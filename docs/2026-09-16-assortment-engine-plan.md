@@ -8,6 +8,7 @@ Programme code: **AE**
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-16 | **R-AE-11** | **Go:** build AE.2 (sharing objects and their life cycle; no data moves). |
 | 2026-09-16 | **R-AE-10** | Commit and push AE.1. |
 | 2026-09-16 | **R-AE-9** | Add the push checks for AE.1 (static stock-writer lock check + race test on a throwaway PostgreSQL). |
 | 2026-09-16 | **R-AE-8** | **Go:** start AE.0 (measure, read only) and AE.1 (stock lock). AE.1 has no database migration. Nothing is committed or pushed until the Owner says so. |
@@ -665,3 +666,124 @@ cd apps/api && NEXUS_TEST_CONCURRENT_PG_URL=postgresql://postgres@127.0.0.1:5549
   npx vitest run src/services/stock-concurrency.vitest.test.ts
 docker stop ae1-stock-pg
 ```
+
+---
+
+## 14. AE.2 — contract (Owner: "go ahead for phase AE.2", R-AE-11)
+
+**Scope.** Sharing objects and their life cycle. **No data moves**: no product, setting or stock is
+copied or read across profiles. No screens yet — the UI lane follows once this contract is fixed.
+
+**Deliberately NOT in AE.2:** `CatalogLink`, `AssortmentChange` and `StockPoolGrant` from §4. Each
+lands in the phase that first writes and reads it (AE.3, AE.4, AE.6). A table with no writer and no
+reader is dead schema, and a pool grant that exists but moves no stock would tell the operator
+something untrue.
+
+### 14.1 Tables
+
+| Table | Owner | Rules |
+| --- | --- | --- |
+| `Assortment` | source profile | `name` unique per profile; `selection` is `list` (members are the products) or `all` (every product except the members); `version` for stale-edit refusal; archived, never deleted |
+| `AssortmentMember` | source profile | one row per (assortment, product); `mode` is `include` for a `list` and `exclude` for `all`; only **top-level, not deleted** products of the same profile (a family's variations follow their parent) |
+| `AssortmentShare` | global (links two profiles) | `status` pending → active ⇄ paused → revoked, or pending → declined; `fieldGroups` fixed at offer; `followSettings`; `version`; who/when for each answer, pause and end |
+
+### 14.2 Who may do what
+
+| Action | Who | From |
+| --- | --- | --- |
+| Create, rename, archive an assortment; add or remove members | a member with `products.edit` | the source profile |
+| Offer a share | an **OWNER** of the source profile, who is also an **active member** of the destination (so an owner cannot name a business they do not belong to) | source |
+| Withdraw (pending → revoked), pause, resume, revoke | an OWNER of the source | source |
+| Accept, decline, leave (active/paused → revoked) | an **OWNER** of the follower | follower |
+
+An API key (no person) can never offer or answer a share: consent is a human act.
+
+### 14.3 Enforced in the database, not only in code
+
+- **Consent cannot be skipped.** A trigger validates every status change by which side is acting
+  (the profile in the request context). The owner side can never set `active` on a pending share;
+  only the follower's accept can. The follower answers through one guarded function
+  (`nexus_assortment_share_respond`) that re-checks the OWNER role itself.
+- **What was offered cannot change after the offer.** Assortment, both profiles, field groups and
+  settings choice are immutable; to change them, revoke and offer again.
+- **A share is never deleted.** Revoking keeps the row and its history.
+- **One open share** (pending, active or paused) per assortment and follower.
+- **The assortment must belong to the offering profile** (composite foreign key).
+- **Reads:** the owner sees its outgoing shares; the follower sees its incoming shares and the
+  shared assortment's name while the share is open; a third profile sees nothing.
+- Both sides get a `WorkspaceAudit` record for every change.
+
+### 14.4 Routes
+
+`/api/assortments` (list, create, rename, archive, members add/remove/list) — `products.view` /
+`products.edit`. `/api/assortment-shares` (list incoming + outgoing, offer, accept, decline, leave,
+pause, resume, revoke) — `settings.workspace.edit`, with the OWNER checks above in the service. Every
+write takes `expectedVersion`; a stale one is refused (409) with the current state.
+
+---
+
+## 15. AE.2 — build record (2026-09-16). Built and proven locally. Not committed.
+
+### 15.1 What was built
+
+| Part | File |
+| --- | --- |
+| Tables `Assortment`, `AssortmentMember`, `AssortmentShare` | `packages/database/prisma/schema.prisma` |
+| Classification (2 business-owned, 1 global) and scoped keys | `packages/database/workspaces/model-ownership.json`, `scoped-keys.json` |
+| Database rules: value checks, one-open-share index, owner and follower read policies, the follower's read of the offered assortment, the status guard trigger, the answer function | `packages/database/workspaces/assortment-share.sql` (+ `policy-migrations.json`) |
+| Migration (additive: 3 tables, their row security, the rules file byte for byte at the end) | `packages/database/prisma/migrations/20260916g_ae2_assortments/migration.sql` |
+| `workspaceModelSql(model)` exported from the policy generator, so a migration adding a business-owned table carries the generator's exact bytes. Generator output proven byte-identical before and after (762,495 bytes). | `packages/database/scripts/workspace-policies.mjs` |
+| Services | `apps/api/src/services/assortment/{share-rules,assortment.service,assortment-share.service}.ts` |
+| Routes (10) and permissions | `apps/api/src/routes/assortments.routes.ts`, `apps/api/src/index.ts`, `apps/api/src/lib/auth/permissions-manifest.ts` |
+
+### 15.2 Proof
+
+1. **The migration builds exactly what the tests test.** A full replay of all 453 migrations is not
+   possible (the oldest ones assume tables created outside migrations; replay fails at
+   `20260502_phase_d3_cascade_categoryattrs_gtin`, unrelated). So two throwaway databases were built:
+   A = yesterday's schema + yesterday's generated rules + migration `20260916g`; B = today's schema +
+   today's generator. Every policy, RLS flag, trigger, grant and `nexus_*` function across all tables,
+   plus the new tables' columns, constraints and indexes: **6,087 catalogue lines each, identical.**
+   Positive control: dropping one policy from a copy of B produced the expected diff.
+2. **24 of 24** database arms (`assortment-share.vitest.test.ts`, real disposable PostgreSQL, profiles
+   ON): services end to end, every refusal by its code, and the rules with no service in the path —
+   the owner cannot activate a pending share, the follower cannot UPDATE or DELETE the row (0 rows,
+   with a count showing the row still there), the owner cannot DELETE it, a third business sees
+   nothing, offered terms are immutable, the composite key refuses a foreign assortment, and **the
+   trigger allows exactly the transitions `share-rules.ts` allows in all 50 (side, from, to)
+   combinations**.
+3. **The suite catches the defects it exists for.** Five mutations of the generated rules, each
+   verified to match exactly once, each made the targeted arm fail: owner can activate (3 failed),
+   follower policy widened to FOR ALL — the DELETE trap (1), any member can answer (3), field groups
+   mutable (1), one-open-share index removed (2).
+4. **10 of 10** pure rule tests, including parity of the field-group and status lists with the SQL
+   file. This found a real defect before it shipped: `'toString' in OWNER_TARGET` is true, so a URL
+   `/assortment-shares/:id/toString` was treated as an owner action. Fixed with an own-property
+   check, and pinned in the route test.
+5. **4 of 4** route tests: all 10 routes are registered and map to the intended permission; refusals
+   keep status, code and sentence; unknown actions (including prototype names) are 404 and call nothing.
+6. Gates run locally: api `tsc` clean; model ownership (440 models); policy ⇄ migration parity (7
+   files); table and column drift; RBAC coverage (2,707 routes, 0 unmapped); route-prisma ratchet;
+   context boundary; event contract; clustered cron; stock-writer lock; security suite 134/134;
+   profiles-ON ratchet (746 files, none new, none worse). All 17 disposable-database suites: 18 of 19
+   files pass (256 tests); the one failure is another session's uncommitted
+   `src/services/sync/data-validation.vitest.test.ts`, whose `beforeAll` builds a database inside the
+   default 10-second hook limit and times out under parallel load. Alone it passes 3/3. Not changed here.
+
+### 15.3 Decisions made inside the contract
+
+- **Offer requires membership of the destination** (any role); acceptance requires its OWNER.
+- **Revoke covers withdrawal:** the owner revoking a pending offer is audited as `share_withdrawn`.
+- **Follower may leave** an active or paused share; it may not pause.
+- **Offered terms are immutable:** revoke and offer again to change field groups or settings.
+- **Members are top-level products only;** adding is all-or-nothing, and each refused product is named.
+- **An assortment with an open share cannot be archived.** Offer and archive take the same row lock,
+  so they cannot interleave.
+
+### 15.4 Not done, and limits
+
+1. **No screens.** The UI lane (plan §7) builds on this contract.
+2. **Nothing moves.** An active share records consent only; AE.3 copies products.
+3. No notification to the follower's owners when an offer arrives; that belongs with the screen it
+   would link to.
+4. **Local only. Not committed.** A push applies migration `20260916g` to production (additive).
