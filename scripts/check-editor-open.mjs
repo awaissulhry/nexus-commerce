@@ -31,6 +31,12 @@
  *  · **WRITE CONTROL.** Every non-GET to the API is aborted at the network layer (the two formula
  *    READ endpoints excepted) and counted. The gate therefore cannot damage the database it is
  *    pointed at, and a re-appearance of the fill-down is a hard failure rather than 20 silent rows.
+ *    ONE exemption, added 2026-09-16: the `PATCH /api/saved-views` the gate's OWN column reveal
+ *    performs, and only inside the window that reveal opens. Without it the gate aborted its own
+ *    setup and then counted the abort against the product — three findings, one blocked push, and a
+ *    log that pointed at the sheet. Paired with a POSITIVE CONTROL at the end of the run: an
+ *    attempted reveal whose save did not land fails the run naming THIS FILE, so the loop cannot
+ *    come back silently.
  *  · **WIRE CONTROL.** `backend-url.ts` falls back to the DEPLOYED Railway API when
  *    `NEXT_PUBLIC_API_URL` is unset, and a dev browser spent ~10 minutes talking to production that
  *    way on 2026-09-03. A run whose page dials anything but the expected host is NOT MEASURED.
@@ -335,6 +341,28 @@ const isApiWrite = (method, url) => {
   if (/^\/api\/pim\/formulas\/(batch|preview)$/.test(path)) return false
   return true
 }
+/**
+ * 🔴 A GATE MAY NOT ABORT ITS OWN SETUP.
+ *
+ * Measured 2026-09-16: three findings — two `NOT MEASURED` and one "2 API writes were armed" — were
+ * one closed loop inside this file. The contract block reveals a declared-but-unrendered column
+ * through the Customise dialog, and that dialog applies ONLY on Save; Save is
+ * `PATCH /api/saved-views`, which the write control below aborted. So the reveal could never
+ * complete, the column never rendered, the sheet was reported unmeasurable, and the gate's own
+ * aborted request was then counted against the product. A push was blocked for a defect that lived
+ * here, and the log pointed at the sheet.
+ *
+ * So a COLUMN-PREFERENCE write is let through — but only inside the window the reveal itself opens,
+ * only on `/api/saved-views`, and tallied apart from `armedWrites` so the invariant the gate exists
+ * for ("an open gesture is not a data change") still fails on any write outside that window. The
+ * reveal therefore persists the revealed column into that surface's saved layout: that is the
+ * dialog's real behaviour, it is a preference and not product data, and the next run needs no
+ * reveal at all.
+ */
+const revealSaves = []
+let revealAttempts = 0
+let revealing = null
+const isPreferenceWrite = (u) => { try { return /^\/api\/saved-views(\/|$)/.test(new URL(u).pathname) } catch { return false } }
 await page.route('**/*', async (r) => {
   const req = r.request(), m = req.method(), u = req.url()
   const h = hostKey(u)
@@ -352,6 +380,12 @@ await page.route('**/*', async (r) => {
   }
   if (!isApiWrite(m, u)) return r.continue()
   const record = { during: inFlight, req: `${m} ${u.replace(/^https?:\/\/[^/]+/, '')}`, body: (req.postData() ?? '').slice(0, 200) }
+  /* The narrowest possible window: open only across this gate's own reveal Save, and only for the
+     preference endpoint. Tested BEFORE the flush branch because a reveal can run inside a flush row. */
+  if (revealing && isPreferenceWrite(u)) {
+    revealSaves.push({ ...record, reveal: revealing })
+    return r.continue()
+  }
   /* 🔴 EXACTLY ONE expected write per flush row, and only while this gate is holding the window
      open. The first API write inside that window is the save this gate deliberately caused; it is
      held forever, so the client believes it is saving and the request never completes. A SECOND
@@ -1021,7 +1055,20 @@ if (RUN.includes('contract')) {
               if (!box.checked) box.click()
               return box.checked
             }, row.col)
-            if (tick) { const save = page.getByRole('button', { name: /^Save$/ }); if (await save.count()) { await save.click(); await page.waitForTimeout(1800) } }
+            /* The SAME exemption as the contract reveal below, for the same reason: this Save is a
+               `PATCH /api/saved-views` and the write control would abort it, leaving `revealed` true
+               over a column that never landed. Two reveal paths, one rule — a second copy that
+               "mostly" matches is how the first one drifted. */
+            if (tick) {
+              const save = page.getByRole('button', { name: /^Save$/ })
+              if (await save.count()) {
+                revealAttempts++
+                revealing = `${scope.key}/${row.kind}/${row.state} (landing reveal)`
+                const landed = page.waitForResponse((res) => isPreferenceWrite(res.url()) && res.request().method() !== 'GET', { timeout: 8000 }).catch(() => null)
+                try { await save.click(); await landed } finally { revealing = null }
+                await page.waitForTimeout(1800)
+              }
+            }
             revealed = tick
             /* 🔴 A reveal that finds no row to tick must CLOSE the dialog it opened. It did not, and on
                the first scope without `condition_type` (EBAY·IT, 2026-09-04) the open backdrop swallowed
@@ -1083,7 +1130,7 @@ if (RUN.includes('contract')) {
            select against `inline` — the sheet was right both times (2026-09-05 02:33). */
         const namedTarget = row.candidates.find(key => rendered.includes(key) && declared.some(c => c.key === key))
         let target = namedTarget ?? declared.map((c) => c.key).find((k) => rendered.includes(k)) ?? null
-        const revealDiag = { ticked: 'not attempted' }
+        const revealDiag = { ticked: 'not attempted', save: 'not attempted' }
         if (!target && declared.length) {
           /* Declared but not rendered — reveal one through the ONE Customise dialog. */
           const label = declared[0].label ?? declared[0].key
@@ -1117,7 +1164,18 @@ if (RUN.includes('contract')) {
             if (ticked) {
               const save = page.getByRole('button', { name: /^Save$/ })
               if (await save.count()) {
-                await save.click()
+                revealAttempts++
+                revealing = `${scope.key}/${row.kind}/${row.state}`
+                /* 🔴 The save must LAND, not merely be clicked. The dialog applies on Save alone, so a
+                   save that never reaches the API leaves the column hidden and the modal open — which
+                   reads exactly like a sheet that cannot render the column. Waiting for the RESPONSE is
+                   what separates those two, and its status is printed in the diagnosis either way. */
+                const landed = page.waitForResponse((res) => isPreferenceWrite(res.url()) && res.request().method() !== 'GET', { timeout: 8000 }).catch(() => null)
+                /* `finally`, because a window left open by a throw is a hole in the write control —
+                   the one invariant this gate cannot afford to widen by accident. */
+                let response = null
+                try { await save.click(); response = await landed } finally { revealing = null }
+                revealDiag.save = response ? String(response.status()) : 'BLOCKED — no response'
                 /* Wait for the COLUMN, not for a duration: the grid re-runs its column model after a
                    Customise save and a fixed sleep decided "not rendered" on a sheet that was still
                    applying it — reported as "could not bring a number column on screen" twice. */
@@ -1144,7 +1202,7 @@ if (RUN.includes('contract')) {
              "could not be brought on screen" and three sessions could not tell whether the reveal
              never ran, the tick never landed, or the column was revealed and then hidden. Print the
              evidence that separates them. */
-          const diag = await page.evaluate((rid) => ({
+          const diag = await page.evaluate(([rid, keys]) => ({
             customiseButton: !!([...document.querySelectorAll('button')].find((b) => /Customise/i.test(b.textContent || ''))),
             modalOpen: !!document.querySelector('.nds-modal'),
             /* 🔴 The SET, not the count. "24 headers against 18" is a number that names nothing;
@@ -1152,9 +1210,13 @@ if (RUN.includes('contract')) {
             headerSet: [...document.querySelectorAll('.ag-header-cell[col-id]')].map((h) => h.getAttribute('col-id')).sort(),
             headers: [...document.querySelectorAll('.ag-header-cell[col-id]')].map((h) => h.getAttribute('col-id')).length,
             bodyCells: [...document.querySelectorAll(`.ag-row[row-id="${rid}"] .ag-cell[col-id]`)].map((c) => c.getAttribute('col-id')).length,
-            wantedHeader: [...document.querySelectorAll('.ag-header-cell[col-id]')].some((h) => h.getAttribute('col-id') === 'condition_type'),
-          }), rowId)
-          failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — ${scope.key} declares ${declared.length} ${row.kind} column(s) for this state (e.g. ${declared[0].key}) but none could be brought on screen. reveal: label="${declared[0].label ?? declared[0].key}" tickResult=${revealDiag.ticked} customiseButton=${diag.customiseButton} modalStillOpen=${diag.modalOpen} headersNow=${diag.headers} bodyCellsNow=${diag.bodyCells} headerHasWanted=${diag.wantedHeader}`)
+            /* 🔴 This probe used to hardcode `condition_type` while the message printed it as
+               "headerHasWanted" for whatever column was being revealed — so it read `false` for every
+               other column and three sessions treated that as evidence. It asks about the columns
+               ACTUALLY declared for this row. */
+            wantedHeader: [...document.querySelectorAll('.ag-header-cell[col-id]')].some((h) => keys.includes(h.getAttribute('col-id'))),
+          }), [rowId, declared.map((c) => c.key)])
+          failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — ${scope.key} declares ${declared.length} ${row.kind} column(s) for this state (e.g. ${declared[0].key}) but none could be brought on screen. reveal: label="${declared[0].label ?? declared[0].key}" tickResult=${revealDiag.ticked} customiseButton=${diag.customiseButton} modalStillOpen=${diag.modalOpen} headersNow=${diag.headers} bodyCellsNow=${diag.bodyCells} headerHasWanted=${diag.wantedHeader} revealSave=${revealDiag.save}`)
           console.log(`   ${at()} ❌ ${row.kind.padEnd(9)} ${row.state.padEnd(10)} could not bring a ${row.kind} column on screen — tick=${revealDiag.ticked} headers=${diag.headers} bodyCells=${diag.bodyCells} headerHasWanted=${diag.wantedHeader} modalOpen=${diag.modalOpen}`)
           console.log(`        HEADER SET (${diag.headerSet.length}): ${diag.headerSet.join(' ')}`)
           continue
@@ -1398,6 +1460,24 @@ if (armedWrites.length > 0) {
   failures.push(`${armedWrites.length} API write(s) were armed during this run — an open gesture is not a data change. First: ${armedWrites[0].req} during ${armedWrites[0].during}`)
 }
 for (const w of armedWrites.slice(0, 8)) console.log(`   [${w.during}] ${w.req}  ${w.body.slice(0, 120)}`)
+/**
+ * 🔴 THE CONTROL THAT KEEPS THE 09-16 LOOP FIXED — a POSITIVE control on the gate's own setup.
+ *
+ * Every other control here asks whether the PRODUCT behaved. This one asks whether the gate's own
+ * preparation succeeded, because the failure it exists to catch is invisible to all the others: a
+ * reveal whose save is blocked produces "the column could not be brought on screen", which is
+ * indistinguishable from a sheet that genuinely cannot render it. On 2026-09-16 that shape blocked a
+ * push for an `apps/api` commit and sent the diagnosis at the sheet for an hour.
+ *
+ * So an attempted reveal whose save did not land fails the run NAMING THIS FILE. If a later edit
+ * widens the write control back over `/api/saved-views`, or the dialog stops saving on Save, this
+ * says so in one line instead of three findings pointing at the product.
+ */
+console.log(`── column reveals this gate performed itself: ${revealSaves.length} preference save(s) landed of ${revealAttempts} attempted`)
+for (const w of revealSaves.slice(0, 8)) console.log(`   [reveal ${w.reveal}] ${w.req}`)
+if (revealAttempts > revealSaves.length) {
+  failures.push(`GATE DEFECT, NOT A PRODUCT FINDING — ${revealAttempts - revealSaves.length} of ${revealAttempts} column reveal(s) performed BY THIS GATE had their preference save blocked before it reached the API. The sheet was never measured and is not at fault: fix the write control in this file (see "A GATE MAY NOT ABORT ITS OWN SETUP"), not the studio.`)
+}
 
 /* ── PARITY: the three scopes are ONE sheet. ──────────────────────────────────────────────────
  * Owner, 2026-09-04: "no inconsistencies or any differences in the UI at all". Measured that day
