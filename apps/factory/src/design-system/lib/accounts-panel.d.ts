@@ -74,6 +74,8 @@ export declare function visibleScopes(scopes: ScopeRow[], expanded: boolean, cap
 /** The stored `lastError` shows only while it explains the status. */
 export declare function errorLineVisible(authStatus: string | undefined, lastError: string | null | undefined): boolean;
 export interface RowActions {
+    /** BP.S1d — off for a borrowed account: the name belongs to its owner. */
+    rename: boolean;
     makePrimary: boolean;
     /** Offered for active accounts, including env-managed connections. */
     test: boolean;
@@ -82,6 +84,8 @@ export interface RowActions {
     disconnect: boolean;
     /** The "Set by environment" reason in place of Disconnect. */
     envNote: boolean;
+    /** BP.S1d — the borrowed-account reason, in place of every action. */
+    sharedNote: string | null;
 }
 /** Which actions a row offers, and what Reconnect says. */
 export declare function rowActions(a: {
@@ -90,7 +94,13 @@ export declare function rowActions(a: {
     managedBy: string;
     scopeDrift?: string[];
     grantedScopes?: string[];
+    /** BP.S1d — the OWNING business's name when this account is only shared with us. */
+    sharedFromName?: string | null;
+    /** BP.S3 — 'read' | 'publish'. What this business may do with a shared account. */
+    sharedMode?: string | null;
 }, hasReconnect: boolean, actionLabel?: string | null): RowActions;
+/** BP.S3 — the chip on a borrowed account: who lent it, and what this business may do. */
+export declare function sharedChipLabel(ownerName: string, mode: string | null | undefined): string;
 export interface HeartbeatOutcome {
     ok: boolean;
     /** The inline text the row prints — "OK · 412 ms" / "Failed · auth_expired · …". */

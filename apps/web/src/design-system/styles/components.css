@@ -2066,7 +2066,14 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-acctp-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; flex-shrink: 0; max-width: 46%; }
 /* Why an action is absent, in words a screen reader and an eye can both reach —
    never a `title` on a disabled control, which fires no pointer events. */
-.nds-acctp-note { font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); max-width: 20ch; text-align: right; }
+.nds-acctp-note {
+  font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); max-width: 20ch; text-align: right;
+  /* BP.S3 — a 20ch right-aligned reason left a single word orphaned on its last line
+     ("…change or disconnect / it", measured). `balance` evens the lines without
+     widening the column, so the row's layout is unchanged. Browsers without it
+     fall back to ordinary wrapping, which is what shipped before. */
+  text-wrap: balance;
+}
 
 .nds-acctp-add {
   margin-top: 10px; font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600;

@@ -14,6 +14,7 @@ import {
   relativeTime,
   rowActions,
   runHeartbeat,
+  sharedChipLabel,
   scopeChipLabel,
   timestampText,
   timestampTitle,
@@ -51,7 +52,7 @@ describe('permissions line + Reconnect label — drift 0 / N, per status, env vs
   it('keeps reconnection available without offering live-account actions on a disconnected account', () => {
     expect(authStatusPill('connected', 0, false)).toEqual({ tone: 'neutral', label: 'Disconnected' })
     expect(authStatusPill('revoked', 0, false)).toEqual({ tone: 'danger', label: 'Access revoked' })
-    expect(rowActions({ isPrimary: false, isActive: false, managedBy: 'oauth' }, true)).toEqual({ makePrimary: false, test: false, reconnect: 'Reconnect', disconnect: false, envNote: false })
+    expect(rowActions({ isPrimary: false, isActive: false, managedBy: 'oauth' }, true)).toEqual({ rename: true, makePrimary: false, test: false, reconnect: 'Reconnect', disconnect: false, envNote: false, sharedNote: null })
   })
   const granted = Array.from({ length: 22 }, (_, i) => `scope.${i}`)
 
@@ -251,5 +252,76 @@ describe('timestampText — not applicable', () => {
     expect(timestampTitle('Refreshed', null, 'na')).toContain('the environment supplies')
     // A real timestamp always wins over the kind.
     expect(timestampText('2026-08-29T10:00:00Z', 'na', Date.parse('2026-08-29T10:01:00Z'))).toBe('1 min ago')
+  })
+})
+
+/**
+ * BP.S1d — an account only SHARED with this business.
+ *
+ * The rule lives here rather than in the component so one test covers every
+ * control at once: a button added to AccountsPanel later cannot quietly appear on
+ * a borrowed row without also appearing in this object.
+ */
+describe('rowActions — a borrowed account', () => {
+  const shared = { isPrimary: true, isActive: true, managedBy: 'oauth', scopeDrift: [], grantedScopes: ['a'], sharedFromName: 'Xavia Racing' }
+
+  it('offers NO action at all, and gives the reason instead', () => {
+    expect(rowActions(shared, true)).toEqual({
+      rename: false,
+      makePrimary: false,
+      test: false,
+      reconnect: null,
+      disconnect: false,
+      envNote: false,
+      sharedNote: 'Only Xavia Racing can change or disconnect it',
+    })
+  })
+
+  it('CONTROL — the identical row without the share offers the full set', () => {
+    const { sharedFromName, ...owned } = shared
+    const actions = rowActions(owned, true)
+    expect(actions.sharedNote).toBeNull()
+    expect(actions.rename).toBe(true)
+    expect(actions.test).toBe(true)
+    expect(actions.disconnect).toBe(true)
+    expect(actions.reconnect).toBeTruthy()
+  })
+
+  it('BP.S3 — the note carries only the limit; the mode belongs to the chip', () => {
+    const actions = rowActions({ ...shared, sharedMode: 'publish' }, true)
+    expect(actions.sharedNote).toBe('Only Xavia Racing can change or disconnect it')
+    // still no controls: publishing happens on the product surface, and renaming or
+    // disconnecting the account remains the owner's alone.
+    expect(actions.rename).toBe(false)
+    expect(actions.disconnect).toBe(false)
+    expect(actions.reconnect).toBeNull()
+  })
+
+  it('the chip names BOTH modes, so neither has to be inferred', () => {
+    expect(sharedChipLabel('Xavia Racing', 'publish')).toBe('Shared by Xavia Racing · can publish')
+    for (const mode of [undefined, null, 'read']) {
+      expect(sharedChipLabel('Xavia Racing', mode)).toBe('Shared by Xavia Racing · read-only')
+    }
+  })
+
+  it('names the owner, so two shares from different businesses do not read alike', () => {
+    expect(rowActions({ ...shared, sharedFromName: 'Second Business' }, true).sharedNote)
+      .toBe('Only Second Business can change or disconnect it')
+  })
+
+  it('stays silent about Primary — that is a fact about the OWNER\'s channel', () => {
+    expect(rowActions({ ...shared, isPrimary: true }, true).makePrimary).toBe(false)
+    expect(rowActions({ ...shared, isPrimary: false }, true).makePrimary).toBe(false)
+  })
+
+  it('an env-managed account that is also shared still reads as shared, not as env', () => {
+    const actions = rowActions({ ...shared, managedBy: 'env' }, true)
+    expect(actions.envNote).toBe(false)
+    expect(actions.sharedNote).toContain('can change or disconnect it')
+  })
+
+  it('an empty owner name is not a share — it would render "Shared by "', () => {
+    expect(rowActions({ ...shared, sharedFromName: '' }, true).sharedNote).toBeNull()
+    expect(rowActions({ ...shared, sharedFromName: null }, true).sharedNote).toBeNull()
   })
 })

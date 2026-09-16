@@ -37,6 +37,7 @@ import {
   permissionsLine,
   rowActions,
   runHeartbeat,
+  sharedChipLabel,
   scopeChipLabel,
   timestampText,
   timestampTitle,
@@ -48,6 +49,9 @@ import '../styles/tokens.css'
 import '../styles/components.css'
 import { ACCOUNT_COLORS, channelDisplayName, type AccountRow, type AccountsPayload } from './AccountSwitcher'
 import { accountDisplayName } from '../lib/account-identity'
+
+/** An account row plus the one fact the panel derives: who it is borrowed from. */
+type PanelRow = AccountRow & { sharedFromName: string | null; sharedMode: string | null }
 
 export interface AccountsPanelProps {
   /** Absolute base URL of the API, e.g. `getBackendUrl()`. */
@@ -63,6 +67,20 @@ export interface AccountsPanelProps {
   onReconnect?: (account: AccountRow) => void | Promise<void>
   /** Host-owned review flow; the panel does not decide business ownership. */
   onAssignProfile?: (account: AccountRow) => void
+  /**
+   * BP.S1d/BP.S3 — share an account this business OWNS with another one,
+   * read-only or to publish.
+   * Host-owned, like `onAssignProfile`: the panel renders the affordance and
+   * decides nothing about business ownership.
+   */
+  onShareProfile?: (account: AccountRow) => void
+  /**
+   * BP.S1d — accounts only SHARED with this business, keyed by connection id,
+   * from `GET /api/accounts/shared-with-me`. A row named here is borrowed: it
+   * renders its owner and offers no actions. Absent = nothing is borrowed, which
+   * is what every caller that has not adopted sharing gets.
+   */
+  sharedAccounts?: Record<string, { ownerWorkspaceName: string; mode?: string }>
   /** Include inactive sign-ins in an account administration surface. */
   includeDisconnected?: boolean
   /** Refresh host counts after a successful account mutation. */
@@ -148,6 +166,8 @@ export function AccountsPanel({
   onConnect,
   onReconnect,
   onAssignProfile,
+  onShareProfile,
+  sharedAccounts,
   includeDisconnected = false,
   onChanged,
   reconnectLabelForAccount,
@@ -297,8 +317,15 @@ export function AccountsPanel({
   }
 
   // Normalize older API responses too, including dialog copy and accessible names.
-  const accounts = (data?.accounts ?? []).map((a) => ({ ...a, label: accountDisplayName(a) }))
-  const byChannel = new Map<string, AccountRow[]>()
+  // The borrowed-account name is attached ONCE here, so the row model, the chip and
+  // the actions all read the same fact rather than three lookups that could disagree.
+  const accounts = (data?.accounts ?? []).map((a) => ({
+    ...a,
+    label: accountDisplayName(a),
+    sharedFromName: sharedAccounts?.[a.id]?.ownerWorkspaceName ?? null,
+    sharedMode: sharedAccounts?.[a.id]?.mode ?? null,
+  }))
+  const byChannel = new Map<string, PanelRow[]>()
   for (const a of accounts) byChannel.set(a.channel, [...(byChannel.get(a.channel) ?? []), a])
   // A channel with a connect handler but no accounts still gets a section, so the
   // button to add the first one has somewhere to live.
@@ -382,7 +409,13 @@ export function AccountsPanel({
                         </Pill>
                       )}
                       {a.label}
-                      {a.isPrimary && <span className="nds-acctp-badge">Primary</span>}
+                      {/* A borrowed account never shows Primary: primary is a fact about
+                          the OWNER's channel and would read as a claim about ours. */}
+                      {a.sharedFromName ? (
+                        <Tag>{sharedChipLabel(a.sharedFromName, a.sharedMode)}</Tag>
+                      ) : (
+                        a.isPrimary && <span className="nds-acctp-badge">Primary</span>
+                      )}
                       {a.managedBy === 'env' && <span className="nds-acct-tag">env-managed</span>}
                       {a.region && <Tag>{a.region}</Tag>}
                     </span>
@@ -453,8 +486,15 @@ export function AccountsPanel({
 
                 {/* A fixed palette, not a colour picker: identity has to read the
                     same on every surface, and an arbitrary hex can land unreadable
-                    against one of the two themes. */}
-                <div className="nds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
+                    against one of the two themes.
+
+                    🔴 Hidden for a borrowed account. A swatch is a WRITE
+                    (`PATCH /api/accounts/:id`, accountColor) that RLS refuses for a
+                    guest, so leaving it would be the same lie as leaving Rename —
+                    it was missed on the first pass precisely because it is a
+                    `<button>` outside the actions block, and the accessibility tree
+                    is what found it. */}
+                {!actions.sharedNote && <div className="nds-acctp-swatches" role="group" aria-label={`Identity colour for ${a.label}`}>
                   {ACCOUNT_COLORS.map((c) => (
                     <button
                       key={c.hex}
@@ -478,10 +518,17 @@ export function AccountsPanel({
                       ×
                     </button>
                   )}
-                </div>
+                </div>}
 
                 <div className="nds-acctp-actions">
-                  <Button
+                  {/* BP.S1d — a borrowed account offers NOTHING and says why instead.
+                      `rowActions` decides; this only renders. Keeping the rule in the
+                      engine is what lets one test cover every control at once. */}
+                  {actions.sharedNote ? (
+                    <span className="nds-acctp-note">{actions.sharedNote}</span>
+                  ) : (
+                  <>
+                  {actions.rename && <Button
                     size="sm"
                     disabled={busy}
                     onClick={() => {
@@ -490,7 +537,7 @@ export function AccountsPanel({
                     }}
                   >
                     Rename
-                  </Button>
+                  </Button>}
                   {actions.makePrimary && (
                     <Button size="sm" disabled={busy} onClick={() => void makePrimary(a)}>
                       Make primary
@@ -523,6 +570,13 @@ export function AccountsPanel({
                     </Button>
                   ) : null}
                   {onAssignProfile && <Button size="sm" disabled={busy} onClick={() => onAssignProfile(a)}>Assign profile</Button>}
+                  {/* Sharing lets another business see this account, or publish to
+                      it. It is not Assign profile, which MOVES ownership and refuses
+                      an account with any history — both are offered so neither is
+                      mistaken for the other. */}
+                  {onShareProfile && <Button size="sm" disabled={busy} onClick={() => onShareProfile(a)}>Share with a profile</Button>}
+                  </>
+                  )}
                 </div>
               </div>
             )

@@ -199,6 +199,8 @@ export function errorLineVisible(authStatus: string | undefined, lastError: stri
 }
 
 export interface RowActions {
+  /** BP.S1d — off for a borrowed account: the name belongs to its owner. */
+  rename: boolean
   makePrimary: boolean
   /** Offered for active accounts, including env-managed connections. */
   test: boolean
@@ -207,22 +209,79 @@ export interface RowActions {
   disconnect: boolean
   /** The "Set by environment" reason in place of Disconnect. */
   envNote: boolean
+  /** BP.S1d — the borrowed-account reason, in place of every action. */
+  sharedNote: string | null
 }
 
 /** Which actions a row offers, and what Reconnect says. */
 export function rowActions(
-  a: { isPrimary: boolean; isActive?: boolean; managedBy: string; scopeDrift?: string[]; grantedScopes?: string[] },
+  a: {
+    isPrimary: boolean
+    isActive?: boolean
+    managedBy: string
+    scopeDrift?: string[]
+    grantedScopes?: string[]
+    /** BP.S1d — the OWNING business's name when this account is only shared with us. */
+    sharedFromName?: string | null
+    /** BP.S3 — 'read' | 'publish'. What this business may do with a shared account. */
+    sharedMode?: string | null
+  },
   hasReconnect: boolean,
   actionLabel?: string | null,
 ): RowActions {
+  /*
+   * BP.S1d — a borrowed account offers NOTHING, and says why.
+   *
+   * A grant (migration 20260916a) lets another business SEE this account, and a
+   * `publish` grant lets it publish with it too. Neither lets it change the account:
+   * RLS gives the guest no row to update or delete, so Rename, Reconnect and
+   * Disconnect would promise something the server will not do. Test is withheld as
+   * well: it checks the OWNER's sign-in, and only the owner can act on the result.
+   *
+   * Returned as a REASON rather than disabled buttons, for the same measured cause as
+   * `envNote` below: a `title` on a disabled control is unreachable, because a
+   * disabled element fires no pointer events, and its colours are dim enough to fail
+   * contrast besides (MAP.4 measured 2.04:1).
+   *
+   * `isPrimary` is deliberately ignored: primary is a fact about the OWNER's channel
+   * and means nothing here.
+   */
+  if (a.sharedFromName) {
+    return {
+      rename: false,
+      makePrimary: false,
+      test: false,
+      reconnect: null,
+      disconnect: false,
+      envNote: false,
+      /*
+       * The LIMIT only. Who shared it and in which mode is the chip's job
+       * (`sharedChipLabel`), and saying it twice measured badly: the combined
+       * sentence ran to 5 lines in a 145px column on the account row. One fact per
+       * element keeps each short enough to read at a glance.
+       */
+      sharedNote: `Only ${a.sharedFromName} can change or disconnect it`,
+    }
+  }
   const env = a.managedBy === 'env'
   return {
+    rename: true,
     makePrimary: !a.isPrimary && a.isActive !== false,
     test: a.isActive !== false,
     reconnect: hasReconnect ? (actionLabel !== undefined ? actionLabel : env ? 'Replace environment credentials' : reconnectLabel(a.scopeDrift, a.grantedScopes)) : null,
     disconnect: !env && a.isActive !== false,
     envNote: env,
+    sharedNote: null,
   }
+}
+
+/**
+ * BP.S3 — the chip on a borrowed account: who lent it, and what this business may do
+ * with it. Both modes are named, including `read-only`, because an unlabelled share
+ * would leave the operator to infer the safer of two materially different states.
+ */
+export function sharedChipLabel(ownerName: string, mode: string | null | undefined): string {
+  return `Shared by ${ownerName} · ${mode === 'publish' ? 'can publish' : 'read-only'}`
 }
 
 export interface HeartbeatOutcome {
