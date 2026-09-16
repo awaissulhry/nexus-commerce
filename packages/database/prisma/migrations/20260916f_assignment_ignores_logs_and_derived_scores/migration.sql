@@ -1,3 +1,8 @@
+-- 2026-09-16 — the profile move guard stops treating a sync-ran timestamp, the outbound API call log
+-- and derived readiness scores as business history (a store with 0 listings and 0 orders could not move).
+-- A sync timestamp still blocks while the profile holds unlinked orders/listings of the channel.
+-- Body = packages/database/workspaces/account-assignment.sql, byte for byte (policy parity check).
+
 CREATE OR REPLACE FUNCTION nexus_retired_connection_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD."managedBy" = 'transferred' THEN

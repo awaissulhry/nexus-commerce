@@ -1,6 +1,6 @@
 {
   "//": "Which migration carries the CURRENT body of each shared policy file. The generator (scripts/workspace-policies.mjs) applies the file to the disposable test database; the named migration applies the same bytes to every deployed one. scripts/check-policy-migration-parity.mjs fails the push if they differ. When you change a file, write a NEW migration that ends with its new bytes and point its entry here — never edit an applied migration.",
-  "account-assignment.sql": "20260908e_guarded_account_assignment",
+  "account-assignment.sql": "20260916f_assignment_ignores_logs_and_derived_scores",
   "account-grant.sql": "20260916a_bps1a_channel_account_grant",
   "account-restriction.sql": "20260916b_bps2_member_account_access",
   "listing-claim.sql": "20260916c_bps3_listing_claim",

@@ -200,6 +200,57 @@ describe('business profile boundaries with PostgreSQL', () => {
     expect(await database.client.channelAccountOwnership.findFirst({ where: { externalAccountId: account.externalAccountId! } })).toMatchObject({ workspaceId: a.id })
   })
 
+  // 2026-09-16 — production refused to move an eBay store with 0 listings and 0 orders: its order
+  // sync had run (lastSyncAt), four read-only API calls were logged, and 1,690 readiness scores had
+  // been derived for it. None of that is business history.
+  it('moves an unused account whose sync ran: its API call log stays as history, its derived readiness scores go', async () => {
+    const user = await person(), a = await service.create(user.id, details()), b = await service.create(user.id, details())
+    const ca = (await service.membership(user.id, a.id)).context
+    const { account, log, product } = await withWorkspace(ca, async () => {
+      const account = await database.client.channelConnection.create({ data: { channelType: 'EBAY', externalAccountId: randomUUID(), isActive: false, authStatus: 'disconnected', lastSyncAt: new Date(), lastSyncStatus: 'SUCCESS' } })
+      const log = await database.client.outboundApiCallLog.create({ data: { channel: 'EBAY', connectionId: account.id, operation: 'getPaymentPolicies', success: true, latencyMs: 12 } })
+      const product = await database.client.product.create({ data: { sku: `READY-${randomUUID()}`, name: 'Ready', basePrice: 10 } })
+      await database.client.readinessIndex.create({ data: { productId: product.id, coordinateKey: JSON.stringify(['EBAY', 'IT', account.id]), channel: 'EBAY', market: 'IT', accountId: account.id, language: 'it', label: 'eBay IT', state: 'blocked', requiredFilled: 0, requiredTotal: 3, missing: [], computedAt: new Date() } })
+      return { account, log, product }
+    })
+    const preview = await service.assignAccount(user.id, a.id, account.id, { destinationId: b.id })
+    expect(preview).toMatchObject({ eligible: true, blockers: [], references: [] })
+    expect(await service.assignAccount(user.id, a.id, account.id, { ...preview, destinationId: b.id }, true)).toMatchObject({ assigned: true, destinationId: b.id })
+    await withWorkspace(ca, async () => {
+      expect(await database.client.readinessIndex.count({ where: { accountId: account.id } })).toBe(0)
+      expect(await database.client.outboundApiCallLog.findUnique({ where: { id: log.id } })).toMatchObject({ connectionId: account.id, workspaceId: a.id })
+      expect(await database.client.product.findUnique({ where: { id: product.id } })).not.toBeNull()
+    })
+  })
+
+  // eBay orders were imported with no store link until 2026-09-16, so a sync timestamp is the only
+  // trace of a store's order history while unlinked records of its channel remain.
+  it('a sync timestamp still blocks while the profile holds unlinked orders or listings of that channel from since the account connected', async () => {
+    const user = await person(), a = await service.create(user.id, details()), b = await service.create(user.id, details())
+    const ca = (await service.membership(user.id, a.id)).context
+    const preview = () => service.assignAccount(user.id, a.id, account.id, { destinationId: b.id })
+    const account = await withWorkspace(ca, () => database.client.channelConnection.create({ data: { channelType: 'EBAY', externalAccountId: randomUUID(), isActive: false, authStatus: 'disconnected', lastSyncAt: new Date() } }))
+    const order = await withWorkspace(ca, () => database.client.order.create({ data: { channel: 'EBAY', channelOrderId: randomUUID(), totalPrice: 10, customerName: 'Buyer', customerEmail: 'buyer@example.test', shippingAddress: {} } }))
+    expect(await preview()).toMatchObject({ eligible: false, blockers: [expect.stringContaining('no store link')] })
+    // An unlinked order from BEFORE this account existed cannot be its history.
+    await withWorkspace(ca, () => database.client.order.update({ where: { id: order.id }, data: { createdAt: new Date(account.createdAt.getTime() - 60_000) } }))
+    expect(await preview()).toMatchObject({ eligible: true, blockers: [] })
+    // An unlinked listing of the channel blocks the same way.
+    const listing = await withWorkspace(ca, async () => {
+      const product = await database.client.product.create({ data: { sku: `UNLINKED-${randomUUID()}`, name: 'Unlinked', basePrice: 10 } })
+      return database.client.channelListing.create({ data: { productId: product.id, channel: 'EBAY', channelMarket: 'EBAY_IT', region: 'IT' } })
+    })
+    expect(await preview()).toMatchObject({ eligible: false, blockers: [expect.stringContaining('no store link')] })
+    await withWorkspace(ca, () => database.client.channelListing.delete({ where: { id: listing.id } }))
+    // A LINKED order is the account's history: the reference scan refuses it.
+    await withWorkspace(ca, () => database.client.order.update({ where: { id: order.id }, data: { channelConnectionId: account.id } }))
+    expect(await preview()).toMatchObject({ eligible: false, references: ['Order'] })
+    // Recorded inbound traffic still blocks on its own.
+    await withWorkspace(ca, () => database.client.order.update({ where: { id: order.id }, data: { channelConnectionId: null } }))
+    await withWorkspace(ca, () => database.client.channelConnection.update({ where: { id: account.id }, data: { lastInboundAt: new Date() } }))
+    expect(await preview()).toMatchObject({ eligible: false, blockers: [expect.stringContaining('business activity')] })
+  })
+
   it('requires live ownership of both profiles, even when the assignment function is called directly', async () => {
     const user = await person(), stranger = await person()
     const a = await service.create(user.id, details()), b = await service.create(stranger.id, details())
