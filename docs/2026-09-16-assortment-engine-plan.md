@@ -1,13 +1,14 @@
 # Assortment engine (AE): share products, settings and stock between business profiles
 
 Date: 2026-09-16
-Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…17). **AE.0 done (§12). AE.1 shipped (§13). AE.2 shipped (§14–15). AE.3 built and proven, NOT committed (§16–17).** Later phases need their own yes.
+Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…18). **AE.0 done (§12). AE.1 shipped (§13). AE.2 shipped (§14–15). AE.3, R-AE-16 and R-AE-17 shipped and migrated in production (§16–18.5).** Later phases need their own yes.
 Programme code: **AE**
 
 ## Owner rulings (newest first)
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-17 | **R-AE-18** | Commit and push it all (AE.3, R-AE-16, R-AE-17, and the deferred health fixes from the public-route audit). |
 | 2026-09-17 | **R-AE-17** | Fix the transfer-engine defect (§17.3.1: inherited language rows refuse variations) as its own small task. |
 | 2026-09-17 | **R-AE-16** | Add the AE.3 end-to-end copy test to the push check that runs on a throwaway PostgreSQL. |
 | 2026-09-16 | **R-AE-15** | **Go:** build AE.3 (first copy). |
@@ -871,7 +872,7 @@ What the engine deliberately does not write, and what AE.3 does about it:
 - **AE.3c** — image files. The upload is mocked in tests. The first real copy runs in production and is
   checked there, because Cloudinary is a single production account.
 
-## 17. AE.3 — build record (2026-09-17). Built and proven locally. **Not committed.**
+## 17. AE.3 — build record (2026-09-17). Shipped and migrated in production (§18.5).
 
 ### 17.1 What was built
 
@@ -963,7 +964,7 @@ What the engine deliberately does not write, and what AE.3 does about it:
 8. The run table does not tie `shareId` to its own business. Harmless: the source read and the link
    guard both check the share against the business in context.
 
-## 18. R-AE-16 and R-AE-17 — build record (2026-09-17). **Not committed.**
+## 18. R-AE-16 and R-AE-17 — build record (2026-09-17). Shipped (§18.5).
 
 ### 18.1 R-AE-16: the copy test runs on every push
 
@@ -1031,3 +1032,26 @@ title); dropping the rows fails (the linked variation kept its own title).
   `src/services/sync/data-validation.vitest.test.ts` ("fails to load"; load average 10). Alone with
   profiles ON it passes 3/3. The rerun: **750 files, 42 known failing, none new, none worse.** That file
   can refuse a push under load; it is not changed here.
+
+### 18.5 Shipped (2026-09-17, R-AE-18: Owner, "Commit and push it all")
+
+- Five commits, through a private index so only these files went in: `3dcb520ad` (transfer engine fix),
+  `3cdc7d7da` (AE.3, 22 files), `e13610e8d` (push gate runner), `5b3cddfce` (the health fixes deferred
+  from the 09-16 public-route audit, 6 files; their tests 9/9 before the commit), `90d2d1f1f` (docs).
+- Left out on purpose: `graphify-out/` (196 MB of generated output), `.graphifyignore`,
+  `.githooks/pre-push.backup`, and `apps/factory/tsconfig.tsbuildinfo` (a build cache).
+- **The push passed every gate on the first try**, including the new real-PostgreSQL runner (stock
+  10/10, copy 8/8) and the profiles-ON ratchet (750 files, none new or worse).
+- **Railway deploy `93b88218`, built from `90d2d1f1f`: SUCCESS.** Its log: *"Applying migration
+  `20260916h_ae3_first_copy`"*, then *"All migrations have been successfully applied."* (454
+  migrations). Boot errors are the three known ones (stock-import sweep, Amazon notifications, fleet
+  clock: "Select a business profile"); none from the copy code.
+- **Live check:** `GET /api/health` answered 200 with `build: 90d2d1f1`. The alarm block that had
+  vanished since profiles went on is back: `qtyMismatches: 5`, and the ads integrity check reads
+  **CRITICAL** (`ADS_SETTINGS_SYNC_NEVER`: no campaign ever verified against Amazon;
+  `ADS_DRIFT_OPEN`: 452 entity fields differ from Amazon). These are real findings the fix made visible,
+  not caused by it.
+- Three minutes after the push, another session started upload deploy `bfc144ac` (no commit attached,
+  from the shared working tree). It replaces the running code, not the database; the migration stays.
+- No real share has copied products in production yet. The first real copy, with real image uploads,
+  is still to be checked there (§17.5.3).
