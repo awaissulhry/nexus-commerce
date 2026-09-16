@@ -1,7 +1,7 @@
 # Assortment engine (AE): share products, settings and stock between business profiles
 
 Date: 2026-09-16
-Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…8). **AE.0 done (§12). AE.1 built and proven locally (§13).** Nothing committed.
+Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…10). **AE.0 done (§12). AE.1 shipped to production (§13).** Later phases need their own yes.
 Programme code: **AE**
 
 ## Owner rulings (newest first)
@@ -533,7 +533,7 @@ A's movement. B's reports read B's own `costPrice` / weighted average, and B has
 
 ---
 
-## 13. AE.1 — build record (2026-09-16). Stock lock. Local only, nothing committed.
+## 13. AE.1 — build record (2026-09-16). Stock lock. Committed and deployed (§13.6).
 
 ### 13.1 The defect, measured before the fix
 
@@ -636,6 +636,25 @@ Both are in `.githooks/pre-push`:
    `UPDATE "Product"`.
 5. `transferStock` is still two transactions (an OUT, then an IN). Each is locked, so no update is
    lost, but a crash between them leaves the transfer half done. Pre-existing, not changed.
+
+### 13.6 Shipped (2026-09-16)
+
+- Commits on `main`: `8b279db5f` (the fix), `bd3390ca3` (push checks), `ce04e1188` (docs). They were
+  committed through a private index, so only AE files went in; other sessions' uncommitted work stayed out.
+- **The first push was refused** by the profiles-ON ratchet. It flagged another session's uncommitted test
+  file (`src/services/sync/data-validation.vitest.test.ts`) as failing to load. That file passed alone
+  (3 of 3), and the ratchet passed on a kept rerun (743 files, none new or worse), so it was a one-off
+  failure under machine load (load average 14). A normal retry passed every gate, including both
+  new AE.1 checks. No gate was bypassed.
+- **Railway:** the deploy for `ce04e1188` (`78bb60a3`) was superseded 3 minutes later by `adfbe113`, a
+  deploy with no commit attached (an upload from the working tree by another session). It started after
+  the push, from the tree that holds these commits, so it carries AE.1; that is inferred from timing,
+  not read from the build log. It went live with SUCCESS: 452 migrations, none pending, health check passed.
+- Boot errors seen are pre-existing (the same lines appear in the deploy before the push): Shopify,
+  WooCommerce and Etsy configuration missing; `amazon-notifications-boot`, `fleet-workflow` and the
+  stock-import stuck-job sweep refusing to run without a business profile.
+- No stock, lock, deadlock or transaction-timeout errors in the first minutes after boot. Traffic in that
+  window was small, so this is not a measurement under load.
 
 **How to run the proof again:**
 
