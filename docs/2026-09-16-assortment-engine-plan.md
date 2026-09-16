@@ -1,13 +1,14 @@
 # Assortment engine (AE): share products, settings and stock between business profiles
 
 Date: 2026-09-16
-Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…10). **AE.0 done (§12). AE.1 shipped to production (§13).** Later phases need their own yes.
+Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…12). **AE.0 done (§12). AE.1 shipped (§13). AE.2 shipped (§14–15).** Later phases need their own yes.
 Programme code: **AE**
 
 ## Owner rulings (newest first)
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-16 | **R-AE-12** | Commit and push AE.2. |
 | 2026-09-16 | **R-AE-11** | **Go:** build AE.2 (sharing objects and their life cycle; no data moves). |
 | 2026-09-16 | **R-AE-10** | Commit and push AE.1. |
 | 2026-09-16 | **R-AE-9** | Add the push checks for AE.1 (static stock-writer lock check + race test on a throwaway PostgreSQL). |
@@ -722,7 +723,7 @@ write takes `expectedVersion`; a stale one is refused (409) with the current sta
 
 ---
 
-## 15. AE.2 — build record (2026-09-16). Built and proven locally. Not committed.
+## 15. AE.2 — build record (2026-09-16). Committed, pushed and migrated in production (§15.5).
 
 ### 15.1 What was built
 
@@ -786,4 +787,17 @@ write takes `expectedVersion`; a stale one is refused (409) with the current sta
 2. **Nothing moves.** An active share records consent only; AE.3 copies products.
 3. No notification to the follower's owners when an offer arrives; that belongs with the screen it
    would link to.
-4. **Local only. Not committed.** A push applies migration `20260916g` to production (additive).
+4. The follower's accept, decline and leave have been exercised on the disposable database only; no real share exists in production yet.
+
+### 15.5 Shipped (2026-09-16)
+
+- Commits `4ebc3cf8e` (feature, 16 files) and `357d08e28` (docs), through a private index so only AE.2
+  files went in. The push passed every gate on the first try, including both AE.1 checks and the
+  profiles-ON ratchet (746 files, none new or worse).
+- **Railway deploy `5481e9d3`, built from `357d08e28`: SUCCESS.** Its log: *"Applying migration
+  `20260916g_ae2_assortments`"*, then *"All migrations have been successfully applied."*
+- Three minutes after the push, another session started deploy `9c8dba2c` (no commit attached, an upload
+  from the shared working tree). It replaces the running code, not the database; the migration stays.
+- An unsigned probe of `/api/assortments` and `/api/assortment-shares` answered 401. So did a made-up
+  route, because the sign-in check runs first, so the probe shows only that the API is up and refuses
+  unsigned calls. It does not prove the routes exist. The deploy built from the commit is the evidence.
