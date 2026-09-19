@@ -1,4 +1,5 @@
 import { runProfileTimer } from '../lib/cron/workspace-timer.js'
+import { workspaceIdForQuery } from '../lib/workspace-context.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CX.1 — the connection heartbeat (docs/2026-08-29-cx1-connection-core.md §7).
@@ -149,8 +150,12 @@ async function expiryAlerts(row: Row): Promise<void> {
 
 export async function runHeartbeatSweep(): Promise<string> {
   return recordCronRun('cx-heartbeat', async () => {
+    // P6.5 — with business profiles ON, a GUEST profile can read an account shared with it but not
+    // write it, so heartbeating that row here failed on the first write and stopped the rest of this
+    // profile's sweep. The owning profile's own sweep heartbeats it; here only accounts it owns.
+    const ownedHere = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? { workspaceId: workspaceIdForQuery() } : {}
     const rows = await prisma.channelConnection.findMany({
-      where: { managedBy: { in: ['oauth', 'env'] }, authStatus: { notIn: ['disconnected', 'revoked'] }, isActive: true },
+      where: { managedBy: { in: ['oauth', 'env'] }, authStatus: { notIn: ['disconnected', 'revoked'] }, isActive: true, ...ownedHere },
     })
     let ok = 0
     let failed = 0
@@ -158,19 +163,25 @@ export async function runHeartbeatSweep(): Promise<string> {
     for (const row of rows) {
       const key = channelKeyOf(row.channelType)
       if (!key) continue
-      // Proactive refresh: anything expiring inside 2 sweeps.
-      if (row.managedBy === 'oauth' && row.accessTokenExpiresAt && row.accessTokenExpiresAt.getTime() < Date.now() + 2 * INTERVAL_MIN * 60_000) {
-        try {
-          await getAccessToken(row.id)
-          refreshed++
-        } catch (err) {
-          logger.warn('[cx-heartbeat] proactive refresh failed', { connectionId: row.id, error: err instanceof Error ? err.message : String(err) })
+      // P6.5 — one account's error no longer stops the sweep for the others.
+      try {
+        // Proactive refresh: anything expiring inside 2 sweeps.
+        if (row.managedBy === 'oauth' && row.accessTokenExpiresAt && row.accessTokenExpiresAt.getTime() < Date.now() + 2 * INTERVAL_MIN * 60_000) {
+          try {
+            await getAccessToken(row.id)
+            refreshed++
+          } catch (err) {
+            logger.warn('[cx-heartbeat] proactive refresh failed', { connectionId: row.id, error: err instanceof Error ? err.message : String(err) })
+          }
         }
+        const r = await runHeartbeatFor(row)
+        if (r.ok) ok++
+        else failed++
+        await expiryAlerts(row)
+      } catch (err) {
+        failed++
+        logger.warn('[cx-heartbeat] account skipped after an error', { connectionId: row.id, error: err instanceof Error ? err.message : String(err) })
       }
-      const r = await runHeartbeatFor(row)
-      if (r.ok) ok++
-      else failed++
-      await expiryAlerts(row)
     }
     // App-secret expiry (SP-API LWA secrets rotate every 180 days). P0.5: 90/30/7 days and on
     // expiry, each level once per recorded date — the exact-day match here fired every sweep.
