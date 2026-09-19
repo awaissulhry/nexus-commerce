@@ -24,6 +24,7 @@ import { readPushControls } from '../listing-push-controls.js'
 
 import { logger } from '../../utils/logger.js'
 import { assertShopifyWriteAllowed } from '../shopify-publish-gate.service.js'
+import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 
 export interface ShopifyBulkInput {
   /** Single mutation that the operation list will fan out. The
@@ -62,7 +63,8 @@ export interface ShopifyBulkPollResult {
   fileSize: number | null
 }
 
-const DEFAULT_API_VERSION = '2024-01'
+// P1.4 — the version the gateway accepts for a Shopify change (services/shopify/api-version.ts).
+const DEFAULT_API_VERSION = SHOPIFY_API_VERSION
 
 function isDryRunEnv(): boolean {
   return process.env.NEXUS_SHOPIFY_BULK_DRYRUN === '1'

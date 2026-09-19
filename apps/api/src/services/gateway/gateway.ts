@@ -32,6 +32,7 @@ import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
 import { accountStatusOf } from './account.js'
 import { writeLedgerRow } from './ledger.js'
+import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
@@ -187,6 +188,16 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 1. account
   if (!req.connectionId && !req.appLevel) {
     return refuse('refused', 'ACCOUNT_REQUIRED', `Nothing was sent to ${name}: the call does not name the account it is for.`, 400)
+  }
+
+  // 1b. P1.4 — a Shopify change (a write, an order action, a setup call) goes out only on the current
+  // GraphQL Admin API with a named account: never REST, never an older version, never the env credential.
+  // Reads are not changes (their version moves in P5.3).
+  if (req.channel === 'SHOPIFY' && req.kind !== 'read') {
+    const endpoint = new URL(req.url).pathname
+    if (!req.connectionId || endpoint !== `/admin/api/${SHOPIFY_API_VERSION}/graphql.json`) {
+      return refuse('refused', 'SHOPIFY_LEGACY_WRITE', `Nothing was sent to Shopify: a change goes out only on the ${SHOPIFY_API_VERSION} GraphQL Admin API with a connected account (this call: ${req.method} ${endpoint}${req.connectionId ? '' : ', no account'}).`, 400)
+    }
   }
 
   // 2. status

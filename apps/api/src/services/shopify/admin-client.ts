@@ -1,5 +1,6 @@
 import { resolveConnection } from '../connection-resolver.service.js'
 import { shopifyKind, shopifyTransport } from '../gateway/shopify.js'
+import { SHOPIFY_API_VERSION } from './api-version.js'
 import { getAccessToken, assertWritable } from '../cx/token.service.js'
 import { shopifyShopDomain } from '../cx/connectors/shopify/auth.js'
 import { acquireShopifyPublishToken, getShopifyPublishMode } from '../shopify-publish-gate.service.js'
@@ -10,7 +11,7 @@ export async function shopifyAdmin(accountId: string): Promise<{ graphql: Shopif
   if (connection.channelType !== 'SHOPIFY') throw new Error('The selected account is not Shopify.')
   const domain = shopifyShopDomain(connection.region)
   if (!domain) throw new Error('The Shopify account has no verified myshopify.com domain.')
-  const url = `https://${domain}/admin/api/2026-07/graphql.json`
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`
   const graphql: ShopifyGraphql = async <T>(query: string, variables: Record<string, unknown> = {}) => {
     if (/^\s*mutation\b/.test(query)) {
       await assertWritable(accountId)

@@ -12,6 +12,7 @@ import {
 } from '../../catalog.js'
 import { shopifyRateReading } from '../../rate-readings.js'
 import { shopifyShopDomain } from './auth.js'
+import { SHOPIFY_API_VERSION } from '../../../shopify/api-version.js'
 
 export const SHOPIFY_REQUIRED_SCOPES = [
   'read_products', 'write_products', 'read_inventory', 'write_inventory', 'read_locations', 'write_locations',
@@ -57,7 +58,7 @@ async function connectionData(handle: ConnectionHandle): Promise<{
   if (!domain) throw new Error('The Shopify connection has no valid myshopify.com domain.')
   const token = await handle.token()
   // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
-  const response = await fetch(`https://${domain}/admin/api/2026-07/graphql.json`, {
+  const response = await fetch(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
     body: JSON.stringify({
@@ -183,7 +184,7 @@ export const shopifySpec: ChannelSpec = {
   },
   rateLimit: { parse: shopifyRateReading, model: 'points' },
   webhooks: { scheme: 'shopify-hmac', subscriptionApi: true, lifecycleTopics: ['app/uninstalled', 'app/scopes_update', 'shop/redact', 'customers/data_request', 'customers/redact'] },
-  apiVersion: '2026-07',
+  apiVersion: SHOPIFY_API_VERSION,
   sandbox: { available: true },
 }
 

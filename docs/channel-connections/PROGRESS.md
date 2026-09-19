@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Written 2026-09-19, at the end of the session. The last session stopped **inside P1.4a** (the Owner asked it to stop).
+Written 2026-09-19. Updated 2026-09-19 (fourth session): P1.4 is BUILT; the next package is P1.6, which starts by showing the Owner the delete list.
 
 Read in this order:
 
@@ -35,32 +35,27 @@ Read in this order:
 | P1.5 eBay market headers from the Marketplace row | b2af8d68b | `build/P1.5.md` |
 | P1.4a Shopify queue on 2026-07 GraphQL with the row's account | 842841031 | `build/P1.4.md` |
 | P1.4b part 1 Shopify order actions (refund, cancel, tracking) on the order's account | 86d128291 | `build/P1.4.md` 6.1 |
-| P1.4b part 2 bulk Shopify price / stock on the listing's account | (this commit) | `build/P1.4.md` 6.2 |
+| P1.4b part 2 bulk Shopify price / stock on the listing's account | 2a0493c6b | `build/P1.4.md` 6.2 |
+| P1.4b part 3 gateway: a Shopify change only on 2026-07 GraphQL with an account | (this commit) | `build/P1.4.md` 6.3 |
 
 **Push is blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 
-## 3. P1.4a — DONE (committed locally, not pushed)
+## 3. P1.4 — BUILT (committed locally, not pushed)
 
-The Shopify queue now sends through the row's own account on the `2026-07` GraphQL client. Record: `build/P1.4.md`. 16/16 mutation checks caught. Full suite: only the 2 known Amazon files fail.
+All three parts of P1.4b and P1.4a are committed. Record: `build/P1.4.md` (section 6.4 = where it stands).
 
-**Open question for the Owner (record section 4.1):** a linked (imported) Shopify listing has no stored stock location, so its queued stock change is refused. Production is not affected while Shopify publish is `gated`.
+- Done-when "0 REST 2024-01 writes": met in code. The gateway refuses any Shopify change that is not on the `2026-07` GraphQL API with a named account (`SHOPIFY_LEGACY_WRITE`).
+- Done-when "one stock round-trip with compare-and-set proven": proven against a stateful fake. On a real shop it needs a Shopify dev store → **ask the Owner** (a live call).
 
-## 4. Next — P1.4b (other Shopify writers)
+## 4. Open questions for the Owner (from P1.4)
 
-Move each to the `2026-07` GraphQL client with the connected account. Inventory and refund mutations need `@idempotent(key:)` and `changeFromQuantity`. Re-check each line number first; they come from notes.
-
-- `apps/api/src/services/bulk-action.service.ts` (~2493–2501): Shopify stock with ONE env inventory item for every product; no `@idempotent`.
-- The Shopify bulk-mutation service: default version `2024-01`.
-- `apps/api/src/services/refunds/refund-publisher.service.ts` (~647): `refundCreate` needs `@idempotent`.
-- The tracking push-back job; the order-cancellation channel cancel.
-- `sync/shopify-sync.service.ts` `updateInventory`; `routes/shopify.ts` sync/inventory; `routes/stock.routes.ts` (ShopifyService); `shopify-setup.routes` webhooks.
-- The old `shopify.service` / `shopify-enhanced` → P1.6 delete candidates.
-- Add a check that finds 0 REST `2024-01` writes.
-- "One stock round-trip with compare-and-set proven" needs a live dev store → **ask the Owner** before any live call.
+1. **Linked Shopify listings have no stock location** (`build/P1.4.md` 4.1). Their queued stock changes are refused. Production is not affected while Shopify publish is `gated`.
+2. **Before a push:** read the production switches `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new). After the push, a switch set to `true` sends through the connected Shopify account (`build/P1.4.md` 6.1).
+3. **P1.6 delete list** grows with the old Shopify env writers (`build/P1.4.md` 6.3).
 
 ## 5. After P1.4
 
-P1.6 (show the delete list first; candidates in `build/P1.2.md` section 8) → P1.7 → P1.8 → P2.x → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+P1.6 (show the delete list first; candidates in `build/P1.2.md` section 8 and `build/P1.4.md` 6.3) → P1.7 → P1.8 → P2.x → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
 ## 6. Commands and traps
 

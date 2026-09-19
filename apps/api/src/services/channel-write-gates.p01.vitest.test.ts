@@ -121,10 +121,10 @@ describe('old Shopify REST client', () => {
     await new ShopifyService().makeRequestPublic('GET', '/locations.json')
     expect(s.fetch).toHaveBeenCalledOnce()
   })
-  it('positive control: live mode sends the write', async () => {
+  it('live mode passes this gate — and since P1.4 the gateway refuses the old REST write anyway, with no call', async () => {
     shopifyMode('live')
-    await (new ShopifyService() as any).makeRequest('PUT', '/variants/1.json', {})
-    expect(s.fetch).toHaveBeenCalledOnce()
+    await expect((new ShopifyService() as any).makeRequest('PUT', '/variants/1.json', {})).rejects.toThrow(/a change goes out only on the 2026-07 GraphQL Admin API with a connected account/)
+    expect(s.fetch).not.toHaveBeenCalled()
   })
 })
 
