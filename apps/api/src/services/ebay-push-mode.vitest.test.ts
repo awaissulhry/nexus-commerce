@@ -1,6 +1,7 @@
 /**
  * GALE incident #3 regression — the push-mode routing decision.
- * Feed mode must NEVER handle shared/duplicate-SKU payloads.
+ * Feed mode must NEVER handle shared/duplicate-SKU payloads, and since P1.6 (R-6) the row count never
+ * chooses the feed lane: only an explicit mode:'feed' does.
  * Run: npx vitest run apps/api/src/services/ebay-push-mode.vitest.test.ts
  */
 import { describe, it, expect } from 'vitest'
@@ -38,16 +39,20 @@ describe('decideEbayPushMode', () => {
     expect(decideEbayPushMode(rows, undefined).mode).toBe('api')
   })
 
-  it('genuine large UNIQUE-SKU push still uses feed (the optimization survives)', () => {
+  it('P1.6 — a large UNIQUE-SKU push takes the API lane: the row count no longer chooses feed', () => {
     const d = decideEbayPushMode(uniqueRows(80), undefined)
-    expect(d.mode).toBe('feed')
+    expect(d.mode).toBe('api')
     expect(d.forcedApi).toBe(false)
     expect(d.hasSharedRow).toBe(false)
     expect(d.hasDuplicateSku).toBe(false)
   })
 
-  it('small unique push uses api (under threshold)', () => {
-    expect(decideEbayPushMode(uniqueRows(10), undefined).mode).toBe('api')
+  it('P1.6 — no row count reaches the feed lane by itself', () => {
+    for (const n of [10, 51, 200, 2000]) expect(decideEbayPushMode(uniqueRows(n), undefined).mode).toBe('api')
+  })
+
+  it('P1.6 — an explicit mode:feed on a clean unique payload is still honoured', () => {
+    expect(decideEbayPushMode(uniqueRows(80), 'feed').mode).toBe('feed')
   })
 
   it('explicit mode:api is always honored and is NOT a forced override', () => {
@@ -65,6 +70,6 @@ describe('decideEbayPushMode', () => {
     const rows = [{ sku: '' }, { sku: '' }, ...uniqueRows(60)]
     const d = decideEbayPushMode(rows, undefined)
     expect(d.hasDuplicateSku).toBe(false)
-    expect(d.mode).toBe('feed')
+    expect(d.mode).toBe('api')
   })
 })
