@@ -20,8 +20,10 @@
  */
 import { BlockList, isIP, type LookupFunction } from 'node:net'
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
-import { request as httpRequest, type IncomingMessage } from 'node:http'
-import { request as httpsRequest } from 'node:https'
+// node:http / node:https are imported when a webhook is sent, not at module load: this module sits in
+// the import graph of every alert (services/monitoring/alert.service.ts), and a test that replaces
+// node:http with a factory (services/pim/theme-change.vitest.test.ts) must not see it loaded early.
+import type { IncomingMessage } from 'node:http'
 import { decryptSecret, encryptSecret, isEncrypted } from './crypto.js'
 
 export const WEBHOOK_TIMEOUT_MS = 8_000
@@ -128,7 +130,7 @@ export interface WebhookDelivery {
 }
 
 /** POST one signed webhook body under the rules at the top of this file. Never throws. */
-export function deliverWebhook(
+export async function deliverWebhook(
   input: { url: string; body: string; headers: Record<string, string> },
   options: WebhookTransportOptions = {},
 ): Promise<WebhookDelivery> {
@@ -141,10 +143,10 @@ export function deliverWebhook(
   })
 
   const problem = webhookUrlProblem(input.url, options)
-  if (problem) return Promise.resolve(done(0, problem))
+  if (problem) return done(0, problem)
 
   const url = new URL(input.url.trim())
-  const send = url.protocol === 'https:' ? httpsRequest : httpRequest
+  const { request: send } = url.protocol === 'https:' ? await import('node:https') : await import('node:http')
   return new Promise((resolve) => {
     let settled = false
     const finish = (status: number, error: string | null) => {

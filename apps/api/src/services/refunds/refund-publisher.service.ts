@@ -305,10 +305,12 @@ async function publishEbayRefund(
 
   // Lazy-import to keep this service tree-shakeable + avoid a hard
   // dep on the eBay auth path when only Amazon is configured.
+  // P0.4 — this is only the "can we sign in" pre-check (its own clear
+  // message); the call below takes its token from the same token service.
   const { ebayAuthService } = await import('../ebay-auth.service.js')
-  let accessToken: string
+  const { ebayFetch } = await import('../cx/connectors/ebay/client.js')
   try {
-    accessToken = await ebayAuthService.getValidToken(connection.id)
+    await ebayAuthService.getValidToken(connection.id)
   } catch (err) {
     return {
       outcome: 'FAILED',
@@ -362,14 +364,14 @@ async function publishEbayRefund(
         triggeredBy: 'manual',
       },
       async () => {
-        const response = await fetch(url, {
+        // P0.4 (docs/channel-connections/FINAL-PLAN.md) — through the eBay
+        // connector client, which signs issue_refund (RFC 9421, the app's
+        // Key Management key). eBay requires the signature for EU/UK
+        // sellers; the plain fetch used before was refused with 215xxx.
+        const response = await ebayFetch(connection.id, url, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Accept-Language': 'en-US',
-            'X-EBAY-C-MARKETPLACE-ID': ebayMarketplace,
-          },
+          marketplaceId: ebayMarketplace,
+          headers: { 'Accept-Language': 'en-US' },
           body: JSON.stringify(body),
         })
 
