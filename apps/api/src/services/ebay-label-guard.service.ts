@@ -199,7 +199,11 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       continue
     }
     if (!controls.length) { refuse('PUSH_CONTROL_UNAVAILABLE', 'No owning listing controls were found; label repair was not sent.'); continue }
-    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null)
+    // P1.7 — the shared push lock now refuses an ENDED listing as well (`PUSH_LISTING_ENDED`). This
+    // guard keeps its own sentence for that case, so both codes its tests pin stay exactly as they are:
+    // a deliberate `presenceIntent` still answers PUSH_INTENT_ENDED, an ENDED listing status answers
+    // PUSH_LEGACY_ENDED below.
+    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null && refusal.code !== 'PUSH_LISTING_ENDED')
     if (locked) { refuse(locked.code, locked.sentence); continue }
     if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
     try {

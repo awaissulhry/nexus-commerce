@@ -3,11 +3,15 @@ export interface PushLockListing {
   offerClosedAt?: Date | string | null
   /** Optional until the Presence Wave 2 migration has been applied. */
   presenceIntent?: string | null
+  /** `ChannelListing.listingStatus`: DRAFT / ACTIVE / INACTIVE / ENDED / ERROR (P1.7). */
+  listingStatus?: string | null
+  /** Set by the Presence migration; until it is applied, `listingStatus` is the only ended signal. */
+  endedAt?: Date | string | null
 }
 
 export type PushRefusal = {
   code: 'PUSH_SYNC_PAUSED' | 'PUSH_OFFER_CLOSED' | 'PUSH_INTENT_HELD' | 'PUSH_INTENT_WITHDRAWN'
-    | 'PUSH_INTENT_ENDED' | 'PUSH_INTENT_DISCONTINUED' | 'PUSH_INTENT_RELEASED'
+    | 'PUSH_INTENT_ENDED' | 'PUSH_INTENT_DISCONTINUED' | 'PUSH_INTENT_RELEASED' | 'PUSH_LISTING_ENDED'
   sentence: string
 }
 
@@ -21,6 +25,12 @@ export function assertPushAllowed(listing: PushLockListing | null | undefined): 
     case 'ENDED': return { code: 'PUSH_INTENT_ENDED', sentence: 'This listing was deliberately ended. Relist it before sending changes.' }
     case 'DISCONTINUED': return { code: 'PUSH_INTENT_DISCONTINUED', sentence: 'This listing is discontinued. Sending changes is refused.' }
     case 'RELEASED': return { code: 'PUSH_INTENT_RELEASED', sentence: 'This listing identity was deliberately released. Sending changes is refused.' }
-    default: return null
   }
+  // P1.7 — an ENDED listing cannot come back through an ordinary push. Presence's intent columns are not
+  // in the generated client yet, so the listing's own status is the signal that works today; `endedAt`
+  // arrives with the Presence migration and is honoured the moment it does.
+  if (listing?.endedAt || String(listing?.listingStatus ?? '').trim().toUpperCase() === 'ENDED') {
+    return { code: 'PUSH_LISTING_ENDED', sentence: 'This listing is ended on the channel. Relist it before sending changes.' }
+  }
+  return null
 }

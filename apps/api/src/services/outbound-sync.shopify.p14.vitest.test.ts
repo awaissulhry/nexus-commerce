@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   listingAccount: 'conn-B' as string | null,
   listingQuantity: 7 as number | null,
+  listingStatus: 'ACTIVE' as string,
   warehouse: 50,
   sent: [] as Array<{ accountId: string; work: any }>,
   fail: null as string | null,
@@ -20,7 +21,7 @@ vi.mock('../db.js', () => ({
   default: {
     outboundSyncQueue: { findUnique: h.queueFindUnique, findMany: h.queueFindMany },
     channelListing: {
-      findUnique: vi.fn(async () => ({ id: 'listing-1', channelConnectionId: h.listingAccount, stockBuffer: 0, fulfillmentMethod: 'FBM', quantity: h.listingQuantity, marketplace: 'GLOBAL', syncPaused: false })),
+      findUnique: vi.fn(async () => ({ id: 'listing-1', channelConnectionId: h.listingAccount, stockBuffer: 0, fulfillmentMethod: 'FBM', quantity: h.listingQuantity, marketplace: 'GLOBAL', syncPaused: false, listingStatus: h.listingStatus })),
       findMany: vi.fn(async ({ where }: any) => {
         if (where?.id?.in) return where.id.in.includes('listing-1') && h.listingAccount ? [{ id: 'listing-1', channelConnectionId: h.listingAccount }] : []
         // two Shopify accounts hold P2
@@ -60,7 +61,7 @@ beforeEach(() => {
   // The old path's env credentials are set: they must not be used.
   vi.stubEnv('SHOPIFY_SHOP_NAME', 'env-shop')
   vi.stubEnv('SHOPIFY_ACCESS_TOKEN', 'env-token')
-  h.listingAccount = 'conn-B'; h.listingQuantity = 7; h.warehouse = 50; h.sent = []; h.fail = null
+  h.listingAccount = 'conn-B'; h.listingQuantity = 7; h.warehouse = 50; h.sent = []; h.fail = null; h.listingStatus = 'ACTIVE'
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
@@ -86,6 +87,13 @@ describe('P1.4 — the Shopify queue: the row\'s own account, never the env cred
     const r = await service.syncToShopify(row({ channelConnectionId: 'conn-A' }))
     expect(r).toMatchObject({ status: 'FAILED', errorCode: 'WRONG_ACCOUNT_WRITE', retryable: false })
     expect(h.sent).toHaveLength(0)
+  })
+  it('P1.7 — the listing is ENDED on the channel: refused by the push lock, 0 calls', async () => {
+    h.listingStatus = 'ENDED'
+    const r = await service.syncToShopify(row({ channelConnectionId: 'conn-B' }))
+    expect(r).toMatchObject({ status: 'SKIPPED', errorCode: 'PUSH_LISTING_ENDED', retryable: false })
+    expect(h.sent).toHaveLength(0)
+    expect(fetch).not.toHaveBeenCalled()
   })
   it('publish mode not live: skipped, 0 calls', async () => {
     vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'dry-run')
