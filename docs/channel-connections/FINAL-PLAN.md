@@ -283,7 +283,7 @@ Paths are under `apps/api/src/` unless shown. This is a partial check (the helpe
 
 ### 4.9 Security
 
-> **Update 2026-09-19:** the 14 public monitoring routes, the `===` bidding-token compare and the Cloudinary re-built body are closed by **P0.2** (committed locally, not pushed): see `build/P0.2.md`. S14 (operator webhooks) is P0.3 (building): see `build/P0.3.md`.
+> **Update 2026-09-19:** the 14 public monitoring routes, the `===` bidding-token compare and the Cloudinary re-built body are closed by **P0.2** (committed locally, not pushed): see `build/P0.2.md`. S14 (operator webhooks) is closed by P0.3 (committed locally, not pushed): see `build/P0.3.md`.
 
 - **Closed since 08-29 (CODE):** S1, S2, S4, S5, S6, S7, S8, S12, S13, S16. S9 is partly closed.
 - **Still open (CODE):**
@@ -330,7 +330,7 @@ Size: **S** ≈ 1 session · **M** ≈ 2–3 sessions · **L** ≈ a week of ses
 
 ### P0 — Make it safe (first, small, urgent)
 
-> **State 2026-09-19:** P0.1 and P0.2 BUILT and committed locally, push blocked (see 14.4). P0.3 building. P0.4–P0.8 not started. The live state is always table 14.2.
+> **State 2026-09-19:** P0.1 and P0.2 BUILT and committed locally, push blocked (see 14.4). P0.3 BUILT and committed locally. P0.4 building. P0.5–P0.8 not started. The live state is always table 14.2.
 
 | ID | Work | Why (evidence) | Done when | Size | Your yes |
 |---|---|---|---|---|---|
@@ -675,8 +675,9 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | Owner items (section 8) | NOT STARTED | — | Secret date first |
 | P0.1 | BUILT (2026-09-19) | `build/P0.1.md` | Not committed. Prod switches read: eBay + Amazon live. Prod proof waits for a push |
 | P0.2 | BUILT (2026-09-19) | `build/P0.2.md` | Committed locally, not pushed. Prod proof: anonymous GET /api/monitoring/queue-stats → 401 after a push |
-| P0.3 | BUILDING (2026-09-19) | `build/P0.3.md` | Owner "go" 2026-09-19 |
-| P0.4 – P0.8 | NOT STARTED | — | |
+| P0.3 | BUILT (2026-09-19) | `build/P0.3.md` | Committed locally, not pushed. Prod read (encryption key set?) refused by the permission system; prod proof after a push |
+| P0.4 | BUILDING (2026-09-19) | `build/P0.4.md` | Owner "go" 2026-09-19 |
+| P0.5 – P0.8 | NOT STARTED | — | |
 | P6.1 automatic secret rotation | NOT STARTED | — | Needs the queue registered |
 | P1.1 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |

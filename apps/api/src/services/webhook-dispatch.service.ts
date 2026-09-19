@@ -27,11 +27,24 @@
  * Phase E window before the signing-secret format flip) are
  * skipped with a logged warning; the operator must recreate the
  * subscription to get a usable signing key.
+ *
+ * P0.3 (S14): every delivery goes through lib/outbound-webhook.ts —
+ * HTTPS to a public address only, checked at connect time, no
+ * redirects, 8 s, reply capped. The secret is stored sealed; a
+ * pre-P0.3 plain-text row still signs and is re-sealed on the
+ * bookkeeping write of its delivery.
  */
 
 import { createHmac } from 'crypto'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import {
+  capWebhookError,
+  deliverWebhook,
+  openWebhookSecret,
+  resealIfLegacy,
+  type OpenedWebhookSecret,
+} from '../lib/outbound-webhook.js'
 
 // Same shape as the test-payload signing in the routes file.
 function signPayload(secret: string, payload: string): string {
@@ -39,7 +52,6 @@ function signPayload(secret: string, payload: string): string {
 }
 
 const FAILS_BEFORE_AUTO_PAUSE = 10
-const DELIVERY_TIMEOUT_MS = 8_000
 
 export interface WebhookEventPayload {
   /** The event-type, must match one of the canonical strings
@@ -116,9 +128,13 @@ async function deliverOne(
   envelope: string,
   result: DispatchResult,
 ): Promise<void> {
-  const looksLikeBcrypt =
-    typeof sub.secretHash === 'string' && sub.secretHash.startsWith('$2')
-  if (looksLikeBcrypt) {
+  let opened: OpenedWebhookSecret | null
+  try {
+    opened = openWebhookSecret(String(sub.secretHash ?? ''))
+  } catch {
+    opened = null
+  }
+  if (opened?.kind === 'legacy-bcrypt') {
     result.skipped++
     logger.warn(
       'webhook-dispatch: skipped legacy bcrypted subscription — operator must recreate to enable dispatch',
@@ -126,33 +142,29 @@ async function deliverOne(
     )
     return
   }
-  const signature = signPayload(sub.secretHash, envelope)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS)
   let status = 0
   let errText: string | null = null
-  try {
-    const res = await fetch(sub.url, {
-      method: 'POST',
+  if (!opened) {
+    // A sealed secret that no longer opens (key changed, row edited):
+    // nothing is sent; the row records why.
+    errText = 'The signing secret cannot be read. Recreate the webhook. Nothing was sent.'
+  } else {
+    const signature = signPayload(opened.secret, envelope)
+    const delivery = await deliverWebhook({
+      url: sub.url,
+      body: envelope,
       headers: {
         'Content-Type': 'application/json',
         'X-Nexus-Event': sub.events?.[0] ?? 'event',
         'X-Nexus-Signature': `sha256=${signature}`,
       },
-      body: envelope,
-      signal: controller.signal,
     })
-    status = res.status
-    if (!(status >= 200 && status < 300)) {
-      errText = (await res.text().catch(() => null)) ?? `HTTP ${status}`
-    }
-  } catch (err) {
-    errText = err instanceof Error ? err.message : String(err)
-  } finally {
-    clearTimeout(timeout)
+    status = delivery.status
+    errText = delivery.ok ? null : delivery.error ?? `HTTP ${status}`
   }
+  const resealed = opened ? resealIfLegacy(opened) : undefined
 
-  const success = status >= 200 && status < 300
+  const success = status >= 200 && status < 300 && errText === null
   if (success) result.delivered++
   else result.failed++
 
@@ -167,9 +179,10 @@ async function deliverOne(
       data: {
         lastFiredAt: new Date(),
         lastStatus: status,
-        lastError: errText,
+        lastError: capWebhookError(errText),
         consecutiveFails: nextFails,
         ...(autoPause ? { isActive: false } : {}),
+        ...(resealed ? { secretHash: resealed } : {}),
       },
     })
     if (autoPause) {

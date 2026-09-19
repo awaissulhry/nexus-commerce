@@ -15,12 +15,15 @@ import { currentProfileUser } from '../lib/auth/current-user.js'
  * Secret handling:
  *   • Generated server-side as 32 random bytes, hex-encoded
  *   • Plaintext returned exactly once at create time
- *   • Stored AS-IS so the dispatcher can sign outbound payloads
- *     (bcrypt would be one-way; the receiver verifies HMAC with
- *     the same plaintext they got on create). secretPrefix is
- *     the first 8 chars, shown in the UI for identification.
- *   • TODO: AES-GCM at rest, keyed off an env var, when we feel
- *     the audit case. For now Postgres + Neon TLS protect the wire.
+ *   • P0.3 — stored as an AES-GCM v1 envelope (lib/outbound-webhook.ts)
+ *     in the column still named `secretHash`; the dispatcher opens it
+ *     to sign (bcrypt would be one-way). A missing key refuses the
+ *     save. Pre-P0.3 plain-text rows still sign and are re-sealed on
+ *     their next delivery. secretPrefix is the first 8 chars, shown in
+ *     the UI for identification.
+ *
+ * URL handling (P0.3, S14): HTTPS to a public address only, no
+ * redirects, 8 s, a capped reply — see lib/outbound-webhook.ts.
  *
  * The dispatch worker that actually fires real events isn't wired
  * here — Phase E lands the schema + CRUD + test-payload. Real
@@ -32,6 +35,14 @@ import type { FastifyPluginAsync } from 'fastify'
 import { randomBytes, createHmac } from 'crypto'
 import prisma from '../db.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
+import {
+  capWebhookError,
+  deliverWebhook,
+  openWebhookSecret,
+  resealIfLegacy,
+  sealWebhookSecret,
+  webhookUrlProblem,
+} from '../lib/outbound-webhook.js'
 
 // Event-types are validated against this list — same set the
 // /settings/notifications page uses. Drop a key here when a new
@@ -107,26 +118,10 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
           .code(400)
           .send({ error: 'Label is required (1–80 characters).' })
       }
-      // Basic URL validation. Reject http:// in production — webhook
-      // payloads must travel over TLS. localhost passes for testing.
-      try {
-        const u = new URL(url)
-        if (!['http:', 'https:'].includes(u.protocol)) {
-          throw new Error('protocol')
-        }
-        const isLocal =
-          u.hostname === 'localhost' ||
-          u.hostname === '127.0.0.1' ||
-          u.hostname.endsWith('.local')
-        if (u.protocol === 'http:' && !isLocal) {
-          return reply.code(400).send({
-            error:
-              'Webhook URL must use HTTPS (HTTP allowed only for localhost / .local during testing).',
-          })
-        }
-      } catch {
-        return reply.code(400).send({ error: 'URL must be a valid http(s) URL.' })
-      }
+      // P0.3 — HTTPS to a public address only (no localhost, private
+      // network or metadata host). Re-checked at connect time.
+      const urlProblem = webhookUrlProblem(url)
+      if (urlProblem) return reply.code(400).send({ error: urlProblem })
       const invalidEvents = events.filter((e) => !KNOWN_EVENTS.has(e))
       if (invalidEvents.length > 0) {
         return reply.code(400).send({
@@ -138,16 +133,24 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
       const rawSecret = generateSecret()
       const secretPrefix = rawSecret.slice(0, 8)
 
-      // Phase H follow-up — store plaintext so the dispatcher can
-      // HMAC-sign payloads. The column is still named `secretHash`
-      // for back-compat with Phase E migrations; we just don't
-      // hash anymore. See header comment.
+      // P0.3 — the column is still named `secretHash` (Phase E), but it
+      // holds a sealed envelope the dispatcher can open to HMAC-sign.
+      // Without the encryption key, refuse: never store plain text.
+      let sealedSecret: string
+      try {
+        sealedSecret = sealWebhookSecret(rawSecret)
+      } catch {
+        return reply.code(503).send({
+          error:
+            'Webhook secrets cannot be stored safely: the encryption key is not configured. Nothing was saved.',
+        })
+      }
       const row = await (prisma as any).notificationWebhook.create({
         data: {
           userId: user?.id ?? null,
           label,
           url,
-          secretHash: rawSecret,
+          secretHash: sealedSecret,
           secretPrefix,
           events,
           isActive: true,
@@ -221,13 +224,9 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (typeof body.url === 'string') {
         const v = body.url.trim()
-        try {
-          new URL(v)
-        } catch {
-          return reply
-            .code(400)
-            .send({ error: 'URL must be a valid http(s) URL.' })
-        }
+        // P0.3 — the same rule as create (it accepted any URL before).
+        const urlProblem = webhookUrlProblem(v)
+        if (urlProblem) return reply.code(400).send({ error: urlProblem })
         data.url = v
       }
       if (Array.isArray(body.events)) {
@@ -318,16 +317,20 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
         if (!row) {
           return reply.code(404).send({ error: 'Webhook not found' })
         }
-        // Sign with the row's stored secret — same key the
-        // receiver verifies with. Rows created before the
-        // bcrypt→plaintext flip (Phase H follow-up) have a
-        // one-way hash here; the dispatcher can't sign with them.
-        // Surface a clear hint instead of firing a payload the
-        // receiver can never verify.
-        const looksLikeBcrypt =
-          typeof row.secretHash === 'string' &&
-          row.secretHash.startsWith('$2')
-        if (looksLikeBcrypt) {
+        // Sign with the row's stored secret — same key the receiver
+        // verifies with. Rows created in the brief Phase E window hold
+        // a one-way bcrypt hash and can never sign: say so instead of
+        // firing a payload the receiver can never verify.
+        let opened: ReturnType<typeof openWebhookSecret>
+        try {
+          opened = openWebhookSecret(String(row.secretHash ?? ''))
+        } catch {
+          return reply.code(409).send({
+            error:
+              'The signing secret for this webhook cannot be read. Recreate the webhook to generate a fresh signing key.',
+          })
+        }
+        if (opened.kind === 'legacy-bcrypt') {
           return reply.code(409).send({
             error:
               'This subscription was created before the secret-format upgrade and cannot be signed. Recreate the webhook to generate a fresh signing key.',
@@ -340,52 +343,38 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
           webhookId: row.id,
           data: { hello: 'world' },
         })
-        const signature = signPayload(row.secretHash, payload)
+        const signature = signPayload(opened.secret, payload)
 
-        const started = Date.now()
-        let status = 0
-        let errText: string | null = null
-        try {
-          const controller = new AbortController()
-          const timeout = setTimeout(() => controller.abort(), 8000)
-          const res = await fetch(row.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Nexus-Event': 'TEST',
-              // sha256=<hex> — same convention GitHub + Stripe use.
-              'X-Nexus-Signature': `sha256=${signature}`,
-              'X-Nexus-Test': '1',
-            },
-            body: payload,
-            signal: controller.signal,
-          })
-          clearTimeout(timeout)
-          status = res.status
-          if (!res.ok) {
-            errText = await res.text().catch(() => `HTTP ${status}`)
-          }
-        } catch (e: any) {
-          errText = e?.message ?? String(e)
-          status = 0
-        }
-        const tookMs = Date.now() - started
+        // P0.3 — public HTTPS only, no redirects, 8 s, capped reply.
+        const delivery = await deliverWebhook({
+          url: row.url,
+          body: payload,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Nexus-Event': 'TEST',
+            // sha256=<hex> — same convention GitHub + Stripe use.
+            'X-Nexus-Signature': `sha256=${signature}`,
+            'X-Nexus-Test': '1',
+          },
+        })
+        const resealed = resealIfLegacy(opened)
 
         await (prisma as any).notificationWebhook.update({
           where: { id: row.id },
           data: {
             lastFiredAt: new Date(),
-            lastStatus: status,
-            lastError: errText,
-            consecutiveFails: status >= 200 && status < 300 ? 0 : row.consecutiveFails + 1,
+            lastStatus: delivery.status,
+            lastError: capWebhookError(delivery.error),
+            consecutiveFails: delivery.ok ? 0 : row.consecutiveFails + 1,
+            ...(resealed ? { secretHash: resealed } : {}),
           },
         })
 
         return {
-          ok: status >= 200 && status < 300,
-          status,
-          error: errText,
-          tookMs,
+          ok: delivery.ok,
+          status: delivery.status,
+          error: delivery.error,
+          tookMs: delivery.tookMs,
         }
       } catch (err: any) {
         fastify.log.error({ err }, '[settings/webhooks/test] failed')
