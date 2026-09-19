@@ -697,7 +697,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P1.3 | BUILT (2026-09-19) | `build/P1.3.md` | Committed locally, not pushed. Queue column (migration `20260919b_p13_queue_destination`, additive); one creation module for all 35 sites; the sender uses the row's account (never the primary); 2 per account at a time; backup loop 200/tick |
 | P1.5 | BUILT (2026-09-19) | `build/P1.5.md` | Committed locally, not pushed. Listing writes get their three headers from the Marketplace row (EBAY_IT → it-IT); `toListingLanguage` deleted (LX F-LX-6 closed); flat-file routes included (Owner) |
 | P1.4 | BUILT (2026-09-19) | `build/P1.4.md` | Committed locally, not pushed. P1.4a queue + P1.4b order actions, bulk action, gateway rule: a Shopify change leaves only on the `2026-07` GraphQL API with a named account (0 REST 2024-01 writes). Live stock round-trip needs a dev store + the Owner's yes. A linked listing with no reviewed location uses the shop's location when it has exactly one (Owner, 2026-09-20) |
-| P1.6 – P1.8 | NOT STARTED | — | P1.6 needs the delete list shown first |
+| P1.6 | BUILT (2026-09-20) | `build/P1.6-delete-list.md` | Committed locally, not pushed. The Owner approved groups A, B and C; 26 files gone, the ratchet still 0. The eBay feed lane is no longer chosen by row count (R-6). Group D stays and is fixed later |
+| P1.7 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |
@@ -719,6 +720,8 @@ Write each answer here with its date, for example: `D2 = A (2026-09-20)`.
 | P1.5 scope | The Owner, 2026-09-19: **include the flat-file routes** in the eBay language-header switch. | 2026-09-19 |
 | Shopify stock location for a linked listing (P1.4) | The Owner, 2026-09-20: **use the shop's own location when it has exactly one active location**; two or more (or none) are refused. Nexus never picks "the first". | 2026-09-20 |
 | Production reads for the P1.6 delete list | The Owner, 2026-09-20: **yes** — this session may read production traffic (Railway `http-requests`, read-only) to prove that a route has no caller. Writes still need a separate yes. | 2026-09-20 |
+| P1.6 delete list | The Owner, 2026-09-20: **groups A, B and C** — delete the code with no caller, the old env-credential Shopify routes (after the locations discovery was moved), and the WooCommerce code. | 2026-09-20 |
+| eBay feed lane (R-6) | The Owner, 2026-09-20: **send big pushes through the API lane** until P1.8 proves the feed lane against eBay's sandbox. An explicit `mode: 'feed'` is still honoured. | 2026-09-20 |
 
 ### 14.4 Handover notes (2026-09-19, from the P0.1 / P0.2 session)
 
