@@ -22,6 +22,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import prisma from '../db.js'
 import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { LEGACY_WORKSPACE_ID } from '../lib/workspace-context.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -71,6 +72,7 @@ async function runSqsPoll(): Promise<void> {
  * Exported for tests (P0.6); the poll loop above is its only production caller.
  */
 export async function handleSqsMessage(message: SqsOrderMessage, tally: { processed: number; skipped: number }): Promise<void> {
+  if (message.credentialBody !== undefined) { await handleCredentialOnNotificationsQueue(message, tally); return }
   const processMessage = async () => { for (const msg of [message]) {
         // P3.4 — Persist to WebhookEvent so the message appears in
         // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
@@ -490,6 +492,36 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
   } catch (error) {
     logger.error('Amazon notification retained for retry: processing failed', { messageId: message.messageId, error: String(error) })
   }
+}
+
+/**
+ * P6.1 — an app-credential notification on the notifications queue (the Owner may register one queue
+ * for both). It belongs to the platform, not a profile: recorded in the legacy profile with a
+ * REDACTED payload (it can carry the new secret), handed to the rotation handler, and deleted only
+ * when the handler is done with it — a new secret that could not be tested or stored stays queued.
+ */
+async function handleCredentialOnNotificationsQueue(message: SqsOrderMessage, tally: { processed: number; skipped: number }): Promise<void> {
+  const written = await legacyIngress(() => recordInbound({
+    channel: 'AMAZON',
+    eventType: message.notificationType,
+    externalId: message.messageId || undefined,
+    payload: message.rawPayload,
+    signatureOk: null,
+    verifiedBy: 'sqs_iam',
+    status: 'pending',
+  }))
+  if (!written.id) {
+    logger.error('[SQS poll] inbound ledger unavailable — credential notification retained', { messageId: message.messageId })
+    tally.skipped++
+    return
+  }
+  const { handleAmazonCredentialMessage } = await import('../services/cx/amazon-secret-rotation.service.js')
+  const outcome = await withIngressWorkspace(LEGACY_WORKSPACE_ID, () => handleAmazonCredentialMessage(message.credentialBody!))
+  const kept = outcome === 'test_failed' || outcome === 'store_failed'
+  await legacyIngress(() => completeInbound(written.id, !kept && outcome !== 'ignored', kept ? `The new secret could not be ${outcome === 'test_failed' ? 'verified' : 'stored'}; kept on the queue.` : outcome === 'ignored' ? 'Not for this app.' : undefined))
+  if (kept) { tally.skipped++; return }
+  await deleteSqsMessage(message.receiptHandle)
+  tally.processed++
 }
 
 /**

@@ -105,7 +105,7 @@ describe('P0.5 — the routes', () => {
     expect(apps).toHaveLength(2)
     expect(apps[0]).toEqual({
       channelKey: 'AMAZON_SP', label: 'Amazon SP-API', environment: 'production',
-      secretExpiresAt: h.apps[0].secretExpiresAt.toISOString(), daysLeft: 45, rotatedAt: null,
+      secretExpiresAt: h.apps[0].secretExpiresAt.toISOString(), daysLeft: 45, rotatedAt: null, automaticRotation: false,
     })
     expect(apps[1]).toMatchObject({ channelKey: 'EBAY', secretExpiresAt: null, daysLeft: null })
     expect(JSON.stringify(response.json())).not.toMatch(/SECRET|KEY|amzn1|ebay-app/)

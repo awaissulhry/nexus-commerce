@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Banner, Card, DateField, EmptyState, Field } from '@/design-system/components'
 import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
-import { appSecretStatus, expiryInputValue, sortAppSecrets, type AppSecretRow } from './app-secrets'
+import { appSecretStatus, expiryInputValue, rotationNote, sortAppSecrets, type AppSecretRow } from './app-secrets'
 
 export function AppSecretsCard() {
   const api = getBackendUrl()
@@ -102,6 +102,7 @@ function AppSecretItem({ row, onSaved }: { row: AppSecretRow; onSaved: () => Pro
           </Pill>
         </div>
         <p className="nds-app-secret-detail">{status.detail}</p>
+        {rotationNote(row) && <p className="nds-app-secret-detail">{rotationNote(row)}</p>}
       </div>
       <div className="nds-app-secret-form">
         <div className="nds-app-secret-date">

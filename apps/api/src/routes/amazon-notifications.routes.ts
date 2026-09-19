@@ -64,7 +64,8 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY ?? null
     const awsRegion = process.env.AWS_REGION ?? null
     const amzRegion = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion() ?? null
-    const lwaId     = process.env.AMAZON_LWA_CLIENT_ID ?? process.env.AMAZON_CLIENT_ID ?? null
+    // P6.1 — the app id the token exchanges really use (ChannelApp), not the env copy.
+    const lwaId     = await import('../services/cx/apps.service.js').then((m) => m.getChannelApp('AMAZON_SP')).then((app) => app.clientId).catch(() => null)
     const spSlug    = mapAwsRegionToSpApiSlug(amzRegion ?? awsRegion ?? 'na')
     const spApiHost = `sellingpartnerapi-${spSlug}.amazon.com`
 

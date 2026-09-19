@@ -14,10 +14,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   queue: [] as Array<{ Body: string; ReceiptHandle: string; MessageId: string }>,
-  timeline: [] as Array<{ op: 'record' | 'complete' | 'delete'; key: string; workspace?: string; status?: string; ok?: boolean; error?: string; eventType?: string }>,
+  timeline: [] as Array<{ op: 'record' | 'complete' | 'delete'; key: string; workspace?: string; status?: string; ok?: boolean; error?: string; eventType?: string; payload?: string }>,
   ledgerDown: false,
   syncNewOrders: vi.fn(async () => undefined),
   cronRuns: [] as Array<{ name: string; workspace?: string }>,
+  credentialOutcome: 'saved' as string,
+  credentialBodies: [] as string[],
 }))
 
 vi.mock('@aws-sdk/client-sqs', () => {
@@ -36,10 +38,10 @@ vi.mock('../services/cx/ingress/ledger.js', async () => {
   const { workspaceContext } = await import('../lib/workspace-context.js')
   let n = 0
   return {
-    recordInbound: vi.fn(async (rec: { externalId?: string; status?: string; eventType: string; lastError?: string }) => {
+    recordInbound: vi.fn(async (rec: { externalId?: string; status?: string; eventType: string; lastError?: string; payload?: unknown }) => {
       if (h.ledgerDown) return { id: null, duplicate: false }
       const id = `wh-${++n}`
-      h.timeline.push({ op: 'record', key: rec.externalId ?? '?', workspace: workspaceContext()?.workspaceId, status: rec.status, eventType: rec.eventType, error: rec.lastError })
+      h.timeline.push({ op: 'record', key: rec.externalId ?? '?', workspace: workspaceContext()?.workspaceId, status: rec.status, eventType: rec.eventType, error: rec.lastError, payload: JSON.stringify(rec.payload) })
       return { id, duplicate: false }
     }),
     completeInbound: vi.fn(async (id: string | null, ok: boolean, error?: string) => { h.timeline.push({ op: 'complete', key: String(id), ok, error }) }),
@@ -87,6 +89,11 @@ vi.mock('../services/connection-resolver.service.js', async () => {
   }
 })
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
+// P6.1 — the rotation handler is a stand-in here; its own tests are in services/cx/amazon-secret-rotation.p61.
+vi.mock('../services/cx/amazon-secret-rotation.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/cx/amazon-secret-rotation.service.js')>()),
+  handleAmazonCredentialMessage: vi.fn(async (body: string) => { h.credentialBodies.push(body); return h.credentialOutcome }),
+}))
 
 import { pollSqsMessages } from '../services/amazon-sqs.service.js'
 import { handleSqsMessage } from './amazon-sqs-poll.job.js'
@@ -214,5 +221,28 @@ describe('P0.6 — subscriptions', () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '0')
     expect(await runAmazonNotificationSetup()).toEqual({ visited: 1, ran: 1 })
     expect(h.cronRuns).toEqual([{ name: 'amazon-notifications-setup', workspace: undefined }])
+  })
+})
+
+describe('P6.1 — an app-credential message on the notifications queue', () => {
+  const SECRET = 'new-secret-DO-NOT-STORE'
+  const body = JSON.stringify({ notificationType: 'APPLICATION_OAUTH_CLIENT_NEW_SECRET', payload: { applicationOAuthClientNewSecret: { clientId: 'c', newClientSecret: SECRET } } })
+  beforeEach(() => { h.credentialOutcome = 'saved'; h.credentialBodies.length = 0 })
+  it('is recorded REDACTED in the legacy profile, handed to the rotation handler, then deleted', async () => {
+    enqueue('c1', body)
+    await drain()
+    expect(recordOf('c1')).toMatchObject({ workspace: LEGACY_WORKSPACE_ID, eventType: 'APPLICATION_OAUTH_CLIENT_NEW_SECRET' })
+    // The ledger saw the payload (so this check can fail), and the payload has no secret in it.
+    expect(recordOf('c1')?.payload).toMatch(/redacted/)
+    expect(JSON.stringify(h.timeline)).not.toContain(SECRET)
+    expect(h.credentialBodies).toEqual([body])
+    expect(deleteIndex('c1')).toBeGreaterThan(recordIndex('c1'))
+  })
+  it('a new secret the handler could not verify stays on the queue', async () => {
+    h.credentialOutcome = 'test_failed'
+    enqueue('c2', body)
+    await drain()
+    expect(h.credentialBodies).toEqual([body])
+    expect(deleted('c2')).toBe(false)
   })
 })

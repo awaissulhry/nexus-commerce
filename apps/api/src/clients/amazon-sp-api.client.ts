@@ -122,26 +122,18 @@ export class AmazonSpApiClient {
   private lastRequestTime: number = 0
   private readonly REQUEST_DELAY_MS = 200 // 5 requests/second = 200ms between requests
 
-  private readonly clientId: string
-  private readonly clientSecret: string
   readonly region: string
 
+  // P6.1 — the app's client id and secret are NOT read from env here any more: the secret rotates
+  // (ChannelApp), and a copy taken at construction would keep using the old one after a rotation.
+  // getGrantlessToken reads ChannelApp on every exchange, like the seller-token path.
   constructor(private readonly boundAccount?: { id: string; region: string }) {
-    this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
-    this.clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET || process.env.AMAZON_CLIENT_SECRET || ''
     // SP-API endpoint slugs are 'na' | 'eu' | 'fe' — not AWS region names.
     // Map AWS region names → SP-API slugs so AMAZON_REGION=us-east-1 works.
     // Default EU to match the listings-feed path (which uses `?? 'eu'`). Xavia
     // sells on EU marketplaces; defaulting NA here made every getListingsItem hit
     // the North America endpoint → 404 on all EU listings → blind read-back.
     this.region = boundAccount?.region ?? mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
-
-    if (!this.clientId || !this.clientSecret) {
-      logger.warn('Amazon SP-API application credentials not fully configured', {
-        hasClientId: !!this.clientId,
-        hasClientSecret: !!this.clientSecret,
-      })
-    }
   }
 
   /**
@@ -167,13 +159,15 @@ export class AmazonSpApiClient {
     if (cached && now < cached.expiresAt) return cached.token
 
     logger.info('Requesting grantless LWA token', { scope })
+    const { getChannelApp } = await import('../services/cx/apps.service.js')
+    const app = await getChannelApp('AMAZON_SP')
     const response = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
+        client_id: app.clientId,
+        client_secret: app.clientSecret,
         scope,
       }).toString(),
     })

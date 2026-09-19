@@ -691,7 +691,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P0.6 | BUILT (2026-09-19) | `build/P0.6.md` | Committed locally, not pushed. Prod proof: per-profile setup CronRuns; no Amazon row left pending |
 | P0.7 | BUILT (2026-09-19) | `build/P0.7.md` | Committed locally, not pushed. Guard removed again by P1.3 |
 | P0.8 | BUILT (2026-09-19) | `build/P0.8.md` | Committed locally. Docs only: section 3 has no DOC rows left |
-| P6.1 automatic secret rotation | NOT STARTED | — | Needs the queue registered |
+| P6.1 automatic secret rotation | BUILT (2026-09-19) | `build/P6.1.md` | Committed locally, not pushed. OFF until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (build/P6.1.md section 4) |
 | P1.1 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |

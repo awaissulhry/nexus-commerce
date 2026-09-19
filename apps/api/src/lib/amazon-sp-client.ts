@@ -30,7 +30,9 @@ export async function amazonCredsConfigured(): Promise<boolean> {
     const account = await amazonAccount()
     if (account.managedBy === 'oauth') return true
     if (account.managedBy !== 'env') return false
-    return Boolean(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
+    // P6.1 — the app credentials live in ChannelApp (they rotate); only the legacy refresh token is env.
+    const app = await (await import('../services/cx/apps.service.js')).getChannelApp('AMAZON_SP').catch(() => null)
+    return Boolean(app?.clientId && app?.clientSecret && process.env.AMAZON_REFRESH_TOKEN)
   } catch { return false }
 }
 const legacyTokens = new Map<string, { token: string; expiresAt: number }>()

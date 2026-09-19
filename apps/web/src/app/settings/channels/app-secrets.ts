@@ -14,6 +14,19 @@ export interface AppSecretRow {
   secretExpiresAt: string | null
   daysLeft: number | null
   rotatedAt: string | null
+  /** P6.1 — Amazon SP-API only: whether Nexus rotates the secret by itself. */
+  automaticRotation?: boolean | null
+}
+
+/** P6.1 — one sentence about automatic rotation, for the apps that have it; null for the rest. */
+export function rotationNote(row: AppSecretRow): string | null {
+  if (row.automaticRotation === true) {
+    return `Automatic rotation is on: Nexus asks Amazon for a new secret ${row.secretExpiresAt ? '30 days before this date' : 'as soon as Amazon reports the date'}, tests it and stores it.${row.rotatedAt ? ` Last rotated ${formatExpiryDate(row.rotatedAt)}.` : ''}`
+  }
+  if (row.automaticRotation === false) {
+    return 'Automatic rotation is off: register the credential queue with Amazon to turn it on (see the channel-connections runbook).'
+  }
+  return null
 }
 
 /** Apps whose secret expires on a fixed schedule we must track (Amazon: every 180 days). */

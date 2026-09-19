@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appSecretStatus, expiryInputValue, formatExpiryDate, type AppSecretRow } from './app-secrets'
+import { appSecretStatus, expiryInputValue, formatExpiryDate, rotationNote, type AppSecretRow } from './app-secrets'
 
 // P0.5 — what the "App secrets" card says. The web runner is node-only, so the pure logic is pinned.
 
@@ -40,5 +40,16 @@ describe('expiryInputValue', () => {
   it('gives the date field yyyy-mm-dd, or empty when no date is recorded', () => {
     expect(expiryInputValue(row({}))).toBe('2026-12-23')
     expect(expiryInputValue(row({ secretExpiresAt: null }))).toBe('')
+  })
+})
+
+describe('rotationNote (P6.1)', () => {
+  it('says rotation is on, when, and the last rotation', () => {
+    expect(rotationNote(row({ automaticRotation: true, rotatedAt: '2026-07-30T08:00:00.000Z' }))).toBe('Automatic rotation is on: Nexus asks Amazon for a new secret 30 days before this date, tests it and stores it. Last rotated 30 Jul 2026.')
+    expect(rotationNote(row({ automaticRotation: true, secretExpiresAt: null, daysLeft: null }))).toMatch(/as soon as Amazon reports the date/)
+  })
+  it('says how to turn it on when it is off, and says nothing for apps without it', () => {
+    expect(rotationNote(row({ automaticRotation: false }))).toMatch(/^Automatic rotation is off: register the credential queue/)
+    expect(rotationNote(row({ channelKey: 'EBAY', label: 'eBay', automaticRotation: null }))).toBeNull()
   })
 })

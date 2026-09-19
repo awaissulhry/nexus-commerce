@@ -50,6 +50,8 @@ export interface AppSecretSummary {
   secretExpiresAt: string | null
   daysLeft: number | null
   rotatedAt: string | null
+  /** P6.1 — Amazon SP-API only: true when the credential queue is configured (rotation runs by itself). */
+  automaticRotation: boolean | null
 }
 
 /** Every app row, with its expiry date. Selects no credential column. */
@@ -65,6 +67,7 @@ export async function listAppSecrets(now: number = Date.now()): Promise<AppSecre
     secretExpiresAt: row.secretExpiresAt ? row.secretExpiresAt.toISOString() : null,
     daysLeft: row.secretExpiresAt ? daysUntil(row.secretExpiresAt, now) : null,
     rotatedAt: row.rotatedAt ? row.rotatedAt.toISOString() : null,
+    automaticRotation: row.channelKey === 'AMAZON_SP' ? Boolean(process.env.AMAZON_APP_CREDENTIAL_QUEUE_URL?.trim()) : null,
   }))
 }
 

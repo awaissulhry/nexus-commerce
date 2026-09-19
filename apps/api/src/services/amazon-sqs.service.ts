@@ -21,6 +21,7 @@ import {
   type Message,
 } from '@aws-sdk/client-sqs'
 import { logger } from '../utils/logger.js'
+import { credentialNotificationType } from './cx/amazon-secret-rotation.service.js'
 
 export interface OrderChangeNotification {
   amazonOrderId: string
@@ -173,6 +174,12 @@ export interface SqsOrderMessage {
    * P0.6 the parser deleted these messages itself, before any ledger row existed.
    */
   unhandled?: string
+  /**
+   * P6.1 — an app-credential notification (a new client SECRET, or its expiry date) that arrived on
+   * this queue. The raw body is kept in memory only, for the rotation handler; `rawPayload` is
+   * redacted, so the secret never reaches the ledger.
+   */
+  credentialBody?: string
 }
 
 /** A message we keep a record of but cannot act on. */
@@ -223,6 +230,17 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
   const results: SqsOrderMessage[] = []
   for (const msg of raw) {
     if (!msg.Body || !msg.ReceiptHandle) continue
+    const credentialType = credentialNotificationType(msg.Body)
+    if (credentialType) {
+      results.push({
+        receiptHandle: msg.ReceiptHandle,
+        messageId: msg.MessageId ?? '',
+        notificationType: credentialType,
+        rawPayload: { notificationType: credentialType, redacted: 'An app-credential notification; its body is never stored.' },
+        credentialBody: msg.Body,
+      })
+      continue
+    }
     try {
       // SP-API wraps the notification in an SNS envelope when delivered
       // via SQS. Body may be: raw notification JSON OR SNS JSON with a

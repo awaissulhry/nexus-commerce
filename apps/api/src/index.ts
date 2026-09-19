@@ -207,6 +207,7 @@ import syncControlRoutes from "./routes/sync-control.routes.js";
 import controlTowerRoutes from "./routes/control-tower.routes.js";
 import shopifySetupRoutes from "./routes/shopify-setup.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
+import { startAmazonSecretRotationCron } from "./jobs/amazon-secret-rotation.job.js";
 import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
@@ -1280,6 +1281,10 @@ async function start() {
       // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
       // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
       startAmazonSqsPollCron();
+
+      // P6.1 — automatic Amazon app-secret rotation. Off until the Owner registers the
+      // credential queue with Amazon and sets AMAZON_APP_CREDENTIAL_QUEUE_URL.
+      startAmazonSecretRotationCron();
 
       // RT.2 — Amazon SQS dead-letter-queue depth monitor (5min). Fires
       // sync.dlq.threshold on the order-events bus whenever DLQ depth

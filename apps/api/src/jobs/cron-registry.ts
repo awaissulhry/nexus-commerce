@@ -31,6 +31,7 @@ import { evaluateEbayAdsRules, runAnomalyGuard, generateWeeklyDigest } from '../
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runHeartbeatSweep as runCxHeartbeat } from './cx-heartbeat.job.js'
+import { runAmazonSecretRotationTick } from './amazon-secret-rotation.job.js'
 import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
 import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runAdsDecisionsReseed } from './cx3b-ads-decisions-reseed.job.js'
@@ -175,6 +176,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // CX.1 — the heartbeat replaced the eBay-only token refresh sweep; the old key stays as an alias.
   'ebay-token-refresh': () => runCxHeartbeat(),
   'cx-heartbeat': () => runCxHeartbeat(),
+  // P6.1 — automatic Amazon app-secret rotation (no-op without AMAZON_APP_CREDENTIAL_QUEUE_URL).
+  'amazon-secret-rotation': () => runAmazonSecretRotationTick(),
   'cx1-credentials-backfill': () => runCredentialsBackfill(),
   'cx1-credentials-restore': () => runCredentialsRestore(),
   'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
