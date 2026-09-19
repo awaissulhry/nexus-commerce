@@ -129,6 +129,13 @@ describe('P1.2 — Amazon SDK calls go through the gateway', () => {
     expect(h.ledger.at(-1)).toMatchObject({ operation: 'createSubscription', outcome: 'sent' })
   })
 
+  it('an order action is sent while listing publishing is gated — its own switch decides', async () => {
+    vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', '')
+    h.answers.push(() => new Response(null, { status: 204 }))
+    await sdk().callAPI({ operation: 'confirmShipment', endpoint: 'orders', path: { orderId: '1' }, body: { marketplaceId: IT, packageDetail: {} } })
+    expect(h.calls).toHaveLength(1)
+  })
+
   it('read or write, from the built request', () => {
     expect(amazonSdkKind('POST', 'createDestination', {}, '/notifications/v1/destinations')).toBe('setup')
     expect(amazonSdkKind('POST', 'rotateApplicationClientSecret', {}, '/applications/2023-11-30/clientSecret')).toBe('setup')
@@ -137,7 +144,9 @@ describe('P1.2 — Amazon SDK calls go through the gateway', () => {
     expect(amazonSdkKind('POST', 'getItemOffersBatch', {})).toBe('read')
     expect(amazonSdkKind('PATCH', 'patchListingsItem', { mode: 'VALIDATION_PREVIEW' })).toBe('read')
     expect(amazonSdkKind('POST', 'createFeed', {})).toBe('write')
-    expect(amazonSdkKind('POST', 'createShipment', {})).toBe('write')
+    expect(amazonSdkKind('POST', 'createShipment', {}, '/mfn/v0/shipments')).toBe('action')
+    expect(amazonSdkKind('POST', 'confirmShipment', {}, '/orders/v0/orders/1/shipmentConfirmation')).toBe('action')
+    expect(amazonSdkKind('PATCH', 'patchListingsItem', {}, '/listings/2021-08-01/items/S/SKU')).toBe('write')
     expect(amazonSdkKind('POST', 'someNewOperation', {})).toBe('write')
   })
 })

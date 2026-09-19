@@ -71,7 +71,7 @@ export function buildGetItemForRelinkXml(itemId: string): string {
 export async function relinkEbayItemId(
   prisma: PrismaClient,
   input: RelinkInput,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
 ): Promise<RelinkResult> {
   const marketplace = input.marketplace.toUpperCase()
   const region = marketplace === 'UK' ? 'GB' : marketplace
@@ -158,6 +158,7 @@ export async function relinkEbayItemId(
     const res = await callTradingApi('GetItem', buildGetItemForRelinkXml(itemId), {
       oauthToken: ctx.oauthToken,
       siteId: siteIdForMarket(marketplace),
+      connectionId: ctx.connectionId,
     })
     raw = res.raw ?? ''
   } catch (err) {

@@ -29,6 +29,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Re-running the cron is safe — quantities never double-deduct.
  */
 
+import { ebaySend } from './gateway/ebay.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
@@ -166,6 +167,8 @@ export class EbayOrdersService {
   async fetchEbayOrders(
     accessToken: string,
     days: number = 7,
+    /** P1.2 — the account the token belongs to (every call goes through the channel gateway). */
+    connectionId: string | null = null,
   ): Promise<EbayOrder[]> {
     try {
       const since = new Date()
@@ -186,7 +189,7 @@ export class EbayOrdersService {
           triggeredBy: 'cron',
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebaySend(connectionId, url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -224,6 +227,8 @@ export class EbayOrdersService {
     accessToken: string,
     from: Date,
     to: Date,
+    /** P1.2 — the account the token belongs to (every call goes through the channel gateway). */
+    connectionId: string | null = null,
   ): Promise<EbayOrder[]> {
     const pageSize = 200 // eBay's max per call
     const collected: EbayOrder[] = []
@@ -242,7 +247,7 @@ export class EbayOrdersService {
           triggeredBy: 'manual',
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebaySend(connectionId, url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -762,7 +767,7 @@ export class EbayOrdersService {
       // fetched=0 and zero OutboundApiCallLog rows.
       const accessToken = await authService.getValidToken(connection.id)
 
-      const orders = await this.fetchEbayOrders(accessToken)
+      const orders = await this.fetchEbayOrders(accessToken, 7, connection.id)
       this.stats.ordersFetched = orders.length
       logger.info('Fetched eBay orders', { count: orders.length })
 
@@ -848,7 +853,7 @@ export class EbayOrdersService {
       // AS.3 — connection ID, not the row (same defect as syncEbayOrders).
       const accessToken = await authService.getValidToken(connection.id)
 
-      const orders = await this.fetchEbayOrdersInRange(accessToken, from, to)
+      const orders = await this.fetchEbayOrdersInRange(accessToken, from, to, connection.id)
       this.stats.ordersFetched = orders.length
       logger.info('Fetched eBay orders (range)', {
         count: orders.length,

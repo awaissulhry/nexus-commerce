@@ -137,6 +137,7 @@ export class EbayAuthService {
           triggeredBy: 'api',
         },
         async () => {
+          // gateway-exempt: OAuth token exchange / refresh (legacy path behind NEXUS_CX_TOKEN_SERVICE=0)
           const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
             method: "POST",
             headers: {
@@ -187,6 +188,7 @@ export class EbayAuthService {
           triggeredBy: 'api',
         },
         async () => {
+          // gateway-exempt: OAuth token exchange / refresh (legacy path behind NEXUS_CX_TOKEN_SERVICE=0)
           const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
             method: "POST",
             headers: {
@@ -406,6 +408,7 @@ export class EbayAuthService {
 
       // Call eBay revocation endpoint
       try {
+        // gateway-exempt: OAuth token revoke (legacy path)
         const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token/revoke`, {
           method: "POST",
           headers: {
@@ -469,6 +472,7 @@ export class EbayAuthService {
     storeFrontUrl?: string;
   }> {
     try {
+      // gateway-exempt: identity with a bare token and no account row; no caller today (P1.6 candidate)
       const response = await fetch(`${this.apiBaseUrl}/sell/account/v1/privilege`, {
         method: "GET",
         headers: {
@@ -531,6 +535,7 @@ export class EbayAuthService {
   ): Promise<{ userId: string; username: string } | null> {
     const base = process.env.EBAY_IDENTITY_BASE ?? "https://apiz.ebay.com";
     try {
+      // gateway-exempt: identity with a bare token and no account row; no caller today (P1.6 candidate)
       const response = await fetch(`${base}/commerce/identity/v1/user/`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,

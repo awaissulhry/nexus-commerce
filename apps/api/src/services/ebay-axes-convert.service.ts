@@ -119,7 +119,7 @@ const GET_XML = (itemId: string) => `<?xml version="1.0" encoding="utf-8"?>
 export async function convertListingAxesToItalian(
   itemId: string,
   marketplace: string,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
 ): Promise<ConvertAxesResult> {
   const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
   for (const row of pushControls) {
@@ -127,14 +127,14 @@ export async function convertListingAxesToItalian(
     if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
   }
   const siteId = siteIdForMarket(marketplace)
-  const { vars, axisSet } = parseVariationsForRename((await callTradingApi('GetItem', GET_XML(itemId), { oauthToken: ctx.oauthToken, siteId })).raw)
+  const { vars, axisSet } = parseVariationsForRename((await callTradingApi('GetItem', GET_XML(itemId), { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId })).raw)
   const renames = axisSet.map((a) => ({ from: a.name, to: italianAxisName(a.name) })).filter((r) => r.from !== r.to)
   const before = axisSet.map((a) => a.name)
   if (renames.length === 0) return { itemId, outcome: 'already-italian', renames, before }
   if (!vars.every((v) => v.sku !== '')) return { itemId, outcome: 'no-sku', renames, before, message: 'Some variations have no SKU — cannot match safely.' }
 
   try {
-    await callTradingApi('ReviseFixedPriceItem', buildAxisRenameReviseXml(itemId, vars, axisSet), { oauthToken: ctx.oauthToken, siteId })
+    await callTradingApi('ReviseFixedPriceItem', buildAxisRenameReviseXml(itemId, vars, axisSet), { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId })
   } catch (e) {
     const msg = (e as Error).message
     if (/inventory|magazzino|non consentita/i.test(msg)) {
@@ -142,7 +142,7 @@ export async function convertListingAxesToItalian(
     }
     return { itemId, outcome: 'failed', renames, before, message: msg }
   }
-  const after = parseVariationsForRename((await callTradingApi('GetItem', GET_XML(itemId), { oauthToken: ctx.oauthToken, siteId })).raw)
+  const after = parseVariationsForRename((await callTradingApi('GetItem', GET_XML(itemId), { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId })).raw)
   return {
     itemId,
     outcome: 'converted',

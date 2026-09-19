@@ -11,6 +11,7 @@
  * connection-aware client the E.3 markdown service + the VP.2 volume-pricing
  * publisher both route through.
  */
+import { ebaySend } from './gateway/ebay.js'
 import prisma from '../db.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from './listing-push-controls.js'
@@ -100,7 +101,7 @@ export async function postEbayMarketing(
 
   let res: Response
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await ebaySend(conn.id, `${API_BASE}${path}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

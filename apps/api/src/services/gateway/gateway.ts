@@ -5,8 +5,8 @@
  *   1. account      — a write names its account (`connectionId`); it never falls back to the primary.
  *   2. status       — an account that needs sign-in (or is revoked / disconnected) is HELD, not called.
  *   3. publish mode — for writes: gated = nothing; dry-run = nothing, recorded as "would send";
- *                     sandbox = the channel's sandbox host, or nothing when it has none. Reads and
- *                     connection setup (see `kind`) are sent in every mode.
+ *                     sandbox = the channel's sandbox host, or nothing when it has none. Only
+ *                     listing writes follow it (see `kind`); order actions have their own switches.
  *   4. push lock    — a listing that is paused, closed, ended or held by Presence is refused; and the
  *                     wrong-account guard (P0.7) for eBay / Amazon listing writes.
  *   5. headers      — the account's token, the market headers (eBay: marketplace id + language from the
@@ -42,19 +42,26 @@ import { ledgerSafeBody } from './redact.js'
 import { classifyChannelAnswer, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
 
 export type GatewayOutcome = 'sent' | 'would_send' | 'gated' | 'refused' | 'held'
+export type GatewayBody = string | FormData | Uint8Array | null
 
 export interface GatewayRequest {
   channel: GatewayChannel
   /** Stable operation name for the ledger and dashboards, e.g. 'inventory.createOrReplaceInventoryItem'. */
   operation: string
   /**
-   * read — changes nothing. write — changes something the seller sells or owes (listings, stock, prices,
-   * orders, refunds, labels): the publish mode, the push lock and the wrong-account guard apply.
+   * read — changes nothing.
+   * write — changes a listing (content, stock, price, images, end / relist): the publish mode, the push
+   *   lock and the wrong-account guard apply.
+   * action — a change that has its own switch at the call site: orders and buyers (refund, shipment,
+   *   cancellation, label, feedback, message — P0.1: NEXUS_ENABLE_*_SHIP_CONFIRM, …_ORDER_CANCEL,
+   *   …_BUY_SHIPPING) and marketing (promotions, markdowns, ads — NEXUS_EBAY_MARKDOWN_LIVE, …_VOLUME_LIVE,
+   *   the ads write gate). The listing publish mode does not apply.
    * setup — plumbing the connection itself needs (event subscriptions, notification destinations, signing
-   * keys, app secrets): sent in every publish mode, because a switched-off channel must still be able to
-   * connect and receive events; the account check, rate bucket and ledger still apply.
+   *   keys, app secrets): sent in every publish mode, because a switched-off channel must still be able to
+   *   connect and receive events.
+   * The account check, rate bucket, error class and ledger apply to all four.
    */
-  kind: 'read' | 'write' | 'setup'
+  kind: 'read' | 'write' | 'action' | 'setup'
   /** The account. Required for writes (never "the primary"); null only with `appLevel`. */
   connectionId: string | null
   /** An app-level call (grantless / our own app), not made for a seller account. */
@@ -63,12 +70,19 @@ export interface GatewayRequest {
   url: string
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   headers?: Record<string, string>
-  body?: string | null
+  /** Text, or a file upload (FormData / bytes). The ledger keeps text bodies (made safe) and only the size of a file. */
+  body?: GatewayBody
   /** How the call is authorised: the account's token (default), a token the caller holds, or none. */
   auth?: 'account' | 'none' | { token: string }
   marketplace?: string | null
   /** eBay: one of the market's content languages (Marketplace.languages); default = the market's first. */
   contentLanguage?: string | null
+  /**
+   * eBay: who sets the marketplace / language headers. 'gateway' (default) — from the Marketplace row.
+   * 'caller' — the call keeps the headers it sends (a path moved onto the gateway before P1.5 switches
+   * its headers); `marketplace` is then only recorded on the ledger.
+   */
+  marketHeaders?: 'gateway' | 'caller'
   /** eBay: sign even when the path is not on the must-sign list. */
   sign?: boolean
   idempotencyKey?: string | null
@@ -78,6 +92,11 @@ export interface GatewayRequest {
   writeTarget?: WriteTarget
   /** The caller already applied the publish mode itself (a client moved onto the gateway as is). */
   modeAppliedByCaller?: boolean
+  /**
+   * For channels that report a failure inside a 2xx (eBay Trading's `<Ack>Failure</Ack>`): false = the
+   * call failed. Without it, a 2xx is a success (Shopify GraphQL errors are read by the gateway itself).
+   */
+  answerOk?: (text: string) => boolean
   maxRateWaitMs?: number
   max429Retries?: number
   /**
@@ -90,6 +109,8 @@ export interface GatewayRequest {
   /** First wait before a transient retry, doubled each time. Default 1000 ms. */
   retryBackoffMs?: number
   timeoutMs?: number
+  /** The caller's own deadline or cancel signal; combined with the gateway's timeout. */
+  signal?: AbortSignal | null
   ledger?: { productId?: string | null; listingId?: string | null; orderId?: string | null; triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook' }
 }
 
@@ -215,7 +236,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // eBay market headers from the Marketplace row. A write to a market Nexus has no languages for is
   // refused (eBay would take the wrong language); a read goes without them (eBay's default is harmless).
   let marketHeaders: Record<string, string> = {}
-  if (req.channel === 'EBAY' && req.marketplace) {
+  if (req.channel === 'EBAY' && req.marketplace && req.marketHeaders !== 'caller') {
     try {
       marketHeaders = await ebayMarketHeaders(req.marketplace, req.contentLanguage)
     } catch (err) {
@@ -229,8 +250,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...(token ? authHeadersOf(req.channel, token) : {}),
   }
   if (req.channel === 'EBAY' && (req.sign || ebaySignatureAppliesTo(url, req.method))) {
+    if (req.body != null && typeof req.body !== 'string') {
+      return refuse('refused', 'SIGNING_BINARY_BODY', 'Nothing was sent to eBay: a signed call with a file body is not supported by the gateway.', 400)
+    }
     const { ebaySigningHeaders } = await import('../cx/connectors/ebay/client.js')
-    Object.assign(headers, await ebaySigningHeaders({ environment: /sandbox/.test(new URL(url).hostname) ? 'sandbox' : 'production', method: req.method, url, body: req.body ?? null }))
+    Object.assign(headers, await ebaySigningHeaders({ environment: /sandbox/.test(new URL(url).hostname) ? 'sandbox' : 'production', method: req.method, url, body: (req.body as string | null | undefined) ?? null }))
   }
 
   // 6–7. rate bucket, send, 429 / transient retries
@@ -255,7 +279,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     attempts++
     timedOut = false
     try {
-      const res = await fetch(url, { method: req.method, headers, body: req.body ?? undefined, signal: AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(url, { method: req.method, headers, body: (req.body ?? undefined) as RequestInit["body"], signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -281,7 +305,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   }
 
   // 8. classify
-  const ok = status >= 200 && status < 300 && !graphqlErrors
+  const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
 
   // 9. ledger
@@ -298,7 +322,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitRemaining: reading?.remaining ?? null,
     rateLimitLimit: reading?.limit ?? null,
     attempts,
-    requestPayload: ok ? undefined : ledgerSafeBody(req.body ?? null),
+    requestPayload: ok ? undefined : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
     responsePayload: ok ? undefined : ledgerSafeBody(text),
   })
 

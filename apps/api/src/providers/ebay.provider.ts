@@ -232,8 +232,13 @@ ${variationsBlock}
         : this.baseUrl;
       const compatLevel = process.env.EBAY_COMPAT_LEVEL || '1193';
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
+      // P1.2 — through the channel gateway, unchanged: an app-level call with the static env token in the
+      // XML (no seller account). P1.6 candidate (FINAL-PLAN): this legacy provider is retired there.
+      const { gatewayFetch } = await import('../services/gateway/gateway.js');
+      const { tradingCallKind, tradingAnswerOk } = await import('../services/ebay-trading-api.service.js');
+      const res = await gatewayFetch({
+        channel: 'EBAY', operation: `trading.${callName}`, kind: tradingCallKind(callName), connectionId: null, appLevel: true,
+        url: endpoint, method: 'POST', auth: 'none', marketHeaders: 'caller', modeAppliedByCaller: true, answerOk: tradingAnswerOk,
         headers: {
           'X-EBAY-API-CALL-NAME': callName,
           'X-EBAY-API-COMPATIBILITY-LEVEL': compatLevel,

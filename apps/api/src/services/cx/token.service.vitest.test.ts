@@ -439,6 +439,15 @@ describe('failRefresh thresholds', () => {
     expect(rows.get(id)!.authStatus).toBe('connected')
   })
 
+  it('P1.2 — every token handed out is recorded against its account (the gateway reads it for token-only call sites)', async () => {
+    const { accountOfToken } = await import('../gateway/token-accounts.js')
+    const id = await seedRow()
+    const token = await getAccessToken(id, { forceRefresh: true })
+    expect(token).toBe('new-access')
+    expect(accountOfToken(token)).toBe(id)
+    expect(accountOfToken('never-handed-out')).toBeNull()
+  })
+
   it('after a failure the connection cools down: the next call is refused without a fetch', async () => {
     const id = await seedRow()
     await failOnce(id)

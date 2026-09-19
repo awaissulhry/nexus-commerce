@@ -14,6 +14,7 @@
  *     { error } so the ingest pipeline records them and moves on.
  */
 
+import { ebayTradingSend } from '../../gateway/ebay.js'
 import { XMLParser } from 'fast-xml-parser'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
@@ -67,7 +68,7 @@ export async function respondToEbayFeedback(
     `<ResponseText>${escapeXml(responseText)}</ResponseText>` +
     `</RespondToFeedbackRequest>`
   try {
-    const res = await fetch(TRADING_ENDPOINT, {
+    const res = await ebayTradingSend(connection.id, TRADING_ENDPOINT, {
       method: 'POST',
       headers: {
         'X-EBAY-API-CALL-NAME': 'RespondToFeedback',
@@ -156,7 +157,7 @@ export async function fetchEbayFeedback(opts: EbayFeedbackOptions = {}): Promise
         `<PageNumber>${page}</PageNumber></Pagination>` +
         `</GetFeedbackRequest>`
 
-      const res = await fetch(TRADING_ENDPOINT, {
+      const res = await ebayTradingSend(connection.id, TRADING_ENDPOINT, {
         method: 'POST',
         headers: {
           'X-EBAY-API-CALL-NAME': 'GetFeedback',

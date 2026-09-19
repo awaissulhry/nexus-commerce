@@ -30,10 +30,12 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
  * raising one is a visible diff that has to be justified.
  *
  * 2026-09-19, P1.2a: first count 42 Amazon SP-API sends; Amazon moved (SDK sender, listings client, 18
- * direct sends) → 0, and 22 non-API sends marked exempt with their reason. The others are next.
+ * direct sends) → 0, and 22 non-API sends marked exempt with their reason.
+ * 2026-09-19, P1.2b: eBay 94 → 0 (ebayFetch, callTradingApi with its account on every caller, 80 direct
+ * sends); 11 eBay non-API sends exempt (OAuth, connector identity, one Amazon pre-signed upload).
  */
 const BASELINE: Record<Channel, number> = {
-  EBAY: 94,
+  EBAY: 0,
   AMAZON_SP: 0,
   AMAZON_ADS: 13,
   SHOPIFY: 25,

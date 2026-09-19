@@ -7,11 +7,15 @@ vi.mock('./pim/publish-review-gate.js', () => ({ assertListingContentReviewed: a
 vi.mock('./listing-activation-sync.service.js', () => ({ syncActivatedListings: async () => {} }))
 vi.mock('./ebay-account.service.js', () => ({ ebayAccountService: { getSnapshot: async () => ({ fulfillmentPolicies: [], paymentPolicies: [], returnPolicies: [], locations: [{ key: 'location' }] }) } }))
 vi.mock('./pim/variation-rules.service.js', () => ({ ebayDeclaredAxes: vi.fn() }))
+// P1.2 — the sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+import { asResponse } from '../test-support/gateway-stubs.js'
 import { pushOffersOnly, pushVariationGroup } from './ebay-variation-push.service.js'
 const rows = [{ sku: 'SKU', price: 10, quantity: 2, _productId: 'product' }]
 const args = [rows, 'IT', 'fixture', 'account', {}, 'https://fixture.invalid', 'EBAY_IT', (_id: unknown, _sku: unknown, qty: number) => qty] as const
 const locks = [{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent => ({ presenceIntent }))]
-beforeEach(() => { vi.clearAllMocks(); s.controls = [{ product: { sku: 'SKU' }, platformAttributes: { __offerIds: { EBAY_IT: 'offer' } } }]; s.review.mockRejectedValue(new Error('REVIEW_CONTROL_REACHED')); s.send.mockResolvedValue({ ok: true, json: async () => ({ offers: [{ offerId: 'offer' }] }), text: async () => '' }); vi.stubGlobal('fetch', s.send)
+beforeEach(() => { vi.clearAllMocks(); s.controls = [{ product: { sku: 'SKU' }, platformAttributes: { __offerIds: { EBAY_IT: 'offer' } } }]; s.review.mockRejectedValue(new Error('REVIEW_CONTROL_REACHED')); s.send.mockResolvedValue({ ok: true, json: async () => ({ offers: [{ offerId: 'offer' }] }), text: async () => '' }); vi.stubGlobal('fetch', (...args: unknown[]) => asResponse(s.send(...args)))
  // P0.1 — these model production: eBay publish mode `live`.
  vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live') })
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })

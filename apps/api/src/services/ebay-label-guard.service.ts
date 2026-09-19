@@ -206,7 +206,7 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       const token = await ebayAuthService.getValidToken(t.channelConnectionId)
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${t.itemId}</ItemID><OutputSelector>Item.SKU</OutputSelector></GetItemRequest>`,
-        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+        { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       if (!got.raw) continue // dry-run/neutralized — indeterminate, never touch
       const liveSku = /<SKU>([^<]*)<\/SKU>/.exec(got.raw)?.[1] ?? ''
       if (liveSku === t.parentSku) {
@@ -215,7 +215,7 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       }
       await callTradingApi('ReviseFixedPriceItem', `<?xml version="1.0" encoding="utf-8"?>
 <ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${t.itemId}</ItemID><SKU>${t.parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`,
-        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+        { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       summary.set++
       logger.info('ebay-label-guard: custom label set', { itemId: t.itemId, parentSku: t.parentSku })
     } catch (err) {

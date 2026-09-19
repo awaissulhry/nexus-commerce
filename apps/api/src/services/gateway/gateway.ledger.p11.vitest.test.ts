@@ -64,6 +64,19 @@ describe('P1.1 — the ledger row, read back from the table', () => {
     expect(held).toMatchObject({ connectionId: 'shop-stale', outcome: 'held', success: false, statusCode: null, errorCode: 'ACCOUNT_NEEDS_SIGNIN', workspaceId: LEGACY })
   })
 
+  it('P1.2 — a gateway call inside an old recordApiCall wrapper: ONE row, with the wrapper\'s name and order link', async () => {
+    const { recordApiCall } = await import('../outbound-api-call-log.service.js')
+    const before = (await rows()).length
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: { shop: { name: 'x' } } }), { status: 200 })))
+    await inLegacy(() => recordApiCall({ channel: 'SHOPIFY', operation: 'orders.fetchOne', orderId: 'order-77' }, () =>
+      gateway.gatewayCall({ channel: 'SHOPIFY', operation: 'POST /admin/api/2026-07/graphql', kind: 'read', connectionId: 'shop-live', url: 'https://x.myshopify.com/admin/api/2026-07/graphql.json', method: 'POST', body: '{}' })))
+    const added = (await rows()).slice(before)
+    expect(added).toEqual([expect.objectContaining({ operation: 'orders.fetchOne', orderId: 'order-77', outcome: 'sent', connectionId: 'shop-live' })])
+    // control: the wrapper alone (no gateway call inside) still writes its own row
+    await inLegacy(() => recordApiCall({ channel: 'SHOPIFY', operation: 'orders.noSend' }, async () => 'no send'))
+    expect((await rows()).slice(before + 1)).toEqual([expect.objectContaining({ operation: 'orders.noSend', outcome: null })])
+  })
+
   it('a failed call keeps its class and a SAFE body (no personal data, no secret)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ errors: [{ message: 'Access denied', extensions: { code: 'ACCESS_DENIED' } }], customer: { email: 'a@b.c' } }), { status: 200 })))
     const res = await inLegacy(() => gateway.gatewayCall({ channel: 'SHOPIFY', operation: 'orders.read', kind: 'read', connectionId: 'shop-live', url: 'https://x.myshopify.com/admin/api/2026-07/graphql.json', method: 'POST', body: JSON.stringify({ query: 'q', variables: { email: 'buyer@example.com' }, access_token: 'shpat_x' }) }))

@@ -182,7 +182,7 @@ export async function refreshEbayLiveImages(
     // (surfacing the real LongMessage), so no manual ack check is needed.
     const res = await callTradingApi('GetItem', buildGetItemRequest(liveItemId), {
       oauthToken,
-      siteId: siteIdForMarket(marketplace),
+      siteId: siteIdForMarket(marketplace), connectionId: conn.id, market: marketplace,
     })
     body = res.raw
   } catch (err) {

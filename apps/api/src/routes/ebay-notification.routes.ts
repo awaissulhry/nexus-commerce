@@ -41,17 +41,17 @@ function tradingCredentialsMissing(): string | null {
   return missing.length ? missing.join(', ') : null
 }
 
-/** Resolve a fresh OAuth access token from the first active eBay ChannelConnection. */
-async function resolveEbayAccessToken(): Promise<string> {
+/** Resolve a fresh OAuth access token, and its account, from the primary eBay ChannelConnection. */
+async function resolveEbayAccessToken(): Promise<{ token: string; connectionId: string }> {
   // MAP.3 — DECLARED. The doc comment above said "the first active eBay
   // ChannelConnection", which is the assumption this phase removes.
   const connection = await resolveConnection({ channel: 'EBAY', primary: true })
   const { EbayAuthService } = await import('../services/ebay-auth.service.js')
   const authService = new EbayAuthService()
-  return authService.getValidToken(connection.id)
+  return { token: await authService.getValidToken(connection.id), connectionId: connection.id }
 }
 
-async function callTradingApi(callName: string, xmlBody: string): Promise<{
+async function callTradingApi(callName: string, xmlBody: string, connectionId: string): Promise<{
   ack: string
   shortMessage?: string
   longMessage?: string
@@ -63,8 +63,13 @@ async function callTradingApi(callName: string, xmlBody: string): Promise<{
     ? 'https://api.sandbox.ebay.com/ws/api.dll'
     : 'https://api.ebay.com/ws/api.dll'
 
-  const res = await fetch(endpoint, {
-    method: 'POST',
+  // P1.2 — through the channel gateway (account state, rate bucket, one ledger row with the Ack read as
+  // the outcome). The token travels in the XML's RequesterCredentials, as before.
+  const { gatewayFetch } = await import('../services/gateway/gateway.js')
+  const { tradingCallKind, tradingAnswerOk } = await import('../services/ebay-trading-api.service.js')
+  const res = await gatewayFetch({
+    channel: 'EBAY', operation: `trading.${callName}`, kind: tradingCallKind(callName), connectionId,
+    url: endpoint, method: 'POST', auth: 'none', marketHeaders: 'caller', answerOk: tradingAnswerOk,
     headers: {
       'X-EBAY-API-CALL-NAME':            callName,
       'X-EBAY-API-COMPATIBILITY-LEVEL':  compatLevel,
@@ -203,8 +208,9 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     }
 
     let token: string
+    let connectionId: string
     try {
-      token = await resolveEbayAccessToken()
+      ;({ token, connectionId } = await resolveEbayAccessToken())
     } catch (err: any) {
       return reply.status(400).send({ error: err?.message ?? String(err) })
     }
@@ -258,7 +264,7 @@ ${eventXml}
 </SetNotificationPreferencesRequest>`
 
     try {
-      const result = await callTradingApi('SetNotificationPreferences', xml)
+      const result = await callTradingApi('SetNotificationPreferences', xml, connectionId)
       logger.info('[eBay setup] SetNotificationPreferences', { ack: result.ack, shortMessage: result.shortMessage })
 
       if (result.ack === 'Failure') {
@@ -293,8 +299,9 @@ ${eventXml}
     }
 
     let token: string
+    let connectionId: string
     try {
-      token = await resolveEbayAccessToken()
+      ;({ token, connectionId } = await resolveEbayAccessToken())
     } catch (err: any) {
       return reply.status(400).send({ error: err?.message ?? String(err) })
     }
@@ -308,7 +315,7 @@ ${eventXml}
 </GetNotificationPreferencesRequest>`
 
     try {
-      const result = await callTradingApi('GetNotificationPreferences', xml)
+      const result = await callTradingApi('GetNotificationPreferences', xml, connectionId)
       return reply.send({
         ack: result.ack,
         rawXml: result.rawXml,

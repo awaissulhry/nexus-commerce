@@ -167,7 +167,7 @@ export async function runEbayFeedPollTickOnce(): Promise<void> {
     const taskId = job.taskId as string
 
     try {
-      const taskStatus = await getTaskStatus(taskId, token)
+      const taskStatus = await getTaskStatus(taskId, token, conn.id)
       const ebayStatus = taskStatus.status?.toUpperCase() ?? 'UNKNOWN'
 
       logger.debug(`[ebay-feed-poll] job ${job.id} taskId=${taskId} eBayStatus=${ebayStatus}`)
@@ -193,7 +193,7 @@ export async function runEbayFeedPollTickOnce(): Promise<void> {
         // Download and parse the result file
         let resultContent = ''
         try {
-          resultContent = await downloadResultFile(taskId, token)
+          resultContent = await downloadResultFile(taskId, token, conn.id)
         } catch (downloadErr) {
           logger.warn(`[ebay-feed-poll] could not download result file for job ${job.id}`, {
             error: downloadErr instanceof Error ? downloadErr.message : String(downloadErr),

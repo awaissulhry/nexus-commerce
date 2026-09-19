@@ -18,6 +18,9 @@ import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
 import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
+import { ebayTransport } from './gateway/ebay.js'
+
+type EbaySend = ReturnType<typeof ebayTransport>
 
 // EFX D5 — AXIS_SYNONYM_GROUPS + axisSynonymKey now live in ebay-theme-axes.ts
 // (so the pure create-logic module can use them without importing this service).
@@ -466,12 +469,13 @@ export function toListingLanguage(mp: string): string {
 // common for large families). Retry with exponential backoff. The body is peeked
 // via res.clone() so callers still read res.ok / res.text() on the result unchanged.
 async function ebayFetchRetry(
+  send: EbaySend,
   url: string,
   init: RequestInit,
   opts: { retries?: number; baseDelayMs?: number; maxDelayMs?: number } = {},
 ): Promise<Response> {
   const { retries = 3, baseDelayMs = 2000, maxDelayMs = 10000 } = opts
-  let res = await fetch(url, init)
+  let res = await send(url, init)
   for (let attempt = 0; attempt < retries; attempt++) {
     if (res.ok || res.status === 204) return res
     let body = ''
@@ -487,7 +491,7 @@ async function ebayFetchRetry(
       body.includes('"errorId":25007')
     if (!transient) return res
     await new Promise((r) => setTimeout(r, Math.min(baseDelayMs * 2 ** attempt, maxDelayMs))) // 2s → 4s → 8s → capped at maxDelayMs
-    res = await fetch(url, init)
+    res = await send(url, init)
   }
   return res
 }
@@ -793,6 +797,9 @@ export async function pushVariationGroup(
     parentContent?: { title: string; subtitle: string; description: string }
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
+  // P1.2 — every eBay call of this push goes through the channel gateway (account, rate bucket, call
+  // ledger); this file keeps its own retry loop, so the gateway does not retry server errors again.
+  const send = ebayTransport(connectionId, { maxTransientRetries: 0 })
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
   // P0.1 — no write unless the publish mode allows this host (every caller).
   const modeRefusal = ebayWriteRefusal(ebayHostOf(apiBase))
@@ -1416,7 +1423,7 @@ export async function pushVariationGroup(
     // bare 5xx) as the publish step; give it a real retry budget.
     const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`
     const itemBodyJson = JSON.stringify(itemBody)
-    const itemRes = await ebayFetchRetry(itemUrl, {
+    const itemRes = await ebayFetchRetry(send, itemUrl, {
       method: 'PUT', headers, body: itemBodyJson,
     }, { retries: 4, baseDelayMs: 1500 })
     if (!itemRes.ok && itemRes.status !== 204) {
@@ -1439,7 +1446,7 @@ export async function pushVariationGroup(
       if (err.includes('"errorId":25004')) {
         let healDetail = 'no existing offer found'
         try {
-          const getBySku = await fetch(
+          const getBySku = await send(
             `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
             { headers },
           )
@@ -1453,10 +1460,10 @@ export async function pushVariationGroup(
             // required field (marketplaceId, format, categoryId, listingPolicies,
             // merchantLocationKey, pricingSummary…) is echoed back unchanged, with
             // only availableQuantity raised.
-            const getFull = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers })
+            const getFull = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers })
             if (getFull.ok) {
               const fullOffer = await getFull.json().catch(() => ({})) as Record<string, unknown>
-              const putRes = await ebayFetchRetry(
+              const putRes = await ebayFetchRetry(send,
                 `${apiBase}/sell/inventory/v1/offer/${offerId}`,
                 { method: 'PUT', headers, body: JSON.stringify(withAvailableQuantity(fullOffer, Number(qty))) },
                 { retries: 2, baseDelayMs: 1000 },
@@ -1465,7 +1472,7 @@ export async function pushVariationGroup(
                 // Offer quantity raised — retry the inventory_item PUT once; eBay's
                 // min(inventory, offer) now clears our >0 quantity. Step 3.5 later
                 // re-affirms availableQuantity=qty harmlessly.
-                const retryItem = await ebayFetchRetry(
+                const retryItem = await ebayFetchRetry(send,
                   itemUrl,
                   { method: 'PUT', headers, body: itemBodyJson },
                   { retries: 2, baseDelayMs: 1000 },
@@ -1514,7 +1521,7 @@ export async function pushVariationGroup(
     await new Promise((r) => setTimeout(r, 3000))
     for (const f of transientItemFailures) {
       try {
-        const retryRes = await ebayFetchRetry(f.url, { method: 'PUT', headers, body: f.body }, { retries: 3, baseDelayMs: 2000 })
+        const retryRes = await ebayFetchRetry(send, f.url, { method: 'PUT', headers, body: f.body }, { retries: 3, baseDelayMs: 2000 })
         if (retryRes.ok || retryRes.status === 204) {
           const idx = results.findIndex((r) => r.sku === f.sku && r.status === 'ERROR')
           if (idx >= 0) results[idx] = { sku: f.sku, market: mp, status: 'PUSHED', message: 'inventory_item updated (recovered after transient eBay error)' }
@@ -1660,7 +1667,7 @@ export async function pushVariationGroup(
 
   console.log('[ebay-push][debug] group_put groupKey=%s variesBy=%j aspects=%j variantCount=%d',
     effectiveGroupKey, groupBody.variesBy, groupBody.aspects, variantRows.length)
-  let groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+  let groupRes = await ebayFetchRetry(send, `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
     method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
   })
 
@@ -1683,7 +1690,7 @@ export async function pushVariationGroup(
         // Update the existing group in place (preserving its old key on eBay)
         effectiveGroupKey = oldGroupId
         console.log(`[ebay-push] 25703 — updating existing group ${effectiveGroupKey} in place`)
-        groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+        groupRes = await ebayFetchRetry(send, `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
           method: 'PUT', headers, body: JSON.stringify({ ...groupBody, inventoryItemGroupKey: effectiveGroupKey }),
         })
         groupErrText = groupRes.ok ? '' : await groupRes.text().catch(() => '') // re-read the retry's body
@@ -1700,7 +1707,7 @@ export async function pushVariationGroup(
     const fallbackAxes = (validSpecs.slice(0, 1).map(e => e.name)).filter(Boolean)
     if (fallbackAxes.length > 0) {
       console.log(`[ebay-push] FFP.15 — group rejected without aspectsImageVariesBy; retrying with [${fallbackAxes.join(', ')}]`)
-      groupRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
+      groupRes = await ebayFetchRetry(send, `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(effectiveGroupKey)}`, {
         method: 'PUT', headers,
         body: JSON.stringify({
           ...groupBody,
@@ -1841,7 +1848,7 @@ export async function pushVariationGroup(
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
     if (!offerId) {
-      const getOfferRes = await fetch(
+      const getOfferRes = await send(
         `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
         { headers: headers },
       )
@@ -1852,7 +1859,7 @@ export async function pushVariationGroup(
     }
 
     if (offerId) {
-      const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+      const upd = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
         method: 'PUT', headers: headers, body: JSON.stringify(offerBody),
       })
       if (!upd.ok) {
@@ -1866,7 +1873,7 @@ export async function pushVariationGroup(
       }
       collectedOfferIds.set(sku, offerId)
     } else {
-      const cre = await fetch(`${apiBase}/sell/inventory/v1/offer`, {
+      const cre = await send(`${apiBase}/sell/inventory/v1/offer`, {
         method: 'POST', headers: headers, body: JSON.stringify(offerBody),
       })
       if (!cre.ok) {
@@ -1891,7 +1898,7 @@ export async function pushVariationGroup(
   // Use effectiveGroupKey (may be old UUID if 25703 triggered in-place update).
   console.log('[ebay-push][debug] publish_by_group groupKey=%s specs=%j imageVariesBy=%j',
     effectiveGroupKey, specifications, imageVariesByAxes)
-  let publishRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+  let publishRes = await ebayFetchRetry(send, `${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
     method: 'POST', headers,
     body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
     // publish_by_group is the step most exposed to eBay's eventual consistency — 25604
@@ -1926,7 +1933,7 @@ export async function pushVariationGroup(
         const s = String(r.sku ?? '')
         if (!s) continue
         try {
-          const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${marketplaceId}`, { headers })
+          const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${marketplaceId}`, { headers })
           if (!or.ok) { issues.push(`${s}: offer GET ${or.status}`); allZeroQty = false; continue }
           const oj = await or.json() as { offers?: Array<{ status?: string; availableQuantity?: number; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string }> }
           const o = oj.offers?.[0]
@@ -1961,7 +1968,7 @@ export async function pushVariationGroup(
             const s = String(r.sku ?? '')
             if (!s) continue
             try {
-              const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
+              const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
               if (!or.ok) continue
               const oj = await or.json() as { offers?: Array<{ status?: string }> }
               if (oj.offers?.[0]?.status === 'UNPUBLISHED') { orphans.push(otherId); break }
@@ -1979,12 +1986,12 @@ export async function pushVariationGroup(
               const s = String(r.sku ?? '')
               if (!s) continue
               try {
-                const or = await fetch(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
+                const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
                 if (!or.ok) continue
                 const oj = await or.json() as { offers?: Array<{ offerId?: string; status?: string }> }
                 const o = oj.offers?.[0]
                 if (o?.offerId && o.status === 'UNPUBLISHED') {
-                  const dr = await fetch(`${apiBase}/sell/inventory/v1/offer/${o.offerId}`, { method: 'DELETE', headers: otherHeaders })
+                  const dr = await send(`${apiBase}/sell/inventory/v1/offer/${o.offerId}`, { method: 'DELETE', headers: otherHeaders })
                   if (dr.ok || dr.status === 204) removed++
                 }
               } catch { /* best-effort cleanup */ }
@@ -1992,7 +1999,7 @@ export async function pushVariationGroup(
           }
           console.log(`[ebay-push] FFP.14 — removed ${removed} unpublished cross-market draft(s) on ${orphans.join(', ')}; retrying publish`)
           if (removed > 0) {
-            const retryRes = await ebayFetchRetry(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+            const retryRes = await ebayFetchRetry(send, `${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
               method: 'POST', headers,
               body: JSON.stringify({ inventoryItemGroupKey: effectiveGroupKey, marketplaceId }),
             }, { retries: 3, baseDelayMs: 2000 })
@@ -2037,7 +2044,7 @@ export async function pushVariationGroup(
   if (!listingId && variantRows.length > 0) {
     try {
       const firstSku = variantRows[0].sku as string
-      const offerLookup = await fetch(
+      const offerLookup = await send(
         `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(firstSku)}&marketplace_id=${marketplaceId}`,
         { headers },
       )
@@ -2170,6 +2177,9 @@ export async function pushOffersOnly(
   marketplaceId: string,
   capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
 ): Promise<Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }>> {
+  // P1.2 — every eBay call of this push goes through the channel gateway (account, rate bucket, call
+  // ledger); this file keeps its own retry loop, so the gateway does not retry server errors again.
+  const send = ebayTransport(connectionId, { maxTransientRetries: 0 })
   // P0.1 — no write unless the publish mode allows this host (every caller).
   const modeRefusal = ebayWriteRefusal(ebayHostOf(apiBase))
   if (modeRefusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `EBAY_WRITE_REFUSED: ${modeRefusal}` }))
@@ -2293,7 +2303,7 @@ export async function pushOffersOnly(
 
     let offerId: string | null = cachedOfferIds.get(sku) ?? null
     if (!offerId) {
-      const getRes = await fetch(
+      const getRes = await send(
         `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
         { headers },
       )
@@ -2328,7 +2338,7 @@ export async function pushOffersOnly(
       quantityLimitPerBuyer,
     }
 
-    const upd = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+    const upd = await send(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
       method: 'PUT', headers, body: JSON.stringify(offerBody),
     })
     if (!upd.ok) {

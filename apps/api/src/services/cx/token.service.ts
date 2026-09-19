@@ -21,6 +21,7 @@
  * `token()` closure calls back in here.
  */
 
+import { rememberTokenAccount } from '../gateway/token-accounts.js'
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -293,7 +294,17 @@ export async function assertWritable(connectionId: string): Promise<void> {
   }
 }
 
+/**
+ * P1.2 — the access token for an account; the channel gateway is told which account it belongs to, so a
+ * call site that holds only the token is still recorded and checked against the right account.
+ */
 export async function getAccessToken(connectionId: string, opts: { forceRefresh?: boolean } = {}): Promise<string> {
+  const token = await accessTokenFor(connectionId, opts)
+  rememberTokenAccount(token, connectionId)
+  return token
+}
+
+async function accessTokenFor(connectionId: string, opts: { forceRefresh?: boolean }): Promise<string> {
   if (typeof connectionId !== 'string' || !connectionId) {
     throw new Error(`getAccessToken expects a connection id string, got ${typeof connectionId}`)
   }

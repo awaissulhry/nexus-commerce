@@ -323,7 +323,7 @@ export async function publishEbaySharedListingImages(
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ItemID>${escapeXml(target.itemId)}</ItemID>
-</GetItemRequest>`, { oauthToken: token, siteId })
+</GetItemRequest>`, { oauthToken: token, siteId, connectionId: connection.id })
       const liveSet = parseVariationSpecificsSet(got.raw)
 
       const payload = buildSharedPicturePayload({
@@ -346,7 +346,7 @@ export async function publishEbaySharedListingImages(
         axisName: payload.axisName,
         byValue: payload.byValue,
       })
-      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId })
+      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId, connectionId: connection.id })
       pictureCount += payload.galleryUrls.length + Object.values(payload.byValue).reduce((n, u) => n + u.length, 0)
       colorSetCount = Math.max(colorSetCount, Object.keys(payload.byValue).length)
       allResults.push({

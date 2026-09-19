@@ -1868,7 +1868,7 @@ export class OutboundSyncService {
         const chunk = updates.slice(i, i + REVISE_INVENTORY_STATUS_MAX_ENTRIES);
         await __ebayTrading.reviseInventoryStatusBatch(
           { itemId, entries: chunk },
-          { oauthToken: token, market },
+          { oauthToken: token, market, connectionId: connection.id },
         );
         const dayCount = countEbayReviseCall(itemId);
         if (dayCount === EBAY_REVISE_DAILY_WARN) {

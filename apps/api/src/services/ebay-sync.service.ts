@@ -1,4 +1,5 @@
 import prisma from "../db.js";
+import { ebaySend } from './gateway/ebay.js'
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { logger } from "../utils/logger.js";
 import { recordApiCall } from "./outbound-api-call-log.service.js";
@@ -100,7 +101,7 @@ export class EbaySyncService {
           triggeredBy: 'cron',
         },
         async () => {
-          const response = await fetch(
+          const response = await ebaySend(connectionId,
             "https://api.ebay.com/sell/inventory/v1/inventory",
             {
               method: "GET",

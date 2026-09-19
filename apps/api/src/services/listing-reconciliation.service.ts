@@ -18,6 +18,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Previously CONFIRMED rows are never overwritten (preserves operator decisions).
  */
 
+import { ebaySend } from './gateway/ebay.js'
 import prisma from '../db.js'
 import {
   AmazonService,
@@ -710,14 +711,14 @@ interface EbayOffer {
   [key: string]: unknown
 }
 
-async function fetchAllEbayOffers(accessToken: string, marketplaceId: string): Promise<EbayOffer[]> {
+async function fetchAllEbayOffers(accessToken: string, marketplaceId: string, connectionId: string): Promise<EbayOffer[]> {
   const base = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
   const all: EbayOffer[] = []
   let offset = 0
   const limit = 200
 
   while (true) {
-    const res = await fetch(
+    const res = await ebaySend(connectionId,
       `${base}/sell/inventory/v1/offer?marketplace_id=${marketplaceId}&limit=${limit}&offset=${offset}`,
       { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
     )
@@ -757,7 +758,7 @@ export async function runEbayReconciliation(marketplace: string = 'IT'): Promise
   const ebayMarketplaceId = EBAY_MARKETPLACE_ID_MAP[marketplace] ?? `EBAY_${marketplace}`
 
   logger.info('[recon/ebay] Fetching offers', { marketplace, ebayMarketplaceId, runId })
-  const offers = await fetchAllEbayOffers(accessToken, ebayMarketplaceId)
+  const offers = await fetchAllEbayOffers(accessToken, ebayMarketplaceId, connection.id)
   logger.info('[recon/ebay] Offers fetched', { count: offers.length, runId })
 
   if (offers.length === 0) {

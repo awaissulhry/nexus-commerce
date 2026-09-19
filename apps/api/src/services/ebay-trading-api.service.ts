@@ -225,6 +225,14 @@ ${setXml}
 export interface TradingCallContext {
   oauthToken: string
   siteId: string
+  /**
+   * P1.2 — the eBay account the token belongs to. Every Trading call goes through the channel gateway,
+   * which checks this account's state and records the call against it (a write never falls back to the
+   * primary account).
+   */
+  connectionId: string
+  /** The market (IT, DE, …) for the call ledger. */
+  market?: string
 }
 export interface TradingCallResult {
   ack: string
@@ -280,6 +288,20 @@ export const TRADING_LISTING_WRITES: ReadonlySet<string> = new Set([
   'UploadSiteHostedPictures',
 ])
 
+/** Read, listing write, order / buyer action, or connection setup — for the gateway. */
+export function tradingCallKind(callName: string): 'read' | 'write' | 'action' | 'setup' {
+  if (TRADING_LISTING_WRITES.has(callName)) return 'write'
+  if (/^(Get|Verify|GeteBay)/.test(callName)) return 'read'
+  if (callName === 'SetNotificationPreferences') return 'setup'
+  return 'action'
+}
+
+/** Trading reports failure inside an HTTP 200; a duplicate submission is a failure too. */
+export function tradingAnswerOk(raw: string): boolean {
+  if (/<Ack>(Failure|PartialFailure)<\/Ack>/.test(raw)) return false
+  return !/<ErrorCode>(488|21060)<\/ErrorCode>|<DuplicateInvocationDetails>/.test(raw)
+}
+
 export async function callTradingApi(
   callName: string,
   xml: string,
@@ -301,7 +323,16 @@ export async function callTradingApi(
   const endpoint = tradingEndpoint()
   if (TRADING_LISTING_WRITES.has(callName)) assertEbayWriteAllowed(ebayHostOf(endpoint))
 
-  const res = await fetch(endpoint, {
+  // P1.2 — through the channel gateway: the account's state, the rate bucket, one ledger row with the
+  // Trading Ack read as the outcome. The token stays in the IAF header; the P0.1 switches above stay the
+  // mode check for this client.
+  const { gatewayFetch } = await import('./gateway/gateway.js')
+  const res = await gatewayFetch({
+    channel: 'EBAY',
+    operation: `trading.${callName}`,
+    kind: tradingCallKind(callName),
+    connectionId: ctx.connectionId,
+    url: endpoint,
     method: 'POST',
     headers: {
       'X-EBAY-API-CALL-NAME': callName,
@@ -314,6 +345,11 @@ export async function callTradingApi(
       'Content-Type': 'text/xml',
     },
     body: xml,
+    auth: 'none',
+    marketplace: ctx.market ?? null,
+    marketHeaders: 'caller',
+    modeAppliedByCaller: true,
+    answerOk: tradingAnswerOk,
   })
 
   if (!res.ok) throw new Error(`eBay ${callName} HTTP ${res.status}`)
@@ -342,22 +378,22 @@ export async function callTradingApi(
 
 export async function addFixedPriceItem(
   input: AddFixedPriceItemInput,
-  ctx: { oauthToken: string; market: string },
+  ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<{ itemId: string }> {
   const siteId = siteIdForMarket(ctx.market)
   const xml = buildAddFixedPriceItemXml(input)
-  const res = await callTradingApi('AddFixedPriceItem', xml, { oauthToken: ctx.oauthToken, siteId })
+  const res = await callTradingApi('AddFixedPriceItem', xml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId, market: ctx.market })
   if (!res.itemId) throw new Error('eBay AddFixedPriceItem succeeded but returned no ItemID')
   return { itemId: res.itemId }
 }
 
 export async function reviseInventoryStatus(
   input: { itemId: string; sku: string; quantity: number },
-  ctx: { oauthToken: string; market: string },
+  ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<void> {
   const siteId = siteIdForMarket(ctx.market)
   const xml = buildReviseInventoryStatusXml(input)
-  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
+  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId, market: ctx.market })
 }
 
 /** RT.4 — minimal GetItem for listing-lifecycle reconcile: only the
@@ -373,12 +409,14 @@ export function buildGetItemStatusXml(itemId: string): string {
 
 export async function getItemListingStatus(
   itemId: string,
-  ctx: { oauthToken: string; market: string },
+  ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<string | null> {
   const siteId = siteIdForMarket(ctx.market)
   const res = await callTradingApi('GetItem', buildGetItemStatusXml(itemId), {
     oauthToken: ctx.oauthToken,
     siteId,
+    connectionId: ctx.connectionId,
+    market: ctx.market,
   })
   return res.raw.match(/<ListingStatus>([^<]+)<\/ListingStatus>/)?.[1] ?? null
 }
@@ -447,12 +485,14 @@ export function parseGetItemQuantities(rawXml: string): ItemQuantityReadback {
 
 export async function getItemQuantities(
   itemId: string,
-  ctx: { oauthToken: string; market: string },
+  ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<ItemQuantityReadback> {
   const siteId = siteIdForMarket(ctx.market)
   const res = await callTradingApi('GetItem', buildGetItemQuantitiesXml(itemId), {
     oauthToken: ctx.oauthToken,
     siteId,
+    connectionId: ctx.connectionId,
+    market: ctx.market,
   })
   return parseGetItemQuantities(res.raw)
 }
@@ -460,11 +500,11 @@ export async function getItemQuantities(
 /** RT.2 — batched revise: ≤4 SKUs of ONE ItemID per Trading call. */
 export async function reviseInventoryStatusBatch(
   input: { itemId: string; entries: Array<{ sku: string; quantity: number }> },
-  ctx: { oauthToken: string; market: string },
+  ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<void> {
   const siteId = siteIdForMarket(ctx.market)
   const xml = buildReviseInventoryStatusBatchXml(input)
-  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId })
+  await callTradingApi('ReviseInventoryStatus', xml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId, market: ctx.market })
 }
 
 // ── EndFixedPriceItem ──────────────────────────────────────────────────────

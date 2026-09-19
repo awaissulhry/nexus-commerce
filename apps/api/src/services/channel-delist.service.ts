@@ -207,7 +207,7 @@ async function delistEbay(
   }
 
   try {
-    const ack = await endFixedPriceItem({ itemId }, { oauthToken, siteId })
+    const ack = await endFixedPriceItem({ itemId }, { oauthToken, siteId, connectionId: accountId })
     const dryRun = ack.itemId?.startsWith('DRYRUN-') === true
     if (!['Success', 'Warning'].includes(ack.ack)) {
       return unknownDelist('EBAY_DELIST_UNVERIFIED', `Acknowledgement: ${ack.ack}`)

@@ -107,7 +107,7 @@ export async function addVariationsToListing(
   itemId: string,
   marketplace: string,
   candidates: NewVariationInput[],
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
 ): Promise<AddVariationsResult> {
   const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId], skus: candidates.map(candidate => candidate.sku) })
   for (const row of pushControls) {
@@ -119,7 +119,7 @@ export async function addVariationsToListing(
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ItemID>${escapeXml(itemId)}</ItemID>
 </GetItemRequest>`
-  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market: market })
   const live: LiveVariation[] = parseLiveVariations(got.raw)
   const declaredSet = parseVariationSpecificsSet(got.raw)
   const liveSkus = new Set(live.map((v) => v.sku))
@@ -161,6 +161,7 @@ export async function addVariationsToListing(
     const res = await callTradingApi('ReviseFixedPriceItem', xml, {
       oauthToken: ctx.oauthToken,
       siteId: siteIdForMarket(market),
+      connectionId: ctx.connectionId,
     })
     ebayAck = res.ack
 

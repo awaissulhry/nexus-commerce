@@ -60,6 +60,7 @@
  *     binary content from anything passed in `requestPayload`.
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { publishSyncLogEvent } from './sync-logs-events.service.js'
@@ -230,10 +231,27 @@ export async function recordApiCall<T>(
   )
 }
 
+/**
+ * P1.2 — a call that moved onto the channel gateway can still sit inside an old `recordApiCall` wrapper.
+ * The gateway then writes the row (one per send) and takes the wrapper's operation name and entity
+ * links; the wrapper writes nothing of its own. Without this every moved call would be recorded twice.
+ */
+interface LedgerScope { ctx: ApiCallContext; gatewayRows: number }
+const ledgerScope = new AsyncLocalStorage<LedgerScope>()
+
+/** For the gateway's ledger write: the enclosing wrapper's context (and the wrapper is told to stay silent). */
+export function claimEnclosingApiCall(): ApiCallContext | null {
+  const scope = ledgerScope.getStore()
+  if (!scope) return null
+  scope.gatewayRows++
+  return scope.ctx
+}
+
 async function recordApiCallInner<T>(
   ctx: ApiCallContext,
   fn: () => Promise<T>,
 ): Promise<T> {
+  const scope: LedgerScope = { ctx, gatewayRows: 0 }
   const startedAt = Date.now()
   let statusCode: number | null = null
   let success = false
@@ -243,7 +261,7 @@ async function recordApiCallInner<T>(
   let responsePayload: unknown = undefined
 
   try {
-    const result = await fn()
+    const result = await ledgerScope.run(scope, fn)
     success = true
     statusCode = 200 // SP-API lib + fetch wrappers return only on 2xx
     return result
@@ -258,7 +276,8 @@ async function recordApiCallInner<T>(
     throw err
   } finally {
     const latencyMs = Date.now() - startedAt
-    try {
+    // The gateway already wrote one row per send made inside this wrapper.
+    if (scope.gatewayRows === 0) try {
       const row = await prisma.outboundApiCallLog.create({
         data: {
           channel: ctx.channel,

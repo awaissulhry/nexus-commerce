@@ -32,6 +32,7 @@ export const EBAY_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'BE', 'AT'
 async function identity(handle: ConnectionHandle) {
   const token = await handle.token()
   const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS[handle.environment ?? 'production'].apiz
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
   const res = await fetch(`${base}/commerce/identity/v1/user/`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(20_000),
@@ -47,6 +48,7 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   try {
     const token = await handle.token()
     const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS[handle.environment ?? 'production'].apiz
+    // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
     const res = await fetch(`${base}/commerce/identity/v1/user/`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(20_000),

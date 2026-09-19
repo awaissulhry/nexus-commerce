@@ -50,12 +50,12 @@ export async function reviewPresentationPublication(inputs: PresentationDestinat
       const view = await readPresentationOrder(target.input)
       if (view.conflicts.length) throw new MappingConflict(view.conflicts.join('; '))
       target.order = { axes: view.axes.map(a => a.name), values: Object.fromEntries(view.axes.map(a => [a.key, a.values])) }
-      const result = await applyVariationOrderToListing(itemId, destination.marketplace, target.order.axes, target.order.values, { oauthToken }, { dryRun: true })
+      const result = await applyVariationOrderToListing(itemId, destination.marketplace, target.order.axes, target.order.values, { oauthToken, connectionId: destination.channelConnectionId }, { dryRun: true })
       if (!['dry-run', 'unchanged'].includes(result.status)) { excluded.push({ listingId: target.listingId, itemId, status: result.status, message: result.message }); continue }
       target.liveToken = result.liveToken; target.preview = result
     } else {
       const rendered = await renderedPresentationDescription(destination)
-      const got = await callTradingApi('GetItem', buildGetItemDescriptionXml(itemId), { oauthToken, siteId: siteIdForMarket(destination.marketplace) })
+      const got = await callTradingApi('GetItem', buildGetItemDescriptionXml(itemId), { oauthToken, siteId: siteIdForMarket(destination.marketplace), connectionId: destination.channelConnectionId, market: destination.marketplace })
       const live = parseDescriptionFromGetItem(got.raw)
       if (live === null) throw new MappingConflict('The current live description could not be verified')
       target.html = rendered.html; target.themeId = rendered.themeId; target.themeVersion = rendered.themeVersion
@@ -103,12 +103,12 @@ export async function executePresentationPublication(jobId: string, userId: stri
       await verify()
       const oauthToken = await ebayAuthService.getValidToken(target.destination.channelConnectionId)
       if (payload.operation === 'order') {
-        const result = await applyVariationOrderToListing(target.itemId, target.destination.marketplace, target.order!.axes, target.order!.values, { oauthToken }, { expectedLiveToken: target.liveToken, beforeWrite: async () => { await verify() } })
+        const result = await applyVariationOrderToListing(target.itemId, target.destination.marketplace, target.order!.axes, target.order!.values, { oauthToken, connectionId: target.destination.channelConnectionId }, { expectedLiveToken: target.liveToken, beforeWrite: async () => { await verify() } })
         outcome = { ...outcome, status: result.status, message: result.message }
       } else {
         const rendered = await renderedPresentationDescription(target.destination)
         if (mappingToken(rendered) !== target.renderedToken) throw new MappingConflict('Theme, content or gallery changed after review')
-        const ctx = { oauthToken, siteId: siteIdForMarket(target.destination.marketplace) }
+        const ctx = { oauthToken, siteId: siteIdForMarket(target.destination.marketplace), connectionId: target.destination.channelConnectionId, market: target.destination.marketplace }
         const got = await callTradingApi('GetItem', buildGetItemDescriptionXml(target.itemId), ctx)
         const live = parseDescriptionFromGetItem(got.raw)
         if (live === null) throw new MappingConflict('The current live description could not be verified')

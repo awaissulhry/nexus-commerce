@@ -19,6 +19,7 @@
  * surfaces the operator-provided name to the buyer).
  */
 
+import { ebaySend } from '../gateway/ebay.js'
 import prisma from '../../db.js'
 import { recordApiCall } from '../outbound-api-call-log.service.js'
 import { resolveConnection } from '../connection-resolver.service.js'
@@ -139,7 +140,7 @@ export async function submitShippingFulfillment(
       orderId,
     },
     async () => {
-      const res = await fetch(url, {
+      const res = await ebaySend(connectionId, url, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,

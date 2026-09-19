@@ -693,7 +693,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P0.8 | BUILT (2026-09-19) | `build/P0.8.md` | Committed locally. Docs only: section 3 has no DOC rows left |
 | P6.1 automatic secret rotation | BUILT (2026-09-19) | `build/P6.1.md` | Committed locally, not pushed. OFF until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (build/P6.1.md section 4) |
 | P1.1 | BUILT (2026-09-19) | `build/P1.1.md` | Committed locally, not pushed. Gateway + ledger columns (migration `20260919a_p11_gateway_call_ledger`, additive); no caller moved yet (P1.2). eBay headers from the Marketplace row (LX.2) |
-| P1.2 | BUILDING (2026-09-19) | `build/P1.2.md` | P1.2a committed locally: ratchet in pre-push; Amazon SP-API 42 → 0 (22 exempt with reasons). eBay 94, Shopify 25, Ads 13, Etsy 4 next |
+| P1.2 | BUILDING (2026-09-19) | `build/P1.2.md` | P1.2a + P1.2b committed locally: ratchet in pre-push; Amazon SP-API 42 → 0, eBay 94 → 0 (33 exempt with reasons). Shopify 25, Ads 13, Etsy 4 next |
 | P1.3 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |

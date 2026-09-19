@@ -13,6 +13,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Auth: user-level OAuth via EbayAuthService.getValidToken()
  */
 
+import { ebaySend } from './gateway/ebay.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { ebayAuthService } from './ebay-auth.service.js'
@@ -41,13 +42,13 @@ interface EbayInventoryItem {
   }
 }
 
-async function fetchAllInventoryItems(accessToken: string): Promise<EbayInventoryItem[]> {
+async function fetchAllInventoryItems(accessToken: string, connectionId: string): Promise<EbayInventoryItem[]> {
   const all: EbayInventoryItem[] = []
   let offset = 0
   const limit = 200
 
   while (true) {
-    const res = await fetch(
+    const res = await ebaySend(connectionId,
       `${EBAY_API_BASE}/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`,
       { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
     )
@@ -92,7 +93,7 @@ export async function importEbayCatalog(): Promise<{
   const accessToken = await ebayAuthService.getValidToken(connection.id)
   logger.info('[ebay-import] Fetching inventory items', { connection: connection.displayName })
 
-  const items = await fetchAllInventoryItems(accessToken)
+  const items = await fetchAllInventoryItems(accessToken, connection.id)
   logger.info('[ebay-import] Items fetched', { count: items.length })
 
   const results: any[] = []

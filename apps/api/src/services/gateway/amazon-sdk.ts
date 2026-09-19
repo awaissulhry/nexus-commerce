@@ -27,16 +27,23 @@ const READS_SENT_AS_WRITES = new Set([
 
 /** SP-API paths that are connection plumbing (see GatewayRequest.kind 'setup'), not selling. */
 const SETUP_PATHS = /^\/(notifications|applications)\//
+/**
+ * SP-API paths whose changes are order / fulfilment / buyer actions (GatewayRequest.kind 'action'): their
+ * own switches decide (NEXUS_ENABLE_AMAZON_SHIP_CONFIRM, …_ORDER_CANCEL, …_BUY_SHIPPING).
+ */
+const ACTION_PATHS = /^\/(orders|mfn|shipping|solicitations|messaging|fba\/outbound|fba\/inbound|inbound\/fba|easyShip|externalFulfillment|replenishment)\//
 
 /**
- * Read, write or setup, from the built request. A listings VALIDATION_PREVIEW changes nothing: a read.
- * Notification subscriptions / destinations and the app's own secret rotation: setup.
+ * Read, write, action or setup, from the built request. A listings VALIDATION_PREVIEW changes nothing:
+ * a read. Notification subscriptions / destinations and the app's own secret rotation: setup. Orders,
+ * shipments, labels, buyer messages, FBA shipments: action. Anything else that changes: a listing write.
  */
-export function amazonSdkKind(method: string, operation: string | undefined, query: Record<string, unknown> | undefined, path?: string): 'read' | 'write' | 'setup' {
+export function amazonSdkKind(method: string, operation: string | undefined, query: Record<string, unknown> | undefined, path?: string): GatewayRequest['kind'] {
   if (method.toUpperCase() === 'GET') return 'read'
   if (path && SETUP_PATHS.test(path)) return 'setup'
   if (operation && READS_SENT_AS_WRITES.has(operation)) return 'read'
   if (String(query?.mode ?? '').toUpperCase() === 'VALIDATION_PREVIEW') return 'read'
+  if (path && ACTION_PATHS.test(path)) return 'action'
   return 'write'
 }
 

@@ -46,7 +46,7 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
 
 async function requestLiveItem(itemId: string, accountId: string, market: string) {
   const oauthToken = await ebayAuthService.getValidToken(accountId)
-  return callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`, { oauthToken, siteId: siteIdForMarket(market) })
+  return callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`, { oauthToken, siteId: siteIdForMarket(market), connectionId: accountId, market })
 }
 
 function liveItemReceipt(itemId: string, got: Awaited<ReturnType<typeof requestLiveItem>>): EbayPublicationReceipt {
@@ -201,7 +201,7 @@ export async function sendEbayPublication(plan: EbayPublication, accountId: stri
   const beforeSend = (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
   if (plan.itemId && await liveItem(plan.itemId, accountId, plan.marketplace).catch(beforeSend) !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
   const oauthToken = await ebayAuthService.getValidToken(accountId).catch(beforeSend)
-  const ctx = { oauthToken, siteId: siteIdForMarket(plan.marketplace) }
+  const ctx = { oauthToken, siteId: siteIdForMarket(plan.marketplace), connectionId: accountId, market: plan.marketplace }
   let validationWarnings: string[] = []
   if (!plan.itemId) {
     const check = await callTradingApi('VerifyAddFixedPriceItem', plan.xml.replace(/AddFixedPriceItemRequest/g, 'VerifyAddFixedPriceItemRequest'), ctx)

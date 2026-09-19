@@ -69,7 +69,25 @@ function verdict(errorClass: GatewayErrorClass, channelCode: unknown, channelMes
   return { errorClass, retryable: isRetryableClass(errorClass), channelCode: channelCode == null ? null : String(channelCode), channelMessage: cap(channelMessage) }
 }
 
+/** eBay Trading (XML) error codes with a class of their own; any other Trading failure is validation. */
+const TRADING_CODES: Record<string, GatewayErrorClass> = {
+  '931': 'auth_revoked', '17470': 'auth_revoked', '16110': 'auth_revoked',
+  '932': 'auth_expired', '21917053': 'auth_expired',
+  '518': 'rate_limited', '21919144': 'rate_limited',
+  '10007': 'transient', '21916984': 'transient',
+  '488': 'conflict', '21060': 'conflict',
+}
+
+/** eBay Trading answers in XML, with its errors inside an HTTP 200. */
+function ebayTrading(status: number, text: string): ChannelVerdict {
+  const code = /<ErrorCode>([^<]+)<\/ErrorCode>/.exec(text)?.[1] ?? null
+  const message = /<LongMessage>([^<]+)<\/LongMessage>/.exec(text)?.[1] ?? /<ShortMessage>([^<]+)<\/ShortMessage>/.exec(text)?.[1] ?? null
+  const known = code ? TRADING_CODES[code] : undefined
+  return verdict(known ?? (status >= 200 && status < 300 ? 'validation' : byStatus(status)), code, message)
+}
+
 function ebay(status: number, text: string): ChannelVerdict {
+  if (/^\s*</.test(text) && /<(Errors|Ack)>/.test(text)) return ebayTrading(status, text)
   const body = parseJson(text)
   const first = Array.isArray(body?.errors) ? body.errors[0] : Array.isArray(body?.error) ? body.error[0] : null
   const id = Number(first?.errorId)

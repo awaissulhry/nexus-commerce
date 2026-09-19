@@ -1,4 +1,5 @@
 import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { ebaySend } from '../gateway/ebay.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
  * O.50 — Channel-side cancellation pushback.
@@ -108,6 +109,7 @@ export async function cancelOnAmazon(
       endpoint: 'feeds',
       body: { contentType: 'text/xml; charset=UTF-8' },
     })
+    // gateway-exempt: pre-signed feed-document upload to Amazon's storage; the feed itself goes through the gateway
     const upload = await fetch(docRes.url, {
       method: 'PUT',
       headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
@@ -180,7 +182,7 @@ export async function cancelOnEbay(
         orderId,
       },
       async () => {
-        const res = await fetch(url, {
+        const res = await ebaySend(connectionId, url, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,

@@ -77,7 +77,7 @@ describe('syncToEbay TRADING branch', () => {
     const res = await (svc as any).syncToEbay(queueItem)
     expect(spy).toHaveBeenCalledWith(
       { itemId: '110556677', entries: [{ sku: 'LNR-M', quantity: 7 }] },
-      { oauthToken: 'TOKEN-XYZ', market: 'IT' },
+      { oauthToken: 'TOKEN-XYZ', market: 'IT', connectionId: 'conn1' },
     )
     expect(res.success).toBe(true)
     expect(res.channel).toBe('EBAY')

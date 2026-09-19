@@ -265,9 +265,11 @@ import { renderListingDescriptionSafe } from './ebay-description-theme.service.j
 
 export interface SharedListingCtx {
   oauthToken: string
+  /** P1.2 — the eBay account the token belongs to (the channel gateway records every call against it). */
+  connectionId: string
   market: string
   capQty?: CapQtyFn
-  addFixedPriceItemFn?: (input: AddFixedPriceItemInput, ctx: { oauthToken: string; market: string }) => Promise<{ itemId: string }>
+  addFixedPriceItemFn?: (input: AddFixedPriceItemInput, ctx: { oauthToken: string; market: string; connectionId: string }) => Promise<{ itemId: string }>
   db?: {
     sharedListingMembership: { findFirst: Function; create: Function; deleteMany?: Function }
     product: { findMany: Function }
@@ -310,7 +312,7 @@ export async function createSharedListing(
       try {
         if (!iid) return null
         const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>\n<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${iid}</ItemID></GetItemRequest>`,
-          { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+          { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market })
         if (!got.raw) return null // dry-run/neutralized harness — indeterminate
         const status = /<ListingStatus>([^<]+)<\/ListingStatus>/.exec(got.raw)?.[1] ?? ''
         return status === 'Active'
@@ -485,7 +487,7 @@ export async function createSharedListing(
     }
 
     // All variant prices validated as positive numbers above — safe to widen for addFn.
-    const { itemId } = await addFn(input as AddFixedPriceItemInput, { oauthToken: ctx.oauthToken, market })
+    const { itemId } = await addFn(input as AddFixedPriceItemInput, { oauthToken: ctx.oauthToken, market, connectionId: ctx.connectionId })
 
     // Build a SKU→productId map so writeback is correct even if the mapper filters/reorders variations.
     const productIdBySku = new Map<string, string | undefined>()
@@ -546,7 +548,7 @@ export async function createSharedListing(
     let labelNote = ''
     try {
       await callTradingApi('ReviseFixedPriceItem', `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`,
-        { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+        { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market })
       labelNote = ' · custom label set'
     } catch {
       labelNote = ' · custom label pending (run Reconcile)'

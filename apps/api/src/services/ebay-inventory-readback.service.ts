@@ -390,7 +390,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
 
   for (const g of batch) {
     try {
-      const rb = await getItemQuantities(g.itemId, { oauthToken: token, market: g.marketplace })
+      const rb = await getItemQuantities(g.itemId, { oauthToken: token, market: g.marketplace, connectionId: connection.id })
 
       if (rb.listingStatus && ENDED_STATUSES.has(rb.listingStatus)) {
         const res = await prisma.sharedListingMembership.updateMany({

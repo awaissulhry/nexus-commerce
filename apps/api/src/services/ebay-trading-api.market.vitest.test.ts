@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// P1.2 — Trading calls go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 const m = vi.hoisted(() => {
   const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
   return { fetch }
@@ -8,7 +11,7 @@ beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
   // P0.1 — listing writes follow the publish mode; these model production (`live`).
   vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
-  m.fetch.mockResolvedValue({ ok: true, text: async () => '<Response><Ack>Success</Ack><ItemID>FAKE</ItemID><ListingStatus>Completed</ListingStatus></Response>' })
+  m.fetch.mockImplementation(async () => new Response('<Response><Ack>Success</Ack><ItemID>FAKE</ItemID><ListingStatus>Completed</ListingStatus></Response>', { status: 200 }))
 })
 afterEach(() => vi.unstubAllEnvs())
 describe('W1.3 GB / UK fold at Trading callers (only synthetic fetch)', () => {
@@ -20,11 +23,11 @@ describe('W1.3 GB / UK fold at Trading callers (only synthetic fetch)', () => {
     expect(() => trading.siteIdForMarket('ZZ')).toThrow('unknown eBay market')
   })
   const calls = [
-    ['reviseInventoryStatus', (market: string) => trading.reviseInventoryStatus({ itemId: 'FAKE', sku: 'SKU', quantity: 0 }, { oauthToken: 'STUB', market })],
-    ['getItemListingStatus', (market: string) => trading.getItemListingStatus('FAKE', { oauthToken: 'STUB', market })],
-    ['getItemQuantities', (market: string) => trading.getItemQuantities('FAKE', { oauthToken: 'STUB', market })],
-    ['reviseInventoryStatusBatch', (market: string) => trading.reviseInventoryStatusBatch({ itemId: 'FAKE', entries: [{ sku: 'SKU', quantity: 0 }] }, { oauthToken: 'STUB', market })],
-    ['addFixedPriceItem', (market: string) => trading.addFixedPriceItem({ title: 'test', description: 'test', categoryId: '1', currency: 'GBP', country: 'GB', location: 'London', postalCode: 'TEST', variations: [], pictures: [], variationSpecificNames: [], itemSpecifics: {}, policies: {} } as any, { oauthToken: 'STUB', market })],
+    ['reviseInventoryStatus', (market: string) => trading.reviseInventoryStatus({ itemId: 'FAKE', sku: 'SKU', quantity: 0 }, { oauthToken: 'STUB', market, connectionId: 'conn-1' })],
+    ['getItemListingStatus', (market: string) => trading.getItemListingStatus('FAKE', { oauthToken: 'STUB', market, connectionId: 'conn-1' })],
+    ['getItemQuantities', (market: string) => trading.getItemQuantities('FAKE', { oauthToken: 'STUB', market, connectionId: 'conn-1' })],
+    ['reviseInventoryStatusBatch', (market: string) => trading.reviseInventoryStatusBatch({ itemId: 'FAKE', entries: [{ sku: 'SKU', quantity: 0 }] }, { oauthToken: 'STUB', market, connectionId: 'conn-1' })],
+    ['addFixedPriceItem', (market: string) => trading.addFixedPriceItem({ title: 'test', description: 'test', categoryId: '1', currency: 'GBP', country: 'GB', location: 'London', postalCode: 'TEST', variations: [], pictures: [], variationSpecificNames: [], itemSpecifics: {}, policies: {} } as any, { oauthToken: 'STUB', market, connectionId: 'conn-1' })],
   ] as const
   for (const [name, run] of calls) it.each(['GB', 'UK'])(`${name} accepts %s and sends site 3 to the stub`, async (market) => {
     await run(market)

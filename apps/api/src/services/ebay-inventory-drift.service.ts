@@ -18,6 +18,7 @@
  * reported as eBay holds them, flagged `comparable: false`, because
  * re-deriving them here would risk a diff that lies in either direction.
  */
+import { ebaySend } from './gateway/ebay.js'
 import type { PrismaClient } from '@prisma/client'
 import { resolvePerMarketContent, toListingLanguage } from './ebay-variation-push.service.js'
 
@@ -85,7 +86,7 @@ export function diffLiveGroup(
 
 export async function collectInventoryDrift(
   prisma: PrismaClient,
-  opts: { marketplace: string; oauthToken: string; apiBase?: string },
+  opts: { marketplace: string; oauthToken: string; apiBase?: string; /** P1.2 — the account the token belongs to. */ connectionId: string },
 ): Promise<DriftReport> {
   const marketplace = opts.marketplace.toUpperCase()
   const region = marketplace === 'UK' ? 'GB' : marketplace
@@ -143,7 +144,7 @@ export async function collectInventoryDrift(
     }
 
     try {
-      const res = await fetch(
+      const res = await ebaySend(opts.connectionId,
         `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`,
         { headers },
       )

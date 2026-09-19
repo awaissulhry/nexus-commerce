@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'fixture-token' } }))
 vi.mock('./outbound-api-call-log.service.js', () => ({ recordApiCall: async (_meta: unknown, request: () => Promise<unknown>) => request() }))
+// P1.2 — the policy reads go through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { EbayAccountService } from './ebay-account.service.js'
 const fetcher = vi.fn()
 const responseFor = (url: string) => {

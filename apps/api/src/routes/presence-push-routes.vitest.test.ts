@@ -3,7 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const s = vi.hoisted(() => {
   const send = vi.fn()
-  vi.stubGlobal('fetch', send)
+  // P1.2 — the gateway reads a real Response; the fake's answers are turned into one.
+  vi.stubGlobal('fetch', async (...args: unknown[]) => (await import('../test-support/gateway-stubs.js')).asResponse(send(...args)))
   return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn(), ebayRefusal: null as string | null,
     // P0.7 — who owns the fixture listing / SKU, and the account's own listing when asked for it.
     owner: null as string | null, own: null as Record<string, unknown> | null, skuOwner: null as string | null }
@@ -40,6 +41,9 @@ vi.mock('../services/ebay-account.service.js', () => ({ ebayAccountService: {}, 
 vi.mock('../services/ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => (s.ebayRefusal ? 'dry-run' : 'live'), ebayWriteRefusal: () => s.ebayRefusal, ebayHostOf: () => 'production' }))
 vi.mock('../services/amazon-mcf.service.js', () => ({ getPendingMcfReservedByProduct: async () => new Map() }))
 vi.mock('../services/order-events.service.js', () => ({ publishOrderEvent: vi.fn() }))
+// P1.2 — the eBay sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../services/ebay-feed.service.js', () => ({ buildInventoryNdjson: () => 'fixture', createInventoryTask: s.feed, uploadFeedFile: s.upload, getTaskStatus: vi.fn() }))
 vi.mock('../services/ebay-flat-file-pull-preview.service.js', () => ({ startEbayPullPreviewJob: vi.fn(), getEbayPullPreviewJobStatus: vi.fn() }))
 vi.mock('../services/ebay-variation-push.service.js', () => ({

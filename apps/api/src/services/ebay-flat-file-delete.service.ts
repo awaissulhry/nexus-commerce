@@ -195,13 +195,13 @@ async function tryRemoveVariationFromListing(
   </Item>
 </ReviseFixedPriceItemRequest>`
     try {
-      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace), connectionId: conn.id, market: marketplace })
       return 'removed'
     } catch (err) {
       logger.warn('ebay-flat-file-delete: variation Delete refused — falling back to qty 0', {
         itemId, sku, err: err instanceof Error ? err.message : String(err),
       })
-      await reviseInventoryStatus({ itemId, sku, quantity: 0 }, { oauthToken: token, market: marketplace })
+      await reviseInventoryStatus({ itemId, sku, quantity: 0 }, { oauthToken: token, market: marketplace, connectionId: conn.id })
       return 'zeroed'
     }
   } catch (err) {

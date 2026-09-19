@@ -114,6 +114,12 @@ describe('P1.1 — steps 1–4: nothing is sent unless it may be', () => {
     expect(await refusalOf(gatewayCall(ebayWrite()))).toMatchObject({ outcome: 'gated' })
     expect(h.calls).toHaveLength(1)
   })
+  it('3. an order action (refund, shipment, cancel) follows its own switch, not the listing publish mode', async () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', '')
+    await gatewayCall(ebayWrite({ kind: 'action', operation: 'fulfillment.issueRefund', url: 'https://api.ebay.com/sell/fulfillment/v1/order/1-2/issue_refund', method: 'POST' }))
+    expect(h.calls).toHaveLength(1)
+    expect(h.ledger.at(-1)).toMatchObject({ outcome: 'sent' })
+  })
   it('3. a client moved onto the gateway as is can keep its own mode check', async () => {
     vi.stubEnv('EBAY_PUBLISH_MODE', 'dry-run')
     await gatewayCall(ebayWrite({ modeAppliedByCaller: true }))
@@ -276,5 +282,22 @@ describe('P1.1 — the vocabulary and the redaction on their own', () => {
       .toBe('<ReviseItemRequest><RequesterCredentials>[redacted]</RequesterCredentials><Email>[personal]</Email></ReviseItemRequest>')
     expect(ledgerSafeBody({ blob: 'x'.repeat(40_000) })).toMatchObject({ __truncated: true })
     expect(apiVersionOf('AMAZON_SP', 'https://sellingpartnerapi-eu.amazon.com/orders/v0/orders')).toBe('v0')
+  })
+})
+
+describe('P1.2 — eBay read / write / action / setup', () => {
+  it.each([
+    ['GET', 'https://api.ebay.com/sell/inventory/v1/inventory_item/S', 'read'],
+    ['PUT', 'https://api.ebay.com/sell/inventory/v1/inventory_item/S', 'write'],
+    ['POST', 'https://api.ebay.com/sell/inventory/v1/offer/1/publish', 'write'],
+    ['POST', 'https://api.ebay.com/sell/inventory/v1/bulk_get_inventory_item', 'read'],
+    ['POST', 'https://api.ebay.com/sell/fulfillment/v1/order/1/issue_refund', 'action'],
+    ['POST', 'https://api.ebay.com/post-order/v2/cancellation', 'action'],
+    ['POST', 'https://api.ebay.com/sell/marketing/v1/item_price_markdown', 'action'],
+    ['POST', 'https://api.ebay.com/commerce/notification/v1/subscription', 'setup'],
+    ['POST', 'https://apiz.ebay.com/developer/key_management/v1/signing_key', 'setup'],
+  ])('%s %s → %s', async (method, url, kind) => {
+    const { ebayKind } = await import('./ebay.js')
+    expect(ebayKind(method, url)).toBe(kind)
   })
 })

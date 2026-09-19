@@ -194,7 +194,7 @@ describe('W1.3 exact targeting', () => {
   })
   it.each(['GB', 'UK'])('%s ends only at site 3', async (targetRegion) => {
     await dispatchChannelDelist({ ...job('EBAY', 'DELETE_LISTING'), targetRegion })
-    expect(m.end).toHaveBeenCalledWith(expect.anything(), { oauthToken: 'fake-token', siteId: '3' })
+    expect(m.end).toHaveBeenCalledWith(expect.anything(), { oauthToken: 'fake-token', siteId: '3', connectionId: 'account-owner' })
   })
   it.each([null, 'ZZ'])('market %s refuses before auth', async (targetRegion) => {
     expect(await dispatchChannelDelist({ ...job('EBAY', 'DELETE_LISTING'), targetRegion })).toMatchObject({ errorCode: targetRegion === null ? 'EBAY_DELIST_NO_REGION' : 'EBAY_UNKNOWN_MARKET', retryable: false })

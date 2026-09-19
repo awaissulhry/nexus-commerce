@@ -5,6 +5,9 @@
  * the writer has one.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// P1.2 — Trading calls go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 
 const s = vi.hoisted(() => {
   const fetch = vi.fn()
@@ -75,7 +78,7 @@ describe('the Shopify write rule', () => {
 })
 
 describe('callTradingApi — every Trading listing write follows the publish mode', () => {
-  const ctx = { oauthToken: 'fixture', siteId: '101' }
+  const ctx = { oauthToken: 'fixture', siteId: '101', connectionId: 'conn-1' }
   beforeEach(() => { vi.stubEnv('NEXUS_EBAY_REAL_API', 'true'); s.fetch.mockResolvedValue(ok('<R><Ack>Success</Ack><ItemID>1</ItemID></R>')) })
 
   it.each([...TRADING_LISTING_WRITES].flatMap(call => (['gated', 'dry-run', 'sandbox'] as const).map(mode => [call, mode] as const)))(

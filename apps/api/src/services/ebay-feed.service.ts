@@ -12,6 +12,7 @@
  * (matches the PUT /sell/inventory/v1/inventory_item/{sku} shape per row).
  */
 
+import { ebaySend } from './gateway/ebay.js';
 import { logger } from '../utils/logger.js';
 import { assertPushAllowed } from '@nexus/shared/push-lock';
 import { readPushControls } from './listing-push-controls.js';
@@ -149,11 +150,13 @@ function mapCondition(condition?: string): string {
 export async function createInventoryTask(
   marketplace: string,
   token: string,
+  /** P1.2 — the eBay account the token belongs to (every call goes through the channel gateway). */
+  connectionId: string,
 ): Promise<string> {
   const marketplaceId = toMarketplaceId(marketplace);
   const url = `${EBAY_API_BASE}/sell/feed/v1/task`;
 
-  const res = await fetch(url, {
+  const res = await ebaySend(connectionId, url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -194,6 +197,8 @@ export async function uploadFeedFile(
   taskId: string,
   ndjson: string,
   token: string,
+  /** P1.2 — the eBay account the token belongs to (every call goes through the channel gateway). */
+  connectionId: string,
 ): Promise<void> {
   // Feed inventory upserts are outbound listing pushes too. Resolve every
   // payload SKU before uploading, including previously absent inventory items.
@@ -218,7 +223,7 @@ export async function uploadFeedFile(
   const formData = new FormData();
   formData.append('file', blob, 'inventory.ndjson');
 
-  const res = await fetch(url, {
+  const res = await ebaySend(connectionId, url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -239,10 +244,12 @@ export async function uploadFeedFile(
 export async function getTaskStatus(
   taskId: string,
   token: string,
+  /** P1.2 — the eBay account the token belongs to (every call goes through the channel gateway). */
+  connectionId: string,
 ): Promise<FeedTaskStatus> {
   const url = `${EBAY_API_BASE}/sell/feed/v1/task/${encodeURIComponent(taskId)}`;
 
-  const res = await fetch(url, {
+  const res = await ebaySend(connectionId, url, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -271,11 +278,13 @@ export async function getTaskStatus(
 export async function downloadResultFile(
   taskId: string,
   token: string,
+  /** P1.2 — the eBay account the token belongs to (every call goes through the channel gateway). */
+  connectionId: string,
 ): Promise<string> {
   // First get the task to find resultFileReferenceId
   const statusUrl = `${EBAY_API_BASE}/sell/feed/v1/task/${encodeURIComponent(taskId)}`;
 
-  const statusRes = await fetch(statusUrl, {
+  const statusRes = await ebaySend(connectionId, statusUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -293,7 +302,7 @@ export async function downloadResultFile(
 
   const resultUrl = `${EBAY_API_BASE}/sell/feed/v1/task/${encodeURIComponent(taskId)}/download_result_file`;
 
-  const resultRes = await fetch(resultUrl, {
+  const resultRes = await ebaySend(connectionId, resultUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

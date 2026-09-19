@@ -182,6 +182,8 @@ interface MinimalLog {
 export interface DescriptionPushCtx {
   prisma: PrismaClient
   oauthToken: string
+  /** P1.2 — the eBay account the token belongs to (the channel gateway records every call against it). */
+  connectionId: string
   log?: MinimalLog
   /** Courtesy delay between live listing operations (tests pass 0). */
   sleepMs?: number
@@ -201,7 +203,7 @@ export async function pushDescriptions(
   input: DescriptionPushInput,
   ctx: DescriptionPushCtx,
 ): Promise<DescriptionPushResult> {
-  const { prisma, oauthToken } = ctx
+  const { prisma, oauthToken, connectionId } = ctx
   const marketplace = (input.marketplace ?? 'IT').toUpperCase()
   const siteId = siteIdForMarket(marketplace) // throws on unknown market — before any work
   const region = regionOf(marketplace)
@@ -391,7 +393,7 @@ export async function pushDescriptions(
           const res = await callTradingApi(
             'ReviseFixedPriceItem',
             buildDescriptionReviseXml(itemId, rendered.html),
-            { oauthToken, siteId },
+            { oauthToken, siteId, connectionId, market: marketplace },
           )
           if (!res.raw) {
             // dev dry-run (NEXUS_EBAY_REAL_API off) — nothing was sent, no parity possible
@@ -414,6 +416,8 @@ export async function pushDescriptions(
             const got = await callTradingApi('GetItem', buildGetItemDescriptionXml(itemId), {
               oauthToken,
               siteId,
+              connectionId,
+              market: marketplace,
             })
             const live = got.raw ? parseDescriptionFromGetItem(got.raw) : null
             if (live === null) {

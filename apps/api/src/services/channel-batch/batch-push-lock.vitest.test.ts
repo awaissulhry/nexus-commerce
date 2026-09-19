@@ -4,6 +4,10 @@ vi.mock('../amazon-market-offer.service.js',()=>({closedMarketSet:s.closed}))
 vi.mock('../listing-push-controls.js',()=>({readPushControls:s.read}))
 vi.mock('../ebay-auth.service.js',()=>({EbayAuthService:class{ getValidToken=s.auth }}))
 vi.mock('../../lib/amazon-sp-client.js',()=>({amazonSpClient:()=>({callAPI:s.sp})}))
+// P1.2 — the eBay sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+import { asResponse } from '../../test-support/gateway-stubs.js'
 import { submitShopifyBulkMutation } from './shopify-bulk-mutation.service.js'
 import { submitEbayParallelBatch } from './ebay-parallel-batch.service.js'
 import { submitAmazonListingsBatch } from './amazon-batch-feed.service.js'
@@ -15,7 +19,7 @@ beforeEach(()=>{
  vi.stubEnv('NEXUS_SHOPIFY_BULK_DRYRUN','0');vi.stubEnv('NEXUS_EBAY_BATCH_DRYRUN','0');vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH','true');vi.stubEnv('AMAZON_PUBLISH_MODE','live')
  // P0.1 — these model production: every channel's publish mode is `live`.
  vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH','true');vi.stubEnv('SHOPIFY_PUBLISH_MODE','live');vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH','true');vi.stubEnv('EBAY_PUBLISH_MODE','live')
- vi.stubGlobal('fetch',s.send);s.send.mockResolvedValue({ok:true,status:200,text:async()=>'',json:async()=>({})})
+ vi.stubGlobal('fetch',(...args:unknown[])=>asResponse(s.send(...args)));s.send.mockResolvedValue({ok:true,status:200,text:async()=>'',json:async()=>({})})
  s.sp.mockImplementation(async({operation}:any)=>operation==='createFeedDocument'?{feedDocumentId:'doc',url:'https://fixture.invalid/upload'}:{feedId:'feed'})
 })
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals()})

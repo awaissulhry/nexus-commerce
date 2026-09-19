@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { ebaySend } from '../services/gateway/ebay.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -77,6 +78,7 @@ import { findMissingRequiredAspects, type AspectRequirement } from '../services/
 import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 import { tryResolveConnection } from '../services/connection-resolver.service.js';
 
+// P1.2 — every eBay REST send in this file goes through the channel gateway (ebaySend).
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
 
@@ -784,14 +786,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // covers BOTH stores (ChannelListing + SharedListingMembership), which is
     // what drifted apart in the VENTRA incident. Token is fetched lazily — only
     // a row that actually CHANGES an ItemID pays for it.
-    let _relinkToken: string | null = null;
-    const getRelinkToken = async (): Promise<string> => {
-      if (_relinkToken) return _relinkToken;
+    let _relinkAuth: { oauthToken: string; connectionId: string } | null = null;
+    const getRelinkAuth = async (): Promise<{ oauthToken: string; connectionId: string }> => {
+      if (_relinkAuth) return _relinkAuth;
       // MAP.6 — DECLARED: no row in scope here names an account.
       const conn = await tryResolveConnection({ channel: 'EBAY', primary: true });
       if (!conn) throw new Error('No active eBay connection');
-      _relinkToken = await ebayAuthService.getValidToken(conn.id);
-      return _relinkToken;
+      _relinkAuth = { oauthToken: await ebayAuthService.getValidToken(conn.id), connectionId: conn.id };
+      return _relinkAuth;
     };
 
     // FM Phase 1 — the flat-file save no longer writes the shared warehouse pool.
@@ -983,7 +985,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 const relink = await relinkEbayItemId(
                   prisma,
                   { parentSku: sku, marketplace: mp, itemId, apply: true },
-                  { oauthToken: await getRelinkToken() },
+                  await getRelinkAuth(),
                 );
                 if (!relink.applied) {
                   rowErrors.push({ sku, rowId, error: `${mp} Item ID ${itemId} NOT applied (${relink.verdict}): ${relink.reason}` });
@@ -1321,10 +1323,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                     const token = await ebayAuthService.getValidToken(connection.id)
                     const { reconcileMembershipsFromEbay: reconcileFn } = await import('../services/ebay-membership-reconcile.service.js')
                     const { adoptSkulessVariations: adoptFn } = await import('../services/ebay-variation-relabel.service.js')
-                    let rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                    let rec = await reconcileFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
                     if (rec.skuless > 0) {
-                      const adopted = await adoptFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
-                      if (adopted.adopted > 0) rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                      const adopted = await adoptFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
+                      if (adopted.adopted > 0) rec = await reconcileFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
                       request.log.info({ itemId, adopted: adopted.adopted, unmatched: adopted.unmatched }, 'ebay/save: SKU-less shell listing auto-adopted')
                     }
                     request.log.info({ itemId, matched: rec.matched, rewritten: rec.rewritten }, 'ebay/save: half-adopted shell listing auto-reconciled')
@@ -1770,8 +1772,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         });
 
         const ndjson = buildInventoryNdjson(feedRows);
-        const taskId = await createInventoryTask(mp, token);
-        await uploadFeedFile(taskId, ndjson, token);
+        const taskId = await createInventoryTask(mp, token, connection.id);
+        await uploadFeedFile(taskId, ndjson, token, connection.id);
 
         // Durable push-history record (feed mode). Non-fatal — never blocks the push.
         let feedJobId = '';
@@ -1998,7 +2000,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
           if (row._isParent === true) {
             // Parent row → end the WHOLE listing (all variations) on this market.
-            const wr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/withdraw_by_inventory_item_group`, {
+            const wr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/withdraw_by_inventory_item_group`, {
               method: 'POST', headers: endHeaders,
               body: JSON.stringify({ inventoryItemGroupKey: sku, marketplaceId }),
             });
@@ -2017,14 +2019,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
           } else {
             // Child row → end just this variation's offer.
-            const gr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
+            const gr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
             const gj = gr.ok ? (await gr.json() as { offers?: Array<{ offerId?: string }> }) : {};
             const offerId = gj.offers?.[0]?.offerId;
             if (!offerId) {
               perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'no live offer on this market — nothing to end' });
               continue;
             }
-            const dr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, { method: 'DELETE', headers: endHeaders });
+            const dr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, { method: 'DELETE', headers: endHeaders });
             if (dr.ok || dr.status === 204) {
               const pid = row._productId as string | undefined;
               if (pid) {
@@ -2138,7 +2140,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (sharedParent?.shared_sku_listing === true && !inventoryManagedFamily) {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               familyRows as Array<Record<string, unknown>>,
-              { oauthToken: token, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
             )
             for (const r of sharedResults) {
               perRowResults.push({
@@ -2172,7 +2174,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               // properly by reconciling memberships from eBay truth first.
               if (memberSkus.size === 0) {
                 try {
-                  const rec = await reconcileMembershipsFromEbay(famItemIdForAdd, mp, { oauthToken: token })
+                  const rec = await reconcileMembershipsFromEbay(famItemIdForAdd, mp, { oauthToken: token, connectionId: connection.id })
                   request.log.info({ itemId: famItemIdForAdd, rewritten: rec.rewritten }, 'ebay/push: first-adopt reconcile')
                   const again = await prisma.sharedListingMembership.findMany({
                     where: { marketplace: mp, itemId: famItemIdForAdd },
@@ -2201,7 +2203,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 .filter((c) => c.price > 0)
               if (memberSkus.size > 0 && candidates.length > 0) {
                 try {
-                  const addRes = await addVariationsToListing(famItemIdForAdd, mp, candidates, { oauthToken: token })
+                  const addRes = await addVariationsToListing(famItemIdForAdd, mp, candidates, { oauthToken: token, connectionId: connection.id })
                   if (addRes.added > 0) for (const c of candidates.slice(0, addRes.added + addRes.skippedExisting)) addedSkus.add(c.sku)
                   request.log.info({ itemId: famItemIdForAdd, added: addRes.added, ack: addRes.ebayAck }, 'ebay/push: variations added to live listing')
                 } catch (err: unknown) {
@@ -2370,7 +2372,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             const groupOk = groupResults.every((g) => g.status !== 'ERROR')
             if (groupOk && /^\d+$/.test(famItemId)) {
               const parityXml = `<?xml version="1.0" encoding="utf-8"?>\n<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${famItemId}</ItemID></GetItemRequest>`
-              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp) })
+              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp), connectionId: connection.id, market: mp })
               const liveVars = parseLiveVariations(parityGot.raw)
               const childRowsP = familyRows.filter((r) => (r as Record<string, unknown>)._isParent !== true && String((r as Record<string, unknown>).sku ?? '').trim())
               if (liveVars.length > 0 && liveVars.length < childRowsP.length) {
@@ -2400,7 +2402,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           try {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               [row] as Array<Record<string, unknown>>,
-              { oauthToken: token, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
             )
             for (const sr of sharedResults) {
               perRowResults.push({
@@ -2591,7 +2593,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
           };
 
-          const invRes = await fetch(invUrl, {
+          const invRes = await ebaySend(connection.id, invUrl, {
             method: 'PUT',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -2710,7 +2712,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
             // Check if offer exists
             const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-            const getOfferRes = await fetch(getOfferUrl, { headers: singleHeaders });
+            const getOfferRes = await ebaySend(connection.id, getOfferUrl, { headers: singleHeaders });
 
             let offerId: string | null = null;
             if (getOfferRes.ok) {
@@ -2719,7 +2721,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
 
             if (offerId) {
-              const updateOfferRes = await fetch(
+              const updateOfferRes = await ebaySend(connection.id,
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`,
                 { method: 'PUT', headers: singleHeaders, body: JSON.stringify(offerBody) },
               );
@@ -2730,7 +2732,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 continue;
               }
             } else {
-              const createOfferRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
+              const createOfferRes = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer`, {
                 method: 'POST', headers: singleHeaders, body: JSON.stringify(offerBody),
               });
               if (createOfferRes.ok) {
@@ -2745,7 +2747,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
 
             if (offerId) {
-              const publishRes = await fetch(
+              const publishRes = await ebaySend(connection.id,
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
                 { method: 'POST', headers: singleHeaders, body: '{}' },
               );
@@ -3030,7 +3032,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
   <OutputSelector>Item.Variations.Variation.SellingStatus.QuantitySold</OutputSelector>
 </GetItemRequest>`
-        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace), connectionId: connection.id, market: marketplace })
         const raw = res.raw
         const title = /<Title>([^<]*)<\/Title>/.exec(raw)?.[1] ?? ''
         const status = /<ListingStatus>([^<]*)<\/ListingStatus>/.exec(raw)?.[1] ?? (raw ? 'Unknown' : 'DRY-RUN')
@@ -3112,16 +3114,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (ownerCl?.product?.sku && !/^\d+$/.test(ownerCl.product.sku)) preferredParentSku = ownerCl.product.sku
         } catch { /* preferred parent is best-effort */ }
 
-        let result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+        let result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
         // Incident #42 — SKU-less variations (the Saponette case) can't become
         // memberships until pool SKUs exist on eBay. Adopt them (write pool
         // SKUs onto the live variations by specifics match), then reconcile
         // again so the final state is ordinary: one operation for the operator.
         let skulessAdoption: Awaited<ReturnType<typeof adoptSkulessVariations>> | undefined
         if (result.skuless > 0) {
-          skulessAdoption = await adoptSkulessVariations(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+          skulessAdoption = await adoptSkulessVariations(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
           if (skulessAdoption.adopted > 0) {
-            result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+            result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
           }
         }
         await clearFileExclusionForItem(itemId, marketplace, request.log)
@@ -3173,12 +3175,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
       try {
         const { convertListingAxesToItalian } = await import('../services/ebay-axes-convert.service.js')
-        const result = await convertListingAxesToItalian(itemId, marketplace, { oauthToken: token })
+        const result = await convertListingAxesToItalian(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
         // A live rename changes the axis names — reconcile so our store (and the
         // drift flag that reads it) reflect the new Italian names.
         if (result.outcome === 'converted') {
           try {
-            await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+            await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
           } catch (e) {
             request.log.warn({ err: e }, 'post-convert reconcile failed (non-fatal)')
           }
@@ -3263,7 +3265,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token })
+        const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
         await clearFileExclusionForItem(itemId, marketplace, request.log)
         return reply.send(result)
       } catch (err: unknown) {
@@ -3296,7 +3298,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        const result = await applyVariationOrderForFamily(parentProductId, marketplace, { oauthToken: token }, { dryRun })
+        const result = await applyVariationOrderForFamily(parentProductId, marketplace, { oauthToken: token, connectionId: connection.id }, { dryRun })
         return reply.send(result)
       } catch (err: unknown) {
         request.log.error(err, 'apply-variation-order failed')
@@ -3454,7 +3456,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           const encodedSku = encodeURIComponent(listing.product.sku);
           const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-          const getOfferRes = await fetch(getOfferUrl, { headers: publishHeaders });
+          const getOfferRes = await ebaySend(connection.id, getOfferUrl, { headers: publishHeaders });
 
           if (!getOfferRes.ok) {
             results.push({ productId, market: mpUpper, status: 'ERROR', message: `Could not fetch offer: ${getOfferRes.status}` });
@@ -3484,12 +3486,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               ...(existingOffer?.merchantLocationKey ? { merchantLocationKey: existingOffer.merchantLocationKey } : {}),
               ...(existingOffer?.categoryId ? { categoryId: existingOffer.categoryId } : {}),
             };
-            await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+            await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
               method: 'PUT', headers: publishHeaders, body: JSON.stringify(updBody),
             });
           }
 
-          const publishRes = await fetch(
+          const publishRes = await ebaySend(connection.id,
             `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
             { method: 'POST', headers: publishHeaders, body: '{}' },
           );
@@ -3625,7 +3627,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           const encodedSku = encodeURIComponent(listing.product.sku);
-          const getOfferRes = await fetch(
+          const getOfferRes = await ebaySend(connection.id,
             `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`,
             { headers: deleteHeaders },
           );
@@ -3648,7 +3650,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const delRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+          const delRes = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
             method: 'DELETE', headers: deleteHeaders,
           });
 
@@ -3696,7 +3698,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     try {
       const token = await ebayAuthService.getValidToken(connection.id);
-      const status = await getTaskStatus(taskId, token);
+      const status = await getTaskStatus(taskId, token, connection.id);
       return reply.send({ taskId, ...status });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/feed poll failed');
@@ -3742,9 +3744,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const base = `${EBAY_API_BASE}/sell/account/v1`;
 
       const [fRes, pmRes, rRes] = await Promise.allSettled([
-        fetch(`${base}/fulfillment_policy?marketplace_id=${marketplace}`, { headers }),
-        fetch(`${base}/payment_policy?marketplace_id=${marketplace}`,     { headers }),
-        fetch(`${base}/return_policy?marketplace_id=${marketplace}`,      { headers }),
+        ebaySend(connection.id, `${base}/fulfillment_policy?marketplace_id=${marketplace}`, { headers }),
+        ebaySend(connection.id, `${base}/payment_policy?marketplace_id=${marketplace}`,     { headers }),
+        ebaySend(connection.id, `${base}/return_policy?marketplace_id=${marketplace}`,      { headers }),
       ]);
 
       async function extract<T>(r: PromiseSettledResult<Response>, key: string): Promise<T[]> {
