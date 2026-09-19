@@ -7,8 +7,7 @@
 // Inventory-API path. Pure + side-effect-free so it is unit-testable without
 // the stock transaction or the network.
 
-import { computeAvailableToPublish } from './available-to-publish.service.js'
-import { resolveMembershipIntended, type RoutedLedgerRow } from './sync-control-core.js'
+import { resolveMembershipIntended, type SyncLedger } from './sync-control-core.js'
 import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
 
 export interface SharedMembershipRow {
@@ -118,22 +117,16 @@ export interface SharedFanoutDeps {
 
 export interface SharedFanoutArgs {
   productId: string
-  /** Reserved-adjusted own-warehouse available for this product (cascade already
-   *  computed it — pass it straight through). */
-  warehouseAvailable: number
-  /** Overselling buffer to subtract (the cascade reads ChannelListing.stockBuffer;
-   *  shared listings have no ChannelListing, so default 0 unless a future per-SKU
-   *  buffer exists). */
-  stockBuffer?: number
   holdUntil: Date
   /** Optional: restrict to a single changed SKU (else all of the product's
    *  memberships re-push). */
   sku?: string
-  /** SC.1 — when provided, quantities derive PER MEMBERSHIP via the sync-
-   *  control core (routing + followPool + per-membership buffer); PAUSED and
-   *  UNCOUNTED members are excluded from the fan-out entirely. Without it,
-   *  the legacy uniform pool-capped quantity applies (back-compat callers). */
-  scLedger?: RoutedLedgerRow[]
+  /** SC.1 — quantities derive PER MEMBERSHIP via the sync-control core (routing + followPool +
+   *  per-membership buffer); PAUSED and UNCOUNTED members are excluded from the fan-out entirely.
+   *  From loadSyncLedgers (shared stock), so a pooled product fans out the pool's number. */
+  scLedger: SyncLedger
+  /** Shared stock — the product left a pool: an uncounted own stock means 0 (loadSyncLedgers). */
+  uncountedIsZero?: boolean
   scPolicies?: PolicyMap
 }
 
@@ -149,41 +142,36 @@ export async function enqueueSharedTradingFanout(
     where,
     select: {
       sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true,
-      followPool: true, stockBuffer: true,
+      followPool: true, stockBuffer: true, pinnedQuantity: true,
     },
-  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number }>
+  })) as Array<SharedMembershipRow & { lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null }>
 
   if (memberships.length === 0) return []
 
-  let eligible = memberships
-  let qtyFor: (m: SharedMembershipRow) => number
-
-  if (args.scLedger) {
-    // SC.1 — per-membership derivation. followPool=false (PAUSED) and
-    // routed-UNCOUNTED members never receive a push from this fan-out.
-    const resolvedQty = new Map<string, number>()
-    eligible = memberships.filter((m) => {
-      const r = resolveMembershipIntended({
-        marketplace: m.marketplace,
-        followPool: m.followPool ?? true,
-        stockBuffer: m.stockBuffer ?? 0,
-        channelPolicy: args.scPolicies ? policyFor(args.scPolicies, 'EBAY', m.marketplace) : null,
-        ledger: args.scLedger!,
-      })
-      if (r.kind !== 'FOLLOW') return false
+  // SC.1 — per-membership derivation. followPool=false (PAUSED) and routed-UNCOUNTED members never
+  // receive a push from this fan-out. A fixed number (shared stock step 3) is pushed until the variant
+  // shows it, then skipped like any variant already at its number. (Shared stock: the one path — the uniform capped number that
+  // ignored Excluded members and the pool is gone; every caller passes the loader's ledger.)
+  const resolvedQty = new Map<string, number>()
+  const eligible = memberships.filter((m) => {
+    const r = resolveMembershipIntended({
+      marketplace: m.marketplace,
+      followPool: m.followPool ?? true,
+      pinnedQuantity: m.pinnedQuantity ?? null,
+      stockBuffer: m.stockBuffer ?? 0,
+      channelPolicy: args.scPolicies ? policyFor(args.scPolicies, 'EBAY', m.marketplace) : null,
+      ledger: args.scLedger,
+      uncountedIsZero: args.uncountedIsZero,
+    })
+    if (r.kind === 'PINNED' && r.quantity != null) {
       resolvedQty.set(`${m.itemId} ${m.sku}`, r.quantity)
       return true
-    })
-    qtyFor = (m) => resolvedQty.get(`${m.itemId} ${m.sku}`) ?? 0
-  } else {
-    const capped = computeAvailableToPublish({
-      fulfillmentMethod: 'FBM',
-      warehouseAvailable: args.warehouseAvailable,
-      fbaSellable: 0,
-      stockBuffer: args.stockBuffer ?? 0,
-    }).available
-    qtyFor = () => capped
-  }
+    }
+    if (r.kind !== 'FOLLOW') return false
+    resolvedQty.set(`${m.itemId} ${m.sku}`, r.quantity)
+    return true
+  })
+  const qtyFor = (m: SharedMembershipRow) => resolvedQty.get(`${m.itemId} ${m.sku}`) ?? 0
 
   const rows = buildSharedFanoutRows(eligible, qtyFor, args.holdUntil)
   if (rows.length === 0) return []

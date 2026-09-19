@@ -42,6 +42,8 @@ import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import { loadPagePoolSources, loadPoolSources, pooledStockRisk, summarizePoolSources, unitsForState, type PoolSource } from '../services/stock-pool/pool-sources.js'
+import { lentUsage } from '../services/stock-pool/lent-usage.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
 import {
   computeYearEndValuation,
@@ -305,6 +307,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Shared stock step 5 — the pool a product sells from, beside its own numbers (never added to
+      // them). A parent row sums its pooled variations.
+      const { sources: poolSources, childrenOf } = await loadPagePoolSources(prisma, pageProductIds, parentProductIds)
+
       return {
         items: products.map((p) => {
           const agg = parentAgg.get(p.id)
@@ -352,6 +358,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             fbaStock: fbaQty,
             fbmStock: nonFbaQty,
             ownStock: ownWHQty,
+            poolSource: p.isParent ? summarizePoolSources(childrenOf.get(p.id) ?? [], poolSources) : (poolSources.get(p.id) ?? null),
             lastUpdatedAt: lastUpdated ? lastUpdated.toISOString() : null,
             // Parent rows carry location stubs for badge rendering (no qty detail).
             // Leaf rows carry full StockLevel data for drawer + bulk ops.
@@ -643,10 +650,13 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       // When DailySalesAggregate has signal we'd refine to days-of-stock
       // < leadTime+7, but with zero rows in the aggregate today the
       // threshold-based heuristic carries the load.
-      const atRisk = await prisma.product.findMany({
+      // Shared stock: a product that sells from a pool is judged by the pool (pooledStockRisk), not by
+      // its own shelf, which is empty by design in a borrowing business.
+      const ownAtRisk = await prisma.product.findMany({
         where: {
           isParent: false,
           status: { not: 'INACTIVE' },
+          stockPoolLinks: { none: { status: 'active' } },
           OR: [
             { totalStock: 0 },
             { totalStock: { gt: 0, lte: 5 } },
@@ -660,6 +670,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: [{ totalStock: 'asc' }, { name: 'asc' }],
         take: STOCKOUT_LIMIT,
       })
+      const atRisk = [...ownAtRisk.map((p) => ({ ...p, poolLenderName: null as string | null })), ...(await pooledStockRisk(prisma, STOCKOUT_LIMIT))]
+        .sort((a, b) => a.totalStock - b.totalStock || a.name.localeCompare(b.name))
+        .slice(0, STOCKOUT_LIMIT)
 
       // ── Allocation gaps ─────────────────────────────────────────
       // Find products with ≥2 locations where one is at ≤ 5 units and
@@ -837,6 +850,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
+      // Shared stock step 5 — the pool a product sells from, beside its own numbers.
+      const poolSources = await loadPoolSources(prisma, products.map((p) => p.id))
       return {
         locations,
         products: products.map((p) => ({
@@ -845,6 +860,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           name: p.name,
           amazonAsin: p.amazonAsin,
           totalStock: p.totalStock,
+          poolSource: poolSources.get(p.id) ?? null,
           lowStockThreshold: p.lowStockThreshold,
           costPrice: p.costPrice == null ? null : Number(p.costPrice),
           basePrice: p.basePrice == null ? null : Number(p.basePrice),
@@ -880,6 +896,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, totalStock: true, lowStockThreshold: true, costPrice: true },
       })
 
+      // Shared stock: units and value are this business's own; the state of a product that sells from a
+      // pool is judged by the pool's free units (unitsForState), so it is not a stockout while the pool has stock.
+      const pools = await loadPoolSources(prisma, buyables.map((p) => p.id))
       let totalStockUnits = 0
       let totalStockValueCents = 0
       let stockouts = 0
@@ -891,9 +910,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         if (p.costPrice != null) {
           totalStockValueCents += p.totalStock * Math.round(Number(p.costPrice) * 100)
         }
-        if (p.totalStock === 0) stockouts++
-        else if (p.totalStock <= 5) critical++
-        else if (p.totalStock <= p.lowStockThreshold) low++
+        const units = unitsForState(p.id, p.totalStock, pools)
+        if (units === 0) stockouts++
+        else if (units <= 5) critical++
+        else if (units <= p.lowStockThreshold) low++
         else healthy++
       }
 
@@ -913,6 +933,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         low,
         healthy,
         totalSkus: buyables.length,
+        /** Products whose state above is the pool's, not their own shelf. */
+        sharedSkus: pools.size,
         activeLocations,
       }
     } catch (error: any) {
@@ -1168,10 +1190,6 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const last30Revenue = last30.reduce((acc, s) => acc + Number(s.grossRevenue), 0)
       const avgDailyUnits = last30Units / 30
       const totalAvailable = stockLevels.reduce((acc, sl) => acc + sl.available, 0)
-      const daysOfStock =
-        avgDailyUnits > 0
-          ? Math.floor(totalAvailable / avgDailyUnits)
-          : null
 
       const atp = atpMap.get(product.id)
 
@@ -1185,6 +1203,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           thumbnailUrl: string | null; abcClass: string | null
           lowStockThreshold: number
           totalStock: number; totalReserved: number; totalAvailable: number
+          /** Shared stock step 5 — the pool this variation sells from, or null (own stock). */
+          poolSource: PoolSource | null
           stockLevels: Array<{
             locationId: string; locationCode: string; locationType: string
             quantity: number; reserved: number; available: number
@@ -1219,6 +1239,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           }),
         ])
 
+        const childPools = await loadPoolSources(prisma, children.map((c) => c.id))
         family = {
           totalStock:     children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.quantity, 0), 0),
           totalReserved:  children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.reserved, 0), 0),
@@ -1234,6 +1255,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             totalStock:     c.stockLevels.reduce((s, sl) => s + sl.quantity, 0),
             totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
             totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
+            poolSource: childPools.get(c.id) ?? null,
             stockLevels: c.stockLevels.map((sl) => ({
               locationId:   sl.location.id,
               locationCode: sl.location.code,
@@ -1248,7 +1270,26 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Shared stock step 5 — the pool this product sells from (a parent: its pooled variations added up),
+      // beside its own numbers; never added to them.
+      const poolSource = product.isParent
+        ? summarizePoolSources((family?.children ?? []).map((c) => c.id),
+            new Map((family?.children ?? []).flatMap((c) => c.poolSource ? [[c.id, c.poolSource] as const] : [])))
+        : ((await loadPoolSources(prisma, [product.id])).get(product.id) ?? null)
+      // Shared stock step 5 — "who sold what": for a LENDER, what each borrowing business holds and sold
+      // from this product (a parent: with its variations). Each movement made for another business names it.
+      const lent = await lentUsage(prisma, [product.id, ...(family?.children ?? []).map((c) => c.id)])
+      // Days of stock: a product that sells from a pool is covered by the pool's free units, not by its own
+      // shelf (empty by design in a borrowing business) — step 7: the drawer said "0 days of stock" in red.
+      const coverUnits = !product.isParent && poolSource ? poolSource.available : totalAvailable
+      const daysOfStock =
+        avgDailyUnits > 0
+          ? Math.floor(coverUnits / avgDailyUnits)
+          : null
+
       return {
+        poolSource,
+        lentUsage: lent.usage,
         product: {
           ...product,
           basePrice: product.basePrice == null ? null : Number(product.basePrice),
@@ -1268,7 +1309,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           activeReservations: sl.reservations.length,
         })),
         channelListings,
-        movements,
+        movements: movements.map((movement) => ({
+          ...movement,
+          usedBy: movement.consumerWorkspaceId
+            ? { businessName: lent.names.get(movement.consumerWorkspaceId) ?? 'another business', orderRef: movement.consumerOrderRef }
+            : null,
+        })),
         salesVelocity: {
           last30Units,
           last30Revenue,
@@ -1285,6 +1331,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         atpPerChannel: atp ? await resolveAtpAcrossChannels({
           productId: product.id,
           byLocation: atp.byLocation as any,
+          // A parent's poolSource is its variations added up; its own listings are not sent stock from it.
+          pool: product.isParent ? null : poolSource,
         }) : [],
         // S.20 — costing surface
         costing: {
@@ -1297,6 +1345,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             ...r,
             quantity: r.quantity,
             location: { id: sl.location.id, code: sl.location.code },
+            // Shared stock — a hold made for another business's order names it; it cannot be released here.
+            usedBy: r.consumerWorkspaceId
+              ? { businessName: lent.names.get(r.consumerWorkspaceId) ?? 'another business', orderRef: r.consumerOrderRef }
+              : null,
           })),
         ),
         // L.10 — active lots for this product, FEFO-ordered. Includes
@@ -3694,6 +3746,15 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       if (!Number.isFinite(quantity) || quantity <= 0) {
         return reply.code(400).send({ error: 'quantity must be > 0' })
       }
+      // Shared stock step 4 — a product that sells from a pool: its listings follow the pool, so a
+      // hold on this business's own stock protects nothing a buyer can see. Say so instead.
+      const { pooledNow } = await import('../services/stock-pool/pool-guard.js')
+      if ((await pooledNow(prisma, [body.productId])).has(body.productId)) {
+        return reply.code(409).send({
+          error: 'This product sells from shared stock. Its listings follow that stock, so a hold on your own stock would not hold anything buyers see. Holds for orders are made in the shared stock automatically.',
+          code: 'pooled_product',
+        })
+      }
       const reservation = await reserveStock({
         productId: body.productId,
         variationId: body.variationId,
@@ -3758,6 +3819,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       })()
       return { ok: true, reservation: updated }
     } catch (error: any) {
+      // Shared stock — a hold made here for another business's order: refused with its reason.
+      if (error?.code === 'pool_hold') return reply.code(409).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[stock/release] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }

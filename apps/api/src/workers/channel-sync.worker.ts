@@ -14,6 +14,7 @@ import { logger } from '../utils/logger.js'
 import { syncProductToAmazon } from '../services/marketplaces/amazon-sync.service.js'
 import { syncProductToEbay } from '../services/marketplaces/ebay-sync.service.js'
 import { syncProductToShopify } from '../services/marketplaces/shopify-sync.service.js'
+import { sellableQuantity } from '../services/stock-pool/sync-ledgers.js'
 
 // Worker statistics
 let processedCount = 0
@@ -142,7 +143,8 @@ async function processChannelSyncJob(job: Job) {
             title: product.name,
             description: '',
             price: product.basePrice,
-            quantity: product.totalStock,
+            // Shared stock — a pooled product's draft starts at the pool's number.
+            quantity: (await sellableQuantity(prisma as never, [product])).get(product.id) ?? product.totalStock,
             listingStatus: 'DRAFT',
             syncStatus: 'IDLE',
           },

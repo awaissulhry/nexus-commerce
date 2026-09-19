@@ -31,7 +31,8 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { resolveListingFulfillmentMethod, resolveCascadePushMethod } from './stock-movement.service.js'
-import { resolveIntendedQuantity, resolveMembershipIntended } from './sync-control-core.js'
+import { resolveIntendedQuantity, resolveMembershipIntended, syncLedgerOf } from './sync-control-core.js'
+import { loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
@@ -907,7 +908,7 @@ async function executeApplyImport(args: {
       wantsWarehouse && chunkProductIds.length > 0
         ? db.sharedListingMembership.findMany({
             where: { productId: { in: chunkProductIds }, status: 'ACTIVE' },
-            select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
+            select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true },
           })
         : [],
     ])
@@ -933,6 +934,10 @@ async function executeApplyImport(args: {
       if (arr) arr.push(m)
       else membershipsByProduct.set(m.productId, [m])
     }
+    // Shared stock — which of the chunk's products sell from another business's pool (their listings
+    // follow the pool, whatever this import does to this business's own rows), and which left one
+    // (an uncounted own stock then means 0). Read in the chunk's transaction, under its lock.
+    const stockSources = await loadSyncLedgers(db, chunkProductIds)
     // IM.3.3 — per-product FBA bucket for listing-method resolution in the
     // explicit channel path (cascade computes its own inline, unchanged).
     const fbaBucketByProduct = new Map<string, number>()
@@ -1127,6 +1132,13 @@ async function executeApplyImport(args: {
       }
       plan.newTotalStock = total
       const netChange = plan.finalQty - plan.baseQty
+      // Shared stock — a pooled product's listings follow the pool (door 1), not the rows this import
+      // wrote; any other product follows this import's final rows, exactly as before.
+      const source = stockSources.get(productId)
+      const pooledSource = source?.source.kind === 'pool' ? source : undefined
+      const listingLedger = pooledSource ? pooledSource.ledger : syncLedgerOf(scLedger)
+      const uncountedIsZero = source?.uncountedIsZero ?? false
+      const snapshotTotal = pooledSource ? pooledSource.quantity : total
 
       for (const listing of listingsByProduct.get(productId) ?? []) {
         if (explicitIds.has(listing.id)) continue // explicit value wins (BOTH)
@@ -1150,13 +1162,14 @@ async function executeApplyImport(args: {
           syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
           pinnedQuantity: listing.quantity,
           stockBuffer: listing.stockBuffer ?? 0,
-          sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
+          sourceLocationCodes: pooledSource ? [] : (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
           channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace),
-          ledger: scLedger,
+          ledger: listingLedger,
+          uncountedIsZero,
         })
         const newListingQty = scRes.kind === 'FOLLOW' ? scRes.quantity : null
         if (newListingQty != null && newListingQty !== listing.quantity) {
-          plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: total, quantity: newListingQty })
+          plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: snapshotTotal, quantity: newListingQty })
           if (VALID_SYNC_TARGETS.has(listing.channel)) {
             plan.queueRows.push({
               id: randomUUID(),
@@ -1179,7 +1192,7 @@ async function executeApplyImport(args: {
                   marketplace: listing.marketplace,
                   quantity: newListingQty,
                   oldQuantity: listing.quantity,
-                  masterQuantity: total,
+                  masterQuantity: snapshotTotal,
                   stockBuffer: listing.stockBuffer ?? 0,
                   reason: 'MANUAL_ADJUSTMENT',
                   change: netChange,
@@ -1189,8 +1202,8 @@ async function executeApplyImport(args: {
               },
             })
           }
-        } else if (listing.masterQuantity !== total) {
-          plan.snapshotWrites.push({ listingId: listing.id, masterQuantity: total })
+        } else if (listing.masterQuantity !== snapshotTotal) {
+          plan.snapshotWrites.push({ listingId: listing.id, masterQuantity: snapshotTotal })
         }
       }
 
@@ -1206,10 +1219,17 @@ async function executeApplyImport(args: {
           const r = resolveMembershipIntended({
             marketplace: (m as { marketplace: string }).marketplace,
             followPool: (m as { followPool?: boolean }).followPool ?? true,
+            pinnedQuantity: (m as { pinnedQuantity?: number | null }).pinnedQuantity ?? null,
             stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
             channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace),
-            ledger: scLedger,
+            ledger: listingLedger,
+            uncountedIsZero,
           })
+          // A fixed number (shared stock step 3) is sent until the variant shows it; then it is a no-op.
+          if (r.kind === 'PINNED' && r.quantity != null) {
+            scQty.set(`${(m as { itemId: string }).itemId} ${(m as { sku: string }).sku}`, r.quantity)
+            return true
+          }
           if (r.kind !== 'FOLLOW') return false
           scQty.set(`${(m as { itemId: string }).itemId} ${(m as { sku: string }).sku}`, r.quantity)
           return true

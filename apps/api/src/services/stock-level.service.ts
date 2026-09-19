@@ -28,6 +28,8 @@ import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { afterStockMovementCommit, applyStockMovement } from './stock-movement.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { pooledNow, PoolHoldError, PooledProductError } from './stock-pool/pool-guard.js'
+import { consumePoolHolds, holdForOrder, releasePoolHolds } from './stock-pool/order-routing.js'
 // EV.2 — reservation facts, published inside each reservation's own transaction.
 import { publishEvent } from '../lib/events/publish.js'
 
@@ -93,6 +95,16 @@ async function reserveStockInTx(tx: Prisma.TransactionClient, args: ReserveStock
 
   // AE.1 — lock before reading `available`: two buyers must not both see the last unit.
   await lockProductStock(tx, [productId])
+
+  // Shared stock step 4 — an order's hold on a warehouse, for a product that sells from a pool, is
+  // held in the pool (reserveOpenOrder routes it there). One that reaches own stock anyway came
+  // through a path nobody routed: refuse it rather than hold stock no listing shows.
+  if (reason === 'OPEN_ORDER') {
+    const location = await tx.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } })
+    if (location?.type === 'WAREHOUSE' && (await pooledNow(tx, [productId])).has(productId)) {
+      throw new PooledProductError(productId, "an order's hold")
+    }
+  }
 
   const sl = await tx.stockLevel.findFirst({
     where: { productId, locationId, variationId: variationId ?? null },
@@ -192,6 +204,8 @@ export async function releaseReservation(
       // Idempotent: already settled
       return r
     }
+    // Shared stock — a hold made here for another business's order is not this business's to release.
+    if (r.consumerWorkspaceId) throw new PoolHoldError(r.id)
 
     const sl = r.stockLevel
     // RV.1 — only HARD reservations affected StockLevel.reserved on
@@ -426,6 +440,15 @@ export async function reserveOpenOrder(args: {
   quantity: number
   actor?: string
 }) {
+  // Shared stock step 4 — a product that sells from a pool is held in the pool, from the lender's
+  // lent warehouses (door 2: one hold per order and product, ever — a re-polled order is never held
+  // twice). Only for a warehouse hold: an Amazon FBA hold (MCF) is this business's own, never pooled.
+  const location = await prisma.stockLocation.findUnique({ where: { id: args.locationId }, select: { type: true } })
+  if (location?.type === 'WAREHOUSE') {
+    const routed = await holdForOrder({ productId: args.productId, quantity: args.quantity, orderId: args.orderId, actor: args.actor ?? 'system' })
+    if (routed.via === 'pool') return { id: routed.result.reservationId, quantity: routed.result.quantity }
+    if (routed.via === 'refused') throw new Error(`reserveOpenOrder: ${routed.refusal.error}`)
+  }
   return await prisma.$transaction(async (tx) => {
     // AE.1 — the "already reserved?" check runs under the same lock as the reservation.
     // Checked outside it, a webhook and a poll for one order both found nothing and both
@@ -488,6 +511,12 @@ export async function consumeOpenOrder(args: {
       // release) doesn't block the remainder.
     }
   }
+  // Shared stock step 4 — and the order's holds in a pool (door 4a finds only this order's own).
+  try {
+    consumed += await consumePoolHolds({ orderId: args.orderId, actor: args.actor })
+  } catch {
+    // best-effort, like the own holds above; the reconcile job retries.
+  }
   return consumed
 }
 
@@ -522,6 +551,12 @@ export async function releaseOpenOrder(args: {
     } catch {
       // continue — best-effort.
     }
+  }
+  // Shared stock step 4 — and the order's holds in a pool (door 3 finds only this order's own).
+  try {
+    released += await releasePoolHolds({ orderId: args.orderId, actor: args.actor, reason: args.reason ?? 'order cancelled' })
+  } catch {
+    // best-effort, like the own holds above; the reconcile job retries.
   }
   return released
 }

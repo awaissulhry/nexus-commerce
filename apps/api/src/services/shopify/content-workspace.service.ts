@@ -17,6 +17,7 @@ import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { applyListingMediaContent } from './listing-media-content.js'
 import { listingSheetValues } from './listing-sheet-values.js'
+import { sellableQuantity } from '../stock-pool/sync-ledgers.js'
 
 /** Stable family keys in the explicitly selected order; omissions remain omitted. */
 export function shopifyAxisOrder(familyAxes: string[], variationMapping: unknown): string[] {
@@ -84,10 +85,14 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
   const mediaFiles = await tx.productImage.findMany({ where: { productId: { in: [family.id, ...family.children.map(c => c.id)] } }, select: { id: true, productId: true, url: true, mediaType: true, alt: true, updatedAt: true } })
   draft = applyListingMediaContent(draft, family.id, listings, mediaFiles)
   const products = family.children.length ? family.children : [family]
+  // Shared stock — a pooled product publishes the pool's number, not its business's own total. Kept
+  // out of `family` so the review revision below does not change with every pool sale.
+  const sellable = await sellableQuantity(tx, products)
   const variants: ContentVariant[] = products.map(p => {
     const offer = listings.find(l => l.productId === p.id)
     const price = offer && !offer.followMasterPrice ? offer.priceOverride ?? offer.price ?? p.basePrice : p.basePrice
-    const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? p.totalStock : p.totalStock
+    const followed = sellable.get(p.id) ?? p.totalStock
+    const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
     return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: { ...object('variantAttributes' in p ? p.variantAttributes : {}), ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })

@@ -75,6 +75,7 @@ import { buildListingScopeWhere, type ListingScope } from '../services/flat-file
 import { findMissingRequiredAspects, type AspectRequirement } from '../services/ebay-aspect-preflight.js';
 import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 import { tryResolveConnection } from '../services/connection-resolver.service.js';
+import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -1594,11 +1595,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     let pendingMcfByProduct = new Map<string, number>();
     if (pushProductIds.length > 0) {
       try {
-      const [whRows, clRows, fbaRows, pendingMcf] = await Promise.all([
-        prisma.stockLevel.findMany({
-          where: { productId: { in: pushProductIds }, location: { type: 'WAREHOUSE' } },
-          select: { productId: true, available: true },
-        }),
+      const [ledgers, clRows, fbaRows, pendingMcf] = await Promise.all([
+        // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
+        loadSyncLedgers(prisma, pushProductIds),
         prisma.channelListing.findMany({
           where: { productId: { in: pushProductIds }, channel: 'EBAY' },
           select: { productId: true, marketplace: true, stockBuffer: true, fulfillmentMethod: true },
@@ -1612,9 +1611,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         getPendingMcfReservedByProduct(pushProductIds),
       ]);
       pendingMcfByProduct = pendingMcf;
-      for (const r of whRows) {
-        trackedProducts.add(r.productId);
-        fbmByProduct.set(r.productId, (fbmByProduct.get(r.productId) ?? 0) + r.available);
+      for (const [productId, ledger] of ledgers) {
+        // Tracked = it has warehouse rows to draw from, or it left a pool (then its own stock is 0).
+        if (ledger.ledger.length === 0 && !ledger.uncountedIsZero) continue;
+        trackedProducts.add(productId);
+        fbmByProduct.set(productId, ledger.available);
       }
       for (const cl of clRows) {
         const key = `${cl.productId}::${(cl.marketplace ?? '').toUpperCase()}`;

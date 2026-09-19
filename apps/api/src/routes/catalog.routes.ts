@@ -12,6 +12,7 @@ import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
 import { masterPriceService } from "../services/master-price.service.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
+import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 
 // ── Request/Response Types ───────────────────────────────────────────────
 
@@ -916,7 +917,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         shouldSync = true;
       }
 
-      if (totalStock !== undefined && totalStock !== product.totalStock) {
+      // Shared stock — a pooled product's listings follow the pool, not this business's own total;
+      // the stock movement's cascade already sent them the pool's number.
+      const pooled = totalStock !== undefined && (await loadSyncLedgers(prisma, [id])).get(id)?.source.kind === 'pool';
+      if (totalStock !== undefined && totalStock !== product.totalStock && !pooled) {
         syncPayload.quantity = totalStock;
         shouldSync = true;
       }

@@ -15,6 +15,7 @@
 import prisma from '../../db.js'
 import { suppressCampaignBids } from './ads-bid-suppression.service.js'
 import { logger } from '../../utils/logger.js'
+import { sellableAvailable } from '../stock-pool/sync-ledgers.js'
 
 export type Verdict = 'pause' | 'watch' | 'ok'
 export interface ProductReadiness { productId: string | null; sku: string | null; asin: string | null; name: string | null; inStock: boolean; availableQty: number; hasBuyBox: boolean | null; priceCompetitive: boolean | null }
@@ -47,18 +48,21 @@ export async function analyzeRetailReadiness(opts: { marketplace?: string; campa
         where: { id: { in: [...productIds] } },
         select: {
           id: true, sku: true, name: true, totalStock: true,
-          stockLevels: { select: { available: true } },
+          stockLevels: { select: { available: true, location: { select: { type: true } } } },
           channelListings: { select: { marketplace: true, channel: true, price: true, lowestCompetitorPrice: true } },
           buyBoxHistory: { orderBy: { observedAt: 'desc' }, take: 5, select: { channel: true, marketplace: true, isOurOffer: true } },
         },
       })
     : []
   const pMap = new Map(products.map((p) => [p.id, p]))
+  // Shared stock — warehouse units come from the product's ledger (its own warehouses, or the pool it
+  // sells from); Amazon-held units stay its own. A pooled product is not "out of stock" here.
+  const warehouseSellable = products.length ? await sellableAvailable(prisma, products.map((p) => p.id)) : new Map<string, number>()
 
   function readiness(productId: string, marketplace: string | null): ProductReadiness {
     const p = pMap.get(productId)
     if (!p) return { productId, sku: null, asin: null, name: null, inStock: true, availableQty: 0, hasBuyBox: null, priceCompetitive: null }
-    const available = p.stockLevels.reduce((s, sl) => s + (sl.available ?? 0), 0)
+    const available = p.stockLevels.filter((sl) => sl.location?.type !== 'WAREHOUSE').reduce((s, sl) => s + (sl.available ?? 0), 0) + (warehouseSellable.get(p.id) ?? 0)
     const inStock = available > 0 || (p.totalStock ?? 0) > 0
     const cl = p.channelListings.find((x) => x.channel === 'AMAZON' && (!marketplace || x.marketplace === marketplace)) ?? p.channelListings.find((x) => x.channel === 'AMAZON')
     const priceCompetitive = cl?.price != null && cl?.lowestCompetitorPrice != null ? Number(cl.price) <= Number(cl.lowestCompetitorPrice) * 1.02 : null

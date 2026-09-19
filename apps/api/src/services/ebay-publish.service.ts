@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { EbayService } from "./marketplaces/ebay.service.js";
 import prisma from "@nexus/database";
 import { publishListingEvent } from "./listing-events.service.js";
+import { sellableQuantity } from "./stock-pool/sync-ledgers.js";
 
 export interface PublishResult {
   success: boolean;
@@ -56,6 +57,8 @@ export class EbayPublishService {
     await assertListingContentReviewed({ productId: draft.product.id, channel: 'EBAY', marketplace: options?.marketplaceId ?? null });
 
     const finalPrice = options?.overridePrice ?? Number(draft.product.basePrice);
+    // Shared stock — a pooled product publishes the pool's number, not its business's own total.
+    const publishQuantity = (await sellableQuantity(this.prisma as never, [draft.product])).get(draft.product.id) ?? draft.product.totalStock;
 
     const listingId = await this.ebayService.publishNewListing(
       draft.product.sku,
@@ -66,7 +69,7 @@ export class EbayPublishService {
         htmlDescription: draft.htmlDescription,
       },
       finalPrice,
-      draft.product.totalStock,
+      publishQuantity,
       draft.productId,
     );
 
@@ -98,7 +101,7 @@ export class EbayPublishService {
           externalListingId: listingId,
           externalSku: draft.product.sku,
           channelPrice: finalPrice,
-          channelQuantity: draft.product.totalStock,
+          channelQuantity: publishQuantity,
           listingStatus: "ACTIVE",
           listingUrl,
           lastSyncedAt: new Date(),

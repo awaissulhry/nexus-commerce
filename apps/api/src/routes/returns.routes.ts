@@ -805,8 +805,10 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
 
-      const restocked: Array<{ sku: string; productId: string; qty: number; grade: string | null }> = []
+      const restocked: Array<{ sku: string; productId: string; qty: number; grade: string | null; to?: 'shared-stock' }> = []
       const skipped: Array<{ sku: string; reason: string }> = []
+      const { putBackForOrder } = await import('../services/stock-pool/order-routing.js')
+      const poolRouteOf = new Map<string, string>()
       for (const item of ret.items) {
         if (!item.productId) {
           skipped.push({ sku: item.sku, reason: 'no-productId' })
@@ -817,6 +819,31 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
         if (grade === 'DAMAGED' || grade === 'UNUSABLE') {
           skipped.push({ sku: item.sku, reason: `grade-${grade}` })
           continue
+        }
+        // Shared stock step 4 — a unit its order took from a pool goes back to the pool (door 5: to the
+        // lent warehouse the order took the most from; once per return; never more than the order took).
+        // Decided once per product, for all of the return's restockable items of that product together.
+        if (ret.orderId) {
+          let route = poolRouteOf.get(item.productId)
+          if (!route) {
+            const quantity = ret.items
+              .filter((other) => other.productId === item.productId && other.conditionGrade !== 'DAMAGED' && other.conditionGrade !== 'UNUSABLE')
+              .reduce((sum, other) => sum + other.quantity, 0)
+            const pooled = await putBackForOrder({
+              productId: item.productId, quantity, orderId: ret.orderId, putBackRef: ret.id,
+              reason: 'RETURN_RESTOCKED', actor: 'return-restock',
+            })
+            route = pooled.via === 'none' ? `shared-stock: ${pooled.refusal.code}` : pooled.via
+            poolRouteOf.set(item.productId, route)
+          }
+          if (route === 'pool') {
+            restocked.push({ sku: item.sku, productId: item.productId, qty: item.quantity, grade, to: 'shared-stock' })
+            continue
+          }
+          if (route !== 'own') {
+            skipped.push({ sku: item.sku, reason: route })
+            continue
+          }
         }
         await applyStockMovement({
           productId: item.productId,

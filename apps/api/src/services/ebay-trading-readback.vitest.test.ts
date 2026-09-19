@@ -170,6 +170,20 @@ describe('AS.4a — diffTradingReadback (pool is the authority)', () => {
     ).toEqual([])
   })
 
+  // Shared stock plan step 3 — a fixed variant is compared with ITS number, never with the pool.
+  it('a fixed variant is compared with its fixed number, not the pool (and not its buffer)', () => {
+    const fixed = (q: number | null): TradingReadbackEntry => ({ ...entry('A', 'p1'), pinnedQuantity: q, stockBuffer: 3 })
+    expect(diffTradingReadback([fixed(2)], obs([[ITEM, 'A', 2]]), new Map([['p1', 7]]), { now: NOW })).toEqual([])
+    expect(diffTradingReadback([fixed(2)], obs([[ITEM, 'A', 7]]), new Map([['p1', 7]]), { now: NOW })).toEqual([
+      { sku: 'A', itemId: ITEM, marketplace: 'EBAY_IT', productId: 'p1', ebayQty: 7, intendedQty: 2 },
+    ])
+    expect(diffTradingReadback([fixed(0)], obs([[ITEM, 'A', 4]]), new Map([['p1', 7]]), { now: NOW })[0]).toMatchObject({ intendedQty: 0 })
+    // Fixed even when the pool is UNCOUNTED (absent from the map): the operator chose the number.
+    expect(diffTradingReadback([fixed(2)], obs([[ITEM, 'A', 5]]), new Map(), { now: NOW })[0]).toMatchObject({ intendedQty: 2 })
+    // No fixed number: the pool minus the buffer, as before.
+    expect(diffTradingReadback([fixed(null)], obs([[ITEM, 'A', 7]]), new Map([['p1', 7]]), { now: NOW })[0]).toMatchObject({ intendedQty: 4 }) // 7 − 3
+  })
+
   it('SKU not present in the GetItem response is skipped (no phantom zero)', () => {
     expect(
       diffTradingReadback([entry('A', 'p1')], new Map(), new Map([['p1', 7]]), { now: NOW }),

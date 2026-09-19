@@ -27,6 +27,7 @@ import { isFbaListing } from './outbound-sync.service.js'
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { sellableAvailable } from './stock-pool/sync-ledgers.js'
 
 const FOLLOW_HOLD_MS = 30 * 1000
 
@@ -139,21 +140,14 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
   result.matched = listings.length
   if (listings.length === 0) return result
 
-  // Per-product warehouse-available (for the FOLLOW recompute) + FBA stock
-  // (fail-closed FBA evidence). READ-ONLY — StockLevel is never written here.
+  // FBA stock (fail-closed FBA evidence). READ-ONLY — StockLevel is never written here. The FOLLOW
+  // number is read per chunk, inside its transaction, from the product's ledger (below).
   const stockRows = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds } },
-    select: { productId: true, available: true, quantity: true, location: { select: { type: true } } },
+    where: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
+    select: { productId: true, quantity: true },
   })
-  const warehouseAvailByProduct = new Map<string, number>()
   const fbaQtyByProduct = new Map<string, number>()
-  for (const s of stockRows) {
-    if (s.location?.type === 'WAREHOUSE') {
-      warehouseAvailByProduct.set(s.productId, (warehouseAvailByProduct.get(s.productId) ?? 0) + s.available)
-    } else if (s.location?.type === 'AMAZON_FBA') {
-      fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
-    }
-  }
+  for (const s of stockRows) fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
 
   const applicable = listings.filter((cl) => {
     // Invariant B: skip FBA (fail-closed — any FBA signal ⇒ leave it alone).
@@ -208,12 +202,8 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
         // request-start snapshot — a sale mid-bulk would have its cascade row
         // coalesced away and replaced with a STALE quantity. One query/chunk.
         const chunkPids = [...new Set(chunk.map((c) => c.productId))]
-        const freshStock = await tx.stockLevel.findMany({
-          where: { productId: { in: chunkPids }, location: { type: 'WAREHOUSE' } },
-          select: { productId: true, available: true },
-        })
-        const freshAvail = new Map<string, number>()
-        for (const st of freshStock) freshAvail.set(st.productId, (freshAvail.get(st.productId) ?? 0) + st.available)
+        // Shared stock — the product's ledger: its own warehouses, or the pool it sells from.
+        const freshAvail = await sellableAvailable(tx, chunkPids)
         // Compute EVERY row's write first, then coalesce ONLY the rows that
         // will actually change. Coalescing the whole chunk cancelled the
         // pending pushes of NO-OP rows without enqueuing a replacement — which
@@ -426,16 +416,13 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
   result.matched = listings.length
   if (listings.length === 0) return result
 
+  // FBA stock (fail-closed FBA evidence); the buffer write reads the ledger per chunk, below.
   const stockRows = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds } },
-    select: { productId: true, available: true, quantity: true, location: { select: { type: true } } },
+    where: { productId: { in: productIds }, location: { type: 'AMAZON_FBA' } },
+    select: { productId: true, quantity: true },
   })
-  const warehouseAvailByProduct = new Map<string, number>()
   const fbaQtyByProduct = new Map<string, number>()
-  for (const s of stockRows) {
-    if (s.location?.type === 'WAREHOUSE') warehouseAvailByProduct.set(s.productId, (warehouseAvailByProduct.get(s.productId) ?? 0) + s.available)
-    else if (s.location?.type === 'AMAZON_FBA') fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
-  }
+  for (const s of stockRows) fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
 
   const applicable = listings.filter((cl) => {
     // Invariant B: skip FBA fail-closed (FBA only exists on AMAZON).
@@ -471,12 +458,8 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
         // Per-chunk pool re-read + compute-first — same freshness and no-op
         // preservation rules as the FOLLOW path above.
         const chunkPids = [...new Set(chunk.map((c) => c.productId))]
-        const freshStock = await tx.stockLevel.findMany({
-          where: { productId: { in: chunkPids }, location: { type: 'WAREHOUSE' } },
-          select: { productId: true, available: true },
-        })
-        const freshAvail = new Map<string, number>()
-        for (const st of freshStock) freshAvail.set(st.productId, (freshAvail.get(st.productId) ?? 0) + st.available)
+        // Shared stock — the product's ledger: its own warehouses, or the pool it sells from.
+        const freshAvail = await sellableAvailable(tx, chunkPids)
         const plans = chunk.map((cl) => {
           const warehouseAvailable = freshAvail.get(cl.productId) ?? 0
           const write = computeStockBufferWrite(cl, buffer, warehouseAvailable)

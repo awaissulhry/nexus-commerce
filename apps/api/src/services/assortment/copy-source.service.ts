@@ -129,10 +129,57 @@ export async function authorisedSource(shareId: string): Promise<AuthorisedSourc
 export async function readOfferedCatalog(input: { shareId: string; market: string }): Promise<OfferedCatalog> {
   const market = String(input.market ?? '').trim().toUpperCase()
   if (!MARKET.test(market)) throw new WorkspaceError('invalid_market', 'Choose the marketplace whose attribute dictionary the copy uses.', 400)
-  const follower = requireWorkspace()
   const source = await authorisedSource(input.shareId)
+  return readFromOwner(source, source.products.map((product) => product.id), market)
+}
+
+/**
+ * AE.4 — what the follower's sync worker may read for one link (shared stock plan step 6, contract
+ * docs/2026-09-19-shared-stock-build.md §6.1). The database answers only for an active link of an active
+ * share between two active businesses, in the follower's context, and names the product ids: the source
+ * product and, for a parent, its variations the assortment still covers. No person is needed — the
+ * follower's owner consented when the share was accepted and the link was made.
+ */
+export interface LinkSource {
+  linkId: string
+  shareId: string
+  ownerWorkspaceId: string
+  fieldGroups: FieldGroup[]
+  /** null: the source product no longer exists. `deleted`: deleted, or no longer in the assortment. */
+  source: { id: string; sku: string; version: number; parentId: string | null; deleted: boolean } | null
+  variations: Array<{ id: string; sku: string; version: number }>
+}
+
+export async function linkSource(linkId: string): Promise<LinkSource> {
+  requireWorkspace()
+  const [{ result }] = await prisma.$queryRaw<Array<{ result: Record<string, unknown> }>>`SELECT nexus_assortment_sync_source(${linkId}) AS result`
+  if (typeof result.error === 'string') throw new WorkspaceError(String(result.code ?? 'source_refused'), result.error, 409)
+  return result as unknown as LinkSource
+}
+
+/** Read `productIds` (all named by `link`) from the owner, filtered to the link's offered groups. Call in the FOLLOWER's context. */
+export async function readLinkedCatalog(input: { link: LinkSource; productIds: string[]; market: string }): Promise<OfferedCatalog> {
+  const market = String(input.market ?? '').trim().toUpperCase()
+  if (!MARKET.test(market)) throw new WorkspaceError('invalid_market', 'The link has no reference marketplace.', 400)
+  const named = new Map<string, { id: string; sku: string; parentId: string | null; version: number }>()
+  const { source } = input.link
+  if (source && !source.deleted) named.set(source.id, { id: source.id, sku: source.sku, parentId: source.parentId, version: source.version })
+  for (const variation of input.link.variations) named.set(variation.id, { ...variation, parentId: source?.id ?? null })
+  const products = input.productIds.map((id) => {
+    const product = named.get(id)
+    if (!product) throw new WorkspaceError('source_not_named', 'The database did not name this product for the link.', 409)
+    return product
+  })
+  const authorised: AuthorisedSource = {
+    shareId: input.link.shareId, shareVersion: 0, ownerWorkspaceId: input.link.ownerWorkspaceId,
+    fieldGroups: input.link.fieldGroups, followSettings: false, products,
+  }
+  return readFromOwner(authorised, products.map((product) => product.id), market)
+}
+
+async function readFromOwner(source: AuthorisedSource, ids: string[], market: string): Promise<OfferedCatalog> {
+  const follower = requireWorkspace()
   const offered = new Set<string>(source.fieldGroups)
-  const ids = source.products.map((product) => product.id)
 
   const read = await withWorkspace(
     { workspaceId: source.ownerWorkspaceId, actorUserId: null, membershipId: null, roleKeys: [] },

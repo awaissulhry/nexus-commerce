@@ -39,6 +39,7 @@ import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compl
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
 import { resolveMembershipIntended } from "./sync-control-core.js";
+import { ledgerInputs, loadSyncLedgers, sellableAvailable } from "./stock-pool/sync-ledgers.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
@@ -1016,11 +1017,8 @@ export class OutboundSyncService {
       payload.quantity !== undefined &&
       product?.id
     ) {
-      const whRows = await prisma.stockLevel.findMany({
-        where: { productId: product.id, location: { type: 'WAREHOUSE' } },
-        select: { available: true },
-      })
-      const warehouseAvailable = whRows.reduce((s, r) => s + (r.available ?? 0), 0)
+      // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
+      const warehouseAvailable = (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0
       const { available } = computeAvailableToPublish({
         fulfillmentMethod: 'FBM',
         warehouseAvailable,
@@ -1230,17 +1228,15 @@ export class OutboundSyncService {
       }
     } catch { /* fail-open */ }
     if (payload.quantity !== undefined && product?.id) {
-      const whRows = await prisma.stockLevel.findMany({
-        where: { productId: product.id, location: { type: "WAREHOUSE" } },
-        select: { available: true },
-      });
+      // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
+      const sellable = (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0;
       // P1 — base the eBay push on the CURRENT listing quantity, then apply the
       // warehouse cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
       if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
         payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
       }
       if (cl?.fulfillmentMethod !== "FBA") {
-        const warehouseAvailable = whRows.reduce((s, r) => s + r.available, 0);
+        const warehouseAvailable = sellable;
         const cap = computeAvailableToPublish({
           fulfillmentMethod: "FBM",
           warehouseAvailable,
@@ -1680,26 +1676,21 @@ export class OutboundSyncService {
     // WITHOUT spending a revise against the item's ~250/day budget.
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0" && payload?.productId) {
       try {
-        const wh = await prisma.stockLevel.findMany({
-          where: { productId: payload.productId, location: { type: "WAREHOUSE" } },
-          select: { available: true, location: { select: { code: true, syncRoutes: true } } },
-        });
         // SC.1 — per-membership derivation at dispatch: routing + followPool
         // + per-membership buffer + channel policy. PAUSED/UNCOUNTED members
         // are dropped here exactly like at enqueue (controls can change
         // between the two — dispatch re-checks, never trusts the row).
-        const scLedger = wh.map((s: { available: number; location: { code: string; syncRoutes: string[] } | null }) => ({
-          locationCode: s.location?.code ?? '?',
-          available: s.available,
-          syncRoutes: s.location?.syncRoutes ?? [],
-        }));
+        // Shared stock — the ledger comes from loadSyncLedgers, as at enqueue: a pooled product is
+        // re-read from the pool, never from this business's own rows.
+        const productLedger = (await loadSyncLedgers(prisma, [payload.productId])).get(payload.productId);
+        const scLedger = ledgerInputs(productLedger).ledger;
         const scPolicies = await loadChannelPolicies();
         const mems = await prisma.sharedListingMembership.findMany({
           where: { marketplace: market, itemId, sku: { in: updates.map((u) => u.sku) } },
-          select: { sku: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
+          select: { sku: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true },
         });
         const memBySku = new Map(
-          mems.map((m: { sku: string; lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number }) => [m.sku, m]),
+          mems.map((m: { sku: string; lastQtyPushed: number | null; followPool?: boolean; stockBuffer?: number; pinnedQuantity?: number | null }) => [m.sku, m]),
         );
         const effective: typeof updates = [];
         for (const u of updates) {
@@ -1707,13 +1698,18 @@ export class OutboundSyncService {
           const r = resolveMembershipIntended({
             marketplace: market,
             followPool: m?.followPool ?? true,
+            pinnedQuantity: m?.pinnedQuantity ?? null,
             stockBuffer: m?.stockBuffer ?? 0,
             channelPolicy: policyFor(scPolicies, 'EBAY', market),
             ledger: scLedger,
+            uncountedIsZero: productLedger?.uncountedIsZero ?? false,
           });
-          if (r.kind !== 'FOLLOW') continue; // paused/uncounted member — never push
-          u.quantity = r.quantity;
-          if (m?.lastQtyPushed !== r.quantity) effective.push(u);
+          // Follow → the pool's number; a fixed number (shared stock step 3) → exactly that number;
+          // paused/uncounted member — never push.
+          const wanted = r.kind === 'FOLLOW' ? r.quantity : r.kind === 'PINNED' ? r.quantity : null;
+          if (wanted == null) continue;
+          u.quantity = wanted;
+          if (m?.lastQtyPushed !== wanted) effective.push(u);
         }
         if (effective.length === 0) {
           return {
@@ -2146,13 +2142,10 @@ export class OutboundSyncService {
         product?.id &&
         cl?.fulfillmentMethod !== "FBA"
       ) {
-        const wh = await prisma.stockLevel.findMany({
-          where: { productId: product.id, location: { type: "WAREHOUSE" } },
-          select: { available: true },
-        });
+        // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
         const available = computeAvailableToPublish({
           fulfillmentMethod: "FBM",
-          warehouseAvailable: wh.reduce((a, s) => a + s.available, 0),
+          warehouseAvailable: (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0,
           fbaSellable: 0,
           stockBuffer: cl?.stockBuffer ?? 0,
         }).available;

@@ -40,11 +40,15 @@ const state = vi.hoisted(() => {
     outboundSyncQueue: {
       create: async () => ({ id: `q${++s.queueCreates}` }),
     },
-    // Per-chunk pool freshness read (added with the stale-snapshot fix).
+    // Per-chunk pool freshness read (added with the stale-snapshot fix). Since shared stock it goes
+    // through loadSyncLedgers: this business's WAREHOUSE rows, the pool door (no product is pooled
+    // here) and the product's link history (none).
     stockLevel: {
       findMany: async ({ where }: any) =>
-        (where.productId.in as string[]).map((productId) => ({ productId, available: 10 })),
+        (where.productId.in as string[]).map((productId) => ({ productId, available: 10, quantity: 10, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })),
     },
+    stockPoolLink: { findMany: async () => [] },
+    $queryRaw: async () => [],
   }
   let txCount = 0
   const prisma = {
@@ -52,7 +56,8 @@ const state = vi.hoisted(() => {
       findMany: async () => s.listings,
     },
     stockLevel: {
-      findMany: async () =>
+      // The pre-read is FBA evidence only (AMAZON_FBA rows); these products hold none.
+      findMany: async ({ where }: any) => where?.location?.type === 'AMAZON_FBA' ? [] :
         [...new Set(s.listings.map((l) => l.productId))].map((productId) => ({
           productId, available: 10, quantity: 10, location: { type: 'WAREHOUSE' },
         })),

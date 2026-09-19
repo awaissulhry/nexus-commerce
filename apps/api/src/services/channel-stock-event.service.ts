@@ -42,6 +42,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { applyStockMovement } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
+import { loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 
 const DEFAULT_AUTO_APPLY_THRESHOLD = 1
 
@@ -150,7 +151,14 @@ export async function recordChannelStockEvent(
   // when the event isn't pinned to a specific location/variant,
   // otherwise scope the read.
   let localQty = 0
-  if (product) {
+  // Shared stock — a product that sells from another business's pool: the channel shows the pool's
+  // number, so that is what it is compared with, and a channel's number is never written into this
+  // business's own ledger (the lender counts its own stock).
+  const productLedger = product ? (await loadSyncLedgers(prisma, [product.id])).get(product.id) : undefined
+  const pooled = productLedger?.source.kind === 'pool'
+  if (product && pooled) {
+    localQty = productLedger!.quantity
+  } else if (product) {
     const where: Prisma.StockLevelWhereInput = {
       productId: product.id,
       // variationId === null sums master-stock; pinning to a specific
@@ -172,7 +180,7 @@ export async function recordChannelStockEvent(
   let initialStatus: 'PENDING' | 'AUTO_APPLIED' | 'REVIEW_NEEDED' | 'APPLIED'
   if (drift === 0) {
     initialStatus = 'APPLIED' // no-op observation, audit only
-  } else if (Math.abs(drift) <= threshold) {
+  } else if (Math.abs(drift) <= threshold && !pooled) {
     initialStatus = 'AUTO_APPLIED'
   } else {
     initialStatus = 'REVIEW_NEEDED'
@@ -276,6 +284,9 @@ export async function applyChannelStockEvent(
     throw new Error(
       `ChannelStockEvent ${eventId} has no resolved productId — cannot apply. Map the SKU first.`,
     )
+  }
+  if (event.drift !== 0 && (await loadSyncLedgers(prisma, [event.productId])).get(event.productId)?.source.kind === 'pool') {
+    throw new Error('This product sells from shared stock owned by another business profile. Count it there; a channel number cannot change it from here.')
   }
 
   // No-drift events are weirdly possible (operator clicks Apply on

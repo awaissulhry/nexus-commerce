@@ -28,6 +28,15 @@
  * Not caught: a table name assembled at runtime, or the delegate reached through a variable
  * (`const { stockLevel } = tx`). Neither pattern exists in the tree today.
  *
+ * DATABASE FUNCTIONS (shared stock, plan 2026-09-19)
+ * The pool doors in packages/database/workspaces/*.sql write StockLevel too, in the lender's ledger
+ * for a borrower. They must take the SAME lock, before their first write, or they race the
+ * TypeScript writers above (measured: without it, a door deadlocks against the lender's own sales —
+ * stock-pool-concurrency.vitest.test.ts, arm 4). Each function that writes StockLevel must be listed
+ * under "sqlFunctions" with its exact number of write sites, and its body must contain
+ *   PERFORM 1 FROM "Product" WHERE id = … FOR NO KEY UPDATE
+ * before its first write. SQL comments (`-- …`) never count.
+ *
  * SCOPE
  * Runtime code: apps/*\/src and packages/*\/src. Tests (*.test.*, __tests__/, test-support/) and
  * one-off scripts are out of scope — they seed fixtures, they do not serve orders.
@@ -142,12 +151,46 @@ for (const [path, r] of found) {
 for (const path of Object.keys(LIST.files)) {
   if (!found.get(path)?.writes.length) failures.push(`${path} is in scripts/stock-writer-lock.json but writes no StockLevel — remove it from the list.`)
 }
+// ── Database functions that write StockLevel (the pool doors) ─────────────────────────────────
+const SQL_DIR = join(ROOT, 'packages', 'database', 'workspaces')
+const SQL_LIST = LIST.sqlFunctions ?? {}
+const LOCK_LINE = /PERFORM\s+1\s+FROM\s+"Product"\s+WHERE\s+id\s*=\s*[^;]+?FOR\s+NO\s+KEY\s+UPDATE/i
+const sqlFound = new Map()
+if (existsSync(SQL_DIR)) {
+  for (const name of readdirSync(SQL_DIR).filter((n) => n.endsWith('.sql')).sort()) {
+    // Comments never count: strip `-- …` to the end of each line first.
+    const text = readFileSync(join(SQL_DIR, name), 'utf8').replace(/--[^\n]*/g, '')
+    for (const block of text.split(/CREATE\s+OR\s+REPLACE\s+FUNCTION\s+/i).slice(1)) {
+      const fn = /^([A-Za-z_][A-Za-z0-9_]*)/.exec(block)?.[1]
+      const writes = [...block.matchAll(RAW_WRITE)]
+      if (!fn || writes.length === 0) continue
+      const lock = LOCK_LINE.exec(block)
+      sqlFound.set(fn, { file: `packages/database/workspaces/${name}`, writes: writes.length, lockedFirst: !!lock && lock.index < writes[0].index })
+    }
+  }
+}
+for (const [fn, r] of sqlFound) {
+  totalWrites += r.writes
+  const entry = SQL_LIST[fn]
+  if (!entry) {
+    failures.push(`${r.file}: function ${fn}() writes StockLevel but is not an approved stock writer. Take the product lock first (PERFORM 1 FROM "Product" WHERE id = … FOR NO KEY UPDATE) and add it to "sqlFunctions" in scripts/stock-writer-lock.json.`)
+    continue
+  }
+  if (r.writes !== entry.writes) failures.push(`${r.file}: function ${fn}() has ${r.writes} StockLevel write site(s); the list approves ${entry.writes}.`)
+  if (!r.lockedFirst) failures.push(`${r.file}: function ${fn}() writes StockLevel without first taking the product lock (PERFORM 1 FROM "Product" WHERE id = … FOR NO KEY UPDATE before its first write).`)
+}
+for (const fn of Object.keys(SQL_LIST)) {
+  if (!sqlFound.has(fn)) failures.push(`${fn}() is in "sqlFunctions" of scripts/stock-writer-lock.json but no function of that name writes StockLevel — remove it from the list.`)
+}
+if (Object.keys(SQL_LIST).length > 0 && sqlFound.size === 0) failures.push(`found ZERO StockLevel-writing database functions under ${SQL_DIR} although approved ones exist — the scanner is not seeing them`)
+
 // Positive control: the approved list is non-empty, so a scanner that finds nothing is broken.
 if (Object.keys(LIST.files).length > 0 && totalWrites === 0) failures.push('found ZERO StockLevel write sites although approved writers exist — the scanner is not seeing them')
 
 if (!CHECK || failures.length === 0) {
   console.log(`stock-writer lock: ${files.length} runtime files scanned, ${totalWrites} StockLevel write site(s) in ${[...found.values()].filter((r) => r.writes.length).length} file(s)`)
   for (const [path, r] of found) if (r.writes.length) console.log(`  ${String(r.writes.length).padStart(2)}  ${path}${r.lockCalls ? `  (lockProductStock ×${r.lockCalls})` : ''}`)
+  for (const [fn, r] of sqlFound) console.log(`  ${String(r.writes).padStart(2)}  ${r.file} ${fn}()${r.lockedFirst ? '  (product lock first)' : '  (NO LOCK FIRST)'}`)
 }
 if (CHECK && failures.length > 0) {
   console.error(`❌ stock-writer lock: ${failures.length} problem(s)`)

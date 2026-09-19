@@ -9,6 +9,7 @@ import {
   locationServes,
   normalizeMarket,
   validateServesTokens,
+  syncLedgerOf,
   type SyncControlInputs,
   type RoutedLedgerRow,
 } from './sync-control-core.js'
@@ -29,8 +30,29 @@ const base = (over: Partial<SyncControlInputs> = {}): SyncControlInputs => ({
   stockBuffer: 0,
   sourceLocationCodes: [],
   channelPolicy: null,
-  ledger: [row('IT-MAIN', 10)],
+  ledger: syncLedgerOf([row('IT-MAIN', 10)]),
   ...over,
+})
+
+describe('Shared stock — a product that left a pool (uncountedIsZero)', () => {
+  it('an empty own ledger is 0, never UNCOUNTED — a listing never keeps the pool\'s last number', () => {
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]), uncountedIsZero: true }))).toEqual({ kind: 'FOLLOW', quantity: 0, routedAvailable: 0, routedLocations: [] })
+    // Positive control: the same ledger without the flag is still the P0 guard.
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]) }))).toEqual({ kind: 'UNCOUNTED' })
+  })
+  it('own rows that route nowhere for this market are 0 too; own stock that is counted is used as is', () => {
+    expect(resolveIntendedQuantity(base({ marketplace: 'FR', ledger: syncLedgerOf([row('X', 9, ['AMAZON:IT'])]), uncountedIsZero: true }))).toMatchObject({ kind: 'FOLLOW', quantity: 0 })
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([row('IT-MAIN', 4)]), stockBuffer: 1, uncountedIsZero: true }))).toMatchObject({ kind: 'FOLLOW', quantity: 3 })
+  })
+  it('every rule above FOLLOW still wins: FBA, policy, pause and pin are untouched by the flag', () => {
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]), uncountedIsZero: true, isFba: true }))).toEqual({ kind: 'FBA_EXCLUDED' })
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]), uncountedIsZero: true, syncPaused: true }))).toEqual({ kind: 'PAUSED', via: 'LISTING' })
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]), uncountedIsZero: true, followMasterQuantity: false, pinnedQuantity: 2 }))).toEqual({ kind: 'PINNED', quantity: 2 })
+  })
+  it('a shared eBay variant follows the same rule', () => {
+    expect(resolveMembershipIntended({ marketplace: 'IT', followPool: true, stockBuffer: 0, ledger: syncLedgerOf([]), uncountedIsZero: true })).toMatchObject({ kind: 'FOLLOW', quantity: 0 })
+    expect(resolveMembershipIntended({ marketplace: 'IT', followPool: true, stockBuffer: 0, ledger: syncLedgerOf([]) })).toEqual({ kind: 'UNCOUNTED' })
+  })
 })
 
 describe('SC.0 — precedence (each rule beats everything below it)', () => {
@@ -72,9 +94,9 @@ describe('SC.0 — precedence (each rule beats everything below it)', () => {
   })
 
   it('5. follow sums routed available minus buffer, floored at 0', () => {
-    const r = resolveIntendedQuantity(base({ ledger: [row('IT-MAIN', 7), row('B', 5)], stockBuffer: 3 }))
+    const r = resolveIntendedQuantity(base({ ledger: syncLedgerOf([row('IT-MAIN', 7), row('B', 5)]), stockBuffer: 3 }))
     expect(r).toEqual({ kind: 'FOLLOW', quantity: 9, routedAvailable: 12, routedLocations: ['IT-MAIN', 'B'] })
-    expect(resolveIntendedQuantity(base({ ledger: [row('A', 2)], stockBuffer: 5 }))).toMatchObject({ quantity: 0 })
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([row('A', 2)]), stockBuffer: 5 }))).toMatchObject({ quantity: 0 })
   })
 })
 
@@ -127,7 +149,7 @@ describe('SC.0 — routing (Layer A: servesMarketplaces)', () => {
     const r = resolveIntendedQuantity(
       base({
         marketplace: 'IT',
-        ledger: [row('X', 4, ['AMAZON:IT', 'EBAY']), row('Y', 6, ['AMAZON:DE'])],
+        ledger: syncLedgerOf([row('X', 4, ['AMAZON:IT', 'EBAY']), row('Y', 6, ['AMAZON:DE'])]),
       }),
     )
     expect(r).toMatchObject({ kind: 'FOLLOW', quantity: 4, routedLocations: ['X'] })
@@ -135,17 +157,17 @@ describe('SC.0 — routing (Layer A: servesMarketplaces)', () => {
 
   it('UNCOUNTED when stock exists ONLY in unrouted locations (never manufacture a zero)', () => {
     const r = resolveIntendedQuantity(
-      base({ marketplace: 'FR', ledger: [row('X', 9, ['AMAZON:IT'])] }),
+      base({ marketplace: 'FR', ledger: syncLedgerOf([row('X', 9, ['AMAZON:IT'])]) }),
     )
     expect(r).toEqual({ kind: 'UNCOUNTED' })
   })
 
   it('UNCOUNTED on a fully empty ledger (P0 parity)', () => {
-    expect(resolveIntendedQuantity(base({ ledger: [] }))).toEqual({ kind: 'UNCOUNTED' })
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([]) }))).toEqual({ kind: 'UNCOUNTED' })
   })
 
   it('counted-to-zero still follows honestly (rows exist, sum 0)', () => {
-    expect(resolveIntendedQuantity(base({ ledger: [row('IT-MAIN', 0)] }))).toMatchObject({
+    expect(resolveIntendedQuantity(base({ ledger: syncLedgerOf([row('IT-MAIN', 0)]) }))).toMatchObject({
       kind: 'FOLLOW',
       quantity: 0,
     })
@@ -195,13 +217,34 @@ describe('SC.0 — membership wrapper (per-variant eBay control)', () => {
     ).toEqual({ kind: 'PAUSED', via: 'POLICY' })
   })
 
+  // Shared stock plan step 3 — "Fixed number" for a shared eBay variant (pinnedQuantity).
+  it('a fixed number is PINNED at exactly that number, whatever the pool and the buffer', () => {
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: 2, stockBuffer: 5, ledger })).toEqual({ kind: 'PINNED', quantity: 2 })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: 30, stockBuffer: 0, ledger: syncLedgerOf([]) })).toEqual({ kind: 'PINNED', quantity: 30 })
+  })
+
+  it('a fixed number of 0 is a real fixed number (not "follow"); null and absent follow the pool', () => {
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: 0, stockBuffer: 0, ledger })).toEqual({ kind: 'PINNED', quantity: 0 })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: null, stockBuffer: 0, ledger })).toMatchObject({ kind: 'FOLLOW', quantity: 12 })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, stockBuffer: 0, ledger })).toMatchObject({ kind: 'FOLLOW', quantity: 12 })
+  })
+
+  it('the listing precedence holds for a fixed variant: policy and Excluded beat the fixed number', () => {
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: false, pinnedQuantity: 2, stockBuffer: 0, ledger })).toEqual({ kind: 'PAUSED', via: 'LISTING' })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: 2, stockBuffer: 0, channelPolicy: { pushesPaused: true }, ledger })).toEqual({ kind: 'PAUSED', via: 'POLICY' })
+  })
+
+  it('a fixed variant ignores "left a pool" too (the operator chose the number)', () => {
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, pinnedQuantity: 4, stockBuffer: 0, ledger: syncLedgerOf([]), uncountedIsZero: true })).toEqual({ kind: 'PINNED', quantity: 4 })
+  })
+
   it('membership routing honors location tokens (EBAY_IT ≡ IT)', () => {
     expect(
       resolveMembershipIntended({
         marketplace: 'EBAY_IT',
         followPool: true,
         stockBuffer: 0,
-        ledger: [row('X', 7, ['EBAY:IT'])],
+        ledger: syncLedgerOf([row('X', 7, ['EBAY:IT'])]),
       }),
     ).toMatchObject({ kind: 'FOLLOW', quantity: 7 })
   })

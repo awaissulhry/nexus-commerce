@@ -33,6 +33,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
 import { applyStockMovement } from './stock-movement.service.js'
+import { takeForOrder } from './stock-pool/order-routing.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
 import { recordOrderItem } from './sales-aggregate.service.js'
 
@@ -555,6 +556,7 @@ export class EbayOrdersService {
         .filter((id): id is string => typeof id === 'string'),
     )
 
+    const sales: Array<{ productId: string; quantity: number; lineItemId: string }> = []
     for (const lineItem of order.lineItems) {
       this.stats.itemsProcessed++
       const isNewLine = !seenLineItemIds.has(lineItem.lineItemId)
@@ -682,31 +684,51 @@ export class EbayOrdersService {
         continue
       }
 
-      // Inventory deduction routes through applyStockMovement so the
-      // StockLevel ledger, ChannelListing.masterQuantity, and the
-      // OutboundSyncQueue (cross-channel push) all update atomically.
-      try {
-        await applyStockMovement({
-          productId: product.id,
-          change: -lineItem.quantity,
-          reason: 'ORDER_PLACED',
-          referenceType: 'ORDER',
-          referenceId: dbOrder.id,
-          orderId: dbOrder.id,
-          actor: 'ebay-orders-sync',
-          notes: `eBay order ${order.orderId} line ${lineItem.lineItemId}`,
-        })
-        this.stats.inventoryDeducted++
-      } catch (err) {
-        // A stock-movement failure shouldn't roll back the order
-        // ingestion (we don't want to lose the order record). Log
-        // and continue; the audit reads stockMovement separately.
-        logger.error('Stock-movement deduction failed for eBay line', {
-          productId: product.id,
-          quantity: lineItem.quantity,
-          orderId: order.orderId,
-          error: err instanceof Error ? err.message : String(err),
-        })
+      sales.push({ productId: product.id, quantity: lineItem.quantity, lineItemId: lineItem.lineItemId })
+    }
+
+    // Stock leaves once per product, for all of its new lines together. Shared stock step 4: a product
+    // that sells from a pool takes the sale from the pool (door 4b), which takes ONE sale per order and
+    // product — and one variant can sit in two eBay listings bought in one order. A refusal is an
+    // oversell: nothing is taken anywhere and the owners are told (the bell). Own stock is used only
+    // when the product does not sell from a pool, line by line as before.
+    const salesByProduct = new Map<string, typeof sales>()
+    for (const sale of sales) salesByProduct.set(sale.productId, [...(salesByProduct.get(sale.productId) ?? []), sale])
+    for (const [productId, lines] of salesByProduct) {
+      const quantity = lines.reduce((sum, line) => sum + line.quantity, 0)
+      const routed = await takeForOrder({ productId, quantity, orderId: dbOrder.id, actor: 'ebay-orders-sync' })
+      if (routed.via === 'pool') { this.stats.inventoryDeducted += lines.length; continue }
+      if (routed.via === 'refused') {
+        logger.error('Shared stock refused the eBay sale', { productId, quantity, orderId: order.orderId, code: routed.refusal.code, error: routed.refusal.error })
+        continue
+      }
+      for (const line of lines) {
+        // Inventory deduction routes through applyStockMovement so the
+        // StockLevel ledger, ChannelListing.masterQuantity, and the
+        // OutboundSyncQueue (cross-channel push) all update atomically.
+        try {
+          await applyStockMovement({
+            productId,
+            change: -line.quantity,
+            reason: 'ORDER_PLACED',
+            referenceType: 'ORDER',
+            referenceId: dbOrder.id,
+            orderId: dbOrder.id,
+            actor: 'ebay-orders-sync',
+            notes: `eBay order ${order.orderId} line ${line.lineItemId}`,
+          })
+          this.stats.inventoryDeducted++
+        } catch (err) {
+          // A stock-movement failure shouldn't roll back the order
+          // ingestion (we don't want to lose the order record). Log
+          // and continue; the audit reads stockMovement separately.
+          logger.error('Stock-movement deduction failed for eBay line', {
+            productId,
+            quantity: line.quantity,
+            orderId: order.orderId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
     }
 

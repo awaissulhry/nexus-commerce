@@ -11,6 +11,7 @@ import {
   resolveIntendedQuantity,
   resolveMembershipIntended,
   type RoutedLedgerRow,
+  syncLedgerOf,
   type SyncControlInputs,
 } from './sync-control-core.js'
 import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
@@ -25,17 +26,17 @@ const base = (over: Partial<SyncControlInputs>): SyncControlInputs => ({
   stockBuffer: 0,
   sourceLocationCodes: [],
   channelPolicy: null,
-  ledger: [],
+  ledger: syncLedgerOf([]),
   ...over,
 })
 
 // Owner example 1: "inventories sent from a certain location to just the IT
 // market on Amazon and all markets on eBay."
 describe("SC.6 — owner example 1: location routes to AMAZON:IT + all of eBay", () => {
-  const ledger: RoutedLedgerRow[] = [
+  const ledger = syncLedgerOf([
     { locationCode: 'MAIN', available: 40, syncRoutes: [] }, // unrouted → everywhere
     { locationCode: 'OUTLET', available: 10, syncRoutes: ['AMAZON:IT', 'EBAY'] },
-  ]
+  ])
 
   it('AMAZON:IT sees both locations (40+10)', () => {
     const r = resolveIntendedQuantity(base({ channel: 'AMAZON', marketplace: 'IT', ledger }))
@@ -56,7 +57,7 @@ describe("SC.6 — owner example 1: location routes to AMAZON:IT + all of eBay",
 // Owner example 2: "all the inventories synced in real time, except for a
 // certain product or a certain variant."
 describe('SC.6 — owner example 2: everything real-time except one variant', () => {
-  const ledger: RoutedLedgerRow[] = [{ locationCode: 'MAIN', available: 25, syncRoutes: [] }]
+  const ledger = syncLedgerOf([{ locationCode: 'MAIN', available: 25, syncRoutes: [] }])
 
   it('the excepted variant is PAUSED (frozen, never pushed)', () => {
     const r = resolveIntendedQuantity(base({ syncPaused: true, ledger }))
@@ -75,7 +76,7 @@ describe('SC.6 — owner example 2: everything real-time except one variant', ()
 })
 
 describe('SC.6 — standing invariants', () => {
-  const ledger: RoutedLedgerRow[] = [{ locationCode: 'MAIN', available: 30, syncRoutes: [] }]
+  const ledger = syncLedgerOf([{ locationCode: 'MAIN', available: 30, syncRoutes: [] }])
 
   it('FBA wins over EVERYTHING — no combination of controls makes an FBA listing pushable', () => {
     const r = resolveIntendedQuantity(base({
@@ -90,7 +91,7 @@ describe('SC.6 — standing invariants', () => {
     expect(r).toEqual({ kind: 'PAUSED', via: 'POLICY' })
   })
   it('empty ledger = UNCOUNTED, never a zero push', () => {
-    const r = resolveIntendedQuantity(base({ ledger: [] }))
+    const r = resolveIntendedQuantity(base({ ledger: syncLedgerOf([]) }))
     expect(r).toEqual({ kind: 'UNCOUNTED' })
     expect(JSON.stringify(r)).not.toContain('"quantity":0')
   })

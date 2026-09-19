@@ -164,7 +164,8 @@ function planProducts(preview: CopyPreview, catalog: OfferedCatalog, choices: Re
 
 // ── Definitions ────────────────────────────────────────────────────────────────
 
-async function createDefinitions(catalog: OfferedCatalog, preview: CopyPreview) {
+/** Creates what `preview.create` lists, by natural key. Shared with the live sync (AE.4), which passes its own missing list. */
+export async function createDefinitions(catalog: OfferedCatalog, preview: Pick<CopyPreview, 'create' | 'conflicts'>) {
   const created = { attributeGroups: [] as string[], attributes: [] as string[], options: [] as string[], families: [] as string[], familyAttributes: [] as string[], categories: [] as string[] }
   const conflicting = new Set(preview.conflicts.map((c) => c.code))
   await prisma.$transaction(async (tx) => {
@@ -323,9 +324,12 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
   await withWorkspace({ workspaceId, actorUserId: run.createdByUserId, membershipId: null, roleKeys: [] }, async () => {
     const outcomes = await prisma.importJobRow.findMany({
       where: { jobId: run.transferJobId!, targetId: { in: plan.products.map((p) => transferTargetKey({ entity: 'Products', sku: p.sku, channel: '', accountId: '', marketplace: '', aliasKey: '' })) } },
-      select: { targetId: true, status: true },
+      select: { targetId: true, status: true, parsedValues: true },
     })
     const saved = new Set(outcomes.filter((o) => o.status === 'SUCCESS').map((o) => (JSON.parse(o.targetId ?? '[]') as string[])[1]))
+    // AE.4 — the rows each product was copied with: what the live sync starts from.
+    const copiedRows = new Map(outcomes.map((o) => [(JSON.parse(o.targetId ?? '[]') as string[])[1], ((o.parsedValues as { rows?: TransferRow[] } | null)?.rows ?? [])]))
+    const firstLinked: string[] = []
     const share = await prisma.assortmentShare.findUnique({ where: { id: run.shareId }, select: { ownerWorkspaceId: true } })
     for (const planned of plan.products) {
       if (!saved.has(planned.sku)) { counts.notSaved++; continue }
@@ -341,7 +345,7 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
             data: {
               shareId: run.shareId, sourceWorkspaceId: share!.ownerWorkspaceId, sourceProductId: planned.sourceProductId,
               targetWorkspaceId: workspaceId, targetProductId: product.id, linkedBy: planned.kind === 'new' ? 'created' : 'matched',
-              sourceVersion: planned.sourceVersion, createdByUserId: run.createdByUserId,
+              sourceVersion: planned.sourceVersion, createdByUserId: run.createdByUserId, syncMarket: run.market,
             },
           })
           counts.linked++
@@ -351,7 +355,7 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
           continue
         }
       }
-      const applied = await applyManaged(product.id, planned.managed, run.id)
+      const applied = await applyManaged(product.id, planned.managed, `assortment-copy:${run.id}`)
       counts.managedApplied += applied.applied
       counts.managedFailed += applied.failed.length
       problems.push(...applied.failed.map((f) => `${planned.sku}: ${f}`))
@@ -363,9 +367,27 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
       counts.imagesFailed += media.failed.length
       counts.mediaNotCopied += planned.mediaNotCopied ?? 0
       problems.push(...media.failed.map((f) => `${planned.sku}: ${f}`))
+
+      // AE.4 — the fingerprints the live sync starts from: the rows as copied, and this business right after.
+      // A link that already has them (a partial run finished again) only gains the images copied now.
+      const link = await prisma.catalogLink.findFirst({
+        where: { targetWorkspaceId: workspaceId, targetProductId: product.id, status: 'active', shareId: run.shareId, sourceProductId: planned.sourceProductId },
+        select: { id: true, appliedState: true },
+      })
+      if (link) {
+        const sync = await import('./sync.service.js')
+        if (link.appliedState === null) {
+          await sync.recordBaseline(link.id, { rows: copiedRows.get(planned.sku) ?? [], product: null, managed: planned.managed, sku: planned.sku, market: run.market, images: planned.images ?? [], pairs: media.pairs })
+          firstLinked.push(link.id)
+        } else {
+          await sync.mergeMediaPairs(link.id, planned.images ?? [], media.pairs)
+        }
+      }
       // Image copies take time. Keep the claim fresh so the sweeper does not hand this run to another worker.
       await prisma.assortmentCopyRun.updateMany({ where: { id: run.id, state: 'finishing' }, data: { updatedAt: new Date() } })
     }
+    // A source edited during the review was not followed yet: one sync per new link compares and catches up.
+    if (firstLinked.length) await (await import('./sync-worker.js')).queueLinks(firstLinked, 'copied')
   })
   const state: RunState = counts.notSaved + counts.linkRefused + counts.managedFailed + counts.imagesFailed === 0 ? 'done' : 'partial'
   await prisma.assortmentCopyRun.update({
@@ -379,13 +401,12 @@ export async function advanceCopyRun(runId: string): Promise<CopyRunView> {
  * Owner-managed fields, through their owning services, only for groups the share offered. A field that
  * already holds the shared value is not written: a finish run again adds no price history or status event.
  */
-async function applyManaged(productId: string, managed: ManagedFields, runId: string): Promise<{ applied: number; failed: string[] }> {
+export async function applyManaged(productId: string, managed: ManagedFields, reason: string): Promise<{ applied: number; failed: string[] }> {
   let applied = 0
   const failed: string[] = []
   const attempt = async (label: string, work: () => Promise<unknown>) => {
     try { await work(); applied++ } catch (error) { failed.push(`${label}: ${error instanceof Error ? error.message : String(error)}`) }
   }
-  const reason = `assortment-copy:${runId}`
   const current = await prisma.product.findUnique({
     where: { id: productId },
     select: { productType: true, basePrice: true, minPrice: true, maxPrice: true, b2bPrice: true, b2bMinQty: true, status: true },

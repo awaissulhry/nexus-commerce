@@ -32,8 +32,12 @@ vi.mock('../db.js', () => ({
     },
     stockLevel: { findMany: (...a: unknown[]) => stockLevelFindMany(...a) },
     channelConnection: { findFirst: (...a: unknown[]) => connectionFindFirst(...a) },
+    // Shared stock — the dispatch re-read goes through loadSyncLedgers: no product is pooled here.
+    stockPoolLink: { findMany: vi.fn().mockResolvedValue([]) },
+    $queryRaw: vi.fn().mockResolvedValue([]),
   },
 }))
+const warehouse = (available: number) => ({ productId: 'p1', available, quantity: available, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })
 // MAP.3 — the code under test now resolves its account through the resolver, so
 // the mock moves to that seam. Mocking `channelConnection.findFirst` pinned the
 // OLD query shape: the resolver reads the account set with findMany, so a
@@ -307,7 +311,7 @@ describe('RT.4 — dispatch re-read (shared Trading)', () => {
   })
 
   it('recomputes quantities from the LIVE pool at dispatch', async () => {
-    stockLevelFindMany.mockResolvedValue([{ available: 3 }, { available: 4 }]) // fresh pool = 7
+    stockLevelFindMany.mockResolvedValue([warehouse(3), warehouse(4)]) // fresh pool = 7
     membershipFindMany.mockResolvedValue([
       { sku: 'V-S', lastQtyPushed: 1 },
       { sku: 'V-M', lastQtyPushed: 2 },
@@ -326,7 +330,7 @@ describe('RT.4 — dispatch re-read (shared Trading)', () => {
   })
 
   it('fully-no-op row exits SUCCESS without spending a revise', async () => {
-    stockLevelFindMany.mockResolvedValue([{ available: 7 }])
+    stockLevelFindMany.mockResolvedValue([warehouse(7)])
     membershipFindMany.mockResolvedValue([
       { sku: 'V-S', lastQtyPushed: 7 },
       { sku: 'V-M', lastQtyPushed: 7 },

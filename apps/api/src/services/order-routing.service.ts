@@ -19,6 +19,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { OWN_WAREHOUSES, sharedWarehouseForOrder } from './stock-pool/shared-warehouses.js'
 
 export interface RouteOrderInput {
   channel: string | null
@@ -27,13 +28,16 @@ export interface RouteOrderInput {
   /** Override the default-warehouse fallback. Useful for tests or
    *  when the caller already knows the desired fallback. */
   fallbackWarehouseId?: string | null
+  /** Shared stock step 4 — the order being shipped: when its units came from another business's pool,
+   *  it ships from this business's copy of that warehouse's address, before any rule. */
+  orderId?: string | null
 }
 
 export interface RouteOrderResult {
   warehouseId: string | null
   ruleId: string | null
   ruleName: string | null
-  source: 'RULE_MATCH' | 'DEFAULT_WAREHOUSE' | 'FALLBACK_OVERRIDE' | 'SCORED' | 'NONE'
+  source: 'RULE_MATCH' | 'DEFAULT_WAREHOUSE' | 'FALLBACK_OVERRIDE' | 'SCORED' | 'SHARED_STOCK' | 'NONE'
   /** CE.4 — cost/proximity score breakdown (only set when source='SCORED') */
   scoreSummary?: Record<string, { proximityScore: number; stockScore: number; total: number }>
 }
@@ -41,9 +45,16 @@ export interface RouteOrderResult {
 export async function resolveWarehouseForOrder(
   input: RouteOrderInput,
 ): Promise<RouteOrderResult> {
+  // Shared stock step 4 — units that came from a pool are in the lender's warehouse: ship from there.
+  if (input.orderId) {
+    const shared = await sharedWarehouseForOrder(input.orderId)
+    if (shared) return { warehouseId: shared, ruleId: null, ruleName: null, source: 'SHARED_STOCK' }
+  }
+
   // Try rules first.
   const rules = await prisma.orderRoutingRule.findMany({
-    where: { isActive: true },
+    // A rule never sends an order to a copy of a lent address (the rule routes refuse one; an older rule is skipped).
+    where: { isActive: true, warehouse: OWN_WAREHOUSES },
     orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
   })
   for (const rule of rules) {
@@ -67,7 +78,8 @@ export async function resolveWarehouseForOrder(
   // by proximity (country match) + available stock and route to highest.
   try {
     const warehouses = await prisma.warehouse.findMany({
-      where: { isActive: true },
+      // A copy of another business's lent warehouse is only for the orders whose units are there.
+      where: { isActive: true, sharedFromLocationId: null },
       select: {
         id: true,
         country: true,
@@ -139,6 +151,7 @@ export async function recordRoutingDecision(
         warehouseId: result.warehouseId,
         method: result.source === 'RULE_MATCH' ? 'rule'
           : result.source === 'SCORED' ? 'scored'
+          : result.source === 'SHARED_STOCK' ? 'shared-stock'
             : result.source === 'FALLBACK_OVERRIDE' ? 'fallback'
               : 'none',
         ruleId: result.ruleId,

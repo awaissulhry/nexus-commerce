@@ -12,14 +12,16 @@
  *                       no routing, no pause state may ever produce a push.
  *   2. Channel policy → PAUSED (operator kill-switch, channel or channel:market)
  *   3. Listing pause  → PAUSED (syncPaused / membership followPool=false)
- *   4. Pinned         → PINNED at the pinned value (no pool derivation)
+ *   4. Pinned         → PINNED at the pinned value (no pool derivation;
+ *                       memberships: pinnedQuantity, shared stock step 3)
  *   5. Follow         → routed-ledger math:
  *        routed rows = WAREHOUSE rows whose location routes to this
  *        channel+market (StockLocation.syncRoutes; empty list = routes
  *        everywhere) ∩ listing sourceLocationCodes (empty = no override).
  *        ZERO routed rows → UNCOUNTED (never manufacture a zero — the P0
  *        guard applied per-listing to the ROUTED set: stock counted only in
- *        unrouted locations still means "unknown here").
+ *        unrouted locations still means "unknown here"), except for a product
+ *        that left a shared pool (uncountedIsZero): there it means 0.
  *        Else quantity = max(0, Σ available − stockBuffer).
  *
  * Routing tokens (StockLocation.syncRoutes — SC's OWN column; the shadow
@@ -46,6 +48,21 @@ export interface RoutedLedgerRow {
   syncRoutes: string[]
 }
 
+declare const SYNC_LEDGER: unique symbol
+/**
+ * Shared stock (plan 2026-09-19) — the ledger a listing follows. A product sells either from this
+ * business's own WAREHOUSE rows or from another business's pool; only `loadSyncLedgers`
+ * (services/stock-pool/sync-ledgers.ts) knows which. The brand makes every caller of the core get its
+ * ledger from there: a ledger built from this business's StockLevel rows by hand would push the
+ * business's own (often empty) stock over a pool number. `syncLedgerOf` is the one way to make one;
+ * scripts/check-sync-ledger-source.mjs keeps it to the loader, the stock import's own planned rows,
+ * and tests.
+ */
+export type SyncLedger = ReadonlyArray<RoutedLedgerRow> & { readonly [SYNC_LEDGER]: true }
+export function syncLedgerOf(rows: ReadonlyArray<RoutedLedgerRow>): SyncLedger {
+  return rows as SyncLedger
+}
+
 export interface SyncControlInputs {
   channel: string
   marketplace: string
@@ -61,7 +78,13 @@ export interface SyncControlInputs {
   /** Listing-level routing override; empty = no override (all routed locations). */
   sourceLocationCodes: string[]
   channelPolicy?: { pushesPaused: boolean } | null
-  ledger: RoutedLedgerRow[]
+  ledger: SyncLedger
+  /**
+   * Shared stock — the product sold from a pool before and now uses its own stock. Its own stock may
+   * never have been counted; that means 0, never "unknown": keeping the pool's last number on the
+   * channel is how an oversell happens (plan §4, first safety rule). From loadSyncLedgers.
+   */
+  uncountedIsZero?: boolean
 }
 
 export type IntendedResolution =
@@ -168,7 +191,9 @@ export function resolveIntendedQuantity(i: SyncControlInputs): IntendedResolutio
     if (override.size > 0 && !override.has(norm(row.locationCode))) return false
     return true
   })
-  if (routed.length === 0) return { kind: 'UNCOUNTED' }
+  if (routed.length === 0) {
+    return i.uncountedIsZero ? { kind: 'FOLLOW', quantity: 0, routedAvailable: 0, routedLocations: [] } : { kind: 'UNCOUNTED' }
+  }
   const routedAvailable = routed.reduce((s, r) => s + r.available, 0)
   const buffer = Math.max(0, i.stockBuffer || 0)
   return {
@@ -180,25 +205,31 @@ export function resolveIntendedQuantity(i: SyncControlInputs): IntendedResolutio
 }
 
 /** Shared-membership wrapper: followPool=false = excluded from fan-out
- *  (PAUSED via LISTING); otherwise the same follow math (memberships have no
- *  pin state — their frozen state IS followPool=false). */
+ *  (PAUSED via LISTING); a pinned quantity (shared stock plan step 3: "Fixed
+ *  number" for a shared variant) is PINNED; otherwise the same follow math. The
+ *  precedence is the listing's: policy → Excluded → Fixed number → follow. */
 export function resolveMembershipIntended(args: {
   marketplace: string
   followPool: boolean
+  /** null or absent = follows the pool. */
+  pinnedQuantity?: number | null
   stockBuffer: number
   channelPolicy?: { pushesPaused: boolean } | null
-  ledger: RoutedLedgerRow[]
+  ledger: SyncLedger
+  uncountedIsZero?: boolean
 }): IntendedResolution {
+  const pinned = args.pinnedQuantity != null
   return resolveIntendedQuantity({
     channel: 'EBAY',
     marketplace: args.marketplace,
     isFba: false,
-    followMasterQuantity: true,
+    followMasterQuantity: !pinned,
     syncPaused: !args.followPool,
-    pinnedQuantity: null,
+    pinnedQuantity: pinned ? args.pinnedQuantity! : null,
     stockBuffer: args.stockBuffer,
     sourceLocationCodes: [],
     channelPolicy: args.channelPolicy,
     ledger: args.ledger,
+    uncountedIsZero: args.uncountedIsZero,
   })
 }

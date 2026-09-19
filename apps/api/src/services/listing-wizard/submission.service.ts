@@ -23,6 +23,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { PrismaClient } from '@nexus/database'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
+import { sellableQuantity } from '../stock-pool/sync-ledgers.js'
 
 export type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
 
@@ -340,6 +341,9 @@ async function resolveAmazonChildren(
       totalStock: true,
     },
   })
+  // Shared stock — a pooled variant publishes the pool's number, not its business's own total.
+  const sellableVariants = await sellableQuantity(prisma as never, variants)
+  for (const v of variants) v.totalStock = sellableVariants.get(v.id) ?? v.totalStock
 
   // Audit-fix #6 — compute the diff between requested SKUs and resolved
   // children. Set lookup is O(1); array remains the source of truth for
@@ -966,6 +970,12 @@ export class SubmissionService {
           id: true, parentId: true, name: true, variationAxes: true, sku: true, basePrice: true, totalStock: true,
           children: { where: { deletedAt: null }, orderBy: { id: 'asc' }, select: { id: true, sku: true, basePrice: true, totalStock: true, variantAttributes: true } },
         } }) : null
+    if (shopifyFamily) {
+      // Shared stock — a pooled product publishes the pool's number, not its business's own total.
+      const sellable = await sellableQuantity(this.prisma as never, [shopifyFamily, ...shopifyFamily.children])
+      shopifyFamily.totalStock = sellable.get(shopifyFamily.id) ?? shopifyFamily.totalStock
+      for (const child of shopifyFamily.children) child.totalStock = sellable.get(child.id) ?? child.totalStock
+    }
 
     const languageRows = await this.prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } })
     return wizard.channels.map((cRaw) => {

@@ -9,6 +9,7 @@ import { loadStoredVariationProjection } from './pim/stored-variation-projection
 import { parseVariationMapping } from '@nexus/shared/variation-mapping';
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js';
+import { sellableQuantity } from './stock-pool/sync-ledgers.js';
 
 
 interface VariationAttribute {
@@ -108,6 +109,9 @@ export class AmazonMapperService {
         throw new Error(`No variation theme set for listing: ${channelListingId}`);
       }
 
+      // Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
+      const sellable = await sellableQuantity(prisma as never, [product, ...product.masterVariations])
+
       // Build parent item
       const parentItem: AmazonItem = {
         sku: product.sku,
@@ -116,7 +120,7 @@ export class AmazonMapperService {
         title: channelListing.title || product.name,
         description: channelListing.description || '',
         price: channelListing.price ? Number(channelListing.price) : Number(product.basePrice),
-        quantity: channelListing.quantity || product.totalStock,
+        quantity: channelListing.quantity || (sellable.get(product.id) ?? product.totalStock),
         fulfillmentChannel: requireAmazonFulfillment(product.fulfillmentChannel),
       };
 
@@ -143,7 +147,7 @@ export class AmazonMapperService {
           title: childChannelListing?.title || child.name,
           description: childChannelListing?.description || '',
           price: childChannelListing?.price ? Number(childChannelListing.price) : Number(child.basePrice),
-          quantity: childChannelListing?.quantity || child.totalStock,
+          quantity: childChannelListing?.quantity || (sellable.get(child.id) ?? child.totalStock),
           fulfillmentChannel: requireAmazonFulfillment(child.fulfillmentChannel || product.fulfillmentChannel),
         };
 

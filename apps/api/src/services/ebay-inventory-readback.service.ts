@@ -25,6 +25,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
 import { policyFor, loadChannelPolicies } from './sync-control-policy.service.js'
 import { resolveMembershipIntended } from './sync-control-core.js'
+import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 
 const DEFAULT_MAX_SKUS = 200
@@ -213,6 +214,8 @@ export interface TradingReadbackEntry {
   lastPushedAt: Date | null
   /** SC.1b — per-membership overselling buffer, subtracted from intended. */
   stockBuffer?: number
+  /** Shared stock step 3 — a fixed number: the variant must show exactly this, whatever the pool. */
+  pinnedQuantity?: number | null
 }
 
 export interface TradingMismatch {
@@ -247,9 +250,14 @@ export function diffTradingReadback(
     if (!e.productId) continue
     const observed = observedByItemSku.get(obsKey(e.itemId, e.sku))
     if (observed === undefined) continue
-    const intendedBase = intendedByProduct.get(e.productId)
-    if (intendedBase === undefined) continue
-    const intended = Math.max(0, intendedBase - Math.max(0, e.stockBuffer ?? 0))
+    let intended: number
+    if (e.pinnedQuantity != null) {
+      intended = e.pinnedQuantity
+    } else {
+      const intendedBase = intendedByProduct.get(e.productId)
+      if (intendedBase === undefined) continue
+      intended = Math.max(0, intendedBase - Math.max(0, e.stockBuffer ?? 0))
+    }
     if (e.lastPushedAt && now - e.lastPushedAt.getTime() < settleMs) continue
     if (observed !== intended) {
       out.push({
@@ -319,7 +327,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     // SC.1 — followPool=false members are operator-excluded: never compared,
     // never healed (their eBay quantity is deliberately theirs to manage).
     where: { status: 'ACTIVE', followPool: true },
-    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true, stockBuffer: true },
+    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true, stockBuffer: true, pinnedQuantity: true },
   })
   if (memberships.length === 0) return result
 
@@ -344,6 +352,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
       productId: m.productId,
       lastPushedAt: m.lastPushedAt,
       stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
+      pinnedQuantity: m.pinnedQuantity,
     })
     byItem.set(key, g)
   }
@@ -358,29 +367,21 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   // (never compared, never healed) — the pre-SC uncounted exclusion, now
   // routing-aware.
   const productIds = [...new Set(memberships.map((m) => m.productId).filter((p): p is string => Boolean(p)))]
-  const levels = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
-    select: { productId: true, available: true, location: { select: { code: true, syncRoutes: true } } },
-  })
-  const ledgerByProduct = new Map<string, { locationCode: string; available: number; syncRoutes: string[] }[]>()
-  const warehouseSum = new Map<string, number>()
-  for (const l of levels) {
-    const arr = ledgerByProduct.get(l.productId) ?? []
-    arr.push({ locationCode: l.location?.code ?? '?', available: l.available, syncRoutes: l.location?.syncRoutes ?? [] })
-    ledgerByProduct.set(l.productId, arr)
-    warehouseSum.set(l.productId, (warehouseSum.get(l.productId) ?? 0) + l.available)
-  }
+  // Shared stock — the ledger comes from loadSyncLedgers: a pooled product is compared with, and
+  // healed to, the pool; its own (often empty) stock would otherwise "heal" a correct number to 0.
+  const ledgers = await loadSyncLedgers(prisma, productIds)
   const scPolicies = await loadChannelPolicies()
   const marketplaceByProduct = new Map<string, string>()
   for (const m of memberships) if (m.productId && !marketplaceByProduct.has(m.productId)) marketplaceByProduct.set(m.productId, m.marketplace)
   const intendedByProduct = new Map<string, number>()
-  for (const [pid, ledger] of ledgerByProduct) {
+  for (const [pid, product] of ledgers) {
     const r = resolveMembershipIntended({
       marketplace: marketplaceByProduct.get(pid) ?? 'EBAY_IT',
       followPool: true,
       stockBuffer: 0,
       channelPolicy: policyFor(scPolicies, 'EBAY', marketplaceByProduct.get(pid) ?? 'EBAY_IT'),
-      ledger,
+      ledger: product.ledger,
+      uncountedIsZero: product.uncountedIsZero,
     })
     if (r.kind === 'FOLLOW') intendedByProduct.set(pid, r.quantity)
   }
@@ -513,11 +514,15 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   const holdOffsets = computeHealHoldOffsets(healTargets, itemIdsByProduct, EBAY_HEAL_STAGGER_MS)
   for (const pid of healTargets) {
     try {
+      // The same per-membership derivation as the cascade (routing, Excluded, buffer), from the same
+      // ledger, so the heal can never push a number the cascade would not.
+      const product = ledgers.get(pid)
       await enqueueSharedTradingFanout(prisma, {
         productId: pid,
-        warehouseAvailable: warehouseSum.get(pid) ?? 0,
-        stockBuffer: 0,
         holdUntil: new Date(Date.now() + (holdOffsets.get(pid) ?? 0)),
+        scLedger: ledgerInputs(product).ledger,
+        uncountedIsZero: ledgerInputs(product).uncountedIsZero,
+        scPolicies,
       })
       result.healedProducts++
     } catch (err) {

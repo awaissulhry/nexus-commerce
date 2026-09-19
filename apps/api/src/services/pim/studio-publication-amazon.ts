@@ -20,6 +20,7 @@ import { publicationImages } from './studio-publication-media.js'
 import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
+import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -39,7 +40,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   const rootListing = listings.find(l => l.productId === parent.id)
   const gallery = object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing
     ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
-  const stocks = await prisma.stockLevel.findMany({ where: { productId: { in: products.map(p => p.id) }, location: { type: 'WAREHOUSE' } }, select: { productId: true, available: true } })
+  // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
+  const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const sellerSkus = new Map(products.map(product => {
     const listing = listings.find(l => l.productId === product.id)
     const offers = [...new Set(listing?.offers.filter(o => o.isActive).map(o => o.sku) ?? [])]
@@ -75,8 +77,11 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
     if (!data) throw new Error(`${product.sku} could not be resolved.`)
+    const ledger = ledgers.get(product.id)
+    // Tracked = warehouse rows to draw from (own or pooled), or it left a pool (then own stock is 0).
+    const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
     const current = { ...listing, priceOverride: listing?.followMasterPrice !== false ? product.basePrice : listing.priceOverride ?? listing.price,
-      quantityOverride: listing?.followMasterQuantity !== false ? product.totalStock : listing.quantityOverride ?? listing.quantity }
+      quantityOverride: listing?.followMasterQuantity !== false ? (tracked ? ledger!.quantity : product.totalStock) : listing.quantityOverride ?? listing.quantity }
     const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id) })
     // Condition belongs to its own attribute, not the purchasable_offer object.
     // The legacy row builder can otherwise stringify an attribute envelope here.
@@ -91,8 +96,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const fulfillment = activeOffer?.fulfillmentMethod ?? listing?.fulfillmentMethod ?? product.fulfillmentMethod
     if (fulfillment) row.fulfillment_availability__fulfillment_channel_code = fulfillment === 'FBA' ? `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(scope.accountId)]}` : 'DEFAULT'
     if (!product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
-    const tracked = stocks.filter(s => s.productId === product.id)
-    const available = Math.max(0, (tracked.length ? tracked.reduce((n, s) => n + s.available, 0) : product.totalStock) - (listing?.stockBuffer ?? 0))
+    const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))
     row.fulfillment_availability__quantity = Math.min(available, Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0)))
     if (!Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
     if (gallery && listing) {

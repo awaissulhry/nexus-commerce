@@ -33,7 +33,8 @@ import {
   type QueueCell,
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
-import { locationServes, resolveIntendedQuantity, type RoutedLedgerRow } from '../sync-control-core.js'
+import { locationServes, resolveIntendedQuantity } from '../sync-control-core.js'
+import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { isFbaListing } from '../outbound-sync.service.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
@@ -119,17 +120,18 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, stockRows, fbaDetail, policies, formulas, snapshots] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, policies, formulas, snapshots] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
     prisma.productListingAlias.findMany({ where: { productId: root.id, status: 'ACTIVE' }, select: { id: true, channel: true, marketplace: true, channelConnectionId: true, label: true, position: true }, orderBy: { position: 'asc' } }),
-    prisma.stockLevel.findMany({ where: { productId: { in: memberIds } }, select: { productId: true, available: true, quantity: true, location: { select: { code: true, type: true, syncRoutes: true } } } }),
+    // Shared stock — the same ledgers the cascade uses (3 queries): a pooled member shows the pool.
+    loadSyncLedgers(prisma, memberIds),
     prisma.fbaInventoryDetail.findMany({ where: { sku: { in: skus }, condition: 'SELLABLE' }, select: { sku: true, marketplaceId: true, quantity: true } }),
     loadChannelPolicies(),
     prisma.cellFormula.findMany({ where: { productId: { in: memberIds }, scope: 'channel', fieldKey: 'price' }, select: { productId: true, channel: true, marketplace: true, aliasKey: true, expr: true } }),
     prisma.pricingSnapshot.findMany({ where: { sku: { in: skus }, fulfillmentMethod: null }, select: { sku: true, channel: true, marketplace: true, isClamped: true, clampedFrom: true, computedPrice: true } }),
-  ]); queries += 9
+  ]); queries += 11
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -157,16 +159,11 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
   const tShape = Date.now()
   const memberById = new Map(members.map((m) => [m.id, m]))
-  const ledgers = new Map<string, RoutedLedgerRow[]>()
   const poolLocations = new Map<string, Array<{ code: string; available: number }>>()
   const fbaBucket = new Map<string, number>()
-  for (const s of stockRows) {
-    if (s.location?.type === 'WAREHOUSE') {
-      ledgers.set(s.productId, [...(ledgers.get(s.productId) ?? []), { locationCode: s.location.code, available: s.available, syncRoutes: s.location.syncRoutes ?? [] }])
-      poolLocations.set(s.productId, [...(poolLocations.get(s.productId) ?? []), { code: s.location.code, available: s.available }])
-    } else if (s.location?.type === 'AMAZON_FBA') {
-      fbaBucket.set(s.productId, (fbaBucket.get(s.productId) ?? 0) + s.quantity)
-    }
+  for (const [productId, product] of syncLedgers) {
+    poolLocations.set(productId, product.ledger.map((r) => ({ code: r.locationCode, available: r.available })))
+    if (product.fbaBucket > 0) fbaBucket.set(productId, product.fbaBucket)
   }
   const fbaSellable = new Map<string, number>()
   for (const d of fbaDetail) {
@@ -291,12 +288,13 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       { fulfillmentMethod: member.fulfillmentMethod },
       { fbaStockQty: fbaBucket.get(member.id) ?? 0, hasActiveFbaOffer: fbaOfferOn.has(l.id) },
     )
-    const ledger = ledgers.get(member.id) ?? []
+    const inputs = ledgerInputs(syncLedgers.get(member.id), l.sourceLocationCodes ?? [])
+    const ledger = inputs.ledger
     const res = resolveIntendedQuantity({
       channel: ch, marketplace: mk, isFba, offerClosed: !!l.offerClosedAt,
       followMasterQuantity: l.followMasterQuantity !== false, syncPaused: l.syncPaused,
-      pinnedQuantity: l.quantity, stockBuffer: l.stockBuffer ?? 0, sourceLocationCodes: l.sourceLocationCodes ?? [],
-      channelPolicy: policyFor(policies, ch, mk), ledger,
+      pinnedQuantity: l.quantity, stockBuffer: l.stockBuffer ?? 0,
+      channelPolicy: policyFor(policies, ch, mk), ...inputs,
     })
     const routed = ledger.filter((r) => locationServes(r.syncRoutes, ch, mk)).map((r) => ({ locationCode: r.locationCode, available: r.available }))
     const warehouseAvailable = routed.reduce((s, r) => s + r.available, 0)

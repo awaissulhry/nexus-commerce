@@ -9,6 +9,19 @@
  *     happen on one connection, so the test would pass whether or not the code is safe.
  *   · `copy-run.vitest.test.ts` (AE.3, R-AE-16) — a first copy end to end through the real catalog
  *     transfer engine, whose apply holds a transaction while it checkpoints on a second connection.
+ *   · `stock-pool-concurrency.vitest.test.ts` (shared stock, plan 2026-09-19) — two businesses selling the
+ *     same units at the same moment through their own writers and the pool doors: one winner, no lost
+ *     update, and a control that removes the door's lock and must break.
+ *   · `stock-pool-e2e.vitest.test.ts` (shared stock) — the switches end to end through the real services,
+ *     cascade and pool worker; the worker runs on several connections at once.
+ *   · `listing-end-times.vitest.test.ts` (shared stock step 3) — "Fixed number until …" and "Paused
+ *     until …" end to end: the Sync Control route and Excel import, the end-time job, the real writer and
+ *     cascade, and the database triggers that clear an end time with its mode.
+ *   · `stock-pool-orders.vitest.test.ts` (shared stock step 4) — orders through the doors: the real eBay
+ *     ingest, holds / take out / give back, cancellations, the returns route, the guard and the repair job.
+ *   · `assortment/sync.vitest.test.ts` (shared stock step 6, AE.4) — live product sync: the capture
+ *     trigger, the worker through the real transfer engine, overrides and "Follow again", images, SKU
+ *     holds, new variations, retries, no chains, and the delay measured with the real LISTEN/NOTIFY.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -28,6 +41,7 @@
  *      nothing: that is a failure here, not a pass.
  *
  *   node scripts/run-real-postgres-tests.mjs
+ *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
  */
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -43,6 +57,11 @@ const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
+  { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
+  { name: 'shared stock end to end (switches, worker, cascade)', file: 'src/services/stock-pool/stock-pool-e2e.vitest.test.ts', expect: 9 },
+  { name: 'listing end times (Sync Control, the job, the database rule)', file: 'src/services/listing-end-times.vitest.test.ts', expect: 25 },
+  { name: 'shared stock orders (sales, holds, cancellations, returns, repair, stock pages)', file: 'src/services/stock-pool/stock-pool-orders.vitest.test.ts', expect: 24 },
+  { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 14 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'
@@ -80,6 +99,19 @@ try {
     try { docker('exec', name, 'pg_isready', '-U', 'postgres', '-h', '127.0.0.1'); ready = true } catch { spawnSync('sleep', ['0.5']) }
   }
   if (!ready) { console.error('❌ real-PostgreSQL tests: the throwaway PostgreSQL did not become ready in 30 s'); process.exit(1) }
+  // --owner production: the suites connect as a NON-superuser that bypasses row security — the rights
+  // production's migration role was measured with (neondb_owner: rolsuper false, rolbypassrls true) — so
+  // every door, trigger and policy is created and run without a superuser (shared stock plan risk 8).
+  const owner = flag('--owner') ?? 'superuser'
+  if (!['superuser', 'production'].includes(owner)) { console.error(`❌ --owner must be superuser or production, not ${owner}`); process.exit(1) }
+  const user = owner === 'production' ? 'nexus_owner' : 'postgres'
+  if (owner === 'production') {
+    for (let i = 0; i < 20; i++) {
+      try { docker('exec', name, 'psql', '-U', 'postgres', '-h', '127.0.0.1', '-v', 'ON_ERROR_STOP=1', '-c', 'CREATE ROLE nexus_owner LOGIN NOSUPERUSER BYPASSRLS CREATEDB CREATEROLE'); break }
+      catch (error) { if (i === 19) throw error; spawnSync('sleep', ['0.5']) }
+    }
+    console.log('real-PostgreSQL tests run as nexus_owner (NOSUPERUSER BYPASSRLS CREATEDB CREATEROLE)')
+  }
 
   const reportPath = join(reportDir, 'report.json')
   const run = spawnSync('npx', ['vitest', 'run', ...SUITES.map((suite) => suite.file), '--no-file-parallelism', '--reporter=default', '--reporter=json', `--outputFile.json=${reportPath}`], {
@@ -87,7 +119,7 @@ try {
     encoding: 'utf8',
     env: {
       ...process.env,
-      NEXUS_TEST_CONCURRENT_PG_URL: `postgresql://postgres@127.0.0.1:${port}/postgres`,
+      NEXUS_TEST_CONCURRENT_PG_URL: `postgresql://${user}@127.0.0.1:${port}/postgres`,
       DATABASE_URL: DEAD,
       DIRECT_URL: DEAD,
       REDIS_URL: 'redis://127.0.0.1:1',

@@ -76,6 +76,10 @@ describe('buildSharedFanoutRows (RT.2 — one row per ITEM, updates[] batched)',
 
 // Task 2 tests
 import { enqueueSharedTradingFanout } from './ebay-shared-fanout.service.js'
+import { syncLedgerOf } from './sync-control-core.js'
+
+// Every caller passes the product's ledger (shared stock: loadSyncLedgers); one warehouse row here.
+const ledgerOf = (available: number) => syncLedgerOf([{ locationCode: 'IT-MAIN', available, syncRoutes: [] }])
 
 function mockDb(members: any[]) {
   const created: any[] = []
@@ -92,12 +96,12 @@ function mockDb(members: any[]) {
 describe('enqueueSharedTradingFanout', () => {
   const hold = new Date('2026-06-27T00:00:00Z')
 
-  it('enqueues one row per ITEM (RT.2), capped by warehouse-available − buffer', async () => {
+  it('enqueues one row per ITEM (RT.2), capped by warehouse-available − the variant\'s buffer', async () => {
     const db = mockDb([
-      { sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 0 },
-      { sku: 'A', itemId: '2', marketplace: 'IT', productId: 'p', lastQtyPushed: 0 },
+      { sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 0, stockBuffer: 2 },
+      { sku: 'A', itemId: '2', marketplace: 'IT', productId: 'p', lastQtyPushed: 0, stockBuffer: 2 },
     ])
-    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', warehouseAvailable: 10, stockBuffer: 2, holdUntil: hold })
+    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })
     expect(db.sharedListingMembership.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { productId: 'p', status: 'ACTIVE' } }),
     )
@@ -110,7 +114,7 @@ describe('enqueueSharedTradingFanout', () => {
 
   it('filters to a single SKU when args.sku is set', async () => {
     const db = mockDb([{ sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 0 }])
-    await enqueueSharedTradingFanout(db, { productId: 'p', warehouseAvailable: 5, holdUntil: hold, sku: 'A' })
+    await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(5), holdUntil: hold, sku: 'A' })
     expect(db.sharedListingMembership.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { productId: 'p', status: 'ACTIVE', sku: 'A' } }),
     )
@@ -118,14 +122,46 @@ describe('enqueueSharedTradingFanout', () => {
 
   it('returns [] and enqueues nothing when no memberships', async () => {
     const db = mockDb([])
-    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', warehouseAvailable: 5, holdUntil: hold })
+    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(5), holdUntil: hold })
     expect(ids).toEqual([])
     expect(db.outboundSyncQueue.createMany).not.toHaveBeenCalled()
   })
 
+  it('an Excluded variant (followPool=false) is never pushed — the removed uniform path pushed it', async () => {
+    const db = mockDb([{ sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 0, followPool: false }])
+    expect(await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })).toEqual([])
+  })
+
+  // Shared stock plan step 3 — a fixed number for a shared variant.
+  it('a fixed variant is pushed exactly its number, whatever the pool and its buffer; its siblings follow the pool', async () => {
+    const db = mockDb([
+      { sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 9, stockBuffer: 3, pinnedQuantity: 2 },
+      { sku: 'A', itemId: '2', marketplace: 'IT', productId: 'p', lastQtyPushed: 0, pinnedQuantity: null },
+    ])
+    await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })
+    expect(db.created.map((r: any) => [r.externalListingId, r.payload.updates])).toEqual([
+      ['1', [{ sku: 'A', quantity: 2, oldQuantity: 9 }]],
+      ['2', [{ sku: 'A', quantity: 10, oldQuantity: 0 }]],
+    ])
+  })
+
+  it('a fixed variant already showing its number is not pushed again; an Excluded fixed variant is never pushed', async () => {
+    const db = mockDb([
+      { sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 2, pinnedQuantity: 2 },
+      { sku: 'A', itemId: '2', marketplace: 'IT', productId: 'p', lastQtyPushed: 0, pinnedQuantity: 4, followPool: false },
+    ])
+    expect(await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })).toEqual([])
+  })
+
+  it('a fixed number of 0 is pushed as 0 (a real number, not "unknown")', async () => {
+    const db = mockDb([{ sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 5, pinnedQuantity: 0 }])
+    await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })
+    expect(db.created[0].payload.updates).toEqual([{ sku: 'A', quantity: 0, oldQuantity: 5 }])
+  })
+
   it('returns [] when every membership is a no-op (qty unchanged)', async () => {
-    const db = mockDb([{ sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 8 }])
-    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', warehouseAvailable: 10, stockBuffer: 2, holdUntil: hold })
+    const db = mockDb([{ sku: 'A', itemId: '1', marketplace: 'IT', productId: 'p', lastQtyPushed: 8, stockBuffer: 2 }])
+    const ids = await enqueueSharedTradingFanout(db, { productId: 'p', scLedger: ledgerOf(10), holdUntil: hold })
     expect(ids).toEqual([]) // cap = 8 === lastQtyPushed
     expect(db.outboundSyncQueue.createMany).not.toHaveBeenCalled()
   })

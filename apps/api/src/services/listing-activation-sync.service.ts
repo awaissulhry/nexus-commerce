@@ -14,6 +14,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { resolveIntendedQuantity } from './sync-control-core.js'
 import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js'
+import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 
 const VALID_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY'])
 
@@ -44,23 +45,12 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
       },
     })
 
-    // Batch: one StockLevel query per distinct productId
+    // Batch: one ledger read for every distinct productId.
     const productIds = [...new Set(listings.map((l) => l.productId).filter(Boolean))] as string[]
-    // RT.2 — WAREHOUSE-only + SUMMED. The old read was location-unfiltered
-    // (could pick up the AMAZON_FBA mirror row — split-inventory bleed) and
-    // the Map kept only the LAST row per product instead of summing.
-    const stockLevels = await prisma.stockLevel.findMany({
-      where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
-      select: { productId: true, available: true, location: { select: { code: true, syncRoutes: true } } },
-    })
-    const availableByProduct = new Map<string, number>()
-    const ledgerByProduct = new Map<string, { locationCode: string; available: number; syncRoutes: string[] }[]>()
-    for (const sl of stockLevels) {
-      availableByProduct.set(sl.productId, (availableByProduct.get(sl.productId) ?? 0) + sl.available)
-      const arr = ledgerByProduct.get(sl.productId) ?? []
-      arr.push({ locationCode: sl.location?.code ?? '?', available: sl.available, syncRoutes: sl.location?.syncRoutes ?? [] })
-      ledgerByProduct.set(sl.productId, arr)
-    }
+    // RT.2 — WAREHOUSE-only + SUMMED (the old read picked up the AMAZON_FBA mirror row and kept
+    // only the LAST row per product). Shared stock: loadSyncLedgers gives a pooled product the
+    // pool's lent locations instead of this business's own rows.
+    const ledgers = await loadSyncLedgers(prisma, productIds)
     const scPolicies = await loadChannelPolicies()
 
     const rows: any[] = []
@@ -81,9 +71,8 @@ export async function syncActivatedListings(listingIds: string[]): Promise<void>
         syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
         pinnedQuantity: null,
         stockBuffer: listing.stockBuffer ?? 0,
-        sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
         channelPolicy: policyFor(scPolicies, listing.channel, (listing as { marketplace?: string }).marketplace ?? 'DEFAULT'),
-        ledger: ledgerByProduct.get(listing.productId) ?? [],
+        ...ledgerInputs(ledgers.get(listing.productId), (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? []),
       })
       if (scRes.kind !== 'FOLLOW') {
         if (scRes.kind === 'UNCOUNTED') uncountedSkips++

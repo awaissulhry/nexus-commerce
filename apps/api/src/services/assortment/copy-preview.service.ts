@@ -109,7 +109,8 @@ function categoryName(categories: OfferedCatalog['categories'], path: string[]):
   return null
 }
 
-async function missingDefinitions(catalog: OfferedCatalog, workspaceId: string) {
+/** Definitions the follower lacks for this catalog, and those whose type conflicts. Shared with the live sync (AE.4). */
+export async function missingDefinitions(catalog: OfferedCatalog, workspaceId: string) {
   const familyCodes = catalog.families.map((f) => f.code)
   const attributeCodes = catalog.attributes.map((a) => a.code)
   const groupCodes = catalog.attributeGroups.map((g) => g.code)

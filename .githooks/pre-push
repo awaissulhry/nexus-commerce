@@ -369,10 +369,19 @@ node scripts/check-context-boundary.mjs --check || {
 }
 # AE.1 (2026-09-16) — every StockLevel write takes the product stock lock first. Without it,
 # simultaneous sales lose updates (measured: 20 sales on 20 units left 19). Only the files in
-# scripts/stock-writer-lock.json may write stock, with exact counts. Mutation-tested (11 arms).
+# scripts/stock-writer-lock.json may write stock, with exact counts. Mutation-tested (11 arms). Since
+# 2026-09-19 it also checks the shared-stock doors in packages/database/workspaces/*.sql (6 arms).
 echo "→ Checking stock writers take the stock lock (AE.1)..."
 node scripts/check-stock-writer-lock.mjs --check || {
   echo "❌ stock-writer lock FAILED — see message above (rule + why: scripts/check-stock-writer-lock.mjs header)"
+  exit 1
+}
+# Shared stock (2026-09-19) — every listing number comes from ONE ledger (loadSyncLedgers), which knows
+# which products sell from another business's pool. A hand-made ledger would push this business's own
+# (often empty) stock over the pool number. Mutation-tested (3 arms).
+echo "→ Checking every Sync Control ledger comes from loadSyncLedgers (shared stock)..."
+node scripts/check-sync-ledger-source.mjs || {
+  echo "❌ sync-ledger source FAILED — see message above (rule + why: scripts/check-sync-ledger-source.mjs header)"
   exit 1
 }
 # EV.4 — every scheduled job goes through the cluster-safe cron wrapper.

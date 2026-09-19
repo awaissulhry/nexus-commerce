@@ -30,6 +30,8 @@ export type ChannelLocationSource =
   | 'EXACT_MATCH'
   | 'WAREHOUSE_DEFAULT'
   | 'NO_LOCATION'
+  /** Shared stock: the listing follows another business's lent warehouses (plan step 5). */
+  | 'SHARED_POOL'
 
 export interface ChannelStockResult {
   locationId: string | null
@@ -108,6 +110,8 @@ export interface ChannelAtpRow {
   followMasterQuantity: boolean
   resolvedLocationCode: string | null
   source: ChannelLocationSource
+  /** The lending business, when `source` is SHARED_POOL. */
+  poolLenderName?: string
   // On-hand at the resolved location(s) before any subtraction.
   onHand: number
   reservedForChannel: number
@@ -129,6 +133,13 @@ export interface ChannelAtpRow {
 export async function resolveAtpAcrossChannels(args: {
   productId: string
   byLocation: AtpLocationRow[]
+  /**
+   * Shared stock: the pool this product sells from (loadPoolSources), or null. Its non-FBA listings
+   * follow the pool, not this business's own WAREHOUSE rows, so their on-hand is the pool's available
+   * (every hold, this business's orders included, is already taken from it) — never the own rows,
+   * which would show a false drift. FBA stays own: Amazon's stock is never pooled.
+   */
+  pool?: { lenderName: string; available: number } | null
 }): Promise<ChannelAtpRow[]> {
   const listings = await prisma.channelListing.findMany({
     where: { productId: args.productId },
@@ -181,6 +192,28 @@ export async function resolveAtpAcrossChannels(args: {
     // can tighten this when ChannelListing carries a per-listing
     // fulfillment-method override.
     const isAmazon = l.channel === 'AMAZON'
+    if (args.pool && !isAmazon) {
+      const buffer = l.stockBuffer ?? 0
+      const available = Math.max(0, args.pool.available - buffer)
+      return {
+        channelListingId: l.id,
+        channel: l.channel,
+        marketplace: l.marketplace,
+        fulfillmentMethod: null,
+        externalListingId: l.externalListingId,
+        listingStatus: l.listingStatus,
+        stockBuffer: buffer,
+        followMasterQuantity: l.followMasterQuantity,
+        resolvedLocationCode: null,
+        source: 'SHARED_POOL' as const,
+        poolLenderName: args.pool.lenderName,
+        onHand: args.pool.available,
+        reservedForChannel: 0,
+        available,
+        channelQuantity: l.quantity,
+        drift: l.quantity == null ? null : available - l.quantity,
+      }
+    }
     const r = resolveStockForChannel({
       byLocation: args.byLocation,
       channel: l.channel,

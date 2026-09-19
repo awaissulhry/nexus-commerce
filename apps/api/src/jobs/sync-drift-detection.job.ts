@@ -49,6 +49,7 @@ import { computeAvailableToPublish } from '../services/available-to-publish.serv
 import { isFbaListing } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js'
 
 interface PriceDriftRow {
   listing_id: string
@@ -226,20 +227,14 @@ export async function runSyncDriftDetection(): Promise<SyncDriftDetectionResult>
   })
 
   const candidateProductIds = [...new Set(followingCandidates.map((c) => c.productId))]
-  const stockRows = candidateProductIds.length
-    ? await prisma.stockLevel.findMany({
-        where: { productId: { in: candidateProductIds } },
-        select: { productId: true, available: true, quantity: true, location: { select: { type: true } } },
-      })
-    : []
+  // Shared stock — the expected number comes from the product's ledger: its own warehouses, or the
+  // pool it sells from. Its own rows would call a correct pool number "drift" and heal it away.
+  const ledgers = await loadSyncLedgers(prisma, candidateProductIds)
   const warehouseAvailByProduct = new Map<string, number>()
   const fbaQtyByProduct = new Map<string, number>()
-  for (const s of stockRows) {
-    if (s.location?.type === 'WAREHOUSE') {
-      warehouseAvailByProduct.set(s.productId, (warehouseAvailByProduct.get(s.productId) ?? 0) + s.available)
-    } else if (s.location?.type === 'AMAZON_FBA') {
-      fbaQtyByProduct.set(s.productId, (fbaQtyByProduct.get(s.productId) ?? 0) + s.quantity)
-    }
+  for (const [productId, ledger] of ledgers) {
+    warehouseAvailByProduct.set(productId, ledger.available)
+    fbaQtyByProduct.set(productId, ledger.fbaBucket)
   }
 
   const qtyDrift: QuantityDriftRow[] = []

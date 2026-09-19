@@ -21,6 +21,8 @@ import { followerDecision, listShares, offerShare, ownerAction } from '../servic
 import { isFollowerDecision, isOwnerAction } from '../services/assortment/share-rules.js'
 import { previewCopy } from '../services/assortment/copy-preview.service.js'
 import { advanceCopyRun, confirmCopy, getCopyRun, listCopyRuns } from '../services/assortment/copy-run.service.js'
+import { catalogLinkState } from '../services/assortment/sync.service.js'
+import { followAgain, resyncShare } from '../services/assortment/sync-worker.js'
 
 type Body = Record<string, unknown> | undefined
 
@@ -85,6 +87,31 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // Idempotent: finishes the run if its product review has been applied, otherwise reports where it is.
   fastify.post<{ Params: { id: string } }>('/assortment-copy-runs/:id/advance', async (request, reply) =>
     respond(reply, async () => ({ success: true, run: await advanceCopyRun(request.params.id) })),
+  )
+
+  // AE.4 — live sync. On demand: queue every link of an incoming share (an OWNER of this business).
+  fastify.post<{ Params: { id: string } }>('/assortment-shares/:id/resync', async (request, reply) =>
+    respond(reply, async () => ({ success: true, ...(await resyncShare(request.params.id)) })),
+  )
+
+  // AE.4 — a product's link: where it comes from, a held rename, and each followed field's state now.
+  fastify.get<{ Querystring: { productId?: string } }>('/catalog-links', async (request, reply) =>
+    respond(reply, async () => {
+      const productId = String(request.query.productId ?? '').trim()
+      if (!productId) throw new WorkspaceError('invalid_product', 'Name the product.', 400)
+      return { success: true, ...(await catalogLinkState(productId)) }
+    }),
+  )
+
+  // AE.4 — "Follow again": stop keeping these fields ("all": every kept field); the next sync applies the source.
+  fastify.post<{ Params: { id: string }; Body: Body }>('/catalog-links/:id/follow-again', async (request, reply) =>
+    respond(reply, async () => {
+      const fields = request.body?.fields
+      if (fields !== 'all' && !(Array.isArray(fields) && fields.every((field) => typeof field === 'string'))) {
+        throw new WorkspaceError('invalid_fields', 'Choose the fields to follow again, or "all".', 400)
+      }
+      return { success: true, ...(await followAgain(request.params.id, fields as string[] | 'all')) }
+    }),
   )
 
   // One route per side keeps the manifest and the audit readable: the owner pauses, resumes and

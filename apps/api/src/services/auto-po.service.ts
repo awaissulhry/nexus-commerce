@@ -22,6 +22,7 @@
 
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { pooledProductIds } from './stock-pool/pool-demand.js'
 import { logger } from '../utils/logger.js'
 import {
   attachPoToRecommendation,
@@ -194,6 +195,16 @@ export async function runAutoPoSweep(args: {
         continue
       }
       afterProductOptOut.push(rec as RecRow)
+    }
+
+    // Shared stock step 7b — a product that sells from another business's pool is that lender's to restock.
+    // A recommendation made before its switch stays ACTIVE but is never ordered here (§8.1 item 4). Noted, not
+    // counted: the counters are this run log's columns.
+    const pooled = await pooledProductIds(prisma, afterProductOptOut.map((r) => r.productId))
+    if (pooled.ids.size > 0) {
+      const skipped = afterProductOptOut.filter((r) => pooled.ids.has(r.productId))
+      notes.push(`${skipped.length} recommendation(s) skipped: the product sells from shared stock of ${pooled.lenders.join(', ')}, who restocks it (${skipped.map((r) => r.sku).join(', ')})`)
+      afterProductOptOut.splice(0, afterProductOptOut.length, ...afterProductOptOut.filter((r) => !pooled.ids.has(r.productId)))
     }
 
     // 3. Group by supplier.

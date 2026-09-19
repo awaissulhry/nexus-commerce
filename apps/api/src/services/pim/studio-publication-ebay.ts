@@ -13,6 +13,7 @@ import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { publicationImages } from './studio-publication-media.js'
 import { readEbayMediaGallery } from '../images/ebay-media-workspace.service.js'
 import { inspectMediaDraft } from '@nexus/shared/ebay-media'
+import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 
 export interface EbayPublication { kind: 'ebay'; marketplace: string; itemId: string | null; xml: string; liveRevision: string | null }
 export interface EbayPublicationReceipt { reference: string; warnings: string[]; verified?: boolean }
@@ -90,7 +91,8 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
       OR: [{ productId: { notIn: products.map(p => p.id) } }, { aliasKey: { not: facts.destination.aliasKey ?? '' } }] }, select: { id: true } })
     if (other) throw new Error('This eBay item is also used by products outside this selection. Review its complete shared listing before publishing.')
   }
-  const stocks = await prisma.stockLevel.findMany({ where: { productId: { in: products.map(p => p.id) }, location: { type: 'WAREHOUSE' } }, select: { productId: true, available: true } })
+  // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
+  const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const rows = []
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
@@ -118,9 +120,15 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
     if (products.length > 1 && pa.bestOffer === true) throw new Error('eBay does not support Best Offer on a variation listing. Turn it off in Information before publishing.')
     if (product.id === parent.id) settings = pa
     const price = Number(resolved.cells.price?.value ?? (listing?.followMasterPrice === false ? listing.priceOverride ?? listing.price : product.basePrice))
-    const requested = Number(resolved.cells.quantity?.value ?? (listing?.followMasterQuantity === false ? listing.quantityOverride ?? listing.quantity : product.totalStock))
-    const tracked = stocks.filter(s => s.productId === product.id)
-    const available = Math.max(0, (tracked.length ? tracked.reduce((n, s) => n + s.available, 0) : product.totalStock) - (listing?.stockBuffer ?? 0))
+    const ledger = ledgers.get(product.id)
+    const tracked = !!ledger && (ledger.ledger.length > 0 || ledger.uncountedIsZero)
+    const following = listing?.followMasterQuantity !== false
+    // A pooled product follows the pool: its own Product.totalStock (what the mapped cell resolves to by
+    // default) is not what it sells from.
+    const requested = following && ledger?.source.kind === 'pool'
+      ? ledger.quantity
+      : Number(resolved.cells.quantity?.value ?? (!following ? listing!.quantityOverride ?? listing!.quantity : product.totalStock))
+    const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))
     const quantity = Math.min(Math.max(0, Math.trunc(requested)), available)
     effective.price = { toNumber: () => price }
     effective.quantity = quantity

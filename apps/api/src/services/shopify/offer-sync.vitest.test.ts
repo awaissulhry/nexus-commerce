@@ -1,7 +1,14 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'graphql'
 const state = vi.hoisted(() => ({ listing: {} as any, quantity: 3, price: '10.00', sku: 'BLUE-M', warehouse: 7, writes: [] as any[], stale: false }))
-vi.mock('../../db.js', () => ({ default: { channelListing: { findUnique: async () => state.listing }, stockLevel: { findMany: async () => [{ available: state.warehouse }] } } }))
+// Shared stock — the offer follows the product's ledger (loadSyncLedgers): its own WAREHOUSE rows here
+// (12 on the shelf, 7 available), no pool, no link history.
+vi.mock('../../db.js', () => ({ default: {
+  channelListing: { findUnique: async () => state.listing },
+  stockLevel: { findMany: async () => [{ productId: 'child', quantity: 12, available: state.warehouse, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } }] },
+  stockPoolLink: { findMany: async () => [] },
+  $queryRaw: async () => [],
+} }))
 vi.mock('./content-workspace.service.js', () => ({ object: (v: any) => v, digest: JSON.stringify }))
 vi.mock('./content-sync.service.js', () => ({ previewContentSync: vi.fn(), synchronizeContent: vi.fn() }))
 vi.mock('./admin-client.js', () => ({ assertShopifyResult: (value: any) => { if (value.userErrors.length) throw new Error(value.userErrors[0].message); return value }, shopifyAdmin: async (id: string) => {

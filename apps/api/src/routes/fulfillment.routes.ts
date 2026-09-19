@@ -219,6 +219,8 @@ import {
   validateTrackingFormat,
 } from '../services/carriers.service.js'
 import { renderInboundDiscrepancyPdf } from '../services/inbound-discrepancy-pdf.service.js'
+import { isSharedStockAddress, OWN_WAREHOUSES, SHARED_ADDRESS_REFUSED } from '../services/stock-pool/shared-warehouses.js'
+import { lenderBorrowers, lenderPoolDemand, poolCoverStock, POOL_DEMAND_CHANNEL, pooledProductIds } from '../services/stock-pool/pool-demand.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // FULFILLMENT B.3–B.9 — full domain API surface
@@ -1053,7 +1055,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!order) return reply.code(404).send({ error: 'Order not found' })
 
-      const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
+      // Shared stock step 4 — an order whose units came from a pool ships from this business's copy of
+      // the lender's warehouse address (unless the operator chose a warehouse).
+      const { sharedWarehouseForOrder } = await import('../services/stock-pool/shared-warehouses.js')
+      const warehouseId = body.warehouseId
+        ?? (await sharedWarehouseForOrder(order.id))
+        ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
 
       const shipment = await prisma.shipment.create({
         data: {
@@ -3111,6 +3118,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
               channel: order.channel,
               marketplace: order.marketplace,
               shippingCountry,
+              orderId: order.id, // shared stock step 4: pool units ship from the lender's address
             })
             resolvedWarehouseId = routing.warehouseId
             routingSource = routing.source
@@ -3816,7 +3824,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
       const warehouses = await prisma.warehouse.findMany({
-        where: { isActive: true },
+        where: { isActive: true, ...OWN_WAREHOUSES },
         select: { id: true, code: true, name: true, isDefault: true },
         orderBy: [{ isDefault: 'desc' }, { code: 'asc' }],
       })
@@ -3847,6 +3855,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (!b.warehouseId) {
         return reply.code(400).send({ error: 'warehouseId required' })
+      }
+      if (await isSharedStockAddress(b.warehouseId)) {
+        return reply.code(400).send({ error: SHARED_ADDRESS_REFUSED, code: 'shared_stock_address' })
       }
       const rule = await prisma.orderRoutingRule.create({
         data: {
@@ -3890,7 +3901,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       if ('channel' in b) data.channel = b.channel ?? null
       if ('marketplace' in b) data.marketplace = b.marketplace ?? null
       if ('shippingCountry' in b) data.shippingCountry = b.shippingCountry ?? null
-      if (typeof b.warehouseId === 'string') data.warehouseId = b.warehouseId
+      if (typeof b.warehouseId === 'string') {
+        if (await isSharedStockAddress(b.warehouseId)) {
+          return reply.code(400).send({ error: SHARED_ADDRESS_REFUSED, code: 'shared_stock_address' })
+        }
+        data.warehouseId = b.warehouseId
+      }
       if (typeof b.isActive === 'boolean') data.isActive = b.isActive
       if ('notes' in b) data.notes = b.notes ?? null
       const updated = await prisma.orderRoutingRule.update({
@@ -8874,6 +8890,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           take: 200,
         }),
         prisma.warehouse.findMany({
+          where: OWN_WAREHOUSES,
           select: { id: true, code: true, name: true, isDefault: true },
           orderBy: [{ isDefault: 'desc' }, { code: 'asc' }],
         }),
@@ -9733,7 +9750,7 @@ Return ONLY valid JSON, no prose:
 
     const warehouseByCode = new Map<string, { id: string }>()
     {
-      const whs = await prisma.warehouse.findMany({ select: { id: true, code: true } })
+      const whs = await prisma.warehouse.findMany({ where: OWN_WAREHOUSES, select: { id: true, code: true } })
       for (const w of whs) warehouseByCode.set(w.code.toLowerCase(), { id: w.id })
     }
 
@@ -9830,7 +9847,7 @@ Return ONLY valid JSON, no prose:
       })
       const warehouseByCode = new Map<string, { id: string }>()
       {
-        const whs = await prisma.warehouse.findMany({ select: { id: true, code: true } })
+        const whs = await prisma.warehouse.findMany({ where: OWN_WAREHOUSES, select: { id: true, code: true } })
         for (const w of whs) warehouseByCode.set(w.code.toLowerCase(), { id: w.id })
       }
 
@@ -10320,8 +10337,11 @@ Return ONLY valid JSON, no prose:
       // economics overrides (servicLevel / orderingCost / carryingCost).
       // F.1 — exclude soft-deleted (recycle-bin) rows so trashed
       // products don't pull velocity / stock / ordering math.
+      // Shared stock step 7b — a product that sells from another business's pool is that lender's to
+      // restock: it is not a suggestion here; the page says how many and whose (§8.1 item 4).
+      const pooledHere = await pooledProductIds(prisma)
       const products = await prisma.product.findMany({
-        where: { isParent: false, status: { not: 'INACTIVE' }, deletedAt: null },
+        where: { isParent: false, status: { not: 'INACTIVE' }, deletedAt: null, stockPoolLinks: { none: { status: 'active' } } },
         select: {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
           fulfillmentChannel: true, fulfillmentMethod: true,
@@ -10445,6 +10465,21 @@ Return ONLY valid JSON, no prose:
       })
       const soldBySku = new Map<string, number>()
       for (const r of sold) soldBySku.set(r.sku, r._sum.unitsSold ?? 0)
+      // Shared stock step 7b — what this business's pool gave to its borrowers' orders is demand on its
+      // own stock too (§8.1 items 1–2). Neither a channel nor a marketplace: left out under those filters.
+      const poolDemand = channelFilter || marketplaceFilter ? [] : await lenderPoolDemand(prisma, { since, skus })
+      const poolBorrowers = poolDemand.length > 0 ? await lenderBorrowers(prisma) : new Map<string, { name: string; locationIds: string[] }>()
+      const poolDaysBySku = new Map<string, Map<string, number>>()
+      const poolByBorrower = new Map<string, Map<string, number>>()
+      for (const d of poolDemand) {
+        soldBySku.set(d.sku, (soldBySku.get(d.sku) ?? 0) + d.units)
+        const days = poolDaysBySku.get(d.sku) ?? new Map<string, number>()
+        days.set(d.day, (days.get(d.day) ?? 0) + d.units)
+        poolDaysBySku.set(d.sku, days)
+        const borrowers = poolByBorrower.get(d.sku) ?? new Map<string, number>()
+        borrowers.set(d.borrowerWorkspaceId, (borrowers.get(d.borrowerWorkspaceId) ?? 0) + d.units)
+        poolByBorrower.set(d.sku, borrowers)
+      }
 
       // R.2 — per-(sku, channel, marketplace) velocity for the
       // channelCover[] breakdown. Same date window as the global
@@ -10459,7 +10494,8 @@ Return ONLY valid JSON, no prose:
       })
       const channelVelocityBySku = new Map<
         string,
-        Array<{ channel: string; marketplace: string; unitsSold: number }>
+        // poolLocationIds: a SHARED_POOL row (step 7b) — the lender's warehouses lent to that borrower.
+        Array<{ channel: string; marketplace: string; unitsSold: number; poolLocationIds?: string[] }>
       >()
       for (const r of soldByChannel) {
         const arr = channelVelocityBySku.get(r.sku) ?? []
@@ -10469,6 +10505,14 @@ Return ONLY valid JSON, no prose:
           unitsSold: r._sum.unitsSold ?? 0,
         })
         channelVelocityBySku.set(r.sku, arr)
+      }
+      for (const [sku, borrowers] of poolByBorrower) {
+        const arr = channelVelocityBySku.get(sku) ?? []
+        for (const [borrowerId, units] of borrowers) {
+          const borrower = poolBorrowers.get(borrowerId)
+          arr.push({ channel: POOL_DEMAND_CHANNEL, marketplace: borrower?.name ?? 'another business', unitsSold: units, poolLocationIds: borrower?.locationIds ?? [] })
+        }
+        channelVelocityBySku.set(sku, arr)
       }
 
       // Pull replenishment rules (overrides) + supplier lead times
@@ -10495,14 +10539,22 @@ Return ONLY valid JSON, no prose:
       // adjuster needs (day, units) pairs because windows are date-
       // ranged. dailyBySku stays a numbers-only series for the σ calc.
       const dailySeriesBySku = new Map<string, { day: string; units: number }[]>()
-      for (const r of dailyRows) {
-        const arr = dailyBySku.get(r.sku) ?? []
-        arr.push(r._sum.unitsSold ?? 0)
-        dailyBySku.set(r.sku, arr)
-        const dateArr = dailySeriesBySku.get(r.sku) ?? []
-        dateArr.push({ day: r.day.toISOString().slice(0, 10), units: r._sum.unitsSold ?? 0 })
-        dailySeriesBySku.set(r.sku, dateArr)
+      const addDay = (sku: string, day: string, units: number) => {
+        const arr = dailyBySku.get(sku) ?? []
+        arr.push(units)
+        dailyBySku.set(sku, arr)
+        const dateArr = dailySeriesBySku.get(sku) ?? []
+        dateArr.push({ day, units })
+        dailySeriesBySku.set(sku, dateArr)
       }
+      for (const r of dailyRows) {
+        // Pool demand on the same day joins that day's value (one value per day keeps σ right).
+        const day = r.day.toISOString().slice(0, 10)
+        const pooled = poolDaysBySku.get(r.sku)?.get(day) ?? 0
+        poolDaysBySku.get(r.sku)?.delete(day)
+        addDay(r.sku, day, (r._sum.unitsSold ?? 0) + pooled)
+      }
+      for (const [sku, days] of poolDaysBySku) for (const [day, units] of days) addDay(sku, day, units)
 
       // R.17 — substitution links for the cohort + stockout windows
       // for the affected primaries. Loaded once per request; each
@@ -10873,7 +10925,8 @@ Return ONLY valid JSON, no prose:
         const isFba = p.fulfillmentChannel === 'FBA'
         const channelCover = (channelVelocityBySku.get(p.sku) ?? [])
           .map((v) => {
-            const stock = resolveStockForChannel({
+            // A pool row sells from the warehouses lent to that borrower (step 7b), not from a channel's location.
+            const stock = v.poolLocationIds ? poolCoverStock(atp?.byLocation ?? [], v.poolLocationIds) : resolveStockForChannel({
               byLocation: atp?.byLocation ?? [],
               channel: v.channel,
               marketplace: v.marketplace,
@@ -11302,6 +11355,8 @@ Return ONLY valid JSON, no prose:
         },
         // R.19 — per-supplier container fill (only suppliers with profiles).
         containerFill,
+        // Shared stock step 7b — products left out above because another business restocks them.
+        sharedStock: pooledHere.ids.size > 0 ? { products: pooledHere.ids.size, lenders: pooledHere.lenders } : null,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[fulfillment/replenishment] failed')
@@ -11700,6 +11755,12 @@ Return ONLY valid JSON, no prose:
           const key = r.day.toISOString().slice(0, 10)
           historyByDay.set(key, (historyByDay.get(key) ?? 0) + r.unitsSold)
         }
+        // Shared stock step 7b — the pool's sales to borrowers are demand here too, as in the forecast (§8.1).
+        if (!channel && !marketplace) {
+          for (const d of await lenderPoolDemand(prisma, { since: historyStart, until: today, skus: [product.sku] })) {
+            historyByDay.set(d.day, (historyByDay.get(d.day) ?? 0) + d.units)
+          }
+        }
         const forecastByDay = new Map<string, {
           point: number
           lower: number
@@ -11776,9 +11837,24 @@ Return ONLY valid JSON, no prose:
           _sum: { unitsSold: true },
         })
         const isFba = product.fulfillmentChannel === 'FBA'
-        const channelCover = channelSold
+        // Shared stock step 7b — the pool's sales to each borrower, as their own rows (§8.1 item 2).
+        const channelPool = new Map<string, number>()
+        for (const d of await lenderPoolDemand(prisma, { since: channelSince, until: today, skus: [product.sku] })) {
+          channelPool.set(d.borrowerWorkspaceId, (channelPool.get(d.borrowerWorkspaceId) ?? 0) + d.units)
+        }
+        const channelBorrowers = channelPool.size > 0 ? await lenderBorrowers(prisma) : new Map<string, { name: string; locationIds: string[] }>()
+        const channelRows: Array<{ channel: string; marketplace: string; _sum: { unitsSold: number | null }; poolLocationIds?: string[] }> = [
+          ...channelSold,
+          ...[...channelPool].map(([borrowerId, units]) => ({
+            channel: POOL_DEMAND_CHANNEL,
+            marketplace: channelBorrowers.get(borrowerId)?.name ?? 'another business',
+            _sum: { unitsSold: units },
+            poolLocationIds: channelBorrowers.get(borrowerId)?.locationIds ?? [],
+          })),
+        ]
+        const channelCover = channelRows
           .map((row) => {
-            const stock = resolveStockForChannel({
+            const stock = row.poolLocationIds ? poolCoverStock(atpEntry?.byLocation ?? [], row.poolLocationIds) : resolveStockForChannel({
               byLocation: atpEntry?.byLocation ?? [],
               channel: row.channel,
               marketplace: row.marketplace,
@@ -15845,8 +15921,11 @@ Return ONLY valid JSON, no prose:
   // WAREHOUSE
   // ═══════════════════════════════════════════════════════════════════
 
-  fastify.get('/fulfillment/warehouses', async (_request, reply) => {
-    const items = await prisma.warehouse.findMany({ orderBy: [{ isDefault: 'desc' }, { code: 'asc' }] })
+  fastify.get('/fulfillment/warehouses', async (request, _reply) => {
+    // Shared stock: copies of lent addresses are shown only to a page that asks (`?shared=include`: the
+    // carrier settings, where a copy can get its own sender). Purchase orders never see one.
+    const { shared } = (request.query ?? {}) as { shared?: string }
+    const items = await prisma.warehouse.findMany({ where: shared === 'include' ? {} : OWN_WAREHOUSES, orderBy: [{ isDefault: 'desc' }, { code: 'asc' }] })
     return { items }
   })
 

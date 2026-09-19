@@ -9,12 +9,15 @@ vi.mock('../db.js', () => {
       channelConnection: { findFirst: vi.fn(async () => connection) },
       sharedListingMembership: {
         updateMany: vi.fn(async () => ({ count: 1 })),
+        // Dispatch re-check (NEXUS_SYNC_ORDERING_V2): the variants' controls at send time.
+        findMany: vi.fn(async () => []),
         // RT.2 debounce read — default: never pushed, no debounce
         aggregate: vi.fn(async () => ({ _max: { lastPushedAt: null } })),
       },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },
       channelListing: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+      syncChannelPolicy: { findMany: vi.fn(async () => []) },
     },
   }
 })
@@ -47,6 +50,19 @@ vi.mock('./channel-publish-audit.service.js', () => ({
   digestPayload: vi.fn(() => 'digest-abc'),
   writeAttemptLog: vi.fn(),
 }))
+
+// The product's ledger at send time (shared stock: its own warehouses or the pool) — 5 available.
+vi.mock('./stock-pool/sync-ledgers.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./stock-pool/sync-ledgers.js')>()
+  const { syncLedgerOf } = await import('./sync-control-core.js')
+  return {
+    ...real,
+    loadSyncLedgers: vi.fn(async (_db: unknown, ids: Iterable<string>) => new Map([...ids].map((id) => [id, {
+      productId: id, source: { kind: 'own' }, ledger: syncLedgerOf([{ locationCode: 'IT-MAIN', available: 5, syncRoutes: [] }]),
+      quantity: 5, available: 5, uncountedIsZero: false, fbaQuantity: 0,
+    }]))),
+  }
+})
 
 import prisma from '../db.js'
 import { OutboundSyncService, __ebayTrading } from './outbound-sync.service.js'
@@ -116,5 +132,48 @@ describe('syncToEbay TRADING branch', () => {
     expect(spy).not.toHaveBeenCalled()
     expect(res.success).toBe(true) // dry-run reports success-but-dryRun
     expect(res.dryRun).toBe(true)
+  })
+})
+
+// Shared stock plan step 3 — the send step re-checks each variant's controls (NEXUS_SYNC_ORDERING_V2 on).
+describe('syncToEbay TRADING — dispatch re-check of a fixed shared variant', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'
+    process.env.EBAY_PUBLISH_MODE = 'live'
+    delete process.env.NEXUS_SYNC_ORDERING_V2
+  })
+  const row = (updates: Array<{ sku: string; quantity: number }>) => ({
+    id: 'q2', externalListingId: '110556677', product: { id: 'p1', sku: 'PARENT' },
+    payload: { pushVia: 'TRADING', itemId: '110556677', market: 'IT', marketplaceId: 'EBAY_IT', productId: 'p1', updates },
+  })
+  const members = (list: Array<Record<string, unknown>>) => vi.mocked((prisma as any).sharedListingMembership.findMany).mockResolvedValue(list as never)
+
+  it('sends a fixed variant its number and a following variant the pool, whatever the queued numbers said', async () => {
+    const { getEbayPublishMode } = await import('./ebay-publish-gate.service.js')
+    vi.mocked(getEbayPublishMode).mockReturnValue('live')
+    members([
+      { sku: 'FIXED', lastQtyPushed: 9, followPool: true, stockBuffer: 0, pinnedQuantity: 2 },
+      { sku: 'FOLLOWS', lastQtyPushed: 9, followPool: true, stockBuffer: 1, pinnedQuantity: null },
+    ])
+    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockResolvedValue(undefined)
+    const res = await (new OutboundSyncService() as any).syncToEbay(row([{ sku: 'FIXED', quantity: 9 }, { sku: 'FOLLOWS', quantity: 9 }]))
+    expect(res.success).toBe(true)
+    expect(spy).toHaveBeenCalledWith(
+      { itemId: '110556677', entries: [{ sku: 'FIXED', quantity: 2 }, { sku: 'FOLLOWS', quantity: 4 }] }, // 5 − buffer 1
+      expect.anything(),
+    )
+  })
+
+  it('spends no revise when the fixed variant already shows its number; an Excluded variant is never sent', async () => {
+    members([
+      { sku: 'FIXED', lastQtyPushed: 2, followPool: true, stockBuffer: 0, pinnedQuantity: 2 },
+      { sku: 'EXCLUDED', lastQtyPushed: 0, followPool: false, stockBuffer: 0, pinnedQuantity: 3 },
+    ])
+    const spy = vi.spyOn(__ebayTrading, 'reviseInventoryStatusBatch').mockResolvedValue(undefined)
+    const res = await (new OutboundSyncService() as any).syncToEbay(row([{ sku: 'FIXED', quantity: 7 }, { sku: 'EXCLUDED', quantity: 7 }]))
+    expect(spy).not.toHaveBeenCalled()
+    expect(res).toMatchObject({ success: true, status: 'SUCCESS' })
+    expect(res.message).toMatch(/no revise spent/)
   })
 })

@@ -1,6 +1,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { releaseOpenOrder, consumeOpenOrder } from './stock-level.service.js'
+import { poolOpenHoldOrders } from './stock-pool/pool-doors.js'
 
 /**
  * Phase 3 — decide what to do with an active OPEN_ORDER reservation whose
@@ -60,8 +61,19 @@ export async function reconcileOpenOrderReservations(opts?: {
     distinct: ['orderId'],
     take: maxOrders + 1,
   })
-  const capped = active.length > maxOrders
-  const orderIds = active.slice(0, maxOrders).map((r) => r.orderId!).filter(Boolean)
+  // Shared stock step 4 — and this business's orders that hold stock in a pool. Those holds live in
+  // the lender's ledger (this business cannot read them); the door lists the order references only.
+  // releaseOpenOrder / consumeOpenOrder settle both kinds of hold.
+  let pooledOrders: string[] = []
+  try {
+    pooledOrders = await poolOpenHoldOrders(prisma, maxOrders + 1)
+  } catch (err) {
+    logger.warn('reservation-reconcile: shared stock holds could not be listed', { err: err instanceof Error ? err.message : String(err) })
+  }
+  const ownOrders = active.map((r) => r.orderId!).filter(Boolean)
+  const allOrders = [...new Set([...ownOrders, ...pooledOrders])]
+  const capped = allOrders.length > maxOrders
+  const orderIds = allOrders.slice(0, maxOrders)
 
   let released = 0
   let consumed = 0

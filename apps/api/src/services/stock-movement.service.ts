@@ -15,6 +15,8 @@ import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
+import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -290,6 +292,12 @@ async function resolveLocationId(
       select: { id: true },
     })
     if (sl) return sl.id
+    // Shared stock step 4 — a copy of another business's lent warehouse is an address, never stock.
+    // Without this the write would silently land on the default location.
+    const copy = await tx.warehouse.findUnique({ where: { id: args.warehouseId }, select: { sharedFromLocationId: true } })
+    if (copy?.sharedFromLocationId) {
+      throw new Error('This warehouse is the address of another business\'s shared stock. Its stock changes only through the shared stock itself.')
+    }
   }
   const itMain = await (await import('./default-stock-location.js')).defaultStockLocation(tx) ?? await tx.stockLocation.findUnique({
     where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
@@ -363,6 +371,16 @@ export async function applyStockMovementInTx(
     locationId,
     warehouseId,
   })
+
+  // Shared stock step 4 — a sale of a product that sells from a pool is taken from the pool
+  // (stock-pool/order-routing.ts). One that reaches this business's own warehouse anyway came through
+  // a path nobody routed: refuse it rather than sell stock no listing shows.
+  if (reason === 'ORDER_PLACED' && change < 0) {
+    const location = await tx.stockLocation.findUnique({ where: { id: resolvedLocationId }, select: { type: true } })
+    if (location?.type === 'WAREHOUSE' && (await pooledNow(tx, [productId])).has(productId)) {
+      throw new PooledProductError(productId, 'a sale')
+    }
+  }
 
   const existing = await tx.stockLevel.findFirst({
     where: {
@@ -656,6 +674,13 @@ export async function afterStockMovementCommit(
     })
   }
 
+  // Shared stock — wake the pool worker: if this product is lent, the database queued work for the
+  // borrowers' listings in the same transaction (stock-pool.sql). One cheap query when nothing waits;
+  // coalesced when many movements commit at once. Dynamic import: pool-tasks imports this module.
+  void import('./stock-pool/pool-tasks.js')
+    .then(({ afterPoolChange }) => afterPoolChange())
+    .catch(() => { /* the poller is the backstop */ })
+
   // ES.4 — refresh the ProductReadCache so the product LIST reflects the new
   // stock. This is the ONLY place every stock change funnels through (bulk
   // import, orders, returns, manual adjustments), and it was missing: stock
@@ -741,34 +766,25 @@ async function cascadeQuantityToListings(
   // over WAREHOUSE locations), not gross totalStock, so FBM listings never list
   // the last `reserved`+`buffer` units. Runs inside the caller's tx, so it sees
   // the just-written stock state.
-  const stockRows = await tx.stockLevel.findMany({
-    where: { productId },
-    select: {
-      quantity: true,
-      available: true,
-      location: { select: { type: true, code: true, syncRoutes: true } },
-    },
-  })
-  const warehouseRows = stockRows.filter((s) => s.location?.type === 'WAREHOUSE')
-  const warehouseAvailable = warehouseRows.reduce((sum, s) => sum + s.available, 0)
+  // Shared stock — the ledger comes from loadSyncLedgers: this business's own WAREHOUSE rows, or,
+  // for a product that sells from another business's pool, the pool's lent locations.
+  const productLedger = (await loadSyncLedgers(tx, [productId])).get(productId)!
+  const pooled = productLedger.source.kind === 'pool'
   // SC.1 — routed-ledger shape for the derivation core + channel policies.
-  const scLedger = warehouseRows.map((s) => ({
-    locationCode: s.location?.code ?? '?',
-    available: s.available,
-    syncRoutes: s.location?.syncRoutes ?? [],
-  }))
+  const scLedger = productLedger.ledger
+  // The drift snapshot: a pooled product's listings follow the pool, not this business's own total.
+  const snapshotQuantity = pooled ? productLedger.quantity : newTotalStock
   const scPolicies = await loadChannelPolicies(tx as never)
   // P0 guard (2026-07-20) — an EMPTY ledger (zero WAREHOUSE rows) means the
   // product was never counted, NOT that stock is zero. Pushing 0 over a
   // positive live quantity from that state is exactly the zero-inventory
   // incident. Counted-to-zero pools (rows exist, sum 0) still cascade 0 —
-  // that's honest.
-  const ledgerUncounted = warehouseRows.length === 0
+  // that's honest. A product that left a shared pool is the exception: there
+  // an uncounted own stock IS 0 (loadSyncLedgers' uncountedIsZero).
+  const ledgerUncounted = scLedger.length === 0 && !productLedger.uncountedIsZero
   let uncountedSkips = 0
   let pausedSkips = 0
-  const fbaBucket = stockRows
-    .filter((s) => s.location?.type === 'AMAZON_FBA')
-    .reduce((sum, s) => sum + s.quantity, 0)
+  const fbaBucket = productLedger.fbaBucket
   const cascadeProduct = await tx.product.findUnique({
     where: { id: productId },
     select: { fulfillmentMethod: true },
@@ -810,9 +826,8 @@ async function cascadeQuantityToListings(
       syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
       pinnedQuantity: listing.quantity,
       stockBuffer: listing.stockBuffer ?? 0,
-      sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
       channelPolicy: policyFor(scPolicies, listing.channel, listing.marketplace),
-      ledger: scLedger,
+      ...ledgerInputs(productLedger, (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? []),
     })
     const uncountedSkip = resolution.kind === 'UNCOUNTED' && (listing.quantity ?? 0) > 0
     if (uncountedSkip) uncountedSkips++
@@ -832,7 +847,7 @@ async function cascadeQuantityToListings(
       await tx.channelListing.update({
         where: { id: listing.id },
         data: {
-          masterQuantity: newTotalStock,
+          masterQuantity: snapshotQuantity,
           quantity: newListingQty,
           lastSyncStatus: 'PENDING',
           lastSyncedAt: null,
@@ -858,7 +873,7 @@ async function cascadeQuantityToListings(
             marketplace: listing.marketplace,
             quantity: newListingQty,
             oldQuantity: listing.quantity,
-            masterQuantity: newTotalStock,
+            masterQuantity: snapshotQuantity,
             stockBuffer: listing.stockBuffer ?? 0,
             reason,
             change,
@@ -870,10 +885,10 @@ async function cascadeQuantityToListings(
     } else {
       // Snapshot-only path. Either followMasterQuantity=false (drift
       // signal preserved) or computed quantity equals existing (no-op).
-      if (listing.masterQuantity !== newTotalStock) {
+      if (listing.masterQuantity !== snapshotQuantity) {
         await tx.channelListing.update({
           where: { id: listing.id },
-          data: { masterQuantity: newTotalStock },
+          data: { masterQuantity: snapshotQuantity },
         })
       }
       snapshottedListingIds.push(listing.id)
@@ -929,11 +944,10 @@ async function cascadeQuantityToListings(
         tx as unknown as Parameters<typeof enqueueSharedTradingFanout>[0],
         {
           productId,
-          warehouseAvailable,
-          stockBuffer: 0, // legacy fallback; per-membership buffer via scLedger path
           holdUntil,
           // SC.1 — per-membership derivation (routing + followPool + buffer)
           scLedger,
+          uncountedIsZero: productLedger.uncountedIsZero,
           scPolicies,
         },
       )
@@ -1042,9 +1056,10 @@ export async function recascadeProduct(
     where: { id: productId },
     select: { totalStock: true },
   })
-  const ledgerRows = await prisma.stockLevel.count({
-    where: { productId, location: { type: 'WAREHOUSE' } },
-  })
+  // Shared stock — a product that sells from a pool follows the pool's rows, and one that left a
+  // pool follows its own stock or 0; neither is the unledgered legacy case this guard protects.
+  const productLedger = (await loadSyncLedgers(prisma, [productId])).get(productId)
+  const ledgerRows = productLedger?.source.kind === 'pool' || productLedger?.uncountedIsZero ? 1 : productLedger?.ledger.length ?? 0
   if ((product?.totalStock ?? 0) > 0 && ledgerRows === 0) {
     return { ok: false, reason: 'NO_LEDGER', totalStock: product?.totalStock ?? 0 }
   }

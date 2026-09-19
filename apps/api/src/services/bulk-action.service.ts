@@ -23,6 +23,8 @@ import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
 import { tryResolveConnection } from './connection-resolver.service.js';
+// Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
+import { sellableQuantity } from './stock-pool/sync-ledgers.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
 // functions, no `this.`, no Prisma. Adding a new attribute path
 // (variantAttributes, channelMetadata, …) is one diff to that file
@@ -2420,7 +2422,7 @@ export class BulkActionService {
         if (isFbaListing(listing, item, { fbaStockQty: fbaAgg?._sum.quantity ?? null })) {
           return { status: 'skipped' };
         }
-        const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+        const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
         await submitAmazonListingsBatch({
           marketplaceIds,
           sellerId,
@@ -2450,7 +2452,7 @@ export class BulkActionService {
           operations: [{ type: 'price', sku, offerId, currency, value }],
         });
       } else {
-        const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+        const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
         batch = await submitEbayParallelBatch({
           connectionId: connection.id,
           operations: [{ type: 'stock', sku, quantity: qty }],
@@ -2487,7 +2489,7 @@ export class BulkActionService {
         'CHANNEL_BATCH SHOPIFY stock: SHOPIFY_DEFAULT_INVENTORY_ITEM_GID + SHOPIFY_DEFAULT_LOCATION_GID env required',
       );
     }
-    const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+    const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
     await submitShopifyBulkMutation({
       mutation:
         'mutation Set($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { message } } }',

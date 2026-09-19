@@ -15,14 +15,15 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { setListingPauseEnds, setListingPinEnds, setMembershipExclusionEnds, setMembershipFixedNumber, setMembershipModeByCoordinate } from '../services/sync-control-overrides.service.js'
 import { logger } from '../utils/logger.js'
 import {
   resolveIntendedQuantity,
   resolveMembershipIntended,
-  type RoutedLedgerRow,
 } from '../services/sync-control-core.js'
 import { loadChannelPolicies, policyFor, validatePolicyInput, enforceNewListingDefaults } from '../services/sync-control-policy.service.js'
 import { validateServesTokens } from '../services/sync-control-core.js'
+import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../services/stock-pool/sync-ledgers.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../services/stock-movement.service.js'
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
@@ -56,20 +57,23 @@ interface SyncControlRow {
   buffer: number
   routedLocations: string[]
   itemId?: string
+  /** Shared stock step 3 — when the current Fixed number / Paused / Excluded ends by itself (ISO), or null. */
+  endsAt?: string | null
+  /** A listing row's full address (lib/listing-coordinate.ts): the account and the alias, so an action on
+   *  it names exactly this listing. Without them every Listings-view action failed (found 2026-09-19). */
+  channelConnectionId?: string | null
+  aliasKey?: string
 }
 
-async function buildLedgers(productIds: string[]): Promise<Map<string, RoutedLedgerRow[]>> {
-  const levels = await prisma.stockLevel.findMany({
-    where: { productId: { in: productIds }, location: { type: 'WAREHOUSE' } },
-    select: { productId: true, available: true, location: { select: { code: true, syncRoutes: true } } },
-  })
-  const map = new Map<string, RoutedLedgerRow[]>()
-  for (const l of levels) {
-    const arr = map.get(l.productId) ?? []
-    arr.push({ locationCode: l.location?.code ?? '?', available: l.available, syncRoutes: l.location?.syncRoutes ?? [] })
-    map.set(l.productId, arr)
-  }
-  return map
+/** Shared stock — the same ledgers the cascade uses: a pooled product shows the pool's numbers. */
+async function buildLedgers(productIds: string[]): Promise<Map<string, ProductLedger>> {
+  return loadSyncLedgers(prisma, productIds)
+}
+
+/** Shared stock step 3 — when the listing's current override ends by itself (null = until changed). */
+function endOf(r: ReturnType<typeof resolveIntendedQuantity>, pinnedUntil: Date | null, pausedUntil: Date | null): string | null {
+  const at = r.kind === 'PINNED' ? pinnedUntil : r.kind === 'PAUSED' && r.via === 'LISTING' ? pausedUntil : null
+  return at ? at.toISOString() : null
 }
 
 function modeOf(r: ReturnType<typeof resolveIntendedQuantity>, isShared: boolean): Mode {
@@ -102,12 +106,13 @@ async function computeRows(): Promise<SyncControlRow[]> {
       select: {
         productId: true, channel: true, marketplace: true, quantity: true, stockBuffer: true,
         followMasterQuantity: true, fulfillmentMethod: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
+        pinnedUntil: true, pausedUntil: true, channelConnectionId: true, aliasKey: true,
         product: { select: { sku: true, fulfillmentMethod: true } },
       },
     }),
     prisma.sharedListingMembership.findMany({
       where: { status: 'ACTIVE' },
-      select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
+      select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true, pinnedQuantity: true, pinnedUntil: true, pausedUntil: true },
     }),
     loadChannelPolicies(),
   ])
@@ -145,9 +150,8 @@ async function computeRows(): Promise<SyncControlRow[]> {
       syncPaused: cl.syncPaused,
       pinnedQuantity: cl.quantity,
       stockBuffer: cl.stockBuffer ?? 0,
-      sourceLocationCodes: cl.sourceLocationCodes ?? [],
       channelPolicy: policyFor(policies, cl.channel, cl.marketplace),
-      ledger: ledgers.get(cl.productId) ?? [],
+      ...ledgerInputs(ledgers.get(cl.productId), cl.sourceLocationCodes ?? []),
     })
     rows.push({
       lane: 'LISTING',
@@ -160,6 +164,9 @@ async function computeRows(): Promise<SyncControlRow[]> {
       liveQty: cl.quantity,
       buffer: cl.stockBuffer ?? 0,
       routedLocations: r.kind === 'FOLLOW' ? r.routedLocations : [],
+      endsAt: endOf(r, cl.pinnedUntil, cl.pausedUntil),
+      channelConnectionId: cl.channelConnectionId,
+      aliasKey: cl.aliasKey,
     })
   }
 
@@ -167,9 +174,11 @@ async function computeRows(): Promise<SyncControlRow[]> {
     const r = resolveMembershipIntended({
       marketplace: m.marketplace,
       followPool: m.followPool ?? true,
+      pinnedQuantity: m.pinnedQuantity,
       stockBuffer: m.stockBuffer ?? 0,
       channelPolicy: policyFor(policies, 'EBAY', m.marketplace),
-      ledger: m.productId ? (ledgers.get(m.productId) ?? []) : [],
+      ledger: ledgerInputs(m.productId ? ledgers.get(m.productId) : undefined).ledger,
+      uncountedIsZero: ledgerInputs(m.productId ? ledgers.get(m.productId) : undefined).uncountedIsZero,
     })
     rows.push({
       lane: 'SHARED',
@@ -178,11 +187,12 @@ async function computeRows(): Promise<SyncControlRow[]> {
       channel: 'EBAY',
       marketplace: m.marketplace,
       mode: modeOf(r, true),
-      intendedQty: r.kind === 'FOLLOW' ? r.quantity : null,
+      intendedQty: r.kind === 'FOLLOW' ? r.quantity : r.kind === 'PINNED' ? r.quantity : null,
       liveQty: m.lastQtyPushed,
       buffer: m.stockBuffer ?? 0,
       routedLocations: r.kind === 'FOLLOW' ? r.routedLocations : [],
       itemId: m.itemId,
+      endsAt: endOf(r, m.pinnedUntil, m.pausedUntil),
     })
   }
   return rows
@@ -400,7 +410,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       buildLedgers(rowPids),
     ])
     const metaById = new Map(masterMeta.map((m) => [m.id, m]))
-    const poolOf = (pid: string) => (ledgers.get(pid) ?? []).reduce((s, l) => s + l.available, 0)
+    const poolOf = (pid: string) => ledgers.get(pid)?.available ?? 0
 
     // SCD.3 — which PARENT listing owns each eBay itemId, so a family can be
     // labelled by the parent SKU the owner recognises (GALE-JACKET-ALT1).
@@ -547,8 +557,26 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
   // ── SC.3 — mutations (writes require inventoryAdjust via the manifest) ──
 
-  const actorOf = (request: { user?: { email?: string } }): string =>
-    request.user?.email ?? 'sync-control'
+  // The signed-in person (auth sets `authUser`). This read `request.user`, which nothing sets, so every
+  // Sync Control history row said "sync-control" instead of who did it (found 2026-09-19).
+  const actorOf = (request: { authUser?: { email?: string | null; id?: string } }): string =>
+    request.authUser?.email ?? request.authUser?.id ?? 'sync-control'
+
+  /**
+   * Shared stock step 3 — the optional end of a Fixed number, a Paused listing or an Excluded variant.
+   * undefined = not given (keep what is there); null = no end; otherwise a moment between one minute and
+   * one year from now. Stored in UTC; the page shows it in the person's own time zone.
+   */
+  const parseUntil = (value: unknown): { ok: true; until: Date | null | undefined } | { ok: false; error: string } => {
+    if (value === undefined) return { ok: true, until: undefined }
+    if (value === null || value === '') return { ok: true, until: null }
+    const at = typeof value === 'string' ? new Date(value) : null
+    if (!at || Number.isNaN(at.getTime())) return { ok: false, error: 'The end time is not a valid date and time.' }
+    const now = Date.now()
+    if (at.getTime() < now + 60_000) return { ok: false, error: 'The end time must be at least one minute from now.' }
+    if (at.getTime() > now + 366 * 24 * 3600_000) return { ok: false, error: 'The end time must be within one year.' }
+    return { ok: true, until: at }
+  }
 
   const audit = async (
     entries: Array<{ scopeType: string; scopeId: string; scopeName?: string; field: string; before?: unknown; after?: unknown }>,
@@ -579,6 +607,10 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const body = request.body as {
       action: 'FOLLOW' | 'PIN' | 'PAUSE' | 'RESUME' | 'ZERO_PIN' | 'EXCLUDE' | 'INCLUDE' | 'BUFFER' | 'CLOSE_OFFER' | 'REOPEN_OFFER'
       buffer?: number
+      /** Shared stock step 3 — optional end for PIN, ZERO_PIN, PAUSE (listings) and PIN, EXCLUDE (shared variants). */
+      until?: string | null
+      /** Shared stock step 3 — the fixed number for a shared variant on PIN (default: what eBay shows now). */
+      quantity?: number
       listings?: ListingTarget[]
       memberships?: MembershipTarget[]
       // SCV.2 — product-first bulk: expand each master to ALL its listings +
@@ -600,6 +632,15 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const listings = [...(body.listings ?? [])]
     const memberships = body.memberships ?? []
     if (!body.action) return reply.code(400).send({ error: 'action required' })
+    const untilParsed = parseUntil(body.until)
+    if ('error' in untilParsed) return reply.code(400).send({ error: untilParsed.error })
+    const until = untilParsed.until
+    if (until !== undefined && !['PIN', 'ZERO_PIN', 'PAUSE', 'EXCLUDE'].includes(body.action)) {
+      return reply.code(400).send({ error: 'An end time can be set with Fixed number, Zero & Pin, Pause or Exclude only.' })
+    }
+    if (body.quantity !== undefined && (body.action !== 'PIN' || !Number.isSafeInteger(body.quantity) || body.quantity < 0)) {
+      return reply.code(400).send({ error: 'A fixed number is a whole number of 0 or more, given with Fixed number (PIN).' })
+    }
     const result: {
       updated: number; skippedFba: number; unchanged: number; recascadeQueued: number
       skippedShared: number; scopedOut: number; error?: string; partial?: boolean
@@ -670,7 +711,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           // EXCLUDE narrowing 200 listing rows it would never touch anyway
           // must not inflate the "outside filters untouched" toast.
           const LANE_L = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER'].includes(body.action)
-          const LANE_S = ['EXCLUDE', 'INCLUDE', 'BUFFER'].includes(body.action)
+          const LANE_S = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW'].includes(body.action)
           result.scopedOut = (LANE_L ? cls.length - clsT.length : 0) + (LANE_S ? mems.length - memsT.length : 0)
         }
 
@@ -681,7 +722,8 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         // it failed while it had already happened (and RESUME skipped its
         // recascade, ZERO_PIN had already pushed qty 0 live).
         const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
-        const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+        // Shared stock step 3 — Fixed number (PIN) and FOLLOW apply to shared eBay variants too.
+        const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW']
         if (LISTING_LANE.includes(body.action)) {
           for (const c of clsT) listings.push(c)
         }
@@ -696,6 +738,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             ? `0 rows match your filters right now (${result.scopedOut} filtered out — drift may have converged since the page rendered). Nothing was written.`
             : 'no targets',
         })
+      }
+      // Shared stock step 3 — a chosen number is for shared eBay variants only. A listing's Fixed number
+      // keeps the number it shows now (setFollowMasterQuantity), so a number sent with listings would be
+      // applied to some rows and silently ignored on others. Refused before anything is written.
+      if (body.quantity !== undefined && listings.length > 0) {
+        return reply.code(400).send({ error: 'A chosen fixed number applies to shared eBay variants only. For a listing, Fixed number keeps the number it shows now.' })
       }
       // Master-bulk legitimately expands large (a 49-variant family ≈ 300 rows).
       // SCT.4/5b — Amazon EU shared-quantity gate. Amazon keeps ONE merchant
@@ -870,6 +918,19 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
                   scopeName: `${x.sku ?? '?'}@${x.channel}:${x.marketplace}`, field: 'followMasterQuantity',
                   after: { follow: body.action === 'FOLLOW', quantity: x.quantity },
                 })), actor)
+            // Shared stock step 3 — the end of the fixed number, on every listing now pinned by this
+            // action (newly, or already: a PIN with an end time sets the end of an existing pin).
+            if (body.action === 'PIN' && until !== undefined) {
+              const pinned = r.results.filter((x) => x.action === 'PIN' || x.action === 'UNCHANGED')
+              if (pinned.length) {
+                // The end it replaces goes in the history too (an existing pin can already have one).
+                const endBefore = await setListingPinEnds(pinned.map((x) => x.listingId), until)
+                await audit(pinned.map((x) => ({
+                  scopeType: 'LISTING', scopeId: `${x.listingId}`, scopeName: `${x.sku ?? '?'}@${x.channel}:${x.marketplace}`,
+                  field: 'pinnedUntil', before: { pinnedUntil: endBefore.get(x.listingId) ?? null }, after: { pinnedUntil: until?.toISOString() ?? null },
+                })), actor)
+              }
+            }
             continue
           }
 
@@ -902,6 +963,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             select: {
               id: true, productId: true, channel: true, marketplace: true, region: true, channelConnectionId: true, aliasKey: true,
               externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true, platformAttributes: true,
+              pinnedUntil: true, pausedUntil: true,
               product: { select: { fulfillmentMethod: true, sku: true } },
             },
           })
@@ -922,6 +984,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
               scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
               field: 'syncPaused', before: { syncPaused: r.syncPaused }, after: { syncPaused: true },
             })), actor)
+            // Shared stock step 3 — the end of the pause (also on a listing that was already paused).
+            if (until !== undefined && eligible.length) {
+              await setListingPauseEnds(eligible.map((r) => r.id), until)
+              await audit(eligible.map((r) => ({
+                scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
+                field: 'pausedUntil', before: { pausedUntil: r.pausedUntil?.toISOString() ?? null }, after: { pausedUntil: until?.toISOString() ?? null },
+              })), actor)
+            }
           } else if (body.action === 'RESUME') {
             const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
             result.unchanged += eligible.length - ids.length
@@ -942,7 +1012,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             if (eligible.length) {
               const u = await prisma.channelListing.updateMany({
                 where: { OR: eligible.map(r => ({ id: r.id, ...whereCoordinate(r) })) },
-                data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING' },
+                data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING', ...(until !== undefined ? { pinnedUntil: until } : {}) },
               })
               result.updated += u.count
             }
@@ -963,7 +1033,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             }
             await audit(eligible.map((r) => ({
               scopeType: 'LISTING', scopeId: r.id, scopeName: `${r.product?.sku}@${r.channel}:${r.marketplace}`,
-              field: 'zeroPin', before: { quantity: r.quantity }, after: { quantity: 0, follow: false },
+              field: 'zeroPin', before: { quantity: r.quantity, ...(until !== undefined ? { pinnedUntil: r.pinnedUntil?.toISOString() ?? null } : {}) }, after: { quantity: 0, follow: false, ...(until !== undefined ? { pinnedUntil: until?.toISOString() ?? null } : {}) },
             })), actor)
           }
         }
@@ -974,7 +1044,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         const or = memberships.map((t) => ({ itemId: t.itemId, marketplace: t.marketplace, sku: t.sku }))
         const rows = await prisma.sharedListingMembership.findMany({
           where: { OR: or },
-          select: { id: true, itemId: true, marketplace: true, sku: true, productId: true, followPool: true },
+          select: { id: true, itemId: true, marketplace: true, sku: true, productId: true, followPool: true, pinnedQuantity: true, lastQtyPushed: true, pinnedUntil: true, pausedUntil: true },
         })
         if (body.action === 'EXCLUDE' || body.action === 'INCLUDE') {
           const want = body.action === 'INCLUDE'
@@ -989,6 +1059,29 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
             field: 'followPool', before: { followPool: r.followPool }, after: { followPool: want },
           })), actor)
+          // Shared stock step 3 — the end of the exclusion.
+          if (!want && until !== undefined && rows.length) {
+            await setMembershipExclusionEnds(rows.map((r) => r.id), until)
+            await audit(rows.map((r) => ({
+              scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`,
+              field: 'pausedUntil', before: { pausedUntil: r.pausedUntil?.toISOString() ?? null }, after: { pausedUntil: until?.toISOString() ?? null },
+            })), actor)
+          }
+        } else if (body.action === 'PIN' || body.action === 'FOLLOW') {
+          // Shared stock step 3 — Fixed number for a shared variant: exactly this number on this eBay
+          // listing, whatever the pool (default: what eBay shows now). FOLLOW returns it to the pool.
+          for (const r of rows) {
+            const next = body.action === 'PIN' ? (body.quantity ?? r.lastQtyPushed ?? 0) : null
+            const changes = next !== r.pinnedQuantity || (body.action === 'PIN' && until !== undefined)
+            if (!changes) { result.unchanged++; continue }
+            await setMembershipFixedNumber(r.id, next, body.action === 'PIN' ? until : undefined)
+            result.updated++
+            if (r.productId) recascadeProducts.add(r.productId)
+            await audit([{
+              scopeType: 'MEMBERSHIP', scopeId: r.id, scopeName: `${r.sku}@${r.itemId}`, field: 'pinnedQuantity',
+              before: { pinnedQuantity: r.pinnedQuantity, ...(body.action === 'PIN' && until !== undefined ? { pinnedUntil: r.pinnedUntil?.toISOString() ?? null } : {}) }, after: { pinnedQuantity: next, ...(body.action === 'PIN' && until !== undefined ? { pinnedUntil: until?.toISOString() ?? null } : {}) },
+            }], actor)
+          }
         } else if (body.action === 'BUFFER') {
           const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
           const u = await prisma.sharedListingMembership.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { stockBuffer: buffer } })
@@ -1261,7 +1354,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, type: true, syncRoutes: true }, orderBy: { code: 'asc' } }),
     ])
     const nameById = new Map(names.map((n) => [n.id, n.name]))
-    const poolOf = (pid: string | null): number | '' => pid ? (ledgers.get(pid) ?? []).reduce((s, l) => s + l.available, 0) : ''
+    const poolOf = (pid: string | null): number | '' => pid ? (ledgers.get(pid)?.available ?? 0) : ''
     const listingRows = rows.map((r) => {
       const lm = logicalMode(r.mode)
       const drift = r.mode !== 'FBA' && r.intendedQty != null && r.liveQty != null && r.intendedQty !== r.liveQty
@@ -1312,8 +1405,12 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       const label = `${e.sku}@${e.channel}:${e.market}`
 
       if (want && want !== curLogical) {
-        if (cur.lane === 'SHARED' && (want === 'PINNED' || want === 'PAUSED')) {
-          skipped.push({ key: label, reason: `shared variant can't be ${want} (use Excluded)` }); continue
+        if (cur.lane === 'SHARED' && want === 'PAUSED') {
+          skipped.push({ key: label, reason: 'a shared variant is not paused; use Excluded' }); continue
+        }
+        // Shared stock step 3 — a shared variant can hold a fixed number; the sheet must say which.
+        if (cur.lane === 'SHARED' && want === 'PINNED' && e.pinnedQty == null) {
+          skipped.push({ key: label, reason: 'a Fixed number for a shared variant needs the number in the pinned column' }); continue
         }
         changes.push({
           lane: cur.lane, key: label, field: 'mode', from: curLogical, to: want,
@@ -1399,11 +1496,14 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           // mode / pinnedQty
           if (c.target === 'FOLLOW') {
             if (c.lane === 'SHARED' && c.itemId) {
-              await prisma.sharedListingMembership.updateMany({ where: { itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, data: { followPool: true } })
+              await setMembershipModeByCoordinate({ itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, null)
             } else {
               await prisma.channelListing.updateMany({ where: { productId: c.productId, channel: c.channel, marketplace: c.marketplace, OR: [{ fulfillmentMethod: null }, { fulfillmentMethod: { not: 'FBA' } }] }, data: { syncPaused: false } })
               await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: true, actor })
             }
+          } else if (c.target === 'PINNED' && c.lane === 'SHARED' && c.itemId) {
+            // Shared stock step 3 — a fixed number for a shared variant (the preview required the number).
+            await setMembershipModeByCoordinate({ itemId: c.itemId, marketplace: c.marketplace, sku: c.sku }, c.pinnedQty ?? 0)
           } else if (c.target === 'PINNED') {
             await setFollowMasterQuantity({ productIds: [c.productId], channel: c.channel as never, markets: [c.marketplace], follow: false, actor })
             if (c.pinnedQty != null) {

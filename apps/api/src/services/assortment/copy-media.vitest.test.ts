@@ -130,11 +130,17 @@ describe('AE.3c — images arrive in the follower business', () => {
 
   it('CONTROL — a stored file is copied into Cloudinary with its own content hash; an outside address is carried, never fetched', async () => {
     const productId = await newProduct('MEDIA-1')
-    const result = await inB(() => media.copyImages(productId, [
-      image({ url: MAIN_FILE, type: 'MAIN', isPrimary: true, sortOrder: 0 }),
-      image({ url: SIDE_ADDRESS, type: 'ALT', sortOrder: 1 }),
-    ]))
-    expect(result).toEqual({ copied: 1, reused: 0, addressed: 1, failed: [] })
+    const main = image({ url: MAIN_FILE, type: 'MAIN', isPrimary: true, sortOrder: 0 })
+    const side = image({ url: SIDE_ADDRESS, type: 'ALT', sortOrder: 1 })
+    const result = await inB(() => media.copyImages(productId, [main, side]))
+    const { pairs, ...counts } = result
+    expect(counts).toEqual({ copied: 1, reused: 0, addressed: 1, failed: [] })
+    // AE.4 — each source image names the follower image that now shows it.
+    const idByUrl = new Map((await sql(`SELECT id, url FROM "ProductImage" WHERE "productId" = $1`, [productId])).map((row) => [row.url, row.id]))
+    expect(pairs).toEqual([
+      { source: main.id, target: idByUrl.get(`https://res.cloudinary.com/follower/image/upload/v1/product-images/${productId}/copy-1.png`) },
+      { source: side.id, target: idByUrl.get(SIDE_ADDRESS) },
+    ])
     expect(fetched).toEqual([{ url: MAIN_FILE, redirect: 'error' }])
     expect(storage.uploads).toEqual([{ folder: `product-images/${productId}`, bytes: bytesFor(MAIN_FILE).length }])
     expect(await rows(productId)).toEqual([
@@ -145,11 +151,8 @@ describe('AE.3c — images arrive in the follower business', () => {
     expect((await rows(productId)).some((row) => row.url === MAIN_FILE)).toBe(false)
 
     // Again: the same bytes and the same address are recognised; nothing is uploaded or added.
-    const again = await inB(() => media.copyImages(productId, [
-      image({ url: MAIN_FILE, type: 'MAIN', isPrimary: true, sortOrder: 0 }),
-      image({ url: SIDE_ADDRESS, type: 'ALT', sortOrder: 1 }),
-    ]))
-    expect(again).toEqual({ copied: 0, reused: 2, addressed: 0, failed: [] })
+    const again = await inB(() => media.copyImages(productId, [main, side]))
+    expect(again).toEqual({ copied: 0, reused: 2, addressed: 0, failed: [], pairs }) // a reused image names the same row
     expect(storage.uploads).toHaveLength(1)
     expect(await rows(productId)).toHaveLength(2)
   })
@@ -187,8 +190,10 @@ describe('AE.3c — images arrive in the follower business', () => {
   it('a business with a Shopify store gets the file in Shopify, not Cloudinary; an unclear store choice is refused, never switched', async () => {
     const productId = await newProduct('MEDIA-4')
     storage.shopify.account = 'acct'
-    const result = await inB(() => media.copyImages(productId, [image({ url: 'https://res.cloudinary.com/owner/image/upload/v1/p/transform/main', type: 'MAIN', isPrimary: true })]))
-    expect(result).toEqual({ copied: 1, reused: 0, addressed: 0, failed: [] })
+    const shopifyImage = image({ url: 'https://res.cloudinary.com/owner/image/upload/v1/p/transform/main', type: 'MAIN', isPrimary: true })
+    const result = await inB(() => media.copyImages(productId, [shopifyImage]))
+    expect(result).toMatchObject({ copied: 1, reused: 0, addressed: 0, failed: [] })
+    expect(result.pairs).toEqual([{ source: shopifyImage.id, target: (await sql(`SELECT id FROM "ProductImage" WHERE "productId" = $1`, [productId]))[0].id }])
     expect(storage.uploads).toEqual([])
     expect(storage.shopify.uploads).toEqual(['main.png']) // a transformation URL has no extension: the file gets one
     const [row] = await rows(productId)

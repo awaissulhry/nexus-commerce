@@ -1,5 +1,5 @@
 {
-  "_rule": "Read scripts/check-stock-writer-lock.mjs. Every file that writes StockLevel is listed with its exact number of write sites. lock=true files must call lockProductStock( first in each writing transaction.",
+  "_rule": "Read scripts/check-stock-writer-lock.mjs. Every file that writes StockLevel is listed with its exact number of write sites. lock=true files must call lockProductStock( first in each writing transaction. Database functions that write StockLevel are listed under sqlFunctions and must take the product lock (FOR NO KEY UPDATE on \"Product\") before their first write.",
   "files": {
     "apps/api/src/services/stock-movement.service.ts": {
       "writes": 2,
@@ -20,6 +20,28 @@
       "writes": 2,
       "lock": false,
       "why": "Threshold-only writes (reorderThreshold / reorderQuantity). They never set quantity, reserved or available, so they cannot lose a stock update."
+    }
+  },
+  "sqlFunctions": {
+    "nexus_pool_reserve": {
+      "writes": 1,
+      "why": "Shared stock door 2 (hold): locks the lender product, then raises reserved on one lent level."
+    },
+    "nexus_pool_release": {
+      "writes": 1,
+      "why": "Shared stock door 3 (give back): locks each held product, then lowers reserved."
+    },
+    "nexus_pool_consume": {
+      "writes": 1,
+      "why": "Shared stock door 4a (take out a hold): locks each held product, then lowers quantity and reserved."
+    },
+    "nexus_pool_take": {
+      "writes": 1,
+      "why": "Shared stock door 4b (take out at once): locks the lender product, then lowers quantity on the lent levels."
+    },
+    "nexus_pool_put_back": {
+      "writes": 2,
+      "why": "Shared stock door 5 (put back): locks the lender product, then raises quantity on the level, or creates it."
     }
   }
 }

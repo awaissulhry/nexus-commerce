@@ -7,6 +7,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { applyStockMovement } from './stock-movement.service.js'
+import { takeForOrder } from './stock-pool/order-routing.js'
 import { recordOrderItem } from './sales-aggregate.service.js'
 import { Prisma } from '@prisma/client'
 
@@ -270,6 +271,7 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
         )
       } else {
         const { consumeWithFefo } = await import('./lot.service.js')
+        const pooledTaken = new Set<string>()
         for (const item of orderItems) {
           try {
             logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
@@ -280,6 +282,22 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
             })
             if (!product) {
               logger.warn(`[ORDER INGESTION] No product matched SKU ${item.sku} — skipping stock decrement`)
+              continue
+            }
+
+            // Shared stock step 4 — a product that sells from a pool takes the sale from the pool: once
+            // per order and product (door 4b), for all of the order's lines of that product together.
+            if (pooledTaken.has(product.id)) continue
+            const quantity = orderItems.filter((other) => other.sku === item.sku).reduce((sum, other) => sum + other.quantity, 0)
+            const routed = await takeForOrder({ productId: product.id, quantity, orderId: order.id, actor: 'mock-order-ingestion' })
+            if (routed.via === 'pool') {
+              pooledTaken.add(product.id)
+              logger.info(`[ORDER INGESTION] Sale for ${item.sku} taken from shared stock (${routed.result.taken})`)
+              continue
+            }
+            if (routed.via === 'refused') {
+              pooledTaken.add(product.id)
+              logger.warn(`[ORDER INGESTION] Shared stock refused the sale for ${item.sku}: ${routed.refusal.error}`)
               continue
             }
 

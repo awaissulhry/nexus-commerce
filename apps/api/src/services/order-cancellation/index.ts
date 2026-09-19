@@ -206,9 +206,30 @@ export async function handleOrderCancelled(
       where: { orderId },
       select: { id: true, productId: true, sku: true, quantity: true },
     })
+    const { putBackForOrder, ownRestoreAllowed } = await import('../stock-pool/order-routing.js')
+    // Shared stock step 4 — where each product's units go back: decided once per product, for all of
+    // its lines together (the pool puts back once per order and product).
+    const routeOf = new Map<string, 'pool' | 'none' | 'own'>()
     for (const it of orderItems) {
       if (!it.productId || it.quantity <= 0) continue
       try {
+        // Units the order took from a pool go back to the pool (door 5: capped at what it took, once
+        // per order). Only an order that did not take this product from a pool restores own stock,
+        // and a product that ever sold from a pool only with proof that the order took it from own
+        // stock (else the restore would invent stock).
+        let route = routeOf.get(it.productId)
+        if (!route) {
+          const quantity = orderItems.filter((o) => o.productId === it.productId).reduce((sum, o) => sum + Math.max(0, o.quantity), 0)
+          const pooled = await putBackForOrder({
+            productId: it.productId, quantity, orderId, putBackRef: orderId,
+            reason: 'ORDER_CANCELLED', actor: 'system:order-cancellation',
+          })
+          route = pooled.via
+          routeOf.set(it.productId, route)
+          if (pooled.via === 'pool' && !pooled.reused) result.itemsRestocked++
+        }
+        if (route !== 'own') continue
+        if (!(await ownRestoreAllowed({ productId: it.productId, orderId }))) continue
         const alreadyRestocked = await prisma.stockMovement.findFirst({
           where: {
             orderId,

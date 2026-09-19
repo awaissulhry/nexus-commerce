@@ -32,6 +32,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { lenderPoolDemand, POOL_DEMAND_CHANNEL } from './stock-pool/pool-demand.js'
 import {
   forecastDailyDemand,
   type ForecastResult,
@@ -96,16 +97,22 @@ export async function generateForecastForSeries(
   historyStart.setUTCDate(historyStart.getUTCDate() - HISTORY_DAYS)
 
   // ── Read history ────────────────────────────────────────────────
-  const aggregates = await prisma.dailySalesAggregate.findMany({
-    where: {
-      sku: identity.sku,
-      channel: identity.channel,
-      marketplace: identity.marketplace,
-      day: { gte: historyStart, lt: today },
-    },
-    orderBy: { day: 'asc' },
-    select: { day: true, unitsSold: true },
-  })
+  // Shared stock step 7b — a pool series (channel SHARED_POOL, marketplace = the borrowing business) reads
+  // what this business's pool gave to that borrower's orders; every other series reads its sales.
+  const pooled = identity.channel === POOL_DEMAND_CHANNEL
+  const aggregates = pooled
+    ? (await lenderPoolDemand(prisma, { since: historyStart, until: today, skus: [identity.sku], borrowerWorkspaceId: identity.marketplace }))
+        .map((d) => ({ day: new Date(`${d.day}T00:00:00.000Z`), unitsSold: d.units }))
+    : await prisma.dailySalesAggregate.findMany({
+        where: {
+          sku: identity.sku,
+          channel: identity.channel,
+          marketplace: identity.marketplace,
+          day: { gte: historyStart, lt: today },
+        },
+        orderBy: { day: 'asc' },
+        select: { day: true, unitsSold: true },
+      })
 
   // Zero-fill missing days so the series is dense (Holt-Winters needs
   // continuous data; gaps would be interpreted as legitimate zeros
@@ -167,7 +174,10 @@ export async function generateForecastForSeries(
   }
 
   let signals: Map<string, SignalsForDay>
-  if (signalsCache && signalsCache.size > 0) {
+  if (pooled) {
+    // No marketplace calendar (holidays, weather, retail events) belongs to pool demand.
+    signals = new Map()
+  } else if (signalsCache && signalsCache.size > 0) {
     signals = signalsCache
   } else {
     signals = await resolveForecastSignals({
@@ -323,10 +333,18 @@ export async function generateForecastsForAll(args: {
     _count: true,
   })
 
+  // Shared stock step 7b — one series per SKU and borrowing business from what this business's pool gave to
+  // that borrower's orders (§8.1 item 3); counted like a sales series (days with demand).
+  const poolDays = new Map<string, { sku: string; channel: string; marketplace: string; _count: number }>()
+  for (const d of await lenderPoolDemand(prisma, { since: oneYearAgo })) {
+    const key = `${d.sku}|${d.borrowerWorkspaceId}`
+    const series = poolDays.get(key) ?? { sku: d.sku, channel: POOL_DEMAND_CHANNEL, marketplace: d.borrowerWorkspaceId, _count: 0 }
+    series._count++
+    poolDays.set(key, series)
+  }
+
   // Filter cold starts unless explicitly included.
-  const eligible = args.includeColdStart
-    ? distinct
-    : distinct.filter((d) => d._count >= 7)
+  const eligible = [...distinct, ...poolDays.values()].filter((d) => args.includeColdStart || d._count >= 7)
 
   // Resolve product types for category-aware weather elasticity. Single
   // batched query — looks up the Product / ProductVariation row whose
@@ -372,7 +390,7 @@ export async function generateForecastsForAll(args: {
     const productType = productTypeBySku.get(series.sku) ?? null
     const cacheKey = sigCacheKey(series.marketplace, series.channel, productType)
     let sig = sigCache.get(cacheKey)
-    if (!sig) {
+    if (!sig && series.channel !== POOL_DEMAND_CHANNEL) {
       sig = await resolveForecastSignals({
         marketplace: series.marketplace,
         channel: series.channel,

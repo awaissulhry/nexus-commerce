@@ -29,6 +29,9 @@ vi.mock('../db.js', () => ({
     stockLevel: { findMany: (...a: unknown[]) => mocks.stockFindMany(...a), aggregate: vi.fn().mockResolvedValue(null) },
     offer: { findFirst: vi.fn().mockResolvedValue(null) },
     product: { findUniqueOrThrow: vi.fn() },
+    // Shared stock — the send-time limit goes through loadSyncLedgers: no product is pooled here.
+    stockPoolLink: { findMany: vi.fn().mockResolvedValue([]) },
+    $queryRaw: vi.fn().mockResolvedValue([]),
   },
 }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
@@ -43,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   delete process.env.NEXUS_ENABLE_EBAY_PUBLISH
   mocks.policies.mockResolvedValue(new Map())
-  mocks.stockFindMany.mockResolvedValue([{ available: 5 }])
+  mocks.stockFindMany.mockResolvedValue([{ productId: 'p1', available: 5, quantity: 5, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } }])
 })
 
 describe('Add 4(c) — the eBay pause gates hold for a content push', () => {

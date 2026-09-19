@@ -5,6 +5,7 @@ import { toGid } from './content-publisher.js'
 import { object, digest } from './content-workspace.service.js'
 import { previewContentSync, synchronizeContent } from './content-sync.service.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
+import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 
 /** Activated native families use named accounts and exact IDs; SKU searches never choose a variant. */
 export async function syncNativeShopifyOffer(item: any) {
@@ -39,12 +40,14 @@ export async function syncNativeShopifyOffer(item: any) {
     return `Verified Shopify price for ${item.product.sku}.`
   }
   if (!['INVENTORY_UPDATE', 'STOCK_UPDATE', 'QUANTITY_UPDATE'].includes(item.syncType)) throw new Error(`Unsupported native Shopify sync type ${item.syncType}; no stock change was attempted.`)
-  let quantity = listing.followMasterQuantity ? item.product.totalStock : listing.quantityOverride ?? listing.quantity ?? item.payload?.quantity
+  // Shared stock — the product's ledger: its own warehouses, or the pool it sells from. For a product
+  // with its own stock, `quantity` is Σ WAREHOUSE quantity, which is what Product.totalStock caches.
+  const productLedger = (await loadSyncLedgers(prisma, [item.product.id])).get(item.product.id)
+  let quantity = listing.followMasterQuantity ? productLedger?.quantity ?? 0 : listing.quantityOverride ?? listing.quantity ?? item.payload?.quantity
   if (!Number.isSafeInteger(quantity) || quantity < 0) throw new Error('A valid explicit inventory quantity is required.')
   quantity = Math.max(0, quantity - (listing.stockBuffer ?? 0))
   if (process.env.NEXUS_OVERSELL_CLAMP !== '0') {
-    const levels = await prisma.stockLevel.findMany({ where: { productId: item.product.id, location: { type: 'WAREHOUSE' } }, select: { available: true } })
-    const available = computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable: levels.reduce((n, level) => n + level.available, 0), fbaSellable: 0, stockBuffer: listing.stockBuffer }).available
+    const available = computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable: productLedger?.available ?? 0, fbaSellable: 0, stockBuffer: listing.stockBuffer }).available
     quantity = Math.min(quantity, available)
   }
   const observed = remote.inventoryItem.inventoryLevel?.quantities.find((q: any) => q.name === 'available')?.quantity

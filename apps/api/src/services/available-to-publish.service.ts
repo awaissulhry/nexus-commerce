@@ -93,7 +93,6 @@ export function planFollowingQtyClamp(
 
 interface ClampDb {
   channelListing: { findMany: (args: unknown) => Promise<any[]> }
-  stockLevel: { findMany: (args: unknown) => Promise<any[]> }
 }
 
 /** Prisma wrapper: resolves Following/pool state for the rows' SKUs, then clamps. */
@@ -101,6 +100,11 @@ export async function clampFollowingQtyRowsForFeed(
   db: ClampDb,
   rows: Array<Record<string, unknown>>,
   marketplace: string,
+  /** Units each product may promise (the shared ledger). Injectable for tests. */
+  sellable: (productIds: string[]) => Promise<Map<string, number>> = async (productIds) => {
+    const [{ default: prisma }, { sellableAvailable }] = await Promise.all([import('../db.js'), import('./stock-pool/sync-ledgers.js')])
+    return sellableAvailable(prisma, productIds)
+  },
 ): Promise<Array<{ sku: string; from: string; to: string }>> {
   const skus = [...new Set(rows.map((r) => String(r.item_sku ?? '').trim()).filter(Boolean))]
   if (!skus.length) return []
@@ -114,17 +118,8 @@ export async function clampFollowingQtyRowsForFeed(
     },
   })
   const pids = [...new Set(listings.map((l) => l.productId).filter(Boolean))]
-  const stock = pids.length
-    ? await db.stockLevel.findMany({
-        where: { productId: { in: pids } },
-        select: { productId: true, available: true, location: { select: { type: true } } },
-      })
-    : []
-  const warehouseByPid = new Map<string, number>()
-  for (const s of stock) {
-    if (s.location?.type !== 'WAREHOUSE') continue
-    warehouseByPid.set(s.productId, (warehouseByPid.get(s.productId) ?? 0) + (s.available ?? 0))
-  }
+  // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
+  const warehouseByPid = pids.length ? await sellable(pids) : new Map<string, number>()
   const infoBySku = new Map<string, FollowingClampInfo>()
   for (const l of listings) {
     infoBySku.set(l.product.sku, {

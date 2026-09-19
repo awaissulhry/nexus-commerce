@@ -33,7 +33,11 @@ import type { SourceImage } from './copy-source.service.js'
 /** What the owner confirmed in Review 1, per image. Stored on the copy run's plan. */
 export type PlannedImage = Pick<SourceImage, 'id' | 'url' | 'alt' | 'type' | 'isPrimary' | 'sortOrder' | 'width' | 'height' | 'mimeType' | 'fileSize'>
 
-export interface MediaCopyResult { copied: number; reused: number; addressed: number; failed: string[] }
+export interface MediaCopyResult {
+  copied: number; reused: number; addressed: number; failed: string[]
+  /** Which follower image now shows each source image (copied or reused). The live sync (AE.4) follows them. */
+  pairs: Array<{ source: string; target: string }>
+}
 
 /** The storage hosts a stored file can come from. Nothing else is ever downloaded. */
 const STORAGE_HOSTS = new Set(['res.cloudinary.com', 'cdn.shopify.com'])
@@ -53,7 +57,7 @@ export function imageOrigin(url: string): 'file' | 'address' {
 }
 
 export async function copyImages(productId: string, images: PlannedImage[]): Promise<MediaCopyResult> {
-  const result: MediaCopyResult = { copied: 0, reused: 0, addressed: 0, failed: [] }
+  const result: MediaCopyResult = { copied: 0, reused: 0, addressed: 0, failed: [], pairs: [] }
   if (images.length === 0) return result
   const present = await prisma.productImage.findMany({ where: { productId }, select: { type: true, isPrimary: true } })
   let hasMain = present.some((image) => image.type === 'MAIN')
@@ -63,10 +67,11 @@ export async function copyImages(productId: string, images: PlannedImage[]): Pro
     const type = image.type === 'MAIN' && hasMain ? 'ALT' : image.type
     const primary = image.isPrimary && !hasPrimary
     try {
-      const outcome = imageOrigin(image.url) === 'file'
+      const { outcome, targetId } = imageOrigin(image.url) === 'file'
         ? await copyFile(productId, image, type, primary)
         : await carryAddress(productId, image, type, primary)
       result[outcome]++
+      if (targetId) result.pairs.push({ source: image.id, target: targetId })
       if (outcome !== 'reused') {
         if (type === 'MAIN') hasMain = true
         if (primary) hasPrimary = true
@@ -81,10 +86,13 @@ export async function copyImages(productId: string, images: PlannedImage[]): Pro
   return result
 }
 
-async function copyFile(productId: string, image: PlannedImage, type: string, primary: boolean): Promise<'copied' | 'reused'> {
+type Outcome<T extends string> = { outcome: T; targetId: string | null }
+
+async function copyFile(productId: string, image: PlannedImage, type: string, primary: boolean): Promise<Outcome<'copied' | 'reused'>> {
   const { buffer, mimeType } = await download(image.url)
   const contentHash = sha256Buffer(buffer)
-  if (await prisma.productImage.findFirst({ where: { productId, contentHash }, select: { id: true } })) return 'reused'
+  const held = await prisma.productImage.findFirst({ where: { productId, contentHash }, select: { id: true } })
+  if (held) return { outcome: 'reused', targetId: held.id }
   const perceptualHash = await aHashBuffer(buffer).catch(() => null)
   const dhash256 = await dHash256Buffer(buffer).catch(() => null)
 
@@ -96,35 +104,41 @@ async function copyFile(productId: string, image: PlannedImage, type: string, pr
     const attached = await attachShopifyImage(productId, asset, type, image.alt)
     await saveMediaFingerprint(attached.image.id, { contentHash, perceptualHash, dhash256 })
     if (primary) await prisma.productImage.update({ where: { id: attached.image.id }, data: { isPrimary: true } })
-    return attached.reused ? 'reused' : 'copied'
+    return { outcome: attached.reused ? 'reused' : 'copied', targetId: attached.image.id }
   }
   if (!isCloudinaryConfigured()) throw new Error('This business has no image storage. Connect a Shopify store or configure Cloudinary.')
   const uploaded = await uploadBufferToCloudinary(buffer, { folder: `product-images/${productId}` })
   try {
-    await prisma.productImage.create({
+    const created = await prisma.productImage.create({
       data: {
         productId, url: uploaded.url, publicId: uploaded.publicId, type, alt: image.alt, sortOrder: await nextSortOrder(productId),
         isPrimary: primary, width: uploaded.width, height: uploaded.height, fileSize: uploaded.bytes, mimeType,
         contentHash, perceptualHash, dhash256,
       },
+      select: { id: true },
     })
+    return { outcome: 'copied', targetId: created.id }
   } catch (error) {
     // Another finish saved the same bytes first. The uploaded file stays unreferenced, as for a hand upload.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return 'reused'
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const winner = await prisma.productImage.findFirst({ where: { productId, contentHash }, select: { id: true } })
+      return { outcome: 'reused', targetId: winner?.id ?? null }
+    }
     throw error
   }
-  return 'copied'
 }
 
-async function carryAddress(productId: string, image: PlannedImage, type: string, primary: boolean): Promise<'addressed' | 'reused'> {
-  if (await prisma.productImage.findFirst({ where: { productId, url: image.url }, select: { id: true } })) return 'reused'
-  await prisma.productImage.create({
+async function carryAddress(productId: string, image: PlannedImage, type: string, primary: boolean): Promise<Outcome<'addressed' | 'reused'>> {
+  const held = await prisma.productImage.findFirst({ where: { productId, url: image.url }, select: { id: true } })
+  if (held) return { outcome: 'reused', targetId: held.id }
+  const created = await prisma.productImage.create({
     data: {
       productId, url: image.url, publicId: null, type, alt: image.alt, sortOrder: await nextSortOrder(productId), isPrimary: primary,
       width: image.width, height: image.height, mimeType: image.mimeType, fileSize: image.fileSize,
     },
+    select: { id: true },
   })
-  return 'addressed'
+  return { outcome: 'addressed', targetId: created.id }
 }
 
 async function nextSortOrder(productId: string) {

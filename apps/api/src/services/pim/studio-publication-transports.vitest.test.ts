@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn() }))
-vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] } } }))
+// Shared stock — publication reads the product's ledger (loadSyncLedgers): nothing is pooled here.
+vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, $queryRaw: async () => [] } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {

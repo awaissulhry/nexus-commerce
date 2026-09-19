@@ -152,6 +152,14 @@ export const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsEdit, pfx('/api/assortments')),
   P(F.settingsWorkspaceEdit, pfx('/api/assortment-shares')),
   P(F.settingsWorkspaceEdit, pfx('/api/assortment-copy-runs')),
+  // AE.4 — a followed product's link: reading it is a product read; "Follow again" edits the product.
+  RW(F.productsView, F.productsEdit, pfx('/api/catalog-links')),
+  // Shared stock (2026-09-19). The profile switch names another business (like product shares), so it
+  // sits at the business-settings bar; the product switch is a stock setting. Reads are stock reads.
+  // OWNER checks for both are in services/stock-pool/, with the database guards behind them.
+  P(F.inventoryView, (m, p) => m === 'GET' && p.startsWith('/api/stock-pool/')),
+  P(F.settingsWorkspaceEdit, (m, p) => m === 'POST' && p.startsWith('/api/stock-pool/grants')),
+  P(F.inventoryAdjust, (m, p) => m === 'POST' && p.startsWith('/api/stock-pool/products/')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
 

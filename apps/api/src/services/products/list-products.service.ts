@@ -46,6 +46,7 @@ import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../amazon-mcf.service.js'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
+import { loadPoolSources, summarizePoolSources, type PoolSourceSummary } from '../stock-pool/pool-sources.js'
 import {
   shadowCompareProductRead,
   isShadowEnabled,
@@ -1013,6 +1014,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   /** Available per row: the product's own StockLevels plus every variation's. */
   let rollupByProduct = new Map<string, number>()
   const salesByProduct = new Map<string, { units: number; revenueCents: number | null }>()
+  /** Shared stock step 5 — the pool a row sells from (a parent: its pooled variations added up). */
+  const poolByProduct = new Map<string, PoolSourceSummary>()
   let salesUnattributed: Array<{ channel: string; orders: number; units: number; revenueCents: number }> = []
   if (pageProductIds.length > 0) {
     // Stock lives on the child (variation) products — a parent owns none
@@ -1064,6 +1067,18 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       stockByProduct.set(ownerId, cur)
     }
     rollupByProduct = foldStockRollup(stockRows, childToParent)
+
+    // Shared stock step 5 — beside the own numbers, never added to them (a product uses one source).
+    const pools = await loadPoolSources(prisma, stockIds)
+    if (pools.size > 0) {
+      const childrenOf = new Map<string, string[]>()
+      for (const [child, parent] of childToParent) childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), child])
+      for (const id of pageProductIds) {
+        const own = pools.get(id)
+        const summary = own ? { ...own, products: 1 } : summarizePoolSources(childrenOf.get(id) ?? [], pools)
+        if (summary) poolByProduct.set(id, summary)
+      }
+    }
 
     if (includeSales) {
       const until = q.asOf ?? new Date()
@@ -1214,6 +1229,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         fulfillmentMethod: derivedFulfillment,
         fbaStock: stockBuckets.fba,
         fbmStock: stockBuckets.non,
+        poolSource: poolByProduct.get(p.id) ?? null,
         family: (p.familyJson as any) ?? null,
         workflowStage: (p.workflowStageJson as any) ?? null,
         version: p.version,
@@ -1281,6 +1297,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       fulfillmentMethod: derivedFulfillment,
       fbaStock: stockBuckets.fba,
       fbmStock: stockBuckets.non,
+      poolSource: poolByProduct.get(p.id) ?? null,
       family: p.family ?? null,
       workflowStage: p.workflowStage ?? null,
       version: p.version,

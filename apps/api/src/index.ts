@@ -188,6 +188,7 @@ import connectionsRoutes from "./routes/connections.routes.js";
 // MAP.0/MAP.1 — uncollapsed account list + the single-account diagnostics proof.
 import accountsRoutes from "./routes/accounts.routes.js";
 import assortmentsRoutes from "./routes/assortments.routes.js";
+import stockPoolRoutes from "./routes/stock-pool.routes.js";
 // CX.1 — connection core
 import "./services/cx/connectors/index.js";
 import cxConnectRoutes from "./routes/cx-connect.routes.js";
@@ -269,6 +270,9 @@ import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAssortmentCopyCron } from "./jobs/assortment-copy.job.js";
+import { startStockPoolWorker } from "./services/stock-pool/pool-tasks.js";
+import { startListingEndTimesCron } from "./jobs/listing-end-times.job.js";
+import { startAssortmentSync } from "./jobs/assortment-sync.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startListingQualityKeeperCron } from "./jobs/listing-quality-keeper.job.js";
 import { startPricingWatchdogCron } from "./jobs/pricing-watchdog.job.js";
@@ -833,6 +837,8 @@ app.register(connectionsRoutes, { prefix: '/api' });
 app.register(accountsRoutes, { prefix: '/api' });
 // AE.2 — assortments and assortment shares between business profiles.
 app.register(assortmentsRoutes, { prefix: '/api' });
+// Shared stock between business profiles (plan 2026-09-19): the profile switch and the product switch.
+app.register(stockPoolRoutes, { prefix: '/api' });
 app.register(cxConnectRoutes, { prefix: '/api' });
 app.register(cxConnectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });
@@ -1476,6 +1482,30 @@ async function start() {
       // watched. Every minute, per business, idempotent. Opt out via NEXUS_ENABLE_ASSORTMENT_COPY_CRON=0.
       if (process.env.NEXUS_ENABLE_ASSORTMENT_COPY_CRON !== '0') {
         startAssortmentCopyCron();
+      }
+
+      // Shared stock (plan 2026-09-19) — the pool worker: updates listings in every business when a
+      // pool changes where no code of ours kicked it (a lender's own sale, an import), and finishes the
+      // lender's bookkeeping for pool sales. Polls every 2 s while busy, 10 s when quiet; kicked at once
+      // after every stock movement and by the pool doors' own callers. Idle-safe: one indexed query per poll. Opt out via
+      // NEXUS_ENABLE_STOCK_POOL_WORKER=0.
+      if (process.env.NEXUS_ENABLE_STOCK_POOL_WORKER !== '0') {
+        startStockPoolWorker();
+      }
+
+      // Shared stock plan step 3 — end "Fixed number until …" / "Paused until …" (and the same on shared
+      // eBay variants) on time. Every minute, per business; one indexed probe when nothing is due.
+      // Opt out via NEXUS_ENABLE_LISTING_END_TIMES_CRON=0.
+      if (process.env.NEXUS_ENABLE_LISTING_END_TIMES_CRON !== '0') {
+        startListingEndTimesCron();
+      }
+
+      // Shared stock plan step 6 (AE.4) — live product sync: edits to a shared product reach the businesses
+      // that follow it. LISTENs for the capture trigger's notify, with a poll behind it (2 s after work,
+      // backing off to 60 s); nightly repair per business. Idle-safe: nothing is written until a product is
+      // linked. Opt out via NEXUS_ENABLE_ASSORTMENT_SYNC=0.
+      if (process.env.NEXUS_ENABLE_ASSORTMENT_SYNC !== '0') {
+        startAssortmentSync();
       }
 
       // R.8 — FBA Restock Inventory Recommendations ingestion. Daily
