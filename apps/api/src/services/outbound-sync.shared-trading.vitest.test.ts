@@ -63,6 +63,7 @@ describe('syncToEbay TRADING branch', () => {
 
   const queueItem = {
     id: 'q1',
+    channelConnectionId: 'conn1', // P1.3 — every row names its account
     externalListingId: '110556677',
     product: { id: 'p1', sku: 'PARENT' },
     payload: {

@@ -1,4 +1,5 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
 import { createOutboundRow } from './outbound-rows.js'
 import { shopifyTransport } from './gateway/shopify.js';
 import { ebaySend } from './gateway/ebay.js';
@@ -645,6 +646,16 @@ export class OutboundSyncService {
     } });
   }
 
+  /**
+   * P1.3 — the channel account this row goes to: the one written with it (services/outbound-rows.ts),
+   * else — a row from before P1.3 — resolved by the same rule. `connectionId: null` = refuse the row.
+   */
+  private async destinationOf(queueItem: any): Promise<Destination> {
+    if (queueItem.channelConnectionId) return { connectionId: queueItem.channelConnectionId, reason: "NAMED" };
+    const [destination] = await resolveDestinations(prisma as never, [queueItem]);
+    return destination;
+  }
+
   private async dispatchSync(item: any): Promise<SyncResult> {
     // Presence W1.2 / D10 / SHOP-P4: the legacy dispatcher has no lifecycle
     // implementation. Refuse before content preparation or any update path.
@@ -774,6 +785,9 @@ export class OutboundSyncService {
         orderBy: {
           createdAt: "asc",
         },
+        // P1.3 — the 1-minute backup loop takes the oldest N rows per tick (it read every pending row,
+        // which after an outage or a bulk edit could be tens of thousands in one tick).
+        take: Math.max(1, Number(process.env.NEXUS_OUTBOUND_BACKUP_BATCH) || 200),
       });
 
       console.log(`Processing ${pendingItems.length} pending syncs`);
@@ -943,8 +957,14 @@ export class OutboundSyncService {
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId =
       payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
+    // P1.3 — the seller of the account this row was created for (never the default seller).
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("Amazon", destination.reason);
+      return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
     const sellerId =
-      (await getAmazonSellerId());
+      (await getAmazonSellerId(destination.connectionId));
 
     // A4.0 — resolve the Amazon product type (required by the Listings PATCH) and
     // build the CORRECT patch body (schema attribute names + value shapes),
@@ -1134,13 +1154,11 @@ export class OutboundSyncService {
       };
     }
 
-    // P0.7 — a change for a listing of ANOTHER Amazon account is refused (terminal). The client
-    // guards every listing write too; this check gives the queue row its exact listing and a
-    // non-retryable answer.
+    // P0.7 → P1.3 — the row goes to its own account; this stays as a consistency check (the listing or
+    // SKU must belong to that account), refused and terminal if not.
     if (sellerId) {
       try {
-        const account = await import('../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null);
-        if (account) await assertWriteAccount("AMAZON", account.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [sku], marketplace: marketplaceId });
+        await assertWriteAccount("AMAZON", destination.connectionId, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [sku], marketplace: marketplaceId });
       } catch (err) {
         if (!isWrongAccountWriteError(err)) throw err;
         return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
@@ -1337,7 +1355,13 @@ export class OutboundSyncService {
     // MAP.3 — DECLARED. 🔴 MAP.6/7: an outbound push SHOULD derive its account
     // from the listing it is pushing; that needs the product→account intent this
     // programme calls labels.
-    const connection = await tryResolveConnection(payload?.source === 'FM_CATALOG_CASCADE' && payload.channelConnectionId ? { accountId: payload.channelConnectionId } : { channel: "EBAY", primary: true });
+    // P1.3 — the account this row was created for (never "the primary"): the one written with the row,
+    // else resolved the same way for rows from before P1.3; none → refused, terminal.
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      return { ...fail("failed", mode, "(no-destination)", noDestinationSentence("eBay", destination.reason)), errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
+    const connection = await tryResolveConnection({ accountId: destination.connectionId });
     if (!connection) {
       return fail(
         "failed",
@@ -1346,8 +1370,8 @@ export class OutboundSyncService {
         "No active eBay connection — link an eBay account in Settings first.",
       );
     }
-    // P0.7 — a change for a listing of ANOTHER eBay account is refused (terminal), never sent through
-    // this one. The queue row names its listing when it has one; else the SKU in this market.
+    // P0.7 → P1.3 — the row now goes to its own account; this stays as a consistency check (the listing
+    // or SKU must belong to that account), refused and terminal if not.
     try {
       await assertWriteAccount("EBAY", connection.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [product?.sku], marketplace: marketplaceId });
     } catch (err) {
@@ -1767,8 +1791,13 @@ export class OutboundSyncService {
       };
     }
 
-    // 2. Connection lookup — MAP.3, DECLARED (see the note on the sibling path).
-    const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
+    // 2. P1.3 — the account this row was created for (never "the primary").
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("eBay", destination.reason);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
+    const connection = await tryResolveConnection({ accountId: destination.connectionId });
     if (!connection) {
       return {
         success: false, queueId, channel: "EBAY", status: "FAILED",

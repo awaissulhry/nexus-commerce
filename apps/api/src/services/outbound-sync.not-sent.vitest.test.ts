@@ -24,7 +24,7 @@ vi.mock('./repricer.service.js', () => ({ calculateTargetPrice: vi.fn() }))
 
 const { default: service } = await import('./outbound-sync.service.js')
 const { processOutboundSyncJob, initializeBullMQWorker, resetBullMQWorkerStats, getBullMQWorkerStats } = await import('../workers/bullmq-sync.worker.js')
-const row = (syncStatus = 'PENDING') => ({ id: 'q-empty', productId: 'fake-product', channelListingId: null, targetChannel: 'AMAZON', syncType: 'STATUS_UPDATE', syncStatus,
+const row = (syncStatus = 'PENDING') => ({ id: 'q-empty', productId: 'fake-product', channelListingId: null, channelConnectionId: 'amazon-account-1', targetChannel: 'AMAZON', syncType: 'STATUS_UPDATE', syncStatus,
   product: { id: 'fake-product', sku: 'SELLER-SKU', productType: 'OUTERWEAR' }, payload: { status: 'INACTIVE', marketplaceId: 'IT' }, retryCount: 0, maxRetries: 3 })
 beforeEach(() => {
   vi.restoreAllMocks(); vi.clearAllMocks(); resetBullMQWorkerStats()

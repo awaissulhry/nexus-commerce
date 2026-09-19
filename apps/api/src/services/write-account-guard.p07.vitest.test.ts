@@ -170,7 +170,12 @@ describe('P0.7 — census: every primary-account eBay listing writer calls the g
   const files = sourceFiles(SRC).map((f) => ({ file: relative(SRC, f), text: readFileSync(f, 'utf8') })).filter(({ text }) => PRIMARY_EBAY.test(text))
   it('finds the known writers (the census is not looking at nothing)', () => {
     const names = files.map((f) => f.file)
-    for (const known of ['services/outbound-sync.service.ts', 'routes/ebay-flat-file.routes.ts', 'services/bulk-action.service.ts', 'services/listing-wizard/ebay-publish.adapter.ts']) expect(names).toContain(known)
+    for (const known of ['routes/ebay-flat-file.routes.ts', 'services/bulk-action.service.ts', 'services/listing-wizard/ebay-publish.adapter.ts']) expect(names).toContain(known)
+  })
+  it('P1.3 — the outbound queue no longer picks the primary eBay account: each row names its own', () => {
+    const queue = readFileSync(join(SRC, 'services/outbound-sync.service.ts'), 'utf8')
+    expect(PRIMARY_EBAY.test(queue)).toBe(false)
+    expect(queue).toMatch(/tryResolveConnection\(\{ accountId: destination\.connectionId \}\)/)
   })
   it('each one either calls the guard or is listed as not writing listings', () => {
     const unguarded = files

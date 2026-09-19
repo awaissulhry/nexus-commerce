@@ -689,12 +689,12 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P0.4 | BUILT (2026-09-19) | `build/P0.4.md` | Committed locally, not pushed. Also fixes a P0.3 test break (see P0.3.md section 4). Prod proof: the next real eBay refund |
 | P0.5 | BUILT (2026-09-19) | `build/P0.5.md` | Committed locally, not pushed. The Owner records the Amazon date on the page after a push (R-3) |
 | P0.6 | BUILT (2026-09-19) | `build/P0.6.md` | Committed locally, not pushed. Prod proof: per-profile setup CronRuns; no Amazon row left pending |
-| P0.7 | BUILT (2026-09-19) | `build/P0.7.md` | Committed locally, not pushed. Guard removed again by P1.3 |
+| P0.7 | BUILT (2026-09-19) | `build/P0.7.md` | Committed locally, not pushed. In the queue, replaced by P1.3 (each row its own account; the ownership check stays as a consistency check). Other paths keep it until MAP.7 |
 | P0.8 | BUILT (2026-09-19) | `build/P0.8.md` | Committed locally. Docs only: section 3 has no DOC rows left |
 | P6.1 automatic secret rotation | BUILT (2026-09-19) | `build/P6.1.md` | Committed locally, not pushed. OFF until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (build/P6.1.md section 4) |
 | P1.1 | BUILT (2026-09-19) | `build/P1.1.md` | Committed locally, not pushed. Gateway + ledger columns (migration `20260919a_p11_gateway_call_ledger`, additive); no caller moved yet (P1.2). eBay headers from the Marketplace row (LX.2) |
 | P1.2 | BUILT (2026-09-19) | `build/P1.2.md` | Committed locally, not pushed. Ratchet in pre-push; ALL channels at 0 (50 exempt, each with a written reason). P1.6 candidates listed in the record |
-| P1.3 | BUILDING (2026-09-19) | `build/P1.3.md` | P1.3a committed locally: queue column + migration `20260919b_p13_queue_destination` (additive), one creation module for all 35 sites (claim check + destination), ratchet 0. Next: send time uses it (P1.3b), concurrency + loop limit (P1.3c) |
+| P1.3 | BUILT (2026-09-19) | `build/P1.3.md` | Committed locally, not pushed. Queue column (migration `20260919b_p13_queue_destination`, additive); one creation module for all 35 sites; the sender uses the row's account (never the primary); 2 per account at a time; backup loop 200/tick |
 | P1.4 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |

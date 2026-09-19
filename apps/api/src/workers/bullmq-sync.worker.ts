@@ -8,7 +8,7 @@
  * - Automatic retry with exponential backoff
  */
 
-import { Job } from 'bullmq'
+import { DelayedError, Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
@@ -92,7 +92,49 @@ export function initializeBullMQWorker() {
  *   syncType: string
  * }
  */
-export async function processOutboundSyncJob(job: Job) {
+/**
+ * P1.3 — per-account concurrency. The worker runs 5 jobs at a time for all channels together; one
+ * account's backlog could take all 5 and starve every other account. A job whose account already has
+ * `NEXUS_OUTBOUND_ACCOUNT_CONCURRENCY` (default 2) jobs running in this process is postponed ~1 s with
+ * BullMQ's own delayed move — not a failure, no attempt used. A row without an account is not limited.
+ */
+const accountRunning = new Map<string, number>()
+const accountLimit = () => Math.max(1, Number(process.env.NEXUS_OUTBOUND_ACCOUNT_CONCURRENCY) || 2)
+const ACCOUNT_BUSY_DELAY_MS = 1000
+
+export async function takeAccountSlot(job: Job, token: string | undefined): Promise<(() => void) | null> {
+  if (!token) return null // called outside a worker (tests, manual runs): nothing to postpone
+  const row = await prisma.outboundSyncQueue.findUnique({ where: { id: job.data?.queueId }, select: { channelConnectionId: true } }).catch(() => null)
+  const account = row?.channelConnectionId
+  if (!account) return null
+  const running = accountRunning.get(account) ?? 0
+  if (running >= accountLimit()) {
+    await job.moveToDelayed(Date.now() + ACCOUNT_BUSY_DELAY_MS + Math.floor(Math.random() * 250), token)
+    throw new DelayedError()
+  }
+  accountRunning.set(account, running + 1)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    const now = (accountRunning.get(account) ?? 1) - 1
+    if (now <= 0) accountRunning.delete(account)
+    else accountRunning.set(account, now)
+  }
+}
+
+export const __accountSlotsTest = { running: (account: string) => accountRunning.get(account) ?? 0, reset: () => accountRunning.clear() }
+
+export async function processOutboundSyncJob(job: Job, token?: string) {
+  const release = await takeAccountSlot(job, token)
+  try {
+    return await processOutboundSyncJobInner(job)
+  } finally {
+    release?.()
+  }
+}
+
+async function processOutboundSyncJobInner(job: Job) {
   const { queueId, productId, channelListingId, targetChannel, syncType } = job.data
 
   logger.info('⚙️ Processing sync job', {

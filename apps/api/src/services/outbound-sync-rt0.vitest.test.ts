@@ -39,10 +39,12 @@ vi.mock('../db.js', () => ({
 // OLD query shape: the resolver reads the account set with findMany, so a
 // findFirst-only stub made the code correctly take its no-connection branch and
 // the test failed for a reason that had nothing to do with what it asserts.
-vi.mock('./connection-resolver.service.js', () => ({
+vi.mock('./connection-resolver.service.js', async (importOriginal) => ({
+  // P1.3 — the destination rule reads the resolver's error classes; keep the real module's exports.
+  ...(await importOriginal<object>()),
   resolveConnection: vi.fn(async () => ({ id: 'conn-1' })),
   tryResolveConnection: vi.fn(async () => ({ id: 'conn-1' })),
-  listActiveConnections: vi.fn(async () => [{ id: 'conn-1' }]),
+  listActiveConnections: vi.fn(async () => [{ id: 'conn-1', channelType: 'EBAY', isActive: true, isPrimary: true }]),
 }))
 
 
