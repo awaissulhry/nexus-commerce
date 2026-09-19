@@ -697,7 +697,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |
 | P5.1 – P5.5 | NOT STARTED | — | P5.1 before 2026-12-15 |
-| P6.2 – P6.8 | NOT STARTED | — | P6.6 needs D1 |
+| P6.3 | BUILT (2026-09-19) | `build/P6.3.md` | Committed locally, not pushed |
+| P6.2, P6.4 – P6.8 | NOT STARTED | — | P6.6 needs D1 |
 | P7, P8 | NOT STARTED | — | Later |
 
 ### 14.3 Decisions log

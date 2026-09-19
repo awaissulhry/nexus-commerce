@@ -1098,3 +1098,65 @@ describe('encryptLegacyRow', () => {
     await expect(encryptLegacyRow('ghost')).resolves.toBe('skipped')
   })
 })
+
+// ── P6.3 — a rotated refresh token is never lost ─────────────────────────────
+describe('P6.3 — Etsy rotated refresh token survives a row that moved underneath', () => {
+  const etsyRow = { channelType: 'ETSY', region: null, grantedScopes: ['shops_r'], connectionMetadata: { environment: 'production' } }
+  const rotate = (during?: (id: string) => void | Promise<void>, id?: { value: string }) => async () => {
+    if (during && id) await during(id.value)
+    return tokenResponse({ access_token: 'etsy-new-access', refresh_token: 'etsy-rotated-refresh', expires_in: 3600 })
+  }
+
+  it('the heartbeat changed the status mid-refresh: the rotated token is still saved (was: RefreshContended, token lost)', async () => {
+    const box = { value: '' }
+    box.value = await seedRow({ row: etsyRow })
+    fetchMock.mockImplementationOnce(rotate((id) => { rows.get(id)!.authStatus = 'degraded'; rows.get(id)!.consecutiveFailures = 3 }, box))
+    await expect(getAccessToken(box.value)).resolves.toBe('etsy-new-access')
+    expect((await credsOf(box.value)).refreshToken).toBe('etsy-rotated-refresh')
+    expect(rows.get(box.value)!.authStatus).toBe('connected')
+  })
+  it('control: the same interruption on a NON-rotating channel keeps the strict rule (refused, old grant kept)', async () => {
+    const box = { value: '' }
+    box.value = await seedRow()
+    fetchMock.mockImplementationOnce(async () => {
+      rows.get(box.value)!.authStatus = 'degraded'
+      return tokenResponse({ access_token: 'new-access', expires_in: 7200 })
+    })
+    await expect(getAccessToken(box.value)).rejects.toMatchObject({ name: 'RefreshContended' })
+    expect((await credsOf(box.value)).accessToken).toBe('old-access')
+  })
+  it('a reconnect replaced the grant mid-refresh: the new grant wins, ours is dropped', async () => {
+    const box = { value: '' }
+    box.value = await seedRow({ row: etsyRow })
+    fetchMock.mockImplementationOnce(rotate(async (id) => {
+      rows.get(id)!.credentialsEnc = (await encryptCredentials({ accessToken: 'reconnected-access', refreshToken: 'reconnected-refresh' })).blob
+    }, box))
+    await expect(getAccessToken(box.value)).rejects.toMatchObject({ name: 'RefreshContended' })
+    expect((await credsOf(box.value)).refreshToken).toBe('reconnected-refresh')
+  })
+  it('an account disconnected mid-refresh is not brought back', async () => {
+    const box = { value: '' }
+    box.value = await seedRow({ row: etsyRow })
+    fetchMock.mockImplementationOnce(rotate((id) => { rows.get(id)!.authStatus = 'disconnected'; rows.get(id)!.isActive = false }, box))
+    await expect(getAccessToken(box.value)).rejects.toMatchObject({ name: 'RefreshContended' })
+    expect(rows.get(box.value)!.authStatus).toBe('disconnected')
+  })
+  it('a write that fails twice is retried and the rotated token lands on the third attempt', async () => {
+    const id = await seedRow({ row: etsyRow })
+    fetchMock.mockImplementationOnce(rotate())
+    const updateMany = vi.mocked(prismaMock.channelConnection.updateMany)
+    updateMany.mockRejectedValueOnce(new Error('connection reset')).mockRejectedValueOnce(new Error('connection reset'))
+    await expect(getAccessToken(id)).resolves.toBe('etsy-new-access')
+    expect((await credsOf(id)).refreshToken).toBe('etsy-rotated-refresh')
+  })
+  it('three failed writes: alert + refresh_failed, and the error surfaces (no token material anywhere)', async () => {
+    const id = await seedRow({ row: etsyRow })
+    fetchMock.mockImplementationOnce(rotate())
+    const updateMany = vi.mocked(prismaMock.channelConnection.updateMany)
+    updateMany.mockRejectedValueOnce(new Error('db down')).mockRejectedValueOnce(new Error('db down')).mockRejectedValueOnce(new Error('db down'))
+    await expect(getAccessToken(id)).rejects.toThrow('db down')
+    expect(alertTitles().some((t) => t.includes('a new refresh token could not be saved'))).toBe(true)
+    expect(eventsOf('refresh_failed', id)).toHaveLength(1)
+    expect(JSON.stringify({ events, alerts: createAlert.mock.calls })).not.toContain('etsy-rotated-refresh')
+  })
+})
