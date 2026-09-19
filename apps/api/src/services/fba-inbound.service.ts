@@ -1,5 +1,5 @@
 import { WorkspaceCache } from '../lib/workspace-cache.js'
-import { getAmazonAccessToken, getAmazonRegion, amazonCredsConfigured } from '../lib/amazon-sp-client.js'
+import { getAmazonRegion, amazonCredsConfigured } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.8a (Inbound) — real Amazon SP-API createInboundShipmentPlan.
@@ -40,7 +40,16 @@ const REGION_ENDPOINTS: Record<string, string> = {
 }
 
 
-async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
+/**
+ * P1.2 — every SP-API call of this file goes through the channel gateway (account, publish mode for
+ * writes, rate bucket, call ledger). `url` is the full SP-API URL built below; the account's own
+ * region host is used, as before (the same account `getAmazonRegion()` resolves).
+ */
+async function spSend(method: 'GET' | 'POST', url: string, operation: string, body?: unknown): Promise<Response> {
+  const parsed = new URL(url)
+  const { amazonSellerFetch } = await import('./gateway/amazon-sdk.js')
+  return amazonSellerFetch({ method, path: parsed.pathname + parsed.search, operation, body })
+}
 
 export async function isFbaInboundConfigured(): Promise<boolean> { return amazonCredsConfigured() }
 
@@ -137,7 +146,6 @@ export async function createInboundShipmentPlan(args: {
   const shipFrom = args.shipFrom ?? (await resolveShipFromAddress())
   const labelPrepPreference = args.labelPrepPreference ?? 'SELLER_LABEL'
   const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
-  const token = await getLwaAccessToken()
 
   // SP-API v0 createInboundShipmentPlan body shape per Amazon docs.
   const body = {
@@ -154,15 +162,7 @@ export async function createInboundShipmentPlan(args: {
 
   const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-amz-access-token': token,
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
+  const res = await spSend('POST', url, 'fbaInbound.createInboundShipmentPlan', body)
 
   const text = await res.text()
   let data: any = null
@@ -231,7 +231,6 @@ export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<Get
 
   const pageType = args.pageType ?? 'PackageLabel_A4_4'
   const labelType = args.labelType ?? 'BARCODE_2D'
-  const token = await getLwaAccessToken()
 
   const qs = new URLSearchParams()
   qs.set('PageType', pageType)
@@ -244,13 +243,7 @@ export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<Get
 
   const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'x-amz-access-token': token,
-      'Accept': 'application/json',
-    },
-  })
+  const res = await spSend('GET', url, 'fbaInbound.getLabels')
 
   const text = await res.text()
   let data: any = null
@@ -326,7 +319,6 @@ export async function getInboundShipmentsBatch(args: {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
-  const token = await getLwaAccessToken()
 
   const qs = new URLSearchParams()
   qs.set('MarketplaceId', marketplaceId)
@@ -361,13 +353,7 @@ export async function getInboundShipmentsBatch(args: {
 
   const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/shipments?${qs.toString()}`
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'x-amz-access-token': token,
-      'Accept': 'application/json',
-    },
-  })
+  const res = await spSend('GET', url, 'fbaInbound.getShipments')
 
   const text = await res.text()
   let data: any = null
@@ -436,7 +422,6 @@ export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<s
   let fnskuInventoryCache = fnskuInventories.get('inventory')
   // Refresh cache if stale
   if (!fnskuInventoryCache || Date.now() - fnskuInventoryCache.fetchedAt > FNSKU_CACHE_TTL_MS) {
-    const token = await getLwaAccessToken()
     const base = REGION_ENDPOINTS[await getAmazonRegion()] ?? REGION_ENDPOINTS.eu
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
     const allMap: Record<string, string> = {}
@@ -450,9 +435,7 @@ export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<s
       url.searchParams.set('marketplaceIds', marketplaceId)
       if (nextToken) url.searchParams.set('nextToken', nextToken)
 
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}`, 'x-amz-access-token': token },
-      })
+      const res = await spSend('GET', url.toString(), 'fbaInventory.getInventorySummaries')
       if (!res.ok) {
         const text = await res.text().catch(() => '')
         throw new Error(`FBA Inventory API ${res.status}: ${text.slice(0, 300)}`)

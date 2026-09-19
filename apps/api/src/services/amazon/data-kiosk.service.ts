@@ -366,6 +366,7 @@ export async function ingestEconomicsDocument(jobId: string, documentId: string)
   const doc = await sp.callAPI({ api_path: `/dataKiosk/2023-11-15/documents/${documentId}`, method: 'GET' })
   if (!doc?.documentUrl) throw new Error(`[data-kiosk] document ${documentId} has no documentUrl`)
 
+  // gateway-exempt: pre-signed Data Kiosk document on Amazon's storage, not the API
   const res = await fetch(doc.documentUrl)
   if (!res.ok) throw new Error(`[data-kiosk] document download failed ${res.status} (300s URL likely expired)`)
   const buf = Buffer.from(await res.arrayBuffer())

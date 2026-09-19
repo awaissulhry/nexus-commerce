@@ -225,6 +225,7 @@ async function getLwaToken(
   logger.debug('[ADS-LIVE] refreshing LWA token', { profileId })
 
   const refreshPromise = (async (): Promise<string> => {
+    // gateway-exempt: OAuth token exchange (LWA refresh) — the gateway's own token source
     const res = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

@@ -68,7 +68,7 @@ redis.call('PEXPIRE', KEYS[1], 3600000)
 return {ok, tostring(tokens), wait}
 `
 
-interface RedisLike {
+export interface RedisLike {
   status?: string
   eval(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown>
   hset(key: string, ...args: Array<string | number>): Promise<unknown>
@@ -99,15 +99,25 @@ class RedisBucketStore implements BucketStore {
 
 const memory = new MemoryBucketStore()
 let override: BucketStore | null = null
+let sharedRedis: (() => RedisLike | null) | null = null
+let sharedStore: { client: RedisLike; store: RedisBucketStore } | null = null
 
-/** Redis when it is connected; else this process's memory. Never blocks on Redis. */
+/**
+ * The app's Redis, handed over by `lib/queue.ts` when it creates its connection. The bucket never opens
+ * a connection itself (importing the queue module would connect every script and test that loads the
+ * gateway).
+ */
+export function registerRateRedis(get: () => RedisLike | null): void {
+  sharedRedis = get
+}
+
+/** Redis while it is connected; else this process's memory. Never blocks on Redis. */
 async function store(): Promise<BucketStore> {
   if (override) return override
-  try {
-    const { getRedisRuntimeStatus, redis } = await import('../../lib/queue.js')
-    if (getRedisRuntimeStatus().status === 'ready') return new RedisBucketStore(redis.connection as unknown as RedisLike)
-  } catch { /* no queue module / Redis not configured */ }
-  return memory
+  const client = sharedRedis?.() ?? null
+  if (!client || client.status !== 'ready') return memory
+  if (sharedStore?.client !== client) sharedStore = { client, store: new RedisBucketStore(client) }
+  return sharedStore.store
 }
 
 export const __rateTest = {
@@ -115,6 +125,8 @@ export const __rateTest = {
   /** The shared store on a given Redis client (the P1.1 probe runs it on a throwaway Redis). */
   useRedis(client: RedisLike) { override = new RedisBucketStore(client) },
   reset() { override = null },
+  /** What `store()` would pick with no override — for the registration test. */
+  async picked() { const saved = override; override = null; try { return (await store()) === memory ? 'memory' : 'redis' } finally { override = saved } },
 }
 
 export function bucketKey(channel: GatewayChannel, connectionId: string | null, group: string): string {

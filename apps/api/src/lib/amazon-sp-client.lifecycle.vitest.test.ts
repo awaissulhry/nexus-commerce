@@ -23,6 +23,8 @@ vi.mock('../services/cx/apps.service.js', () => ({ getChannelApp: async () => ({
 const requests = vi.fn(async (_config: unknown, _args: unknown[]) => ({ ok: true }))
 const downloads = vi.fn(async () => 'document')
 vi.mock('amazon-sp-api', () => ({ SellingPartner: class {
+  // P1.2 — the gateway adapter replaces this sender; this mock's callAPI never uses it.
+  _request = { api: async () => ({}), _constructRequestOptions: () => ({ method: 'GET', url: 'https://sellingpartnerapi-eu.amazon.com/', body: null, headers: {} }) }
   _access_token: string
   constructor(readonly config: any) { this._access_token = config.access_token }
   get access_token() { return this._access_token }

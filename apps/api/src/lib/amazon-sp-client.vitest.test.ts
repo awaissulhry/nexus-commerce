@@ -30,7 +30,10 @@ const getAccessToken = vi.fn(async () => 'database-access-token')
 const readRefreshToken = vi.fn(async (): Promise<string | null> => 'database-refresh-token')
 vi.mock('../services/cx/token.service.js', () => ({ getAccessToken, readRefreshToken }))
 vi.mock('../services/cx/apps.service.js', () => ({ getChannelApp: async () => ({ clientId: 'test-client', clientSecret: 'test-secret' }) }))
-vi.mock('../services/outbound-api-call-log.service.js', () => ({ instrumentSellingPartner: vi.fn() }))
+// P1.2 — SDK calls go through the channel gateway: its account check reads the row, its ledger writes one.
+const ledger = vi.hoisted(() => [] as Array<Record<string, unknown>>)
+vi.mock('../services/outbound-api-call-log.service.js', () => ({ recordGatewayCall: vi.fn(async (row: Record<string, unknown>) => { ledger.push(row) }) }))
+vi.mock('../db.js', () => ({ default: { channelConnection: { findUnique: vi.fn(async () => ({ authStatus: 'connected', isActive: true, displayName: 'Amazon' })) } } }))
 
 const { amazonAccount, getAmazonAccessToken, getAmazonSellerId, getAmazonSpClient } = await import('./amazon-sp-client.js')
 
@@ -81,24 +84,29 @@ describe('Amazon seller grant resolution outside workspace mode', () => {
     expect(client._options.auto_request_tokens).toBe(false)
   })
 
-  it('loads product type definitions through the real SDK with the refreshed token', async () => {
+  it('loads product type definitions through the real SDK — sent by the gateway with the refreshed token', async () => {
     const client = await getAmazonSpClient(oauthAccount.id)
     const definition = { schema: { link: { resource: 'https://schema.test/outerwear' } } }
-    const execute = vi.spyOn(client._request, 'execute').mockResolvedValue({
-      statusCode: 200, headers: {}, body: JSON.stringify(definition),
-    })
+    const execute = vi.spyOn(client._request, 'execute')
+    const sent: Array<{ url: string; headers: Record<string, string> }> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      sent.push({ url: String(url), headers: init.headers as Record<string, string> })
+      return new Response(JSON.stringify(definition), { status: 200 })
+    }))
     getAccessToken.mockResolvedValue('refreshed-access-token')
+    ledger.length = 0
 
     await expect(client.callAPI({
       operation: 'getDefinitionsProductType', endpoint: 'productTypeDefinitions',
       path: { productType: 'OUTERWEAR' }, query: { marketplaceIds: ['APJ6JRA9NG5V4'] },
     })).resolves.toEqual(definition)
 
-    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
-      headers: expect.objectContaining({ 'x-amz-access-token': 'refreshed-access-token' }),
-    }), expect.anything())
+    expect(execute).not.toHaveBeenCalled()
+    expect(sent).toEqual([{ url: 'https://sellingpartnerapi-eu.amazon.com/definitions/2020-09-01/productTypes/OUTERWEAR?marketplaceIds=APJ6JRA9NG5V4', headers: expect.objectContaining({ 'x-amz-access-token': 'refreshed-access-token' }) }])
+    expect(ledger).toEqual([expect.objectContaining({ channel: 'AMAZON', connectionId: oauthAccount.id, operation: 'getDefinitionsProductType', marketplace: 'APJ6JRA9NG5V4', outcome: 'sent', success: true })])
     expect(client.access_token).toBe('refreshed-access-token')
     expect(client._options.auto_request_tokens).toBe(false)
+    vi.unstubAllGlobals()
   })
 
   it('requires the selected seller refresh grant even if an environment grant exists', async () => {

@@ -3,12 +3,15 @@ const f = vi.hoisted(() => ({ account: {} as any, market: {} as any, token: vi.f
 vi.mock('../../db.js', () => ({ default: { channelConnection: { findUnique: async () => f.account }, marketplace: { findFirst: async () => f.market } } }))
 vi.mock('../../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { region: 'eu', getAccessToken: f.envToken } }))
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: f.token, assertWritable: f.writable }))
+vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { amazonMediaClient, amazonVariationAttributes, marketValue } from './amazon-media-client'
 const item = { id: 'l', productId: 'p', sku: 'SELLER/SKU', asin: 'ASIN', label: 'Shirt', parent: false, productType: 'SHIRT', theme: null, attributes: {} }
 function listing(extra: object = {}) { return { sku: item.sku, summaries: [{ marketplaceId: 'IT-ID', asin: 'ASIN', productType: 'SHIRT' }], productTypes: [{ marketplaceId: 'IT-ID', productType: 'SHIRT' }], attributes: { main_product_image_locator: [{ marketplace_id: 'IT-ID', media_location: 'https://cdn.example/a.jpg' }] }, ...extra } }
 function response(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }) }
 beforeEach(() => {
-  vi.clearAllMocks(); vi.stubGlobal('fetch', f.fetch)
+  // P1.2 — the listings calls now go through the channel gateway, which sends a string URL; the fake
+  // channel keeps receiving a URL object so the assertions below read it as before.
+  vi.clearAllMocks(); vi.stubGlobal('fetch', (input: URL | string, init?: unknown) => f.fetch(typeof input === 'string' ? new URL(input) : input, init))
   f.account = { id: 'a', channelType: 'AMAZON', managedBy: 'oauth', region: 'EU', isActive: true, externalAccountId: 'seller-123' }
   f.market = { marketplaceId: 'IT-ID', region: 'EU' }
   f.token.mockResolvedValue('account-token'); f.envToken.mockResolvedValue('env-token'); f.writable.mockResolvedValue(undefined)

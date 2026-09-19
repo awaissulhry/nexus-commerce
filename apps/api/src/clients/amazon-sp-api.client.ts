@@ -119,8 +119,6 @@ export function mapAwsRegionToSpApiSlug(region: string): string {
 export class AmazonSpApiClient {
   // Grantless token cache — keyed by scope string
   private grantlessTokens: Map<string, { token: string; expiresAt: number }> = new Map()
-  private lastRequestTime: number = 0
-  private readonly REQUEST_DELAY_MS = 200 // 5 requests/second = 200ms between requests
 
   readonly region: string
 
@@ -161,6 +159,7 @@ export class AmazonSpApiClient {
     logger.info('Requesting grantless LWA token', { scope })
     const { getChannelApp } = await import('../services/cx/apps.service.js')
     const app = await getChannelApp('AMAZON_SP')
+    // gateway-exempt: OAuth token exchange (LWA client_credentials) — the gateway's own token source
     const response = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -263,100 +262,54 @@ export class AmazonSpApiClient {
   }
 
   /**
-   * Apply rate limiting (200ms delay between requests)
-   * Ensures we respect Amazon's 5 requests/second limit
+   * P1.2 — every call of this client goes through the channel gateway (services/gateway/gateway.ts):
+   * the account status check, the publish mode for writes (a listings VALIDATION_PREVIEW is a read),
+   * the rate bucket per account and operation (it replaces this client's old fixed 200 ms gap), the
+   * error class and one ledger row per call. The token the method already fetched is the one sent.
+   *
+   * Retries: a 429 up to 3 times (the gateway waits for the bucket); a network error, timeout or 5xx
+   * up to 3 times with a 1 s / 2 s / 4 s wait — only for a read or a write that is safe to repeat
+   * (the listings API's PUT / PATCH / DELETE). A POST that could apply twice (a label purchase, a
+   * solicitation) is not retried any more.
+   *
+   * Returns the channel's answer as a Response (callers read status and body as before). No answer at
+   * all throws, as before. Nothing sent (held, gated, dry run, refused) throws the GatewayRefusal.
    */
-  private async applyRateLimit(): Promise<void> {
-    const now = Date.now()
-    const timeSinceLastRequest = now - this.lastRequestTime
-
-    if (timeSinceLastRequest < this.REQUEST_DELAY_MS) {
-      const delayNeeded = this.REQUEST_DELAY_MS - timeSinceLastRequest
-      logger.debug('Rate limiting', { delayMs: delayNeeded })
-      await new Promise((resolve) => setTimeout(resolve, delayNeeded))
-    }
-
-    this.lastRequestTime = Date.now()
-  }
-
-  /**
-   * C.1 — fetch wrapper with exponential backoff on transient errors.
-   *
-   * Retries on:
-   *   - Network errors (fetch throws — DNS / TCP / TLS / connection reset)
-   *   - HTTP 429 (Too Many Requests — SP-API rate limit + LWA throttling)
-   *   - HTTP 500, 502, 503, 504 (transient server / gateway issues)
-   *
-   * Does NOT retry on:
-   *   - 4xx (other than 429) — caller error, fail fast so wizard surfaces
-   *     it as actionable
-   *   - HTTP 401/403 — credentials wrong, retrying won't help
-   *
-   * Backoff schedule: 1s, 2s, 4s (3 retries on top of the initial attempt).
-   * Rate-limiter applies before EACH attempt so the per-request 200ms gap
-   * is preserved across retries.
-   *
-   * Failed-after-retries returns the last Response (so callers see the
-   * upstream status / body) or throws the last network error.
-   */
-  private static readonly RETRY_DELAYS_MS = [1000, 2000, 4000] as const
-  private static readonly RETRYABLE_STATUSES = new Set([
-    429, 500, 502, 503, 504,
-  ])
-
   private async fetchWithRetry(
     url: string,
     init: RequestInit,
     label: string,
   ): Promise<Response> {
-    let lastErr: unknown = null
-    const maxAttempts = AmazonSpApiClient.RETRY_DELAYS_MS.length + 1
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await this.applyRateLimit()
-      try {
-        const response = await fetch(url, init)
-        if (!AmazonSpApiClient.RETRY_DELAYS_MS[attempt]) {
-          // Final attempt — return whatever we got, retryable or not.
-          return response
-        }
-        if (!AmazonSpApiClient.RETRYABLE_STATUSES.has(response.status)) {
-          return response
-        }
-        // Response says "try again" — read body to free the connection,
-        // then sleep + loop. We don't reuse the response after this.
-        try {
-          await response.text()
-        } catch {
-          // Ignore body-read failures — we're discarding it anyway.
-        }
-        const delay = AmazonSpApiClient.RETRY_DELAYS_MS[attempt]!
-        logger.warn('SP-API retryable status — backing off', {
-          label,
-          attempt: attempt + 1,
-          status: response.status,
-          delayMs: delay,
-        })
-        await new Promise((r) => setTimeout(r, delay))
-        continue
-      } catch (err) {
-        lastErr = err
-        if (!AmazonSpApiClient.RETRY_DELAYS_MS[attempt]) {
-          throw err
-        }
-        const delay = AmazonSpApiClient.RETRY_DELAYS_MS[attempt]!
-        logger.warn('SP-API network error — backing off', {
-          label,
-          attempt: attempt + 1,
-          error: err instanceof Error ? err.message : String(err),
-          delayMs: delay,
-        })
-        await new Promise((r) => setTimeout(r, delay))
-      }
+    const { gatewayFetch } = await import('../services/gateway/gateway.js')
+    const { amazonSdkKind } = await import('../services/gateway/amazon-sdk.js')
+    const { operationOfPath } = await import('../services/gateway/channels.js')
+    const connectionId = this.boundAccount?.id ?? (await (await import('../lib/amazon-sp-client.js')).amazonAccount({})).id
+    const headers: Record<string, string> = {}
+    let token: string | null = null
+    for (const [name, value] of Object.entries((init.headers ?? {}) as Record<string, string>)) {
+      if (/^x-amz-access-token$/i.test(name)) token = value
+      else headers[name] = value
     }
-    // Defensive fallthrough — the loop always returns or throws.
-    throw lastErr instanceof Error
-      ? lastErr
-      : new Error('SP-API fetchWithRetry exhausted')
+    const method = String(init.method ?? 'GET').toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+    const parsed = new URL(url)
+    const operation = /^[a-z][A-Za-z]+/.exec(label)?.[0] ?? operationOfPath(method, url)
+    return gatewayFetch({
+      channel: 'AMAZON_SP',
+      operation,
+      kind: amazonSdkKind(method, operation, Object.fromEntries(parsed.searchParams), parsed.pathname),
+      connectionId,
+      url,
+      method,
+      headers,
+      body: typeof init.body === 'string' ? init.body : null,
+      auth: token ? { token } : 'account',
+      marketplace: parsed.searchParams.get('marketplaceIds')?.split(',')[0] ?? null,
+      idempotent: /^\/listings\//.test(parsed.pathname),
+      max429Retries: 3,
+      maxTransientRetries: 3,
+      retryBackoffMs: 1000,
+      timeoutMs: 60_000,
+    })
   }
 
   /**

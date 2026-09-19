@@ -9,8 +9,8 @@ import {
   type ConnectionHandle,
   type ConnectionIdentity,
   type HeartbeatResult,
-  type RateLimitReading,
 } from '../../catalog.js'
+import { shopifyRateReading } from '../../rate-readings.js'
 import { shopifyShopDomain } from './auth.js'
 
 export const SHOPIFY_REQUIRED_SCOPES = [
@@ -180,17 +180,7 @@ export const shopifySpec: ChannelSpec = {
       metadata: { storeUrl: identity.storeUrl ?? null },
     }]
   },
-  rateLimit: {
-    parse: (headers: Headers, status: number): RateLimitReading | null => {
-      const call = headers.get('x-shopify-shop-api-call-limit')
-      if (call) {
-        const [used, max] = call.split('/').map(Number)
-        return { model: 'leaky_bucket', remaining: max - used, limit: max, retryAfterSec: status === 429 ? Number(headers.get('retry-after') ?? 1) : undefined }
-      }
-      return status === 429 ? { model: 'points', retryAfterSec: 1 } : null
-    },
-    model: 'points',
-  },
+  rateLimit: { parse: shopifyRateReading, model: 'points' },
   webhooks: { scheme: 'shopify-hmac', subscriptionApi: true, lifecycleTopics: ['app/uninstalled', 'app/scopes_update', 'shop/redact', 'customers/data_request', 'customers/redact'] },
   apiVersion: '2026-07',
   sandbox: { available: true },

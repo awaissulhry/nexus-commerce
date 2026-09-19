@@ -11,7 +11,8 @@
  * it was a stub: consent at `www.amazon.com/ap/oa`, tokens at `api.amazon.com`. A
  * catalogue that disagrees with the working flow is worse than no catalogue.
  */
-import { registerChannel, type ChannelSpec, type ConnectionHandle, type RateLimitReading, type ScopeInput } from '../../catalog.js'
+import { registerChannel, type ChannelSpec, type ConnectionHandle, type ScopeInput } from '../../catalog.js'
+import { amazonAdsRateReading } from '../../rate-readings.js'
 import { logger } from '../../../../utils/logger.js'
 
 /** Region → Ads API host. Same three values as `services/advertising/ads-api-client.ts`. */
@@ -213,10 +214,7 @@ export const amazonAdsSpec: ChannelSpec = {
   identity,
   heartbeat,
   discoverScopes,
-  rateLimit: {
-    parse: (headers: Headers, status: number): RateLimitReading | null => (status === 429 ? { model: 'token_bucket', retryAfterSec: Number(headers.get('retry-after') ?? 0) || undefined } : null),
-    model: 'token_bucket',
-  },
+  rateLimit: { parse: amazonAdsRateReading, model: 'token_bucket' },
   webhooks: { scheme: 'sqs', subscriptionApi: true, lifecycleTopics: [] },
   apiVersion: 'ads-v1 · reporting-v3',
   sandbox: { available: true },

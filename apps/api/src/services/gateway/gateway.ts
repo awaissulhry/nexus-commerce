@@ -5,14 +5,17 @@
  *   1. account      — a write names its account (`connectionId`); it never falls back to the primary.
  *   2. status       — an account that needs sign-in (or is revoked / disconnected) is HELD, not called.
  *   3. publish mode — for writes: gated = nothing; dry-run = nothing, recorded as "would send";
- *                     sandbox = the channel's sandbox host, or nothing when it has none.
+ *                     sandbox = the channel's sandbox host, or nothing when it has none. Reads and
+ *                     connection setup (see `kind`) are sent in every mode.
  *   4. push lock    — a listing that is paused, closed, ended or held by Presence is refused; and the
  *                     wrong-account guard (P0.7) for eBay / Amazon listing writes.
  *   5. headers      — the account's token, the market headers (eBay: marketplace id + language from the
  *                     Marketplace row, the one language authority), the eBay RFC 9421 signature on
  *                     its must-sign paths.
  *   6. rate bucket  — one token per call from the bucket of (channel, account, operation group); the
- *                     channel's own rate headers tune it; a 429 waits for its Retry-After and retries.
+ *                     channel's own rate headers tune it; a 429 waits for its Retry-After and retries;
+ *                     a network error / timeout / 5xx is retried (with a growing wait) only for a read
+ *                     or a write that is safe to repeat — never for a write that could apply twice.
  *   7. idempotency  — a caller's key is recorded (Shopify @idempotent, eBay UUID/InvocationID live in
  *                     the body the caller builds; `idempotencyKeyFor` makes a stable one).
  *   8. classify     — a failed answer gets one class from the one vocabulary (vocabulary.ts).
@@ -25,9 +28,10 @@
  * so a caller keeps its own error handling while moving onto the gateway.
  */
 import { createHash } from 'node:crypto'
-import prisma from '../../db.js'
+import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { recordGatewayCall } from '../outbound-api-call-log.service.js'
+import { accountStatusOf } from './account.js'
+import { writeLedgerRow } from './ledger.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
@@ -43,7 +47,14 @@ export interface GatewayRequest {
   channel: GatewayChannel
   /** Stable operation name for the ledger and dashboards, e.g. 'inventory.createOrReplaceInventoryItem'. */
   operation: string
-  kind: 'read' | 'write'
+  /**
+   * read — changes nothing. write — changes something the seller sells or owes (listings, stock, prices,
+   * orders, refunds, labels): the publish mode, the push lock and the wrong-account guard apply.
+   * setup — plumbing the connection itself needs (event subscriptions, notification destinations, signing
+   * keys, app secrets): sent in every publish mode, because a switched-off channel must still be able to
+   * connect and receive events; the account check, rate bucket and ledger still apply.
+   */
+  kind: 'read' | 'write' | 'setup'
   /** The account. Required for writes (never "the primary"); null only with `appLevel`. */
   connectionId: string | null
   /** An app-level call (grantless / our own app), not made for a seller account. */
@@ -69,6 +80,15 @@ export interface GatewayRequest {
   modeAppliedByCaller?: boolean
   maxRateWaitMs?: number
   max429Retries?: number
+  /**
+   * A write that is safe to send twice (the same body gives the same result). PUT and DELETE are by
+   * HTTP rule; a POST / PATCH is only when the caller says so (Amazon's listings PATCH is).
+   */
+  idempotent?: boolean
+  /** Retries after a network error, a timeout or a 5xx — reads and idempotent writes only. Default 1. */
+  maxTransientRetries?: number
+  /** First wait before a transient retry, doubled each time. Default 1000 ms. */
+  retryBackoffMs?: number
   timeoutMs?: number
   ledger?: { productId?: string | null; listingId?: string | null; orderId?: string | null; triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook' }
 }
@@ -114,7 +134,14 @@ async function tokenFor(req: GatewayRequest): Promise<string | null> {
   return (await import('../cx/token.service.js')).getAccessToken(req.connectionId)
 }
 
-export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
+export function gatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
+  return withSpan(`${req.channel.toLowerCase()}.${req.operation}`, {
+    channel: req.channel, operation: req.operation, marketplace: req.marketplace ?? undefined, 'http.method': req.method,
+    'http.endpoint': safePath(req.url), 'listing.id': req.ledger?.listingId ?? undefined, 'product.id': req.ledger?.productId ?? undefined,
+  }, () => runGatewayCall(req))
+}
+
+async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   const started = Date.now()
   const name = CHANNEL_NAME[req.channel]
   const base = {
@@ -132,7 +159,7 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
     triggeredBy: req.ledger?.triggeredBy,
   }
   const refuse = async (outcome: Exclude<GatewayOutcome, 'sent'>, code: string, message: string, statusCode: number): Promise<never> => {
-    await recordGatewayCall({ ...base, statusCode: null, success: false, latencyMs: Date.now() - started, outcome, errorCode: code, errorMessage: message })
+    await writeLedgerRow({ ...base, statusCode: null, success: false, latencyMs: Date.now() - started, outcome, errorCode: code, errorMessage: message })
     throw new GatewayRefusal(outcome, code, message, statusCode)
   }
 
@@ -143,7 +170,7 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
 
   // 2. status
   if (req.connectionId) {
-    const account = await prisma.channelConnection.findUnique({ where: { id: req.connectionId }, select: { authStatus: true, isActive: true, displayName: true } })
+    const account = await accountStatusOf(req.connectionId)
     if (!account) return refuse('refused', 'ACCOUNT_NOT_FOUND', `Nothing was sent to ${name}: the account ${req.connectionId} does not exist here.`, 404)
     if (!account.isActive || ['needs_reauth', 'revoked', 'disconnected'].includes(account.authStatus)) {
       return refuse('held', 'ACCOUNT_NEEDS_SIGNIN', `Held, nothing sent: the ${name} account "${account.displayName ?? req.connectionId}" needs to be reconnected (${account.isActive ? account.authStatus : 'inactive'}).`, 409)
@@ -208,7 +235,11 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
 
   // 6–7. rate bucket, send, 429 / transient retries
   const key = bucketKey(req.channel, req.connectionId, bucketGroupOf(req.channel, req.method, url))
-  const maxRetries = req.max429Retries ?? 2
+  const max429 = req.max429Retries ?? 2
+  const maxTransient = req.maxTransientRetries ?? 1
+  const repeatable = req.kind === 'read' || req.idempotent === true || req.method === 'PUT' || req.method === 'DELETE'
+  let throttleRetries = 0
+  let transientRetries = 0
   let attempts = 0
   let status = 0
   let text = ''
@@ -240,9 +271,12 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
     if (gql && (gql.remaining !== null || gql.limit !== null)) reading = { ...(reading ?? {}), remaining: gql.remaining ?? undefined, limit: gql.limit ?? undefined }
     const throttled = status === 429 || !!gql?.throttled
     await observeRate(req.channel, key, throttled ? { ...(reading ?? {}), retryAfterSec: reading?.retryAfterSec ?? (Number(responseHeaders.get('retry-after')) || 1) } : reading)
-    const retryable429 = throttled && attempts <= maxRetries
-    const retryableRead = req.kind === 'read' && (status === 0 || status >= 500) && attempts < 2
-    if (retryable429 || retryableRead) continue
+    if (throttled && throttleRetries < max429) { throttleRetries++; continue }
+    if ((status === 0 || status >= 500) && repeatable && transientRetries < maxTransient) {
+      await sleepMs((req.retryBackoffMs ?? 1000) * 2 ** transientRetries)
+      transientRetries++
+      continue
+    }
     break
   }
 
@@ -251,7 +285,7 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
 
   // 9. ledger
-  await recordGatewayCall({
+  await writeLedgerRow({
     ...base,
     endpoint: safePath(url),
     statusCode: status || null,
@@ -282,6 +316,28 @@ export async function gatewayCall(req: GatewayRequest): Promise<GatewayResponse>
       try { return text ? (JSON.parse(text) as T) : null } catch { return null }
     },
   }
+}
+
+const sleepMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** No answer at all (network error or timeout) — thrown by `gatewayFetch`, as `fetch` itself throws. */
+export class GatewayNoAnswer extends Error {
+  constructor(readonly channel: GatewayChannel, readonly operation: string, readonly errorClass: 'network' | 'timeout', detail: string) {
+    super(`${CHANNEL_NAME[channel]} did not answer (${operation}): ${detail}`)
+    this.name = 'GatewayNoAnswer'
+  }
+}
+
+/**
+ * `gatewayCall` with the answer as a `Response`, so a `fetch(…)` call site moves onto the gateway without
+ * changing how it reads the answer (`res.ok`, `res.status`, `res.json()`). No answer at all throws
+ * `GatewayNoAnswer`; nothing sent throws the `GatewayRefusal`.
+ */
+export async function gatewayFetch(req: GatewayRequest): Promise<Response> {
+  const res = await gatewayCall(req)
+  if (res.status === 0) throw new GatewayNoAnswer(req.channel, req.operation, res.verdict?.errorClass === 'timeout' ? 'timeout' : 'network', res.text)
+  const bodyless = res.status === 204 || res.status === 205 || res.status === 304
+  return new Response(bodyless ? null : res.text, { status: res.status, headers: res.headers })
 }
 
 /** The URL path for the ledger, with any query string dropped (it can carry buyer data or tokens). */

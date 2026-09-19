@@ -1,4 +1,6 @@
 import { languageTag } from '../pim/market-languages.js'
+import { gatewayFetch } from '../gateway/gateway.js'
+import { amazonSdkKind } from '../gateway/amazon-sdk.js'
 import { amazonImageSlots, type AmazonMediaItem, type AmazonMediaObservation, type AmazonMediaPatch } from '@nexus/shared/amazon-media'
 import prisma from '../../db.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
@@ -69,10 +71,16 @@ export async function amazonMediaClient(accountId: string, marketplace: string) 
     const token = account!.managedBy === 'env' ? await amazonSpApiClient.getAccessToken() : await getAccessToken(accountId)
     const url = new URL(`https://sellingpartnerapi-${region}.amazon.com${path}`)
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
-    // Never automatically retry PATCH: a dropped response has an unknown outcome.
-    const response = await fetch(url, { method, signal: AbortSignal.timeout(25_000), headers: {
-      'x-amz-access-token': token, 'Content-Type': 'application/json',
-    }, body: body === undefined ? undefined : JSON.stringify(body) })
+    // Never automatically retry PATCH: a dropped response has an unknown outcome (the gateway retries
+    // a write after a network error only when it is marked safe to repeat; this one is not).
+    // P1.2 — through the channel gateway (account state, publish mode for writes, rate bucket, ledger).
+    const verb = method.toUpperCase() as 'GET' | 'PATCH'
+    const operation = verb !== 'GET' ? 'patchListingsItem.images' : path.startsWith('/definitions/') ? 'getDefinitionsProductType' : path.startsWith('/catalog/') ? 'getCatalogItem' : 'getListingsItem'
+    const response = await gatewayFetch({
+      channel: 'AMAZON_SP', operation, kind: amazonSdkKind(verb, operation, Object.fromEntries(url.searchParams), url.pathname),
+      connectionId: accountId, url: url.toString(), method: verb, headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? null : JSON.stringify(body), auth: { token }, marketplace: marketplaceId, timeoutMs: 25_000,
+    })
     const data = await response.json() as Record<string, any>
     if (!response.ok) throw new Error(`Amazon ${response.status}: ${Array.isArray(data.errors) ? data.errors.map((e: any) => `${e.code}: ${e.message}`).join('; ') : 'Request failed'}`)
     return data
@@ -86,6 +94,7 @@ export async function amazonMediaClient(accountId: string, marketplace: string) 
       })
       const resource = new URL(definition.schema?.link?.resource)
       if (resource.protocol !== 'https:' || !/(^|\.)amazonaws\.com$/.test(resource.hostname)) throw new Error('Amazon returned an unrecognized schema location.')
+      // gateway-exempt: pre-signed schema document on Amazon's storage (checked amazonaws.com above), not the API
       const response = await fetch(resource, { signal: AbortSignal.timeout(25_000), redirect: 'error' })
       if (!response.ok) throw new Error('Amazon product type requirements could not be downloaded.')
       const schema = await response.json() as Record<string, any>

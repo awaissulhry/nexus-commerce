@@ -21,24 +21,27 @@
 import { logger } from '../utils/logger.js'
 import { isSqsConfigured } from './amazon-sqs.service.js'
 import { mapAwsRegionToSpApiSlug } from '../clients/amazon-sp-api.client.js'
+import { amazonGrantlessFetch } from './gateway/amazon-sdk.js'
 
 const NOTIFICATIONS_SCOPE = 'sellingpartnerapi::notifications'
 
+/**
+ * P1.2 — the app's own (grantless) notification calls go through the channel gateway as app-level
+ * connection setup: sent in every publish mode, recorded on the call ledger.
+ */
+function grantlessSend(token: string, slug: string, method: 'GET' | 'POST' | 'DELETE', path: string, operation: string, body?: unknown): Promise<Response> {
+  return amazonGrantlessFetch({ token, host: `sellingpartnerapi-${slug}.amazon.com`, method, path, operation, body })
+}
+
 async function grantlessGet<T>(token: string, slug: string, path: string): Promise<T> {
-  const res = await fetch(`https://sellingpartnerapi-${slug}.amazon.com${path}`, {
-    headers: { 'x-amz-access-token': token },
-  })
+  const res = await grantlessSend(token, slug, 'GET', path, 'notifications.getDestinations')
   const text = await res.text()
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} — ${text.slice(0, 300)}`), { statusCode: res.status })
   return JSON.parse(text) as T
 }
 
 async function grantlessPost<T>(token: string, slug: string, path: string, body: unknown): Promise<T> {
-  const res = await fetch(`https://sellingpartnerapi-${slug}.amazon.com${path}`, {
-    method: 'POST',
-    headers: { 'x-amz-access-token': token, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const res = await grantlessSend(token, slug, 'POST', path, 'notifications.createDestination', body)
   const text = await res.text()
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} — ${text.slice(0, 300)}`), { statusCode: res.status })
   return JSON.parse(text) as T
@@ -85,10 +88,7 @@ export async function ensureSubscriptionForType(
       logger.warn(`[amazon-notifications-boot] ${notifType} points at FOREIGN destination — deleting + recreating`, {
         subscriptionId: subId, foreignDestinationId: subDest, expectedDestinationId: destinationId,
       })
-      const res = await fetch(
-        `https://sellingpartnerapi-${grantless.slug}.amazon.com/notifications/v1/subscriptions/${notifType}/${subId}`,
-        { method: 'DELETE', headers: { 'x-amz-access-token': grantless.token } },
-      )
+      const res = await grantlessSend(grantless.token, grantless.slug, 'DELETE', `/notifications/v1/subscriptions/${notifType}/${subId}`, 'notifications.deleteSubscriptionById')
       if (!res.ok && res.status !== 404) {
         const text = await res.text().catch(() => '')
         throw new Error(`delete foreign ${notifType} sub failed: HTTP ${res.status} — ${text.slice(0, 200)}`)
@@ -251,19 +251,13 @@ export async function setupAllAmazonNotifications(): Promise<{
           const existing = await amazonSpApiClient.request<any>('GET', `/notifications/v1/subscriptions/${t}`)
           const subId = existing?.payload?.subscriptionId
           if (subId) {
-            const res = await fetch(
-              `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/subscriptions/${t}/${subId}`,
-              { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
-            )
+            const res = await grantlessSend(grantlessToken, slug, 'DELETE', `/notifications/v1/subscriptions/${t}/${subId}`, 'notifications.deleteSubscriptionById')
             steps.push(`delSub:${t}=${res.status}`)
           }
         } catch { steps.push(`delSub:${t}=absent`) }
       }
       if (existingDest?.destinationId) {
-        const res = await fetch(
-          `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/destinations/${existingDest.destinationId}`,
-          { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
-        )
+        const res = await grantlessSend(grantlessToken, slug, 'DELETE', `/notifications/v1/destinations/${existingDest.destinationId}`, 'notifications.deleteDestination')
         steps.push(`delDest=${res.status}`)
       }
       const destResp = await grantlessPost<any>(grantlessToken, slug, '/notifications/v1/destinations', {

@@ -24,15 +24,9 @@ async function spApiGrantless<T>(method: 'GET' | 'POST', path: string, body?: un
   const token = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
   const slug = (amazonSpApiClient as any).region as string
   const host = `sellingpartnerapi-${slug}.amazon.com`
-  const url = `https://${host}${path}`
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'x-amz-access-token': token,
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  })
+  // P1.2 — through the channel gateway (app-level connection setup; recorded on the call ledger).
+  const { amazonGrantlessFetch } = await import('../services/gateway/amazon-sdk.js')
+  const res = await amazonGrantlessFetch({ token, host, method, path, operation: method === 'GET' ? 'notifications.getDestinations' : 'notifications.createDestination', body })
   const text = await res.text()
   if (res.status === 204) return undefined as T
   if (res.status >= 200 && res.status < 300) return text ? JSON.parse(text) as T : undefined as T
@@ -130,10 +124,8 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       try {
         const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
         const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
-        const url = `https://${spApiHost}/notifications/v1/destinations`
-        const res = await fetch(url, {
-          headers: { 'x-amz-access-token': grantlessToken },
-        })
+        const { amazonGrantlessFetch } = await import('../services/gateway/amazon-sdk.js')
+        const res = await amazonGrantlessFetch({ token: grantlessToken, host: spApiHost, method: 'GET', path: '/notifications/v1/destinations', operation: 'notifications.getDestinations' })
         const body = await res.text()
         if (res.ok) {
           const parsed = body ? JSON.parse(body) : {}

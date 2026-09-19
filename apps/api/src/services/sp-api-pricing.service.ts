@@ -33,7 +33,6 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const RATE_LIMIT_MS = 200 // SP-API: 5 req/sec for productFees & productPricing
 

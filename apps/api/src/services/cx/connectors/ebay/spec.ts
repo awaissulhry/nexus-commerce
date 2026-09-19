@@ -12,7 +12,8 @@
  * 215xxx 403 family the prod financial sync has been hitting daily.
  */
 
-import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type RateLimitReading } from '../../catalog.js'
+import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult } from '../../catalog.js'
+import { ebayRateReading } from '../../rate-readings.js'
 import { CredentialsDecryptError } from '../../../../lib/crypto.js'
 import { ChannelAppConfigurationError } from '../../app-configuration-error.js'
 import { RefreshFailed } from '../../token.service.js'
@@ -79,13 +80,6 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   }
 }
 
-function parseRateLimit(headers: Headers, status: number): RateLimitReading | null {
-  const retryAfter = headers.get('retry-after')
-  if (status === 429 || retryAfter) {
-    return { model: 'daily_quota', retryAfterSec: retryAfter ? Number(retryAfter) : undefined }
-  }
-  return null
-}
 
 export const ebaySpec: ChannelSpec = {
   key: 'EBAY',
@@ -122,7 +116,7 @@ export const ebaySpec: ChannelSpec = {
   identity,
   heartbeat,
   signing: { scheme: 'ebay-rfc9421', appliesTo: (method, url) => ebaySignatureAppliesTo(url, method) },
-  rateLimit: { parse: parseRateLimit, model: 'daily_quota' },
+  rateLimit: { parse: ebayRateReading, model: 'daily_quota' },
   webhooks: {
     scheme: 'ebay-ecdsa',
     subscriptionApi: true,

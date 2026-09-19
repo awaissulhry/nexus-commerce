@@ -47,6 +47,7 @@ export async function getAmazonAccessToken(accountId?: string): Promise<string> 
   if (!refreshToken) throw new Error('Reconnect the Amazon account to configure its credentials.')
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP')
+  // gateway-exempt: OAuth token exchange (LWA refresh) — the gateway's own token source
   const response = await fetch('https://api.amazon.com/auth/o2/token', { method: 'POST', signal: AbortSignal.timeout(25_000), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: app.clientId, client_secret: app.clientSecret }) })
   if (!response.ok) throw new Error(`Amazon token exchange failed (${response.status}).`)
   const result = await response.json() as { access_token?: string; expires_in?: number }
@@ -79,6 +80,7 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP', environment)
   const { SellingPartner } = await import('amazon-sp-api')
+  // gateway-exempt: routed: this SDK instance's sender is replaced by the gateway (services/gateway/amazon-sdk.ts), checked by its test
   const client: any = new SellingPartner({ region: await getAmazonRegion(id), access_token: token, refresh_token: refreshToken, credentials: { SELLING_PARTNER_APP_CLIENT_ID: app.clientId, SELLING_PARTNER_APP_CLIENT_SECRET: app.clientSecret }, options: { auto_request_tokens: false, auto_request_throttled: true, ...options, use_sandbox: environment === 'sandbox' } } as any)
   // Retained SDK instances remain bound to their business and seller. Recheck
   // authorization and refresh the access token before every API/document call.
@@ -92,8 +94,10 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
       return original(...args)
     }
   }
-  const { instrumentSellingPartner } = await import('../services/outbound-api-call-log.service.js')
-  instrumentSellingPartner(client as never, { channel: 'AMAZON' })
+  // P1.2 — every API call of this instance goes through the channel gateway (status, publish mode,
+  // rate bucket, error class, one ledger row). This replaces the old per-call ledger wrapper.
+  const { routeSdkThroughGateway } = await import('../services/gateway/amazon-sdk.js')
+  routeSdkThroughGateway(client, { connectionId: id ?? null })
   return client
 }
 /** Used by synchronous SDK factories; no process-wide seller or token state. */

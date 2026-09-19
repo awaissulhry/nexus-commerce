@@ -576,6 +576,7 @@ async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unkn
     const fetchTimer = setTimeout(() => ctrl.abort(), 15_000)
     let raw: Response
     try {
+      // gateway-exempt: pre-signed feed-result document on Amazon's storage, not the API
       raw = await fetch(docRes.url, { signal: ctrl.signal })
     } finally {
       clearTimeout(fetchTimer)

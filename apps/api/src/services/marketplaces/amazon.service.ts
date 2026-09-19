@@ -3,7 +3,6 @@ import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
-import { instrumentSellingPartner } from "../outbound-api-call-log.service.js";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */

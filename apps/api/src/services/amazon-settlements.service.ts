@@ -22,7 +22,6 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const SETTLEMENT_REPORT_TYPE = 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2'
 

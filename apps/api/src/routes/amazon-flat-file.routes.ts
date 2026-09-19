@@ -675,6 +675,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       })
 
       // Step 2: upload body
+      // gateway-exempt: pre-signed feed-result document on Amazon's storage, not the API
       const uploadRes = await fetch(docRes.url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },

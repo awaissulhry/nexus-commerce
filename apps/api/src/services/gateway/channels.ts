@@ -6,7 +6,8 @@
 import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
-import { tryGetChannelSpec, type ChannelKey } from '../cx/catalog.js'
+import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
+import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, shopifyRateReading } from '../cx/rate-readings.js'
 import type { GatewayChannel } from './vocabulary.js'
 import prisma from '../../db.js'
 import { languageTag, marketLanguages } from '../pim/market-languages.js'
@@ -94,11 +95,14 @@ export async function ebayMarketHeaders(market: string, contentLanguage?: string
   return { 'X-EBAY-C-MARKETPLACE-ID': marketplaceId, 'Content-Language': tag, 'Accept-Language': tag }
 }
 
-/** The rate reading of an answer, through the connector spec (these parsers existed but nothing called them). */
-export function rateReadingOf(channel: GatewayChannel, headers: Headers, status: number) {
-  const spec = tryGetChannelSpec(SPEC_KEY[channel])
+const RATE_READINGS: Record<GatewayChannel, (headers: Headers, status: number) => RateLimitReading | null> = {
+  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading,
+}
+
+/** The rate reading of an answer — the connectors' own parsers (they existed, but nothing called them). */
+export function rateReadingOf(channel: GatewayChannel, headers: Headers, status: number): RateLimitReading | null {
   try {
-    return spec?.rateLimit.parse(headers, status) ?? null
+    return RATE_READINGS[channel](headers, status)
   } catch {
     return null
   }
@@ -135,6 +139,17 @@ export function bucketGroupOf(channel: GatewayChannel, method: string, url: stri
   // the seller id or SKU that follow, so one bucket per operation family, not per SKU.
   const kept = new URL(url).pathname.split('/').filter(Boolean).slice(0, 3)
   return `${method.toUpperCase()} /${kept.join('/')}`
+}
+
+/**
+ * A stable operation name from a URL when the caller has none: the method and the path, with every part
+ * that is not a plain word or an API version replaced by `:id` (ids, SKUs, order numbers never reach a
+ * dashboard key).
+ */
+export function operationOfPath(method: string, url: string): string {
+  const parts = new URL(url).pathname.split('/').filter(Boolean).slice(0, 8)
+    .map((part) => (/^[A-Za-z]+$/.test(part) || /^(v\d+(\.\d+)?|\d{4}-\d{2}(-\d{2})?)$/.test(part) ? part : ':id'))
+  return `${method.toUpperCase()} /${parts.join('/')}`
 }
 
 /** The API version a URL carries (`2021-08-01`, `v1`, `2026-07`), else the connector's declared one. */

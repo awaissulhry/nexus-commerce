@@ -106,6 +106,14 @@ describe('P1.1 — steps 1–4: nothing is sent unless it may be', () => {
     expect(res.ok).toBe(true)
     expect(h.calls).toHaveLength(1)
   })
+  it('3. connection setup (event subscriptions, keys) is sent in every mode; a write in the same mode is not', async () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', '')
+    await gatewayCall(ebayWrite({ kind: 'setup', operation: 'notification.createSubscription', url: 'https://api.ebay.com/commerce/notification/v1/subscription', method: 'POST' }))
+    expect(h.calls).toHaveLength(1)
+    expect(h.ledger.at(-1)).toMatchObject({ outcome: 'sent', operation: 'notification.createSubscription' })
+    expect(await refusalOf(gatewayCall(ebayWrite()))).toMatchObject({ outcome: 'gated' })
+    expect(h.calls).toHaveLength(1)
+  })
   it('3. a client moved onto the gateway as is can keep its own mode check', async () => {
     vi.stubEnv('EBAY_PUBLISH_MODE', 'dry-run')
     await gatewayCall(ebayWrite({ modeAppliedByCaller: true }))
@@ -225,13 +233,24 @@ describe('P1.1 — steps 7–9: key, class, ledger', () => {
   })
   it('a network failure on a read is retried once; a timeout is classed timeout', async () => {
     h.answers.push(() => { throw new TypeError('fetch failed') }, () => json({ ok: true }))
-    expect(await gatewayCall(ebayWrite({ kind: 'read', method: 'GET', body: null }))).toMatchObject({ ok: true, attempts: 2 })
+    expect(await gatewayCall(ebayWrite({ kind: 'read', method: 'GET', body: null, retryBackoffMs: 1 }))).toMatchObject({ ok: true, attempts: 2 })
     h.answers.push(() => { const e = new Error('timed out'); e.name = 'TimeoutError'; throw e }, () => { const e = new Error('timed out'); e.name = 'TimeoutError'; throw e })
-    expect(await gatewayCall(ebayWrite({ kind: 'read', method: 'GET', body: null }))).toMatchObject({ ok: false, attempts: 2, verdict: { errorClass: 'timeout', retryable: true } })
+    expect(await gatewayCall(ebayWrite({ kind: 'read', method: 'GET', body: null, retryBackoffMs: 1 }))).toMatchObject({ ok: false, attempts: 2, verdict: { errorClass: 'timeout', retryable: true } })
   })
-  it('a write is NOT retried on a 5xx (the channel may have applied it)', async () => {
+  it('a write that could apply twice (POST) is NOT retried on a 5xx or a network error', async () => {
     h.answers.push(() => json({ errors: [{ errorId: 25001, message: 'System error' }] }, 500))
-    expect(await gatewayCall(ebayWrite())).toMatchObject({ ok: false, attempts: 1, verdict: { errorClass: 'transient', retryable: true } })
+    expect(await gatewayCall(ebayWrite({ method: 'POST', retryBackoffMs: 1 }))).toMatchObject({ ok: false, attempts: 1, verdict: { errorClass: 'transient', retryable: true } })
+    h.answers.push(() => { throw new TypeError('fetch failed') })
+    expect(await gatewayCall(ebayWrite({ method: 'PATCH', retryBackoffMs: 1 }))).toMatchObject({ ok: false, attempts: 1, verdict: { errorClass: 'network' } })
+  })
+  it('a write that is safe to repeat (PUT, or flagged idempotent) is retried with a growing wait, up to the limit', async () => {
+    for (let i = 0; i < 5; i++) h.answers.push(() => json({ errors: [{ errorId: 25001 }] }, 503))
+    const started = Date.now()
+    expect(await gatewayCall(ebayWrite({ method: 'PUT', maxTransientRetries: 3, retryBackoffMs: 20 }))).toMatchObject({ ok: false, attempts: 4 })
+    expect(Date.now() - started).toBeGreaterThanOrEqual(20 + 40 + 80 - 5)
+    h.answers.length = 0
+    h.answers.push(() => { throw new TypeError('fetch failed') }, () => json({ ok: true }))
+    expect(await gatewayCall(ebayWrite({ method: 'PATCH', idempotent: true, retryBackoffMs: 1 }))).toMatchObject({ ok: true, attempts: 2 })
   })
 })
 

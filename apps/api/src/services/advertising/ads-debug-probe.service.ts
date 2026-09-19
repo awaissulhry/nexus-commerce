@@ -38,6 +38,7 @@ async function probeLwaToken(creds: ProbeCredentials): Promise<{
   status: number
   responseSnippet: string
 }> {
+  // gateway-exempt: OAuth token exchange (LWA) for a diagnostic probe
   const res = await fetch('https://api.amazon.com/auth/o2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

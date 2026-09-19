@@ -294,6 +294,7 @@ export async function submitAmazonListingsBatch(
   const uploadUrl: string = docRes.url
 
   // Step 2: upload the body to the presigned URL.
+  // gateway-exempt: pre-signed feed-document upload to Amazon's storage; the feed itself goes through the gateway
   const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json; charset=UTF-8' },

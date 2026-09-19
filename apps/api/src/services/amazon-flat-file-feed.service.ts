@@ -269,6 +269,7 @@ async function fetchReportText(url: string, compressionAlgorithm: string | undef
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
+    // gateway-exempt: pre-signed report document on Amazon's storage, not the API
     const res = await fetch(url, { signal: ctrl.signal })
     return decodeReportBytes(Buffer.from(await res.arrayBuffer()), compressionAlgorithm)
   } finally {

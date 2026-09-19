@@ -63,8 +63,6 @@ export async function pullAPlusContentMetadata(opts: {
   const marketplaceId = opts.marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
   const authorization = await import('../lib/amazon-sp-client.js')
   const account = await authorization.amazonAccount()
-  const region = await authorization.getAmazonRegion(account.id)
-  const host = `sellingpartnerapi-${region}.amazon.com`
 
   const collected: AmazonContentMetadataRecord[] = []
   let nextPageToken: string | undefined
@@ -75,10 +73,10 @@ export async function pullAPlusContentMetadata(opts: {
       pageSize: '20',
       ...(nextPageToken ? { pageToken: nextPageToken } : {}),
     })
-    const res = await fetch(
-      `https://${host}/aplus/2020-11-01/contentDocuments?${params.toString()}`,
-      { headers: { 'x-amz-access-token': await authorization.getAmazonAccessToken(account.id), 'Content-Type': 'application/json' } },
-    )
+    // P1.2 — through the channel gateway (the same account; rate bucket; call ledger).
+    const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
+      accountId: account.id, path: `/aplus/2020-11-01/contentDocuments?${params.toString()}`, operation: 'aplus.searchContentDocuments',
+    })
     if (!res.ok) {
       const body = await res.text()
       throw new Error(`aplus listDocs ${res.status}: ${body.slice(0, 200)}`)

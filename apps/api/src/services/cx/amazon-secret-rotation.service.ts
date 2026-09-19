@@ -83,6 +83,7 @@ function parse(body: string): Record<string, any> {
 /** A real LWA token exchange with this secret. True only when Amazon issues a token. */
 async function secretWorks(clientId: string, clientSecret: string): Promise<boolean> {
   try {
+    // gateway-exempt: OAuth token exchange (LWA client_credentials) — never carries a seller's data
     const response = await fetch(LWA_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -204,6 +205,7 @@ export async function requestAmazonSecretRotation(reason: string): Promise<{ req
   if (problem) return { requested: false, error: problem }
   const app = await getChannelApp('AMAZON_SP')
   try {
+    // gateway-exempt: OAuth token exchange (LWA client_credentials) — never carries a seller's data
     const tokenResponse = await fetch(LWA_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -213,11 +215,9 @@ export async function requestAmazonSecretRotation(reason: string): Promise<{ req
     const token = tokenResponse.ok ? ((await tokenResponse.json()) as { access_token?: string }).access_token : undefined
     if (!token) throw new Error(`the rotation token was refused (HTTP ${tokenResponse.status})`)
     const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
-    const response = await fetch(`https://sellingpartnerapi-${slug}.amazon.com/applications/2023-11-30/clientSecret`, {
-      method: 'POST',
-      headers: { 'x-amz-access-token': token },
-      signal: AbortSignal.timeout(20_000),
-    })
+    // P1.2 — through the channel gateway: app-level connection setup, recorded on the call ledger.
+    const { amazonGrantlessFetch } = await import('../gateway/amazon-sdk.js')
+    const response = await amazonGrantlessFetch({ token, host: `sellingpartnerapi-${slug}.amazon.com`, method: 'POST', path: '/applications/2023-11-30/clientSecret', operation: 'applications.rotateApplicationClientSecret' })
     if (response.status !== 204) {
       const text = (await response.text().catch(() => '')).slice(0, 300)
       throw new Error(`Amazon answered HTTP ${response.status}${text ? `: ${text}` : ''}`)

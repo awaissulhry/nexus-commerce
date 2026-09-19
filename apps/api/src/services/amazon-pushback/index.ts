@@ -173,6 +173,7 @@ export async function submitShippingConfirmation(
 
   // Step 2: upload the XML body to the returned URL.
   const xml = buildFeedXml(input, merchantToken)
+  // gateway-exempt: pre-signed feed-document upload to Amazon's storage; the feed itself goes through the gateway
   const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': 'text/xml; charset=UTF-8' },
