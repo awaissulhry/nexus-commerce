@@ -1073,9 +1073,11 @@ export function orderHeldReason(channel: string, coordinateLabel: string): strin
   if (upper === 'SHOPIFY') return ''
   /**
    * ETSY stores the order too, and nothing publishes it: there is no Etsy variation publish path in this
-   * codebase today (`marketplaces/etsy.service.ts` has no importer — measured, `/usr/bin/grep` for its module
-   * name across `apps/api/src` finds none). Saying "stored here, not sent yet" is the honest sentence; saying
-   * it is writable would promise a buyer-facing change nothing makes.
+   * codebase today. (Corrected 2026-09-20: the old claim here said `marketplaces/etsy.service.ts` "has no
+   * importer". It has one — `sync/etsy-sync.service.ts` — and that client only reads listings and receipts
+   * and writes a variation QUANTITY; no method sends a property order. Measured with
+   * `/usr/bin/grep -rn "marketplaces/etsy.service" apps/api/src`.) Saying "stored here, not sent yet" is the
+   * honest sentence; saying it is writable would promise a buyer-facing change nothing makes.
    */
   if (upper === 'ETSY') {
     return `${coordinateLabel} stores this order, but nothing publishes an Etsy property order yet, so a reorder here is recorded and not sent.`
