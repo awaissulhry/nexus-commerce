@@ -38,6 +38,8 @@ export interface ShareRow {
   version: number
   createdAt: Date
   respondedAt: Date | null
+  /** AE.3 — follower products that follow this share now. Read through row security from either side. */
+  linkedProducts: number
   pausedAt: Date | null
   endedAt: Date | null
   endedBySide: 'owner' | 'follower' | null
@@ -74,11 +76,17 @@ async function withNames(rows: ShareRecord[]): Promise<ShareRow[]> {
   const names = new Map(
     ids.length === 0 ? [] : (await prisma.assortment.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((a) => [a.id, a.name]),
   )
+  // The owner reads links through the owner read policy, the follower through its own (assortment-copy.sql).
+  const linkCounts = new Map(
+    rows.length === 0 ? [] : (await prisma.catalogLink.groupBy({ by: ['shareId'], where: { shareId: { in: rows.map((row) => row.id) }, status: 'active' }, _count: { _all: true } }))
+      .map((group) => [group.shareId, group._count._all]),
+  )
   return rows.map(({ ownerWorkspace, workspace, ...row }) => ({
     ...row,
     status: row.status as ShareStatus,
     endedBySide: row.endedBySide as ShareRow['endedBySide'],
     assortmentName: names.get(row.assortmentId) ?? null,
+    linkedProducts: linkCounts.get(row.id) ?? 0,
     ownerWorkspaceName: ownerWorkspace.name,
     workspaceName: workspace.name,
   }))

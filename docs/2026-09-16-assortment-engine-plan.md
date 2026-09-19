@@ -8,6 +8,7 @@ Programme code: **AE**
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-17 | **R-AE-19** | "Go ahead, go with your recommendation": build the screens (UI lane, §7) for what is shipped — shares (AE.2) and the first copy (AE.3). The ads findings stay with the ads programme. |
 | 2026-09-17 | **R-AE-18** | Commit and push it all (AE.3, R-AE-16, R-AE-17, and the deferred health fixes from the public-route audit). |
 | 2026-09-17 | **R-AE-17** | Fix the transfer-engine defect (§17.3.1: inherited language rows refuse variations) as its own small task. |
 | 2026-09-17 | **R-AE-16** | Add the AE.3 end-to-end copy test to the push check that runs on a throwaway PostgreSQL. |
@@ -1055,3 +1056,92 @@ title); dropping the rows fails (the linked variation kept its own title).
   from the shared working tree). It replaces the running code, not the database; the migration stays.
 - No real share has copied products in production yet. The first real copy, with real image uploads,
   is still to be checked there (§17.5.3).
+
+## 19. UI lane — contract: sharing and first copy screens (R-AE-19)
+
+The Owner said "Go ahead, go with your recommendation" (R-AE-19). This builds the screens for what is
+shipped: shares (AE.2) and the first copy (AE.3). The follow and override badges (§7: products grid,
+studio, mappings) wait for AE.4 and AE.5, because nothing follows live yet (rule 8: a control with no
+reader is not shown).
+
+### 19.1 Where it lives — a measured change from §7
+
+§7 placed a Sharing section on the profile manager at `/settings/profiles`. Measured: that path is
+an **identity path** (`apps/web/src/lib/workspaces/paths.ts` `isIdentityPath`, and `SELF_SERVICE` in
+`lib/auth/nav-permissions.ts`). It has no business in its URL, so no call from it carries a business,
+and every sharing route needs one. That is why the page today only redirects to `/profiles`.
+
+**Decision:** one settings page inside the business, **`/settings/sharing` — "Shared products"**, in
+the settings rail's **Catalog** group. A settings page is registered in `SETTINGS_NAV`, the rail's one
+source of truth. The profile manager (`/profiles`) gets a quiet **"Shared products"** link on each
+business card an owner can manage, beside "Connected accounts", so §7's entry point stays.
+
+Rejected: a tab on `/products/catalog-transfer`. That page is about one file ("Prepare products …
+using one file"), and accepting a share is consent between businesses, not a file import.
+
+### 19.2 The page
+
+Header: the business name, "Share products with your other business profiles." Three `Tabs`, with a
+count once loaded (`null` until then, never a false 0):
+
+1. **Assortments** (this business shares these)
+   - One `Card` per assortment: name; a line with the selection ("Products you choose" or "Every
+     product except the ones you exclude"), the product count, and how many businesses it is shared
+     with. Actions: **Products**, **Share**, **Rename**, **Archive**.
+   - An assortment with an open share shows the reason as text instead of Archive: "Shared with
+     *B*. End the share before archiving."
+   - **Create assortment** (`Modal`): name, description (`Textarea`), selection (`Radio`). The
+     selection is fixed after creation, and the rename dialog shows it as text.
+   - **Products** (`Modal` xl): the members in a `DataGrid` (SKU, product, added), "Show more" for
+     the next page, a remove action per row, and **Add a product** (`AsyncListboxPanel` over
+     `/api/products/lookup`, top-level products). The panel stays open after an add. Each add or
+     remove sends the version it read; a 409 reloads with the reason.
+2. **Shared by this business**
+   - One `Card` per share: "*Assortment* → *Business*", status in words, what is shared (group
+     names in words), dates, and the linked product count.
+   - Actions by status: pending → **Withdraw offer**; active → **Pause**, **End share**; paused →
+     **Resume**, **End share**. Ended shares show who ended them and when.
+   - **End share** confirms with the exact count: "*N* products in *B* stop following. *B* keeps its
+     copies."
+   - **Share an assortment** (`Modal`): assortment (`Listbox`), business (`Listbox` of the other
+     businesses this person belongs to), what to share (`Checkbox` per group, in words, defaults as
+     the API sets them). No "settings follow" control: nothing reads it until AE.5.
+3. **Shared with this business**
+   - One `Card` per share: "*Assortment* from *Business*", status, what is shared.
+   - pending → **Review offer** (what is shared, and "Nothing is copied until you start a copy"),
+     then **Accept** or **Decline**; active → **Copy products**, **Leave**; paused → the reason as
+     text ("Paused by *A*"), and **Leave**.
+   - Under each card, its copy runs: state in words, when, and the counts. A run in review opens its
+     review; a partial run offers **Finish again**.
+
+Only an owner can act. Anyone else sees the lists and one sentence: "Only an owner of *B* can share,
+accept or copy products." No action is shown disabled (§7.1 rule 9).
+
+### 19.3 The copy flow (`Drawer`, the same container the product studio uses for its import review)
+
+`Stepper`: **What arrives** → **Every field** → **Done**.
+
+1. **What arrives** (Review 1). "Reference marketplace" in a `Disclosure` with the same words as the
+   import page. `KeyValue` counts: new products, products whose SKU is already here, already linked,
+   cannot copy, images, not copied yet (videos, 3D models, documents). A `DataGrid` of products: SKU,
+   what happens, and for an existing SKU a `SegmentedControl` **Link** / **Skip** (default Skip). What
+   will be created: families, attributes, options, categories. Conflicts as a `Banner`. Fields not
+   copied, with reasons, in a `Disclosure`. **Continue to field review** sends the fingerprint and the
+   choices; if the review changed, the screen reloads it and says so.
+2. **Every field** (Review 2): the shared `TransferReview`, unchanged, with its own apply.
+3. **Done**: the run finishes; counts in words (linked, images copied, addresses kept, not saved);
+   problems as a list; **Finish again** on a partial run.
+
+### 19.4 Backend additions
+
+- `GET /api/assortment-shares/:id/copy-runs` — this business's runs for a share, newest first.
+- The share list gains `linkedProducts` (active links per share). The owner reads it through the
+  owner read policy; the follower through its own.
+
+### 19.5 Checks before "done" (§7.1)
+
+Built only from the design system; no raw controls. On the running app, on a **throwaway copy of
+the development database** (never the shared development database, never production): both
+businesses end to end (create, share, accept, copy with a link and a skip, review, finish, end);
+light and dark with measured contrast; keyboard only; the accessibility tree; 390 px through
+Playwright; and every screen read as a stranger (no ids, no field paths, no storage units).

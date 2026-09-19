@@ -135,24 +135,25 @@ async function nextSortOrder(productId: string) {
 /** Only called for a storage host. No redirect is followed, and the body is read up to the ceiling. */
 async function download(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
   const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) })
-  if (!response.ok || !response.body) throw new Error(`the source file answered ${response.status}`)
+  if (response.status === 404 || response.status === 410) throw new Error('the image no longer exists at its address')
+  if (!response.ok || !response.body) throw new Error('the image could not be downloaded; try again later')
   const mimeType = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
   if (!mimeType.startsWith('image/')) {
     await response.body.cancel()
-    throw new Error('the source file is not an image')
+    throw new Error('the address does not hold an image')
   }
   if (Number(response.headers.get('content-length') ?? 0) > MAX_IMAGE_BYTES) {
     await response.body.cancel()
-    throw new Error('the source image is larger than 20 MB')
+    throw new Error('the image is larger than 20 MB')
   }
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
     size += chunk.byteLength
-    if (size > MAX_IMAGE_BYTES) throw new Error('the source image is larger than 20 MB')
+    if (size > MAX_IMAGE_BYTES) throw new Error('the image is larger than 20 MB')
     chunks.push(Buffer.from(chunk))
   }
-  if (size === 0) throw new Error('the source file is empty')
+  if (size === 0) throw new Error('the image file is empty')
   return { buffer: Buffer.concat(chunks), mimeType }
 }
 

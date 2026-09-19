@@ -24,10 +24,13 @@ vi.mock('../../db.js', async () => {
 })
 const column = (key: string, storage: string, kind = 'text') => ({ key, writeField: key, label: key, group: 'Shared', kind, storage, scope: 'global', shape: 'scalar', requiredBy: [], editable: true, defaultVisible: true })
 vi.mock('../pim/sheet-columns.service.js', () => ({
-  getSheetColumns: async () => ({ columns: [
-    column('name', 'column'), column('description', 'column'), column('gtin', 'column'), column('weightValue', 'column', 'number'),
+  getSheetColumns: async ({ market }: { market: string }) => {
+    if (market === 'ZZ') throw Object.assign(new Error('Unknown market "ZZ". This platform has: IT, DE'), { name: 'UnknownMarketError', market, known: ['IT', 'DE'] })
+    return { columns: [
+    column('name', 'column'), column('description', 'column'), column('gtin', 'column'), column('weightValue', 'column', 'number'), { ...column('bulletPoints', 'column'), shape: 'list' },
     column('basePrice', 'column', 'number'), column('totalStock', 'column', 'number'), column('fulfillmentMethod', 'column'), column('armor_level', 'categoryAttributes'),
-  ] }),
+  ] }
+  },
   clearSheetColumnCache: () => {},
   coordinatesFor: () => [],
 }))
@@ -200,6 +203,12 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
 
   // ── The source read ─────────────────────────────────────────────────────────
   describe('readOfferedCatalog', () => {
+    it('a marketplace the owner does not have is refused with the owner\'s list, not a server error', async () => {
+      const error = await as(B, user.ownerB, () => source.readOfferedCatalog({ shareId, market: 'ZZ' })).then(() => null, (e: unknown) => e as { code?: string; statusCode?: number; message: string })
+      expect(error).toMatchObject({ code: 'unknown_market', statusCode: 400 })
+      expect(error?.message).toBe('The business that shares these products has no marketplace ZZ. It has IT, DE. Choose another reference marketplace.')
+    })
+
     it('keeps only the offered groups, never the stock, never a source version, and returns to the follower context', async () => {
       const catalog = await as(B, user.ownerB, () => source.readOfferedCatalog({ shareId, market: 'IT' }))
       const fields = new Set(catalog.rows.map((r) => r.field))
@@ -209,7 +218,10 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
       expect(catalog.rows.some((r) => r.sku === 'HELMET')).toBe(false)
       // Stock and price never reach a row at all (the engine's MANAGED_FIELDS); a non-managed field that
       // must not travel is reported with its reason.
-      expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'fulfillmentMethod', reason: expect.stringMatching(/fulfilment/) })]))
+      expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'fulfillmentMethod', group: null, reason: expect.stringMatching(/fulfilment/) })]))
+      // No bullet points in the source: listed as not copied, and no row is sent (an empty list refuses the product).
+      expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'bulletPoints', group: null, reason: 'empty in the shared product, so nothing is copied' })]))
+      expect(catalog.rows.some((row) => row.field === 'bulletPoints')).toBe(false)
       // Translations were offered by default: the German name travels as its own row.
       expect(catalog.rows).toEqual(expect.arrayContaining([expect.objectContaining({ sku: 'JKT', field: 'name', locale: 'de', value: 'Jacke' })]))
       // Price and status were NOT offered: not in the managed fields. Product type (attributes) was.
@@ -233,7 +245,7 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
       const catalog = await as(B, user.ownerB, () => source.readOfferedCatalog({ shareId: offer.id, market: 'IT' }))
       expect(catalog.products[0].managed).toEqual({ basePrice: '99', minPrice: null, maxPrice: null, b2bPrice: null, b2bMinQty: null, status: 'ACTIVE' })
       expect(catalog.rows.some((r) => r.field === 'name')).toBe(false)
-      expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'name', reason: 'the "content" group was not offered' })]))
+      expect(catalog.excluded).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'name', label: 'name', group: 'content', reason: null })]))
     })
   })
 
@@ -247,8 +259,8 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
       expect(review.create.attributeGroups).toEqual([{ code: 'safety', label: 'Safety' }])
       expect(review.create.attributes).toEqual([{ code: 'armor_level', label: 'Armour level', type: 'select' }])
       expect(review.create.options.map((o) => o.code)).toEqual(['l1', 'l2'])
-      expect(review.create.categories).toEqual([{ path: ['apparel', 'jackets'] }])
-      expect(review.conflicts).toEqual([{ kind: 'attribute_type', code: 'shell_material', source: 'text', follower: 'select' }])
+      expect(review.create.categories).toEqual([{ path: ['apparel', 'jackets'], names: ['apparel', 'jackets'] }]) // no names stored: the slug stands in
+      expect(review.conflicts).toEqual([{ kind: 'attribute_type', code: 'shell_material', label: 'Shell material', source: 'text', follower: 'select' }])
     })
 
     it('the fingerprint is stable, and moves when a source product changes', async () => {
@@ -274,6 +286,9 @@ describe('AE.3a — reading what a share offers, links, and Review 1', () => {
       linkId = (await sql(`SELECT id FROM "CatalogLink" WHERE "targetProductId" = $1`, [product.bMedium]))[0].id as string
       expect((await as(A, user.ownerA, () => database.client.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM "CatalogLink" WHERE id = ${linkId}`))[0].n).toBe(1)
       expect((await as(C, user.ownerC, () => database.client.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM "CatalogLink" WHERE id = ${linkId}`))[0].n).toBe(0)
+      // The share list counts the link from both sides, each through its own read policy.
+      expect((await as(B, user.ownerB, () => shares.listShares())).incoming.find((row) => row.id === shareId)?.linkedProducts).toBe(1)
+      expect((await as(A, user.ownerA, () => shares.listShares())).outgoing.find((row) => row.id === shareId)?.linkedProducts).toBe(1)
     })
 
     it('refuses a source product outside the assortment, a target outside the follower, a second active link from either end, and a link written by the owner', async () => {

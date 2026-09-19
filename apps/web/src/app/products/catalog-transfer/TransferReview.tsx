@@ -11,7 +11,52 @@ import { previewColumns } from './previewColumns'
 import { channelName, languageName } from './workbookSelection'
 import styles from './transfer.module.css'
 
-export function TransferReview({ jobId, options, onReset, onJob, onSettled, onReturn, allowApply = true, productId, onBusyChange }: { jobId: string; options: TransferOptions; onReset: () => void; onJob: (id: string) => void; onSettled?: (job: TransferJob) => void; onReturn?: () => void; allowApply?: boolean; productId?: string; onBusyChange?: (busy: boolean) => void }) {
+/**
+ * What the review is for. `file` (the default) is a workbook or source import, and every consumer from
+ * before AE.3 gets exactly its old words and actions. `copy` is a first copy of products another business
+ * shares (settings/sharing, plan §19.3): there is no file to upload again; no retry, because a retry
+ * creates a job the copy does not follow; and saving is offered even with no field changes, because
+ * saving is also what links the products. One discriminant selects the whole set, never a caller's own
+ * sentence (feedback: shared components carry no copy props).
+ */
+export type TransferReviewPurpose = 'file' | 'copy'
+const REVIEW_WORDS = {
+  file: {
+    checking: 'Checking your complete file', stopped: 'Import stopped', partial: 'Import finished with issues',
+    receipt: 'Saved import receipt', totals: 'File review totals',
+    completedTitle: 'Next: check your listings before publishing',
+    completedBody: 'Review the saved products across their seller accounts and marketplaces, then continue through the listing editor. Saving this import has not submitted your listings to Amazon or eBay.',
+    noChanges: 'This file makes no catalog changes. Your existing values are preserved.',
+    excludedTitle: (n: string) => `${n} inputs excluded from this import`,
+    excludedBody: 'These include source instructions, managed fields or unsupported inputs. Each exclusion has a reason. Review them to make sure the file contains everything you intended to import.',
+    closeNote: 'You can close this review. Processing continues in Nexus; reopen Import to check the result.',
+    reviewed: (n: string) => `${n} record outcomes reviewed across the entire file.`,
+    invalidTitle: 'Correct the source before applying',
+    invalidBody: 'Validation failures block this review. Every failure and exclusion is available in the outcomes below.',
+    filtersQueued: (n: number) => `Filters change what you see here. Saving includes all ${n} reviewed attribute changes in the file.`,
+    filtersDone: 'Filters change what you see here. The import receipt covers the complete file.',
+    save: 'Save reviewed changes', saving: 'Starting import…',
+  },
+  copy: {
+    checking: 'Checking the shared products', stopped: 'Saving stopped', partial: 'Saved with issues',
+    receipt: 'Saved copy receipt', totals: 'Review totals',
+    completedTitle: 'Saved in this business',
+    completedBody: 'Next, each saved product is linked to the product it copies. Nothing has been submitted to Amazon or eBay.',
+    noChanges: 'These products already hold the shared values. Saving changes nothing and links them.',
+    excludedTitle: (n: string) => `${n} values not copied`,
+    excludedBody: 'These are fields this business manages itself, or values a shared product cannot carry. Each one has a reason.',
+    closeNote: 'You can close this review. Saving continues in Nexus; reopen Shared products to check the result.',
+    reviewed: (n: string) => `${n} product outcomes reviewed across every shared product.`,
+    invalidTitle: 'Some products cannot be saved as they are',
+    invalidBody: 'Every refusal is listed below with its reason. Fix it in the business that shares the products, then start a new copy.',
+    filtersQueued: (n: number) => `Filters change what you see here. Saving includes all ${n} reviewed attribute changes.`,
+    filtersDone: 'Filters change what you see here. The receipt covers every shared product.',
+    save: 'Save and link products', saving: 'Starting to save…',
+  },
+} as const
+
+export function TransferReview({ jobId, options, onReset, onJob, onSettled, onReturn, allowApply = true, productId, onBusyChange, purpose = 'file' }: { jobId: string; options: TransferOptions; onReset: () => void; onJob: (id: string) => void; onSettled?: (job: TransferJob) => void; onReturn?: () => void; allowApply?: boolean; productId?: string; onBusyChange?: (busy: boolean) => void; purpose?: TransferReviewPurpose }) {
+  const words = REVIEW_WORDS[purpose]
   const [job, setJob] = useState<TransferJob | null>(null), [outcomes, setOutcomes] = useState<OutcomePage | null>(null)
   const [page, setPage] = useState(1), [filter, setFilter] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -65,7 +110,7 @@ export function TransferReview({ jobId, options, onReset, onJob, onSettled, onRe
     try { const next = await transferApi<TransferJob>(`catalog-transfer/jobs/${encodeURIComponent(jobId)}/retry`, {}); onJob(next.jobId) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
   const counts = job?.counts
-  const title = job?.state === 'PREVIEWING' ? 'Checking your complete file' : job?.state === 'RUNNING' ? 'Saving catalog changes' : job?.state === 'COMPLETED' ? 'Changes saved in Nexus' : job?.state === 'FAILED' ? 'Import stopped' : job?.state === 'PARTIAL' ? 'Import finished with issues' : 'Review the proposed changes'
+  const title = job?.state === 'PREVIEWING' ? words.checking : job?.state === 'RUNNING' ? 'Saving catalog changes' : job?.state === 'COMPLETED' ? 'Changes saved in Nexus' : job?.state === 'FAILED' ? words.stopped : job?.state === 'PARTIAL' ? words.partial : 'Review the proposed changes'
   return <Card header={<h2>{title}</h2>} description={job?.filename ?? 'Loading saved import'}><div className={styles.stack}>
     {error && <Banner tone="danger" action={<Button disabled={busy} onClick={() => { setError(''); setAttempt(n => n + 1) }}>Reload review</Button>}>{error}</Banner>}
     {job?.error && <Banner tone="danger">{job.error}</Banner>}
@@ -74,21 +119,21 @@ export function TransferReview({ jobId, options, onReset, onJob, onSettled, onRe
       <p>{job.boundary.includeShared ? `Shared details${job.boundary.locales.length ? ` and ${job.boundary.locales.map(languageName).join(', ')} content` : ''} · ` : ''}{job.boundary.listings.length} selected listings. Other products and destinations cannot be added to this review.</p>
       {job.boundary.includeShared && <p>Shared changes can affect variants and listings that inherit these values, including destinations outside this file. Existing destination overrides are preserved.</p>}
     </Banner>}
-    {job?.receipt && <Banner tone={job.receipt.failed || job.receipt.unprocessed ? 'warning' : 'success'} title="Saved import receipt"><p>{job.receipt.saved} records saved · {job.receipt.unchanged} unchanged · {job.receipt.failed} refused · {job.receipt.excluded} excluded · {job.receipt.unprocessed} unprocessed.</p></Banner>}
-    {counts && <><p className={styles.secondary}>File review totals{active ? ' (still processing)' : ''} · proposed changes</p><MetricStrip className={styles.reviewMetrics} metrics={[
+    {job?.receipt && <Banner tone={job.receipt.failed || job.receipt.unprocessed ? 'warning' : 'success'} title={words.receipt}><p>{job.receipt.saved} records saved · {job.receipt.unchanged} unchanged · {job.receipt.failed} refused · {job.receipt.excluded} excluded · {job.receipt.unprocessed} unprocessed.</p></Banner>}
+    {counts && <><p className={styles.secondary}>{words.totals}{active ? ' (still processing)' : ''} · proposed changes</p><MetricStrip className={styles.reviewMetrics} metrics={[
       { value: counts.productsAffected ?? counts.productsCreated, label: 'Shared record changes' }, { value: counts.listingsAffected ?? counts.listingsCreated, label: 'Listing record changes' },
       { value: counts.changed, label: 'Attribute changes' }, { value: counts.refused, label: 'Issues to fix' },
       { value: counts.unchanged, label: 'Unchanged attributes' }, { value: counts.excluded ?? 0, label: 'Excluded inputs' },
     ]} /></>}
     {job && <>
-      {job.state === 'COMPLETED' && <Banner tone="success" title="Next: check your listings before publishing">Review the saved products across their seller accounts and marketplaces, then continue through the listing editor. Saving this import has not submitted your listings to Amazon or eBay.</Banner>}
-      {job.state === 'QUEUED' && <p>{counts?.changed ? 'Check the destination and before/after values below. Saving applies these changes to Nexus; it does not publish listings.' : 'This file makes no catalog changes. Your existing values are preserved.'}</p>}
-      {!!counts?.excluded && <Banner tone="warning" title={`${counts.excluded.toLocaleString()} inputs excluded from this import`} action={<Button size="sm" onClick={() => { setFilter('EXCLUDED'); setPage(1) }}>Review excluded inputs</Button>}>These include source instructions, managed fields or unsupported inputs. Each exclusion has a reason. Review them to make sure the file contains everything you intended to import.</Banner>}
+      {job.state === 'COMPLETED' && <Banner tone="success" title={words.completedTitle}>{words.completedBody}</Banner>}
+      {job.state === 'QUEUED' && <p>{counts?.changed ? 'Check the destination and before/after values below. Saving applies these changes to Nexus; it does not publish listings.' : words.noChanges}</p>}
+      {!!counts?.excluded && <Banner tone="warning" title={words.excludedTitle(counts.excluded.toLocaleString())} action={<Button size="sm" onClick={() => { setFilter('EXCLUDED'); setPage(1) }}>Review excluded inputs</Button>}>{words.excludedBody}</Banner>}
       {counts && <Disclosure summary="Details of preserved values and overrides"><p>{counts.newOverrides ?? 0} new overrides · {counts.preservedOverrides ?? 0} existing override entries preserved. An override replaces a shared value only for its listed destination.</p></Disclosure>}
-      {active && <><ProgressBar ariaLabel={title} value={job.processed / Math.max(1, job.total) * 100} /><p>You can close this review. Processing continues in Nexus; reopen Import to check the result.</p></>}
-      <p role="status">{active ? `${job.processed} of ${job.total} records checked in this phase; totals above are still accumulating.` : job.state === 'QUEUED' || job.state === 'INVALID' ? `${job.total.toLocaleString()} record outcomes reviewed across the entire file.` : `${job.processed} of ${job.total} records processed. Inspect outcomes for individual refusals.`}</p>
+      {active && <><ProgressBar ariaLabel={title} value={job.processed / Math.max(1, job.total) * 100} /><p>{words.closeNote}</p></>}
+      <p role="status">{active ? `${job.processed} of ${job.total} records checked in this phase; totals above are still accumulating.` : job.state === 'QUEUED' || job.state === 'INVALID' ? words.reviewed(job.total.toLocaleString()) : `${job.processed} of ${job.total} records processed. Inspect outcomes for individual refusals.`}</p>
       {job.policy && <p className={styles.secondary}>Source policy: shared facts — {job.policy.shared}; listing changes — {job.policy.overrides}. Blank and omitted values are preserved.</p>}
-      {job.state === 'INVALID' && <Banner tone="danger" title="Correct the source before applying">Validation failures block this review. Every failure and exclusion is available in the outcomes below.</Banner>}
+      {job.state === 'INVALID' && <Banner tone="danger" title={words.invalidTitle}>{words.invalidBody}</Banner>}
       {job.unmappedColumns?.length ? <Disclosure summary={`${job.unmappedColumns.length} unmapped columns excluded`}><p>{job.unmappedColumns.join(', ')}</p></Disclosure> : null}
       {job.issues?.length ? <Banner tone="danger">{job.issues.map((i, n) => <p key={n}>{i.sku} · {i.field}: {i.message}</p>)}</Banner> : null}
     </>}
@@ -102,16 +147,16 @@ export function TransferReview({ jobId, options, onReset, onJob, onSettled, onRe
         <Button asChild variant="link"><a href={`${getBackendUrl()}/api/catalog-transfer/jobs/${encodeURIComponent(jobId)}/errors`} download>Download all errors</a></Button>
       </div>
       <p>{outcomes ? `${outcomes.total.toLocaleString()} matching record outcomes · page ${page} of ${Math.max(1, Math.ceil(outcomes.total / 50))}` : 'Loading outcomes…'}</p>
-      {(sku || destination || filter) && <p className={styles.secondary}>{job.state === 'QUEUED' ? `Filters change what you see here. Saving includes all ${counts?.changed ?? 0} reviewed attribute changes in the file.` : 'Filters change what you see here. The import receipt covers the complete file.'}</p>}
+      {(sku || destination || filter) && <p className={styles.secondary}>{job.state === 'QUEUED' ? words.filtersQueued(counts?.changed ?? 0) : words.filtersDone}</p>}
       {outcomes?.rows.map(row => <Outcome key={`${row.id}:${filter}`} row={row} options={options} changesOnly={filter === 'CHANGED'} historical={['RUNNING', 'COMPLETED', 'PARTIAL', 'FAILED'].includes(job.state)} />)}
       <Pagination page={page} pageCount={Math.max(1, Math.ceil((outcomes?.total ?? 0) / 50))} onPage={setPage} />
     </>}
     {!!job?.warnings.length && <Banner tone="warning" title="Review notes">{job.warnings.map(w => <p key={w}>{w}</p>)}</Banner>}
     <div className={styles.actions}>
-      <Button disabled={busy || active || !job && !error} onClick={onReset}>Upload another file</Button>
-      {job && ['COMPLETED', 'PARTIAL'].includes(job.state) && (onReturn ? <Button variant="primary" onClick={onReturn}>Return to product</Button> : <Button asChild variant="primary"><Link href={`/products/listing-readiness${job.cells ? '' : `?job=${encodeURIComponent(jobId)}`}`}>Check saved products for listing</Link></Button>)}
-      {job && ['PARTIAL', 'FAILED'].includes(job.state) && <Button disabled={busy || !allowApply} onClick={retry}>Review unprocessed or refused records again</Button>}
-      {job?.state === 'QUEUED' && !counts?.refused && !!counts?.changed && <Button variant="primary" disabled={busy || !allowApply} onClick={apply}>{busy ? 'Starting import…' : 'Save reviewed changes'}</Button>}
+      {purpose === 'file' && <Button disabled={busy || active || !job && !error} onClick={onReset}>Upload another file</Button>}
+      {purpose === 'file' && job && ['COMPLETED', 'PARTIAL'].includes(job.state) && (onReturn ? <Button variant="primary" onClick={onReturn}>Return to product</Button> : <Button asChild variant="primary"><Link href={`/products/listing-readiness${job.cells ? '' : `?job=${encodeURIComponent(jobId)}`}`}>Check saved products for listing</Link></Button>)}
+      {purpose === 'file' && job && ['PARTIAL', 'FAILED'].includes(job.state) && <Button disabled={busy || !allowApply} onClick={retry}>Review unprocessed or refused records again</Button>}
+      {job?.state === 'QUEUED' && !counts?.refused && (!!counts?.changed || purpose === 'copy') && <Button variant="primary" disabled={busy || !allowApply} onClick={apply}>{busy ? words.saving : words.save}</Button>}
     </div>
   </div></Card>
 }

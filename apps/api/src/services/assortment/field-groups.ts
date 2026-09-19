@@ -19,13 +19,13 @@ const g = (group: FieldGroup): Disposition => ({ group })
 const never = (reason: string): Disposition => ({ never: reason })
 
 const BOOKKEEPING = never('record bookkeeping belongs to each business')
-const STOCK = never('stock and replenishment belong to each business; a lent stock pool is AE.6')
+const STOCK = never('stock and replenishment belong to each business')
 const CHANNEL = never('channel identities and listing content belong to each business\'s own accounts')
 const OPERATIONS = never('fulfilment and shipping belong to each business')
 const MARKET_READING = never('market readings are measured per business')
 const SYNC_STATE = never('sync state belongs to each business')
 const PROCESS = never('import, review and validation state belong to each business')
-const LEGACY = never('legacy master-link field, not in use')
+const LEGACY = never('an old field that is no longer used')
 
 /** Every scalar column of `Product` (schema.prisma), one decision each. */
 export const PRODUCT_COLUMNS: Record<string, Disposition> = {
@@ -50,7 +50,7 @@ export const PRODUCT_COLUMNS: Record<string, Disposition> = {
   status: g('status'),
 
   // never copied
-  costPrice: never('cost belongs to each business; a lent stock pool carries its cost in AE.6'),
+  costPrice: never('cost belongs to each business'),
   minMargin: never('margin rules belong to each business'),
   workspaceId: BOOKKEEPING, id: BOOKKEEPING, version: BOOKKEEPING, createdAt: BOOKKEEPING, updatedAt: BOOKKEEPING, deletedAt: BOOKKEEPING,
   totalStock: STOCK, lowStockThreshold: STOCK, firstInventoryDate: STOCK, abcClass: STOCK, abcClassUpdatedAt: STOCK,
@@ -90,5 +90,5 @@ export function classifyRow(row: { field: string; locale?: string }, storage: Co
   const column = PRODUCT_COLUMNS[row.field]
   if (column) return column
   // A key the map does not know is reported, never copied on a guess.
-  return never(`"${row.field}" has no field-group decision yet`)
+  return never('this field is not shared yet')
 }

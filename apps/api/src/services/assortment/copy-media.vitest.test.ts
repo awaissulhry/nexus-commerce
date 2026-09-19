@@ -168,11 +168,11 @@ describe('AE.3c — images arrive in the follower business', () => {
   it('refuses what is not an image, too large, or not there — and uploads nothing for them', async () => {
     const productId = await newProduct('MEDIA-3')
     const cases: Array<[string, (url: string) => Response, RegExp]> = [
-      ['https://res.cloudinary.com/owner/a.png', () => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } }), /not an image/],
+      ['https://res.cloudinary.com/owner/a.png', () => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } }), /does not hold an image/],
       ['https://res.cloudinary.com/owner/b.png', () => new Response('x', { status: 200, headers: { 'content-type': 'image/png', 'content-length': String(21 * 1024 * 1024) } }), /larger than 20 MB/],
       // No declared length: the body itself is counted while it is read.
       ['https://res.cloudinary.com/owner/c.png', () => new Response(new ReadableStream({ start(c) { for (let i = 0; i < 21; i++) c.enqueue(new Uint8Array(1024 * 1024)); c.close() } }), { status: 200, headers: { 'content-type': 'image/png' } }), /larger than 20 MB/],
-      ['https://res.cloudinary.com/owner/d.png', () => new Response('gone', { status: 404, headers: { 'content-type': 'image/png' } }), /answered 404/],
+      ['https://res.cloudinary.com/owner/d.png', () => new Response('gone', { status: 404, headers: { 'content-type': 'image/png' } }), /no longer exists at its address/],
     ]
     for (const [url, response, message] of cases) {
       respond = response

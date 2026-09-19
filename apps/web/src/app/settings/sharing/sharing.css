@@ -1,0 +1,13 @@
+/* Settings › Shared products. Layout only: every control keeps its design-system size and colour. */
+/* Grid children may shrink below their content: without this the column took the tab strip's natural
+   width (549 px at a 390 px viewport, measured) and the whole page scrolled sideways. */
+.shared-products > *, .shared-products-panel > * { min-width: 0; }
+.shared-products-panel { display: grid; gap: var(--nds-space-16); }
+.shared-products-card-body { display: grid; gap: var(--nds-space-12); }
+.shared-products-note { color: var(--nds-text-2); margin: 0; }
+.shared-products-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.shared-products-fieldset legend { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); margin-bottom: var(--nds-space-8); padding: 0; }
+.shared-products-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--nds-space-8); }
+.shared-products-picker { display: grid; gap: var(--nds-space-8); }
+.shared-products-drawer { display: grid; gap: var(--nds-space-16); min-width: 0; }
+.shared-products .business-profiles-heading h2 { font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); margin: 0 0 var(--nds-space-4); }

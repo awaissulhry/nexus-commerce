@@ -63,6 +63,10 @@ describe('AE.2 routes', () => {
       ['POST', '/api/assortment-shares', 'settings.workspace.edit'],
       ['POST', '/api/assortment-shares/:id/:action', 'settings.workspace.edit'],
       ['GET', '/api/assortment-shares/:id/copy/preview', 'settings.workspace.edit'],
+      ['POST', '/api/assortment-shares/:id/copy', 'settings.workspace.edit'],
+      ['GET', '/api/assortment-shares/:id/copy-runs', 'settings.workspace.edit'],
+      ['GET', '/api/assortment-copy-runs/:id', 'settings.workspace.edit'],
+      ['POST', '/api/assortment-copy-runs/:id/advance', 'settings.workspace.edit'],
     ]
     for (const [method, pattern, permission] of expected) expect(permissionForRoute(method, pattern), `${method} ${pattern}`).toBe(permission)
     // Positive control: each of these patterns is really registered by the plugin, so the mapping

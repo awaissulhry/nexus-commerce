@@ -78,3 +78,7 @@ The host supplies only the current business’s accounts. Several accounts may u
 ### AccountsPanel — Amazon Seller migration (2026-09-08)
 
 When the host supplies `onReconnect`, an ENV-managed row offers **Replace environment credentials**. `permissionModel="application_roles"` describes Amazon’s approved app roles without displaying a false OAuth-scope count. The ENV grant remains visibly active until website authorization or private-app self-authorization import succeeds.
+
+### Card heading level — 2026-09-17
+
+`Card` takes `headingLevel` (2–6) to render its header title as a real heading instead of a `<span>`, so a page made of cards can be navigated by heading. Unset keeps the span, so every existing card renders as before. `.nds-card-head .t` now resets `margin`, which a heading carries by default and a span never had. First used by Settings › Shared products.

@@ -31,6 +31,7 @@ import {
   Webhook,
   History,
   Users,
+  Share2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -205,6 +206,14 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         description:
           'Content workflow stages — draft → review → published.',
         keywords: ['workflow', 'stages', 'review', 'approval'],
+        status: 'live',
+      },
+      {
+        href: '/settings/sharing',
+        label: 'Shared products',
+        icon: Share2,
+        description: 'Share products with your other business profiles, and copy products they share with you.',
+        keywords: ['share', 'sharing', 'assortment', 'copy', 'business profiles', 'link products', 'other business'],
         status: 'live',
       },
       {

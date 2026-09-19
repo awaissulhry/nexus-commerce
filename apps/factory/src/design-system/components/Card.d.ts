@@ -11,6 +11,8 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | '
     description?: ReactNode;
     /** optional right-aligned header slot (e.g. an action button) */
     headerAction?: ReactNode;
+    /** Renders the header title as a real heading instead of a `<span>`. Unset keeps the span. */
+    headingLevel?: 2 | 3 | 4 | 5 | 6;
     /**
      * Makes the whole card a `<button>` — a KPI tile that filters a chart, a card that scrolls to
      * its section. Four surfaces hand-rolled this because `Card` was not interactive and `Button`
@@ -27,4 +29,4 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | '
     className?: string;
 }
 /** Surface container (H10 panel/`.h10-am-card` look). */
-export declare function Card({ padded, elevated, header, description, headerAction, onClick, pressed, children, className, ...rest }: CardProps): import("react/jsx-runtime").JSX.Element;
+export declare function Card({ padded, elevated, header, description, headerAction, headingLevel, onClick, pressed, children, className, ...rest }: CardProps): import("react/jsx-runtime").JSX.Element;

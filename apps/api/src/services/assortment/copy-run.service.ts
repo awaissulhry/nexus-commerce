@@ -409,6 +409,36 @@ async function applyManaged(productId: string, managed: ManagedFields, runId: st
   return { applied, failed }
 }
 
+export interface CopyRunSummary {
+  id: string
+  state: RunState
+  market: string
+  products: number
+  skipped: number
+  counts: RunCounts | null
+  error: string | null
+  createdAt: Date
+  finishedAt: Date | null
+}
+
+/** This business's copy runs for one share, newest first: the list under an incoming share. */
+export async function listCopyRuns(shareId: string): Promise<CopyRunSummary[]> {
+  const { workspaceId } = requireWorkspace()
+  const runs = await prisma.assortmentCopyRun.findMany({
+    where: { workspaceId, shareId },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { id: true, state: true, market: true, plan: true, counts: true, error: true, createdAt: true, finishedAt: true },
+  })
+  return runs.map((run) => {
+    const plan = run.plan as unknown as RunPlan
+    return {
+      id: run.id, state: run.state as RunState, market: run.market, products: plan.products.length, skipped: plan.skipped.length,
+      counts: run.counts as unknown as RunCounts | null, error: run.error, createdAt: run.createdAt, finishedAt: run.finishedAt,
+    }
+  })
+}
+
 /** One indexed read: is anything waiting to be finished in this business? */
 export async function hasOpenCopyRuns(): Promise<boolean> {
   const { workspaceId } = requireWorkspace()

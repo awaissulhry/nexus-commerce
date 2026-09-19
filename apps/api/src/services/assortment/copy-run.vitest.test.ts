@@ -269,6 +269,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`AE.3b — a first copy, end to end (n
       { url: FILE.side, type: 'ALT', isPrimary: false, stored: false },
     ])
     expect(await images(product.bMedium)).toEqual([{ url: 'https://res.cloudinary.com/follower/image/upload/v1/own-medium.png', type: 'MAIN', isPrimary: true, stored: true }])
+    // The run list under the incoming share shows this run with its outcome.
+    expect((await as(B, user.ownerB, () => runs.listCopyRuns(shareId))).map((run) => [run.id, run.state, run.products, run.skipped, run.counts?.linked])).toEqual([[runId, 'partial', 3, 0, 3]])
+    expect(await as(A, user.ownerA, () => runs.listCopyRuns(shareId))).toEqual([]) // the owner's business has no runs of its own
     expect(await sql(`SELECT count(*)::int AS n FROM "ProductImage" p JOIN "Product" x ON x.id = p."productId" WHERE x."workspaceId" = $1 AND x.sku = 'JKT-S'`, [B])).toEqual([{ n: 0 }])
   }, 120_000)
 
@@ -324,6 +327,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`AE.3b — a first copy, end to end (n
     expect(applied.job.status, JSON.stringify({ failures, errors: applied.job.errors })).toBe('COMPLETED')
     const finished = await as(B, user.ownerB, () => runs.advanceCopyRun(second.id))
     expect(finished.state).toBe('done')
+    expect((await as(B, user.ownerB, () => runs.listCopyRuns(shareId))).map((run) => [run.id, run.state])).toEqual([[second.id, 'done'], [runId, 'done']])
     expect(finished.counts).toMatchObject({ linked: 3, notSaved: 0, linkRefused: 0, managedFailed: 0 })
 
     // Both are variations of B's JKT, and the German title lives on the parent only: B's own XL title was cleared.

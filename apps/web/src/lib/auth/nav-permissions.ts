@@ -78,6 +78,8 @@ const SETTINGS_NAV_PERMS: Array<[string, string]> = [
   ['/settings/company', 'settings.workspace.edit'],
   ['/settings/terminology', 'settings.workspace.edit'],
   ['/settings/pim', 'pim.manage'],
+  // AE — assortments read at products.view; shares and copies need settings.workspace.edit (the API checks both).
+  ['/settings/sharing', 'settings.workspace.edit'],
   ['/settings/dam', 'assets.manage'],
   ['/settings/channels', 'settings.integrations.manage'],
   ['/settings/mappings', 'settings.integrations.manage'],

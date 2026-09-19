@@ -20,7 +20,7 @@ import {
 import { followerDecision, listShares, offerShare, ownerAction } from '../services/assortment/assortment-share.service.js'
 import { isFollowerDecision, isOwnerAction } from '../services/assortment/share-rules.js'
 import { previewCopy } from '../services/assortment/copy-preview.service.js'
-import { advanceCopyRun, confirmCopy, getCopyRun } from '../services/assortment/copy-run.service.js'
+import { advanceCopyRun, confirmCopy, getCopyRun, listCopyRuns } from '../services/assortment/copy-run.service.js'
 
 type Body = Record<string, unknown> | undefined
 
@@ -71,6 +71,11 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // AE.3 — confirm a copy: re-checks Review 1, creates the definitions, stages the product review.
   fastify.post<{ Params: { id: string }; Body: Body }>('/assortment-shares/:id/copy', async (request, reply) =>
     respond(reply, async () => ({ success: true, run: await confirmCopy({ shareId: request.params.id, ...(request.body ?? {}) }) }), 201),
+  )
+
+  // This business's copy runs for one share, newest first.
+  fastify.get<{ Params: { id: string } }>('/assortment-shares/:id/copy-runs', async (request, reply) =>
+    respond(reply, async () => ({ success: true, runs: await listCopyRuns(request.params.id) })),
   )
 
   fastify.get<{ Params: { id: string } }>('/assortment-copy-runs/:id', async (request, reply) =>

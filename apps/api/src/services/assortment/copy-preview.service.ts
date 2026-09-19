@@ -33,10 +33,11 @@ export interface CopyPreview {
     attributes: Array<{ code: string; label: string; type: string }>
     options: Array<{ attributeCode: string; code: string; label: string }>
     familyAttributes: Array<{ familyCode: string; attributeCode: string }>
-    categories: Array<{ path: string[] }>
+    /** `path` is the slug path the copy matches on; `names` is the same path as people read it. */
+    categories: Array<{ path: string[]; names: string[] }>
   }
   /** Definitions that exist in the follower but differ in a way that stops values landing. */
-  conflicts: Array<{ kind: 'attribute_type'; code: string; source: string; follower: string }>
+  conflicts: Array<{ kind: 'attribute_type'; code: string; label: string; source: string; follower: string }>
   excluded: OfferedCatalog['excluded']
   /** Bytes of the image files to copy; null when a file's size is unknown. */
   imageBytes: number | null
@@ -96,6 +97,18 @@ export async function previewCopy(input: { shareId: string; market: string }): P
   return { preview: { ...body, fingerprint }, catalog }
 }
 
+/** A category's display name: a plain string, or the English (else first) value of a localized one. */
+function categoryName(categories: OfferedCatalog['categories'], path: string[]): string | null {
+  const name = categories.find((c) => c.path.join('/') === path.join('/'))?.name
+  if (typeof name === 'string' && name.trim()) return name
+  if (name && typeof name === 'object') {
+    const values = name as Record<string, unknown>
+    const chosen = typeof values.en === 'string' && values.en.trim() ? values.en : Object.values(values).find((v) => typeof v === 'string' && v.trim())
+    if (typeof chosen === 'string') return chosen
+  }
+  return null
+}
+
 async function missingDefinitions(catalog: OfferedCatalog, workspaceId: string) {
   const familyCodes = catalog.families.map((f) => f.code)
   const attributeCodes = catalog.attributes.map((a) => a.code)
@@ -119,7 +132,7 @@ async function missingDefinitions(catalog: OfferedCatalog, workspaceId: string) 
       continue
     }
     if (existing.type !== attribute.type) {
-      conflicts.push({ kind: 'attribute_type', code: attribute.code, source: attribute.type, follower: existing.type })
+      conflicts.push({ kind: 'attribute_type', code: attribute.code, label: attribute.label, source: attribute.type, follower: existing.type })
       continue
     }
     const has = new Set(existing.options.map((o) => o.code))
@@ -148,7 +161,7 @@ async function missingDefinitions(catalog: OfferedCatalog, workspaceId: string) 
       if (!next) { missing = true; break }
       parent = next.id
     }
-    if (missing) create.categories.push({ path: category.path })
+    if (missing) create.categories.push({ path: category.path, names: category.path.map((slug, depth) => categoryName(catalog.categories, category.path.slice(0, depth + 1)) ?? slug) })
   }
   return { create, conflicts }
 }

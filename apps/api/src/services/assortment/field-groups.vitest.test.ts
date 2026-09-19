@@ -60,6 +60,6 @@ describe('AE.3 field groups', () => {
     expect(classifyRow({ field: 'armor_level' }, 'categoryAttributes', 'it')).toEqual({ group: 'attributes' })
     expect(classifyRow({ field: 'item_name' }, 'listing', 'it')).toMatchObject({ never: expect.stringMatching(/listing/) })
     expect(classifyRow({ field: 'gtin' }, 'column', 'it')).toEqual({ group: 'identity' })
-    expect(classifyRow({ field: 'mystery' }, undefined, 'it')).toMatchObject({ never: expect.stringMatching(/no field-group decision/) })
+    expect(classifyRow({ field: 'mystery' }, undefined, 'it')).toMatchObject({ never: 'this field is not shared yet' })
   })
 })

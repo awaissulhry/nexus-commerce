@@ -20,6 +20,6 @@ export function browserWorkspaceId(): string | null {
 /** Preserve a section when switching, while leaving record IDs and account filters behind. */
 export function workspaceSwitchPath(path: string): string {
   const current = withoutWorkspace(path).split(/[?#]/)[0]
-  const sections = ['/settings/channels', '/settings/account', '/settings/company', '/settings/team', '/settings/terminology', '/settings/profiles', '/fulfillment/stock', '/fulfillment/inbound', '/fulfillment/outbound', '/fulfillment/purchase-orders', '/products', '/listings', '/orders', '/pricing', '/insights', '/sync-logs']
+  const sections = ['/settings/channels', '/settings/account', '/settings/company', '/settings/team', '/settings/terminology', '/settings/sharing', '/settings/profiles', '/fulfillment/stock', '/fulfillment/inbound', '/fulfillment/outbound', '/fulfillment/purchase-orders', '/products', '/listings', '/orders', '/pricing', '/insights', '/sync-logs']
   return sections.find(section => current === section || current.startsWith(`${section}/`)) ?? '/dashboard/overview'
 }

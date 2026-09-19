@@ -16,6 +16,13 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | '
   /** optional right-aligned header slot (e.g. an action button) */
   headerAction?: ReactNode
   /**
+   * Renders the header title as a real heading (`<h2>`…`<h6>`) instead of a `<span>`, so a page of
+   * cards can be navigated by heading. A list of shares or assortments is exactly that page, and a
+   * heading placed INSIDE the span was invalid HTML. Unset keeps the span: every existing card is
+   * unchanged. Styling is the same either way (`.nds-card-head .t`).
+   */
+  headingLevel?: 2 | 3 | 4 | 5 | 6
+  /**
    * Makes the whole card a `<button>` — a KPI tile that filters a chart, a card that scrolls to
    * its section. Four surfaces hand-rolled this because `Card` was not interactive and `Button`
    * is not a card (`.hl-tile`, `.rpt-kpi` and two more).
@@ -32,7 +39,7 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, 'title' | '
 }
 
 /** Surface container (H10 panel/`.h10-am-card` look). */
-export function Card({ padded, elevated, header, description, headerAction, onClick, pressed, children, className, ...rest }: CardProps) {
+export function Card({ padded, elevated, header, description, headerAction, headingLevel, onClick, pressed, children, className, ...rest }: CardProps) {
   const cls = ['nds-card', onClick ? 'btn' : '', padded && header == null ? 'pad' : '', elevated ? 'shadow' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
@@ -40,6 +47,7 @@ export function Card({ padded, elevated, header, description, headerAction, onCl
   const rootProps = onClick
     ? { type: 'button' as const, onClick, ...(pressed !== undefined ? { 'aria-pressed': pressed } : {}) }
     : {}
+  const Title = headingLevel ? (`h${headingLevel}` as const) : 'span'
   if (header != null) {
     // 9.3 — `padded` now also reaches the BODY of a headed card. It previously applied only to
     // headerless cards, so a card with a header always got 16px however it was configured, and
@@ -51,11 +59,11 @@ export function Card({ padded, elevated, header, description, headerAction, onCl
         <div className={['nds-card-head', description != null ? 'stacked' : ''].filter(Boolean).join(' ')}>
           {description != null ? (
             <div className="nds-card-headmain">
-              <span className="t">{header}</span>
+              <Title className="t">{header}</Title>
               <span className="d">{description}</span>
             </div>
           ) : (
-            <span className="t">{header}</span>
+            <Title className="t">{header}</Title>
           )}
           {headerAction}
         </div>

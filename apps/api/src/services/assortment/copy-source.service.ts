@@ -98,8 +98,11 @@ export interface OfferedCatalog {
   market: string
   /** Transfer rows for the offered groups only, without source versions. */
   rows: TransferRow[]
-  /** Per field: why it is not copied (not offered, or never shared). */
-  excluded: Array<{ field: string; reason: string; rows: number }>
+  /**
+   * Per field: why it is not copied. `group` is the field group that was not offered; `reason` is why a
+   * field is never shared. Exactly one is set. `label` is the field's name as people read it.
+   */
+  excluded: Array<{ field: string; label: string; group: string | null; reason: string | null; rows: number }>
   products: Array<{ id: string; sku: string; parentSku: string | null; version: number; familyCode: string | null; categoryPaths: string[][]; primaryCategoryPath: string[] | null; managed: ManagedFields }>
   families: FamilyDefinition[]
   attributeGroups: AttributeGroupDefinition[]
@@ -109,6 +112,8 @@ export interface OfferedCatalog {
 }
 
 const MARKET = /^(?:[A-Z]{2}|GLOBAL)$/
+/** The transfer engine's metadata fields have no master-sheet column, so no column label. */
+const METADATA_LABELS: Record<string, string> = { family: 'Family', parentSku: 'Parent SKU', categoryIds: 'Categories', primaryCategoryId: 'Primary category' }
 
 /** Step 1: the database decides what this follower may read. */
 export async function authorisedSource(shareId: string): Promise<AuthorisedSource> {
@@ -132,18 +137,30 @@ export async function readOfferedCatalog(input: { shareId: string; market: strin
   const read = await withWorkspace(
     { workspaceId: source.ownerWorkspaceId, actorUserId: null, membershipId: null, roleKeys: [] },
     () => readInOwner(source, ids, market, offered.has('translations')),
-  )
+  ).catch((error: unknown) => {
+    // Marketplaces belong to each business: the owner may not have the one this business chose. Say so,
+    // with the owner's own list, instead of a server error. (By name: the class is mocked in tests.)
+    if ((error as { name?: string })?.name === 'UnknownMarketError') {
+      const known = (error as { known?: string[] }).known ?? []
+      throw new WorkspaceError('unknown_market', `The business that shares these products has no marketplace ${market}.${known.length ? ` It has ${known.join(', ')}.` : ''} Choose another reference marketplace.`, 400)
+    }
+    throw error
+  })
   // Back in the follower's context: nothing below may touch the owner's tables.
   if (requireWorkspace().workspaceId !== follower.workspaceId) throw new WorkspaceError('context_leak', 'The business context did not return to the follower.', 500)
 
-  const excludedCounts = new Map<string, { field: string; reason: string; rows: number }>()
+  const excludedCounts = new Map<string, OfferedCatalog['excluded'][number]>()
   const rows: TransferRow[] = []
   for (const row of read.rows) {
     const disposition = classifyRow(row, read.storage.get(row.field), PRIMARY_CONTENT_LOCALE)
-    const reason = 'never' in disposition ? disposition.never : offered.has(disposition.group) ? null : `the "${disposition.group}" group was not offered`
-    if (reason) {
-      const key = `${row.field}\u0000${reason}`
-      const entry = excludedCounts.get(key) ?? { field: row.field, reason, rows: 0 }
+    // An empty list (no bullet points, no keywords) has nothing to copy, and the field contract refuses
+    // an empty list outright: sending it would refuse the whole product. Nothing is set or cleared.
+    const emptyList = row.action === 'SET' && Array.isArray(row.value) && row.value.every((item) => item === null || String(item).trim() === '')
+    const reason = 'never' in disposition ? disposition.never : emptyList ? 'empty in the shared product, so nothing is copied' : null
+    const group = 'never' in disposition || emptyList || offered.has(disposition.group) ? null : disposition.group
+    if (reason || group) {
+      const key = `${row.field}\u0000${reason ?? group}`
+      const entry = excludedCounts.get(key) ?? { field: row.field, label: read.labels.get(row.field) ?? METADATA_LABELS[row.field] ?? row.field, group, reason, rows: 0 }
       entry.rows++
       excludedCounts.set(key, entry)
       continue
@@ -194,6 +211,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
   const contracts = transferContracts(market, { allowIncompleteSchema: true })
   const rows: TransferRow[] = []
   const storage = new Map<string, ColumnStorage>()
+  const labels = new Map<string, string>()
   for (const product of products) {
     const locales = includeTranslations ? contentLanguages(product, product.parent) : [PRIMARY_CONTENT_LOCALE]
     const boundary = {
@@ -205,6 +223,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
     const familyId = product.familyId ?? product.parent?.familyId ?? null
     for (const column of await contracts.master(familyId, product as unknown as TransferProduct)) {
       if (!storage.has(column.key)) storage.set(column.key, column.storage as ColumnStorage)
+      if (!labels.has(column.key) && typeof column.label === 'string') labels.set(column.key, column.label)
     }
   }
 
@@ -273,6 +292,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
   return {
     rows,
     storage,
+    labels,
     products: products.map((product) => ({
       id: product.id, sku: product.sku, parentSku: product.parentId ? skuById.get(product.parentId) ?? product.parent?.sku ?? null : null,
       version: product.version, familyCode: familyById.get(product.familyId ?? '')?.code ?? null,

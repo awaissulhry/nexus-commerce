@@ -54,6 +54,8 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   font-size: var(--nds-font-size-md);
   font-weight: 700;
   color: var(--nds-text);
+  /* A heading title (`headingLevel`) carries a user-agent margin; a span has none. */
+  margin: 0;
 }
 /* 9.3 — a headed card whose body meets its own edges (charts, tables, heatmaps). Before this
    the head forced 16px on the body, which is why 17 call sites kept the second Card. */

@@ -47,6 +47,7 @@ export default function ProfilesClient() {
           {showArchived ? <Button onClick={() => setChangingStatus(profile)}>Restore profile</Button> : <>
           <Button variant="primary" asChild><a href={`/w/${profile.id}/dashboard/overview`}>Open profile</a></Button>
           {(profile.isOwner || profile.canConnectAccounts) && <Button asChild><a href={`/w/${profile.id}/settings/channels`}>Connected accounts</a></Button>}
+          {profile.isOwner && <Button asChild><a href={`/w/${profile.id}/settings/sharing`}>Shared products</a></Button>}
           {profile.isOwner && <><Button variant="quiet" onClick={() => setRenaming(profile)}>Rename</Button><Button variant="quiet" onClick={() => setChangingStatus(profile)}>Archive</Button></>}
           </>}
         </div>
