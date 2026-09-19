@@ -7,8 +7,9 @@
  * lookups from 60 to 0).
  *
  * Which channel a send belongs to, in this order: a channel host written in the call itself; else the
- * channel hosts written anywhere in its file; else the channel named in its file path; else an eBay
- * `apiBase` argument. A send that is not a channel API call — an OAuth token exchange the gateway itself
+ * API path written in the call (`/sell/…` is eBay, `/variants.json` Shopify — a file can mix channels);
+ * else the channel hosts written anywhere in its file; else the channel named in its file path; else an
+ * eBay `apiBase` argument. A send that is not a channel API call — an OAuth token exchange the gateway itself
  * depends on, a pre-signed storage URL — carries `// gateway-exempt: <reason>` on its line or one of
  * the two lines above; it is listed, not counted. An exemption without a reason is counted.
  *
@@ -33,12 +34,14 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
  * direct sends) → 0, and 22 non-API sends marked exempt with their reason.
  * 2026-09-19, P1.2b: eBay 94 → 0 (ebayFetch, callTradingApi with its account on every caller, 80 direct
  * sends); 11 eBay non-API sends exempt (OAuth, connector identity, one Amazon pre-signed upload).
+ * Then the API-path rule found 10 more eBay sends in outbound-sync.service.ts (a file with both eBay and
+ * Shopify, counted as Shopify before) — moved; Shopify's true count is 15.
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
   AMAZON_SP: 0,
   AMAZON_ADS: 13,
-  SHOPIFY: 25,
+  SHOPIFY: 15,
   ETSY: 4,
 }
 
@@ -48,6 +51,13 @@ const HOSTS: Array<[Channel, RegExp]> = [
   ['EBAY', /(^|[/.])(api|apiz|svcs|open\.api|auth|signin)(\.sandbox)?\.ebay\.com/],
   ['SHOPIFY', /myshopify\.com|\/admin\/api\/20\d\d-\d\d/],
   ['ETSY', /(openapi|api)\.etsy\.com/],
+]
+/** The API path written in the call itself — decides before the file's hosts (a file can mix channels). */
+const API_PATHS: Array<[Channel, RegExp]> = [
+  ['EBAY', /\/(sell|commerce|post-order|developer)\/|\/ws\/api\.dll|\/identity\/v1\//],
+  ['SHOPIFY', /\/admin\/api\/|\/(variants|products|locations|inventory_levels|inventory_items|orders|fulfillments|webhooks)(\/[^`'"]*)?\.json|graphql\.json/],
+  ['AMAZON_ADS', /\/(v2|v3)\/(sp|sb|sd|profiles|portfolios)|\/sp\/(campaigns|adGroups|keywords|targets)|\/reporting\/reports/],
+  ['AMAZON_SP', /\/(listings|orders|fba|feeds|reports|catalog|notifications|sellers|finances|aplus|definitions|products|mfn|shipping)\/(v\d|20\d\d)/],
 ]
 const PATH_CHANNEL: Array<[Channel, RegExp]> = [
   ['AMAZON_ADS', /amazon-ads|advertising|(^|\/)ads[-/]/i],
@@ -102,7 +112,9 @@ export function scan(root = SRC): Site[] {
       if (send) {
         const target = (args?.[0]?.getText(source) ?? '').replace(/\s+/g, ' ')
         const own = hostChannels(target)
+        const byPath = API_PATHS.find(([, re]) => re.test(target))?.[0] ?? null
         const channel: Channel | null = own[0]
+          ?? byPath
           ?? (fileChannels.length === 1 ? fileChannels[0] : null)
           ?? (fileChannels.length > 1 ? (pathChannel && fileChannels.includes(pathChannel) ? pathChannel : fileChannels[0]) : null)
           ?? pathChannel

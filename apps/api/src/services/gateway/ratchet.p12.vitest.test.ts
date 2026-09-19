@@ -31,6 +31,8 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
   write('services/comment-only.ts', "// fetch('https://api.ebay.com/sell/inventory/v1/offer')\nexport const i = 1\n")
   write('services/raw-ebay.vitest.test.ts', "fetch('https://api.ebay.com/sell/inventory/v1/offer')\n")
   write('services/sdk.ts', "import { SellingPartner } from 'amazon-sp-api'\nexport const j = () => new SellingPartner({})\n")
+  // A file that mixes channels: the API path in each call decides (outbound-sync.service.ts has both).
+  write('services/mixed-sync.ts', "const shop = 'https://x.myshopify.com'\nexport const m1 = (apiBase: string) => fetch(`${apiBase}/sell/inventory/v1/offer`)\nexport const m2 = (apiBase: string) => fetch(`${apiBase}/variants.json?sku=1`)\n")
   write('services/https.ts', "import https from 'node:https'\nexport const k = () => https.request('https://advertising-api-eu.amazon.com/v2/profiles')\n")
 
   const sites = scan(root)
@@ -44,6 +46,9 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
     expect(where('services/sdk.ts')).toEqual([expect.objectContaining({ channel: 'AMAZON_SP', send: 'new SellingPartner' })])
     expect(where('services/https.ts')).toEqual([expect.objectContaining({ channel: 'AMAZON_ADS' })])
   })
+  it('a file that mixes channels: each call counts for the channel its API path names', () => {
+    expect(where('services/mixed-sync.ts').map((s) => s.channel)).toEqual(['EBAY', 'SHOPIFY'])
+  })
   it('lists an exemption WITH a reason, and counts one without', () => {
     expect(where('services/exempt.ts')).toEqual([expect.objectContaining({ exempt: 'OAuth token exchange' })])
     expect(where('services/no-reason.ts')).toEqual([expect.objectContaining({ channel: 'EBAY', exempt: null })])
@@ -52,7 +57,7 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
     for (const file of ['services/gateway/inside.ts', 'services/not-a-channel.ts', 'services/comment-only.ts', 'services/raw-ebay.vitest.test.ts']) expect(where(file)).toEqual([])
   })
   it('the counts are per channel, exemptions left out', () => {
-    expect(counts(sites)).toEqual({ EBAY: 2, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 1, ETSY: 0 })
+    expect(counts(sites)).toEqual({ EBAY: 3, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 2, ETSY: 0 })
   })
 })
 

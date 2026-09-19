@@ -29,6 +29,9 @@ vi.mock('./connection-resolver.service.js', async (importOriginal) => ({
   tryResolveConnection: vi.fn(async () => ({ id: 'conn-A', channelType: 'EBAY', isPrimary: true })),
 }))
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: vi.fn(async () => 'token-A') } }))
+// P1.2 — the eBay sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 
 import { OutboundSyncService } from './outbound-sync.service.js'
 

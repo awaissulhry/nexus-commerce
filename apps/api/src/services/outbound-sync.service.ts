@@ -1,4 +1,5 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
 import { readSaleWindows } from './pim/sale-window.js' // MX.1 (D-MX4) — the stored sale window a price push must carry
@@ -1493,7 +1494,7 @@ export class OutboundSyncService {
         // Offer id (read of the OFFER, never the item — zero image risk).
         let offerId: string | null = null;
         try {
-          const bySku = await fetch(
+          const bySku = await ebaySend(connection.id,
             `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
             { headers },
           );
@@ -1506,7 +1507,7 @@ export class OutboundSyncService {
             ...(offerId ? { offers: [{ offerId, availableQuantity: payload.quantity }] } : {}),
           }],
         };
-        const bulkRes = await fetch(`${apiBase}/sell/inventory/v1/bulk_update_price_quantity`, {
+        const bulkRes = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/bulk_update_price_quantity`, {
           method: "POST", headers, body: JSON.stringify(bulkBody),
         });
         const bulkJson = bulkRes.ok
@@ -1522,7 +1523,7 @@ export class OutboundSyncService {
       } else if (touchesItem) {
         const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         let existing: Record<string, any> = {};
-        const getRes = await fetch(itemUrl, { method: "GET", headers });
+        const getRes = await ebaySend(connection.id, itemUrl, { method: "GET", headers });
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
         // WIPE GUARD: createOrReplace REPLACES the whole item. If the GET
         // failed (rate-limit, blip) `existing` is {}, and a content PUT built
@@ -1535,7 +1536,7 @@ export class OutboundSyncService {
           );
         }
         const itemBodyJson = JSON.stringify(mergeEbayInventoryItem(existing, payload));
-        const putRes = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
+        const putRes = await ebaySend(connection.id, itemUrl, { method: "PUT", headers, body: itemBodyJson });
         if (!(putRes.ok || putRes.status === 204)) {
           const errBody = (await putRes.text().catch(() => "")).slice(0, 500);
           // RT.4 — 25004 self-heal, ported from the manual flat-file push
@@ -1548,7 +1549,7 @@ export class OutboundSyncService {
           // upstream — never more than available) and retry the PUT once.
           if (errBody.includes('"errorId":25004') && payload.quantity !== undefined) {
             try {
-              const bySku = await fetch(
+              const bySku = await ebaySend(connection.id,
                 `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
                 { headers },
               );
@@ -1556,16 +1557,16 @@ export class OutboundSyncService {
                 ? ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null
                 : null;
               if (offerId) {
-                const getFull = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
+                const getFull = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
                 if (getFull.ok) {
                   const fullOffer = (await getFull.json().catch(() => ({}))) as Record<string, unknown>;
-                  const raised = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+                  const raised = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/offer/${offerId}`, {
                     method: "PUT",
                     headers,
                     body: JSON.stringify({ ...fullOffer, availableQuantity: payload.quantity }),
                   });
                   if (raised.ok || raised.status === 204) {
-                    const retryItem = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
+                    const retryItem = await ebaySend(connection.id, itemUrl, { method: "PUT", headers, body: itemBodyJson });
                     if (retryItem.ok || retryItem.status === 204) {
                       logger.info("syncToEbay: recovered from 25004 — raised parked offer + retried", {
                         sku, offerId, quantity: payload.quantity,
@@ -1593,7 +1594,7 @@ export class OutboundSyncService {
 
       // 7b. Price → offer (resolve the offer by SKU, then PUT its pricingSummary).
       if (payload.price !== undefined) {
-        const offersRes = await fetch(
+        const offersRes = await ebaySend(connection.id,
           `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
           { method: "GET", headers },
         );
@@ -1610,7 +1611,7 @@ export class OutboundSyncService {
           // non-retryable + does not trip the marketplace circuit.
           return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`, "failed", 404);
         }
-        const offerRes = await fetch(
+        const offerRes = await ebaySend(connection.id,
           `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
           {
             method: "PUT",
