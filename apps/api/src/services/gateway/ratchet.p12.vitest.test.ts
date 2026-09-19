@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { counts, scan } from '../../../scripts/channel-gateway-ratchet.mjs'
+import { counts, scan, scanQueueRowCreation } from '../../../scripts/channel-gateway-ratchet.mjs'
 
 const root = mkdtempSync(join(tmpdir(), 'gw-ratchet-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -61,10 +61,20 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
   })
 })
 
+describe('P1.3 — queue rows are created only by the one creation module', () => {
+  write('services/direct-queue.ts', "export const q = (tx: any) => tx.outboundSyncQueue.createMany({ data: [] })\nexport const r = (prisma: any) => prisma.outboundSyncQueue.update({ where: {} })\n")
+  write('services/outbound-rows.ts', "export const home = (db: any) => db.outboundSyncQueue.create({ data: {} })\n")
+  it('counts a direct create / createMany anywhere else, not an update, not the module itself', () => {
+    const found = scanQueueRowCreation(root)
+    expect(found.map((f) => `${f.file} ${f.call}`)).toEqual(['services/direct-queue.ts outboundSyncQueue.createMany'])
+  })
+})
+
 describe('P1.2 — the real tree is at or below the baseline', () => {
   it('--check passes', () => {
     const api = fileURLToPath(new URL('../../../', import.meta.url))
     const out = execFileSync('npx', ['tsx', 'scripts/channel-gateway-ratchet.mts', '--check'], { cwd: api, encoding: 'utf8' })
     expect(out).toMatch(/channel sends outside the gateway: \{"EBAY":\d+,"AMAZON_SP":0,/)
+    expect(out).toMatch(/queue rows created outside services\/outbound-rows\.ts: 0/)
   }, 60_000)
 })

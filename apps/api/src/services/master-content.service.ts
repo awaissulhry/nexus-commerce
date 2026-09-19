@@ -3,6 +3,7 @@
  * The caller's transaction owns values, versions, audit and outbound queue rows.
  */
 
+import { createOutboundRow } from './outbound-rows.js'
 import { produceReadiness } from './pim/readiness-index.service.js'
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
@@ -142,7 +143,7 @@ export class MasterContentService {
         // Caller transactions leave scheduling to the drain after commit.
         if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false) {
           const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
-          const queue = await tx.outboundSyncQueue.create({ data: { productId: listing.productId, channelListingId: listing.id, targetChannel: listing.channel as any,
+          const queue = await createOutboundRow(tx, { data: { productId: listing.productId, channelListingId: listing.id, channelConnectionId: listing.channelConnectionId, targetChannel: listing.channel as any,
             targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',
             holdUntil: ctx.applyGrace === false ? null : new Date(Date.now() + DEFAULT_HOLD_MS), payload: { source: 'MASTER_CONTENT_CHANGE', productId: listing.productId, productSku: listing.product.sku,
               channel: listing.channel, marketplace: market, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey,

@@ -21,6 +21,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * easier to cache server-side.
  */
 
+import { createOutboundRow } from '../services/outbound-rows.js'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -3254,7 +3255,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
               version: { increment: 1 },
             },
           })
-          return tx.outboundSyncQueue.create({
+          return createOutboundRow(tx, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               productId: listing.productId,
@@ -3306,7 +3307,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             version: { increment: 1 },
           },
         })
-        return tx.outboundSyncQueue.create({
+        return createOutboundRow(tx, {
           select: { id: true, productId: true, syncType: true, holdUntil: true },
           data: {
             productId: listing.productId,

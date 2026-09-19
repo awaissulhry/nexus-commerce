@@ -140,6 +140,38 @@ export function scan(root = SRC): Site[] {
   return sites
 }
 
+/**
+ * P1.3 — OutboundSyncQueue rows are created only by services/outbound-rows.ts (and the enqueue module
+ * next to it): there every row gets its destination account and the listing-claim check. A direct
+ * `….outboundSyncQueue.create / createMany / createManyAndReturn / upsert(` anywhere else is counted.
+ * Baseline 0 since P1.3a.
+ */
+export const QUEUE_ROW_BASELINE = 0
+const QUEUE_ROW_HOMES = new Set(['services/outbound-rows.ts', 'services/outbound-enqueue.ts'])
+
+export function scanQueueRowCreation(root = SRC): Array<{ file: string; line: number; call: string }> {
+  const out: Array<{ file: string; line: number; call: string }> = []
+  for (const full of files(root)) {
+    const file = path.relative(root, full).replace(/\\/g, '/')
+    if (QUEUE_ROW_HOMES.has(file)) continue
+    const text = fs.readFileSync(full, 'utf8')
+    if (!text.includes('outboundSyncQueue')) continue
+    const source = ts.createSourceFile(full, text, ts.ScriptTarget.Latest, true)
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const method = node.expression.name.text
+        const target = node.expression.expression
+        if (/^(create|createMany|createManyAndReturn|upsert)$/.test(method) && ts.isPropertyAccessExpression(target) && target.name.text === 'outboundSyncQueue') {
+          out.push({ file, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, call: `outboundSyncQueue.${method}` })
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+  }
+  return out
+}
+
 export function counts(sites: Site[]): Record<Channel, number> {
   const out: Record<Channel, number> = { EBAY: 0, AMAZON_SP: 0, AMAZON_ADS: 0, SHOPIFY: 0, ETSY: 0 }
   for (const site of sites) if (!site.exempt) out[site.channel]++
@@ -156,12 +188,21 @@ if (isMain) {
     }
   }
   console.log(`channel sends outside the gateway: ${JSON.stringify(count)} (exempt: ${sites.filter((s) => s.exempt).length})`)
+  const queueRows = scanQueueRowCreation()
+  if (process.argv.includes('--list')) for (const row of queueRows) console.log(`QUEUE-ROW ${row.file}:${row.line}  ${row.call}(`)
+  console.log(`queue rows created outside services/outbound-rows.ts: ${queueRows.length}`)
   if (process.argv.includes('--check')) {
     const over = (Object.keys(BASELINE) as Channel[]).filter((channel) => count[channel] > BASELINE[channel])
     if (over.length) {
       console.error(`❌ channel-gateway ratchet: ${over.map((c) => `${c} ${count[c]} > ${BASELINE[c]}`).join(', ')}.`)
       console.error('   A new send to a channel must go through services/gateway/gateway.ts (gatewayCall), or carry')
       console.error('   `// gateway-exempt: <reason>` when it is not a channel API call. Run with --list to see the sites.')
+      process.exit(1)
+    }
+    if (queueRows.length > QUEUE_ROW_BASELINE) {
+      console.error(`❌ queue-row ratchet: ${queueRows.length} > ${QUEUE_ROW_BASELINE}. Create OutboundSyncQueue rows through`)
+      console.error('   services/outbound-rows.ts (createOutboundRow / createOutboundRows / createOutboundRowsAndReturn):')
+      console.error('   there each row gets its destination account and the listing-claim check. Run with --list.')
       process.exit(1)
     }
     const under = (Object.keys(BASELINE) as Channel[]).filter((channel) => count[channel] < BASELINE[channel])

@@ -31,13 +31,17 @@ export interface Coordinate {
  * not here needs no claim at all, which is what keeps this feature off the path of
  * every existing single-business publish.
  */
-export async function sharedConnectionIds(connectionIds: string[]): Promise<Set<string>> {
+export async function sharedConnectionIds(
+  connectionIds: string[],
+  /** P1.3 — the caller's client (a transaction reads through its own connection; no second one). */
+  client: { channelAccountGrant: { findMany: (args: never) => Promise<Array<{ connectionId: string }>> } } = prisma as never,
+): Promise<Set<string>> {
   const unique = [...new Set(connectionIds.filter(Boolean))]
   if (unique.length === 0) return new Set()
-  const rows = await prisma.channelAccountGrant.findMany({
+  const rows = await client.channelAccountGrant.findMany({
     where: { connectionId: { in: unique }, revokedAt: null },
     select: { connectionId: true },
-  })
+  } as never)
   return new Set(rows.map(row => row.connectionId))
 }
 

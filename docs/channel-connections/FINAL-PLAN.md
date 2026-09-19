@@ -694,7 +694,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P6.1 automatic secret rotation | BUILT (2026-09-19) | `build/P6.1.md` | Committed locally, not pushed. OFF until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (build/P6.1.md section 4) |
 | P1.1 | BUILT (2026-09-19) | `build/P1.1.md` | Committed locally, not pushed. Gateway + ledger columns (migration `20260919a_p11_gateway_call_ledger`, additive); no caller moved yet (P1.2). eBay headers from the Marketplace row (LX.2) |
 | P1.2 | BUILT (2026-09-19) | `build/P1.2.md` | Committed locally, not pushed. Ratchet in pre-push; ALL channels at 0 (50 exempt, each with a written reason). P1.6 candidates listed in the record |
-| P1.3 – P1.8 | NOT STARTED | — | |
+| P1.3 | BUILDING (2026-09-19) | `build/P1.3.md` | P1.3a committed locally: queue column + migration `20260919b_p13_queue_destination` (additive), one creation module for all 35 sites (claim check + destination), ratchet 0. Next: send time uses it (P1.3b), concurrency + loop limit (P1.3c) |
+| P1.4 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |

@@ -26,7 +26,9 @@ import { sellingRisk } from '@nexus/shared/listing-risk'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
-import { sellerSkuForClaim } from './listing-claim-identity.js'
+import { reserveSharedCoordinates, type BlockedCoordinate } from './outbound-rows.js'
+// P1.3 — the claim check and the one way to create a queue row live in outbound-rows.ts (no queue import).
+export { reserveSharedCoordinates, createOutboundRow, createOutboundRows, createOutboundRowsAndReturn, type BlockedCoordinate } from './outbound-rows.js'
 
 /** Capture before deletion: Listings Items is keyed by seller SKU, never ASIN. */
 export function sellerSkuForDelist(
@@ -123,8 +125,10 @@ export async function enqueueDelistCascade(
       },
     })
   }
+  // P1.3 — the delist rows already name their account (payload.channelConnectionId); stamped as the column.
   const entries = data.length ? await tx.outboundSyncQueue.createManyAndReturn({
-    data, select: { id: true, productId: true, syncType: true, holdUntil: true },
+    data: data.map((row) => ({ ...row, channelConnectionId: ((row.payload as Record<string, unknown>)?.channelConnectionId as string | null) ?? null })),
+    select: { id: true, productId: true, syncType: true, holdUntil: true },
   }) : []
   return { entries, channelCascadeEnqueued: entries.length, channelSkipped }
 }
@@ -242,82 +246,6 @@ export async function fireOutboundJobs(
   }
 }
 
-/** One coordinate the BP.S3 preflight refused, and the sentence that says why. */
-export interface BlockedCoordinate {
-  channelListingId: string
-  sellerSku: string | null
-  marketplace: string
-  reason: string
-  heldByWorkspaceName?: string
-}
-
-/**
- * BP.S3 — the publish preflight for a SHARED seller account.
- *
- * Two businesses behind one account share one SKU namespace, so before either may
- * push into a coordinate it must hold `ChannelListingClaim` for it. This is the one
- * place that check can live: every OutboundSyncQueue row in the instant lane is
- * created here, and it runs BEFORE the rows exist, so a refused coordinate never
- * becomes a durable job someone has to cancel.
- *
- * 🔴 It is a NO-OP unless the account is shared. `sharedConnectionIds` is one
- * indexed read, and an account with a single business behind it takes the early
- * return — so nothing about existing publishing changes, which is what keeps the
- * blast radius of this feature at zero for every account nobody has shared.
- *
- * Returns the rows that may proceed, plus a refusal per coordinate that may not.
- * Refusals are collected rather than thrown: a bulk publish must report every
- * blocked coordinate at once, not stop on the first.
- */
-export async function reserveSharedCoordinates(
-  db: OutboundEnqueueDb,
-  rows: Array<Record<string, unknown>>,
-): Promise<{ allowed: Array<Record<string, unknown>>; blocked: BlockedCoordinate[] }> {
-  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return { allowed: rows, blocked: [] }
-  const listingIds = [...new Set(rows.map(r => r.channelListingId).filter((id): id is string => typeof id === 'string' && !!id))]
-  if (listingIds.length === 0) return { allowed: rows, blocked: [] }
-  /*
-   * Imported HERE, past the flag check, on purpose. This module is on the hot path
-   * of every outbound push; the claim service pulls in the prisma client, and a
-   * single-business install never reaches this line. It also keeps that client out
-   * of the import graph of callers that mock `@nexus/database` partially —
-   * `channel-delist.vitest.test.ts` mocks it with no default export, which a
-   * top-level import here turned into a suite-load failure.
-   */
-  const { claimCoordinate, sharedConnectionIds } = await import('./listing-claim.service.js')
-
-  const listings = await (db as unknown as { channelListing: { findMany: (a: unknown) => Promise<Array<Record<string, unknown>>> } }).channelListing.findMany({
-    where: { id: { in: listingIds } },
-    select: {
-      id: true, marketplace: true, channelConnectionId: true,
-      product: { select: { sku: true } },
-      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
-    },
-  })
-  const byId = new Map(listings.map(l => [l.id as string, l]))
-  const shared = await sharedConnectionIds(listings.map(l => l.channelConnectionId as string).filter(Boolean))
-  if (shared.size === 0) return { allowed: rows, blocked: [] }
-
-  const blocked: BlockedCoordinate[] = []
-  const refusedListingIds = new Set<string>()
-  for (const id of listingIds) {
-    const listing = byId.get(id)
-    const connectionId = listing?.channelConnectionId as string | undefined
-    if (!listing || !connectionId || !shared.has(connectionId)) continue
-    const marketplace = (listing.marketplace as string) ?? 'DEFAULT'
-    const sellerSku = sellerSkuForClaim(listing as never)
-    const outcome = await claimCoordinate({ connectionId, marketplace, sellerSku, channelListingId: id })
-    if (outcome.result === 'blocked') {
-      refusedListingIds.add(id)
-      blocked.push({ channelListingId: id, sellerSku, marketplace, reason: outcome.reason ?? 'That coordinate belongs to another business profile.', heldByWorkspaceName: outcome.heldBy?.workspaceName })
-    }
-  }
-  if (blocked.length > 0) {
-    logger.warn('BP.S3 publish refused: coordinate held by another business profile', { count: blocked.length, coordinates: blocked.map(b => `${b.marketplace}/${b.sellerSku}`) })
-  }
-  return { allowed: rows.filter(r => !refusedListingIds.has(r.channelListingId as string)), blocked }
-}
-
 /**
  * createMany the rows + fire instant-lane jobs for them. Returns the created
  * entries. `rows` are OutboundSyncQueue create-inputs (payload may be absent).
@@ -356,9 +284,13 @@ export async function enqueueOutboundRowsInstant(
   }
   rows = allowed
   if (rows.length === 0) return []
+  // P1.3 — the destination account of every row, fixed now.
+  const { resolveDestinations } = await import('./outbound-destination.js')
+  const destinations = await resolveDestinations(db as never, rows as never)
   const tag = randomUUID()
-  const tagged = rows.map((r) => ({
+  const tagged = rows.map((r, i) => ({
     ...r,
+    channelConnectionId: destinations[i].connectionId,
     payload: { ...((r.payload as Record<string, unknown> | null) ?? {}), enqueueBatch: tag },
   }))
   await db.outboundSyncQueue.createMany({

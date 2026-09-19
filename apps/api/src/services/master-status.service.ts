@@ -47,6 +47,7 @@
  *   drain picks it up.
  */
 
+import { createOutboundRows } from './outbound-rows.js'
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -209,7 +210,7 @@ export class MasterStatusService {
 
       let queuedSyncIds: string[] = []
       if (queueRowsToCreate.length > 0) {
-        await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })
+        await createOutboundRows(tx, { data: queueRowsToCreate })
         const justEnqueued = await tx.outboundSyncQueue.findMany({
           where: {
             channelListingId: { in: cascadedListingIds },

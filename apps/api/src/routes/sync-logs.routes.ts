@@ -24,6 +24,7 @@
  *   ?limit=50, ?cursor=<id>  (recent endpoint pagination)
  */
 
+import { createOutboundRows } from '../services/outbound-rows.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { OutboundSyncStatus, Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -1565,7 +1566,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     let enqueued = 0
     let errors = 0
     try {
-      const result = await prisma.outboundSyncQueue.createMany({ data: rows as any })
+      const result = await createOutboundRows(prisma, { data: rows as any })
       enqueued = result.count
     } catch (err: any) {
       errors = rows.length

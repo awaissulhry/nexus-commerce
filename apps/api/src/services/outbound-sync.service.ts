@@ -1,4 +1,5 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { createOutboundRow } from './outbound-rows.js'
 import { shopifyTransport } from './gateway/shopify.js';
 import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
@@ -582,7 +583,7 @@ export class OutboundSyncService {
       }
 
       // Create queue entry
-      const queueEntry = await prisma.outboundSyncQueue.create({
+      const queueEntry = await createOutboundRow(prisma, {
         data: {
           productId,
           targetChannel,

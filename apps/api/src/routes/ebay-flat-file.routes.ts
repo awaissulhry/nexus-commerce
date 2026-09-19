@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
@@ -1098,7 +1099,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const qtyChanged = newQty != null && oldQty !== newQty;
 
           if (priceChanged) {
-            const qRow = await prisma.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,
@@ -1116,7 +1117,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           if (qtyChanged) {
-            const qRow = await prisma.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,

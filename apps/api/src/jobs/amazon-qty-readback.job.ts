@@ -19,6 +19,7 @@
  * same DB-directive pattern as the notification recycle.
  */
 
+import { createOutboundRow } from '../services/outbound-rows.js'
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
@@ -174,7 +175,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
       // Bounded self-heal: re-enqueue the intended quantity.
       if (healed < healMax) {
         try {
-          await prisma.outboundSyncQueue.create({
+          await createOutboundRow(prisma, {
             data: {
               productId: d.productId,
               channelListingId: d.channelListingId,

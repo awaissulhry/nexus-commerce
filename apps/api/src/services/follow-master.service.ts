@@ -21,6 +21,7 @@ import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordina
  * proven stock-import pinOverride path.
  */
 
+import { createOutboundRow } from './outbound-rows.js'
 import prisma from '../db.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { isFbaListing } from './outbound-sync.service.js'
@@ -270,10 +271,11 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
           })
 
           if (VALID_SYNC_TARGETS.has(cl.channel)) {
-            const qRow = await tx.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(tx, {
               data: {
                 productId: cl.productId,
                 channelListingId: cl.id,
+                channelConnectionId: cl.channelConnectionId, // P1.3 — the listing's own account (no extra read)
                 targetChannel: cl.channel as any,
                 targetRegion: cl.region,
                 syncStatus: 'PENDING' as any,
@@ -507,9 +509,9 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
           acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
 
           if (write.pushQuantity !== null && VALID_SYNC_TARGETS.has(cl.channel)) {
-            const qRow = await tx.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(tx, {
               data: {
-                productId: cl.productId, channelListingId: cl.id, targetChannel: cl.channel as any, targetRegion: cl.region,
+                productId: cl.productId, channelListingId: cl.id, channelConnectionId: cl.channelConnectionId, targetChannel: cl.channel as any, targetRegion: cl.region,
                 syncStatus: 'PENDING' as any, syncType: 'QUANTITY_UPDATE', holdUntil, externalListingId: cl.externalListingId, maxRetries: 3,
                 payload: { source: 'STOCK_BUFFER', productId: cl.productId, channel: cl.channel, marketplace: cl.marketplace, quantity: write.pushQuantity, oldQuantity: cl.quantity, stockBuffer: write.stockBuffer, actor: actor ?? null },
               },
