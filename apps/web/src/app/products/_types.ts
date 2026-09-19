@@ -24,6 +24,8 @@ export type ProductRow = {
   fulfillmentMethod: string | null
   fbaStock?: number
   fbmStock?: number
+  /** Shared stock step 5 — the pool this product sells from (a parent: its pooled variations), or null. */
+  poolSource?: { lenderName: string; available: number; products?: number } | null
   /**
    * W2.12 — ProductFamily attached via Product.familyId. Null when
    * the row hasn't been categorised yet (the legacy categoryAttributes

@@ -20,10 +20,12 @@ import { usePolledList } from '@/lib/sync/use-polled-list'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { END_TIME_ACTIONS, endsAtWords, useSyncActionDialog, type SyncActionAnswer } from '../../SyncActionDialog'
 import { ExternalLink } from 'lucide-react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import SyncExcelBar from '../../SyncExcelBar'
 import {
+  listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   type Density, type Mode, type Row, type ProductMaster,
 } from '../../sync-control-shared'
@@ -70,6 +72,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const confirm = useConfirm()
+  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
 
   // SCD.3 — ?family=<key> narrows this page to ONE parent listing, so every
   // action here touches only that family's child SKUs.
@@ -201,19 +205,22 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
     const listingActs = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
-    const sharedActs = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+    const sharedActs = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW'] // PIN/FOLLOW: shared stock step 3
     const l = listingActs.includes(action) ? listings : []
     const m = sharedActs.includes(action) ? memberships : []
     if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${action}.`); return }
     const fbaSkipped = rows.filter((r) => r.mode === 'FBA').length
-    const ok = await confirm({
-      title: `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`,
-      description: `${l.length} listing(s)${m.length ? ` + ${m.length} shared variant(s)` : ''}${fbaSkipped ? ` · ${fbaSkipped} FBA skipped (Amazon-managed)` : ''}` +
+    const title = `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`
+    const description = `${l.length} listing(s)${m.length ? ` + ${m.length} shared variant(s)` : ''}${fbaSkipped ? ` · ${fbaSkipped} FBA skipped (Amazon-managed)` : ''}` +
         (action === 'ZERO_PIN' ? ' · pushes qty 0 NOW and pins there' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities until Resume' : ''),
-      confirmLabel: 'Apply',
-    })
-    if (!ok) return
+        (action === 'PAUSE' ? ' · freezes current quantities until Resume' : '')
+    // Shared stock step 3 — these four can end by themselves; a number only for shared variants alone.
+    let extra: Partial<SyncActionAnswer> = {}
+    if (END_TIME_ACTIONS.has(action)) {
+      const answer = await askAction({ action, title, description, allowQuantity: action === 'PIN' && l.length === 0 && m.length > 0 })
+      if (!answer) return
+      extra = answer
+    } else if (!(await confirm({ title, description, confirmLabel: 'Apply' }))) return
     setBusy(true); setNotice(null)
 
     // SCT.6b — Close/Reopen make 1-2 Amazon API calls PER ROW; a big selection
@@ -222,7 +229,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     // fully succeed behind exactly that error). Batch client-side with live
     // progress so what you see is always what happened.
     if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
-      const targets = l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace }))
+      const targets = l.map(listingTarget)
       const BATCH = 20
       const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
       try {
@@ -258,8 +265,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
       const res = await fetch(`${API}/api/stock/sync-control/actions`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action, buffer: opts.buffer,
-          listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+          action, buffer: opts.buffer, ...extra,
+          listings: l.map(listingTarget),
           memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
         }),
       })
@@ -277,8 +284,8 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
         const res2 = await fetch(`${API}/api/stock/sync-control/actions`, {
           method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action, buffer: opts.buffer,
-            listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+            action, buffer: opts.buffer, ...extra,
+            listings: l.map(listingTarget),
             memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
             expandEuAligned: true,
           }),
@@ -309,7 +316,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
     { key: 'channel', label: <TipText help={COLUMN_HELP.channel} cursor="inherit">Channel</TipText>, width: 90, sortable: true, sortValue: (r) => r.channel, render: (r) => r.channel },
     { key: 'market', label: <TipText help={COLUMN_HELP.market} cursor="inherit">Market</TipText>, width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: <TipText help={COLUMN_HELP.lane}>Lane</TipText>, width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
-    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span>Mode</span></Tooltip>, width: 130, sortable: true, sortValue: (r) => r.mode, render: (r) => <Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex"><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip> },
+    { key: 'mode', label: <Tooltip content={COLUMN_HELP.sync}><span>Mode</span></Tooltip>, width: 210, sortable: true, sortValue: (r) => r.mode, render: (r) => <><Tooltip content={MODE_HELP[r.mode as Mode] ?? ''}><span className="inline-flex"><Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill></span></Tooltip>{endsAtWords(r.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.endsAt)}</span>}</> },
     { key: 'intended', label: <Tooltip content={COLUMN_HELP.intended}><span>Intended</span></Tooltip>, align: 'right', width: 85, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.intendedQty ?? -1),
       render: (r) => <span className="tabular-nums">{r.mode === 'FBA' ? '—' : r.intendedQty ?? '—'}</span> },
     { key: 'live', label: <Tooltip content={COLUMN_HELP.live}><span>Live</span></Tooltip>, align: 'right', width: 75, sortable: true, sortValue: (r) => (r.mode === 'FBA' ? -1 : r.liveQty ?? -1),
@@ -527,6 +534,7 @@ export default function ProductDetailClient({ masterId }: { masterId: string }) 
           <Tip help={CONTROL_HELP.pagination}><Pagination page={page} pageCount={pages} onPage={setPage} /></Tip>
         </div>
       </div>
+      {actionDialog}
     </div>
   )
 }

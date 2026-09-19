@@ -1,3 +1,11 @@
+## DateField calendar in dialogs and grids — 2026-09-19
+
+`DateField`'s calendar is portalled with fixed coordinates (`usePopoverPosition`), like `Listbox`: in flow it was cut off by any scrolling or overflow-hidden ancestor — inside a DS `Modal` only a 4 px strip showed. Its body now uses the `nds-dp-cal` box, as `DateRangePicker` does (the title and the grid sat side by side with no padding). Keyboard: opening moves focus to the chosen day (else today, else the first day that can be picked); Tab and Shift+Tab stay inside the calendar; Escape closes only the calendar (a host `Modal` stays open) and returns focus to the field; choosing or clearing returns focus too. Each day is named by its full date, with `aria-pressed` for the chosen day and `aria-current="date"` for today. The calendar carries `ag-custom-component-popup`, so a DateField inside an AG Grid cell editor does not end the edit when a day is clicked. `DateTimeField` names its controls with the chosen date and time. Mirrored in Factory.
+
+## End date and time — 2026-09-19
+
+Added `DateTimeField`: a moment in time as a `DateField`, a time `Listbox` (15-minute steps by default) and the viewer's time zone named beside them. `value`/`onChange` are an ISO instant (UTC), so the stored moment never depends on who reads it. `min`/`max` are instants: days outside them cannot be picked and, on the edge days, the times outside them are not offered. Both controls keep their own size; the row wraps on narrow hosts. Used by Sync Control end times ("Fixed number until …"). Catalog specimen under Date and time; mirrored in Factory.
+
 ## Product selection — 2026-09-15
 
 Added `LoadedRowsSelectionHeader`: a shared Checkbox header that selects explicit loaded rows without an implicit server-wide selection. Checked/mixed state follows loaded rows as groups expand. Mirrored in Factory.

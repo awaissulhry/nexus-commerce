@@ -214,6 +214,13 @@
   flex-direction: column;
   gap: 2px;
 }
+/* Shared stock: a third line (the pool). No gaps, so three lines fit the compact row (51px). */
+.invCellBtnThree {
+  padding-block: 0;
+}
+.invCellBtnThree .invSplit {
+  gap: 0;
+}
 .invLine {
   display: flex;
   align-items: center;

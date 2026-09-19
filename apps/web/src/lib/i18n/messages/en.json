@@ -1074,6 +1074,7 @@
   "stock.locations.errorLoad": "Failed to load locations",
   "stock.locations.errorSave": "Failed to save location",
   "stock.atpPerChannel.onHand": "on-hand",
+  "stock.atpPerChannel.shared": "shared from {name}",
   "stock.atpPerChannel.reserved": "reserved",
   "stock.atpPerChannel.buffer": "buffer",
   "stock.atpPerChannel.available": "available",

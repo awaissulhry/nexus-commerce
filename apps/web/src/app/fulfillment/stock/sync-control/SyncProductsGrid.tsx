@@ -24,6 +24,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { END_TIME_ACTIONS, endsAtWords, useSyncActionDialog, type SyncActionAnswer } from './SyncActionDialog'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Tip } from './SyncTip'
 import SyncExcelBar from './SyncExcelBar'
@@ -91,6 +92,8 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
   // still be acted on while hidden. Narrowing the list clears the selection.
   useEffect(() => { setSelected(new Set()) }, [search, family])
   const confirm = useConfirm()
+  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
 
   const url = useMemo(() => {
     const p = new URLSearchParams()
@@ -177,17 +180,21 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
       filters.modes.length ? `mode ${filters.modes.join('/')}` : '',
       filters.drift ? 'drifted rows only (evaluated at apply time — drift moves as syncs converge)' : '',
     ].filter(Boolean)
-    const ok = await confirm({
-      title: `${action.replace('_', ' ')} — ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}`,
-      description:
+    const title = `${action.replace('_', ' ')} — ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}`
+    const description =
         `Applies to every non-FBA listing across ${selectedMasterIds.length} product${selectedMasterIds.length === 1 ? '' : 's'}` +
         (scopeBits.length ? ` matching your filters (${scopeBits.join(', ')}) — other markets/listings stay untouched.` : ` (all channels + markets).`) +
         ` FBA stays Amazon-managed.` +
         (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there.' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume.' : ''),
-      confirmLabel: 'Apply',
-    })
-    if (!ok) return
+        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume.' : '')
+    // Shared stock step 3 — these four can end by themselves (a chosen number needs shared variants alone,
+    // and a product always carries its listings, so the product view never offers one).
+    let extra: Partial<SyncActionAnswer> = {}
+    if (END_TIME_ACTIONS.has(action)) {
+      const answer = await askAction({ action, title, description, allowQuantity: false })
+      if (!answer) return
+      extra = answer
+    } else if (!(await confirm({ title, description, confirmLabel: 'Apply' }))) return
     setBusy(true)
 
     // SCD.3 — a group's action must hit ALL its listings: the canonical master
@@ -241,7 +248,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action, masterIds: expandedMasterIds, buffer: opts.buffer,
+          action, masterIds: expandedMasterIds, buffer: opts.buffer, ...extra,
           // Act-on-what-you-see: the server narrows the family expansion to
           // rows matching these filters with the same predicate the grid uses.
           scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
@@ -264,7 +271,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action, masterIds: expandedMasterIds, buffer: opts.buffer,
+            action, masterIds: expandedMasterIds, buffer: opts.buffer, ...extra,
             scope: { channels: filters.channels, markets: filters.markets, modes: filters.modes, drift: filters.drift },
             expandEuAligned: true,
           }),
@@ -307,7 +314,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
     },
     {
       key: 'sync', label: <Hdr k="sync" label="Sync" />, width: 170,
-      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : r.kind === 'child' ? <ModePill mode={r.c.mode} /> : null,
+      render: (r) => r.kind === 'master' ? <SyncRollup m={r.m} /> : r.kind === 'child' ? <><ModePill mode={r.c.mode} />{endsAtWords(r.c.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.c.endsAt)}</span>}</> : null,
     },
     {
       key: 'intended', label: <Hdr k="intended" label="Intended" />, align: 'right', width: 80,
@@ -427,6 +434,7 @@ export default function SyncProductsGrid({ filters, density, onDensity, onChange
         <span className="tabular-nums">{total} products · page {page}/{pages}</span>
         <Tip help={CONTROL_HELP.pagination}><Pagination page={page} pageCount={pages} onPage={setPage} /></Tip>
       </div>
+      {actionDialog}
     </div>
   )
 }

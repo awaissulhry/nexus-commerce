@@ -82,3 +82,11 @@ When the host supplies `onReconnect`, an ENV-managed row offers **Replace enviro
 ### Card heading level — 2026-09-17
 
 `Card` takes `headingLevel` (2–6) to render its header title as a real heading instead of a `<span>`, so a page made of cards can be navigated by heading. Unset keeps the span, so every existing card renders as before. `.nds-card-head .t` now resets `margin`, which a heading carries by default and a span never had. First used by Settings › Shared products.
+
+### DateTimeField — 2026-09-19
+
+A moment in time: `DateField` + a time `Listbox` + the viewer's zone ("Europe/Rome (CEST)"). `value`/`onChange` are ISO instants (UTC) or ''; `min`/`max` are instants. Label it with `Field` (the label reaches the date trigger) and pass `ariaLabel` (it names the date and the time controls). Verify: keyboard through date, time and back; the time list skips moments before `min` on the first day; light/dark; a 390 px host wraps the zone under the controls.
+
+### DateField calendar — 2026-09-19
+
+The calendar is portalled (fixed coordinates, like `Listbox`), so a `Modal` or a scrolling panel no longer cuts it off. Opening moves focus to the chosen day (else today); Tab stays inside the calendar; Escape closes only the calendar and returns to the field. It carries `ag-custom-component-popup`, so it works inside an AG Grid cell editor. Verify inside a `Modal`: keyboard open, Tab, Escape (the modal stays open), pick a day.

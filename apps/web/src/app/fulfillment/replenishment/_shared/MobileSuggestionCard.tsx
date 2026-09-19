@@ -17,6 +17,7 @@ import { Factory, ShoppingCart, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { URGENCY_TONE } from './UrgencyTiles'
 import type { Suggestion } from './types'
+import { channelKeyLabel } from './channelLabel'
 
 export function MobileSuggestionCard({
   s,
@@ -82,7 +83,7 @@ export function MobileSuggestionCard({
             {/* R.14 — channel badge on mobile too */}
             {s.urgencySource === 'CHANNEL' && s.worstChannelKey && (
               <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-mono">
-                · {s.worstChannelKey.replace(':', '·')}
+                · {channelKeyLabel(s.worstChannelKey)}
               </span>
             )}
             {/* R.13 — event-driven urgency badge (mobile parity). */}

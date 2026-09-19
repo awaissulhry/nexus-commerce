@@ -20,6 +20,16 @@ export interface Row {
   buffer: number
   routedLocations: string[]
   itemId?: string
+  /** Shared stock step 3 — when the current Fixed number / Paused / Excluded ends by itself (ISO), or null. */
+  endsAt?: string | null
+  /** A listing row's full address: its account and alias (the API needs all five levels). */
+  channelConnectionId?: string | null
+  aliasKey?: string
+}
+
+/** The address an action names for a listing row: product, channel, market, account and alias. */
+export function listingTarget(r: Pick<Row, 'productId' | 'channel' | 'marketplace' | 'channelConnectionId' | 'aliasKey'>) {
+  return { productId: r.productId, channel: r.channel, marketplace: r.marketplace, channelConnectionId: r.channelConnectionId ?? null, aliasKey: r.aliasKey ?? '' }
 }
 
 export interface ProductRollup {

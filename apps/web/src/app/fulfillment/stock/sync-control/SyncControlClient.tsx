@@ -19,6 +19,7 @@ import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Tip, TipText } from './SyncTip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { END_TIME_ACTIONS, endsAtWords, useSyncActionDialog, type SyncActionAnswer } from './SyncActionDialog'
 // DS class styles — the Listbox/grid markup is unstyled without these
 // (pages import them directly; see ApiKeysClient for the convention).
 import '@/design-system/styles/tokens.css'
@@ -28,6 +29,7 @@ import '@/design-system/styles/patterns.css'
 import styles from './styles.module.css'
 import SyncProductsGrid from './SyncProductsGrid'
 import {
+  listingTarget,
   DENSITY_OPTIONS, MODE_TONE, MODE_LABEL, MODE_HELP, COLUMN_HELP, ACTION_HELP, CONTROL_HELP, PAGE_SIZES,
   type Mode, type Row, type Density,
 } from './sync-control-shared'
@@ -117,6 +119,8 @@ export default function SyncControlClient() {
   const [polChannel, setPolChannel] = useState('AMAZON')
   const [polMarket, setPolMarket] = useState('*')
   const confirm = useConfirm()
+  // Shared stock step 3 — Pin, Zero & Pin, Pause and Exclude can end by themselves.
+  const { dialog: actionDialog, ask: askAction } = useSyncActionDialog()
   const [pageSize, setPageSize] = useState(50)
   const [density, setDensity] = useState<Density>('cozy')
   const [view, setView] = useState<'products' | 'listings'>('products')
@@ -202,21 +206,24 @@ export default function SyncControlClient() {
     const listings = rows.filter((r) => r.lane === 'LISTING' && r.mode !== 'FBA' && r.productId)
     const memberships = rows.filter((r) => r.lane === 'SHARED')
     const listingActions = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
-    const sharedActions = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+    const sharedActions = ['EXCLUDE', 'INCLUDE', 'BUFFER', 'PIN', 'FOLLOW'] // PIN/FOLLOW: shared stock step 3
     const l = listingActions.includes(action) ? listings : []
     const m = sharedActions.includes(action) ? memberships : []
     if (l.length === 0 && m.length === 0) { setNotice(`No eligible rows for ${action}.`); return }
     const fbaSkipped = rows.filter((r) => r.mode === 'FBA').length
-    const ok = await confirm({
-      title: `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`,
-      description:
+    const title = `${action.replace('_', ' ')} — ${l.length + m.length} row(s)`
+    const description =
         `${l.length} listing row(s)${m.length ? ` + ${m.length} shared variant(s)` : ''}` +
         (fbaSkipped ? ` · ${fbaSkipped} FBA row(s) skipped (Amazon-managed)` : '') +
         (action === 'ZERO_PIN' ? ' · pushes quantity 0 NOW and pins there (resume via Set Follow)' : '') +
-        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume' : ''),
-      confirmLabel: 'Apply',
-    })
-    if (!ok) return
+        (action === 'PAUSE' ? ' · freezes current quantities; nothing pushes until Resume' : '')
+    // Shared stock step 3 — these four can end by themselves; a number only for shared variants alone.
+    let extra: Partial<SyncActionAnswer> = {}
+    if (END_TIME_ACTIONS.has(action)) {
+      const answer = await askAction({ action, title, description, allowQuantity: action === 'PIN' && l.length === 0 && m.length > 0 })
+      if (!answer) return
+      extra = answer
+    } else if (!(await confirm({ title, description, confirmLabel: 'Apply' }))) return
     setBusy(true)
 
     // SCT.6b — Close/Reopen make 1-2 Amazon API calls PER ROW; a big selection
@@ -225,7 +232,7 @@ export default function SyncControlClient() {
     // fully succeed behind exactly that error). Batch client-side with live
     // progress so what you see is always what happened.
     if (action === 'CLOSE_OFFER' || action === 'REOPEN_OFFER') {
-      const targets = l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace }))
+      const targets = l.map(listingTarget)
       const BATCH = 20
       const agg = { updated: 0, skippedFba: 0, unchanged: 0 }
       try {
@@ -266,7 +273,8 @@ export default function SyncControlClient() {
         body: JSON.stringify({
           action,
           buffer: opts.buffer,
-          listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+          ...extra,
+          listings: l.map(listingTarget),
           memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
         }),
       })
@@ -290,7 +298,8 @@ export default function SyncControlClient() {
           body: JSON.stringify({
             action,
             buffer: opts.buffer,
-            listings: l.map((r) => ({ productId: r.productId, channel: r.channel, marketplace: r.marketplace })),
+            ...extra,
+            listings: l.map(listingTarget),
             memberships: m.map((r) => ({ itemId: r.itemId, marketplace: r.marketplace, sku: r.sku })),
             expandEuAligned: true,
           }),
@@ -423,11 +432,14 @@ export default function SyncControlClient() {
     { key: 'market', label: <Hdr k="market" label="Market" />, width: 80, sortable: true, sortValue: (r) => r.marketplace, render: (r) => r.marketplace },
     { key: 'lane', label: <Hdr k="lane" label="Lane" />, width: 70, render: (r) => <span className="text-xs text-zinc-500">{r.lane === 'SHARED' ? 'Shared' : 'Listing'}</span> },
     {
-      key: 'mode', label: <Hdr k="mode" label="Mode" />, width: 130, sortable: true, sortValue: (r) => r.mode,
+      key: 'mode', label: <Hdr k="mode" label="Mode" />, width: 210, sortable: true, sortValue: (r) => r.mode,
       render: (r) => (
-        <TipText help={MODE_HELP[r.mode] ?? ''}>
-          <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>
-        </TipText>
+        <>
+          <TipText help={MODE_HELP[r.mode] ?? ''}>
+            <Pill tone={MODE_TONE[r.mode]}>{MODE_LABEL[r.mode]}</Pill>
+          </TipText>
+          {endsAtWords(r.endsAt) && <span className={styles.endsAt}>{endsAtWords(r.endsAt)}</span>}
+        </>
       ),
     },
     {
@@ -896,6 +908,7 @@ export default function SyncControlClient() {
           </div>
         </div>
       </div>
+      {actionDialog}
     </div>
   )
 }

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { Listbox } from '@/design-system/components/Listbox'
+import { Banner } from '@/design-system/components/Banner'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
@@ -107,6 +108,8 @@ interface ReplenishmentResponse {
   filter: { channel: string | null; marketplace: string | null }
   // R.19 — per-supplier container fill summary (only suppliers with profiles).
   containerFill?: ContainerFillEntry[]
+  // Shared stock step 7b — products left out because another business restocks them.
+  sharedStock?: { products: number; lenders: string[] } | null
 }
 
 // W9.6 — UpcomingEvent + UrgencyTile + UpcomingEventsBanner moved to
@@ -1390,6 +1393,13 @@ export default function ReplenishmentWorkspace() {
       {/* Upcoming-events banner — surfaces the next ≤3 events with prep deadlines */}
       {events && events.length > 0 && (
         <UpcomingEventsBanner events={events.slice(0, 3)} />
+      )}
+
+      {/* Shared stock step 7b — products this business sells from another business's pool are the lender's to restock. */}
+      {data?.sharedStock && (
+        <Banner tone="info" title={`${data.sharedStock.products} ${data.sharedStock.products === 1 ? 'product sells' : 'products sell'} from shared stock`}>
+          {data.sharedStock.lenders.join(', ')} {data.sharedStock.lenders.length === 1 ? 'restocks' : 'restock'} {data.sharedStock.products === 1 ? 'it' : 'them'}, so {data.sharedStock.products === 1 ? 'it is' : 'they are'} not suggested here.
+        </Banner>
       )}
 
       {/* Urgency tiles */}

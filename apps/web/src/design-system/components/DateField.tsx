@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useClickAway } from './useClickAway'
+import { usePopoverPosition } from './usePopoverPosition'
 
 /**
  * How the date READS. `value` and `onChange` are ISO (`yyyy-mm-dd`) whatever this is set to, so
@@ -74,7 +76,39 @@ function monthGrid(month: Date): Array<Date | null> {
 export function DateField({ id, 'aria-describedby': describedBy, value, onChange, format = 'dd/mm/yyyy', locale = 'en-GB', min, max, placeholder = 'not set', clearable = true, clearLabel = 'clear', ariaLabel, className, disabled }: DateFieldProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  useClickAway(ref, () => setOpen(false), open)
+  // The calendar is portalled with fixed coordinates, like Listbox (usePopoverPosition): an absolute
+  // panel was cut off by every scrolling or overflow-hidden ancestor — measured 2026-09-19 inside a
+  // DS Modal, where only a 4 px strip of the calendar showed under the field.
+  const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'auto' })
+  useClickAway([ref, popRef], () => setOpen(false), open)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  // Choosing, clearing or Escape returns to the field, like Listbox. A click away leaves focus where it went.
+  const close = () => { setOpen(false); triggerRef.current?.focus() }
+
+  // Portalled, the calendar is no longer next to the field in the Tab order — and inside a Modal the
+  // modal's Tab trap would never reach it. So, as a date picker dialog does, focus moves INTO it on
+  // open (the chosen day, else today, else the first day that can be picked) and Tab stays inside it.
+  useEffect(() => {
+    if (!open) return
+    const pop = popRef.current
+    const day = pop?.querySelector<HTMLButtonElement>('.nds-dp-day.start:not(:disabled)')
+      ?? pop?.querySelector<HTMLButtonElement>('.nds-dp-day.today:not(:disabled)')
+      ?? pop?.querySelector<HTMLButtonElement>('button.nds-dp-day:not(:disabled)')
+      ?? pop?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+    day?.focus({ preventScroll: true })
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onPopKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    // preventDefault: a Modal that holds this field ignores a handled key (Escape closes only the calendar).
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return }
+    if (e.key !== 'Tab') return
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+    if (items.length === 0) return
+    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+    const next = e.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : (at === items.length - 1 ? 0 : at + 1)
+    e.preventDefault()
+    items[next]?.focus()
+  }
   const selected = value ? fromIso(value) : null
   const [view, setView] = useState(() => {
     const base = selected ?? (min ? fromIso(min) : new Date())
@@ -92,12 +126,18 @@ export function DateField({ id, 'aria-describedby': describedBy, value, onChange
 
   return (
     <div className={`nds-datefield${className ? ` ${className}` : ''}`} ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
-      <button type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
+      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={ariaLabel} onClick={toggle}>
         <span className={value ? undefined : 'ph'}>{value ? fmt(value, format) : placeholder}</span>
         <Calendar size={14} className="chev" aria-hidden />
       </button>
-      {open && (
-        <div className="nds-dp-pop single" role="dialog" aria-label={ariaLabel ?? 'Pick a date'}>
+      {open && createPortal(
+        // `ag-custom-component-popup`: AG Grid counts a click or focus in an element with this class as
+        // inside its editor. A DateField inside a grid cell editor (the Shopify sheet's metafield dialog)
+        // would otherwise end the cell edit when a day is clicked, now that the calendar sits in <body>.
+        <div ref={popRef} style={popStyle} className="nds-dp-pop single ag-custom-component-popup" role="dialog" aria-label={ariaLabel ?? 'Pick a date'} onKeyDown={onPopKey}>
+          {/* The same body box as DateRangePicker: without it the title and the grid sat side by side
+              (the popover is a flex row) with no padding. */}
+          <div className="nds-dp-cal">
           <div className="nds-dp-nav">
             <button type="button" onClick={() => setView(addMonths(view, -1))} aria-label="Previous month"><ChevronLeft size={15} /></button>
             <div className="nds-dp-mh">{monthLabel(view, locale)}</div>
@@ -111,7 +151,9 @@ export function DateField({ id, 'aria-describedby': describedBy, value, onChange
                 const dis = (minD != null && day < minD) || (maxD != null && day > maxD)
                 const cls = ['nds-dp-day', dis ? 'dis' : '', selected && sameDay(day, selected) ? 'start' : '', sameDay(day, today) ? 'today' : ''].filter(Boolean).join(' ')
                 return (
-                  <button key={i} type="button" className={cls} disabled={dis} onClick={() => { onChange(toIso(day)); setOpen(false) }}>
+                  <button key={i} type="button" className={cls} disabled={dis} onClick={() => { onChange(toIso(day)); close() }}
+                    aria-label={day.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    aria-pressed={selected ? sameDay(day, selected) : false} aria-current={sameDay(day, today) ? 'date' : undefined}>
                     {day.getDate()}
                   </button>
                 )
@@ -120,10 +162,12 @@ export function DateField({ id, 'aria-describedby': describedBy, value, onChange
           </div>
           {clearable && value && (
             <div className="nds-datefield-foot">
-              <button type="button" onClick={() => { onChange(''); setOpen(false) }}>{clearLabel}</button>
+              <button type="button" onClick={() => { onChange(''); close() }}>{clearLabel}</button>
             </div>
           )}
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

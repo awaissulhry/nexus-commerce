@@ -21,6 +21,7 @@ import { Factory, ShoppingCart, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { URGENCY_TONE } from './UrgencyTiles'
 import type { Suggestion } from './types'
+import { channelKeyLabel } from './channelLabel'
 
 export function SuggestionRow({
   suggestion: s,
@@ -106,7 +107,7 @@ export function SuggestionRow({
               className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-mono"
               title={`Promoted because of ${s.worstChannelKey} (${s.worstChannelDaysOfCover}d cover). Aggregate was ${s.globalUrgency ?? 'lower'}.`}
             >
-              · {s.worstChannelKey.replace(':', '·')}
+              · {channelKeyLabel(s.worstChannelKey)}
             </span>
           )}
           {/* R.13 — event-driven urgency badge. Tooltip shows the

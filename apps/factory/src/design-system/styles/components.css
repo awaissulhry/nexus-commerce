@@ -3058,3 +3058,9 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-menu button[data-tone="danger"],
 .nds-menu a[role="menuitem"][data-tone="danger"],
 .nds-menu-danger { color: var(--nds-danger-text); }
+
+/* DateTimeField — a date, a time of day and the viewer's zone on one line (wraps on narrow hosts).
+   Layout only: the date and time controls keep their own DateField / Listbox size and colour. */
+.nds-datetimefield { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.nds-datetimefield > .nds-datefield { width: auto; flex: 1 1 150px; min-width: 150px; }
+.nds-datetimefield-zone { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }

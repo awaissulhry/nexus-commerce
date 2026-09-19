@@ -13,6 +13,7 @@
 
 import { PresenceExample } from './PresenceExample'
 import { ScrollingTabsExample } from './ScrollingTabsExample'
+import { DateTimeFieldExample } from './DateTimeFieldExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
@@ -799,6 +800,9 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Pagination</div>
           <ScrollingTabsExample />
           <Pagination page={pg} pageCount={12} onPage={setPg} />
+
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Date and time</div>
+          <DateTimeFieldExample />
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Progress</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>

@@ -57,6 +57,7 @@ import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useInboundEvents } from '@/lib/sync/use-inbound-events'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { PushHealthChip } from '@/components/dashboard/PushHealthChip'
+import { HeldForNote, LentUsageNote, MovementUsedBy, PoolSourceNote, WithPoolSource, type LentUsageView, type PoolSourceView } from '@/app/_shared/stock-pool/PoolSourceTag'
 import { BulkProgressBanner } from '../../products/_components/BulkProgressBanner'
 
 // Product-centric row — mirrors /api/stock/products response.
@@ -82,6 +83,8 @@ type StockRow = {
   fbaStock: number
   fbmStock: number
   ownStock: number
+  /** Shared stock step 5 — the pool this product sells from (a parent: its pooled variations), or null. */
+  poolSource?: PoolSourceView | null
   lastUpdatedAt: string | null
   stockLevels: Array<{
     id: string
@@ -205,6 +208,8 @@ type Insights = {
     id: string; sku: string; name: string; amazonAsin: string | null
     totalStock: number; lowStockThreshold: number
     costPrice: number | null; thumbnailUrl: string | null
+    /** Shared stock: totalStock is this lender's pool (free units), not the business's own shelf. */
+    poolLenderName?: string | null
   }>
   allocationGaps: Array<{
     productId: string; sku: string; name: string; thumbnailUrl: string | null
@@ -270,6 +275,8 @@ type Movement = {
   notes: string | null
   actor: string | null
   createdAt: string
+  /** Shared stock step 5 — a movement this business made for a business it lends to. */
+  usedBy?: { businessName: string; orderRef: string | null } | null
 }
 
 // S.4 — focusable-element selector for the StockDrawer's a11y focus trap.
@@ -2014,6 +2021,7 @@ function InsightsPanel({
   onToggle: () => void
   onOpenProduct: (id: string) => void
 }) {
+  const { t } = useTranslations()
   const totalSignal =
     insights.stockoutRisk.length + insights.allocationGaps.length + insights.syncConflicts.length
   if (totalSignal === 0) return null
@@ -2087,6 +2095,9 @@ function InsightsPanel({
                 <div className="min-w-0 flex-1">
                   <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
                   <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{p.sku}</div>
+                  {p.poolLenderName && (
+                    <div className="nds-type-xs truncate" style={{ color: 'var(--nds-text-muted)' }}>{t('stock.atpPerChannel.shared', { name: p.poolLenderName })}</div>
+                  )}
                 </div>
                 <div className={`text-base font-semibold tabular-nums ${
                   p.totalStock === 0 ? 'text-rose-600' : 'text-orange-600'
@@ -2233,6 +2244,10 @@ function InsightCategory({
 // One bundle fetch (/api/stock/product/:id) drives every section.
 // ─────────────────────────────────────────────────────────────────────
 type DrawerBundle = {
+  /** Shared stock step 5 — the pool this product sells from, or null. */
+  poolSource?: PoolSourceView | null
+  /** Shared stock step 5 — as a lender: what each borrowing business holds and sold from this product. */
+  lentUsage?: LentUsageView[]
   product: {
     id: string; sku: string; name: string; amazonAsin: string | null
     totalStock: number; lowStockThreshold: number
@@ -2269,6 +2284,8 @@ type DrawerBundle = {
     id: string; quantity: number; reason: string; orderId: string | null
     expiresAt: string; createdAt: string
     location: { id: string; code: string }
+    /** Shared stock — held for another business's order: named, and not released here. */
+    usedBy?: { businessName: string; orderRef: string | null } | null
   }>
   // S.26 — per-channel ATP rollup
   atpPerChannel?: Array<{
@@ -2282,6 +2299,8 @@ type DrawerBundle = {
     followMasterQuantity: boolean
     resolvedLocationCode: string | null
     source: string
+    /** Shared stock: the lending business when source is SHARED_POOL. */
+    poolLenderName?: string
     onHand: number
     reservedForChannel: number
     available: number
@@ -2523,6 +2542,8 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                       <span className="tabular-nums">{bundle.salesVelocity.totalAvailable}</span> available
                     </span>
                   </div>
+                  {bundle.poolSource && <PoolSourceNote source={bundle.poolSource} />}
+                  <LentUsageNote usage={bundle.lentUsage ?? []} />
                 </div>
               </div>
 
@@ -2722,7 +2743,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             {/* S.26 — ATP breakdown: on-hand − reserved − buffer = available */}
                             {atp && (
                               <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
-                                {t('stock.atpPerChannel.onHand')} <span className="text-slate-700 dark:text-slate-300 font-semibold">{atp.onHand}</span>
+                                {atp.source === 'SHARED_POOL' ? t('stock.atpPerChannel.shared', { name: atp.poolLenderName ?? '' }) : t('stock.atpPerChannel.onHand')} <span className="text-slate-700 dark:text-slate-300 font-semibold">{atp.onHand}</span>
                                 {atp.reservedForChannel > 0 && <> · −<span className="text-violet-700">{atp.reservedForChannel}</span> {t('stock.atpPerChannel.reserved')}</>}
                                 {atp.stockBuffer > 0 && <> · −<span className="text-amber-700">{atp.stockBuffer}</span> {t('stock.atpPerChannel.buffer')}</>}
                                 <> = <span className="text-emerald-700 font-semibold">{atp.available}</span> {t('stock.atpPerChannel.available')}</>
@@ -2835,8 +2856,9 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             {r.orderId && <span>order {r.orderId.slice(0, 8)} · </span>}
                             expires {formatRelative(r.expiresAt, t)}
                           </div>
+                          {r.usedBy && <HeldForNote usedBy={r.usedBy} />}
                         </div>
-                        <button
+                        {!r.usedBy && <button
                           onClick={async () => {
                             if (!(await askConfirm({ title: `Release ${r.quantity} units?`, confirmLabel: 'Release', tone: 'warning' }))) return
                             try {
@@ -2846,7 +2868,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             } catch (e: any) { toast.error(e.message) }
                           }}
                           className="h-6 px-2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 border border-default dark:border-slate-700 rounded"
-                        >Release</button>
+                        >Release</button>}
                       </li>
                     ))}
                   </ul>
@@ -3036,6 +3058,7 @@ function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
                             )}
                           </div>
                           {m.notes && <div className="text-sm text-slate-600 mt-0.5">{m.notes}</div>}
+                          <MovementUsedBy usedBy={m.usedBy} />
                           <div className="text-xs text-tertiary mt-0.5">
                             {new Date(m.createdAt).toLocaleString()} {m.actor && `· ${m.actor}`}
                           </div>
@@ -3713,8 +3736,11 @@ const COLUMN_META: Record<ColumnKey, {
   available: {
     align: 'right',
     head: 'Available',
+    // Shared stock step 5 — own stock and the pool it sells from, one under the other, never added up.
     cell: ({ it }) => (
-      <span className="tabular-nums text-slate-700 dark:text-slate-300">{it.totalAvailable}</span>
+      <WithPoolSource source={it.poolSource} compact>
+        <span className="tabular-nums text-slate-700 dark:text-slate-300">{it.totalAvailable}</span>
+      </WithPoolSource>
     ),
   },
   threshold: {

@@ -54,6 +54,7 @@ import { FbaRestockSignalPanel } from './FbaRestockPanels'
 import { SubstitutionPanel } from './SubstitutionPanel'
 import { ForecastAccuracyCard } from './ForecastDiagnosticsCards'
 import { RecommendationHistoryCard } from './RecommendationHistoryCard'
+import { channelKeyLabel } from './channelLabel'
 
 interface SupplierCandidate {
   supplierId: string
@@ -462,10 +463,7 @@ export function ForecastDetailDrawer({
                     </span>{' '}
                     driven by{' '}
                     <span className="font-mono">
-                      {detail.recommendation.worstChannelKey.replace(
-                        ':',
-                        ' · ',
-                      )}
+                      {channelKeyLabel(detail.recommendation.worstChannelKey)}
                     </span>{' '}
                     ({detail.recommendation.worstChannelDaysOfCover}d cover).
                     Aggregate stock looks fine, but this channel is at risk.

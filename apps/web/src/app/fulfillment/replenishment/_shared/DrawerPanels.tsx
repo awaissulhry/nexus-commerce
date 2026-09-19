@@ -21,6 +21,7 @@
  */
 
 import { cn } from '@/lib/utils'
+import { channelLabel } from './channelLabel'
 
 export function SignalsPanel({ signals }: { signals: unknown }) {
   const s = signals as
@@ -280,13 +281,15 @@ export function ChannelCoverPanel({
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <span className="font-mono text-sm">
-                    {c.channel} · {c.marketplace}
+                    {channelLabel(c.channel, c.marketplace)}
                   </span>
                   {c.source !== 'EXACT_MATCH' && (
                     <span className="ml-1 text-xs uppercase tracking-wider opacity-70">
                       {c.source === 'WAREHOUSE_DEFAULT'
                         ? '(default WH)'
-                        : '(no location)'}
+                        : c.source === 'SHARED_POOL'
+                          ? '(lent warehouses)'
+                          : '(no location)'}
                     </span>
                   )}
                 </div>

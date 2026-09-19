@@ -1062,6 +1062,7 @@
   "stock.locations.errorLoad": "Errore nel caricamento delle ubicazioni",
   "stock.locations.errorSave": "Errore nel salvataggio dell'ubicazione",
   "stock.atpPerChannel.onHand": "in giacenza",
+  "stock.atpPerChannel.shared": "condivise da {name}",
   "stock.atpPerChannel.reserved": "riservate",
   "stock.atpPerChannel.buffer": "riserva",
   "stock.atpPerChannel.available": "disponibili",

@@ -59,3 +59,7 @@
 :global(.nds-gridcard.sc-card-pop) {
   overflow: visible;
 }
+
+/* Shared stock step 3 — the end-time dialog and the "until …" beside a row's mode. Layout only. */
+.actionDialog { display: grid; gap: var(--nds-space-12); }
+.endsAt { margin-left: var(--nds-space-6); color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); white-space: nowrap; }

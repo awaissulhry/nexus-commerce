@@ -1088,7 +1088,7 @@ function WarehousesTab({ carrierCode }: { carrierCode: string }) {
     setLoading(true)
     try {
       const [wRes, sRes, aRes] = await Promise.all([
-        fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/warehouses?shared=include`, { cache: 'no-store' }), // + shared-stock ship-from copies
         fetch(
           `${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/sender-addresses`,
           { cache: 'no-store' },
@@ -1791,7 +1791,7 @@ function PickupsTab({ carrierCode }: { carrierCode: string }) {
     try {
       const [pRes, wRes] = await Promise.all([
         fetch(`${getBackendUrl()}/api/fulfillment/carriers/${carrierCode}/pickups`, { cache: 'no-store' }),
-        fetch(`${getBackendUrl()}/api/fulfillment/warehouses`, { cache: 'no-store' }),
+        fetch(`${getBackendUrl()}/api/fulfillment/warehouses?shared=include`, { cache: 'no-store' }), // + shared-stock ship-from copies
       ])
       if (pRes.ok) setPickups((await pRes.json()).items ?? [])
       if (wRes.ok) {
