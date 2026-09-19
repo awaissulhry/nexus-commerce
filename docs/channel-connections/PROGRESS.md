@@ -54,6 +54,10 @@ All three parts of P1.4b and P1.4a are committed. Record: `build/P1.4.md` (secti
 2. **Before a push:** read the production switches `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new). After the push, a switch set to `true` sends through the connected Shopify account (`build/P1.4.md` 6.1).
 3. **P1.6 delete list** grows with the old Shopify env writers (`build/P1.4.md` 6.3). The Owner allowed production **reads** (Railway `http-requests`) to prove a route has no caller (2026-09-20).
 
+## 4b. P1.6 — the delete list is WRITTEN and waiting for the Owner
+
+`build/P1.6-delete-list.md` (2026-09-20): four groups — A delete now (no caller anywhere), B delete after one small replacement (old env-credential Shopify routes), C WooCommerce (decision 5), D keep and fix instead (5 items that are still live, incl. the eBay app-token service and the eBay feed mode, R-6). Evidence: a full code census plus production traffic and logs, each with a positive control. **Nothing is deleted until the Owner says yes.**
+
 ## 5. After P1.4
 
 P1.6 (show the delete list first; candidates in `build/P1.2.md` section 8 and `build/P1.4.md` 6.3) → P1.7 → P1.8 → P2.x → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
