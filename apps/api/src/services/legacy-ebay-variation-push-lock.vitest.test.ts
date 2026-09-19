@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ controls: [] as any[], send: vi.fn(), review: vi.fn() }))
-vi.mock('../db.js', () => ({ default: { channelListing: { findMany: async () => s.controls, findFirst: async () => null }, product: { findFirst: async () => null } } }))
+vi.mock('../db.js', () => ({ default: { channelListing: { findMany: async () => s.controls, findFirst: async () => null }, product: { findFirst: async () => null },
+  // P1.5 — eBay listing writes take their language from the Marketplace row (the seeded IT row).
+  marketplace: { findFirst: async ({ where }: any) => (where.code === 'IT' ? { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it' } : null) } } }))
 vi.mock('./pim/stored-variation-projection.js', () => ({ loadStoredVariationProjection: vi.fn() }))
 vi.mock('./ebay-presentation-consumer.service.js', () => ({ assertLegacyPresentationPublishAllowed: s.review }))
 vi.mock('./pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))

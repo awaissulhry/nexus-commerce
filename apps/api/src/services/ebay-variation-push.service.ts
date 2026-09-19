@@ -19,6 +19,7 @@ import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-ax
 import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
 import { ebayTransport } from './gateway/ebay.js'
+import { ebayListingLanguage } from './gateway/channels.js'
 
 type EbaySend = ReturnType<typeof ebayTransport>
 
@@ -450,18 +451,12 @@ export function resolveVariationAxes(
   }
 }
 
-// Maps eBay marketplace short-code to the BCP-47 language tag that eBay's
-// Inventory API requires for Content-Language / Accept-Language headers.
-// eBay stores aspect names in the locale used at write time — sending en-US
-// for an EBAY_IT listing causes eBay to expect English names ("Color", "Size")
-// which then don't match the Italian category aspects ("Colore", "Taglia"),
-// triggering publish error 25013.
-export function toListingLanguage(mp: string): string {
-  const MAP: Record<string, string> = {
-    IT: 'it-IT', DE: 'de-DE', FR: 'fr-FR', ES: 'es-ES', UK: 'en-GB', GB: 'en-GB',
-  }
-  return MAP[mp.toUpperCase()] ?? 'en-US'
-}
+// P1.5 — the BCP-47 language tag eBay's Inventory API requires for Content-Language / Accept-Language
+// comes from the Marketplace row (gateway/channels.ts `ebayListingLanguage`). eBay stores aspect names in
+// the locale used at write time — sending en-US for an EBAY_IT listing makes eBay expect English names
+// ("Color", "Size") that don't match the Italian category aspects ("Colore", "Taglia"), error 25013.
+// The old map here turned the full id `EBAY_IT` into en-US; it is gone, and the gateway sets the three
+// headers of every listing write from the same row.
 
 // Transient eBay Inventory errors — 25001 ("internal warehouse service error")
 // and 25604 ("product not found") — fire when a PUT/POST races eBay's eventual
@@ -844,7 +839,7 @@ export async function pushVariationGroup(
     sinkWarn(`Cover & common gallery: ${groupImageOverride.length} images curated — only the first ${EBAY_VARIATION_IMAGE_MAX} were sent (eBay group gallery limit)`)
   }
 
-  const lang = toListingLanguage(mp)
+  const lang = await ebayListingLanguage(mp)
   // eBay Sell Inventory API requires BOTH Content-Language AND Accept-Language
   // on every call (inventory_item, inventory_item_group, offer, publish).
   // Sending only one triggers error 25709 ("Invalid value for Content-Language
@@ -1962,7 +1957,7 @@ export async function pushVariationGroup(
         const orphans: string[] = []
         const otherMkts = MARKETS.map((m) => toMarketplaceId(m)).filter((id) => id !== marketplaceId)
         for (const otherId of otherMkts) {
-          const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': toListingLanguage(otherId), 'Accept-Language': toListingLanguage(otherId) }
+          const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': await ebayListingLanguage(otherId), 'Accept-Language': await ebayListingLanguage(otherId) }
           // Bounded probe: the first hit per market is enough to name the culprit.
           for (const r of variantRows.slice(0, 4)) {
             const s = String(r.sku ?? '')
@@ -1981,7 +1976,7 @@ export async function pushVariationGroup(
           // market properly later) and retry the publish once.
           let removed = 0
           for (const otherId of orphans) {
-            const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': toListingLanguage(otherId), 'Accept-Language': toListingLanguage(otherId) }
+            const otherHeaders = { ...headers, 'X-EBAY-C-MARKETPLACE-ID': otherId, 'Content-Language': await ebayListingLanguage(otherId), 'Accept-Language': await ebayListingLanguage(otherId) }
             for (const r of variantRows) {
               const s = String(r.sku ?? '')
               if (!s) continue
@@ -2201,8 +2196,8 @@ export async function pushOffersOnly(
   const headers = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-    'Content-Language': toListingLanguage(marketplaceId),
-    'Accept-Language': toListingLanguage(marketplaceId),
+    'Content-Language': await ebayListingLanguage(marketplaceId),
+    'Accept-Language': await ebayListingLanguage(marketplaceId),
     Accept: 'application/json',
     'X-EBAY-C-MARKETPLACE-ID': marketplaceId,
   }

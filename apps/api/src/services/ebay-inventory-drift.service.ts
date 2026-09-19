@@ -20,7 +20,8 @@
  */
 import { ebaySend } from './gateway/ebay.js'
 import type { PrismaClient } from '@prisma/client'
-import { resolvePerMarketContent, toListingLanguage } from './ebay-variation-push.service.js'
+import { resolvePerMarketContent } from './ebay-variation-push.service.js'
+import { ebayListingLanguage } from './gateway/channels.js';
 
 export interface DriftField {
   field: string
@@ -96,7 +97,7 @@ export async function collectInventoryDrift(
   // Accept-Language" — which reads like a bad group key but is not. Mirrors the
   // header set pushVariationGroup already uses (see its note at the headers
   // object), so this reader authenticates exactly like the writer.
-  const lang = toListingLanguage(marketplace)
+  const lang = await ebayListingLanguage(marketplace)
   const headers = {
     Authorization: `Bearer ${opts.oauthToken}`,
     'Content-Type': 'application/json',

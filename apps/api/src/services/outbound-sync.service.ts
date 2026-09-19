@@ -52,7 +52,7 @@ import {
   reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
 } from "./ebay-trading-api.service.js";
-import { toListingLanguage } from "./ebay-variation-push.service.js";
+import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
 
@@ -217,9 +217,9 @@ export function ebayCurrencyForMarket(marketplaceId: string | undefined): string
 
 /** eBay Inventory API requires BOTH language headers set to the marketplace
  *  locale, plus the marketplace id, on every call (error 25709 otherwise). */
-export function ebayInventoryHeaders(token: string, marketplaceId: string): Record<string, string> {
+export async function ebayInventoryHeaders(token: string, marketplaceId: string): Promise<Record<string, string>> {
   const mp2 = (marketplaceId ?? "EBAY_IT").replace(/^EBAY_/, "");
-  const lang = toListingLanguage(mp2);
+  const lang = await ebayListingLanguage(mp2);
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -1445,7 +1445,7 @@ export class OutboundSyncService {
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
     const currency = ebayCurrencyForMarket(marketplaceId);
-    const headers = ebayInventoryHeaders(token, marketplaceId);
+    const headers = await ebayInventoryHeaders(token, marketplaceId);
 
     // Task 3: gate the new per-listing isolation behind an env flag (default ON).
     // Set NEXUS_EBAY_FAILURE_ISOLATION=0 to fall back to pre-Task-3 behavior.

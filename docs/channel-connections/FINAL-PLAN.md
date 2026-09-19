@@ -695,7 +695,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P1.1 | BUILT (2026-09-19) | `build/P1.1.md` | Committed locally, not pushed. Gateway + ledger columns (migration `20260919a_p11_gateway_call_ledger`, additive); no caller moved yet (P1.2). eBay headers from the Marketplace row (LX.2) |
 | P1.2 | BUILT (2026-09-19) | `build/P1.2.md` | Committed locally, not pushed. Ratchet in pre-push; ALL channels at 0 (50 exempt, each with a written reason). P1.6 candidates listed in the record |
 | P1.3 | BUILT (2026-09-19) | `build/P1.3.md` | Committed locally, not pushed. Queue column (migration `20260919b_p13_queue_destination`, additive); one creation module for all 35 sites; the sender uses the row's account (never the primary); 2 per account at a time; backup loop 200/tick |
-| P1.4 – P1.8 | NOT STARTED | — | |
+| P1.5 | BUILT (2026-09-19) | `build/P1.5.md` | Committed locally, not pushed. Listing writes get their three headers from the Marketplace row (EBAY_IT → it-IT); `toListingLanguage` deleted (LX F-LX-6 closed); flat-file routes included (Owner) |
+| P1.4, P1.6 – P1.8 | NOT STARTED | — | P1.6 needs the delete list shown first |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |

@@ -12,6 +12,12 @@ const h = vi.hoisted(() => ({
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: vi.fn(async (id: string) => `account-token-${id}`) }))
+// The eBay Marketplace rows as seeded (IT, DE, FR, ES, UK) plus a two-language market (BE).
+vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: vi.fn(async ({ where }: any) => ({
+  IT: { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it' }, DE: { marketplaceId: 'EBAY_DE', languages: ['de'], language: 'de' },
+  FR: { marketplaceId: 'EBAY_FR', languages: ['fr'], language: 'fr' }, ES: { marketplaceId: 'EBAY_ES', languages: ['es'], language: 'es' },
+  UK: { marketplaceId: 'EBAY_GB', languages: ['en'], language: 'en' }, BE: { marketplaceId: 'EBAY_BE', languages: ['fr', 'nl'], language: 'fr' },
+} as Record<string, unknown>)[where.code] ?? null) } } }))
 
 import { gatewayAccounts, gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
@@ -35,10 +41,9 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
 
 describe('ebayTransport — a file\'s fetch calls moved onto the gateway unchanged', () => {
-  it('keeps the call\'s own headers and bearer token, records the account, adds no market headers', async () => {
+  it('a read keeps the call\'s own headers and bearer token (English labels on purpose) and gets only the missing market header', async () => {
     await ebaySend('conn-1', 'https://api.ebay.com/sell/inventory/v1/offer?sku=S', { headers: { Authorization: 'Bearer caller-token', 'Accept-Language': 'en-US', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_IT' } })
-    expect(h.calls[0].init.headers).toMatchObject({ Authorization: 'Bearer caller-token', 'Accept-Language': 'en-US', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_IT' })
-    expect((h.calls[0].init.headers as Record<string, string>)['Content-Language']).toBeUndefined()
+    expect(h.calls[0].init.headers).toMatchObject({ Authorization: 'Bearer caller-token', 'Accept-Language': 'en-US', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_IT', 'Content-Language': 'it-IT' })
     expect(gatewayLedger).toEqual([expect.objectContaining({ connectionId: 'conn-1', marketplace: 'EBAY_IT', operation: 'GET /sell/inventory/v1/offer', outcome: 'sent' })])
   })
 
@@ -120,5 +125,43 @@ describe('ebayTradingSend — Trading XML calls from their own files', () => {
     expect(res.status).toBe(200)
     expect(gatewayLedger.at(-1)).toMatchObject({ connectionId: 'conn-T', operation: 'trading.GetFeedback', success: false, errorClass: 'transient', errorCode: '21916984' })
     expect((h.calls[0].init.headers as Record<string, string>).Authorization).toBeUndefined()
+  })
+})
+
+describe('P1.5 — eBay market headers on a listing write, from the Marketplace row', () => {
+  const put = (market: string, language?: string) => ebaySend('conn-1', 'https://api.ebay.com/sell/inventory/v1/inventory_item/S', {
+    method: 'PUT', body: '{}', headers: { 'X-EBAY-C-MARKETPLACE-ID': market, 'Content-Type': 'application/json', ...(language ? { 'Content-Language': language, 'accept-language': language } : {}) },
+  })
+  it.each([
+    ['EBAY_IT', 'EBAY_IT', 'it-IT'], ['EBAY_DE', 'EBAY_DE', 'de-DE'], ['EBAY_FR', 'EBAY_FR', 'fr-FR'],
+    ['EBAY_ES', 'EBAY_ES', 'es-ES'], ['EBAY_GB', 'EBAY_GB', 'en-GB'], ['EBAY_BE', 'EBAY_BE', 'fr-BE'],
+  ])('%s: all three headers right (the old helper sent en-US for the full id)', async (market, id, tag) => {
+    await put(market, 'en-US')
+    const sent = h.calls[0].init.headers as Record<string, string>
+    expect(sent).toMatchObject({ 'X-EBAY-C-MARKETPLACE-ID': id, 'Content-Language': tag, 'Accept-Language': tag })
+    // one value per header — the caller's differently-cased copy is gone, not joined
+    expect(Object.keys(sent).filter((k) => k.toLowerCase() === 'accept-language')).toEqual(['Accept-Language'])
+  })
+  it('a language of the market that the caller chose is kept (Belgium in Dutch)', async () => {
+    await put('EBAY_BE', 'nl-BE')
+    expect(h.calls[0].init.headers).toMatchObject({ 'Content-Language': 'nl-BE', 'Accept-Language': 'nl-BE' })
+  })
+  it('a listing write to a market Nexus has no row for: refused, nothing sent', async () => {
+    const refused = await put('EBAY_AU').then(() => null, (e) => e)
+    expect(refused).toMatchObject({ code: 'MARKET_UNCONFIGURED' })
+    expect(h.calls).toHaveLength(0)
+  })
+  it('a failed market lookup is not "market not set up": refused as MARKET_LOOKUP_FAILED (retry later), nothing sent', async () => {
+    const db = (await import('../../db.js')).default as any
+    const real = db.marketplace.findFirst
+    db.marketplace.findFirst = vi.fn(async () => { throw new Error('connection reset') })
+    try {
+      expect(await put('EBAY_IT').then(() => null, (e) => e)).toMatchObject({ code: 'MARKET_LOOKUP_FAILED', statusCode: 503 })
+      expect(h.calls).toHaveLength(0)
+    } finally { db.marketplace.findFirst = real }
+  })
+  it('the language helper the callers use reads the same row (and answers en-US only for an unknown market)', async () => {
+    const { ebayListingLanguage } = await import('./channels.js')
+    expect(await Promise.all(['EBAY_IT', 'IT', 'EBAY_GB', 'UK', 'EBAY_AU'].map(ebayListingLanguage))).toEqual(['it-IT', 'it-IT', 'en-GB', 'en-GB', 'en-US'])
   })
 })

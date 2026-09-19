@@ -81,6 +81,19 @@ export class MarketUnconfigured extends Error {
   constructor(message: string) { super(message); this.name = 'MarketUnconfigured' }
 }
 
+/**
+ * P1.5 — the content language eBay expects for a market, from the Marketplace row (`EBAY_IT` / `IT` →
+ * `it-IT`, `EBAY_GB` / `UK` → `en-GB`). A market Nexus has no row for answers `en-US` so a READ can still
+ * be sent; a listing WRITE to such a market is refused by the gateway (MARKET_UNCONFIGURED).
+ */
+export async function ebayListingLanguage(market: string): Promise<string> {
+  try {
+    return (await ebayMarketHeaders(market))['Content-Language']
+  } catch {
+    return 'en-US'
+  }
+}
+
 export async function ebayMarketHeaders(market: string, contentLanguage?: string | null): Promise<Record<string, string>> {
   const code = market.trim().toUpperCase().replace(/^EBAY_/, '')
   if (!/^[A-Z]{2}$/.test(code)) throw new MarketUnconfigured(`"${market}" is not an eBay market code.`)

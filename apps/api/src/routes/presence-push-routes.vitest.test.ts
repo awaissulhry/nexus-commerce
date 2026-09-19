@@ -20,6 +20,8 @@ vi.mock('../db.js', () => ({ default: {
     update: s.update, updateMany: s.update },
   // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
   sharedListingMembership: { findMany: async () => [] },
+  // P1.5 — eBay listing writes take their language from the Marketplace row (the seeded IT row).
+  marketplace: { findFirst: async ({ where }: { where: { code: string } }) => where.code === 'IT' ? { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it' } : null },
   stockLevel: { findMany: async () => [] }, fbaInventoryDetail: { findMany: async () => [] },
   ebayPushJob: { findFirst: async () => null, create: async () => ({ id: 'job' }), update: s.job },
 } }))
@@ -48,7 +50,7 @@ vi.mock('../services/ebay-feed.service.js', () => ({ buildInventoryNdjson: () =>
 vi.mock('../services/ebay-flat-file-pull-preview.service.js', () => ({ startEbayPullPreviewJob: vi.fn(), getEbayPullPreviewJobStatus: vi.fn() }))
 vi.mock('../services/ebay-variation-push.service.js', () => ({
   MARKETS: ['IT', 'DE', 'UK'], toMarketplaceId: (m: string) => `EBAY_${m}`, toChannelMarket: (m: string) => `EBAY_${m}`,
-  toListingLanguage: () => 'it-IT', CONDITION_ID_TO_ENUM: {}, buildPackageWeightAndSize: () => null,
+  CONDITION_ID_TO_ENUM: {}, buildPackageWeightAndSize: () => null,
   resolvePerMarketContent: (_listing: unknown, fallback: unknown) => fallback,
   buildFlatRow: vi.fn(), packSharedFields: vi.fn(), applyEbayFlatFileSnapshot: vi.fn(), buildBestOfferTerms: vi.fn(), resolveQuantityLimitPerBuyer: vi.fn(),
   pushVariationGroup: vi.fn(), pushOffersOnly: vi.fn(), axisSynonymKey: (v: string) => v.toLowerCase(),

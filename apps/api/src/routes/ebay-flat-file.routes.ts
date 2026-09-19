@@ -43,7 +43,8 @@ import {
   startEbayPullPreviewJob,
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
-import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { ebayListingLanguage } from '../services/gateway/channels.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
 import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js';
 import { pushSharedListings, POOL_DEFAULT_QTY_SENTINEL, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
@@ -1978,7 +1979,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const sku = String(row.sku ?? '');
         if (!sku) continue;
         const region = mp === 'UK' ? 'GB' : mp;
-        const lang = toListingLanguage(marketplaceId);
+        const lang = await ebayListingLanguage(marketplaceId);
         const endHeaders = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -2450,7 +2451,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
-        const lang = toListingLanguage(mp);
+        const lang = await ebayListingLanguage(mp);
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
 
         // P0: reject before touching eBay API so the operator gets a clear message
@@ -3445,7 +3446,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const lang = toListingLanguage(mpUpper);
+          const lang = await ebayListingLanguage(mpUpper);
           const publishHeaders = {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -3581,7 +3582,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const region = mpUpper === 'UK' ? 'GB' : mpUpper;
         const marketplaceId = toMarketplaceId(mpUpper);
-        const lang = toListingLanguage(mpUpper);
+        const lang = await ebayListingLanguage(mpUpper);
         const deleteHeaders = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',

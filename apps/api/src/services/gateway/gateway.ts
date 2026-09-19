@@ -35,7 +35,7 @@ import { writeLedgerRow } from './ledger.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -233,20 +233,41 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   } catch (err) {
     return refuse('held', 'TOKEN_UNAVAILABLE', `Held, nothing sent: no ${name} token for this account (${err instanceof Error ? err.message : String(err)}).`, 409)
   }
-  // eBay market headers from the Marketplace row. A write to a market Nexus has no languages for is
-  // refused (eBay would take the wrong language); a read goes without them (eBay's default is harmless).
+  // P1.5 — eBay's three market headers (X-EBAY-C-MARKETPLACE-ID, Content-Language, Accept-Language) from
+  // the Marketplace row, for the market the call names (`marketplace`, or its marketplace-id header).
+  // A LISTING WRITE gets all three from the row — eBay stores content in the write's language, and the
+  // old helpers sent en-US for Italy; a language the caller sends is kept only when it is one of that
+  // market's languages, and a write to a market with no row is refused. Every other call only gets the
+  // headers it left out (a read may ask for English labels on purpose).
+  const callerHeaders: Record<string, string> = { ...(req.headers ?? {}) }
+  const callerValue = (name: string) => Object.entries(callerHeaders).find(([k]) => k.toLowerCase() === name)?.[1]
   let marketHeaders: Record<string, string> = {}
-  if (req.channel === 'EBAY' && req.marketplace && req.marketHeaders !== 'caller') {
+  const market = req.marketplace ?? callerValue('x-ebay-c-marketplace-id') ?? null
+  if (req.channel === 'EBAY' && market && req.marketHeaders !== 'caller') {
+    const preferred = req.contentLanguage ?? callerValue('content-language') ?? null
     try {
-      marketHeaders = await ebayMarketHeaders(req.marketplace, req.contentLanguage)
+      // A language the call CHOSE (`contentLanguage`) must be the market's; one it only sends in a header is
+      // dropped for the market's default when it is not.
+      marketHeaders = await ebayMarketHeaders(market, preferred).catch((err) => (req.contentLanguage ? Promise.reject(err) : ebayMarketHeaders(market)))
     } catch (err) {
-      if (req.kind === 'write') return refuse('refused', 'MARKET_UNCONFIGURED', `Nothing was sent to eBay: ${err instanceof Error ? err.message : String(err)}`, 400)
+      if (req.kind === 'write') {
+        return err instanceof MarketUnconfigured
+          ? refuse('refused', 'MARKET_UNCONFIGURED', `Nothing was sent to eBay: ${err.message}`, 400)
+          : refuse('refused', 'MARKET_LOOKUP_FAILED', `Nothing was sent to eBay: the market's languages could not be read (${err instanceof Error ? err.message : String(err)}). Retry later.`, 503)
+      }
+    }
+    if (req.kind === 'write') {
+      for (const name of Object.keys(callerHeaders)) {
+        if (/^(x-ebay-c-marketplace-id|content-language|accept-language)$/i.test(name)) delete callerHeaders[name]
+      }
+    } else {
+      marketHeaders = Object.fromEntries(Object.entries(marketHeaders).filter(([name]) => callerValue(name.toLowerCase()) === undefined))
     }
   }
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    ...callerHeaders,
     ...marketHeaders,
-    ...(req.headers ?? {}),
     ...(token ? authHeadersOf(req.channel, token) : {}),
   }
   if (req.channel === 'EBAY' && (req.sign || ebaySignatureAppliesTo(url, req.method))) {

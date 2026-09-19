@@ -1,6 +1,6 @@
 /**
- * P1.2 — eBay on the gateway: the read / write / setup rule for an eBay REST call, and one send helper
- * for the call sites that move onto the gateway (they keep their own headers until P1.5).
+ * P1.2 — eBay on the gateway: the read / write / action / setup rule for an eBay REST call, and the send
+ * helpers the call sites use. P1.5 — the market headers of a listing write come from the Marketplace row.
  */
 import { gatewayFetch, type GatewayBody, type GatewayRequest } from './gateway.js'
 import { operationOfPath } from './channels.js'
@@ -51,7 +51,11 @@ export interface EbayGatewayInput {
   signal?: AbortSignal | null
 }
 
-/** An eBay REST call on the gateway, answered as a `Response`. The call's own market headers are kept. */
+/**
+ * An eBay REST call on the gateway, answered as a `Response`. P1.5: a listing write gets its three market
+ * headers from the Marketplace row (the call's own language kept only when it is one of the market's);
+ * other calls keep what they send and get only what they leave out.
+ */
 export function ebayGatewayFetch(input: EbayGatewayInput): Promise<Response> {
   const method = input.method ?? 'GET'
   const headers = input.headers ?? {}
@@ -68,7 +72,6 @@ export function ebayGatewayFetch(input: EbayGatewayInput): Promise<Response> {
     body: input.body ?? null,
     auth: input.token ? { token: input.token } : 'account',
     marketplace: input.marketplace ?? headerMarket ?? null,
-    marketHeaders: 'caller',
     sign: input.sign,
     idempotent: input.idempotent,
     timeoutMs: input.timeoutMs,
