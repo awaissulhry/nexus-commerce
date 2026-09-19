@@ -183,24 +183,19 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       })
     }
 
-    // Respond immediately — SP-API calls for all 8 types take 30-60s
+    // Respond immediately — SP-API calls for every type take 30-60s
     // total and Railway cuts the connection at 30s. Work runs in
     // background; check status with GET /api/admin/amazon-notification-
     // status after ~60 seconds.
+    // P0.6 — the list is the canonical one, not a hand-typed copy (the copy
+    // still named ORDER_STATUS_CHANGE and LISTINGS_ITEM_STATUS_CHANGE).
+    const { NEXUS_SP_API_NOTIFICATION_TYPES } = await import(
+      '../services/amazon-notifications-boot.service.js'
+    )
     reply.status(202).send({
       status: 'setup started',
-      message:
-        'SP-API destination + 8 subscriptions running in background. Check GET /api/admin/amazon-notification-status in ~60s.',
-      expectedSubscriptions: [
-        'ORDER_CHANGE',
-        'ORDER_STATUS_CHANGE',
-        'FBA_OUTBOUND_SHIPMENT_STATUS',
-        'FBA_INVENTORY_AVAILABILITY_CHANGES',
-        'ANY_OFFER_CHANGED',
-        'LISTINGS_ITEM_STATUS_CHANGE',
-        'FEED_PROCESSING_FINISHED',
-        'ACCOUNT_STATUS_CHANGED',
-      ],
+      message: `SP-API destination + ${NEXUS_SP_API_NOTIFICATION_TYPES.length} subscriptions running in background. Check GET /api/admin/amazon-notification-status in ~60s.`,
+      expectedSubscriptions: [...NEXUS_SP_API_NOTIFICATION_TYPES],
     })
 
     // Background work — detached from the HTTP response. Reuses the

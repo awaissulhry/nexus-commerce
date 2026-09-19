@@ -330,7 +330,7 @@ Size: **S** ≈ 1 session · **M** ≈ 2–3 sessions · **L** ≈ a week of ses
 
 ### P0 — Make it safe (first, small, urgent)
 
-> **State 2026-09-19:** P0.1 and P0.2 BUILT and committed locally, push blocked (see 14.4). P0.3 BUILT and committed locally. P0.4 BUILT and committed locally. P0.5–P0.8 in progress. The live state is always table 14.2.
+> **State 2026-09-19:** P0.1 and P0.2 BUILT and committed locally, push blocked (see 14.4). P0.3 BUILT and committed locally. P0.4 BUILT and committed locally. P0.5 and P0.6 BUILT and committed locally. P0.7–P0.8 in progress. The live state is always table 14.2.
 
 | ID | Work | Why (evidence) | Done when | Size | Your yes |
 |---|---|---|---|---|---|
@@ -678,7 +678,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P0.3 | BUILT (2026-09-19) | `build/P0.3.md` | Committed locally, not pushed. Prod read (encryption key set?) refused by the permission system; prod proof after a push |
 | P0.4 | BUILT (2026-09-19) | `build/P0.4.md` | Committed locally, not pushed. Also fixes a P0.3 test break (see P0.3.md section 4). Prod proof: the next real eBay refund |
 | P0.5 | BUILT (2026-09-19) | `build/P0.5.md` | Committed locally, not pushed. The Owner records the Amazon date on the page after a push (R-3) |
-| P0.6 – P0.8 | NOT STARTED | — | |
+| P0.6 | BUILT (2026-09-19) | `build/P0.6.md` | Committed locally, not pushed. Prod proof: per-profile setup CronRuns; no Amazon row left pending |
+| P0.7 – P0.8 | NOT STARTED | — | |
 | P6.1 automatic secret rotation | NOT STARTED | — | Needs the queue registered |
 | P1.1 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |

@@ -1,17 +1,21 @@
 /**
  * IS.2 — Ensure SP-API order-notification subscriptions exist.
  *
- * RT.5 — now ensures BOTH ORDER_CHANGE (legacy) and ORDER_STATUS_CHANGE
- * (Amazon's replacement) are subscribed in parallel so we collect 7
- * days of side-by-side coverage. After that window the verifier
- * scripts/verify-rt5-order-status-coverage.mjs confirms equivalence
- * and a follow-up phase removes ORDER_CHANGE. Both feed into the
- * same SQS destination — amazon-sqs.service accepts either type.
+ * P0.6 (docs/channel-connections/FINAL-PLAN.md) — ORDER_STATUS_CHANGE is no
+ * longer subscribed: Amazon retired it on 2026-07-29 (it had been added by
+ * RT.5 as ORDER_CHANGE's "replacement"; it was the other way round).
+ * ORDER_CHANGE stays. The parser still reads a stray ORDER_STATUS_CHANGE.
  *
  * Called once at server boot (fire-and-forget from index.ts).
  * Idempotent: checks each subscription's current state and skips
  * everything already in place. Railway's 30s response timeout is
  * never a factor.
+ *
+ * P0.6 — with business profiles ON, a subscription belongs to a seller, and
+ * the seller's token is only reachable inside its profile. The boot run
+ * therefore visits each active profile that has an Amazon account and runs
+ * there (before P0.6 it ran outside any profile and failed with "Select a
+ * business profile", so no subscription was kept).
  */
 
 import { logger } from '../utils/logger.js'
@@ -155,8 +159,8 @@ export async function ensureSubscriptionForType(
  * Add a new RT.* notification type here and both code paths pick it up.
  */
 export const NEXUS_SP_API_NOTIFICATION_TYPES = [
-  'ORDER_CHANGE',                       // RT.5 legacy
-  'ORDER_STATUS_CHANGE',                // RT.5 replacement
+  'ORDER_CHANGE',
+  // ORDER_STATUS_CHANGE removed (P0.6): Amazon retired it on 2026-07-29.
   'FBA_OUTBOUND_SHIPMENT_STATUS',       // RT.6 (MCF)
   'FBA_INVENTORY_AVAILABILITY_CHANGES', // RT.9
   'ANY_OFFER_CHANGED',                  // RT.13
@@ -341,23 +345,46 @@ export function ensureAmazonNotificationSubscription(): void {
   if (!isSqsConfigured()) return
   if (!process.env.NEXUS_ENABLE_AMAZON_SQS_POLL || process.env.NEXUS_ENABLE_AMAZON_SQS_POLL !== '1') return
 
-  void (async () => {
+  void runAmazonNotificationSetup().catch((err: any) => {
+    logger.error('[amazon-notifications-boot] setup failed (non-fatal)', { error: err?.message ?? String(err) })
+  })
+}
+
+/**
+ * One setup run per place a seller token lives: the whole app with profiles OFF, else each active
+ * profile that has an active Amazon account. A failure in one profile is recorded (CronRun) and
+ * does not stop the others. Returns the profiles visited, for tests and the log.
+ */
+export async function runAmazonNotificationSetup(): Promise<{ visited: number; ran: number }> {
+  // RT.3 — record the per-type result to CronRun so subscription state
+  // is DB-readable (Railway logs required archaeology before; the local
+  // seller refresh-token being stale makes local probing impossible).
+  const { recordCronRun } = await import('../utils/cron-observability.js')
+  const setupHere = () => recordCronRun('amazon-notifications-setup', async () => {
+    const result = await setupAllAmazonNotifications()
+    const parts = result.perType.map((p) =>
+      `${p.type}=${p.status}${p.subscriptionId ? `(sub=${p.subscriptionId.slice(0, 8)},dest=${p.destinationId?.slice(0, 8)})` : ''}${p.error ? `(${p.error.slice(0, 80)})` : ''}`,
+    )
+    return `dest=${result.destinationId ?? 'NONE'} ${parts.join(' ')}`
+  })
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') {
+    await setupHere()
+    return { visited: 1, ran: 1 }
+  }
+  const { visitActiveWorkspaces } = await import('../lib/workspace-sweep.js')
+  const { listActiveConnections } = await import('./connection-resolver.service.js')
+  let visited = 0
+  let ran = 0
+  await visitActiveWorkspaces(async () => {
+    visited++
     try {
-      // RT.3 — record the per-type result to CronRun so subscription state
-      // is DB-readable (Railway logs required archaeology before; the local
-      // seller refresh-token being stale makes local probing impossible).
-      const { recordCronRun } = await import('../utils/cron-observability.js')
-      await recordCronRun('amazon-notifications-setup', async () => {
-        const result = await setupAllAmazonNotifications()
-        const parts = result.perType.map((p) =>
-          `${p.type}=${p.status}${p.subscriptionId ? `(sub=${p.subscriptionId.slice(0, 8)},dest=${p.destinationId?.slice(0, 8)})` : ''}${p.error ? `(${p.error.slice(0, 80)})` : ''}`,
-        )
-        return `dest=${result.destinationId ?? 'NONE'} ${parts.join(' ')}`
-      })
+      if ((await listActiveConnections('AMAZON')).length === 0) return
+      ran++
+      await setupHere()
     } catch (err: any) {
-      logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
-        error: err?.message ?? String(err),
-      })
+      logger.error('[amazon-notifications-boot] setup failed in a business profile (non-fatal)', { error: err?.message ?? String(err) })
     }
-  })()
+  })
+  logger.info('[amazon-notifications-boot] setup visited business profiles', { visited, ran })
+  return { visited, ran }
 }
