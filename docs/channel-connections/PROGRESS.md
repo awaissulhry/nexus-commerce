@@ -33,7 +33,8 @@ Read in this order:
 | P1.3 each queue row carries its account | 7eaf48d59, eaa8f5856 | `build/P1.3.md` |
 | Flat-file edit list + Owner's answers | 52f985539 | `build/flat-file-edit-list.md` |
 | P1.5 eBay market headers from the Marketplace row | b2af8d68b | `build/P1.5.md` |
-| P1.4a Shopify queue on 2026-07 GraphQL with the row's account | (this commit) | `build/P1.4.md` |
+| P1.4a Shopify queue on 2026-07 GraphQL with the row's account | 842841031 | `build/P1.4.md` |
+| P1.4b part 1 Shopify order actions (refund, cancel, tracking) on the order's account | (this commit) | `build/P1.4.md` 6.1 |
 
 **Push is blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 

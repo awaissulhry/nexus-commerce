@@ -230,9 +230,15 @@ function isShopifyReal() {
   return process.env.NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL === 'true'
 }
 
+/**
+ * P1.4b — the order's own Shopify account on the 2026-07 GraphQL client (services/shopify/
+ * order-actions.service.ts), not the env credentials. The old `orderCancel(input:)` form no longer
+ * exists on the API. No refund (the operator refunds separately), no restock (Nexus already restocked).
+ */
 export async function cancelOnShopify(
   shopifyOrderId: string,
   reason: string | undefined,
+  orderId?: string,
 ): Promise<ChannelCancelResult> {
   if (!isShopifyReal()) {
     return {
@@ -244,59 +250,19 @@ export async function cancelOnShopify(
     }
   }
   try {
-    const [{ ShopifyEnhancedService }, { ConfigManager }] = await Promise.all([
-      import('../marketplaces/shopify-enhanced.service.js'),
-      import('../../utils/config.js'),
-    ])
-    const config = ConfigManager.getConfig('SHOPIFY')
-    if (!config) throw new Error('Shopify config missing — SHOPIFY_* env vars not set')
-    const shopify = new ShopifyEnhancedService(config as any)
-
-    // Shopify GraphQL orderCancel mutation. The shop expects a
-    // global ID — the order id we store is the numeric portion;
-    // graphql_id = `gid://shopify/Order/${id}`.
-    const gid = shopifyOrderId.startsWith('gid://')
-      ? shopifyOrderId
-      : `gid://shopify/Order/${shopifyOrderId}`
-    const mutation = `
-      mutation CancelOrder($input: OrderCancelInput!) {
-        orderCancel(input: $input) {
-          job { id }
-          orderCancelUserErrors { field message code }
-        }
-      }
-    `
+    const { shopifyOrderAccount, cancelShopifyOrder } = await import('../shopify/order-actions.service.js')
+    const accountId = await shopifyOrderAccount(orderId ? { orderId } : { channelOrderId: shopifyOrderId })
     const reasonEnum =
       reason && /inventory|stock/i.test(reason) ? 'INVENTORY'
       : reason && /fraud/i.test(reason) ? 'FRAUD'
       : reason && /customer|buyer/i.test(reason) ? 'CUSTOMER'
       : 'OTHER'
-    const response = await (shopify as any).graphqlRequest(mutation, {
-      input: {
-        orderId: gid,
-        reason: reasonEnum,
-        refund: false, // operator handles refunds separately
-        restock: false, // we already restocked locally via O.46
-        notifyCustomer: true,
-        staffNote: reason ?? 'Cancelled via Nexus',
-      },
-    })
-    const errs = response?.orderCancel?.orderCancelUserErrors ?? []
-    if (errs.length > 0) {
-      return {
-        ok: false,
-        channel: 'SHOPIFY',
-        channelOrderId: shopifyOrderId,
-        ackRef: null,
-        dryRun: false,
-        error: errs.map((e: any) => `${e.field?.join('.') ?? ''}: ${e.message}`).join('; '),
-      }
-    }
+    const { jobId } = await cancelShopifyOrder({ accountId, channelOrderId: shopifyOrderId, reason: reasonEnum, staffNote: reason ?? 'Cancelled via Nexus' })
     return {
       ok: true,
       channel: 'SHOPIFY',
       channelOrderId: shopifyOrderId,
-      ackRef: response?.orderCancel?.job?.id ?? null,
+      ackRef: jobId,
       dryRun: false,
     }
   } catch (err: any) {

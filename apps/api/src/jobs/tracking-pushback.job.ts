@@ -25,7 +25,8 @@
  * Gated behind NEXUS_ENABLE_TRACKING_PUSHBACK_CRON (default ON
  * because silent failures here mean Amazon/eBay charge late-ship
  * penalties). Per-channel ENABLE_*_SHIP_CONFIRM flags still control
- * whether the underlying pushback hits the real API.
+ * whether the underlying pushback hits the real API (Shopify:
+ * NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM, P1.4b).
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -193,49 +194,27 @@ async function processOne(rowId: string): Promise<'SUCCESS' | 'FAILED' | 'DEAD_L
         }
       }
     } else if (row.channel === 'SHOPIFY') {
-      // Shopify thin adapter: reuses the existing
-      // ShopifyEnhancedService.createFulfillment. dryRun is implicit
-      // here — the Shopify enhanced service hits real API when
-      // configured; no separate enable flag because shopify-pushback
-      // didn't get its own module. Future: extract to apps/api/src/
-      // services/shopify-pushback/ for symmetry.
+      // P1.4b — the order's own Shopify account on the 2026-07 GraphQL client (services/shopify/
+      // order-actions.service.ts). The old adapter used the env credentials and a `fulfillmentCreate`
+      // input the API no longer has. Its own switch, as the other channels: off → nothing is sent and
+      // the row stays a failure with that reason (never a pretended success).
       const shipment = await prisma.shipment.findUnique({
         where: { id: row.shipmentId },
-        include: {
-          order: {
-            select: {
-              channelOrderId: true,
-              items: { select: { ebayMetadata: true, sku: true } }, // not used; placeholder
-            },
-          },
-        },
+        include: { order: { select: { id: true, channelOrderId: true } } },
       })
       if (!shipment?.order || !shipment.trackingNumber) {
         outcome = { success: false, error: 'Shopify input incomplete', code: 'INPUT_INCOMPLETE' }
+      } else if (process.env.NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM !== 'true') {
+        outcome = { success: false, error: 'Shopify tracking push-back is switched off (NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM). Nothing was sent.', code: 'SHIP_CONFIRM_OFF' }
       } else {
         try {
-          const [{ ShopifyEnhancedService }, { ConfigManager }] = await Promise.all([
-            import('../services/marketplaces/shopify-enhanced.service.js'),
-            import('../utils/config.js'),
-          ])
-          const shopifyConfig = ConfigManager.getConfig('SHOPIFY')
-          if (!shopifyConfig) {
-            throw new Error('Shopify config missing — set SHOPIFY_* env vars')
-          }
-          const shopify = new ShopifyEnhancedService(shopifyConfig as any)
-          // Shopify createFulfillment expects orderId + lineItemIds[]
-          // (GraphQL global IDs). Without the line-item-ID metadata
-          // captured at ingest, fall back to fulfilling the whole
-          // order via the legacy non-line-item path.
-          const result = await shopify.createFulfillment(
-            shipment.order.channelOrderId,
-            [], // empty lineItemIds → fulfill all
-            {
-              number: shipment.trackingNumber,
-              company: shipment.carrierCode,
-              url: shipment.trackingUrl ?? undefined,
-            },
-          )
+          const { shopifyOrderAccount, fulfilShopifyOrder } = await import('../services/shopify/order-actions.service.js')
+          const accountId = await shopifyOrderAccount({ orderId: shipment.order.id })
+          const result = await fulfilShopifyOrder({
+            accountId,
+            channelOrderId: shipment.order.channelOrderId,
+            tracking: { number: shipment.trackingNumber, company: shipment.carrierCode, url: shipment.trackingUrl },
+          })
           outcome = { success: true, response: result }
         } catch (e: any) {
           outcome = { success: false, error: e?.message ?? String(e), code: e?.code ?? null }

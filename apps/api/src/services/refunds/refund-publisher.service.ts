@@ -516,8 +516,8 @@ function publishAmazonRefund(ret: LoadedReturn): RefundPublishResult {
  * and refund proportionally against them. Note=the refund reason.
  *
  * dryRun-default: returns a structurally-valid mock refundGid when
- * NEXUS_ENABLE_SHOPIFY_REFUND is unset/false. Real path requires the
- * SHOPIFY_* env vars + the flag flipped to 'true'.
+ * NEXUS_ENABLE_SHOPIFY_REFUND is unset/false. The real path (flag 'true') uses the order's own
+ * connected Shopify account (P1.4b).
  */
 function isShopifyRefundReal(): boolean {
   return process.env.NEXUS_ENABLE_SHOPIFY_REFUND === 'true'
@@ -552,129 +552,22 @@ async function publishShopifyRefund(
     }
   }
 
-  // Real path. Lazy-import to avoid pulling in Shopify client when
-  // refunding non-Shopify channels.
-  const [{ ShopifyEnhancedService }, { ConfigManager }] = await Promise.all([
-    import('../marketplaces/shopify-enhanced.service.js'),
-    import('../../utils/config.js'),
-  ])
-  const config = ConfigManager.getConfig('SHOPIFY')
-  if (!config) {
-    return {
-      outcome: 'FAILED',
-      error: 'Shopify config missing — set SHOPIFY_* env vars',
-    }
-  }
-  const shopify = new ShopifyEnhancedService(config as any)
-
-  // Order GID: the channelOrderId is the numeric id; promote to GID.
-  const gid = order.channelOrderId.startsWith('gid://')
-    ? order.channelOrderId
-    : `gid://shopify/Order/${order.channelOrderId}`
-
+  // P1.4b — the order's own Shopify account on the 2026-07 GraphQL client (services/shopify/
+  // order-actions.service.ts), not the env credentials; `refundCreate` carries `@idempotent(key)`.
   const refundCurrency = ret.currencyCode || 'EUR'
   const totalAmount = (ret.refundCents! / 100).toFixed(2)
   const reasonText = (input.reasonText ?? ret.notes ?? 'Refund issued via Nexus Commerce').slice(0, 500)
-
-  // 1) Fetch the order's transactions so we know what to refund against.
-  const txQuery = `
-    query OrderTransactions($id: ID!) {
-      order(id: $id) {
-        id
-        currencyCode
-        transactions(first: 10) {
-          id
-          kind
-          status
-          amountSet { shopMoney { amount currencyCode } }
-        }
-      }
-    }
-  `
-  let txResp: any
+  let refundId: string | null
   try {
-    txResp = await (shopify as any).graphqlRequest(txQuery, { id: gid })
+    const { shopifyOrderAccount, refundShopifyOrder } = await import('../shopify/order-actions.service.js')
+    const accountId = await shopifyOrderAccount({ orderId: order.id })
+    ;({ refundId } = await refundShopifyOrder({ accountId, channelOrderId: order.channelOrderId, returnId: ret.id, amount: totalAmount, note: reasonText }))
   } catch (err) {
     return {
       outcome: 'FAILED',
-      error: `Shopify transactions fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+      error: err instanceof Error ? err.message : String(err),
     }
   }
-  const allTx: Array<{ id: string; kind: string; status: string; amountSet: { shopMoney: { amount: string; currencyCode: string } } }> =
-    txResp?.order?.transactions ?? []
-  const refundable = allTx.filter(
-    (tx) => (tx.kind === 'CAPTURE' || tx.kind === 'SALE') && tx.status === 'SUCCESS',
-  )
-  if (refundable.length === 0) {
-    return {
-      outcome: 'FAILED',
-      error: 'Shopify order has no refundable capture/sale transactions',
-    }
-  }
-
-  // 2) Build refund transactions list. v0: refund the full
-  // ret.refundCents proportionally across capture/sale transactions
-  // (most orders have a single transaction, so this collapses to a
-  // straight refund on it).
-  const totalCaptured = refundable.reduce(
-    (sum, tx) => sum + Number(tx.amountSet.shopMoney.amount),
-    0,
-  )
-  if (totalCaptured <= 0) {
-    return {
-      outcome: 'FAILED',
-      error: 'Shopify captured total is zero — nothing to refund against',
-    }
-  }
-  const refundAmount = Number(totalAmount)
-  const transactions = refundable.map((tx) => {
-    const txAmount = Number(tx.amountSet.shopMoney.amount)
-    const share = totalCaptured > 0 ? (txAmount / totalCaptured) * refundAmount : 0
-    return {
-      orderId: gid,
-      parentId: tx.id,
-      amount: share.toFixed(2),
-      gateway: undefined as string | undefined,
-      kind: 'REFUND',
-    }
-  })
-
-  // 3) refundCreate. notify=true so Shopify sends the customer's
-  // refund email; note carries the operator reason for the customer-
-  // facing note in the order timeline.
-  const mutation = `
-    mutation RefundCreate($input: RefundInput!) {
-      refundCreate(input: $input) {
-        refund { id legacyResourceId }
-        userErrors { field message }
-      }
-    }
-  `
-  let resp: any
-  try {
-    resp = await (shopify as any).graphqlRequest(mutation, {
-      input: {
-        orderId: gid,
-        note: reasonText,
-        notify: true,
-        transactions,
-      },
-    })
-  } catch (err) {
-    return {
-      outcome: 'FAILED',
-      error: `Shopify refundCreate failed: ${err instanceof Error ? err.message : String(err)}`,
-    }
-  }
-  const errs = resp?.refundCreate?.userErrors ?? []
-  if (errs.length > 0) {
-    return {
-      outcome: 'FAILED',
-      error: errs.map((e: any) => `${e.field?.join('.') ?? ''}: ${e.message}`).join('; '),
-    }
-  }
-  const refund = resp?.refundCreate?.refund
-  const refundId = refund?.id ?? null
   logger.info('shopify refund issued', {
     returnId: ret.id,
     shopifyOrderId: order.channelOrderId,
