@@ -20,8 +20,6 @@ vi.mock('../db.js', () => ({ default: new Proxy({}, { get: () => new Proxy({}, {
 import { ebayHostOf, ebayWriteRefusal, assertEbayWriteAllowed, EbayWriteRefusedError } from './ebay-publish-gate.service.js'
 import { assertShopifyWriteAllowed, ShopifyWriteRefusedError } from './shopify-publish-gate.service.js'
 import { callTradingApi, TRADING_LISTING_WRITES } from './ebay-trading-api.service.js'
-import { ShopifyService } from './marketplaces/shopify.service.js'
-import { ShopifyEnhancedService } from './marketplaces/shopify-enhanced.service.js'
 import { EtsyService } from './marketplaces/etsy.service.js'
 import { publishEbayImagesViaInventory } from './images/ebay-inventory-image-publish.service.js'
 
@@ -109,34 +107,9 @@ describe('callTradingApi — every Trading listing write follows the publish mod
   })
 })
 
-describe('old Shopify REST client', () => {
-  beforeEach(() => { vi.stubEnv('SHOPIFY_SHOP_NAME', 'fixture'); vi.stubEnv('SHOPIFY_ACCESS_TOKEN', 'fixture'); vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '') })
-  it.each(['POST', 'PUT', 'DELETE'])('%s is refused outside live, with no call', async method => {
-    shopifyMode('dry-run')
-    await expect((new ShopifyService() as any).makeRequest(method, '/products/1.json', {})).rejects.toThrow('Nothing was sent to Shopify')
-    expect(s.fetch).not.toHaveBeenCalled()
-  })
-  it('a GET (read) still goes out', async () => {
-    shopifyMode('gated')
-    await new ShopifyService().makeRequestPublic('GET', '/locations.json')
-    expect(s.fetch).toHaveBeenCalledOnce()
-  })
-  it('live mode passes this gate — and since P1.4 the gateway refuses the old REST write anyway, with no call', async () => {
-    shopifyMode('live')
-    await expect((new ShopifyService() as any).makeRequest('PUT', '/variants/1.json', {})).rejects.toThrow(/a change goes out only on the 2026-07 GraphQL Admin API with a connected account/)
-    expect(s.fetch).not.toHaveBeenCalled()
-  })
-})
-
-describe('old Shopify GraphQL client', () => {
-  const service = () => new ShopifyEnhancedService({ shopName: 'fixture', accessToken: 'fixture', webhookSecret: 'fixture' } as any)
-  it.each(['gated', 'dry-run'] as const)('price and stock writes are refused in %s mode, with no call', async mode => {
-    shopifyMode(mode)
-    await expect(service().updateVariantPrice('gid://shopify/ProductVariant/1', 2)).rejects.toThrow('Nothing was sent to Shopify')
-    await expect(service().updateInventory('gid://shopify/InventoryItem/1', 'gid://shopify/Location/1', 2)).rejects.toThrow('Nothing was sent to Shopify')
-    expect(s.fetch).not.toHaveBeenCalled()
-  })
-})
+// P1.6 — the old Shopify REST and GraphQL clients are deleted. What replaced their gate is the
+// gateway rule in services/gateway/shopify-writes.p14.vitest.test.ts: a Shopify change leaves only on
+// the 2026-07 GraphQL API with a named account.
 
 describe('old Etsy client', () => {
   it.each(['gated', 'live'] as const)('the stock PATCH is refused even when Shopify/eBay are %s (Etsy is read-only)', async mode => {

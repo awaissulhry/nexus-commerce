@@ -76,7 +76,6 @@ import {
   moveStockBetweenBins,
 } from '../services/bin.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
-import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 import {
   createMCFShipment,
   syncMCFStatus,
@@ -2708,17 +2707,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // externalLocationId; safe to call concurrently).
   fastify.post('/stock/shopify-locations/discover', async (_request, reply) => {
     try {
-      // Lazy-construct the Shopify client. The discovery service
-      // accepts a thin shape with just `makeRequest`; ShopifyService
-      // exposes that via the public makeRequestPublic shim.
-      let svc: { makeRequest: (m: 'GET', p: string) => Promise<unknown> } | null = null
-      try {
-        const inner = new ShopifyService()
-        svc = { makeRequest: (m, p) => inner.makeRequestPublic(m, p) }
-      } catch (err) {
-        fastify.log.warn({ err }, '[shopify-locations/discover] Shopify not configured')
-      }
-      const summary = await shopifyLocations.discoverShopifyLocations(svc)
+      // P1.6 — the connected Shopify account on the 2026-07 GraphQL client; the env-credential
+      // ShopifyService is gone. A missing or ambiguous account comes back as an error in the summary.
+      const summary = await shopifyLocations.discoverShopifyLocations()
       return summary
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/shopify-locations/discover] failed')

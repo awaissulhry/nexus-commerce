@@ -10,7 +10,6 @@ vi.mock('./ebay-variation-push.service.js', () => ({ axisSynonymKey: (v: string)
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getAccessToken: s.next } }))
 vi.mock('./connection-resolver.service.js', () => ({ tryResolveConnection: s.next }))
 vi.mock('./marketplaces/amazon.service.js', () => ({ AmazonService: class { updateVariantPrice = s.transport } }))
-vi.mock('./marketplaces/shopify.service.js', () => ({ ShopifyService: class { updateVariantPrice = s.transport; updateVariantInventory = s.transport } }))
 vi.mock('./marketplaces/woocommerce.service.js', () => ({ WooCommerceService: class {} }))
 vi.mock('./marketplaces/etsy.service.js', () => ({ EtsyService: class {} }))
 import { convertListingAxesToItalian } from './ebay-axes-convert.service.js'
@@ -20,10 +19,8 @@ import { applyVariationOrderToListing } from './ebay-variation-order-apply.servi
 import { relabelListingToPoolSkus, adoptSkulessVariations } from './ebay-variation-relabel.service.js'
 import { createSharedListing } from './ebay-shared-listing-push.service.js'
 import { publishEbaySharedListingImages } from './images/ebay-shared-image-publish.service.js'
-import { MarketplaceService } from './marketplaces/marketplace.service.js'
 import { EbayService } from './marketplaces/ebay.service.js'
 const ctx = { oauthToken: 'fixture' }
-const market = new MarketplaceService()
 const ebay = new EbayService()
 const cases: Array<[string, () => Promise<unknown>, 'read' | 'send' | 'review']> = [
  ['axis rename', () => convertListingAxesToItalian('123', 'IT', ctx), 'send'],
@@ -34,8 +31,6 @@ const cases: Array<[string, () => Promise<unknown>, 'read' | 'send' | 'review']>
  ['adopt SKU-less', () => adoptSkulessVariations('123', 'IT', ctx), 'send'],
  ['shared create', () => createSharedListing({sku:'SKU'}, [], {...ctx, market:'IT'} as any), 'review'],
  ['shared images', () => publishEbaySharedListingImages('product', 'IT'), 'read'],
- ['Shopify legacy price', () => market.updatePrice([{ channel:'SHOPIFY', channelVariantId:'123', price:2 }]), 'send'],
- ['Shopify legacy stock', () => market.updateInventory([{ channel:'SHOPIFY', channelVariantId:'123', inventory:2 }]), 'send'],
  ['eBay legacy stock', () => ebay.updateInventory('SKU', 2), 'read'],
  ['eBay legacy price', () => ebay.updatePrice('SKU', 2), 'read'],
  ['eBay legacy variant price', () => ebay.updateVariantPrice('SKU', 2), 'read'],
@@ -66,19 +61,10 @@ it('explicit order dry-run retains its remote-read preview without a push-contro
  await applyVariationOrderToListing('123','IT',[],{},ctx,{dryRun:true})
  expect(s.read).not.toHaveBeenCalled(); expect(s.transport).toHaveBeenCalledWith('GetItem',expect.any(String),expect.any(Object))
 })
-it('Etsy refusal remains local and does not enter a write lookup', async () => {
- const result = await market.updatePrice([{channel:'ETSY',channelVariantId:'123',price:2}])
- expect(result[0].success).toBe(false); expect(s.read).not.toHaveBeenCalled(); expect(s.transport).not.toHaveBeenCalled()
-})
 
-// P0.1 — outside `live`, the legacy writers stop before any lookup or transport.
+// P0.1 — outside `live`, the legacy writers stop before any lookup or transport. (The MarketplaceService
+// fan-out rows went with the façade in P1.6; the eBay legacy service is what is left.)
 const legacyWriters: Array<[string, () => Promise<unknown>, string]> = [
- ['Shopify legacy price', () => market.updatePrice([{ channel:'SHOPIFY', channelVariantId:'123', price:2 }]), 'Nothing was sent to Shopify'],
- ['Shopify legacy stock', () => market.updateInventory([{ channel:'SHOPIFY', channelVariantId:'123', inventory:2 }]), 'Nothing was sent to Shopify'],
- ['eBay legacy fan-out price', () => market.updatePrice([{ channel:'EBAY', channelVariantId:'123', price:2 }]), 'Nothing was sent to eBay'],
- ['Amazon legacy fan-out price', () => market.updatePrice([{ channel:'AMAZON', channelVariantId:'123', price:2 }]), 'Nothing was sent to Amazon'],
- ['WooCommerce legacy stock', () => market.updateInventory([{ channel:'WOOCOMMERCE', channelVariantId:'123', inventory:2 }]), 'no longer a Nexus channel'],
- ['Etsy legacy stock', () => market.updateInventory([{ channel:'ETSY', channelVariantId:'123', channelProductId:'9', inventory:2 }]), 'Etsy is read-only'],
  ['eBay legacy stock', () => ebay.updateInventory('SKU', 2), 'Nothing was sent to eBay'],
  ['eBay legacy price', () => ebay.updatePrice('SKU', 2), 'Nothing was sent to eBay'],
  ['eBay legacy variant price', () => ebay.updateVariantPrice('SKU', 2), 'Nothing was sent to eBay'],
