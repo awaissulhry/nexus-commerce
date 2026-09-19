@@ -15,6 +15,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { channelName, relativeTime, STATUS_LABEL, type AccountRow } from './channels-data'
 import { LedgerGrid, InboundGrid, type LedgerRow, type InboundRow } from './ChannelEventsGrid'
 import { readableAccountText } from './channel-event-details'
+import { AppSecretsCard } from './AppSecretsCard'
 
 interface HeartbeatResult {
   ok: boolean
@@ -165,13 +166,22 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
     )
   }
   if (!account) {
-    return <EmptyState title="No connected account to check" description="Connect a channel first — Diagnostics runs live checks against a connected account." />
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--nds-space-12)' }}>
+        <AppSecretsCard />
+        <EmptyState title="No connected account to check" description="Connect a channel first — Diagnostics runs live checks against a connected account." />
+      </div>
+    )
   }
 
   const status = STATUS_LABEL[account.authStatus ?? 'unknown'] ?? STATUS_LABEL.unknown
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
+    // P0.5 — `minmax(0, 1fr)`: without it the account picker's fixed 360 px Listbox set the track
+    // width, and every card on this tab overflowed a phone-width panel (measured 360 in 298 px).
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--nds-space-12)' }}>
+      {/* P0.5 — not tied to one account, so above the account picker. */}
+      <AppSecretsCard />
       <div className="nds-diag-picker">
         <span id="diag-account-label">Account</span>
         <Listbox

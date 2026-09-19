@@ -151,3 +151,64 @@
   text-transform: uppercase;
   color: var(--nds-text-muted);
 }
+
+/* P0.5 — App secrets card (Diagnostics). Geometry only; every control is a DS component.
+   One row per app: what it is on the left, the date and its Save on the right. */
+.nds-app-secrets {
+  display: grid;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.nds-app-secret {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-app-secret:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.nds-app-secret > .nds-banner {
+  grid-column: 1 / -1;
+}
+.nds-app-secret-info {
+  display: grid;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.nds-app-secret-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+.nds-app-secret-name {
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+.nds-app-secret-detail {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+.nds-app-secret-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--nds-space-8);
+}
+.nds-app-secret-date {
+  width: 220px;
+}
+@media (max-width: 720px) {
+  .nds-app-secret {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nds-app-secret-form {
+    flex-wrap: wrap;
+  }
+}

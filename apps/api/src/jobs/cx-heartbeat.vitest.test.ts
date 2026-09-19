@@ -492,11 +492,12 @@ describe('runHeartbeatSweep', () => {
     heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1 }).mockResolvedValueOnce({ ok: false, latencyMs: 1, errorClass: 'network', message: 'down' })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
-    apps = [{ channelKey: 'AMAZON_SP', secretExpiresAt: new Date(Date.now() + 7 * 86_400_000 + 60_000) }]
+    apps = [{ id: 'app-sp', channelKey: 'AMAZON_SP', environment: 'production', secretExpiresAt: new Date(Date.now() + 7 * 86_400_000 + 60_000) }]
     const summary = await runHeartbeatSweep()
     expect(summary).toBe('connections=2 ok=1 failed=1 refreshed=0 sessionsSwept=0')
     expect(heartbeat).toHaveBeenCalledTimes(2)
-    expect(alertTitles()).toEqual(['AMAZON_SP app secret expires in 7 day(s)'])
+    // P0.5 — plain title with the date; the level rules live in services/cx/app-secret-expiry.p05 tests.
+    expect(alertTitles()).toEqual([expect.stringMatching(/^Amazon SP-API app secret expires in 7 days \(\d{4}-\d{2}-\d{2}\)$/)])
     expect(prismaMock.oAuthSession.deleteMany).toHaveBeenCalled()
     expect(prismaMock.channelConnection.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { refreshLeaseUntil: null, refreshLeaseOwner: null } }),

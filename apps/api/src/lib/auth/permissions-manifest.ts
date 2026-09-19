@@ -160,6 +160,8 @@ export const ENTRIES: Entry[] = [
   P(PUBLIC, (m, p) => m.toUpperCase() === 'GET' && p.startsWith('/api/cx/callback/')),
   RW(F.channelsConnect, F.channelsConnect, pfx('/api/cx/connect/')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/connections')),
+  // P0.5 — our app secrets' expiry dates (never a secret): the same people who manage connections.
+  RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/apps')),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   RW(F.channelsConnect, F.channelsConnect, pfx('/api/ebay/auth')),
   RW(F.adsConnect, F.adsConnect, pfx('/api/amazon-ads/auth')), // (callback already PUBLIC above)
