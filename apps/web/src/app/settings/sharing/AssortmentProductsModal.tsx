@@ -6,7 +6,8 @@
  * same assortment never overwrite each other silently (a 409 reloads and says so).
  */
 import { useCallback, useEffect, useState } from 'react'
-import { AsyncListboxPanel, Banner, DataGrid, Modal, type Column } from '@/design-system/components'
+import { AsyncListboxPanel, Banner, Modal } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { sharingApi, SharingError, type Assortment, type AssortmentMember } from './sharingApi'

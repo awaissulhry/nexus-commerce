@@ -5,7 +5,8 @@
  * Each action names its consequence, with the real linked-product count, before it is sent (§7.1 rule 10).
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Banner, Card, DataGrid, EmptyState, KeyValue, Modal, type Column } from '@/design-system/components'
+import { Banner, Card, EmptyState, KeyValue, Modal } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Pill } from '@/design-system/primitives'
 import type { Access } from './SharingClient'
 import { CopyDrawer } from './CopyDrawer'

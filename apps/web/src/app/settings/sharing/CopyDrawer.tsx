@@ -10,7 +10,8 @@
  *   Done           The run links the saved products and copies images. A partial run can run again.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Banner, DataGrid, Disclosure, Drawer, Field, KeyValue, Listbox, MetricStrip, Stepper, SummaryTable, type Column } from '@/design-system/components'
+import { Banner, Disclosure, Drawer, Field, KeyValue, Listbox, MetricStrip, Stepper, SummaryTable } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Pill, SegmentedControl } from '@/design-system/primitives'
 import { TransferReview } from '@/app/products/catalog-transfer/TransferReview'
 import type { TransferJob, TransferOptions } from '@/app/products/catalog-transfer/sourceMapping'
