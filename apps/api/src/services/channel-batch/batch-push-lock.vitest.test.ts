@@ -8,10 +8,8 @@ vi.mock('../../lib/amazon-sp-client.js',()=>({amazonSpClient:()=>({callAPI:s.sp}
 vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { asResponse } from '../../test-support/gateway-stubs.js'
-import { submitShopifyBulkMutation } from './shopify-bulk-mutation.service.js'
 import { submitEbayParallelBatch } from './ebay-parallel-batch.service.js'
 import { submitAmazonListingsBatch } from './amazon-batch-feed.service.js'
-const shop={mutation:'mutation Update($input:ProductInput!){productUpdate(input:$input){userErrors{message}}}',operations:[{input:{id:'gid://shopify/Product/123',title:'Fixture'}}],shopName:'fixture',accessToken:'mock'}
 const amazon={sellerId:'fixture',marketplaceIds:['APJ6JRA9NG5V4'],operations:[{type:'stock' as const,sku:'SKU',quantity:2}]}
 const locks=[{syncPaused:true},{offerClosedAt:new Date('2026-09-13')},...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent=>({presenceIntent}))]
 import { rememberTokenAccount } from '../gateway/token-accounts.js'
@@ -26,19 +24,6 @@ beforeEach(()=>{
  s.sp.mockImplementation(async({operation}:any)=>operation==='createFeedDocument'?{feedDocumentId:'doc',url:'https://fixture.invalid/upload'}:{feedId:'feed'})
 })
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals()})
-it.each(locks)('Shopify bulk refuses %j before upload or mutation',async lock=>{
- s.controls=[lock];await expect(submitShopifyBulkMutation(shop)).rejects.toThrow('PUSH_');expect(s.send).not.toHaveBeenCalled()
-})
-it('Shopify bulk collects nested product and inventory identities and submits an unlocked mocked operation',async()=>{
- s.send.mockResolvedValueOnce({ok:true,json:async()=>({data:{stagedUploadsCreate:{stagedTargets:[{url:'https://fixture.invalid/upload',resourceUrl:'path',parameters:[]}],userErrors:[]}}})})
- .mockResolvedValueOnce({ok:true}).mockResolvedValueOnce({ok:true,json:async()=>({data:{bulkOperationRunMutation:{bulkOperation:{id:'bulk',status:'CREATED'},userErrors:[]}}})})
- expect(await submitShopifyBulkMutation(shop)).toMatchObject({bulkOperationId:'bulk',dryRun:false});expect(s.send).toHaveBeenCalledTimes(3)
- expect(s.read).toHaveBeenCalledWith({channel:'SHOPIFY',externalIds:['gid://shopify/Product/123']})
-})
-it('Shopify explicit dry-run bypasses reads and writes even when the fixture is held',async()=>{
- vi.stubEnv('NEXUS_SHOPIFY_BULK_DRYRUN','1');s.controls=[{syncPaused:true}]
- expect((await submitShopifyBulkMutation(shop)).dryRun).toBe(true);expect(s.read).not.toHaveBeenCalled();expect(s.send).not.toHaveBeenCalled()
-})
 it.each(locks)('eBay batch refuses %j for stock and price',async lock=>{
  s.controls=[lock]
  const r=await submitEbayParallelBatch({connectionId:'fixture',maxRetries:0,operations:[{type:'stock',sku:'SKU',quantity:2},{type:'price',sku:'SKU',offerId:'offer',currency:'EUR',value:'2'}]})
@@ -59,10 +44,6 @@ it.each([['gated',undefined],['dry-run','dry-run'],['sandbox','sandbox']])('P0.1
  const r=await submitEbayParallelBatch({connectionId:'fixture',maxRetries:0,operations:[{type:'withdraw',sku:'SKU',offerId:'offer'}]})
  expect(r).toMatchObject({succeeded:0,failed:1,dryRun:true});expect(r.results[0].errorMessage).toMatch(/^EBAY_WRITE_REFUSED.*Nothing was sent to eBay/)
  expect(s.auth).not.toHaveBeenCalled();expect(s.send).not.toHaveBeenCalled()
-})
-it.each([['gated',undefined],['dry-run','dry-run']])('P0.1 — Shopify bulk in %s mode refuses before any read or write',async(_label,mode)=>{
- if(mode){vi.stubEnv('SHOPIFY_PUBLISH_MODE',mode)}else{vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH','')}
- await expect(submitShopifyBulkMutation(shop)).rejects.toThrow('Nothing was sent to Shopify');expect(s.send).not.toHaveBeenCalled();expect(s.read).not.toHaveBeenCalled()
 })
 it('eBay explicit dry-run preserves its no-transport behavior',async()=>{
  vi.stubEnv('NEXUS_EBAY_BATCH_DRYRUN','1');s.controls=[{syncPaused:true}]

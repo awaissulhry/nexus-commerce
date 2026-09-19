@@ -16,6 +16,7 @@
  * Every call goes through the channel gateway (admin-client → shopifyTransport). A refusal or a failed
  * read-back throws with one plain sentence; the queue records it.
  */
+import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
 import { shopifyAdmin, assertShopifyResult as checked, type ShopifyGraphql } from './admin-client.js'
 import { toGid } from './content-publisher.js'
 import { idempotencyKeyFor } from '../gateway/gateway.js'
@@ -26,7 +27,8 @@ export interface LinkedListingRow {
   syncType: string
   payload?: Record<string, any> | null
   product?: { id: string; sku: string } | null
-  channelListing?: { id: string; platformAttributes?: unknown } | null
+  /** The listing row as loaded (it carries the push-lock fields too). */
+  channelListing?: (PushLockListing & { id: string; platformAttributes?: unknown }) | null
 }
 
 export interface LinkedListingWork {
@@ -85,6 +87,10 @@ async function identify(gql: ShopifyGraphql, row: LinkedListingRow) {
 
 /** Send one queued change to a linked Shopify listing through `accountId`. Returns the result sentence. */
 export async function syncShopifyLinkedListing(row: LinkedListingRow, accountId: string, work: LinkedListingWork): Promise<string> {
+  // The push lock (paused, closed, ended, Presence intent), here as well as at the callers: this module
+  // is the one place every linked Shopify write passes (Presence W1.5).
+  const refusal = assertPushAllowed(row.channelListing ?? null)
+  if (refusal) throw Object.assign(new Error(refusal.sentence), { code: refusal.code, refusal })
   const { graphql, domain } = await shopifyAdmin(accountId)
   // The shop's circuit breaker (kept from the REST path): after repeated failures, stop calling this shop.
   const circuit = checkShopifyCircuit(domain)

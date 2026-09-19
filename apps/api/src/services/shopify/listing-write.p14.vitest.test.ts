@@ -86,6 +86,12 @@ describe('P1.4 — whose shop, which variant', () => {
     await expect(syncShopifyLinkedListing(row('QUANTITY_UPDATE'), 'shop-A', { quantity: 5 })).rejects.toThrow(/circuit open/)
     expect(shop.ops).toHaveLength(0)
   })
+  it('a paused listing (push lock): refused before the shop is even opened', async () => {
+    const paused = { ...row('QUANTITY_UPDATE'), channelListing: { ...row('QUANTITY_UPDATE').channelListing, syncPaused: true } }
+    await expect(syncShopifyLinkedListing(paused, 'shop-A', { quantity: 5 })).rejects.toThrow(/paused/i)
+    expect(shop.accounts).toHaveLength(0)
+    expect(shop.ops).toHaveLength(0)
+  })
   it('the stored variant now carries another SKU: refused, nothing written', async () => {
     shop.variants[0].sku = 'OTHER'
     await expect(syncShopifyLinkedListing(row('QUANTITY_UPDATE'), 'shop-A', { quantity: 5 })).rejects.toThrow(/changed/)

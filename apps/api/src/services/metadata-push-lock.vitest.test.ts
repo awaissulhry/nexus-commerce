@@ -20,7 +20,6 @@ import { applyVariationOrderToListing } from './ebay-variation-order-apply.servi
 import { relabelListingToPoolSkus, adoptSkulessVariations } from './ebay-variation-relabel.service.js'
 import { createSharedListing } from './ebay-shared-listing-push.service.js'
 import { publishEbaySharedListingImages } from './images/ebay-shared-image-publish.service.js'
-import { ebayProvider } from '../providers/ebay.provider.js'
 import { MarketplaceService } from './marketplaces/marketplace.service.js'
 import { EbayService } from './marketplaces/ebay.service.js'
 const ctx = { oauthToken: 'fixture' }
@@ -35,7 +34,6 @@ const cases: Array<[string, () => Promise<unknown>, 'read' | 'send' | 'review']>
  ['adopt SKU-less', () => adoptSkulessVariations('123', 'IT', ctx), 'send'],
  ['shared create', () => createSharedListing({sku:'SKU'}, [], {...ctx, market:'IT'} as any), 'review'],
  ['shared images', () => publishEbaySharedListingImages('product', 'IT'), 'read'],
- ['provider images', () => ebayProvider.reviseItemImages({ itemId:'123', galleryUrls:['https://fixture.invalid/a.jpg'] }), 'send'],
  ['Shopify legacy price', () => market.updatePrice([{ channel:'SHOPIFY', channelVariantId:'123', price:2 }]), 'send'],
  ['Shopify legacy stock', () => market.updateInventory([{ channel:'SHOPIFY', channelVariantId:'123', inventory:2 }]), 'send'],
  ['eBay legacy stock', () => ebay.updateInventory('SKU', 2), 'read'],
@@ -49,7 +47,6 @@ beforeEach(() => {
  s.next.mockRejectedValue(new Error('NEXT_READ')); s.transport.mockRejectedValue(new Error('NEXT_TRANSPORT')); s.review.mockRejectedValue(new Error('NEXT_REVIEW'))
  vi.stubGlobal('fetch', s.transport)
  vi.spyOn(ebay as any, 'getAccessToken').mockImplementation(s.next)
- vi.spyOn(ebayProvider as any, 'callTradingApi').mockImplementation(s.transport)
  // P0.1 — these boundaries model production: publish mode `live` on every channel.
  vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
  vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'true'); vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'live')

@@ -1,7 +1,7 @@
 /**
  * P1.4b part 2 — the bulk price / stock action on Shopify sends each listing through its OWN account on
- * the 2026-07 GraphQL client (the outbound queue's code), not a bulk operation on the env credentials
- * that set one env inventory item for every product. More than one Shopify account for the product →
+ * the 2026-07 GraphQL client (the outbound queue's code), not the env-credential bulk operation that
+ * set one env inventory item for every product (deleted in P1.6). More than one Shopify account for the product →
  * refused (D7); the push lock holds; a native family goes to offer-sync.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +16,6 @@ vi.mock('./shopify/listing-write.service.js', () => ({
   syncShopifyLinkedListing: vi.fn(async (row: any, accountId: string, work: any) => { h.linked.push({ row, accountId, work }); return 'ok' }),
 }))
 vi.mock('./shopify/offer-sync.service.js', () => ({ syncNativeShopifyOffer: vi.fn(async (row: any) => { h.native.push(row); return 'ok' }) }))
-vi.mock('./channel-batch/shopify-bulk-mutation.service.js', () => ({ submitShopifyBulkMutation: vi.fn(async () => { throw new Error('the old env bulk path was used') }) }))
 vi.mock('./connection-resolver.service.js', async (original) => ({
   ...(await original<object>()),
   listActiveConnections: vi.fn(async () => h.active),
