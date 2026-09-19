@@ -14,6 +14,7 @@
  * Images come from the child ProductImage rows (the publisher's default).
  * Per-colour curation overrides arrive in Phase 3.
  */
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
 import prisma from '../../db.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
 import {
@@ -166,6 +167,13 @@ export async function publishEbayImagesViaInventory(
   const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     return { success: false, message: 'No active eBay connection found', pictureCount: 0, colorSetCount: 0, error: 'No connection' }
+  }
+  // P0.7 — refuse (before any job row) when this product's eBay listings belong only to another account.
+  try {
+    await assertWriteAccount('EBAY', connection.id, { productIds: [productId] })
+  } catch (err) {
+    if (!isWrongAccountWriteError(err)) throw err
+    return { success: false, message: err.message, pictureCount: 0, colorSetCount: 0, error: err.code }
   }
   let token: string
   try {

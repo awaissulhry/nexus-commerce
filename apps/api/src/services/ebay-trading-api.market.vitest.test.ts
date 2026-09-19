@@ -36,7 +36,8 @@ describe('W1.3 GB / UK fold at Trading callers (only synthetic fetch)', () => {
 vi.mock('./connection-resolver.service.js', () => ({ tryResolveConnection: vi.fn(async () => ({ id: 'owner', channelType: 'EBAY' })) }))
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: vi.fn(async () => 'STUB') } }))
 vi.mock('./channel-delist.service.js', () => ({ dispatchChannelDelist: vi.fn(() => { throw new Error('Unexpected whole-item delist') }) }))
-vi.mock('../db.js', () => ({ default: {} }))
+// P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
+vi.mock('../db.js', () => ({ default: { channelListing: { findMany: async () => [] }, sharedListingMembership: { findMany: async () => [] } } }))
 const { runEbayFlatFileDelete } = await import('./ebay-flat-file-delete.service.js')
 it.each(['GB', 'UK'])('tryRemoveVariationFromListing through remove-listing accepts %s', async (marketplace) => {
   const db: any = { sharedListingMembership: { deleteMany: vi.fn(async () => ({ count: 1 })) } }

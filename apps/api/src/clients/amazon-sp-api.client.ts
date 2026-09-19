@@ -1462,6 +1462,34 @@ export class AmazonSpApiClient {
   }
 }
 
+/**
+ * P0.7 (docs/channel-connections/FINAL-PLAN.md) — the listing writes. Before one is sent, the
+ * account it will use must be one that owns the SKU(s) it touches (write-account-guard.ts); a SKU
+ * that belongs only to another Amazon account is refused, nothing sent. Reads are not checked.
+ */
+const GUARDED_WRITES = new Set(['submitListingPayload', 'submitListingPayloadBatch', 'putListingsItem', 'patchListingPrice', 'patchPurchasableOffer', 'deleteListingsItem'])
+
+async function guardAmazonWrite(method: string, args: unknown[], accountId: string | undefined): Promise<void> {
+  const { assertWriteAccount, assertWriteAccountPerSku } = await import('../services/write-account-guard.js')
+  const first = args[0] as { sellerId?: string; accountId?: string; sku?: string; marketplaceId?: string } | Array<{ sku?: string }> | undefined
+  let id = accountId
+  if (!id) {
+    // Profiles OFF (legacy single profile): the account is whatever the seller id resolves to. When
+    // nothing resolves there is no second account to confuse it with, so there is nothing to check.
+    try {
+      const single = Array.isArray(first) ? undefined : first
+      id = (await (await import('../lib/amazon-sp-client.js')).amazonAccount({ accountId: single?.accountId, sellerId: single?.sellerId })).id
+    } catch {
+      return
+    }
+  }
+  if (Array.isArray(first)) {
+    await assertWriteAccountPerSku('AMAZON', id, first.map((o) => o?.sku))
+    return
+  }
+  await assertWriteAccount('AMAZON', id, { skus: [first?.sku], marketplace: first?.marketplaceId })
+}
+
 // Singleton instance
 const legacyAmazonClient = new AmazonSpApiClient()
 export const amazonSpApiClient = new Proxy(legacyAmazonClient, {
@@ -1470,11 +1498,16 @@ export const amazonSpApiClient = new Proxy(legacyAmazonClient, {
     if (typeof value !== 'function') return value
     if (property === 'getGrantlessToken') return value.bind(target)
     return async (...args: unknown[]) => {
-      if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return value.apply(target, args)
+      const guarded = GUARDED_WRITES.has(String(property))
+      if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') {
+        if (guarded) await guardAmazonWrite(String(property), args, undefined)
+        return value.apply(target, args)
+      }
       const { amazonAccount, getAmazonRegion } = await import('../lib/amazon-sp-client.js')
       const options = args[0] as { accountId?: string; sellerId?: string } | undefined
       const account = await amazonAccount({ accountId: options?.accountId, sellerId: options?.sellerId })
       if (!account) throw new Error('Select an Amazon seller account.')
+      if (guarded) await guardAmazonWrite(String(property), args, account.id)
       const client = new AmazonSpApiClient({ id: account.id, region: await getAmazonRegion(account.id) })
       return Reflect.get(client, property).apply(client, args)
     }

@@ -1,3 +1,4 @@
+import { assertWriteAccount } from './write-account-guard.js'
 import { requireTranslationGeneration, previewCatalogTranslation } from './pim/catalog-translate.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -2396,6 +2397,11 @@ export class BulkActionService {
           'CHANNEL_BATCH AMAZON: AMAZON_SELLER_ID env required',
         );
       }
+      // P0.7 — the feed goes through the default seller: this listing must belong to it.
+      {
+        const account = await import('../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null);
+        if (account) await assertWriteAccount('AMAZON', account.id, { listingIds: [listing.id] });
+      }
       const marketplaceIds = marketplace ? [marketplace] : [];
       if (operation === 'price') {
         const value = Number(listing.price ?? item.basePrice ?? 0);
@@ -2440,6 +2446,8 @@ export class BulkActionService {
       if (!connection) {
         throw new Error('CHANNEL_BATCH EBAY: no active eBay connection');
       }
+      // P0.7 — this batch can only use the primary account: the listing must belong to it.
+      await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] });
       const offerId = listing.externalListingId;
       let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {

@@ -30,6 +30,7 @@ import prismaClient from '../db.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket, escapeXml, reviseInventoryStatus } from './ebay-trading-api.service.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { assertWriteAccount } from './write-account-guard.js'
 import {
   dispatchChannelDelist,
   type ChannelDelistJob,
@@ -182,6 +183,9 @@ async function tryRemoveVariationFromListing(
     // two accounts as well as one.
     const conn = await tryResolveConnection({ itemId, marketplace })
     if (!conn) return 'failed'
+    // P0.7 — the resolver falls back to the primary account for an item with no recorded account;
+    // never remove a variation of another account's item through it.
+    await assertWriteAccount('EBAY', conn.id, { itemIds: [itemId], skus: [sku], marketplace })
     const token = await ebayAuthService.getValidToken(conn.id)
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">

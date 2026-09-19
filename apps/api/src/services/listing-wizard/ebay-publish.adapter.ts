@@ -1,3 +1,4 @@
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
 import { marketLanguages, languageTag } from '../pim/market-languages.js'
 import { assertLegacyPresentationPublishAllowed } from '../ebay-presentation-consumer.service.js'
 import { assertListingContentReviewed } from '../pim/publish-review-gate.js'
@@ -310,6 +311,13 @@ export class EbayPublishAdapter {
         error:
           'No active eBay connection — link an eBay account in Settings first.',
       }
+    }
+    // P0.7 — this publish can only use the primary account: refuse a SKU whose listing here
+    // belongs only to another eBay account (nothing sent).
+    try { await assertWriteAccount('EBAY', connection.id, { skus: [payload.sku], marketplace: payload.marketplaceId }) }
+    catch (e) {
+      if (!isWrongAccountWriteError(e)) throw e
+      return { ok: false, sku: payload.sku, failedStep: 'account', error: e.message }
     }
 
     // C.7 — circuit breaker check. Per (connectionId, marketplaceId)

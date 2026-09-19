@@ -1,3 +1,4 @@
+import { assertWriteAccountPerSku, isWrongAccountWriteError } from '../services/write-account-guard.js'
 import { marketLanguages } from '../services/pim/market-languages.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../lib/amazon-sp-client.js'
@@ -361,6 +362,15 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
     if (!rows || rows.length === 0) {
       return reply.code(400).send({ error: 'rows must be non-empty' })
+    }
+    // P0.7 — the feed goes through the default seller: refuse it (409, nothing sent) when a row's
+    // SKU belongs only to another Amazon account.
+    try {
+      const account = await import('../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null)
+      if (account) await assertWriteAccountPerSku('AMAZON', account.id, rows.map((row: { item_sku?: unknown }) => String(row?.item_sku ?? '')), marketplaceId)
+    } catch (err) {
+      if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+      throw err
     }
     if (rows.length > 2000) {
       return reply.code(400).send({ error: 'Max 2000 rows per submission' })

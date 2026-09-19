@@ -62,6 +62,7 @@ import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js';
 import { upsertSharedMembershipsFromRows, normalizeEbaySharedFlags, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
+import { assertWriteAccount, assertWriteAccountPerSku, isWrongAccountWriteError, ownListingFor } from '../services/write-account-guard.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
@@ -1309,6 +1310,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                       (await tryResolveConnection({ itemId })) ??
                       (await tryResolveConnection({ channel: 'EBAY', primary: true }))
                     if (!connection) continue
+                    // P0.7 — never heal an item of another eBay account through this one.
+                    try {
+                      await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+                    } catch (err) {
+                      if (!isWrongAccountWriteError(err)) throw err
+                      request.log.warn({ itemId, error: err.message }, 'ebay/save: shell auto-heal refused (wrong account)')
+                      continue
+                    }
                     const token = await ebayAuthService.getValidToken(connection.id)
                     const { reconcileMembershipsFromEbay: reconcileFn } = await import('../services/ebay-membership-reconcile.service.js')
                     const { adoptSkulessVariations: adoptFn } = await import('../services/ebay-variation-relabel.service.js')
@@ -1556,6 +1565,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(503).send({
         error: 'No active eBay connection found. Please connect your eBay account first.',
       });
+    }
+
+    // P0.7 — this push can only use the primary account: refuse it (409, nothing sent) when a row's
+    // SKU belongs only to another eBay account in a target market.
+    try {
+      const pushSkus = [...rows, ...(Array.isArray(pooledRows) ? pooledRows : [])].map((row) => String((row as { sku?: unknown }).sku ?? ''));
+      for (const m of targetMarkets) await assertWriteAccountPerSku('EBAY', connection.id, pushSkus, m);
+    } catch (err) {
+      if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message });
+      throw err;
     }
 
     let token: string;
@@ -2986,6 +3005,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3058,6 +3085,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3122,6 +3157,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3205,6 +3248,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3362,10 +3413,22 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         try {
           // Find the listing
-          const listing = await prisma.channelListing.findFirst({
+          let listing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
             include: { product: { select: { sku: true } } },
           });
+
+          // P0.7 — this route sends through the primary account only: act on that account's listing,
+          // and refuse (nothing sent) when this product's listing here belongs to another account.
+          if (listing?.channelConnectionId && listing.channelConnectionId !== connection.id) {
+            const own = await ownListingFor('EBAY', connection.id, { productId, region });
+            if (!own) {
+              const refusal = await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] }).then(() => null, (err: unknown) => err as Error);
+              results.push({ productId, market: mpUpper, status: 'REFUSED', message: refusal?.message ?? 'This listing belongs to another eBay account. Nothing was sent.' });
+              continue;
+            }
+            listing = own;
+          }
 
           if (!listing) {
             results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No listing found' });
@@ -3525,10 +3588,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         };
 
         try {
-          const listing = await prisma.channelListing.findFirst({
+          let listing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
             include: { product: { select: { sku: true } } },
           });
+          // P0.7 — this route sends through the primary account only: act on that account's listing,
+          // and refuse (nothing sent) when this product's listing here belongs to another account.
+          if (listing?.channelConnectionId && listing.channelConnectionId !== connection.id) {
+            const own = await ownListingFor('EBAY', connection.id, { productId, region });
+            if (!own) {
+              const refusal = await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] }).then(() => null, (err: unknown) => err as Error);
+              results.push({ productId, market: mpUpper, status: 'REFUSED', message: refusal?.message ?? 'This listing belongs to another eBay account. Nothing was sent.' });
+              continue;
+            }
+            listing = own;
+          }
 
           // FFP.6 — shared-SKU (Trading API) listings have no Inventory offer.
           // The old flow found none, then reset the DB row to DRAFT and nulled

@@ -1,3 +1,4 @@
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from '../listing-push-controls.js'
 /**
@@ -282,6 +283,13 @@ export async function publishEbaySharedListingImages(
     ? await tryResolveConnection({ itemId: targets[0].itemId, marketplace: targets[0].marketplace })
     : await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) return fail('No active eBay connection found', 'No connection')
+  // P0.7 — the first target's account is used for every target: each listing must belong to it.
+  try {
+    for (const t of targets) await assertWriteAccount('EBAY', connection.id, { itemIds: [t.itemId] })
+  } catch (err) {
+    if (!isWrongAccountWriteError(err)) throw err
+    return fail(err.message, err.code)
+  }
   let token: string
   try {
     token = await ebayAuthService.getValidToken(connection.id)

@@ -11,6 +11,8 @@ vi.mock('../db.js', () => {
         updateMany: vi.fn(async () => ({ count: 1 })),
         // RT.2 debounce read — default: never pushed, no debounce
         aggregate: vi.fn(async () => ({ _max: { lastPushedAt: null } })),
+        // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
+        findMany: vi.fn(async () => []),
       },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },

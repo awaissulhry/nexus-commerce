@@ -6,6 +6,7 @@ import { assertListingContentReviewed, PUBLISH_CONTENT_FIELDS } from './pim/publ
 import { marketLanguages, languageTag } from './pim/market-languages.js'
 import { assertInformationLocale } from './pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { assertWriteAccount, isWrongAccountWriteError } from './write-account-guard.js'
 import prisma from "../db.js";
 import { DELIST_OPERATOR_COPY } from './delist-error-codes.js';
 import { logger } from "../utils/logger.js";
@@ -1130,6 +1131,19 @@ export class OutboundSyncService {
       };
     }
 
+    // P0.7 — a change for a listing of ANOTHER Amazon account is refused (terminal). The client
+    // guards every listing write too; this check gives the queue row its exact listing and a
+    // non-retryable answer.
+    if (sellerId) {
+      try {
+        const account = await import('../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null);
+        if (account) await assertWriteAccount("AMAZON", account.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [sku], marketplace: marketplaceId });
+      } catch (err) {
+        if (!isWrongAccountWriteError(err)) throw err;
+        return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
+      }
+    }
+
     // A1.3 — delegate the gate→circuit→rate-limit→dry-run→audit chain to the
     // shared ListingPublishService; inject Amazon's gate functions + the actual
     // SP-API call. (Behavior-preserving extraction of the former inline chain.)
@@ -1328,6 +1342,14 @@ export class OutboundSyncService {
         "(no-connection)",
         "No active eBay connection — link an eBay account in Settings first.",
       );
+    }
+    // P0.7 — a change for a listing of ANOTHER eBay account is refused (terminal), never sent through
+    // this one. The queue row names its listing when it has one; else the SKU in this market.
+    try {
+      await assertWriteAccount("EBAY", connection.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [product?.sku], marketplace: marketplaceId });
+    } catch (err) {
+      if (!isWrongAccountWriteError(err)) throw err;
+      return { ...fail("failed", mode, connection.id, err.message), errorCode: err.code, retryable: false };
     }
 
     // 3. Circuit breaker
@@ -1750,6 +1772,13 @@ export class OutboundSyncService {
         message: "No active eBay connection",
         error: "No active eBay connection — link an eBay account in Settings first.",
       };
+    }
+    // P0.7 — the shared listing (ItemID) must belong to the account this row is about to use.
+    try {
+      await assertWriteAccount("EBAY", connection.id, { itemIds: [itemId] });
+    } catch (err) {
+      if (!isWrongAccountWriteError(err)) throw err;
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
     }
 
     // 3. Circuit breaker

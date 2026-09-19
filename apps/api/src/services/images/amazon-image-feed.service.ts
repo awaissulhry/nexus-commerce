@@ -1,3 +1,4 @@
+import { assertWriteAccountPerSku } from '../write-account-guard.js'
 import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
@@ -387,6 +388,13 @@ export async function submitAmazonImageFeed(
 
   const sellerId = (await getAmazonSellerId())
   if (!sellerId) throw new Error('AMAZON_SELLER_ID env var required')
+
+  // P0.7 — the feed goes through the default seller: every SKU must belong to it (checked before
+  // the job row, so a refusal leaves no half-started job).
+  {
+    const account = await import('../../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null)
+    if (account) await assertWriteAccountPerSku('AMAZON', account.id, includedSkus, marketplaceId)
+  }
 
   // Create job row first so UI has a jobId to poll immediately
   const job = await prisma.amazonImageFeedJob.create({
