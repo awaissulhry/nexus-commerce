@@ -713,6 +713,8 @@ Write each answer here with its date, for example: `D2 = A (2026-09-20)`.
 |---|---|---|
 | D1 = A, D2 = A, D3 = A, D4 = A, D5 = B, D6 = B, D7 = B, D8 = B, D9 = B (the "My pick" column of section 9) | The Owner, 2026-09-19: "I'll go with your recommendations. We just have to go with the best approach." D1 still reads R-2 first. | 2026-09-19 |
 | How to run the plan | The Owner, 2026-09-19: "Start to implement the whole plan. I'll stop you where we need it." Packages run in the plan's order without a per-package "go". Each package is committed locally when its proof is green; **nothing is pushed**. Still asked first: any push, any production read or write, any live channel call, any delete list (P1.6), every destructive drop (P7), and the Owner-only steps in section 8. | 2026-09-19 |
+| Flat-file routes (standing no-touch rule) | P0.7, P1.2 and P1.3 edited `routes/ebay-flat-file.routes.ts` (and one comment in `amazon-flat-file.routes.ts`) without the per-change yes the rule needs. Written list: `build/flat-file-edit-list.md`. The Owner, 2026-09-19: **keep them** ("Keep them (Recommended)"). The blanket go above does NOT lift that rule for future edits. | 2026-09-19 |
+| P1.5 scope | The Owner, 2026-09-19: **include the flat-file routes** in the eBay language-header switch. | 2026-09-19 |
 
 ### 14.4 Handover notes (2026-09-19, from the P0.1 / P0.2 session)
 
