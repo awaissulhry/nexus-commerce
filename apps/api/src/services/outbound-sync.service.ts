@@ -1,7 +1,7 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
 import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
+import { syncShopifyLinkedListing, type LinkedListingWork } from './shopify/listing-write.service.js';
 import { createOutboundRow } from './outbound-rows.js'
-import { shopifyTransport } from './gateway/shopify.js';
 import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
@@ -28,12 +28,7 @@ import {
   getEbayPublishMode,
   recordEbayOutcome,
 } from "./ebay-publish-gate.service.js";
-import {
-  acquireShopifyPublishToken,
-  checkShopifyCircuit,
-  recordShopifyOutcome,
-  getShopifyPublishMode,
-} from "./shopify-publish-gate.service.js";
+import { getShopifyPublishMode } from "./shopify-publish-gate.service.js";
 import {
   digestPayload,
   writeAttemptLog,
@@ -703,7 +698,8 @@ export class OutboundSyncService {
   async processSingle(queueId: string): Promise<SyncResult> {
     const item = await prisma.outboundSyncQueue.findUnique({
       where: { id: queueId },
-      include: { product: true },
+      // P1.4 — the listing too: the Shopify native lane reads its mapping (it was never reached).
+      include: { product: true, channelListing: true },
     });
     if (!item) {
       return { success: false, queueId, channel: "UNKNOWN", status: "FAILED", message: `Queue row ${queueId} not found`, error: "queue-row-not-found" };
@@ -781,6 +777,7 @@ export class OutboundSyncService {
         },
         include: {
           product: true,
+          channelListing: true, // P1.4 — the Shopify native lane reads the listing's mapping
         },
         orderBy: {
           createdAt: "asc",
@@ -1984,11 +1981,8 @@ export class OutboundSyncService {
   }
 
   /**
-   * Sync product to Shopify via inventory_levels/set.
-   *
-   * IS.1 — real implementation that updates the Shopify inventory level
-   * for the SKU's inventory_item_id at the configured location. Replaces
-   * the NOT_IMPLEMENTED gate from C.8.
+   * Sync one queued change to Shopify. A native family goes to `syncNativeShopifyOffer`; a linked listing
+   * goes to `syncShopifyLinkedListing` (P1.4: the 2026-07 GraphQL client with the row's own account).
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
     const pushRefusal = (await this.pushLockListings(queueItem, 'SHOPIFY'))
@@ -2020,180 +2014,55 @@ export class OutboundSyncService {
       }
     }
 
-    const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";
-    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN ?? process.env.SHOPIFY_ADMIN_API_TOKEN ?? "";
-
-    if (!shopName || !accessToken) {
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName || "(unset)",
-        sku, productId: product?.id ?? null, mode: "gated", outcome: "gated",
-        payloadDigest: digestPayload(payload),
-        errorMessage: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN not configured.",
-      });
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify outbound sync not configured",
-        error: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN env vars missing." };
+    // P1.3 / P1.4 — the row's own Shopify account, on the 2026-07 GraphQL client (services/shopify/
+    // listing-write.service.ts). The REST 2024-01 path with env credentials is gone: it picked "the first"
+    // variant for a SKU and "the first" shop location, and wrote with a token of no named account.
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("Shopify", destination.reason);
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
     }
-
-    // P3.0 — circuit breaker check
-    const circuitCheck = checkShopifyCircuit(shopName);
-    if (!circuitCheck.ok) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify circuit open", error: circuitCheck.error };
+    // The consistency check (as P0.7 for eBay / Amazon): a row may not name one shop for a listing of another.
+    // Its stored ids — or its SKU — would then be looked up in the wrong shop.
+    const listingAccount: string | null = channelListing?.channelConnectionId ?? null;
+    if (listingAccount && listingAccount !== destination.connectionId) {
+      const error = `This Shopify listing belongs to another Shopify account than the one this change was queued for. Nothing was sent.`;
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
     }
-
-    // P3.0 — rate limiter
-    const tokenResult = await acquireShopifyPublishToken(shopName);
-    if (!tokenResult.ok) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify rate limited", error: tokenResult.error };
-    }
-
-    const apiBase = `https://${shopName}.myshopify.com/admin/api/2024-01`;
-    // P1.2 — through the channel gateway (env credential → app-level; P1.4 moves it to the connected account).
-    const shopifySend = shopifyTransport(null);
-    const headers = {
-      "X-Shopify-Access-Token": accessToken,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-
-    // Resolve variant (needed for price + inventory_item_id for qty) and the
-    // parent product id (B3 — content lives on the product, not the variant).
-    let variantId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.variantId ?? null;
-    let inventoryItemId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.inventoryItemId ?? null;
-    let shopifyProductId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.shopifyProductId ?? null;
-
-    if (!variantId || !inventoryItemId || !shopifyProductId) {
-      const varRes = await shopifySend(
-        `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id,product_id`,
-        { headers },
-      ).catch(() => null);
-      if (varRes?.ok) {
-        const varData = await varRes.json().catch(() => null) as {
-          variants?: Array<{ id: string; inventory_item_id: string; product_id: string }>
-        } | null;
-        const v = varData?.variants?.[0];
-        if (v) {
-          variantId = String(v.id);
-          inventoryItemId = String(v.inventory_item_id);
-          shopifyProductId = String(v.product_id);
-        }
-      }
-    }
-
-    // ── B3 — Content update (title/description → Shopify product) ─────────
-    // Keyed on syncType so a content sync can NEVER fall through to the
-    // quantity path below (which sets inventory to payload.quantity ?? 0 and
-    // would zero stock on a content-only change).
+    const work: LinkedListingWork = {};
     if (syncType === "CONTENT_UPDATE") {
-      // B3 content (title/body_html) + C3 GPSR compliance metafields, in ONE
-      // product PUT. Compliance rides the content sync (a dedicated compliance-
-      // only trigger is a follow-up). Both best-effort.
-      const update = buildShopifyProductUpdate(shopifyProductId, payload);
+      // B3 content (title / description) + C3 GPSR compliance metafields. Keyed on syncType so a content
+      // sync can never fall through to the stock path.
       let metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [];
       if (product?.id) {
         const cp = await resolveComplianceById(product.id).catch(() => null);
         if (cp) metafields = buildShopifyComplianceMetafields(cp);
       }
-
-      if (!shopifyProductId) {
-        // Hard error only when there's actually something to push.
-        if (update || metafields.length > 0) {
-          return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-            message: `No Shopify product for SKU ${sku} — publish the listing first`,
-            error: "shopify product_id not resolved." };
-        }
-        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-          message: `Shopify content: nothing to push for ${sku} (skipped)` };
-      }
-      // Nothing pushable (no content field, no compliance metafield) → skip.
-      if (!update && metafields.length === 0) {
-        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-          message: `Shopify content: no pushable field for ${sku} (skipped)` };
-      }
-
-      const productBody: Record<string, any> = update?.product ?? { id: parseInt(shopifyProductId, 10) };
-      if (metafields.length > 0) productBody.metafields = metafields;
-
-      const t0 = Date.now();
-      const contentRes = await shopifySend(`${apiBase}/products/${shopifyProductId}.json`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ product: productBody }),
-      }).catch((err: Error) => ({ ok: false, status: 0, text: async () => err.message } as any));
-
-      const succeeded = contentRes.ok;
-      const errBody = succeeded ? null : await contentRes.text().catch(() => "");
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-        sku, productId: product?.id ?? null, mode: "live",
-        outcome: succeeded ? "success" : "failed",
-        payloadDigest: digestPayload(payload),
-        errorMessage: succeeded ? null : `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}`,
-        durationMs: Date.now() - t0,
-      });
-      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `products PUT ${contentRes.status}`);
-
-      if (!succeeded) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: "Failed to update Shopify product content",
-          error: `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}` };
-      }
-      const metaNote = metafields.length > 0 ? ` + ${metafields.length} compliance metafield(s)` : "";
-      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-        message: `Shopify content updated: ${sku}${metaNote}` };
+      work.content = { title: payload?.title, description: payload && "description" in payload ? payload.description : undefined, metafields };
+    } else if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+      work.price = payload?.price ?? null;
+    } else {
+      work.quantity = await this.shopifyDispatchQuantity(queueItem, sku);
     }
-
-    // ── P3.0 — Price update ──────────────────────────────────────────────
-    if (syncType === "PRICE_UPDATE" || payload?.price != null) {
-      const newPrice: number | null = payload?.price ?? null;
-      if (newPrice == null || !variantId) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: `Cannot update Shopify price for SKU ${sku}: missing price or variantId`,
-          error: "price or variantId not resolved." };
-      }
-
-      const t0 = Date.now();
-      const priceStr = Number(newPrice).toFixed(2);
-      const priceRes = await shopifySend(`${apiBase}/variants/${variantId}.json`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ variant: { id: parseInt(variantId, 10), price: priceStr } }),
-      }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
-
-      const succeeded = priceRes.ok;
-      const errBody = succeeded ? null : await priceRes.text().catch(() => "");
-
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-        sku, productId: product?.id ?? null, mode: "live",
-        outcome: succeeded ? "success" : "failed",
-        payloadDigest: digestPayload(payload),
-        errorMessage: succeeded ? null : `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}`,
-        durationMs: Date.now() - t0,
-      });
-
-      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `variants PUT ${priceRes.status}`);
-
-      if (!succeeded) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: "Failed to update Shopify variant price",
-          error: `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}` };
-      }
-
-      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-        message: `Shopify price updated: ${sku} → €${priceStr}` };
+    const t0 = Date.now();
+    try {
+      const message = await syncShopifyLinkedListing(queueItem, destination.connectionId, work);
+      writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
+      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS", message };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message };
     }
+  }
 
-    // ── Quantity update (existing path) ─────────────────────────────────
-    // RT.4 — parity with Amazon/eBay: re-read the live committed quantity at
-    // dispatch (a stale payload from a superseded-but-undelivered row must
-    // not overwrite a fresher value) and clamp to the warehouse pool so
-    // Shopify can never advertise units the pool doesn't have.
+  /**
+   * RT.4 — parity with Amazon/eBay: re-read the live committed quantity at dispatch (a stale payload from
+   * a superseded-but-undelivered row must not overwrite a fresher value) and clamp to the warehouse pool
+   * so Shopify can never advertise units the pool doesn't have. (Moved unchanged from the REST path.)
+   */
+  private async shopifyDispatchQuantity(queueItem: any, sku: string): Promise<number> {
+    const { product, payload, channelListing } = queueItem;
     let newQty: number = payload?.quantity ?? 0;
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0") {
       const cl = channelListing?.id
@@ -2238,59 +2107,7 @@ export class OutboundSyncService {
       }
     }
 
-    if (!inventoryItemId) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: `No Shopify inventory_item_id found for SKU ${sku}`,
-        error: "inventory_item_id not in ChannelListing and SKU lookup returned nothing." };
-    }
-
-    let locationId: string | null = process.env.SHOPIFY_LOCATION_ID ?? null;
-    if (!locationId) {
-      const locRes = await shopifySend(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
-      if (locRes?.ok) {
-        const locData = await locRes.json().catch(() => null) as { locations?: Array<{ id: string }> } | null;
-        locationId = String(locData?.locations?.[0]?.id ?? "");
-      }
-    }
-
-    if (!locationId) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Could not resolve Shopify location ID",
-        error: "Set SHOPIFY_LOCATION_ID env var or connect a Shopify location." };
-    }
-
-    const t0 = Date.now();
-    const setRes = await shopifySend(`${apiBase}/inventory_levels/set.json`, {
-      method: "POST", headers,
-      body: JSON.stringify({
-        location_id: parseInt(locationId, 10),
-        inventory_item_id: parseInt(inventoryItemId, 10),
-        available: newQty,
-      }),
-    }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
-
-    const succeeded = setRes.ok;
-    const errorBody = succeeded ? null : await setRes.text().catch(() => "");
-
-    writeAttemptLog({
-      channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-      sku, productId: product?.id ?? null, mode: "live",
-      outcome: succeeded ? "success" : "failed",
-      payloadDigest: digestPayload(payload),
-      errorMessage: succeeded ? null : `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
-      durationMs: Date.now() - t0,
-    });
-
-    recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `inventory_levels/set ${setRes.status}`);
-
-    if (!succeeded) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Failed to update Shopify inventory",
-        error: `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}` };
-    }
-
-    return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-      message: `Shopify inventory updated: ${sku} → ${newQty} at location ${locationId}` };
+    return newQty;
   }
 
   /**
