@@ -11607,6 +11607,22 @@ model OutboundApiCallLog {
   listingId String? // ChannelListing.id
   orderId   String?
 
+  // P1.1 (docs/channel-connections/FINAL-PLAN.md) — the channel gateway's ledger fields. Null on rows
+  // written by callers not yet on the gateway.
+  // What the gateway did: sent | would_send (dry run) | gated | refused | held (account needs sign-in).
+  outcome            String?
+  // The one error vocabulary (services/gateway/vocabulary.ts): auth_revoked | auth_expired | forbidden |
+  // signature | configuration | validation | not_found | conflict | rate_limited | transient | network |
+  // timeout | unknown.
+  errorClass         String?
+  // Rate headroom as the channel reported it on this answer (remaining / limit of its own unit).
+  rateLimitRemaining Float?
+  rateLimitLimit     Float?
+  idempotencyKey     String?
+  // Send attempts (a 429 retry counts).
+  attempts           Int?
+  apiVersion         String?
+
   createdAt DateTime @default(now())
 
   @@index([channel, createdAt])

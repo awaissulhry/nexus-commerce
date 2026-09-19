@@ -61,6 +61,15 @@ async function signingKeyFor(environment: 'production' | 'sandbox', appToken: ()
   return { signingKeyId: created.signingKeyId, jwe: created.jwe, privateKey: created.privateKey, cipher: created.signingKeyCipher }
 }
 
+/**
+ * P1.1 — the RFC 9421 signature headers for one eBay request, made with the app's Key Management key
+ * (created on first use). The gateway calls this for every path on eBay's must-sign list.
+ */
+export async function ebaySigningHeaders(input: { environment: 'production' | 'sandbox'; method: string; url: string; body: string | null }): Promise<Record<string, string>> {
+  const key = await signingKeyFor(input.environment, () => ebayAppToken(input.environment))
+  return signEbayRequest({ method: input.method, url: input.url, body: input.body, jwe: key.jwe, privateKeyPem: key.privateKey })
+}
+
 /** Application (client-credentials) token — used only for Key Management and Notification public keys. */
 export async function ebayAppToken(environment: 'production' | 'sandbox' = 'production', scope = 'https://api.ebay.com/oauth/api_scope'): Promise<string> {
   const app = await getChannelApp('EBAY', environment)

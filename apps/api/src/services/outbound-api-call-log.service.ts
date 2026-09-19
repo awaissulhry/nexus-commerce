@@ -78,6 +78,8 @@ type Channel =
   | 'WOOCOMMERCE'
   | 'ETSY'
   | 'SENDCLOUD'
+  // P1.1 — Amazon Ads rows were written as 'AMAZON'; the gateway writes them as their own channel.
+  | 'AMAZON_ADS'
 
 export interface ApiCallContext {
   channel: Channel
@@ -349,5 +351,111 @@ async function recordApiCallInner<T>(
         operation: ctx.operation,
       })
     }
+  }
+}
+
+// ── P1.1 — the channel gateway's ledger row ─────────────────────────────────
+
+export interface GatewayLedgerRow {
+  channel: Channel
+  marketplace?: string | null
+  connectionId?: string | null
+  operation: string
+  endpoint?: string | null
+  method?: string | null
+  statusCode: number | null
+  success: boolean
+  latencyMs: number
+  /** sent | would_send | gated | refused | held */
+  outcome: string
+  errorClass?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  rateLimitRemaining?: number | null
+  rateLimitLimit?: number | null
+  idempotencyKey?: string | null
+  attempts?: number | null
+  apiVersion?: string | null
+  /** Already made safe by services/gateway/redact.ts (secrets and personal data removed, capped). */
+  requestPayload?: unknown
+  responsePayload?: unknown
+  triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
+  productId?: string | null
+  listingId?: string | null
+  orderId?: string | null
+}
+
+/** Map the gateway's class onto the older errorType column, so existing dashboards keep grouping. */
+const LEGACY_ERROR_TYPE: Record<string, ParsedError['type']> = {
+  rate_limited: 'RATE_LIMIT', auth_revoked: 'AUTHENTICATION', auth_expired: 'AUTHENTICATION', forbidden: 'AUTHENTICATION',
+  signature: 'AUTHENTICATION', configuration: 'AUTHENTICATION', validation: 'VALIDATION', not_found: 'VALIDATION',
+  conflict: 'VALIDATION', transient: 'SERVER', network: 'NETWORK', timeout: 'NETWORK',
+}
+
+/**
+ * Write one gateway row (every gateway call writes exactly one, whatever happened). Never throws: a
+ * ledger outage is logged and must not become a failed channel call.
+ */
+export async function recordGatewayCall(row: GatewayLedgerRow): Promise<void> {
+  try {
+    const created = await prisma.outboundApiCallLog.create({
+      data: {
+        channel: row.channel,
+        marketplace: row.marketplace ?? undefined,
+        connectionId: row.connectionId ?? undefined,
+        operation: row.operation,
+        endpoint: row.endpoint ?? undefined,
+        method: row.method ?? undefined,
+        statusCode: row.statusCode,
+        success: row.success,
+        latencyMs: row.latencyMs,
+        errorMessage: row.errorMessage?.slice(0, ERROR_MESSAGE_MAX),
+        errorCode: row.errorCode ?? undefined,
+        errorType: row.errorClass ? LEGACY_ERROR_TYPE[row.errorClass] : undefined,
+        requestId: getRequestId(),
+        triggeredBy: row.triggeredBy ?? getRequestSource() ?? 'api',
+        requestPayload: row.success ? undefined : (row.requestPayload as never),
+        responsePayload: row.success ? undefined : (row.responsePayload as never),
+        productId: row.productId ?? undefined,
+        listingId: row.listingId ?? undefined,
+        orderId: row.orderId ?? undefined,
+        outcome: row.outcome,
+        errorClass: row.errorClass ?? undefined,
+        rateLimitRemaining: row.rateLimitRemaining ?? undefined,
+        rateLimitLimit: row.rateLimitLimit ?? undefined,
+        idempotencyKey: row.idempotencyKey ?? undefined,
+        attempts: row.attempts ?? undefined,
+        apiVersion: row.apiVersion ?? undefined,
+      },
+      select: { id: true, createdAt: true },
+    })
+    publishSyncLogEvent({
+      type: 'api-call.recorded',
+      ts: created.createdAt.getTime(),
+      id: created.id,
+      channel: row.channel,
+      marketplace: row.marketplace ?? null,
+      operation: row.operation,
+      statusCode: row.statusCode,
+      success: row.success,
+      latencyMs: row.latencyMs,
+      errorType: row.errorClass ?? null,
+      errorMessage: row.errorMessage ? row.errorMessage.slice(0, 200) : null,
+    })
+    if (!row.success && row.outcome === 'sent') {
+      void recordErrorOccurrence({
+        channel: row.channel,
+        operation: row.operation,
+        errorType: row.errorClass ?? null,
+        errorCode: row.errorCode ?? null,
+        message: row.errorMessage ?? null,
+      })
+    }
+  } catch (writeErr) {
+    logger.warn('outbound-api-call-log: gateway row write failed', {
+      error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+      channel: row.channel,
+      operation: row.operation,
+    })
   }
 }
