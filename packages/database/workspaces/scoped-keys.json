@@ -6192,5 +6192,37 @@
     "scalar": {},
     "compound": {},
     "relations": []
+  },
+  "StockPoolLink": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockPoolTask": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

@@ -23,7 +23,9 @@
     "ChannelAccountGrant",
     "ChannelAccountOwnership",
     "AssortmentShare",
-    "CatalogLink"
+    "CatalogLink",
+    "StockPoolGrant",
+    "AssortmentChange"
   ],
   "workspaceModels": [
     "Product",
@@ -443,6 +445,8 @@
     "SellerReferenceLabel",
     "Assortment",
     "AssortmentMember",
-    "AssortmentCopyRun"
+    "AssortmentCopyRun",
+    "StockPoolLink",
+    "StockPoolTask"
   ]
 }

@@ -7,5 +7,8 @@
   "membership-write-guard.sql": "20260916d_l1_membership_write_guard",
   "reference-guard.sql": "20260916e_bps3_publish_reference_guard",
   "assortment-share.sql": "20260916g_ae2_assortments",
-  "assortment-copy.sql": "20260916h_ae3_first_copy"
+  "assortment-copy.sql": "20260916h_ae3_first_copy",
+  "stock-pool.sql": "20260919a_stock_pool",
+  "listing-end-times.sql": "20260919b_listing_end_times",
+  "assortment-sync.sql": "20260919d_ae4_live_sync"
 }
