@@ -112,6 +112,8 @@ beforeAll(async () => {
 afterAll(async () => { await app.close(); vi.unstubAllEnvs() })
 beforeEach(() => {
   vi.clearAllMocks()
+  // P0.1 — these model production: Amazon publish mode `live`.
+  vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
   fixture.state.seq = 0; fixture.state.runs = []
   fixture.state.products = [
     { id: 'p', sku: 'BOTTLE', name: 'Studio bottle', parentId: null, isParent: true, deletedAt: null, productType: 'BOTTLE', variantAttributes: {} },
@@ -325,6 +327,23 @@ describe('Amazon Media immutable review and publication', () => {
     expect((await readAmazonMedia(await destination('DE'))).draft.common).toEqual({})
     await processAmazonMediaRun(run.id)
     expect(fixture.patch.mock.calls.filter(c => !c[3])).toHaveLength(2)
+  })
+  it.each(['dry-run', 'sandbox'])('P0.1 — %s mode refuses approval, so nothing is queued or sent', async mode => {
+    const { d, w, run } = await reviewed()
+    vi.stubEnv('AMAZON_PUBLISH_MODE', mode)
+    await expect(approveAmazonMediaRun(d, run.id, w.revision)).rejects.toThrow(`Amazon publishing is in ${mode} mode. Nothing was sent to Amazon.`)
+    expect((await readAmazonMediaRun(d, run.id)).status).toBe('REVIEW')
+    expect(fixture.patch.mock.calls.filter(c => !c[3])).toHaveLength(0)
+  })
+  it('P0.1 — a run approved in live mode sends nothing once the mode leaves live, and records NOT_SENT (never UNKNOWN)', async () => {
+    const { d, w, run } = await reviewed()
+    await approveAmazonMediaRun(d, run.id, w.revision)
+    vi.stubEnv('AMAZON_PUBLISH_MODE', 'dry-run')
+    await processAmazonMediaRun(run.id)
+    const result = await readAmazonMediaRun(d, run.id)
+    expect(result.receipts.map(r => r.status)).toEqual(['NOT_SENT', 'NOT_SENT'])
+    expect(result.receipts[0].message).toContain('Nothing was sent to Amazon')
+    expect(fixture.patch.mock.calls.filter(c => !c[3])).toHaveLength(0)
   })
   it('refuses double approval and stale local revisions', async () => {
     const { d, w, run } = await reviewed()

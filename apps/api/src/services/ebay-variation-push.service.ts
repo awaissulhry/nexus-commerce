@@ -9,6 +9,7 @@ import { assertListingContentReviewed } from './pim/publish-review-gate.js'
  * code path. No logic changes vs the original at extraction time.
  */
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { ebayWriteRefusal, ebayHostOf } from './ebay-publish-gate.service.js'
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
@@ -793,6 +794,9 @@ export async function pushVariationGroup(
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
+  // P0.1 — no write unless the publish mode allows this host (every caller).
+  const modeRefusal = ebayWriteRefusal(ebayHostOf(apiBase))
+  if (modeRefusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `EBAY_WRITE_REFUSED: ${modeRefusal}` }))
   // All account-matching markets participate: this publisher can also touch
   // sibling-market offers. Stored controls, never incoming cells, own the lock.
   const pushSkus = rows.map(row => String(row.sku ?? '')).filter(Boolean)
@@ -2166,6 +2170,9 @@ export async function pushOffersOnly(
   marketplaceId: string,
   capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
 ): Promise<Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }>> {
+  // P0.1 — no write unless the publish mode allows this host (every caller).
+  const modeRefusal = ebayWriteRefusal(ebayHostOf(apiBase))
+  if (modeRefusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `EBAY_WRITE_REFUSED: ${modeRefusal}` }))
   // All account-matching markets participate: this publisher can also touch
   // sibling-market offers. Stored controls, never incoming cells, own the lock.
   const pushSkus = rows.map(row => String(row.sku ?? '')).filter(Boolean)

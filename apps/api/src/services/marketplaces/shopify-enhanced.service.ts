@@ -6,6 +6,7 @@
 import { RateLimiter } from "../../utils/rate-limiter.js";
 import { MarketplaceSyncError } from "../../utils/error-handler.js";
 import type { ShopifyConfig } from "../../types/marketplace.js";
+import { assertShopifyWriteAllowed } from "../shopify-publish-gate.service.js";
 
 // ── GraphQL Query Types ────────────────────────────────────────────────
 
@@ -572,6 +573,7 @@ export class ShopifyEnhancedService {
    * Update variant price
    */
   async updateVariantPrice(variantId: string, price: number): Promise<void> {
+    assertShopifyWriteAllowed(); // P0.1 — listing writes need Shopify publish mode `live`
     const mutation = `
       mutation UpdateVariantPrice($input: ProductVariantInput!) {
         productVariantUpdate(input: $input) {
@@ -620,6 +622,7 @@ export class ShopifyEnhancedService {
     locationId: string,
     quantity: number
   ): Promise<void> {
+    assertShopifyWriteAllowed(); // P0.1 — listing writes need Shopify publish mode `live`
     const mutation = `
       mutation UpdateInventory($input: InventoryAdjustQuantityInput!) {
         inventoryAdjustQuantity(input: $input) {

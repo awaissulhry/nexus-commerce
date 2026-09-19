@@ -36,6 +36,23 @@ export function getShopifyPublishMode(): ShopifyPublishMode {
   return 'dry-run'
 }
 
+export class ShopifyWriteRefusedError extends Error {
+  readonly code = 'SHOPIFY_WRITE_REFUSED'
+  constructor(message: string) {
+    super(message)
+    this.name = 'ShopifyWriteRefusedError'
+  }
+}
+
+/** P0.1 — a Shopify write is sent only in `live`. */
+export function assertShopifyWriteAllowed(): void {
+  const mode = getShopifyPublishMode()
+  if (mode === 'live') return
+  throw new ShopifyWriteRefusedError(mode === 'gated'
+    ? 'Shopify publishing is turned off. Nothing was sent to Shopify.'
+    : 'Shopify publishing is in dry-run mode. Nothing was sent to Shopify.')
+}
+
 // ── Rate limiter ─────────────────────────────────────────────────────────
 
 interface RateBucket {

@@ -12,6 +12,8 @@ beforeEach(() => {
   f.account = { id: 'a', channelType: 'AMAZON', managedBy: 'oauth', region: 'EU', isActive: true, externalAccountId: 'seller-123' }
   f.market = { marketplaceId: 'IT-ID', region: 'EU' }
   f.token.mockResolvedValue('account-token'); f.envToken.mockResolvedValue('env-token'); f.writable.mockResolvedValue(undefined)
+  // P0.1 — these model production: Amazon publish mode `live`.
+  vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'true'); vi.stubEnv('AMAZON_PUBLISH_MODE', 'live')
   f.fetch.mockImplementation(async (url: URL) => {
     if (url.hostname.endsWith('amazonaws.com')) return response({ properties: {
       main_product_image_locator: { items: {} }, other_product_image_locator_1: { editable: false }, swatch_product_image_locator: { readOnly: true }, image_locator_ps01: {},
@@ -62,6 +64,14 @@ describe('account-scoped Amazon image client', () => {
     expect(f.fetch.mock.calls[0][0].searchParams.has('mode')).toBe(false)
     f.fetch.mockResolvedValue(response({ status: 'VALID' })); await c.patch('SKU', 'SHIRT', [], true)
     expect(f.fetch.mock.calls[1][0].searchParams.get('mode')).toBe('VALIDATION_PREVIEW')
+  })
+  it.each([['gated', ''], ['dry-run', 'dry-run'], ['sandbox', 'sandbox']])('P0.1 — %s: a real PATCH is refused with no call; the validation preview still runs', async (_label, mode) => {
+    if (mode) vi.stubEnv('AMAZON_PUBLISH_MODE', mode); else vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', '')
+    const c = await amazonMediaClient('a', 'IT')
+    await expect(c.patch('SKU', 'SHIRT', [], false)).rejects.toThrow('Nothing was sent to Amazon')
+    expect(f.fetch).not.toHaveBeenCalled()
+    f.fetch.mockResolvedValue(response({ status: 'VALID' })); await c.patch('SKU', 'SHIRT', [], true)
+    expect(f.fetch).toHaveBeenCalledTimes(1); expect(f.fetch.mock.calls[0][0].searchParams.get('mode')).toBe('VALIDATION_PREVIEW')
   })
   it('refuses ambiguous image arrays rather than deleting them as empty', async () => {
     f.fetch.mockResolvedValue(response(listing({ attributes: { main_product_image_locator: [{ media_location: 'one' }, { media_location: 'two' }] } })))

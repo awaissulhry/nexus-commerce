@@ -2441,20 +2441,24 @@ export class BulkActionService {
         throw new Error('CHANNEL_BATCH EBAY: no active eBay connection');
       }
       const offerId = listing.externalListingId;
+      let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {
         if (!offerId) return { status: 'skipped' };
         const value = String(listing.price ?? item.basePrice ?? 0);
-        await submitEbayParallelBatch({
+        batch = await submitEbayParallelBatch({
           connectionId: connection.id,
           operations: [{ type: 'price', sku, offerId, currency, value }],
         });
       } else {
         const qty = Number(listing.quantity ?? item.totalStock ?? 0);
-        await submitEbayParallelBatch({
+        batch = await submitEbayParallelBatch({
           connectionId: connection.id,
           operations: [{ type: 'stock', sku, quantity: qty }],
         });
       }
+      // P0.1 — a failed or refused operation must not read as "processed".
+      const failure = batch.results.find((r) => r.status === 'failed');
+      if (failure) throw new Error(failure.errorMessage ?? 'eBay did not accept this change.');
       return { status: 'processed' };
     }
 

@@ -11,6 +11,31 @@ import { ShopifyService } from "./shopify.service.js";
 import { WooCommerceService } from "./woocommerce.service.js";
 import { EtsyService } from "./etsy.service.js";
 import type { MarketplaceChannel, WooCommerceConfig, EtsyConfig } from "../../types/marketplace.js";
+import { getAmazonPublishMode } from "../amazon-publish-gate.service.js";
+import { ebayWriteRefusal, ebayHostOf } from "../ebay-publish-gate.service.js";
+import { getShopifyPublishMode } from "../shopify-publish-gate.service.js";
+
+/**
+ * P0.1 — the old price/stock fan-out had no publish gate. A write goes out
+ * only when that channel's publish mode is `live`. Etsy is read-only (D6) and
+ * WooCommerce is no longer a channel, so both always refuse.
+ */
+export function channelWriteRefusal(channel: string): string | null {
+  switch (channel) {
+    case "AMAZON":
+      return getAmazonPublishMode() === "live" ? null : `Amazon publishing is not live (mode: ${getAmazonPublishMode()}). Nothing was sent to Amazon.`;
+    case "EBAY":
+      return ebayWriteRefusal(ebayHostOf(process.env.EBAY_API_BASE ?? "https://api.ebay.com"));
+    case "SHOPIFY":
+      return getShopifyPublishMode() === "live" ? null : `Shopify publishing is not live (mode: ${getShopifyPublishMode()}). Nothing was sent to Shopify.`;
+    case "ETSY":
+      return "Etsy is read-only in Nexus. Nothing was sent to Etsy.";
+    case "WOOCOMMERCE":
+      return "WooCommerce is no longer a Nexus channel. Nothing was sent.";
+    default:
+      return null;
+  }
+}
 
 export type { MarketplaceChannel };
 
@@ -139,6 +164,8 @@ export class MarketplaceService {
 
     for (const update of updates) {
       try {
+        const modeRefusal = channelWriteRefusal(update.channel);
+        if (modeRefusal) throw new Error(modeRefusal);
         if (update.channel !== "ETSY") {
           const pushControls = await readPushControls({ channel: update.channel, skus: [String(update.channelVariantId)], externalIds: [String(update.channelVariantId), ...(update.channelProductId ? [String(update.channelProductId)] : [])] })
           for (const row of pushControls) {
@@ -241,6 +268,8 @@ export class MarketplaceService {
 
     for (const update of updates) {
       try {
+        const modeRefusal = channelWriteRefusal(update.channel);
+        if (modeRefusal) throw new Error(modeRefusal);
         if (update.channel !== "ETSY") {
           const pushControls = await readPushControls({ channel: update.channel, skus: [String(update.channelVariantId)], externalIds: [String(update.channelVariantId), ...(update.channelProductId ? [String(update.channelProductId)] : [])] })
           for (const row of pushControls) {

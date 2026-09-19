@@ -7,6 +7,8 @@
  * static Auth'n'Auth token + fixed Site ID and is left untouched.
  */
 
+import { assertEbayWriteAllowed, ebayHostOf } from './ebay-publish-gate.service.js'
+
 const SITE_ID_BY_MARKET: Record<string, string> = {
   IT: '101',
   DE: '77',
@@ -265,6 +267,19 @@ function tradingEndpoint(): string {
     : 'https://api.ebay.com/ws/api.dll'
 }
 
+/**
+ * P0.1 — Trading calls that change a listing. These follow the eBay publish
+ * mode like every other listing write. Reads (Get…, Verify…) and order,
+ * feedback and notification calls keep their own switches.
+ */
+export const TRADING_LISTING_WRITES: ReadonlySet<string> = new Set([
+  'AddItem', 'AddItems', 'AddFixedPriceItem',
+  'ReviseItem', 'ReviseFixedPriceItem', 'ReviseInventoryStatus',
+  'EndItem', 'EndItems', 'EndFixedPriceItem',
+  'RelistItem', 'RelistFixedPriceItem',
+  'UploadSiteHostedPictures',
+])
+
 export async function callTradingApi(
   callName: string,
   xml: string,
@@ -283,7 +298,10 @@ export async function callTradingApi(
     return { ack: 'Success', itemId: `DRYRUN-${callName}`, errors: [], raw: '' }
   }
 
-  const res = await fetch(tradingEndpoint(), {
+  const endpoint = tradingEndpoint()
+  if (TRADING_LISTING_WRITES.has(callName)) assertEbayWriteAllowed(ebayHostOf(endpoint))
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'X-EBAY-API-CALL-NAME': callName,

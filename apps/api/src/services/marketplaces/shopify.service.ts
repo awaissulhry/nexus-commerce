@@ -1,4 +1,5 @@
 import { requireLegacyCredentials } from '../../lib/workspace-legacy-credentials.js'
+import { assertShopifyWriteAllowed } from '../shopify-publish-gate.service.js'
 /**
  * Shopify Marketplace Service
  * Handles product listing, inventory, and pricing operations on Shopify
@@ -121,6 +122,9 @@ export class ShopifyService {
     endpoint: string,
     body?: unknown
   ): Promise<unknown> {
+    // P0.1 — this old REST client had no publish gate. Reads stay open;
+    // every write needs Shopify publish mode `live`.
+    if (method.toUpperCase() !== "GET") assertShopifyWriteAllowed();
     const url = `${this.getBaseUrl()}${endpoint}`;
 
     const options: RequestInit = {

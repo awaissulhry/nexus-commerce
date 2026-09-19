@@ -2,8 +2,15 @@ import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from '../listing-push-controls.js'
 import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
+import { assertEbayWriteAllowed, ebayHostOf } from "../ebay-publish-gate.service.js";
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
+
+/** P0.1 — this old service had no publish gate: every write needs `live`
+ *  (or `sandbox` with a sandbox EBAY_API_BASE). */
+function assertWriteAllowed(): void {
+  assertEbayWriteAllowed(ebayHostOf(EBAY_API_BASE));
+}
 const EBAY_AUTH_URL = process.env.EBAY_AUTH_URL ?? "https://api.ebay.com/identity/v1/oauth2/token";
 const EBAY_MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID ?? "EBAY_IT";
 const EBAY_CURRENCY = process.env.EBAY_CURRENCY ?? "EUR";
@@ -163,6 +170,7 @@ export class EbayService {
    * Updates the available quantity for an existing inventory item on eBay.
    */
   async updateInventory(sku: string, quantity: number, productId?: string): Promise<void> {
+    assertWriteAllowed();
     const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [] })
     for (const row of pushControls) {
       const refusal = assertPushAllowed(row)
@@ -273,6 +281,7 @@ export class EbayService {
    * Finds the active offer by SKU, then updates its pricing.
    */
   async updatePrice(sku: string, newPrice: number, productId?: string): Promise<void> {
+    assertWriteAllowed();
     const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [] })
     for (const row of pushControls) {
       const refusal = assertPushAllowed(row)
@@ -399,6 +408,7 @@ export class EbayService {
     quantity: number,
     productId?: string
   ): Promise<string> {
+    assertWriteAllowed();
     const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [], allowAbsent: true })
     for (const row of pushControls) {
       const refusal = assertPushAllowed(row)
@@ -601,6 +611,7 @@ export class EbayService {
    * Idempotent: 204 if already exists, that's fine.
    */
   async ensureMerchantLocation(): Promise<void> {
+    assertWriteAllowed();
     const token = await this.getAccessToken();
     const url = `${EBAY_API_BASE}/sell/inventory/v1/location/${encodeURIComponent(EBAY_MERCHANT_LOCATION_KEY)}`;
 
@@ -675,6 +686,7 @@ export class EbayService {
    * @param newPrice The new price to set
    */
   async updateVariantPrice(variantSku: string, newPrice: number, productId?: string): Promise<void> {
+    assertWriteAllowed();
     try {
       const pushControls = await readPushControls({ channel: 'EBAY', skus: [variantSku], productIds: productId ? [productId] : [] })
       for (const row of pushControls) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ controls: [] as any[], read: vi.fn(), next: vi.fn(), transport: vi.fn(), review: vi.fn() }))
 vi.mock('./listing-push-controls.js', () => ({ readPushControls: s.read }))
 vi.mock('../db.js', () => ({ default: { product: { findUnique: s.next, findMany: s.next }, sharedListingMembership: { findMany: s.next } } }))
@@ -50,7 +50,11 @@ beforeEach(() => {
  vi.stubGlobal('fetch', s.transport)
  vi.spyOn(ebay as any, 'getAccessToken').mockImplementation(s.next)
  vi.spyOn(ebayProvider as any, 'callTradingApi').mockImplementation(s.transport)
+ // P0.1 — these boundaries model production: publish mode `live` on every channel.
+ vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
+ vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'true'); vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'live')
 })
+afterEach(() => { vi.unstubAllEnvs() })
 describe.each(cases)('%s push boundary', (_name, run, next) => {
  it.each(locks)('refuses %j before remote work', async lock => {
   s.controls = [lock]; expect(await outcome(run)).toContain('PUSH_')
@@ -68,4 +72,28 @@ it('explicit order dry-run retains its remote-read preview without a push-contro
 it('Etsy refusal remains local and does not enter a write lookup', async () => {
  const result = await market.updatePrice([{channel:'ETSY',channelVariantId:'123',price:2}])
  expect(result[0].success).toBe(false); expect(s.read).not.toHaveBeenCalled(); expect(s.transport).not.toHaveBeenCalled()
+})
+
+// P0.1 — outside `live`, the legacy writers stop before any lookup or transport.
+const legacyWriters: Array<[string, () => Promise<unknown>, string]> = [
+ ['Shopify legacy price', () => market.updatePrice([{ channel:'SHOPIFY', channelVariantId:'123', price:2 }]), 'Nothing was sent to Shopify'],
+ ['Shopify legacy stock', () => market.updateInventory([{ channel:'SHOPIFY', channelVariantId:'123', inventory:2 }]), 'Nothing was sent to Shopify'],
+ ['eBay legacy fan-out price', () => market.updatePrice([{ channel:'EBAY', channelVariantId:'123', price:2 }]), 'Nothing was sent to eBay'],
+ ['Amazon legacy fan-out price', () => market.updatePrice([{ channel:'AMAZON', channelVariantId:'123', price:2 }]), 'Nothing was sent to Amazon'],
+ ['WooCommerce legacy stock', () => market.updateInventory([{ channel:'WOOCOMMERCE', channelVariantId:'123', inventory:2 }]), 'no longer a Nexus channel'],
+ ['Etsy legacy stock', () => market.updateInventory([{ channel:'ETSY', channelVariantId:'123', channelProductId:'9', inventory:2 }]), 'Etsy is read-only'],
+ ['eBay legacy stock', () => ebay.updateInventory('SKU', 2), 'Nothing was sent to eBay'],
+ ['eBay legacy price', () => ebay.updatePrice('SKU', 2), 'Nothing was sent to eBay'],
+ ['eBay legacy variant price', () => ebay.updateVariantPrice('SKU', 2), 'Nothing was sent to eBay'],
+ ['eBay legacy new listing', () => ebay.publishNewListing('SKU', {} as any, 2, 1), 'Nothing was sent to eBay'],
+ ['eBay legacy merchant location', () => ebay.ensureMerchantLocation(), 'Nothing was sent to eBay'],
+]
+describe.each([['gated', {}], ['dry-run', { NEXUS_ENABLE_EBAY_PUBLISH: 'true', EBAY_PUBLISH_MODE: 'dry-run', NEXUS_ENABLE_SHOPIFY_PUBLISH: 'true', SHOPIFY_PUBLISH_MODE: 'dry-run', NEXUS_ENABLE_AMAZON_PUBLISH: 'true', AMAZON_PUBLISH_MODE: 'dry-run' }]] as const)('P0.1 — %s mode', (_mode, env) => {
+ beforeEach(() => {
+  for (const key of ['NEXUS_ENABLE_EBAY_PUBLISH', 'EBAY_PUBLISH_MODE', 'NEXUS_ENABLE_SHOPIFY_PUBLISH', 'SHOPIFY_PUBLISH_MODE', 'NEXUS_ENABLE_AMAZON_PUBLISH', 'AMAZON_PUBLISH_MODE']) vi.stubEnv(key, (env as Record<string, string>)[key] ?? '')
+ })
+ it.each(legacyWriters)('%s sends nothing and says why', async (_name, run, sentence) => {
+  expect(await outcome(run)).toContain(sentence)
+  expect(s.read).not.toHaveBeenCalled(); expect(s.transport).not.toHaveBeenCalled(); expect(s.next).not.toHaveBeenCalled()
+ })
 })

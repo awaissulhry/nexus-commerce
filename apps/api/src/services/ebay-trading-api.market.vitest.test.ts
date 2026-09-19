@@ -6,6 +6,8 @@ const m = vi.hoisted(() => {
 const trading = await import('./ebay-trading-api.service.js')
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv('NEXUS_EBAY_REAL_API', 'true')
+  // P0.1 — listing writes follow the publish mode; these model production (`live`).
+  vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
   m.fetch.mockResolvedValue({ ok: true, text: async () => '<Response><Ack>Success</Ack><ItemID>FAKE</ItemID><ListingStatus>Completed</ListingStatus></Response>' })
 })
 afterEach(() => vi.unstubAllEnvs())

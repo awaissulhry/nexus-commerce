@@ -238,7 +238,11 @@ describe('product presentation destination workflow', () => {
     const review = await reviewPresentationPublication([destination], 'description', 'operator')
     expect(review.targets).toEqual([]); expect(review.excluded[0].status).toBe('inventory-managed')
     const rows = await buildEbayFamilyRows('f1', 'IT', { channelConnectionId: 'b', aliasKey: 'alt' })
-    await expect(pushVariationGroup('f1', rows, 'IT', 'token-b', 'b', {}, 'https://fixture.invalid', 'EBAY_IT', async (_s: string, q: number) => q)).rejects.toThrow(/Full Inventory/)
+    // P0.1 — measured in production's publish mode (`live`), so the refusal seen is the presentation gate's.
+    vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
+    try {
+      await expect(pushVariationGroup('f1', rows, 'IT', 'token-b', 'b', {}, 'https://fixture.invalid', 'EBAY_IT', async (_s: string, q: number) => q)).rejects.toThrow(/Full Inventory/)
+    } finally { vi.unstubAllEnvs() }
     expect(revisions()).toHaveLength(0)
   })
   it('exposes exact-account usage/staleness and durable review routes through the registered plugins', async () => {

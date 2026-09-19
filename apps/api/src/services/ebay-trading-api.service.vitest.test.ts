@@ -145,7 +145,11 @@ import { callTradingApi } from './ebay-trading-api.service.js'
 describe('callTradingApi', () => {
   const ctx = { oauthToken: 'OAUTH123', siteId: '101' }
   const OLD = { ...process.env }
-  beforeEach(() => { vi.restoreAllMocks() })
+  // P0.1 — the real-call cases model production: eBay publish mode `live`.
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'; process.env.EBAY_PUBLISH_MODE = 'live'; delete process.env.EBAY_SANDBOX
+  })
   afterEach(() => { process.env = { ...OLD } })
 
   it('dry-run (no real-API) returns simulated success without calling fetch (non-prod)', async () => {

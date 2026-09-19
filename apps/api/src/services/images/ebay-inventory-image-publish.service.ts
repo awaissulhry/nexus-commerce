@@ -31,6 +31,7 @@ import { resolveImagePictureAxis } from './ebay-image-axis.pure.js'
 import { galleryForCuratedRow } from './ebay-gallery-verbatim.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
 import { tryResolveConnection } from '../connection-resolver.service.js'
+import { ebayWriteRefusal, ebayHostOf } from '../ebay-publish-gate.service.js'
 
 /**
  * PURE — the per-variation gallery a publish sends for one curated row.
@@ -76,6 +77,11 @@ export async function publishEbayImagesViaInventory(
   /** FFP.7 — the axis the operator selected in the modal (wins over the stored preference). */
   activeAxis?: string,
 ): Promise<EbayInventoryPublishResult> {
+  // P0.1 — refuse before any job row exists, so no job reads DONE for a send
+  // that never happened. The Trading lane is also guarded in callTradingApi.
+  const refusal = ebayWriteRefusal(ebayHostOf(EBAY_API_BASE))
+  if (refusal) return { success: false, message: refusal, error: refusal, pictureCount: 0, colorSetCount: 0 }
+
   const product = await prisma.product.findUnique({
     where: { id: productId },
     select: { id: true, sku: true, isParent: true, parentId: true, imageAxisPreference: true, productType: true },

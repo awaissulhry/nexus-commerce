@@ -1044,16 +1044,19 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             })
           }
 
-          // Mark as published + sync inventory
-          await prisma.channelListing.updateMany({
-            where: { productId: id, channel, marketplace },
-            data: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
-          })
-          const publishedListing = await prisma.channelListing.findFirst({
-            where: { productId: id, channel, marketplace },
-            select: { id: true },
-          })
-          if (publishedListing) void syncActivatedListings([publishedListing.id])
+          // Mark as published + sync inventory — only when Amazon really got it.
+          // P0.1: a dry run sent nothing, so the listing stays as it was.
+          if (!spResult.dryRun) {
+            await prisma.channelListing.updateMany({
+              where: { productId: id, channel, marketplace },
+              data: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
+            })
+            const publishedListing = await prisma.channelListing.findFirst({
+              where: { productId: id, channel, marketplace },
+              select: { id: true },
+            })
+            if (publishedListing) void syncActivatedListings([publishedListing.id])
+          }
 
           responsePayload = {
             ok: true,

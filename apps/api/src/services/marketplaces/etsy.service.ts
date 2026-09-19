@@ -400,22 +400,16 @@ export class EtsyService {
     variationId: number,
     quantity: number
   ): Promise<void> {
-    try {
-      await this.request(
-        "PATCH",
-        `/shops/${this.shopId}/listings/${listingId}/variations/${variationId}`,
-        {
-          quantity,
-        }
-      );
-    } catch (error) {
-      throw new MarketplaceSyncError(
-        "ETSY",
-        "VALIDATION",
-        `Failed to update variation quantity: ${error instanceof Error ? error.message : String(error)}`,
-        { listingId, variationId, quantity }
-      );
-    }
+    // P0.1 — Etsy is read-only in Nexus (plan decision D6). This old stock
+    // PATCH (/shops/:shop/listings/:listing/variations/:variation) was still
+    // reachable with an env token; it now never sends. Etsy writes return
+    // through the gateway in P4.6, only with the Owner's yes.
+    throw new MarketplaceSyncError(
+      "ETSY",
+      "VALIDATION",
+      "Etsy is read-only in Nexus. Nothing was sent to Etsy.",
+      { listingId, variationId, quantity }
+    );
   }
 
   /**

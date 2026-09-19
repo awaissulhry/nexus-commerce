@@ -4,6 +4,17 @@ import prisma from '../../db.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { getAccessToken, assertWritable } from '../cx/token.service.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
+import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
+
+/** P0.1 — this client has no sandbox host, so an image write is sent only in
+ *  `live`. Returns the sentence to show when it must not be sent. */
+export function amazonMediaWriteRefusal(): string | null {
+  const mode = getAmazonPublishMode()
+  if (mode === 'live') return null
+  return mode === 'gated'
+    ? 'Amazon publishing is turned off. Nothing was sent to Amazon.'
+    : `Amazon publishing is in ${mode} mode. Nothing was sent to Amazon.`
+}
 
 export const mediaObject = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 export function marketValue(value: unknown, marketplaceId: string): string | null {
@@ -124,6 +135,9 @@ export async function amazonMediaClient(accountId: string, marketplace: string) 
       issues: (Array.isArray(data.issues) ? data.issues : []).map((i: any) => ({ code: String(i.code), message: String(i.message), severity: String(i.severity) })) }
   }
   async function patch(sku: string, productType: string, patches: AmazonMediaPatch[], preview: boolean) {
+    // A VALIDATION_PREVIEW changes nothing on Amazon; a real PATCH needs `live`.
+    const refusal = preview ? null : amazonMediaWriteRefusal()
+    if (refusal) throw new WorkspaceScopeError(refusal, 409)
     return request(listingPath(sku), { marketplaceIds: marketplaceId, ...(preview ? { mode: 'VALIDATION_PREVIEW' } : {}) }, 'PATCH', { productType, patches })
   }
   return { observe, patch, marketplaceId, sellerId }

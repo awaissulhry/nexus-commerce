@@ -666,9 +666,15 @@ export class AmazonSpApiClient {
 
     // A1.1 — gate at the client layer. This is the path repricing reached
     // ungated; it now obeys NEXUS_ENABLE_AMAZON_PUBLISH + AMAZON_PUBLISH_MODE.
+    // P0.1 — 'sandbox' included for the AS.5 reason: this path has no sandbox
+    // host, so sandbox used to send a real production PATCH.
     const mode = getAmazonPublishMode()
-    if (mode === 'gated' || mode === 'dry-run') {
-      logger.info(`SP-API patchListingPrice (mode=${mode}, no HTTP)`, { sku, sellerId, marketplaceId })
+    if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') {
+      if (mode === 'sandbox') {
+        logger.warn('SP-API patchListingPrice: sandbox mode has no sandbox host on this path — treating as dry-run (no HTTP)', { sku, sellerId, marketplaceId })
+      } else {
+        logger.info(`SP-API patchListingPrice (mode=${mode}, no HTTP)`, { sku, sellerId, marketplaceId })
+      }
       return { success: true, sku, status: 'ACCEPTED', submissionId: `dry-run-${Date.now()}`, dryRun: true }
     }
 
@@ -789,9 +795,14 @@ export class AmazonSpApiClient {
     dryRun?: boolean
   }> {
     const { sellerId, sku, marketplaceId, productType, op, value } = options
+    // P0.1 — no sandbox host on this path (AS.5 reason): sandbox = no HTTP.
     const mode = getAmazonPublishMode()
-    if (mode === 'gated' || mode === 'dry-run') {
-      logger.info(`SP-API patchPurchasableOffer (mode=${mode}, no HTTP)`, { sku, marketplaceId, op })
+    if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') {
+      if (mode === 'sandbox') {
+        logger.warn('SP-API patchPurchasableOffer: sandbox mode has no sandbox host on this path — treating as dry-run (no HTTP)', { sku, marketplaceId, op })
+      } else {
+        logger.info(`SP-API patchPurchasableOffer (mode=${mode}, no HTTP)`, { sku, marketplaceId, op })
+      }
       return { success: true, sku, status: 'ACCEPTED', submissionId: `dry-run-${Date.now()}`, dryRun: true }
     }
     try {
@@ -1142,9 +1153,11 @@ export class AmazonSpApiClient {
   }> {
     const { sellerId, sku, marketplaceId } = options
 
+    // P0.1 — 'sandbox' included: `request` below targets the production host,
+    // so sandbox used to send a real DELETE.
     const mode = getAmazonPublishMode()
-    if (mode === 'gated' || mode === 'dry-run') {
-      logger.info('SP-API deleteListingsItem (dry-run, no HTTP)', {
+    if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') {
+      logger.info(`SP-API deleteListingsItem (mode=${mode}, no HTTP)`, {
         sku,
         marketplaceId,
       })

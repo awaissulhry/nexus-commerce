@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 const s = vi.hoisted(() => {
   const send = vi.fn()
   vi.stubGlobal('fetch', send)
-  return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn() }
+  return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn(), ebayRefusal: null as string | null }
 })
 vi.mock('../db.js', () => ({ default: {
   product: { findUnique: async () => ({ id: 'p', sku: 'SKU', name: 'Fixture', basePrice: 20, productType: 'COAT', translations: [] }), findFirst: async () => ({ brand: 'Fixture' }) },
@@ -27,7 +27,7 @@ vi.mock('../services/ebay-auth.service.js', () => ({ ebayAuthService: { getValid
 vi.mock('../services/connection-resolver.service.js', () => ({ tryResolveConnection: async () => ({ id: 'account', connectionMetadata: {} }) }))
 vi.mock('../services/ebay-category.service.js', () => ({ EbayCategoryService: class {} }))
 vi.mock('../services/ebay-account.service.js', () => ({ ebayAccountService: {}, resolvePolicyDisplayNames: vi.fn() }))
-vi.mock('../services/ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
+vi.mock('../services/ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => (s.ebayRefusal ? 'dry-run' : 'live'), ebayWriteRefusal: () => s.ebayRefusal, ebayHostOf: () => 'production' }))
 vi.mock('../services/amazon-mcf.service.js', () => ({ getPendingMcfReservedByProduct: async () => new Map() }))
 vi.mock('../services/order-events.service.js', () => ({ publishOrderEvent: vi.fn() }))
 vi.mock('../services/ebay-feed.service.js', () => ({ buildInventoryNdjson: () => 'fixture', createInventoryTask: s.feed, uploadFeedFile: s.upload, getTaskStatus: vi.fn() }))
@@ -48,6 +48,7 @@ vi.mock('../services/ebay-variation-order-apply.service.js', () => ({ applyVaria
 vi.mock('../services/ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async () => ({ html: 'Fixture' }), stampDescriptionPushSafe: vi.fn() }))
 
 import marketplaceRoutes from './marketplaces.routes.js'
+import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
 import ebayRoutes from './ebay-flat-file.routes.js'
 
 let app: FastifyInstance
@@ -60,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close(); vi.unstubAllGlobals() })
 beforeEach(() => {
   vi.clearAllMocks()
+  s.ebayRefusal = null
   s.read.mockResolvedValue([{}])
   s.review.mockResolvedValue({})
   s.amazon.mockResolvedValue({ success: true, status: 'SUBMITTED' })
@@ -129,4 +131,39 @@ it('keeps a skipped row excluded without asking for an ordinary-push permission'
   expect(s.read).not.toHaveBeenCalled()
   expect(s.send).not.toHaveBeenCalled()
   expect(s.job).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'DONE', pushed: 0 }) }))
+})
+
+// P0.1 — outside `live` the flat-file writers send nothing (they used to write
+// live in dry-run and sandbox, and the offer DELETE had no gate at all).
+describe('P0.1 — eBay flat-file writers outside live mode', () => {
+  const refusal = 'eBay publishing is in dry-run mode. Nothing was sent to eBay.'
+  it.each([
+    ['POST', '/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'api' }],
+    ['POST', '/api/ebay/flat-file/push', { rows: [row], markets: ['IT'], mode: 'feed' }],
+    ['POST', '/api/ebay/flat-file/publish', { rowIds: ['p'], markets: ['IT'] }],
+    ['DELETE', '/api/ebay/flat-file/offer', { rowIds: ['p'], markets: ['IT'] }],
+  ] as const)('%s %s answers 503 and makes no call', async (method, url, payload) => {
+    s.ebayRefusal = refusal
+    const response = await app.inject({ method, url, payload: payload as object })
+    expect(response.statusCode).toBe(503)
+    expect(response.json()).toMatchObject({ error: refusal, mode: 'dry-run' })
+    expect(s.send).not.toHaveBeenCalled(); expect(s.feed).not.toHaveBeenCalled(); expect(s.upload).not.toHaveBeenCalled()
+  })
+})
+
+describe('P0.1 — Amazon direct publish dry run', () => {
+  it('reports DRY_RUN and leaves the listing unpublished, with no stock sync', async () => {
+    s.amazon.mockResolvedValue({ success: true, dryRun: true, status: 'ACCEPTED' })
+    const response = await app.inject({ method: 'POST', url: '/api/products/p/listings/AMAZON/IT/publish', payload: {} })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ ok: true, status: 'DRY_RUN' })
+    expect(s.update).not.toHaveBeenCalled()
+    expect(syncActivatedListings).not.toHaveBeenCalled()
+  })
+  it('positive control: a real submission marks the listing published and starts the stock sync', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/products/p/listings/AMAZON/IT/publish', payload: {} })
+    expect(response.json()).toMatchObject({ ok: true, status: 'SUBMITTED' })
+    expect(s.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublished: true, listingStatus: 'ACTIVE' }) }))
+    expect(syncActivatedListings).toHaveBeenCalledWith(['listing'])
+  })
 })

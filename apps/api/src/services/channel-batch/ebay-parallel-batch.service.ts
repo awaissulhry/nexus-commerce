@@ -23,11 +23,26 @@ import { readPushControls } from '../listing-push-controls.js'
  *     action handler can write per-BulkActionItem outcomes.
  *
  * Dry-run gate: NEXUS_EBAY_BATCH_DRYRUN=1 skips the HTTP layer
- * and returns synthesised success rows.
+ * and returns synthesised success rows. P0.1: outside that explicit
+ * rehearsal, anything but eBay publish mode `live` sends nothing and
+ * reports failed rows.
  */
 
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
+import { ebayWriteRefusal, ebayHostOf } from '../ebay-publish-gate.service.js'
+
+/**
+ * P0.1 — price and stock are refused on this path. Both are PUTs that REPLACE
+ * the whole eBay record: the stock op sent an inventory_item holding only
+ * `availability` (it erased the listing's title, aspects and images), and the
+ * price op sent an offer holding only `pricingSummary`. A safe bulk path is
+ * P4.3 / P4.4 of docs/channel-connections/FINAL-PLAN.md.
+ */
+const UNSAFE_BULK_OPS: Partial<Record<EbayBatchOperation['type'], string>> = {
+  stock: 'EBAY_BULK_UNSAFE: This bulk path would replace the whole eBay item and erase its content. Nothing was sent to eBay. Change the stock in Nexus; the normal eBay sync sends it.',
+  price: 'EBAY_BULK_UNSAFE: This bulk path would replace the whole eBay offer. Nothing was sent to eBay. Change the price in Nexus; the normal eBay sync sends it.',
+}
 
 export type EbayBatchOperation =
   | { type: 'price'; sku: string; offerId: string; currency: string; value: string }
@@ -130,6 +145,8 @@ async function runOne(
       return { sku: op.sku, status: 'failed', attempts: 0, errorMessage: error instanceof Error ? error.message : String(error), httpStatus: null }
     }
   }
+  const unsafe = UNSAFE_BULK_OPS[op.type]
+  if (unsafe) return { sku: op.sku, status: 'failed', attempts: 0, errorMessage: unsafe, httpStatus: null }
   const call = operationToCall(op)
   let attempt = 0
   let lastErr: string | null = null
@@ -249,6 +266,16 @@ export async function submitEbayParallelBatch(
       results,
       dryRun: true,
     }
+  }
+
+  // P0.1 — this path only knows the production host, so it writes only in `live`.
+  // A refusal is reported as failed rows, never as synthesised success.
+  const modeRefusal = ebayWriteRefusal(ebayHostOf(EBAY_API_BASE))
+  if (modeRefusal) {
+    const results: EbayBatchOpResult[] = input.operations.map((op) => ({
+      sku: op.sku, status: 'failed', attempts: 0, errorMessage: `EBAY_WRITE_REFUSED: ${modeRefusal}`, httpStatus: null,
+    }))
+    return { connectionId: input.connectionId, total: results.length, succeeded: 0, failed: results.length, results, dryRun: true }
   }
 
   const auth = new EbayAuthService()

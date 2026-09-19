@@ -22,6 +22,7 @@ import { readPushControls } from '../listing-push-controls.js'
  */
 
 import { logger } from '../../utils/logger.js'
+import { assertShopifyWriteAllowed } from '../shopify-publish-gate.service.js'
 
 export interface ShopifyBulkInput {
   /** Single mutation that the operation list will fan out. The
@@ -180,6 +181,10 @@ export async function submitShopifyBulkMutation(
       dryRun: true,
     }
   }
+
+  // P0.1 — outside the explicit rehearsal above, a bulk write needs Shopify
+  // publish mode `live`. Refused as an error, never as a fake success.
+  assertShopifyWriteAllowed()
 
   // Each bulk line must establish its own stored listing controls before upload.
   for (const operation of input.operations) {

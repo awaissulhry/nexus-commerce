@@ -11,8 +11,10 @@ import { pushOffersOnly, pushVariationGroup } from './ebay-variation-push.servic
 const rows = [{ sku: 'SKU', price: 10, quantity: 2, _productId: 'product' }]
 const args = [rows, 'IT', 'fixture', 'account', {}, 'https://fixture.invalid', 'EBAY_IT', (_id: unknown, _sku: unknown, qty: number) => qty] as const
 const locks = [{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent => ({ presenceIntent }))]
-beforeEach(() => { vi.clearAllMocks(); s.controls = [{ product: { sku: 'SKU' }, platformAttributes: { __offerIds: { EBAY_IT: 'offer' } } }]; s.review.mockRejectedValue(new Error('REVIEW_CONTROL_REACHED')); s.send.mockResolvedValue({ ok: true, json: async () => ({ offers: [{ offerId: 'offer' }] }), text: async () => '' }); vi.stubGlobal('fetch', s.send) })
-afterEach(() => vi.unstubAllGlobals())
+beforeEach(() => { vi.clearAllMocks(); s.controls = [{ product: { sku: 'SKU' }, platformAttributes: { __offerIds: { EBAY_IT: 'offer' } } }]; s.review.mockRejectedValue(new Error('REVIEW_CONTROL_REACHED')); s.send.mockResolvedValue({ ok: true, json: async () => ({ offers: [{ offerId: 'offer' }] }), text: async () => '' }); vi.stubGlobal('fetch', s.send)
+ // P0.1 — these model production: eBay publish mode `live`.
+ vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live') })
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 it.each(locks)('refuses both eBay direct publishers for %j', async lock => {
  Object.assign(s.controls[0], lock)
  expect((await pushOffersOnly(...args))[0]).toMatchObject({ status: 'ERROR', message: expect.stringMatching(/^PUSH_/) })
@@ -24,4 +26,16 @@ it('lets unlocked offers reach one mocked PUT and full-publish reach the next in
  expect(s.send).toHaveBeenCalledTimes(1); expect(s.send.mock.calls[0][1].method).toBe('PUT')
  await expect(pushVariationGroup('group', ...args)).rejects.toThrow('REVIEW_CONTROL_REACHED')
  expect(s.review).toHaveBeenCalledTimes(1)
+})
+it.each([['gated', ''], ['dry-run', 'dry-run'], ['sandbox with a production host', 'sandbox']])('P0.1 — %s: both direct publishers refuse with no read and no call', async (_label, mode) => {
+ if (mode) vi.stubEnv('EBAY_PUBLISH_MODE', mode); else vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', '')
+ for (const result of [await pushOffersOnly(...args), await pushVariationGroup('group', ...args)])
+  expect(result[0]).toMatchObject({ status: 'ERROR', message: expect.stringMatching(/^EBAY_WRITE_REFUSED: .*Nothing was sent to eBay/) })
+ expect(s.send).not.toHaveBeenCalled(); expect(s.review).not.toHaveBeenCalled()
+})
+it('P0.1 — sandbox mode with the sandbox host still reaches the mocked transport', async () => {
+ vi.stubEnv('EBAY_PUBLISH_MODE', 'sandbox')
+ const sandboxArgs = [rows, 'IT', 'fixture', 'account', {}, 'https://api.sandbox.ebay.com', 'EBAY_IT', (_id: unknown, _sku: unknown, qty: number) => qty] as const
+ expect((await pushOffersOnly(...sandboxArgs))[0].status).toBe('PUSHED')
+ expect(s.send).toHaveBeenCalledTimes(1); expect(s.send.mock.calls[0][0]).toContain('https://api.sandbox.ebay.com/')
 })

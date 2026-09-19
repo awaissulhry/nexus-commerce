@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { buildImagePatches, type AmazonMediaPlanItem, type AmazonMediaReceipt, type AmazonMediaRun } from '@nexus/shared/amazon-media'
 import prisma from '../../db.js'
 import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
-import { amazonMediaClient } from './amazon-media-client.js'
+import { amazonMediaClient, amazonMediaWriteRefusal } from './amazon-media-client.js'
 import { amazonMediaDestination, assertNoActiveMediaRun, desiredAmazonImages, mutateAmazonMedia, readAmazonMedia, refreshAmazonMedia } from './amazon-media-workspace.service.js'
 
 const json = (value: unknown) => value as Prisma.InputJsonValue
@@ -32,6 +32,9 @@ export async function approveAmazonMediaRun(destination: WorkspaceDestination, i
     throw new WorkspaceScopeError('This review expired or has already been submitted. Build a fresh review.')
   if (!run.items.length || run.items.some(i => i.issues.length)) throw new WorkspaceScopeError('Resolve every blocking issue in this review before publishing.', 422)
   if (!run.items.some(i => i.patches.length)) throw new WorkspaceScopeError('There are no image changes to publish.', 422)
+  // P0.1 — refuse before the run is queued, so nothing waits for a send that must not happen.
+  const refusal = amazonMediaWriteRefusal()
+  if (refusal) throw new WorkspaceScopeError(refusal, 409)
   const workspace = await mutateAmazonMedia(destination, revision, async (current, pa, tx) => {
     await assertNoActiveMediaRun(current, tx)
     const claimed = await tx.amazonMediaRun.updateMany({ where: { id, status: 'REVIEW' }, data: { status: 'QUEUED' } })
@@ -93,6 +96,9 @@ export async function processAmazonMediaRun(id: string) {
           // Credential state is rechecked for each effect, not just at job start.
           const writer = await amazonMediaClient(initial.accountId, initial.marketplace)
           if ((await readAmazonMedia(destination)).revision !== initial.revision) throw new Error('The listing changed while Amazon was being checked. Build a fresh review.')
+          // P0.1 — checked before SENDING, so a refusal is recorded as NOT_SENT, never UNKNOWN.
+          const refusal = amazonMediaWriteRefusal()
+          if (refusal) throw new Error(refusal)
           receipt.status = 'SENDING'
           await prisma.amazonMediaRun.update({ where: { id }, data: { receipts: json(receipts) } })
           const response = await writer.patch(entry.sku, entry.productType, entry.patches, false)

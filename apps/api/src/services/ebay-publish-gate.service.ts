@@ -61,6 +61,45 @@ export function getEbayApiBaseForMode(mode: EbayPublishMode): string {
   return process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 }
 
+/** Which eBay environment a URL points at. Anything not on a sandbox host
+ *  counts as production, so an unknown host is never treated as safe. */
+export function ebayHostOf(url: string): 'production' | 'sandbox' {
+  try {
+    return new URL(url).hostname.includes('.sandbox.') ? 'sandbox' : 'production'
+  } catch {
+    return 'production'
+  }
+}
+
+/**
+ * P0.1 — the one rule for every eBay write: production only in `live`, the
+ * sandbox host only in `sandbox`, nothing in `gated` / `dry-run`. Returns the
+ * sentence to show when the write must not be sent, or null when it may.
+ */
+export function ebayWriteRefusal(host: 'production' | 'sandbox'): string | null {
+  const mode = getEbayPublishMode()
+  if (mode === 'live' && host === 'production') return null
+  if (mode === 'sandbox' && host === 'sandbox') return null
+  if (mode === 'gated') return 'eBay publishing is turned off. Nothing was sent to eBay.'
+  if (mode === 'sandbox') return 'eBay publishing is in sandbox mode, and this action has no sandbox. Nothing was sent to eBay.'
+  if (mode === 'live') return 'eBay publishing is live, but this action points at the eBay sandbox. Nothing was sent to eBay.'
+  return 'eBay publishing is in dry-run mode. Nothing was sent to eBay.'
+}
+
+export class EbayWriteRefusedError extends Error {
+  readonly code = 'EBAY_WRITE_REFUSED'
+  constructor(message: string) {
+    super(message)
+    this.name = 'EbayWriteRefusedError'
+  }
+}
+
+/** Throws EbayWriteRefusedError when the write must not be sent. */
+export function assertEbayWriteAllowed(host: 'production' | 'sandbox'): void {
+  const refusal = ebayWriteRefusal(host)
+  if (refusal) throw new EbayWriteRefusedError(refusal)
+}
+
 // ── Rate limiter ──────────────────────────────────────────────────────
 //
 // Token bucket per (connectionId, marketplaceId). One token per

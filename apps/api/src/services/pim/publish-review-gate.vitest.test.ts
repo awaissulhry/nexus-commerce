@@ -125,8 +125,10 @@ describe('the fourth eBay direct push (pushVariationGroup)', () => {
     // The presentation assert runs first and reads these two.
     db.channelListing.findMany = vi.fn().mockResolvedValue([])
     vi.stubGlobal('fetch', vi.fn(() => { throw new Error('PROVIDER FORBIDDEN') }))
+    // P0.1 — the review gate is measured in production's publish mode (`live`).
+    vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'true'); vi.stubEnv('EBAY_PUBLISH_MODE', 'live')
   })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
   it('refuses an unreviewed draft before anything downstream runs', async () => {
     db.product.findFirst.mockResolvedValue(product([draftRow]))

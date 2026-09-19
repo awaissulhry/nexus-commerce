@@ -53,7 +53,7 @@ import { addVariationsToListing } from '../services/ebay-variation-add.service.j
 import { applyVariationOrderForFamily } from '../services/ebay-variation-order-apply.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
 import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../services/ebay-description-theme.service.js';
-import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js';
+import { getEbayPublishMode, ebayWriteRefusal, ebayHostOf } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
 import { publishOrderEvent } from '../services/order-events.service.js';
 import { computeCuratedImageOverrides } from '../services/images/ebay-inventory-image-publish.service.js';
@@ -1512,9 +1512,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // ── Publish gate ─────────────────────────────────────────────────────
     // Mirror the cockpit path: honour NEXUS_ENABLE_EBAY_PUBLISH so that
     // the safety flag blocks ALL eBay writes, not just cockpit publishes.
-    const publishMode = getEbayPublishMode();
-    if (publishMode === 'gated') {
-      return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: publishMode });
+    // P0.1 — dry-run and sandbox refuse too: this route only knows the
+    // production host, so anything but `live` used to write live.
+    const pushRefusal = ebayWriteRefusal(ebayHostOf(EBAY_API_BASE));
+    if (pushRefusal) {
+      return reply.code(503).send({ error: pushRefusal, mode: getEbayPublishMode() });
     }
 
     // Resolve which markets to push to
@@ -3326,9 +3328,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'markets must be non-empty' });
     }
 
-    const republishMode = getEbayPublishMode();
-    if (republishMode === 'gated') {
-      return reply.code(503).send({ error: 'eBay publish is currently disabled', mode: republishMode });
+    // P0.1 — only `live` may write (this route only knows the production host).
+    const republishRefusal = ebayWriteRefusal(ebayHostOf(EBAY_API_BASE));
+    if (republishRefusal) {
+      return reply.code(503).send({ error: republishRefusal, mode: getEbayPublishMode() });
     }
 
     // MAP.6 — DECLARED: no row in scope here names an account.
@@ -3484,6 +3487,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }
     if (!Array.isArray(markets) || markets.length === 0) {
       return reply.code(400).send({ error: 'markets must be non-empty' });
+    }
+
+    // P0.1 — this route had no gate at all: it deleted live offers in every mode.
+    const offerDeleteRefusal = ebayWriteRefusal(ebayHostOf(EBAY_API_BASE));
+    if (offerDeleteRefusal) {
+      return reply.code(503).send({ error: offerDeleteRefusal, mode: getEbayPublishMode() });
     }
 
     // MAP.6 — DECLARED: no row in scope here names an account.
