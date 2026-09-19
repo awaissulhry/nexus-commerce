@@ -36,7 +36,8 @@ Read in this order:
 | P1.4a Shopify queue on 2026-07 GraphQL with the row's account | 842841031 | `build/P1.4.md` |
 | P1.4b part 1 Shopify order actions (refund, cancel, tracking) on the order's account | 86d128291 | `build/P1.4.md` 6.1 |
 | P1.4b part 2 bulk Shopify price / stock on the listing's account | 2a0493c6b | `build/P1.4.md` 6.2 |
-| P1.4b part 3 gateway: a Shopify change only on 2026-07 GraphQL with an account | (this commit) | `build/P1.4.md` 6.3 |
+| P1.4b part 3 gateway: a Shopify change only on 2026-07 GraphQL with an account | bc9baf734 | `build/P1.4.md` 6.3 |
+| P1.4 the shop's single location for a linked listing (Owner 09-20) | (this commit) | `build/P1.4.md` 4.1 |
 
 **Push is blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 
@@ -49,9 +50,9 @@ All three parts of P1.4b and P1.4a are committed. Record: `build/P1.4.md` (secti
 
 ## 4. Open questions for the Owner (from P1.4)
 
-1. **Linked Shopify listings have no stock location** (`build/P1.4.md` 4.1). Their queued stock changes are refused. Production is not affected while Shopify publish is `gated`.
+1. ~~Linked Shopify listings have no stock location~~ **ANSWERED 2026-09-20**: use the shop's location when it has exactly one active one; two or more are refused (`build/P1.4.md` 4.1). Built and committed.
 2. **Before a push:** read the production switches `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new). After the push, a switch set to `true` sends through the connected Shopify account (`build/P1.4.md` 6.1).
-3. **P1.6 delete list** grows with the old Shopify env writers (`build/P1.4.md` 6.3).
+3. **P1.6 delete list** grows with the old Shopify env writers (`build/P1.4.md` 6.3). The Owner allowed production **reads** (Railway `http-requests`) to prove a route has no caller (2026-09-20).
 
 ## 5. After P1.4
 

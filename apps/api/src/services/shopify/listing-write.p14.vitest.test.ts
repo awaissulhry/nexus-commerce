@@ -15,6 +15,7 @@ const shop = vi.hoisted(() => ({
   concurrent: null as number | null, // a stock change by someone else between our read and our write
   priceIgnored: false, // the shop answers the price write without applying it
   stockAfterWrite: null as number | null, // someone else changes the stock right after our write
+  locations: [] as Array<{ id: string; name: string; isActive: boolean }>, // the shop's own locations
 }))
 vi.mock('./admin-client.js', async (original) => ({
   ...(await original<object>()),
@@ -23,6 +24,7 @@ vi.mock('./admin-client.js', async (original) => ({
     const graphql = async (query: string, variables: any = {}) => {
       shop.ops.push({ query, variables })
       const byId = (id: string) => shop.variants.find((v) => v.id === id)
+      if (query.includes('NexusShopLocations')) return { locations: { nodes: shop.locations } }
       if (query.includes('NexusVariantBySku')) return { productVariants: { nodes: shop.variants.filter((v) => `sku:${JSON.stringify(v.sku)}` === variables.q) } }
       if (query.includes('NexusVariantPrice(')) { const v = byId(variables.id); return { productVariant: v ?? null } }
       if (query.includes('query NexusVariant(')) {
@@ -57,6 +59,7 @@ const mutations = () => shop.ops.filter((o) => /^\s*mutation/.test(o.query))
 
 beforeEach(() => {
   shop.accounts = []; shop.ops = []; shop.concurrent = null; shop.priceIgnored = false; shop.stockAfterWrite = null
+  shop.locations = [{ id: LOC, name: 'Main', isActive: true }]
   __resetShopifyPublishGateForTests()
   shop.variants = [{ id: 'gid://shopify/ProductVariant/11', sku: 'SKU-1', price: '10.00', product: { id: 'gid://shopify/Product/33' }, inventoryItem: { id: 'gid://shopify/InventoryItem/22' } }]
   shop.stock = new Map([[`gid://shopify/InventoryItem/22@${LOC}`, 3]])
@@ -120,8 +123,21 @@ describe('P1.4 — the stock round-trip with compare-and-set', () => {
     expect(await syncShopifyLinkedListing(row('QUANTITY_UPDATE'), 'shop-A', { quantity: 3 })).toMatch(/nothing sent/)
     expect(mutations()).toHaveLength(0)
   })
-  it('no reviewed location: refused, no location chosen automatically', async () => {
-    await expect(syncShopifyLinkedListing(row('QUANTITY_UPDATE', { variantId: '11', inventoryItemId: '22', shopifyProductId: '33' }), 'shop-A', { quantity: 5 })).rejects.toThrow(/No reviewed Shopify stock location/)
+  it('a reviewed location: the shop is never asked for its locations', async () => {
+    await syncShopifyLinkedListing(row('QUANTITY_UPDATE'), 'shop-A', { quantity: 5 })
+    expect(shop.ops.filter((o) => o.query.includes('NexusShopLocations'))).toHaveLength(0)
+  })
+  it('no reviewed location and the shop has exactly ONE active location: that one is used', async () => {
+    const noLocation = row('QUANTITY_UPDATE', { variantId: '11', inventoryItemId: '22', shopifyProductId: '33' })
+    expect(await syncShopifyLinkedListing(noLocation, 'shop-A', { quantity: 5 })).toMatch(/3 → 5/)
+    expect(mutations()[0].variables.input.quantities[0].locationId).toBe(LOC)
+  })
+  it('no reviewed location and the shop has two (or no) active locations: refused, nothing written', async () => {
+    const noLocation = row('QUANTITY_UPDATE', { variantId: '11', inventoryItemId: '22', shopifyProductId: '33' })
+    shop.locations = [{ id: LOC, name: 'Main', isActive: true }, { id: 'gid://shopify/Location/10', name: 'Shop', isActive: true }]
+    await expect(syncShopifyLinkedListing(noLocation, 'shop-A', { quantity: 5 })).rejects.toThrow(/the shop has 2 active locations/)
+    shop.locations = [{ id: 'gid://shopify/Location/10', name: 'Closed', isActive: false }]
+    await expect(syncShopifyLinkedListing(noLocation, 'shop-A', { quantity: 5 })).rejects.toThrow(/no active location/)
     expect(mutations()).toHaveLength(0)
   })
 })

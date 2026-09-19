@@ -8,9 +8,11 @@
  *     variant with the SKU; the variant read back must carry the SKU and the product;
  *   - content: `productUpdate` (title, description) + `metafieldsSet` (compliance fields);
  *   - price: `productVariantsBulkUpdate`, read back;
- *   - stock: the reviewed location on the listing (`inventoryLocationId`; none → refused, never
- *     guessed), `inventorySetQuantities` with compare-and-set (`changeFromQuantity`: the quantity just
- *     read) and `@idempotent(key)` (mandatory since 2026-04), read back.
+ *   - stock: the reviewed location on the listing (`inventoryLocationId`), else — Owner decision
+ *     2026-09-20 — the shop's location when it has EXACTLY ONE active one; two or more, or none, are
+ *     refused (never "the first"). Then `inventorySetQuantities` with compare-and-set
+ *     (`changeFromQuantity`: the quantity just read) and `@idempotent(key)` (mandatory since 2026-04),
+ *     read back.
  * Every call goes through the channel gateway (admin-client → shopifyTransport). A refusal or a failed
  * read-back throws with one plain sentence; the queue records it.
  */
@@ -39,6 +41,24 @@ export interface LinkedListingWork {
 const VARIANT_QUERY = `query NexusVariant($id: ID!, $location: ID!) { productVariant(id: $id) { id sku price product { id } inventoryItem { id inventoryLevel(locationId: $location) { quantities(names: ["available"]) { name quantity } } } } }`
 const VARIANT_BY_SKU = `query NexusVariantBySku($q: String!) { productVariants(first: 2, query: $q) { nodes { id sku product { id } inventoryItem { id } } } }`
 const VARIANT_PRICE_QUERY = `query NexusVariantPrice($id: ID!) { productVariant(id: $id) { id sku price product { id } inventoryItem { id } } }`
+const SHOP_LOCATIONS = `query NexusShopLocations { locations(first: 3, includeInactive: false, includeLegacy: false) { nodes { id name isActive } } }`
+const isLocationId = (value: unknown) => /^gid:\/\/shopify\/Location\/\d+$/.test(String(value ?? ''))
+
+/**
+ * The location this listing's stock goes to: the one reviewed on the listing, else the shop's own when
+ * it has exactly one active location (Owner decision 2026-09-20). Two or more → refused: Nexus never
+ * picks one of several. The single location is not stored, so a second one refuses from that day on.
+ */
+async function stockLocation(gql: ShopifyGraphql, row: LinkedListingRow, sku: string): Promise<string> {
+  const reviewed = mapping(row).inventoryLocationId
+  if (isLocationId(reviewed)) return reviewed as string
+  const nodes = (await gql(SHOP_LOCATIONS)).locations?.nodes ?? []
+  const active = nodes.filter((l: any) => l?.isActive !== false && isLocationId(l?.id))
+  if (active.length === 1) return active[0].id as string
+  throw new Error(active.length === 0
+    ? `No reviewed Shopify stock location for ${sku}, and the shop has no active location. Nothing was sent.`
+    : `No reviewed Shopify stock location for ${sku}, and the shop has ${active.length} active locations. Choose the location for this listing; none was chosen automatically.`)
+}
 
 function mapping(row: LinkedListingRow): Record<string, string | undefined> {
   const attrs = row.channelListing?.platformAttributes
@@ -121,10 +141,7 @@ export async function syncShopifyLinkedListing(row: LinkedListingRow, accountId:
   // Stock
   const quantity = work.quantity
   if (quantity == null || !Number.isSafeInteger(quantity) || quantity < 0) throw new Error(`A valid stock quantity is required for ${sku}.`)
-  const location = mapping(row).inventoryLocationId
-  if (!/^gid:\/\/shopify\/Location\/\d+$/.test(location ?? '')) {
-    throw new Error(`No reviewed Shopify stock location for ${sku}. Choose the location for this listing; none was chosen automatically.`)
-  }
+  const location = await stockLocation(gql, row, sku)
   const read = async () => (await gql(VARIANT_QUERY, { id: ids.variantId, location })).productVariant
   const before = await read()
   const observed = before?.inventoryItem?.inventoryLevel?.quantities?.find((q: any) => q.name === 'available')?.quantity
