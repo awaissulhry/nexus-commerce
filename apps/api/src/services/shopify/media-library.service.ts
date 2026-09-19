@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { shopifyTransport } from '../gateway/shopify.js'
 import { workspaceIdForQuery, workspaceKey } from '@nexus/database/workspace-context'
 import type { ShopifyFile, ShopifyMediaSource, MediaSourcesResponse, ShopifyFilesResponse, ShopifyFileReference } from '@nexus/shared/shopify-media'
 import { shopifyFileQuerySchema, SHOPIFY_UPLOAD_MAX_BYTES } from '@nexus/shared/shopify-media'
@@ -205,6 +206,7 @@ export async function uploadShopifyFile(accountId: string, buffer: Buffer, origi
   const form = new FormData()
   for (const parameter of target.parameters) form.append(parameter.name, parameter.value)
   form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), name)
+  // gateway-exempt: staged upload to Shopify's storage (the pre-signed target the GraphQL call returned)
   const response = await fetch(target.url, { method: 'POST', body: form, signal: AbortSignal.timeout(120_000), redirect: 'error' })
   if (!response.ok) throw new ShopifyMediaError('The transfer to Shopify failed. Retry this file.', 502)
   try {

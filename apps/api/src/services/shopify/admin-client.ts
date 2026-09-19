@@ -1,4 +1,5 @@
 import { resolveConnection } from '../connection-resolver.service.js'
+import { shopifyTransport } from '../gateway/shopify.js'
 import { getAccessToken, assertWritable } from '../cx/token.service.js'
 import { shopifyShopDomain } from '../cx/connectors/shopify/auth.js'
 import { acquireShopifyPublishToken, getShopifyPublishMode } from '../shopify-publish-gate.service.js'
@@ -19,7 +20,8 @@ export async function shopifyAdmin(accountId: string): Promise<{ graphql: Shopif
     const token = await getAccessToken(accountId)
     // Mutations are not blindly retried after ambiguous network results. Product identity,
     // deterministic filenames and persisted checkpoints make an explicit retry reconcilable.
-    const response = await fetch(`https://${domain}/admin/api/2026-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(60_000), redirect: 'error' })
+    // P1.2 — through the channel gateway (the connected account; state, rate bucket, call ledger).
+    const response = await shopifyTransport(accountId)(`https://${domain}/admin/api/2026-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token }, body: JSON.stringify({ query, variables }), signal: AbortSignal.timeout(60_000) })
     if (!response.ok) throw new Error(`Shopify request failed (HTTP ${response.status}). Retry after checking the account and request status.`)
     const result = await response.json() as { data?: T; errors?: { message: string }[] }
     if (result.errors?.length || !result.data) throw new Error(result.errors?.map(e => e.message).join('; ') ?? 'Shopify returned no data.')

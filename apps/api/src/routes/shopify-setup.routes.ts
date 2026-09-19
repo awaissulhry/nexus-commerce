@@ -24,6 +24,7 @@
  *   verify the registration matches our route mounts.
  */
 
+import { shopifyTransport } from '../services/gateway/shopify.js'
 import type { FastifyInstance } from 'fastify'
 import { ConfigManager } from '../utils/config.js'
 import type { ShopifyConfig } from '../types/marketplace.js'
@@ -65,7 +66,8 @@ async function shopifyAdminRequest<T>(
 ): Promise<{ ok: boolean; status: number; body: T | { errors?: unknown } }> {
   const apiVersion = config.apiVersion || '2024-01'
   const url = `https://${config.shopName}.myshopify.com/admin/api/${apiVersion}${path}`
-  const res = await fetch(url, {
+  // P1.2 — through the channel gateway (env credential → app-level; P1.4 moves it to the connected account).
+  const res = await shopifyTransport(null)(url, {
     method,
     headers: {
       'X-Shopify-Access-Token': config.accessToken,

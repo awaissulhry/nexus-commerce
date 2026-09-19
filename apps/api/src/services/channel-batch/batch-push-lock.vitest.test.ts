@@ -14,7 +14,10 @@ import { submitAmazonListingsBatch } from './amazon-batch-feed.service.js'
 const shop={mutation:'mutation Update($input:ProductInput!){productUpdate(input:$input){userErrors{message}}}',operations:[{input:{id:'gid://shopify/Product/123',title:'Fixture'}}],shopName:'fixture',accessToken:'mock'}
 const amazon={sellerId:'fixture',marketplaceIds:['APJ6JRA9NG5V4'],operations:[{type:'stock' as const,sku:'SKU',quantity:2}]}
 const locks=[{syncPaused:true},{offerClosedAt:new Date('2026-09-13')},...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent=>({presenceIntent}))]
+import { rememberTokenAccount } from '../gateway/token-accounts.js'
 beforeEach(()=>{
+ // P1.2 — the bulk token is an account's token the token service handed out (the gateway refuses unknown ones).
+ rememberTokenAccount('mock','shopify-account')
  vi.clearAllMocks();s.closed.mockResolvedValue(new Set());s.controls=[{productId:'product',marketplace:'IT'}];s.read.mockImplementation(async()=>s.controls);s.auth.mockResolvedValue('fixture')
  vi.stubEnv('NEXUS_SHOPIFY_BULK_DRYRUN','0');vi.stubEnv('NEXUS_EBAY_BATCH_DRYRUN','0');vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH','true');vi.stubEnv('AMAZON_PUBLISH_MODE','live')
  // P0.1 — these model production: every channel's publish mode is `live`.

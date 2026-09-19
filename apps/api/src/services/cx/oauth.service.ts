@@ -333,6 +333,7 @@ export async function complete(input: {
   let ok: boolean
   let status: number
   try {
+    // gateway-exempt: OAuth code exchange for every channel — the gateway's own token source
     const res = await fetch(spec.auth.tokenUrl({ region: session.region, environment }), { method: 'POST', headers, body: body.toString(), signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS), redirect: 'error' })
     text = await res.text()
     ok = res.ok

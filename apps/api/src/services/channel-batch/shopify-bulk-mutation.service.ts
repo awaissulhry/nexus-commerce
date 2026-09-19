@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { shopifyTransport } from '../gateway/shopify.js'
 import { readPushControls } from '../listing-push-controls.js'
 /**
  * W12.2 — Shopify Admin GraphQL bulkOperationRunMutation wrapper.
@@ -91,7 +92,8 @@ async function gql<T>(
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<T> {
-  const res = await fetch(graphqlUrl(shopName, apiVersion), {
+  // P1.2 — through the channel gateway: the token's account, or the env credential as app-level.
+  const res = await shopifyTransport(null)(graphqlUrl(shopName, apiVersion), {
     method: 'POST',
     headers: {
       'X-Shopify-Access-Token': accessToken,
@@ -245,6 +247,7 @@ export async function submitShopifyBulkMutation(
   const form = new FormData()
   for (const p of target.parameters) form.append(p.name, p.value)
   form.append('file', new Blob([jsonl], { type: 'text/jsonl' }), 'bulk_op_vars.jsonl')
+  // gateway-exempt: staged upload to Shopify's storage (the pre-signed target the GraphQL call returned)
   const uploadRes = await fetch(target.url, {
     method: 'POST',
     body: form,

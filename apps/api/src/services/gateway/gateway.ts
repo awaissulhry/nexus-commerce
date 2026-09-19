@@ -279,7 +279,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     attempts++
     timedOut = false
     try {
-      const res = await fetch(url, { method: req.method, headers, body: (req.body ?? undefined) as RequestInit["body"], signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      // Never follow a redirect: a channel call carries its token in a header, and a custom token header
+      // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
+      const res = await fetch(url, { method: req.method, headers, body: (req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()

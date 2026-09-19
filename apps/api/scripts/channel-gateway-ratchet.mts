@@ -36,12 +36,14 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
  * sends); 11 eBay non-API sends exempt (OAuth, connector identity, one Amazon pre-signed upload).
  * Then the API-path rule found 10 more eBay sends in outbound-sync.service.ts (a file with both eBay and
  * Shopify, counted as Shopify before) — moved; Shopify's true count is 15.
+ * 2026-09-19, P1.2c: Shopify 15 → 0 (the account GraphQL client, the env-credential paths as app-level
+ * calls, the bulk mutation); 4 exempt (2 staged uploads, the connector heartbeat, the OAuth exchange).
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
   AMAZON_SP: 0,
   AMAZON_ADS: 13,
-  SHOPIFY: 15,
+  SHOPIFY: 0,
   ETSY: 4,
 }
 

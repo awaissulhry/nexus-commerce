@@ -3,6 +3,7 @@
  * Handles product listing, inventory, orders, and parent-child product hierarchy
  */
 
+import { shopifyTransport } from '../gateway/shopify.js'
 import { RateLimiter } from "../../utils/rate-limiter.js";
 import { MarketplaceSyncError } from "../../utils/error-handler.js";
 import type { ShopifyConfig } from "../../types/marketplace.js";
@@ -244,7 +245,8 @@ export class ShopifyEnhancedService {
     const url = this.getGraphQLUrl();
 
     try {
-      const response = await fetch(url, {
+      // P1.2 — through the channel gateway (env credential → app-level).
+      const response = await shopifyTransport(null)(url, {
         method: "POST",
         headers: {
           "X-Shopify-Access-Token": this.accessToken,

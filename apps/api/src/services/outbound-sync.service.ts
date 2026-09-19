@@ -1,4 +1,5 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { shopifyTransport } from './gateway/shopify.js';
 import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
@@ -2019,6 +2020,8 @@ export class OutboundSyncService {
     }
 
     const apiBase = `https://${shopName}.myshopify.com/admin/api/2024-01`;
+    // P1.2 — through the channel gateway (env credential → app-level; P1.4 moves it to the connected account).
+    const shopifySend = shopifyTransport(null);
     const headers = {
       "X-Shopify-Access-Token": accessToken,
       "Content-Type": "application/json",
@@ -2035,7 +2038,7 @@ export class OutboundSyncService {
       (channelListing?.platformAttributes as Record<string, any>)?.shopifyProductId ?? null;
 
     if (!variantId || !inventoryItemId || !shopifyProductId) {
-      const varRes = await fetch(
+      const varRes = await shopifySend(
         `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id,product_id`,
         { headers },
       ).catch(() => null);
@@ -2087,7 +2090,7 @@ export class OutboundSyncService {
       if (metafields.length > 0) productBody.metafields = metafields;
 
       const t0 = Date.now();
-      const contentRes = await fetch(`${apiBase}/products/${shopifyProductId}.json`, {
+      const contentRes = await shopifySend(`${apiBase}/products/${shopifyProductId}.json`, {
         method: "PUT",
         headers,
         body: JSON.stringify({ product: productBody }),
@@ -2126,7 +2129,7 @@ export class OutboundSyncService {
 
       const t0 = Date.now();
       const priceStr = Number(newPrice).toFixed(2);
-      const priceRes = await fetch(`${apiBase}/variants/${variantId}.json`, {
+      const priceRes = await shopifySend(`${apiBase}/variants/${variantId}.json`, {
         method: "PUT",
         headers,
         body: JSON.stringify({ variant: { id: parseInt(variantId, 10), price: priceStr } }),
@@ -2213,7 +2216,7 @@ export class OutboundSyncService {
 
     let locationId: string | null = process.env.SHOPIFY_LOCATION_ID ?? null;
     if (!locationId) {
-      const locRes = await fetch(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
+      const locRes = await shopifySend(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
       if (locRes?.ok) {
         const locData = await locRes.json().catch(() => null) as { locations?: Array<{ id: string }> } | null;
         locationId = String(locData?.locations?.[0]?.id ?? "");
@@ -2227,7 +2230,7 @@ export class OutboundSyncService {
     }
 
     const t0 = Date.now();
-    const setRes = await fetch(`${apiBase}/inventory_levels/set.json`, {
+    const setRes = await shopifySend(`${apiBase}/inventory_levels/set.json`, {
       method: "POST", headers,
       body: JSON.stringify({
         location_id: parseInt(locationId, 10),

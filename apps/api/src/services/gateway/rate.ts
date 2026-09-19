@@ -22,6 +22,18 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
   AMAZON_ADS: { capacity: 20, refillPerSec: 10 },
 }
 
+/**
+ * Shopify: REST is a leaky bucket of 40 draining at 2/s; GraphQL is cost-based (about 100 points/s, a
+ * mutation ~10) — its own, faster bucket. The key's operation group says which (channels.bucketGroupOf).
+ */
+const SHOPIFY_GRAPHQL: BucketParams = { capacity: 50, refillPerSec: 10 }
+const SHOPIFY_REST: BucketParams = { capacity: 40, refillPerSec: 2 }
+
+function defaultsFor(channel: GatewayChannel, key: string): BucketParams {
+  if (channel === 'SHOPIFY') return key.endsWith(':graphql') ? SHOPIFY_GRAPHQL : SHOPIFY_REST
+  return DEFAULT_BUCKETS[channel]
+}
+
 export interface TakeResult { ok: boolean; waitMs: number; tokensLeft: number }
 
 interface BucketStore {
@@ -136,7 +148,7 @@ export function bucketKey(channel: GatewayChannel, connectionId: string | null, 
 /** Wait for a token, up to `maxWaitMs`. `ok: false` = still none after waiting (answer rate_limited). */
 export async function takeToken(channel: GatewayChannel, key: string, maxWaitMs: number, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<TakeResult & { waitedMs: number }> {
   const s = await store()
-  const params = (await s.getParams(key).catch(() => null)) ?? DEFAULT_BUCKETS[channel]
+  const params = (await s.getParams(key).catch(() => null)) ?? defaultsFor(channel, key)
   let waitedMs = 0
   for (;;) {
     const result = await s.take(key, params, 1, Date.now()).catch(() => ({ ok: true, waitMs: 0, tokensLeft: 0 } as TakeResult))

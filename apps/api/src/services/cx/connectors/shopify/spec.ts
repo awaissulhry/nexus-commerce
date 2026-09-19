@@ -56,6 +56,7 @@ async function connectionData(handle: ConnectionHandle): Promise<{
   const domain = shopifyShopDomain(handle.region)
   if (!domain) throw new Error('The Shopify connection has no valid myshopify.com domain.')
   const token = await handle.token()
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
   const response = await fetch(`https://${domain}/admin/api/2026-07/graphql.json`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },

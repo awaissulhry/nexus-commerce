@@ -134,6 +134,7 @@ export function shopifyGraphqlBodyOf(text: string): { errors: boolean; throttled
  * ids dropped; the others limit per app / per account, so one group.
  */
 export function bucketGroupOf(channel: GatewayChannel, method: string, url: string): string {
+  if (channel === 'SHOPIFY') return /\/graphql\.json$/.test(new URL(url).pathname) ? 'graphql' : 'rest'
   if (channel !== 'AMAZON_SP') return 'all'
   // `/{api}/{version}/{resource}` — e.g. `/listings/2021-08-01/items`, `/orders/v0/orders` — never
   // the seller id or SKU that follow, so one bucket per operation family, not per SKU.

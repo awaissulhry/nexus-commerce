@@ -1,4 +1,5 @@
 import { requireLegacyCredentials } from '../../lib/workspace-legacy-credentials.js'
+import { shopifyTransport } from '../gateway/shopify.js'
 import { assertShopifyWriteAllowed } from '../shopify-publish-gate.service.js'
 /**
  * Shopify Marketplace Service
@@ -140,7 +141,8 @@ export class ShopifyService {
     }
 
     try {
-      const response = await fetch(url, options);
+      // P1.2 — through the channel gateway (env credential → app-level).
+      const response = await shopifyTransport(null)(url, options);
 
       if (!response.ok) {
         const errorBody = await response.text();
