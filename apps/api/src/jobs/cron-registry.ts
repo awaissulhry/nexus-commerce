@@ -85,7 +85,6 @@ import {
   runCompetitiveRefresh,
 } from './pricing-refresh.job.js'
 import { runAllEstySyncJobs } from './etsy-sync.job.js'
-import { runAllWooCommerceSyncJobs } from './woocommerce-sync.job.js'
 // AD.1 + AD.2 — Trading Desk cron entrypoints.
 // H.2e: runAdsSyncCron + runAdsMetricsIngestCron retired (replaced by
 // v1 export pipeline + Phase 11 async reports respectively).
@@ -235,7 +234,6 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // who only want a single sub-tick re-trigger from CLI today —
   // fine-grained sub-tick triggers can be exposed later.
   'etsy-sync': () => runAllEstySyncJobs(),
-  'woocommerce-sync': () => runAllWooCommerceSyncJobs(),
 
   // AD.1 + AD.2 — Trading Desk substrate + metrics ingest.
   // AD.3 — advertising-domain AutomationRule evaluator.

@@ -10,7 +10,6 @@ vi.mock('./ebay-variation-push.service.js', () => ({ axisSynonymKey: (v: string)
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getAccessToken: s.next } }))
 vi.mock('./connection-resolver.service.js', () => ({ tryResolveConnection: s.next }))
 vi.mock('./marketplaces/amazon.service.js', () => ({ AmazonService: class { updateVariantPrice = s.transport } }))
-vi.mock('./marketplaces/woocommerce.service.js', () => ({ WooCommerceService: class {} }))
 vi.mock('./marketplaces/etsy.service.js', () => ({ EtsyService: class {} }))
 import { convertListingAxesToItalian } from './ebay-axes-convert.service.js'
 import { reconcileMembershipsFromEbay } from './ebay-membership-reconcile.service.js'

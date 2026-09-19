@@ -3,9 +3,9 @@
  *
  * Walks TrackingMessageLog rows where status='PENDING' AND
  * nextAttemptAt <= NOW(), routes each to the appropriate channel
- * pushback module (O.9 Amazon FBM, O.10 eBay, O.11 Woo, plus a thin
- * Shopify adapter), and finalizes the row to SUCCESS / FAILED /
- * DEAD_LETTER per the outcome.
+ * pushback module (O.9 Amazon FBM, O.10 eBay, plus the Shopify order
+ * actions; WooCommerce was removed in P1.6), and finalizes the row to
+ * SUCCESS / FAILED / DEAD_LETTER per the outcome.
  *
  * Backoff: nextAttemptAt = now + min(5min × 2^attemptCount, 12h).
  * After attemptCount >= maxAttempts (default 8 → ≈26h of attempts),
@@ -44,11 +44,6 @@ import {
   buildFulfillmentInputForShipment as ebayBuild,
   EbayPushbackError,
 } from '../services/ebay-pushback/index.js'
-import {
-  submitShipConfirmation as wooSubmit,
-  buildShipInputForShipment as wooBuild,
-  WooPushbackError,
-} from '../services/woocommerce-pushback/index.js'
 
 const STALENESS_MINUTES = 10
 const MAX_BACKOFF_HOURS = 12
@@ -177,19 +172,6 @@ async function processOne(rowId: string): Promise<'SUCCESS' | 'FAILED' | 'DEAD_L
           outcome = { success: true, response: result }
         } catch (e: any) {
           if (e instanceof EbayPushbackError) outcome = { success: false, error: e.message, code: e.code }
-          else outcome = { success: false, error: e?.message ?? String(e), code: null }
-        }
-      }
-    } else if (row.channel === 'WOOCOMMERCE') {
-      const input = await wooBuild(row.shipmentId)
-      if (!input) {
-        outcome = { success: false, error: 'Cannot build Woo input', code: 'INPUT_INCOMPLETE' }
-      } else {
-        try {
-          const result = await wooSubmit(input)
-          outcome = { success: true, response: result }
-        } catch (e: any) {
-          if (e instanceof WooPushbackError) outcome = { success: false, error: e.message, code: e.code }
           else outcome = { success: false, error: e?.message ?? String(e), code: null }
         }
       }
