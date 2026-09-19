@@ -139,7 +139,7 @@ The 08-29 research covered every channel API in depth. What was missing was a ch
 
 | # | Check | Why it matters | Type | Who | Work package |
 |---|---|---|---|---|---|
-| R-1 | Finish the deadline check for Amazon Ads, eBay, Shopify and Etsy (not reached today). Most important: which eBay Post-Order methods end in 2026 (we still call `return/search`), whether eBay still accepts our own image URLs, and whether Shopify 2026-07 needs `@idempotent` on `compareQuantity` stock writes. | A missed date breaks a live flow. | Web, ~1 short session | Claude | P0.8 |
+| R-1 | Finish the deadline check for Amazon Ads, eBay, Shopify and Etsy (not reached today). Most important: which eBay Post-Order methods end in 2026 (we still call `return/search`), whether eBay still accepts our own image URLs, and whether Shopify 2026-07 needs `@idempotent` on `compareQuantity` stock writes. | A missed date breaks a live flow. | Web, ~1 short session | Claude | P0.8 — **DONE 2026-09-19** (`build/P0.8.md`) |
 | R-2 | Read two new Amazon posts: "Simplified Authorization for Service Providers" and "Solution Provider Portal Agreement and Policy Updates". | They may change decision D1 (private or public Amazon app). | Web, 15 min | Claude | D1 |
 | R-3 | Find our Amazon LWA client-secret expiry date. | If the secret is not rotated in time, **every** Amazon call stops. | Solution Provider Portal, 2 min | **You** | P0.5 |
 | R-4 | Read the production settings (list in section 7, item 10). | Code shows what a flag does. Only production shows which flags are on. | Railway read, 10 min | You or Claude with your go | P0 |
@@ -150,7 +150,7 @@ The 08-29 research covered every channel API in depth. What was missing was a ch
 
 ## 3. Hard deadlines (checked 2026-09-19)
 
-Status key: **CONFIRMED** = checked on the channel's own site today. **DOC** = from the 08-29 research, not re-checked today (see R-1).
+Status key: **CONFIRMED** = checked on the channel's own site. **DOC** = from the 08-29 research, not re-checked. Since **P0.8 (2026-09-19)** no DOC row is left: every row below was checked on the channel's own pages (eBay: the API deprecation status page; Shopify: shopify.dev changelog and versioning page; Amazon Ads: its release-notes feed, because the deprecations page renders only with JavaScript; Etsy: the etsy/open-api announcements). Record: `build/P0.8.md`.
 
 ### 3.1 Dates already passed — our code still has work to do
 
@@ -160,23 +160,33 @@ Status key: **CONFIRMED** = checked on the channel's own site today. **DOC** = f
 | 2026-07-29 | Amazon | `ORDER_STATUS_CHANGE` notification. **CONFIRMED** | **CODE:** still subscribed (`services/amazon-notifications-boot.service.ts:156-168`). It receives nothing. | Remove it (P2.2). |
 | 2026-08-26 | Amazon | `LISTINGS_ITEM_ISSUES_CHANGE` payload v1.0 stopped. Current version is 2023-12-13; it adds `LISTING_SUPPRESSED`, `ATTRIBUTE_SUPPRESSED`, `CATALOG_ITEM_REMOVED`. **CONFIRMED** | **CODE:** we do not subscribe to it at all. | Subscribe to the 2023-12-13 version (P2.2). |
 | 2026-08-26 | Amazon | Catalog Items v0 `listCatalogCategories`. **CONFIRMED** | **CODE:** not used. | None. |
+| 2026-01-20 → 03-16 | eBay | Post-Order: most return, case and inquiry write methods decommissioned (e.g. Create Return Draft, Mark Return Refund Sent, Issue Case Refund 03-02, Create Inquiry 03-16). **Search Returns is NOT on the list.** **CONFIRMED** | **CODE:** we call only `GET /post-order/v2/return/search` (`services/ebay-returns/ingest.service.ts:283`), which still works. The signed-path list names Post-Order refund paths that nothing calls. | None; P5.5 is not needed. |
+| 2026-03-31 → 08-15 | eBay | Marketing `setupQuickCampaign` / `launchCampaign` (03-31), Trading `GetCategories` (04-15), Product Metadata API (04-27), Trading `GetCategoryFeatures` (06-04), Product API (08-15). **CONFIRMED** | **CODE:** none of them is called (searched with a positive control). | None. |
+| 2026-02-09 | Etsy | The `x-api-key` header must be `keystring:secret`. **CONFIRMED** (etsy/open-api) | **CODE:** the connector and the read client send it (`services/cx/connectors/etsy/spec.ts:78`, `services/etsy/read-client.ts:17`). The old `services/marketplaces/etsy.service.ts:273` sends the access token as the key, so every call on that path fails; nothing scheduled uses it. | P1.6 removes it. |
+| 2026-04 (API version) | Shopify | `@idempotent` mandatory on inventory and refund mutations; `compareQuantity` / `ignoreCompareQuantity` removed in favour of `changeFromQuantity`. **CONFIRMED** | **CODE:** `services/shopify/offer-sync.service.ts:52` calls `inventorySetQuantities` on the `2026-07` client with `compareQuantity` and **no** `@idempotent`, so it fails on every call. The other `2026-07` stock writes are correct (`information-inventory.ts:55`, `content-publisher.ts:271`). Shopify is `gated` in production. | P1.4. |
+| 2026-06 | Amazon Ads | v2 suggested-keyword endpoints shut off; `/v2/stores` deprecated; negative bid adjustments on Sponsored Brands placement groups (06-15). **CONFIRMED** | **CODE:** none used. | None. |
+| 2026-07-06 | Amazon Ads | Sponsored Brands "Product collection" ad entity deprecated in favour of Manual / Auto Collection (**CONFIRMED**). A full shut-off in January 2027 is reported by a third party only (**NOT CONFIRMED** on Amazon's pages). | **CODE:** Sponsored Brands creation defaults to `creativeType: 'productCollection'` (`services/advertising/ads-create.service.ts:940`). | P4.5: default to Manual Collection. |
 
 ### 3.2 Dates to come
 
 | Date | Channel | What ends | Our code today | Action |
 |---|---|---|---|---|
 | **Every 180 days** | Amazon | The LWA client secret must be rotated. Notice comes 90 days before. The old secret works 7 days after rotation. If missed: **no Amazon call works.** **CONFIRMED** (applies to all apps). | **CODE:** no rotation handling. `ChannelApp.secretExpiresAt` is read by the heartbeat but **never written**. | You find the date now (R-3). Then P6.1. |
-| 2026-09-21 | eBay | Trading `GetAdFormatLeads`. DOC | **CODE:** not used. | None. |
-| 2026-09-30 | eBay | Trading `UploadSiteHostedPictures`. DOC | **CODE:** not called (one comment only, `services/channel-publish.service.ts:141`). The replacement Media API is not used either. | None for the date. See P4.2 for image hosting. |
+| 2026-09-21 | eBay | Trading `GetAdFormatLeads` → REST Leads API. **CONFIRMED** | **CODE:** not used. | None. |
+| 2026-09-30 | eBay | Trading `UploadSiteHostedPictures` → Media API `createImageFromFile` / `createImageFromUrl`. **CONFIRMED**. eBay still accepts our own HTTPS image URLs in `PictureURL` (up to 24) and in Inventory `imageUrls`: no deadline on self-hosting. | **CODE:** not called (one comment only, `services/channel-publish.service.ts:141`). The Media API is not used either. | None for the date. See P4.2 for image hosting. |
 | 2026-11-11 | Amazon | Settlement reports `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE` and `..._XML`. **CONFIRMED** | **CODE:** we use `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2` (`services/amazon-settlements.service.ts:27`). That is a different type and is **not** on the list. | None. Keep an eye on it. |
-| 2027-01-01 | Shopify | Public apps must use expiring offline tokens. DOC | Our app is custom distribution, so this probably does not apply (R-1). The connector already accepts expiring tokens. | Confirm in R-1. |
-| 2027-01-19 | eBay | Shipping discount profiles. DOC | NOT CHECKED. | Check in R-1. |
+| 2027-01-01 | Shopify | Public apps must use expiring offline tokens. **CONFIRMED**, and Shopify states it does **not** apply to custom apps. | Our app is custom distribution. The connector already accepts expiring tokens. | None. |
+| 2027-01-19 | eBay | Trading `GetSellerDiscountProfiles` / `SetShippingDiscountProfiles` → Account API v2 combined shipping rules. **CONFIRMED** | **CODE:** not used. | None. |
+| 2026-09-30 | eBay | VeRO API (all methods) → VeRO API v2. **CONFIRMED** | **CODE:** not called (only a scope name in `services/cx/connectors/ebay/spec.ts:113`). | None. |
+| 2027-01-11 | eBay | Trading `ShoppingCartItemEndingSoon` notification. **CONFIRMED** | **CODE:** not used. | None. |
+| About 2027-01 | Shopify | When `2026-01` leaves support, the oldest accessible version becomes `2026-04`, where `@idempotent` is **mandatory** on inventory and refund mutations and `compareQuantity` is **removed** (**CONFIRMED**: mandatory from `2026-04`; the month is derived from the 12-month rule). | **CODE:** the `2024-01` clients fall forward into it: `refundCreate` (`services/refunds/refund-publisher.service.ts:647`) and the bulk stock write (`services/bulk-action.service.ts:2493`, which also writes ONE env inventory item for every product) send no `@idempotent`. Shopify publishing is `gated` in production today. | P1.4 / P5.3. |
+| 2027-07 | Amazon Ads | Legacy account endpoints (`/dsp/advertisers`, `/adsAccounts…`) answer 404 (deprecated July 2026). **CONFIRMED** | **CODE:** not used. | None. |
 | **2027-03-27** | Amazon | **Orders API v0 removed.** Replacement: Orders v2026-01-01 (`searchOrders`, `getOrder`). **CONFIRMED** | **CODE:** we use v0 (`services/marketplaces/amazon.service.ts:930, 977, 1149`; `services/channel-reconciliation.service.ts:102`). The `amazon-sp-api` library (1.2.1) has no `endpoints_versions` set, so it picks the **oldest** version of each call. | Migrate by 2026-12 (P5.1). |
 | **2027-08-27** | Amazon | **Finances API v0 removed.** Replacement: Finances 2024-06-19 (`listTransactions`, plus `listSummary` and `listBalances` since 2026-07-29). **CONFIRMED** | **CODE:** both exist: v0 in `services/marketplaces/amazon.service.ts:1655`, 2024-06-19 in `services/amazon-financial-events.service.ts:574`. | Move every caller to 2024-06-19 (P5.2). |
-| 365 days after consent | Amazon Ads | Refresh tokens issued from 2026-07-30 expire 365 days after consent. DOC | **CODE:** the stored expiry is an estimate (365 days from the adopt job), not the real consent date. | Reconnect once to get a true date (P4.5). |
+| 365 days after consent | Amazon Ads | Refresh tokens issued **on or after 2026-07-30** expire 365 days after consent; tokens issued **before** that date are **not affected**. **CONFIRMED** (Amazon Ads release note of 2026-05-26). | **CODE:** the stored expiry is an estimate (365 days from the adopt job), not the real consent date. If our grant predates 2026-07-30, it has no 365-day expiry at all, and a reconnect would START one. | P4.5: decide from the grant date before reconnecting. |
 | 18 months | eBay | Refresh token lifetime (no rotation). | **CODE:** tracked (`refreshTokenExpiresAt`), alerts at 30/7/1 days. | None. |
 | 90 days, rotates | Etsy | Refresh token rotates on every use. | **CODE:** tracked. A rotated token can be lost if the save fails (risk). | P6.3. |
-| ~12 months per version | Shopify | Each API version is supported about 12 months. DOC | **CODE:** 6 client files still pin `2024-01`, long out of support. | P5.3. |
+| ≥ 12 months per version | Shopify | Each stable version is supported at least 12 months; a call to a retired version is answered by the **oldest accessible** version ("falls forward"). **CONFIRMED** | **CODE:** 6 client files still pin `2024-01`, long out of support, so they already run on whatever version is oldest. | P5.3. |
 
 ### 3.3 New from Amazon since June (CONFIRMED, for information)
 
@@ -399,7 +409,7 @@ Size: **S** ≈ 1 session · **M** ≈ 2–3 sessions · **L** ≈ a week of ses
 | P5.2 | Amazon Finances v0 → 2024-06-19 for every caller. | 2027-08-27 | 2027-03 | S |
 | P5.3 | Shopify: remove or move the 6 `2024-01` clients to `2026-07`. Then a routine: move to the newest version every quarter. | Already out of support | With P1.4 | S |
 | P5.4 | Amazon buyer data: use a Restricted Data Token where we read buyer personal data — or stop reading it if we do not need it. | Policy | With P5.1 | S |
-| P5.5 | eBay Post-Order `return/search` → its replacement, if R-1 finds it ends. | R-1 | R-1 | S |
+| P5.5 | eBay Post-Order `return/search` → its replacement, if R-1 finds it ends. **Not needed (P0.8, 2026-09-19): Search Returns is not on eBay's decommission list.** | R-1 | R-1 | — |
 
 ### P6 — Sign-in and account life cycle
 
@@ -679,7 +689,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P0.4 | BUILT (2026-09-19) | `build/P0.4.md` | Committed locally, not pushed. Also fixes a P0.3 test break (see P0.3.md section 4). Prod proof: the next real eBay refund |
 | P0.5 | BUILT (2026-09-19) | `build/P0.5.md` | Committed locally, not pushed. The Owner records the Amazon date on the page after a push (R-3) |
 | P0.6 | BUILT (2026-09-19) | `build/P0.6.md` | Committed locally, not pushed. Prod proof: per-profile setup CronRuns; no Amazon row left pending |
-| P0.7 – P0.8 | NOT STARTED | — | |
+| P0.7 | BUILDING (2026-09-19) | — | Census of write paths running |
+| P0.8 | BUILT (2026-09-19) | `build/P0.8.md` | Committed locally. Docs only: section 3 has no DOC rows left |
 | P6.1 automatic secret rotation | NOT STARTED | — | Needs the queue registered |
 | P1.1 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
