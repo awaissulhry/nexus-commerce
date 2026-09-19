@@ -8,11 +8,14 @@
  * assets, etc.
  *
  * Verification: Cloudinary signs every payload with sha1(body_string
- * + timestamp + api_secret). The body_string is the canonical JSON
- * Cloudinary emits (no whitespace). We re-stringify the parsed body
- * — same approach as the Sendcloud webhook (O.7) — and compare in
- * constant time. With no CLOUDINARY_API_SECRET set the route refuses
- * to accept events so this surface is safe to expose publicly.
+ * + timestamp + api_secret), where body_string is the exact bytes it
+ * sent. P0.2: the check now reads those raw bytes (registerRawJsonParser,
+ * the same capture the Shopify, Sendcloud and eBay receivers use). It
+ * used to re-stringify the parsed body, which changes float formatting,
+ * unicode escapes and key order, so the signed bytes were never the
+ * checked bytes. Compared in constant time. With no CLOUDINARY_API_SECRET
+ * set the route refuses to accept events, and a request with no raw body
+ * is refused, so this surface is safe to expose publicly.
  *
  * Side effects:
  *   - notification_type='delete' → flag the matching DigitalAsset
@@ -28,6 +31,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
 
 interface CloudinaryNotification {
   notification_type?: string
@@ -64,6 +68,8 @@ function verifySignature(
 }
 
 const cloudinaryWebhookRoutes: FastifyPluginAsync = async (fastify) => {
+  // Scoped to this plugin by Fastify encapsulation; the rest of the API keeps its parser.
+  registerRawJsonParser(fastify)
   fastify.post('/assets/_webhooks/cloudinary', async (request, reply) => {
     const secret = process.env.CLOUDINARY_API_SECRET ?? ''
     if (!secret) {
@@ -81,15 +87,11 @@ const cloudinaryWebhookRoutes: FastifyPluginAsync = async (fastify) => {
       | string
       | undefined
 
-    // Match the project pattern from sendcloud-webhooks.routes: re-
-    // stringify the parsed body. Cloudinary emits whitespace-free
-    // canonical JSON, which round-trips cleanly through JSON.stringify.
-    const bodyString =
-      typeof request.body === 'string'
-        ? request.body
-        : JSON.stringify(request.body ?? {})
+    // The exact bytes Cloudinary signed. No raw body = nothing to verify = refused.
+    const rawBody = (request as RawBodyRequest).rawBody
+    const bodyString = rawBody ? rawBody.toString('utf8') : typeof request.body === 'string' ? request.body : null
 
-    if (!verifySignature(bodyString, headerTimestamp, headerSignature, secret)) {
+    if (bodyString === null || !verifySignature(bodyString, headerTimestamp, headerSignature, secret)) {
       request.log.warn(
         { type: body.notification_type, requestId: body.request_id },
         '[cloudinary-webhook] signature mismatch',

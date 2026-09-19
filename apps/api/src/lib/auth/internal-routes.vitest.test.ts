@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { permissionForRoute, PUBLIC } from './permissions-manifest.js'
+import { internalTokenMatches } from './internal-token.js'
 
 describe('/api/internal/bidding', () => {
   it.each([
@@ -44,9 +45,8 @@ describe('the secret is the real gate', () => {
     const previous = process.env.NEXUS_INTERNAL_API_TOKEN
     delete process.env.NEXUS_INTERNAL_API_TOKEN
     try {
-      const token = process.env.NEXUS_INTERNAL_API_TOKEN
-      const authed = !!token && 'anything' === token
-      expect(authed).toBe(false)
+      // P0.2 — the route's real check (it used to be re-implemented here).
+      expect(internalTokenMatches('anything', process.env.NEXUS_INTERNAL_API_TOKEN)).toBe(false)
     } finally {
       if (previous !== undefined) process.env.NEXUS_INTERNAL_API_TOKEN = previous
     }

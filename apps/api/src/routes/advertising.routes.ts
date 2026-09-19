@@ -95,6 +95,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
+import { internalTokenMatches } from '../lib/auth/internal-token.js'
 
 /** AX-IE.3 — stable per-entity key, the only thing a re-upload is matched on. */
 const rowKey = (entity: string, externalId: string | null | undefined, localId: string): string =>
@@ -8789,10 +8790,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Internal: bidding-engine microservice contract (token-gated) ────
   // services/bidding-engine reads contexts + reports applied bids here; the
   // DB stays owned by this app. Auth via x-internal-token header.
-  const internalAuthed = (request: { headers: Record<string, unknown> }): boolean => {
-    const token = process.env.NEXUS_INTERNAL_API_TOKEN
-    return !!token && request.headers['x-internal-token'] === token
-  }
+  // P0.2 — constant-time compare (was `===`); still fails closed when the secret is unset.
+  const internalAuthed = (request: { headers: Record<string, unknown> }): boolean =>
+    internalTokenMatches(request.headers['x-internal-token'], process.env.NEXUS_INTERNAL_API_TOKEN)
   fastify.get('/internal/bidding/contexts', async (request, reply) => {
     if (!internalAuthed(request as never)) { reply.status(401); return { error: 'unauthorized' } }
     const q = request.query as Record<string, string | undefined>

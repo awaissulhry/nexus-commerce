@@ -206,6 +206,8 @@ Paths are under `apps/api/src/` unless shown. This is a partial check (the helpe
 
 ### 4.2 Outgoing: publish and content — **the biggest problem area**
 
+> **Update 2026-09-19:** every "dry run or sandbox that writes live" path below is closed by **P0.1** (commit `8fcd1d500`, not yet pushed). The P0.1 census found more than this list (for example the ungated `DELETE /ebay/flat-file/offer` and every eBay Trading write): see `build/P0.1.md` sections 3 and 6. The other gaps in this section are still open.
+
 - **There is no single choke point.** Every path builds its own call.
   - **Amazon: 11 write stacks** (queue, wizard, a direct publish route, flat file, cockpit, studio, batch feed, price, offer close/reopen, delete, FBA restore).
   - **eBay: 12+ write stacks** (queue, flat file, variation push, wizard, legacy app-token service, bulk operations, shared-SKU Trading, studio, 8 small Revise side-stacks, delist, image provider).
@@ -281,6 +283,8 @@ Paths are under `apps/api/src/` unless shown. This is a partial check (the helpe
 
 ### 4.9 Security
 
+> **Update 2026-09-19:** the 14 public monitoring routes, the `===` bidding-token compare and the Cloudinary re-built body are closed by **P0.2** (committed locally, not pushed): see `build/P0.2.md`. S14 (operator webhooks) is P0.3 (building): see `build/P0.3.md`.
+
 - **Closed since 08-29 (CODE):** S1, S2, S4, S5, S6, S7, S8, S12, S13, S16. S9 is partly closed.
 - **Still open (CODE):**
   - **14 monitoring and job-monitor routes are public with no auth**, including job cancel and retry, queue pause and resume, and the alert-config PUT (`lib/auth/permissions-manifest.ts:58-59`; `routes/monitoring.ts`, `routes/job-monitor.routes.ts`).
@@ -325,6 +329,8 @@ What we postpone: the full "raw channel data first" model (CX.7). It is a good d
 Size: **S** ≈ 1 session · **M** ≈ 2–3 sessions · **L** ≈ a week of sessions. "Your yes" = needs your explicit approval before it starts, beyond approving this plan.
 
 ### P0 — Make it safe (first, small, urgent)
+
+> **State 2026-09-19:** P0.1 and P0.2 BUILT and committed locally, push blocked (see 14.4). P0.3 building. P0.4–P0.8 not started. The live state is always table 14.2.
 
 | ID | Work | Why (evidence) | Done when | Size | Your yes |
 |---|---|---|---|---|---|
@@ -668,7 +674,9 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 |---|---|---|---|
 | Owner items (section 8) | NOT STARTED | — | Secret date first |
 | P0.1 | BUILT (2026-09-19) | `build/P0.1.md` | Not committed. Prod switches read: eBay + Amazon live. Prod proof waits for a push |
-| P0.2 – P0.8 | NOT STARTED | — | |
+| P0.2 | BUILT (2026-09-19) | `build/P0.2.md` | Committed locally, not pushed. Prod proof: anonymous GET /api/monitoring/queue-stats → 401 after a push |
+| P0.3 | BUILDING (2026-09-19) | `build/P0.3.md` | Owner "go" 2026-09-19 |
+| P0.4 – P0.8 | NOT STARTED | — | |
 | P6.1 automatic secret rotation | NOT STARTED | — | Needs the queue registered |
 | P1.1 – P1.8 | NOT STARTED | — | |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
@@ -684,4 +692,26 @@ Write each answer here with its date, for example: `D2 = A (2026-09-20)`.
 
 | Decision | Answer | Date |
 |---|---|---|
-| D1 – D9 | open | — |
+| D1 = A, D2 = A, D3 = A, D4 = A, D5 = B, D6 = B, D7 = B, D8 = B, D9 = B (the "My pick" column of section 9) | The Owner, 2026-09-19: "I'll go with your recommendations. We just have to go with the best approach." D1 still reads R-2 first. | 2026-09-19 |
+
+### 14.4 Handover notes (2026-09-19, from the P0.1 / P0.2 session)
+
+**State of the tree**
+- P0.1 is commit `8fcd1d500` on local `main`. It is **not on `origin/main`** and **not deployed**. The first push was refused by the pre-push **grid-kit ratchet**: 35 importers of the DS `DataGrid` against a baseline of 32. The committed code has exactly 32. The +3 are another session's untracked files: `apps/web/src/app/settings/sharing/AssortmentProductsModal.tsx`, `CopyDrawer.tsx`, `SharesPanels.tsx`. The ratchet reads the whole working tree, so nobody can push until those move to `NexusGrid` or leave the tree. Never lower the baseline, never `--no-verify`.
+- P0.2 is **uncommitted** in the working tree: `apps/api/src/lib/auth/permissions-manifest.ts`, `lib/auth/internal-token.ts` (new), `lib/auth/internal-routes.vitest.test.ts`, `routes/advertising.routes.ts`, `routes/cloudinary-webhook.routes.ts`, `routes/public-surface.p02.vitest.test.ts` (new), plus `docs/channel-connections/build/P0.2.md` and this file.
+- A background auto-push loop was refused by the permission system (unattended persistence). Push by hand, once, when the ratchet is clean.
+
+**Production facts read 2026-09-19** (Railway, `@nexus/api`, production): Amazon and eBay publish modes `live`; `NEXUS_EBAY_REAL_API=true`; Shopify publish not set (`gated`); no Shopify, Etsy or WooCommerce env tokens; `NEXUS_RBAC_MODE=enforce`; `NEXUS_WORKSPACES_ENABLED=1`. Re-read before relying on them.
+
+**Traps met in these two packages**
+1. `docs/channel-connections/build/` is caught by the generic `build/` rule in `.gitignore` (line 12). Add a build record with `git add -f <file>`, or a `git commit --only` fails on its pathspec.
+2. Many existing tests model a live write but never set the publish mode. When a gate makes them fail, pin `live` in that test's fixture (`vi.stubEnv('NEXUS_ENABLE_…_PUBLISH','true')` + mode `live`); do not move the gate to please the test.
+3. 6 tests fail locally before and after this work: `clients/amazon-validation-preview` (5) and `services/marketplaces/amazon-classifications` (1). They read the local database's Amazon account through `lib/amazon-sp-client.ts`, which answers "Reconnect the selected Amazon seller account." Not a code regression.
+4. In zsh, `$FILES` holding a newline list is ONE argument. Feed file lists with `xargs … < list.txt`.
+5. A "no caller" claim for a route needs both the code search and production traffic (Railway `http-requests`, 7 days, with `/api/health` as the positive control).
+
+**Next steps, in order**
+1. Check `git log origin/main` for `8fcd1d500` (a sister session's push may have carried it). If not, check `node scripts/check-grid-kit-ratchet.mjs --check`; when clean, push normally.
+2. With the Owner's word, commit P0.2 (`git commit --only` with its exact paths; `git add -f` the build record) and push.
+3. Production proofs: P0.1 — switches unchanged, `OutboundApiCallLog` shows normal live eBay/Amazon calls and no refusals on live paths. P0.2 — anonymous `GET https://api.xavia.it/api/monitoring/queue-stats` answers 401. Write both into the build records; set the rows to PROD-VERIFIED.
+4. Then P0.3 (operator webhooks, S14), P0.4 (sign eBay `issue_refund`), P0.5 (Amazon secret expiry alert — needs the date, R-3, from the Owner), P0.6, P0.7, P0.8, each with its exact-change list and the Owner's "go".

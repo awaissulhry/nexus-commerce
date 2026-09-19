@@ -55,8 +55,12 @@ export const ENTRIES: Entry[] = [
   P(PUBLIC, (_m, p) => p === '/api/workspaces' || p.startsWith('/api/workspaces/')),
   // ── PUBLIC: health / infra ──────────────────────────────────────
   P(PUBLIC, (_m, p) => ['/api/health', '/api/health/ready', '/admin/health', '/health', '/health/ready'].includes(p)),
-  P(PUBLIC, pfx('/api/monitoring')),
-  P(PUBLIC, pfx('/monitoring')),
+  // P0.2 (docs/channel-connections/FINAL-PLAN.md) — these were PUBLIC: anyone could read queue and
+  // sync metrics, retry or cancel jobs, pause or resume the queue, and change alert config. No
+  // unauthenticated caller existed (one probe each in 7 days of production traffic, 2026-09-16);
+  // Railway's health check does not use them. Same rule as /api/job-monitor below.
+  RW(F.adminView, F.jobsManage, pfx('/api/monitoring')),
+  RW(F.adminView, F.jobsManage, pfx('/monitoring')),
 
   // ── PUBLIC: webhook receivers (signature-verified, not session) ──
   P(PUBLIC, pfx('/webhooks/')),
