@@ -38,13 +38,17 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY'
  * Shopify, counted as Shopify before) — moved; Shopify's true count is 15.
  * 2026-09-19, P1.2c: Shopify 15 → 0 (the account GraphQL client, the env-credential paths as app-level
  * calls, the bulk mutation); 4 exempt (2 staged uploads, the connector heartbeat, the OAuth exchange).
+ * 2026-09-19, P1.2d: Amazon Ads 13 → 0 (the Ads client's sender, the debug probe; 11 exempt: report
+ * downloads, OAuth, connect-time identity) and Etsy 4 → 0 (the account reader, the legacy writer as
+ * app-level; 2 exempt: connector identity). **The burn-down is closed: every channel at 0.** Any increase
+ * from here is a regression — which is what a baseline of 0 is for.
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
   AMAZON_SP: 0,
-  AMAZON_ADS: 13,
+  AMAZON_ADS: 0,
   SHOPIFY: 0,
-  ETSY: 4,
+  ETSY: 0,
 }
 
 const HOSTS: Array<[Channel, RegExp]> = [

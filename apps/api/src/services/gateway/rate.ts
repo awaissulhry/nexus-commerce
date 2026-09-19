@@ -20,6 +20,7 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
   EBAY: { capacity: 50, refillPerSec: 10 },
   SHOPIFY: { capacity: 20, refillPerSec: 2 },
   AMAZON_ADS: { capacity: 20, refillPerSec: 10 },
+  ETSY: { capacity: 10, refillPerSec: 5 },
 }
 
 /**

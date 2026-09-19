@@ -418,6 +418,7 @@ export async function ingestBrandMetricsJob(jobId: string): Promise<BrandMetrics
     await prisma.amazonAdsReportJob.update({ where: { id: jobId }, data: { location: url, completedAt: new Date() } })
   }
 
+  // gateway-exempt: pre-signed report file on Amazon's storage (signed URL, 300 s), not the API
   const res = await fetch(url)
   if (!res.ok) {
     const msg = `download failed ${res.status}${urlRefreshed ? ' (after URL refresh)' : ' — URL likely expired'}`

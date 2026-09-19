@@ -290,6 +290,7 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       // PKCE verifier is always sent (the state check above guarantees it) —
       // Amazon issues JWT-format access tokens instead of legacy Atza| ones.
       exchangeParams.code_verifier = pkce.verifier
+      // gateway-exempt: OAuth code exchange (LWA) while the Ads account is being connected
       const tokenRes = await fetch(LWA_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -309,6 +310,7 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     // Discover all advertising profiles this token can access
     let profiles: AdsProfile[]
     try {
+      // gateway-exempt: connector identity at connect: lists the profiles of a token before any account row exists
       const profilesRes = await fetch(`${ADS_API_BASE}/v2/profiles`, {
         headers: {
           Authorization: `Bearer ${tokens.access_token}`,

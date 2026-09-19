@@ -31,7 +31,7 @@ export const GATEWAY_ERROR_CLASSES: readonly GatewayErrorClass[] = [
 const RETRYABLE = new Set<GatewayErrorClass>(['rate_limited', 'transient', 'network', 'timeout'])
 export const isRetryableClass = (cls: GatewayErrorClass): boolean => RETRYABLE.has(cls)
 
-export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS'
+export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY'
 
 export interface ChannelVerdict {
   errorClass: GatewayErrorClass
@@ -137,6 +137,14 @@ function amazonAds(status: number, text: string): ChannelVerdict {
   return verdict(byStatus(status), code ?? null, message)
 }
 
+function etsy(status: number, text: string): ChannelVerdict {
+  const body = parseJson(text)
+  const message = body?.error_description ?? body?.error ?? (text || null)
+  if (/invalid_grant/i.test(text)) return verdict('auth_revoked', 'invalid_grant', message)
+  if (status === 401) return verdict('auth_expired', 401, message)
+  return verdict(byStatus(status), body?.error ?? null, message)
+}
+
 /** Classify a channel's answer. `status` 0 = no answer (network); `timedOut` wins over everything. */
 export function classifyChannelAnswer(channel: GatewayChannel, status: number, text: string, opts: { timedOut?: boolean } = {}): ChannelVerdict {
   if (opts.timedOut) return verdict('timeout', null, 'The channel did not answer in time.')
@@ -146,5 +154,6 @@ export function classifyChannelAnswer(channel: GatewayChannel, status: number, t
     case 'AMAZON_SP': return amazonSp(status, text)
     case 'SHOPIFY': return shopify(status, text)
     case 'AMAZON_ADS': return amazonAds(status, text)
+    case 'ETSY': return etsy(status, text)
   }
 }

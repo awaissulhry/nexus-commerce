@@ -35,3 +35,14 @@ export function shopifyRateReading(headers: Headers, status: number): RateLimitR
 export function amazonAdsRateReading(headers: Headers, status: number): RateLimitReading | null {
   return status === 429 ? { model: 'token_bucket', retryAfterSec: Number(headers.get('retry-after') ?? 0) || undefined } : null
 }
+
+/** Etsy: a daily quota per app, reported on every answer. */
+export function etsyRateReading(headers: Headers, status: number): RateLimitReading | null {
+  const num = (name: string) => { const raw = headers.get(name); if (raw === null) return undefined; const v = Number(raw); return Number.isFinite(v) ? v : undefined }
+  const remaining = num('x-remaining-today')
+  const limit = num('x-limit-per-day')
+  if (remaining !== undefined || limit !== undefined || status === 429) {
+    return { model: 'daily_quota', remaining, limit, retryAfterSec: status === 429 ? num('retry-after') ?? 1 : undefined }
+  }
+  return null
+}

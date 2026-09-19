@@ -7,7 +7,7 @@ import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
-import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, shopifyRateReading } from '../cx/rate-readings.js'
+import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, shopifyRateReading } from '../cx/rate-readings.js'
 import type { GatewayChannel } from './vocabulary.js'
 import prisma from '../../db.js'
 import { languageTag, marketLanguages } from '../pim/market-languages.js'
@@ -16,7 +16,7 @@ import { normalizeLanguage } from '../pim/content-language.js'
 export type PublishMode = 'gated' | 'dry-run' | 'sandbox' | 'live'
 
 export const SPEC_KEY: Record<GatewayChannel, ChannelKey> = {
-  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS',
+  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY',
 }
 
 /** The publish mode that governs WRITES on this channel today. */
@@ -29,6 +29,9 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // honours its sandbox switch here, so a sandbox Ads write never reaches the live host.
     // Same rule as ads-api-client.ts `adsMode()` (exact 'live', else sandbox).
     case 'AMAZON_ADS': return process.env.NEXUS_AMAZON_ADS_MODE === 'live' ? 'live' : 'sandbox'
+    // Etsy has no publish switch yet: the connected-account client is read-only, and the only Etsy writer
+    // is the legacy service P1.6 retires (it needs its own env credentials to send anything).
+    case 'ETSY': return 'live'
   }
 }
 
@@ -41,6 +44,7 @@ const SANDBOX_HOSTS: Record<GatewayChannel, Array<[RegExp, (m: RegExpMatchArray)
   // Shopify has no sandbox host: a development store is a different shop, chosen by the account.
   SHOPIFY: [],
   AMAZON_ADS: [[/^advertising-api(-eu|-fe)?\.amazon\.com$/, () => 'advertising-api-test.amazon.com']],
+  ETSY: [],
 }
 
 /** The URL in sandbox mode, or null when the channel has no sandbox host for it (then: no call). */
@@ -60,6 +64,7 @@ export function authHeadersOf(channel: GatewayChannel, token: string): Record<st
     case 'AMAZON_SP': return { 'x-amz-access-token': token }
     case 'SHOPIFY': return { 'X-Shopify-Access-Token': token }
     case 'AMAZON_ADS': return { Authorization: `Bearer ${token}` }
+    case 'ETSY': return { Authorization: `Bearer ${token}` }
   }
 }
 
@@ -96,7 +101,7 @@ export async function ebayMarketHeaders(market: string, contentLanguage?: string
 }
 
 const RATE_READINGS: Record<GatewayChannel, (headers: Headers, status: number) => RateLimitReading | null> = {
-  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading,
+  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading, ETSY: etsyRateReading,
 }
 
 /** The rate reading of an answer — the connectors' own parsers (they existed, but nothing called them). */

@@ -383,12 +383,14 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
   // Download + decompress + parse
   let records: unknown[]
   try {
+    // gateway-exempt: pre-signed export file on Amazon's storage, not the API
     let res = await fetch(url)
     // A link can still lapse between the check and the request, and Amazon
     // answers a dead link with 400/403. Re-mint once and retry rather than
     // banking the failure — the data is still there, only the link is stale.
     if ((res.status === 400 || res.status === 403)) {
       const fresh = await remintExportUrl(job).catch(() => null)
+      // gateway-exempt: pre-signed export file on Amazon's storage (re-minted URL), not the API
       if (fresh) res = await fetch(fresh)
     }
     if (!res.ok) throw new Error(`s3_download_${res.status}`)

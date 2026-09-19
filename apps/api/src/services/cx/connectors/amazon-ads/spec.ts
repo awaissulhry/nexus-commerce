@@ -46,6 +46,7 @@ async function profilesForRegion(
   if (!host) return null
   const started = Date.now()
   try {
+    // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
     const res = await fetch(`${host}/v2/profiles`, {
       headers: {
         Authorization: `Bearer ${token}`,

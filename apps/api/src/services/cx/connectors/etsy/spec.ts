@@ -1,4 +1,5 @@
 /** Etsy Open API v3 connector: authorization-code + mandatory PKCE and a live shop heartbeat. */
+import { etsyRateReading } from '../../rate-readings.js'
 import { CredentialsDecryptError } from '../../../../lib/crypto.js'
 import { getChannelApp } from '../../apps.service.js'
 import { ChannelAppConfigurationError } from '../../app-configuration-error.js'
@@ -77,6 +78,7 @@ async function connectionData(handle: ConnectionHandle): Promise<EtsyConnectionD
   const token = await handle.token()
   const apiKey = `${app.clientId}:${app.clientSecret}`
   const commonHeaders = { Accept: 'application/json', 'x-api-key': apiKey }
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
   const selfResponse = await fetch(`${API_BASE}/users/me`, {
     headers: { ...commonHeaders, Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(20_000),
@@ -89,6 +91,7 @@ async function connectionData(handle: ConnectionHandle): Promise<EtsyConnectionD
   const shopId = positiveId(self?.shop_id)
   if (!positiveId(self?.user_id) || !shopId) return { response: selfResponse, body: selfBody, self, shop: null }
 
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
   const shopResponse = await fetch(`${API_BASE}/shops/${encodeURIComponent(shopId)}`, {
     headers: commonHeaders,
     signal: AbortSignal.timeout(20_000),
@@ -166,12 +169,6 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   }
 }
 
-function numericHeader(headers: Headers, name: string): number | undefined {
-  const raw = headers.get(name)
-  if (raw === null) return undefined
-  const value = Number(raw)
-  return Number.isFinite(value) ? value : undefined
-}
 
 export const etsySpec: ChannelSpec = {
   key: 'ETSY',
@@ -209,22 +206,7 @@ export const etsySpec: ChannelSpec = {
       metadata: { storeUrl: handle.identity?.storeUrl ?? null },
     }]
   },
-  rateLimit: {
-    parse: (headers: Headers, status: number): RateLimitReading | null => {
-      const remaining = numericHeader(headers, 'x-remaining-today')
-      const limit = numericHeader(headers, 'x-limit-per-day')
-      if (remaining !== undefined || limit !== undefined || status === 429) {
-        return {
-          model: 'daily_quota',
-          remaining,
-          limit,
-          retryAfterSec: status === 429 ? numericHeader(headers, 'retry-after') ?? 1 : undefined,
-        }
-      }
-      return null
-    },
-    model: 'daily_quota',
-  },
+  rateLimit: { parse: etsyRateReading, model: 'daily_quota' },
   webhooks: { scheme: 'standard-webhooks', subscriptionApi: false, lifecycleTopics: [] },
   apiVersion: '3.0.0',
   sandbox: { available: false },
