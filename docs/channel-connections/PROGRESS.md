@@ -34,7 +34,8 @@ Read in this order:
 | Flat-file edit list + Owner's answers | 52f985539 | `build/flat-file-edit-list.md` |
 | P1.5 eBay market headers from the Marketplace row | b2af8d68b | `build/P1.5.md` |
 | P1.4a Shopify queue on 2026-07 GraphQL with the row's account | 842841031 | `build/P1.4.md` |
-| P1.4b part 1 Shopify order actions (refund, cancel, tracking) on the order's account | (this commit) | `build/P1.4.md` 6.1 |
+| P1.4b part 1 Shopify order actions (refund, cancel, tracking) on the order's account | 86d128291 | `build/P1.4.md` 6.1 |
+| P1.4b part 2 bulk Shopify price / stock on the listing's account | (this commit) | `build/P1.4.md` 6.2 |
 
 **Push is blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 
