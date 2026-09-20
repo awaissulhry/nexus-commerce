@@ -21,7 +21,7 @@ const querySchema = z.object({ accountId: z.string().min(1), listingId: z.string
   locale: z.string().min(2).max(35).optional(), refreshConstraints: z.literal('1').optional(),
   ownerId: z.string().optional(), id: z.string().optional(), type: z.string().optional(), query: z.string().max(200).optional(), cursor: z.string().max(2000).optional(), metaobjectType: z.string().optional() }).strict()
 export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
-  const routes = [['GET', ''], ['PUT', ''], ['POST', '/cells'], ['GET', '/schema'], ['POST', '/schema-subscriptions'], ['GET', '/information'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
+  const routes = [['GET', ''], ['PUT', ''], ['POST', '/cells'], ['GET', '/schema'], ['POST', '/schema-subscriptions'], ['POST', '/webhook-subscriptions'], ['GET', '/information'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
     ['POST', '/discover'], ['POST', '/suggest-sharing'], ['POST', '/automation'], ['POST', '/automation-check'], ['POST', '/products'], ['POST', '/read-links'], ['POST', '/field-values'], ['POST', '/import'], ['POST', '/preview'], ['POST', '/rebase'], ['POST', '/synchronize'], ['POST', '/advance'], ['GET', '/entry'], ['POST', '/entry']] as const
   for (const [method, suffix] of routes) app.route<{ Params: { productId: string }; Querystring: ContentScope; Body: unknown }>({
     method, url: `/products/:productId/shopify-linked${suffix}`, bodyLimit: 10 * 1024 * 1024,
@@ -60,6 +60,13 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
           return await saveShopifySheetCells(id, query, input, request.authUser?.id ?? null)
         }
         if (suffix === '/schema-subscriptions') return await ensureShopifySchemaSubscriptions(destination.accountId)
+        // P2.4 — the OTHER twelve. `schema-subscriptions` registers three metafield
+        // topics; nothing registered the product, order, lifecycle or privacy topics,
+        // so Shopify had never been told to send anything the main receivers listen for.
+        if (suffix === '/webhook-subscriptions') {
+          const { ensureShopifyWebhookSubscriptions } = await import('../../services/shopify/webhook-registration.service.js')
+          return await ensureShopifyWebhookSubscriptions(destination.accountId)
+        }
         if (!suffix) return method === 'GET' ? await getLinkedWorkspace(id, query) : await saveLinkedWorkspace(id, query, request.body, request.authUser?.id ?? null)
         if (suffix === '/automation') return await configureLinkedAutomation(id, query, request.body)
         if (suffix === '/automation-check') return await runLinkedAutomation(id, query)

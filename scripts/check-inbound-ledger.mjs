@@ -92,19 +92,19 @@ for (const file of files) {
 // The registry's own entries, read from its source rather than imported: this script
 // must not need the API's runtime to run.
 const registrySource = fs.readFileSync(path.join(apiSrc, 'services/cx/ingress/handlers.ts'), 'utf8')
-const registered = new Map()
+const handlers = new Map()
 let currentChannel = null
 for (const line of registrySource.split('\n')) {
   const channel = line.match(/^\s{2}([A-Z_]+):\s*\{/)
-  if (channel) { currentChannel = channel[1]; registered.set(currentChannel, new Set()); continue }
+  if (channel) { currentChannel = channel[1]; handlers.set(currentChannel, new Set()); continue }
   const entry = line.match(/^\s{4}'([^']+)':\s*async/)
-  if (entry && currentChannel) registered.get(currentChannel).add(entry[1])
+  if (entry && currentChannel) handlers.get(currentChannel).add(entry[1])
 }
 
 for (const [channel, types] of written) {
   if (UNREPLAYABLE[channel] === '*') continue
   for (const type of types) {
-    if (!registered.get(channel)?.has(type)) {
+    if (!handlers.get(channel)?.has(type)) {
       failures.push(`${channel}/${type} is written by a receiver but has no replay handler. Add it to services/cx/ingress/handlers.ts or name it in UNREPLAYABLE with a reason.`)
     }
   }
@@ -113,13 +113,44 @@ if (seedOrphan) {
   failures.push('SEEDED: a deliberate rule-2 violation, to prove this check can fail.')
 }
 
+// ── Rule 3: what we RECEIVE and what we REGISTER are the same list ──────────────
+// A Shopify topic has three names — the `WebhookSubscriptionTopic` enum Shopify is
+// told, the path it is delivered to, and the `eventType` written to the ledger. They
+// live in two files, and two lists of the same thing drift: that is exactly how
+// `refunds/create` was written while `refund/create` was listed, leaving no refund
+// replayable and nothing saying so. Both sides are derived from source here.
+const registrationSource = fs.readFileSync(path.join(apiSrc, 'services/shopify/webhook-registration.service.ts'), 'utf8')
+const registered = new Map() // eventType -> path
+for (const m of registrationSource.matchAll(/topic:\s*'[A-Z_]+',\s*path:\s*'([^']+)',\s*eventType:\s*'([^']+)'/g)) {
+  registered.set(m[2], m[1])
+}
+const receiverPaths = new Map() // eventType -> path
+for (const file of files) {
+  const text = fs.readFileSync(file, 'utf8')
+  for (const m of text.matchAll(/receiveShopify\(\s*"([^"]+)"\s*,\s*"([^"]+)"/g)) {
+    receiverPaths.set(m[2], m[1])
+  }
+}
+for (const [eventType, receiverPath] of receiverPaths) {
+  if (!registered.has(eventType)) {
+    failures.push(`SHOPIFY/${eventType} is received at ${receiverPath} but Shopify is never told to send it. Add it to services/shopify/webhook-registration.service.ts.`)
+  } else if (registered.get(eventType) !== receiverPath) {
+    failures.push(`SHOPIFY/${eventType} is received at ${receiverPath} but registered at ${registered.get(eventType)}. Shopify would deliver to a path nothing listens on.`)
+  }
+}
+for (const [eventType, registeredPath] of registered) {
+  if (!receiverPaths.has(eventType)) {
+    failures.push(`SHOPIFY/${eventType} is registered at ${registeredPath} but no receiver listens there.`)
+  }
+}
+
 // ── Positive control ────────────────────────────────────────────────────────────
 // A check that found nothing to look at is not a pass. State what was examined, so a
 // green caused by an empty file list is visible rather than reassuring.
 const writtenCount = [...written.values()].reduce((n, set) => n + set.size, 0)
-const registeredCount = [...registered.values()].reduce((n, set) => n + set.size, 0)
-console.log(`[inbound-ledger] ${files.length} source files; ${writtenCount} event types written by receivers; ${registeredCount} replay handlers registered.`)
-if (files.length === 0 || registeredCount === 0) {
+const handlerCount = [...handlers.values()].reduce((n, set) => n + set.size, 0)
+console.log(`[inbound-ledger] ${files.length} source files; ${writtenCount} event types written by receivers; ${handlerCount} replay handlers registered; ${registered.size} Shopify topics registered with Shopify.`)
+if (files.length === 0 || handlerCount === 0 || registered.size === 0) {
   console.error('[inbound-ledger] FAIL: nothing was examined. This check cannot pass on an empty measurement.')
   process.exit(1)
 }
@@ -129,4 +160,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('[inbound-ledger] OK — no inbound event is deleted, and every written event type is replayable or named.')
+console.log('[inbound-ledger] OK — no inbound event is deleted, every written event type is replayable or named, and what we receive is what Shopify is told to send.')

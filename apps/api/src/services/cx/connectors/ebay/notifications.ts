@@ -214,11 +214,23 @@ export async function subscribeEbayTopic(
   environment: EbayEnvironment,
   topicId: string,
   destinationId: string,
-  catalogue: Set<string>,
+  catalogue: Map<string, EbayTopic>,
   existing: EbaySubscription[],
 ): Promise<SubscribeOutcome> {
-  if (!catalogue.has(topicId)) {
+  const topic = catalogue.get(topicId)
+  if (!topic) {
     return { topicId, status: 'not_offered', detail: 'eBay\'s topic catalogue has no topic with this id.' }
+  }
+  // The schema version comes from the TOPIC, not from a constant. P2.2 found the same
+  // mistake on the Amazon side, where one hardcoded payload version stood for every
+  // notification type and would have been refused outright for one of them. eBay
+  // returns each topic's supported payloads from `getTopics`; the newest non-deprecated
+  // one is what a new subscription should ask for.
+  const payloads = (topic.supportedPayloads ?? []).filter((p) => !p.deprecated && p.schemaVersion)
+  const schemaVersion = payloads[payloads.length - 1]?.schemaVersion
+  const format = payloads[payloads.length - 1]?.format ?? 'JSON'
+  if (!schemaVersion) {
+    return { topicId, status: 'failed', detail: 'eBay lists this topic with no usable payload version.' }
   }
   const already = existing.find((s) => s.topicId === topicId && s.destinationId === destinationId)
   if (already) {
@@ -232,7 +244,7 @@ export async function subscribeEbayTopic(
   }
   const res = await notificationApi<{ subscriptionId?: string }>(
     environment, 'POST', '/commerce/notification/v1/subscription',
-    { topicId, destinationId, status: 'ENABLED', payload: { format: 'JSON', schemaVersion: '1.0', deliveryConfig: { includeResourceData: true } } },
+    { topicId, destinationId, status: 'ENABLED', payload: { format, schemaVersion, deliveryConfig: { includeResourceData: true } } },
   )
   if (res.status === 201 || res.status === 200) {
     return { topicId, status: 'created', subscriptionId: res.body?.subscriptionId }
@@ -284,7 +296,7 @@ export async function setupEbayNotifications(options: {
 
   try {
     const catalogue = await getEbayTopics(environment)
-    const offered = new Set(catalogue.map((t) => t.topicId))
+    const offered = new Map(catalogue.map((t) => [t.topicId, t]))
 
     const destinations = await getEbayDestinations(environment)
     let destination = destinations.find((d) => d.endpoint === endpoint)
@@ -318,7 +330,7 @@ export async function setupEbayNotifications(options: {
     return {
       configured: true, environment, endpoint,
       destinationId: destination.destinationId,
-      catalogue: [...offered], notOffered, perTopic,
+      catalogue: [...offered.keys()], notOffered, perTopic,
     }
   } catch (err) {
     return { ...base, error: err instanceof Error ? err.message : String(err) }

@@ -20,8 +20,6 @@ import { completeInbound, recordInbound } from "../services/cx/ingress/ledger.js
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from "../lib/workspace-ingress.js";
 import { inboundHandlerFor } from "../services/cx/ingress/handlers.js";
 import type { RawBodyRequest } from "../utils/webhook.js";
-import { ConfigManager } from "../utils/config.js";
-import type { ShopifyConfig } from "../types/marketplace.js";
 import { publishListingEvent } from "../services/listing-events.service.js";
 import { productEventService } from "../services/product-event.service.js";
 import {
@@ -906,6 +904,87 @@ export async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): P
   }
 }
 
+
+
+/**
+ * P2.4 — the app lifecycle and privacy topics.
+ *
+ * `spec.ts` has declared these five as Shopify's lifecycle topics since the connector
+ * was written, and not one of them had a route. Three are the privacy topics every
+ * Shopify app is required to answer; `app/uninstalled` is the only signal that a shop
+ * has cut us off.
+ *
+ * They go through the SAME receiver as everything else, so each one is recorded in
+ * the inbound ledger with its payload, deduped on its delivery id and retried if its
+ * handler fails — which matters most for `app/uninstalled`, the one whose failure
+ * leaves Nexus writing to a shop that has removed the app.
+ */
+export async function handleAppUninstalled(payload: ShopifyWebhookPayload): Promise<void> {
+  const domain = String((payload as any)?.myshopify_domain ?? (payload as any)?.domain ?? "");
+  // Routed by `inboundAliases`, which is exactly this domain (P2.1), so the
+  // connection is the one this receiver already resolved. Marked by domain rather
+  // than by id so the write is correct even if the row was re-created.
+  // Narrowed to the shop the notice names. `updateMany` is already scoped to the
+  // business profile this webhook routed to, but a profile may hold more than one
+  // Shopify connection, and revoking a shop that is still installed because another
+  // one was removed is the worst kind of correct-looking write.
+  const updated = await (prisma as any).channelConnection.updateMany({
+    where: {
+      channelType: "SHOPIFY",
+      isActive: true,
+      ...(domain ? { OR: [{ displayName: domain }, { identity: { path: ["extra", "myshopifyDomain"], equals: domain } }] } : {}),
+    },
+    data: { authStatus: "revoked", isActive: false, lastError: `The app was uninstalled from ${domain || "this shop"}.`, lastErrorAt: new Date() },
+  });
+  if (updated.count === 0) {
+    // Not silent. Either the domain did not match any row, or the connection was
+    // already inactive; both are worth knowing before someone asks why writes to a
+    // removed shop are still being attempted.
+    logger.error("[ShopifyWebhooks] app/uninstalled matched NO connection — nothing was revoked", { domain });
+  }
+  logger.error("[ShopifyWebhooks] app/uninstalled — the account is revoked and writes are stopped", {
+    domain, connectionsRevoked: updated.count,
+  });
+}
+
+export async function handleScopesUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+  const granted = (payload as any)?.current as string[] | undefined;
+  // Recorded, not acted on: deciding what a reduced scope set means for each feature
+  // is P2.6's job. Logged at warn so a shop quietly dropping a scope is visible now.
+  logger.warn("[ShopifyWebhooks] app/scopes_update — the granted scopes changed", {
+    granted: Array.isArray(granted) ? granted.join(" ") : null,
+  });
+  if (Array.isArray(granted)) {
+    const domain = String((payload as any)?.myshopify_domain ?? "");
+    await (prisma as any).channelConnection.updateMany({
+      where: {
+        channelType: "SHOPIFY",
+        isActive: true,
+        ...(domain ? { OR: [{ displayName: domain }, { identity: { path: ["extra", "myshopifyDomain"], equals: domain } }] } : {}),
+      },
+      data: { grantedScopes: granted },
+    });
+  }
+}
+
+/**
+ * The three privacy topics.
+ *
+ * Acknowledging them is mandatory. CARRYING THEM OUT is not done here: it deletes
+ * real customer data, so it is the Owner's decision and its own unit — the same
+ * position this repository already takes for eBay's erasure notice. Logged at error
+ * level so it cannot pass unseen while that decision is pending, and the payload is
+ * in the ledger for whoever acts on it.
+ */
+export function privacyTopicHandler(topic: string) {
+  return async (payload: ShopifyWebhookPayload): Promise<void> => {
+    logger.error(`[ShopifyWebhooks] ${topic} received — acknowledged and recorded; erasure is NOT automated`, {
+      shopDomain: (payload as any)?.shop_domain ?? null,
+      customerId: (payload as any)?.customer?.id ?? null,
+    });
+  };
+}
+
 export async function shopifyWebhookRoutes(app: FastifyInstance) {
   // CX.0 (S9): Shopify signs the raw bytes; capture them for this plugin only.
   registerRawJsonParser(app);
@@ -940,6 +1019,27 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   }
 
   /**
+   * The secret Shopify signs webhooks with.
+   *
+   * Read per request rather than captured at boot: `getChannelApp` caches for its own
+   * TTL, and an app credential rotated while the process is alive must take effect
+   * without a restart — a receiver rejecting every webhook until someone redeploys is
+   * indistinguishable from the channel going quiet.
+   */
+  async function shopifyWebhookSecret(): Promise<string | null> {
+    try {
+      const { getChannelApp } = await import("../services/cx/apps.service.js");
+      const app = await getChannelApp("SHOPIFY");
+      return app?.clientSecret || null;
+    } catch (error) {
+      logger.error("[ShopifyWebhooks] could not read the Shopify app credential", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
    * P2.1 — one receiver for all seven topics.
    *
    * What stood here was the same forty lines copied seven times, and the copies had
@@ -968,7 +1068,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
    */
   type ShopifyTopicHandler = (payload: ShopifyWebhookPayload) => Promise<unknown>;
 
-  function receiveShopify(path: string, eventType: string, handle: ShopifyTopicHandler) {
+  function receiveShopify(path: string, eventType: string, handle: ShopifyTopicHandler, options: { lifecycle?: boolean } = {}) {
     app.post(path, async (request, reply) => {
       const body = (request as RawBodyRequest).rawBody;
       const signature = request.headers["x-shopify-hmac-sha256"] as string | undefined;
@@ -976,12 +1076,30 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       const deliveryId = request.headers["x-shopify-webhook-id"] as string | undefined;
       const payload = request.body as ShopifyWebhookPayload;
 
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({ success: false, error: "Shopify is not configured" });
+      // P2.4 — the signing secret comes from the connected APP, not from an environment
+      // variable.
+      //
+      // This used to read `ConfigManager.getConfig("SHOPIFY").webhookSecret`, which is
+      // `process.env.SHOPIFY_WEBHOOK_SECRET`, and the config object only exists when
+      // SHOPIFY_SHOP_NAME, SHOPIFY_ACCESS_TOKEN and SHOPIFY_WEBHOOK_SECRET are ALL set.
+      // Production has none of them — the variable list contains no SHOPIFY_* entry at
+      // all — so every Shopify webhook was answered **400 "Shopify is not configured"**
+      // before its signature was even looked at. Fixing the ledger write in P2.1 was
+      // necessary and not sufficient; this is the other half.
+      //
+      // Shopify signs with the app's client secret, which is what
+      // `services/shopify/schema-sync.service.ts` has always verified against — that
+      // receiver worked while these seven did not. Two secrets for one signature check
+      // is the same drift as everything else in this programme; there is now one.
+      const appSecret = await shopifyWebhookSecret();
+      if (!appSecret) {
+        // No credential means no way to tell a genuine webhook from a forged one. A 503
+        // keeps it on Shopify's retry schedule; a 200 would ack something unverified.
+        logger.error("[ShopifyWebhooks] no Shopify app credential — cannot verify any webhook", { eventType });
+        return reply.status(503).send({ success: false, error: "Shopify credentials are unavailable." });
       }
 
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
+      const validation = WebhookValidator.validateShopifySignature(body, signature, appSecret);
       if (!validation.isValid) {
         // `externalId: null` on purpose. Nothing about an unverified body is
         // trustworthy, and `(channel, externalId)` is UNIQUE: a forged delivery id
@@ -1009,6 +1127,34 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
       try {
         route = await resolveShopifyRoute(shopDomain);
       } catch (error) {
+        // P2.4 — a lifecycle or privacy topic must be answered even when no connected
+        // shop matches, and for two of them that is the NORMAL case: `shop/redact`
+        // arrives about 48 hours AFTER the uninstall, by which time `app/uninstalled`
+        // has set the connection inactive and the database trigger has deleted its
+        // routing row. Refusing it would mean Shopify retrying a mandatory privacy
+        // notice until it flags the app. Handled in the platform's own workspace, which
+        // is the honest home for a notification no connected business owns.
+        if (options.lifecycle) {
+          logger.warn("[ShopifyWebhooks] lifecycle topic for a shop that no longer routes — handled as the platform", { eventType, shopDomain });
+          return await legacyIngress(async () => {
+            const written = await recordInbound({
+              channel: "SHOPIFY", eventType, externalId: deliveryId ?? null, rawBody: body ?? null,
+              payload: payload ?? {}, signatureOk: true, verifiedBy: "shopify_hmac",
+              providerTimestamp: parseShopifyTriggeredAt(request), status: "pending",
+            });
+            try {
+              await handle(payload);
+              await completeInbound(written.id, true);
+            } catch (handlerError) {
+              const message = handlerError instanceof Error ? handlerError.message : String(handlerError);
+              await completeInbound(written.id, false, message);
+              logger.error(`[ShopifyWebhooks] ${eventType} failed`, { error: message });
+            }
+            // 200 regardless: the notice is recorded, and Shopify measures us on the
+            // answer, not on what we did with it.
+            return reply.send({ success: true });
+          });
+        }
         // The signature passed, so the body is genuinely Shopify's — we simply do not
         // know whose shop it is. Record it before answering, so the event exists even
         // though nothing can act on it, then let Shopify retry.
@@ -1085,6 +1231,13 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   receiveShopify("/webhooks/shopify/orders/update", "order/update", handleOrderUpdate);
   receiveShopify("/webhooks/shopify/fulfillments/create", "fulfillment/create", handleFulfillmentCreate);
   receiveShopify("/webhooks/shopify/refunds/create", "refunds/create", handleRefundCreate);
+
+  // P2.4 — the lifecycle and privacy topics, on Shopify's own topic paths.
+  receiveShopify("/webhooks/shopify/app/uninstalled", "app/uninstalled", handleAppUninstalled, { lifecycle: true });
+  receiveShopify("/webhooks/shopify/app/scopes_update", "app/scopes_update", handleScopesUpdate, { lifecycle: true });
+  receiveShopify("/webhooks/shopify/customers/data_request", "customers/data_request", privacyTopicHandler("customers/data_request"), { lifecycle: true });
+  receiveShopify("/webhooks/shopify/customers/redact", "customers/redact", privacyTopicHandler("customers/redact"), { lifecycle: true });
+  receiveShopify("/webhooks/shopify/shop/redact", "shop/redact", privacyTopicHandler("shop/redact"), { lifecycle: true });
 
   // CX.0 (S8): the unsigned `refunds/create-test` route is gone. Verify
   // scripts sign a request to the real route with SHOPIFY_WEBHOOK_SECRET.

@@ -38,6 +38,14 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
     'order/update': async () => (await import(SHOPIFY_WEBHOOKS)).handleOrderUpdate,
     'fulfillment/create': async () => (await import(SHOPIFY_WEBHOOKS)).handleFulfillmentCreate,
     'refunds/create': async () => (await import(SHOPIFY_WEBHOOKS)).handleRefundCreate,
+    // P2.4 — the app lifecycle and privacy topics. `app/uninstalled` is the one that
+    // most needs to be replayable: its failure leaves Nexus writing to a shop that has
+    // removed the app.
+    'app/uninstalled': async () => (await import(SHOPIFY_WEBHOOKS)).handleAppUninstalled,
+    'app/scopes_update': async () => (await import(SHOPIFY_WEBHOOKS)).handleScopesUpdate,
+    'customers/data_request': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/data_request'),
+    'customers/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/redact'),
+    'shop/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('shop/redact'),
   },
 }
 

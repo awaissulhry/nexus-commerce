@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 and P2.3 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.4**.
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2, P2.3 and P2.4 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.5** (Etsy).
 
 Read in this order:
 
@@ -41,7 +41,7 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P2.4
+## 3. Next — P2.5 (Etsy)
 
 Read `build/P2.1.md`, `P2.2.md` and `P2.3.md` first. Between them they found five live
 production defects that none of the plan's package descriptions predicted. That is the
@@ -56,6 +56,15 @@ argument for measuring before building, every single time.
 - **P2.3** — there was no eBay destination and no subscription, so **no genuine eBay
   notification had ever arrived**, and `MARKETPLACE_ACCOUNT_DELETION` was answered
   **503**.
+- **P2.4** — Shopify's inbound path had THREE independent reasons to deliver nothing.
+  P2.1 fixed one. The receivers also read `process.env.SHOPIFY_WEBHOOK_SECRET` and
+  production has no `SHOPIFY_*` variable at all, so every webhook was answered 400
+  before its signature was looked at — while `schema-sync.service.ts` verified against
+  the app's client secret and worked. And nothing had ever registered the webhooks.
+
+**The pattern in all four:** a component that looks finished, is referenced by working
+code around it, and has never once run. Ask "what would I see if this had never
+executed?" before believing it does.
 
 **The standing rule the Owner kept:** the flat-file routes still need a yes per change
 (`apps/api/src/routes/{ebay,amazon}-flat-file.routes.ts`,
@@ -73,23 +82,29 @@ P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 3. **Shopify order-action switches** now reach the connected account when set to `true`: `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new in P1.7).
 4. **Re-publishing an ended listing has no path**: the push lock refuses it and nothing in the code relists. Presence's relist verb is the planned answer.
 5. **A live stock round-trip on a real Shopify dev store** is still unproven (P1.4 done-when 2) — it is a live channel call, so it needs the Owner's yes.
-6. **Start eBay's live notifications** by setting `EBAY_NOTIFICATION_ENDPOINT_URL`
+6. **Register the Shopify webhooks** per connected shop:
+   `POST /api/…/shopify-linked-products/<id>/webhook-subscriptions`. Until this runs,
+   Shopify sends nothing at all. The result reports each topic as created, already ours,
+   already pointed elsewhere (left untouched), or refused with Shopify's own message —
+   which is where we learn whether the Admin API accepts the three privacy topics or
+   whether they must be set in the Partner Dashboard.
+7. **Start eBay's live notifications** by setting `EBAY_NOTIFICATION_ENDPOINT_URL`
    (the public `/api/webhooks/ebay-notification` URL) and
    `EBAY_NOTIFICATION_VERIFICATION_TOKEN` (32–80 characters) in production. Until both
    are set, `setupEbayNotifications` makes **no call at all**. Once set, the nightly
    reconcile creates the destination and subscribes the topics. Check the result with
    `GET /api/admin/ebay-notification-status`; a topic listed under `notOffered` means
    its id in `services/cx/ingress/ebay-topics.ts` is wrong.
-7. **Turn on the new Amazon notification types** when you want them: set
+8. **Turn on the new Amazon notification types** when you want them: set
    `NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES=true`. That makes the next boot, the nightly
    reconcile and the admin endpoint attempt `LISTINGS_ITEM_ISSUES_CHANGE` and the four
    types whose SQS support is unverified. A 400 InvalidInput on one of those is a
    finding, not a fault — it means that type needs an EventBridge destination. Two types
    already need one: `LISTINGS_ITEM_STATUS_CHANGE` and `BRANDED_ITEM_CONTENT_CHANGE`.
-8. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
-9. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
-10. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-11. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
+9. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
+10. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
+11. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+12. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 5. Traps that cost time here — read before measuring anything
 

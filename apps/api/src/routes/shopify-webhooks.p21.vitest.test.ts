@@ -31,8 +31,13 @@ vi.mock('../lib/workspace-ingress.js', () => ({
     return { workspaceId: 'ws-1', connectionId: 'conn-1' }
   }),
 }))
-vi.mock('../utils/config.js', () => ({
-  ConfigManager: { getConfig: () => ({ webhookSecret: SECRET }) },
+// P2.4 — the receiver reads the connected app's client secret, which is what Shopify
+// actually signs with. It used to read process.env.SHOPIFY_WEBHOOK_SECRET through
+// ConfigManager, and production has no SHOPIFY_* variable at all, so every webhook was
+// answered 400 before its signature was looked at.
+let appSecret: string | null = SECRET
+vi.mock('../services/cx/apps.service.js', () => ({
+  getChannelApp: async () => (appSecret === null ? null : { clientSecret: appSecret }),
 }))
 vi.mock('../services/shopify/schema-sync.service.js', () => ({ registerShopifySchemaWebhook: () => {} }))
 // The route calls the REAL handler, so the handler's own first call is what tells us
@@ -44,7 +49,20 @@ vi.mock('../services/shopify/content-webhook.service.js', () => ({
     return false
   },
 }))
-vi.mock('../db.js', () => ({ default: new Proxy({}, { get: () => new Proxy({}, { get: () => async () => null }) }) }))
+// P2.4 — the connection writes must be observable: `app/uninstalled` revoking a shop
+// is the one handler whose failure leaves Nexus writing to a shop that removed the app.
+const dbCalls: Array<{ model: string; method: string; args: any }> = []
+let updateManyCount = 1
+vi.mock('../db.js', () => ({
+  default: new Proxy({}, {
+    get: (_t, model: string) => new Proxy({}, {
+      get: (_m, method: string) => async (args: any) => {
+        dbCalls.push({ model, method, args })
+        return method === 'updateMany' ? { count: updateManyCount } : null
+      },
+    }),
+  }),
+}))
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 vi.mock('../services/product-event.service.js', () => ({ productEventService: { emit: vi.fn() } }))
 vi.mock('../services/listing-events.service.js', () => ({ publishListingEvent: vi.fn() }))
@@ -79,6 +97,9 @@ beforeEach(() => {
   nextWrite = { id: 'row-1', duplicate: false }
   routeThrowsFor = null
   handlerThrows = false
+  appSecret = SECRET
+  dbCalls.length = 0
+  updateManyCount = 1
   vi.clearAllMocks()
 })
 
@@ -199,5 +220,69 @@ describe('when the ledger or the routing is unavailable', () => {
     expect(recorded[0].lastError).toContain('no connected shop')
     expect(handled).toHaveLength(0)
     await app.close()
+  })
+})
+
+describe('the signing secret', () => {
+  it('refuses to ack when no app credential is available, rather than trusting the body', async () => {
+    appSecret = null
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
+    // 400 "not configured" was the old answer and it was wrong twice over: it fired in
+    // production for every webhook, and it told Shopify the request was bad rather than
+    // that we could not check it. 503 keeps it on Shopify's retry schedule.
+    expect(res.statusCode).toBe(503)
+    expect(handled).toHaveLength(0)
+    await app.close()
+  })
+})
+
+describe('P2.4 — the app lifecycle and privacy topics', () => {
+  const lifecycle = (path: string, body: string) => async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: path,
+      headers: { ...headers(), 'x-shopify-hmac-sha256': sign(body) },
+      payload: body,
+    })
+    await app.close()
+    return res
+  }
+
+  it('answers a privacy topic 200 even when NO connected shop routes', async () => {
+    // `shop/redact` arrives about 48 hours AFTER the uninstall, by which time the
+    // connection is inactive and the database trigger has deleted its routing row. So
+    // "no shop matches" is the NORMAL case for it, not an error — and refusing a
+    // mandatory privacy notice makes Shopify retry until it flags the app.
+    routeThrowsFor = '*'
+    const body = JSON.stringify({ shop_id: 1, shop_domain: 'a-shop.myshopify.com' })
+    const res = await lifecycle('/webhooks/shopify/shop/redact', body)()
+    expect(res.statusCode).toBe(200)
+    // Recorded even though nothing routed.
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0].eventType).toBe('shop/redact')
+  })
+
+  it('app/uninstalled revokes the shop the notice NAMES, not every Shopify connection', async () => {
+    const body = JSON.stringify({ id: 1, myshopify_domain: 'a-shop.myshopify.com' })
+    const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
+    expect(res.statusCode).toBe(200)
+    const update = dbCalls.find((c) => c.model === 'channelConnection' && c.method === 'updateMany')
+    expect(update).toBeDefined()
+    expect(update!.args.data).toMatchObject({ authStatus: 'revoked', isActive: false })
+    // A profile may hold more than one Shopify connection. Revoking a shop that is
+    // still installed because a different one was removed is the worst kind of
+    // correct-looking write.
+    expect(JSON.stringify(update!.args.where)).toContain('a-shop.myshopify.com')
+  })
+
+  it('says so loudly when an uninstall matched nothing, instead of reporting success', async () => {
+    updateManyCount = 0
+    const body = JSON.stringify({ id: 1, myshopify_domain: 'a-shop.myshopify.com' })
+    const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
+    // Still 200 — Shopify measures the answer — but the handler ran and found nothing,
+    // which is worth knowing before someone asks why writes to a removed shop continue.
+    expect(res.statusCode).toBe(200)
+    expect(completed[0]).toMatchObject({ ok: true })
   })
 })

@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 vi.mock('../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
 const { ebayTopicAction, knownEbayTopicIds, legacyEbayTopicAliases } = await import('./ebay-topics.js')
-const { EBAY_DESIRED_TOPICS, ebayNotificationConfig } = await import('../connectors/ebay/notifications.js')
+const { EBAY_DESIRED_TOPICS, ebayNotificationConfig, subscribeEbayTopic } = await import('../connectors/ebay/notifications.js')
 
 const orderPayload = (topic: string | null, orderId = '12-34567-89012') => ({
   ...(topic ? { metadata: { topic } } : {}),
@@ -94,5 +94,25 @@ describe('the endpoint configuration cannot drift', () => {
     delete process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN
     // An empty string would still hash to a well-formed, WRONG answer.
     expect(ebayNotificationConfig()).toEqual({ endpoint: null, verificationToken: null })
+  })
+})
+
+
+describe("the subscription asks for the version eBay lists for that topic", () => {
+  it('refuses to subscribe a topic eBay does not offer, without calling anything', async () => {
+    const out = await subscribeEbayTopic('production', 'NOT_A_REAL_TOPIC', 'dest-1', new Map(), [])
+    expect(out.status).toBe('not_offered')
+  })
+
+  it('refuses rather than guessing when eBay lists no usable payload version', async () => {
+    // P2.2 found one hardcoded payload version standing for every Amazon notification
+    // type, which would have been refused outright for one of them. The first draft of
+    // the eBay subscribe had exactly the same constant, '1.0'. The version now comes
+    // from the topic's own supportedPayloads, and a topic that offers none is a refusal
+    // rather than a guess.
+    const catalogue = new Map([['ITEM_SOLD', { topicId: 'ITEM_SOLD', supportedPayloads: [{ format: 'JSON', schemaVersion: '1.0', deprecated: true }] }]])
+    const out = await subscribeEbayTopic('production', 'ITEM_SOLD', 'dest-1', catalogue as any, [])
+    expect(out.status).toBe('failed')
+    expect(out.detail).toContain('no usable payload version')
   })
 })
