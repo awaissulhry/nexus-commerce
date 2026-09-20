@@ -29,7 +29,10 @@ vi.mock('../db.js', () => ({
         return []
       }),
     },
-    stockLevel: { findMany: vi.fn(async () => [{ available: h.warehouse }]) },
+    // The dispatch reads ONE ledger (loadSyncLedgers, shared stock): warehouse rows carry their product and
+    // location, and this business has no pool link, so the pool door is never asked.
+    stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: h.warehouse, available: h.warehouse, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))) },
+    stockPoolLink: { findMany: vi.fn(async () => []) },
     channelPublishAttempt: { create: vi.fn(async () => ({})) },
     outboundApiCallLog: { create: vi.fn(async () => ({})) },
   },

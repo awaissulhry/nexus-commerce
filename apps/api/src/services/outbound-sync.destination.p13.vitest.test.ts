@@ -23,7 +23,10 @@ vi.mock('../db.js', () => ({
     },
     sharedListingMembership: { findMany: vi.fn(async () => []) },
     channelConnection: { findMany: vi.fn(async () => [{ id: 'conn-A', displayName: 'Primary shop', externalAccountId: 'a' }, { id: 'conn-B', displayName: 'Second shop', externalAccountId: 'b' }]) },
-    stockLevel: { findMany: vi.fn(async () => [{ available: 5 }]), aggregate: vi.fn(async () => null) },
+    // The dispatch reads ONE ledger (loadSyncLedgers, shared stock): warehouse rows carry their product and
+    // location, and this business has no pool link, so the pool door is never asked.
+    stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: 5, available: 5, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))), aggregate: vi.fn(async () => null) },
+    stockPoolLink: { findMany: vi.fn(async () => []) },
     offer: { findFirst: vi.fn(async () => null) },
     product: { findUniqueOrThrow: vi.fn() },
     outboundApiCallLog: { create: vi.fn(async () => ({})) },

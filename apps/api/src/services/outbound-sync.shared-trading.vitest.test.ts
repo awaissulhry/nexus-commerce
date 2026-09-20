@@ -18,6 +18,8 @@ vi.mock('../db.js', () => {
       },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },
+      // Shared stock: no pool link here, so the ledger never asks the pool door.
+      stockPoolLink: { findMany: vi.fn(async () => []) },
       channelListing: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
       syncChannelPolicy: { findMany: vi.fn(async () => []) },
     },
@@ -147,7 +149,8 @@ describe('syncToEbay TRADING — dispatch re-check of a fixed shared variant', (
     delete process.env.NEXUS_SYNC_ORDERING_V2
   })
   const row = (updates: Array<{ sku: string; quantity: number }>) => ({
-    id: 'q2', externalListingId: '110556677', product: { id: 'p1', sku: 'PARENT' },
+    // P1.3 — a queue row names the account it goes to; a row without one is refused before the send.
+    id: 'q2', channelConnectionId: 'conn1', externalListingId: '110556677', product: { id: 'p1', sku: 'PARENT' },
     payload: { pushVia: 'TRADING', itemId: '110556677', market: 'IT', marketplaceId: 'EBAY_IT', productId: 'p1', updates },
   })
   const members = (list: Array<Record<string, unknown>>) => vi.mocked((prisma as any).sharedListingMembership.findMany).mockResolvedValue(list as never)

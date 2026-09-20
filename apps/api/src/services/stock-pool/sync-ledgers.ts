@@ -60,9 +60,11 @@ export async function loadSyncLedgers(db: Db, productIds: Iterable<string>): Pro
     where: { productId: { in: ids } },
     select: { productId: true, quantity: true, available: true, location: { select: { type: true, code: true, syncRoutes: true } } },
   })
-  const pool = await poolLevels(db, ids)
+  // The links first: a product that never joined a pool cannot have one now, so the door is not asked at
+  // all (an indexed read instead of a SECURITY DEFINER call on every dispatch of every business).
   const history = await db.stockPoolLink.findMany({ where: { productId: { in: ids } }, select: { productId: true }, distinct: ['productId'] })
   const everPooled = new Set(history.map((h) => h.productId))
+  const pool = everPooled.size > 0 ? await poolLevels(db, [...everPooled]) : new Map<string, PoolLevel[]>()
 
   const ownRows = new Map<string, RoutedLedgerRow[]>()
   const ownTotals = new Map<string, { quantity: number; available: number; fba: number }>()
