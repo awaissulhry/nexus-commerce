@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. The next package is **P2.1** (the incoming event ledger).
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is built** (see `build/P2.1.md`). The next package is **P2.2**.
 
 Read in this order:
 
@@ -40,13 +40,34 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P2.1, the incoming event ledger
+## 3. Next — P2.2
 
-Plan row: *A ledger that works for every channel: status lifecycle, dedupe on the channel's delivery id (Amazon `NotificationId`, Shopify `X-Shopify-Webhook-Id`, eBay notification id), rejects recorded in every mode, retry worker, dead-letter queue, replay button, **archive instead of delete**. Done when: a forced failure retries, lands in dead letters, and replays; no row is ever deleted.* Size M. Decision D8 is settled: **archive, never delete**.
+P2.1 is done: `build/P2.1.md`. Read it before touching anything inbound — it found that
+CX.4a had already built the ledger TABLE, so the plan's own description of P2.1 was out
+of date, and it found two live production defects behind that.
 
-**Start by measuring**, not by building — the plan's reading is from 2026-09-19 and this tree moves daily. For each channel: which receiver routes exist, what they store, whether any delivery id is kept, what happens to a rejected or failed event, and whether anything deletes rows.
+**The short version of what P2.1 changed:**
 
-After P2.1: P2.2 → P2.3 (**needs the Owner's yes**: it starts live traffic) → P2.4 → P2.5 → P2.6 → P2.7 → P2.8 → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+- Shopify webhooks reached the ledger for the first time. They had run with **no
+  business profile**, so both `WebhookProcessor` methods threw `Select a business
+  profile` into their own catch blocks — no Shopify event was ever recorded and no
+  delivery was ever seen as a duplicate. `WebhookProcessor` is deleted.
+- Their idempotency key was the **resource** id, not the delivery id. Fixing the write
+  alone would have handled the first change to a product and dropped every later change
+  to it. The key is now `X-Shopify-Webhook-Id`.
+- eBay rejected notifications are recorded **in production** too; the write had been
+  switched off whenever profiles were on.
+- A retry worker (`jobs/inbound-retry.job.ts`), dead letters, and a replay that updates
+  `status` instead of only `isProcessed`.
+- One replay registry (`services/cx/ingress/handlers.ts`) instead of two lists that had
+  already drifted (`refund/create` vs `refunds/create`).
+- A guard: `node scripts/check-inbound-ledger.mjs`.
+
+**Start P2.2 by measuring**, the same way. The plan's reading of a package can be stale.
+
+After P2.2: P2.3 (**needs the Owner's yes**: it starts live traffic) → P2.4 → P2.5 →
+P2.6 → P2.7 → P2.8 → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 /
+6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
 ## 4. Open items the Owner owns
 
@@ -55,7 +76,10 @@ After P2.1: P2.2 → P2.3 (**needs the Owner's yes**: it starts live traffic) �
 3. **Shopify order-action switches** now reach the connected account when set to `true`: `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new in P1.7).
 4. **Re-publishing an ended listing has no path**: the push lock refuses it and nothing in the code relists. Presence's relist verb is the planned answer.
 5. **A live stock round-trip on a real Shopify dev store** is still unproven (P1.4 done-when 2) — it is a live channel call, so it needs the Owner's yes.
-6. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
+6. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
+7. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
+8. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+9. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 5. Traps that cost time here — read before measuring anything
 
@@ -65,6 +89,10 @@ After P2.1: P2.2 → P2.3 (**needs the Owner's yes**: it starts live traffic) �
 - Run API tests **from `apps/api`**, never the repo root (from the root, `DATABASE_URL` resolves to Neon **production**).
 - A full suite **under load** fails files that pass alone (PGlite setup timeouts). Re-run a file alone before calling it a regression.
 - Known-failing baseline of the full API suite: `clients/amazon-validation-preview` (5) and `services/marketplaces/amazon-classifications` (1) — both read a local Amazon account.
+- **`scripts/check-push-lock.mjs` is RED and has been since before P2.1**: `studio-publication-amazon.ts:164 sendAmazonPublication -> fetch, callAPI`. Verified at clean `HEAD` 5b5ca6166 in a separate worktree. Do not treat it as yours; do not "fix" it inside another package without saying so.
+- **A probe must target the layer the code runs on.** The first P2.1 probe used a bare `new PrismaClient()` and reported a missing `workspaceId` argument. The app uses a SCOPING client that completes compound keys itself — the real cause was a missing business profile, and the real fix was different. Probe through `apps/api/src/db.js`, and run the arm WITH a workspace as the control.
+- **Raw SQL is invisible to the scoping client.** `$queryRawUnsafe` is filtered only by the database's own row policy. A sweep written that way read zero rows while a due row sat in the table. Use the model API for anything workspace-scoped.
+- **A non-platform `cron.schedule` already visits every active business profile** and runs the handler inside each one. A sweep does not need to read across workspaces itself — and if you call one from a probe, enter a profile first or you measure a job that can see nothing.
 - `grep` in this shell is an `ugrep` function that skips ignored files. Use `/usr/bin/grep` for any "exists / does not exist" claim, with a positive control for every set claim.
 - `docs/channel-connections/build/` is caught by the `build/` rule in `.gitignore` → `git add -f`.
 - Channel client tests stub the gateway with `apps/api/src/test-support/gateway-stubs.ts` (`accountModule`, `ledgerModule`, `asResponse`).

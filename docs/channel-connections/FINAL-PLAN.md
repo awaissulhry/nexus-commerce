@@ -700,7 +700,8 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P1.6 | BUILT (2026-09-20) | `build/P1.6-delete-list.md` | Committed locally, not pushed. The Owner approved groups A, B and C; 26 files gone, the ratchet still 0. The eBay feed lane is no longer chosen by row count (R-6). Group D stays and is fixed later |
 | P1.7 | BUILT (2026-09-20) | `build/P1.7.md` | Committed locally, not pushed. Amazon previews every content write (queue, wizard, direct route, image feed); eBay verifies before every Add; the push lock refuses an ENDED listing. The flat-file submit route previews every row up to 200 (Owner, option A) |
 | P1.8 | BUILT (2026-09-20) | `build/P1.8.md` | Committed locally, not pushed. Nightly sandbox contract run; every check is a read on a sandbox host, a channel with no sandbox host is reported not-configured. **OFF** until the Owner sets `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` + one sandbox account per channel |
-| P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
+| P2.1 | BUILT (2026-09-20) | `build/P2.1.md` | CX.4a had already built the ledger TABLE; what was missing was the behaviour. Retry worker + dead letters + replay through the ledger. Two live defects fixed: **no Shopify event had ever been recorded** (the routes ran with no business profile, both `WebhookProcessor` methods swallowed `Select a business profile`), and its idempotency keyed on the RESOURCE id, which would have dropped every change to a product after the first. eBay rejects are now recorded in production too. Migrations `20260920a_p21_inbound_retry` and `20260920b_p21_inbound_route_aliases`, both additive |
+| P2.2 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |
 | P5.1 – P5.5 | NOT STARTED | — | P5.1 before 2026-12-15 |

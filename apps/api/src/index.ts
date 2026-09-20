@@ -256,6 +256,7 @@ import { startEbayAdsSyncCrons } from "./jobs/ebay-ads-sync.job.js";
 import { startReconcileCron } from "./jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "./jobs/tracking-pushback.job.js";
+import { startInboundRetryCron } from "./jobs/inbound-retry.job.js";
 import { startCarrierServiceSyncCron } from "./jobs/carrier-service-sync.job.js";
 import { startPickupDispatchCron } from "./jobs/pickup-dispatch.job.js";
 import { startCarrierMetricsCron } from "./jobs/carrier-metrics.job.js";
@@ -1382,6 +1383,14 @@ async function start() {
       // ENABLE_*_SHIP_CONFIRM flags still gate whether the underlying
       // call hits the real API or returns dryRun mocks.
       startTrackingPushbackCron();
+
+      // P2.1 — the inbound ledger's retry worker. Takes the inbound events whose
+      // backoff has expired, re-runs each through the handler that first received it,
+      // and moves the ones that are out of attempts — or that nothing can replay —
+      // into dead letters where an operator can find them. Default-ON: before this,
+      // a failed inbound event stayed `failed` forever and no retry existed at all.
+      // Opt out via NEXUS_ENABLE_INBOUND_RETRY_CRON=0.
+      startInboundRetryCron();
 
       // CR.12 — daily Sendcloud service-catalog sync. Pulls
       // /shipping_methods per connected Sendcloud account and upserts

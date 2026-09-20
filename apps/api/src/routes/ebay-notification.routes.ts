@@ -1,4 +1,4 @@
-import { verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * IS.2 — eBay Notification Platform push webhook + Trading API subscription setup.
@@ -370,7 +370,18 @@ ${eventXml}
       // notification that never arrived were indistinguishable afterwards. Record it.
       const rejected = req.body as any
       const claimedId = rejected?.metadata?.notificationId ?? null
-      if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') await recordInbound({
+      // P2.1 — this write used to be skipped whenever business profiles were on,
+      // which is how production runs. So the one mode where a rejected notification
+      // mattered was the one mode that recorded nothing, and `signatureOk = false`
+      // could not occur in production however many forged notifications arrived.
+      //
+      // The reason it was switched off rather than fixed is real: an unverified body
+      // names no seller, so there is no workspace to route it to and the write threw.
+      // The platform's own workspace is the honest home for it — the same choice the
+      // Amazon credential path makes for a message no business owns. It is also the
+      // only safe one: attributing an unverified body to a business would let anyone
+      // who can reach the endpoint write rows into that business's ledger.
+      await legacyIngress(() => recordInbound({
         channel: 'EBAY',
         eventType: rejected?.metadata?.topic ?? 'unverified',
         // NOT the notificationId the payload claims. Nothing about an unverified
@@ -387,7 +398,7 @@ ${eventXml}
         verifiedBy: 'ebay_ecdsa',
         status: 'failed',
         lastError: `signature rejected: ${verdict.reason}${verdict.kid ? ` (kid ${verdict.kid})` : ''}${claimedId ? ` (claimed id ${String(claimedId).slice(0, 60)})` : ''}`,
-      })
+      }))
       logger.warn('[eBay notification] signature rejected', { reason: verdict.reason, kid: verdict.kid })
       // 412 is what eBay's own SDK answers on a failed check. The 204 that stood here
       // told eBay the notification had been accepted.

@@ -39,7 +39,8 @@ import {
   listKnownCrons,
 } from '../jobs/cron-registry.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { dispatchShopifyWebhook } from './shopify-webhooks.js'
+import { inboundHandlerFor, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
+import { completeInbound, deadLetterInbound, replayInbound } from '../services/cx/ingress/ledger.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 
@@ -1003,18 +1004,22 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
-   * L.17.0 — webhook replay.
+   * Webhook replay — POST /api/sync-logs/webhooks/:id/replay
    *
-   * POST /api/sync-logs/webhooks/:id/replay
+   * L.17.0 built this; P2.1 made it tell the truth about what it did.
    *
-   * Reads the WebhookEvent row, dispatches the saved payload through
-   * the same handle* function the original receipt would have hit,
-   * and updates isProcessed/processedAt/error based on the result.
+   * Every arm used to write `isProcessed` and `error` and leave `status` alone. The
+   * CX.4a migration had promised those two could never disagree, and here is where
+   * they did: a successful replay of a dead letter left the row reading `dlq` with
+   * `isProcessed = true`, so the dead-letter list still showed an event that had in
+   * fact been handled, and the operator had no way to clear it. Both now move through
+   * the ledger, which owns the pair.
    *
-   * Stripe-tier: same behaviour as receiving the webhook again, except
-   * the signature check is skipped (we already authenticated the
-   * payload at original receipt time and stored it locally — re-
-   * dispatching it doesn't need the original HMAC).
+   * The replay also RESETS the attempt budget before running. An operator clicking
+   * replay is asserting that whatever broke is fixed, so the event deserves a full set
+   * of attempts rather than the nothing its exhausted count left it. If this attempt
+   * fails, the row goes back to `failed` with a backoff and the retry worker picks it
+   * up from there — the button and the worker land the event in the same place.
    */
   fastify.post<{ Params: { id: string } }>(
     '/sync-logs/webhooks/:id/replay',
@@ -1027,94 +1032,69 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Webhook event not found' })
         }
 
-        // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
-        if (event.channel === 'AMAZON') {
-          try {
-            const since = new Date(Date.now() - 5 * 60 * 1000)
-            await amazonOrdersService.syncNewOrders(since, { limit: 50 })
-            await prisma.webhookEvent.update({
-              where: { id: event.id },
-              data: { isProcessed: true, processedAt: new Date(), error: null },
-            })
-            return reply.send({ success: true })
-          } catch (handlerErr) {
-            const msg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr)
-            await prisma.webhookEvent.update({
-              where: { id: event.id },
-              data: { isProcessed: false, error: msg.slice(0, 2000) },
-            })
-            return reply.code(500).send({ success: false, error: msg })
-          }
+        // Decision D8 — archived events are not replayable: the payload has moved and
+        // the row only holds a pointer to it. Say that, rather than replaying `{}`.
+        const queued = await replayInbound({ id: event.id })
+        if (!queued.ok) {
+          const message =
+            queued.reason === 'archived'
+              ? 'This event is archived; its payload is no longer on the row.'
+              : queued.reason === 'already_pending'
+                ? 'This event is already queued for the retry worker.'
+                : 'Webhook event not found'
+          return reply.code(queued.reason === 'not_found' ? 404 : 409).send({ error: message })
         }
 
-        // RT.4 — eBay platform-notification replay: re-runs syncEbayOrders
-        // for every active eBay connection. Service is idempotent on
-        // (channel, channelOrderId) so re-syncing covers the receipt
-        // action even if the cron already picked it up.
-        if (event.channel === 'EBAY') {
-          try {
+        const replay = async (): Promise<void> => {
+          // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
+          if (event.channel === 'AMAZON') {
+            const since = new Date(Date.now() - 5 * 60 * 1000)
+            await amazonOrdersService.syncNewOrders(since, { limit: 50 })
+            return
+          }
+          // RT.4 — eBay platform-notification replay: re-runs syncEbayOrders for every
+          // active eBay connection. The service is idempotent on
+          // (channel, channelOrderId), so re-syncing covers the receipt action even if
+          // the cron already picked it up. MAP.3 — a replay carries no account, so
+          // every account is swept and the idempotent order service dedupes.
+          if (event.channel === 'EBAY') {
             const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
-            // MAP.3 — a replay has no account on it, so every account is swept and
-            // the idempotent order service dedupes. Correct for N accounts.
             const connections = await listActiveConnections('EBAY')
             for (const conn of connections) {
               await ebayOrdersService.syncEbayOrders(conn.id)
             }
-            await prisma.webhookEvent.update({
-              where: { id: event.id },
-              data: { isProcessed: true, processedAt: new Date(), error: null },
-            })
-            return reply.send({ success: true })
-          } catch (handlerErr) {
-            const msg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr)
-            await prisma.webhookEvent.update({
-              where: { id: event.id },
-              data: { isProcessed: false, error: msg.slice(0, 2000) },
-            })
-            return reply.code(500).send({ success: false, error: msg })
+            return
           }
-        }
-
-        // CX.0: the WooCommerce and Etsy receivers were deleted (Woo is out of
-        // scope; Etsy's real order webhooks arrive via the CX.4 ingress).
-        const dispatcher = event.channel === 'SHOPIFY' ? dispatchShopifyWebhook : null
-        if (!dispatcher) {
-          return reply.code(400).send({
-            error: `Replay not supported for channel '${event.channel}'`,
-          })
+          // Everything else goes through the one replay registry, which the retry
+          // worker also uses. A channel with no registered handler is refused here
+          // rather than silently doing nothing.
+          const handler = await inboundHandlerFor(event.channel, event.eventType)
+          if (!handler) {
+            throw new ReplayUnsupported(
+              `Replay is not supported for ${event.channel}/${event.eventType}.`,
+            )
+          }
+          await handler(event.payload)
         }
 
         try {
-          await dispatcher(event.eventType, event.payload)
-          await prisma.webhookEvent.update({
-            where: { id: event.id },
-            data: {
-              isProcessed: true,
-              processedAt: new Date(),
-              error: null,
-            },
-          })
+          await replay()
+          await completeInbound(event.id, true)
           return reply.send({ success: true })
         } catch (handlerErr) {
-          const msg =
-            handlerErr instanceof Error
-              ? handlerErr.message
-              : String(handlerErr)
-          await prisma.webhookEvent.update({
-            where: { id: event.id },
-            data: {
-              isProcessed: false,
-              error: msg.slice(0, 2000),
-            },
-          })
+          const msg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr)
+          if (handlerErr instanceof ReplayUnsupported) {
+            // Not a failed attempt — nothing ran. Dead-letter it with the reason
+            // instead of spending an attempt that would fail identically.
+            await deadLetterInbound(event.id, msg)
+            return reply.code(400).send({ success: false, error: msg })
+          }
+          await completeInbound(event.id, false, msg)
           return reply.code(500).send({ success: false, error: msg })
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        fastify.log.error(
-          { err },
-          '[sync-logs/webhooks/:id/replay] failed',
-        )
+        fastify.log.error({ err }, '[sync-logs/webhooks/:id/replay] failed')
         return reply.code(500).send({ error: message })
       }
     },

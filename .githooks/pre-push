@@ -253,6 +253,20 @@ echo "→ Checking channel-gateway ratchet (P1.2)..."
   exit 1
 }
 
+# P2.1 (docs/channel-connections/build/P2.1.md) — the inbound ledger's two standing rules.
+# 1) Nothing DELETES an inbound event (Decision D8: archive, never delete) — the ledger is the
+#    only record that a notification ever arrived.
+# 2) Every event type a receiver writes has a replay handler, or is named unreplayable with a
+#    reason. The registry and the receivers are two lists of the same topics, and they had
+#    already drifted once: `refunds/create` was written and `refund/create` was listed, so no
+#    refund was replayable and nothing said so.
+echo "→ Checking the inbound ledger's rules (P2.1)..."
+node scripts/check-inbound-ledger.mjs >/dev/null 2>&1 || {
+  node scripts/check-inbound-ledger.mjs 2>&1 | tail -8
+  echo "❌ inbound-ledger guard FAILED — see message above (rule + why: scripts/check-inbound-ledger.mjs header)"
+  exit 1
+}
+
 echo "→ Checking tokens.css is in sync with css-vars.ts..."
 npm run tokens:check --silent || {
   echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"

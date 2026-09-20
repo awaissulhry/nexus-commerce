@@ -15,7 +15,10 @@ import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.se
 
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
-import { WebhookValidator, WebhookProcessor, registerRawJsonParser } from "../utils/webhook.js";
+import { WebhookValidator, registerRawJsonParser } from "../utils/webhook.js";
+import { completeInbound, recordInbound } from "../services/cx/ingress/ledger.js";
+import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from "../lib/workspace-ingress.js";
+import { inboundHandlerFor } from "../services/cx/ingress/handlers.js";
 import type { RawBodyRequest } from "../utils/webhook.js";
 import { ConfigManager } from "../utils/config.js";
 import type { ShopifyConfig } from "../types/marketplace.js";
@@ -55,7 +58,7 @@ function parseShopifyTriggeredAt(request: { headers: Record<string, unknown> }):
 /**
  * Process product update webhook
  */
-async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   try {
     const product = payload as any;
     const shopifyProductId = String(product.id);
@@ -107,7 +110,7 @@ async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void
 /**
  * Process product delete webhook
  */
-async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void> {
   try {
     const product = payload as any;
     const shopifyProductId = String(product.id);
@@ -171,7 +174,7 @@ async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void
  *      the threshold logic (auto-apply small drifts, queue large
  *      drifts for REVIEW_NEEDED).
  */
-async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   const inventory = payload as any;
   const inventoryItemId = String(inventory.inventory_item_id ?? '');
   const shopifyLocationId = inventory.location_id != null ? String(inventory.location_id) : null;
@@ -309,7 +312,7 @@ function mapShopifyOrderStatus(financial?: string, fulfillment?: string | null):
   return 'PENDING';
 }
 
-async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> {
   const order = payload as any;
   const shopifyOrderId = String(order.id);
 
@@ -515,7 +518,7 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
 /**
  * Process order update webhook
  */
-async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   const order = payload as any;
   const shopifyOrderId = String(order.id);
 
@@ -688,7 +691,7 @@ async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> 
  * ReturnId=payload.id). If found, ignore — Shopify retries on 5xx
  * and we don't want duplicate RMAs.
  */
-async function handleRefundCreate(payload: ShopifyWebhookPayload): Promise<{ kind: 'created' | 'duplicate' | 'no_order' | 'no_lines'; returnId?: string }> {
+export async function handleRefundCreate(payload: ShopifyWebhookPayload): Promise<{ kind: 'created' | 'duplicate' | 'no_order' | 'no_lines'; returnId?: string }> {
   const refund = payload as any;
   const refundId = String(refund.id);
   const channelOrderId = refund.order_id != null ? String(refund.order_id) : null;
@@ -847,7 +850,7 @@ async function handleRefundCreate(payload: ShopifyWebhookPayload): Promise<{ kin
 /**
  * Process fulfillment create webhook
  */
-async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): Promise<void> {
   const fulfillment = payload as any;
   const shopifyOrderId = String(fulfillment.order_id);
 
@@ -908,516 +911,197 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   registerRawJsonParser(app);
   registerShopifySchemaWebhook(app);
 
-  const webhookValidator = new WebhookValidator();
-  const webhookProcessor = new WebhookProcessor();
-
   /**
-   * POST /webhooks/shopify/products/update
-   * Handle product update webhooks
-   */
-  app.post("/webhooks/shopify/products/update", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "product/update";
-      const externalId = String(payload.id);
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleProductUpdate(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Product update webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * POST /webhooks/shopify/products/delete
-   * Handle product delete webhooks
-   */
-  app.post("/webhooks/shopify/products/delete", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "product/delete";
-      const externalId = String(payload.id);
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleProductDelete(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Product delete webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * POST /webhooks/shopify/inventory/update
-   * Handle inventory update webhooks
-   */
-  app.post("/webhooks/shopify/inventory/update", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "inventory/update";
-      const externalId = `${payload.inventory_item_id}:${payload.location_id}:${payload.updated_at}`;
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleInventoryUpdate(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Inventory update webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * POST /webhooks/shopify/orders/create
-   * Handle order create webhooks
-   */
-  app.post("/webhooks/shopify/orders/create", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "order/create";
-      const externalId = String(payload.id);
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleOrderCreate(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Order create webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * POST /webhooks/shopify/orders/update
-   * Handle order update webhooks
-   */
-  app.post("/webhooks/shopify/orders/update", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "order/update";
-      const externalId = String(payload.id);
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleOrderUpdate(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Order update webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * POST /webhooks/shopify/fulfillments/create
-   * Handle fulfillment create webhooks
-   */
-  app.post("/webhooks/shopify/fulfillments/create", async (request, reply) => {
-    try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
-      const body = (request as RawBodyRequest).rawBody;
-
-      // Validate webhook signature
-      const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-      if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
-      }
-
-      const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
-      if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] Invalid webhook signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
-        });
-      }
-
-      const payload = request.body as ShopifyWebhookPayload;
-
-      // Check idempotency
-      const eventType = "fulfillment/create";
-      const externalId = String(payload.id);
-
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        console.log(`[ShopifyWebhooks] Webhook already processed: ${externalId}`);
-        return reply.send({ success: true, message: "Already processed" });
-      }
-
-      // Process webhook
-      await handleFulfillmentCreate(payload);
-
-      // Mark as processed — RT.1 passes eventType + payload so push-health
-      // and /sync-logs/webhooks can show meaningful topic names instead
-      // of "unknown" placeholders. RT.3 passes the X-Shopify-Triggered-At
-      // header value as providerTimestamp for the push-latency dashboard.
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] Fulfillment create webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
-      });
-    }
-  });
-
-  /**
-   * R4.1 — POST /webhooks/shopify/refunds/create
+   * Which connected shop a verified webhook belongs to.
    *
-   * Mirrors a Shopify-issued refund into a Nexus Return row so the
-   * /fulfillment/returns workspace, analytics, and audit log all
-   * see channel-issued refunds alongside operator-created RMAs.
+   * The first choice is the shop domain Shopify stamps on the request, matched against
+   * the routing index's `inboundAliases`. That is the only answer that stays correct
+   * once a second Shopify account is connected.
    *
-   * Test endpoint (no signature) lives at /webhooks/shopify/refunds/
-   * (the former create-test route was removed in CX.0) — the route below is the
-   * production path.
+   * The fallback exists because the alias is backfilled from the connection's stored
+   * identity, and a connection saved before that identity was captured has no alias to
+   * match. Asking the index for the channel alone answers only when exactly ONE active
+   * Shopify route exists — with two it raises, because guessing between two businesses
+   * is the one failure this whole programme is about. So the fallback cannot leak: it
+   * can only recover the single-account case that worked before this change.
    */
-  app.post("/webhooks/shopify/refunds/create", async (request, reply) => {
+  async function resolveShopifyRoute(shopDomain?: string) {
+    if (!shopDomain) return verifiedChannelWorkspace("SHOPIFY");
     try {
-      const signature = request.headers["x-shopify-hmac-sha256"] as string;
+      return await verifiedChannelWorkspace("SHOPIFY", shopDomain);
+    } catch (error) {
+      const route = await verifiedChannelWorkspace("SHOPIFY");
+      logger.warn("[ShopifyWebhooks] routed by the only connected shop; its domain alias is missing", {
+        shopDomain,
+        connectionId: route.connectionId,
+      });
+      return route;
+    }
+  }
+
+  /**
+   * P2.1 — one receiver for all seven topics.
+   *
+   * What stood here was the same forty lines copied seven times, and the copies had
+   * drifted into two defects that only a rewrite removes:
+   *
+   * 1. Nothing reached the ledger. The routes ran with NO business profile, so every
+   *    `WebhookEvent` query inside them threw `Select a business profile` into a catch
+   *    block that logged and carried on. Measured before this change: a receiver's own
+   *    write left zero rows behind. Shopify was the only connected channel with no
+   *    inbound history at all.
+   *
+   * 2. Idempotency keyed on the RESOURCE, not the delivery. `externalId` was
+   *    `String(payload.id)` — the product's id, the order's id — against a unique
+   *    `(channel, externalId)`. Had defect 1 not been masking it, the FIRST update to
+   *    a product would have been handled and every later update to that same product
+   *    dropped as "Already processed", permanently. Fixing the ledger write without
+   *    fixing this would have turned a silent gap into silent data loss, so the two
+   *    are one change. The key is now `X-Shopify-Webhook-Id`: Shopify's own id for
+   *    this delivery, which is stable across ITS retries and different for every new
+   *    change to the same resource.
+   *
+   * A rejected signature is recorded too. An unsigned body cannot name a workspace,
+   * so it is recorded against the platform's own — the same choice the Amazon
+   * credential path makes for a message no business owns — and its claimed shop is
+   * kept as text in the reason rather than trusted as a routing key.
+   */
+  type ShopifyTopicHandler = (payload: ShopifyWebhookPayload) => Promise<unknown>;
+
+  function receiveShopify(path: string, eventType: string, handle: ShopifyTopicHandler) {
+    app.post(path, async (request, reply) => {
       const body = (request as RawBodyRequest).rawBody;
+      const signature = request.headers["x-shopify-hmac-sha256"] as string | undefined;
+      const shopDomain = request.headers["x-shopify-shop-domain"] as string | undefined;
+      const deliveryId = request.headers["x-shopify-webhook-id"] as string | undefined;
+      const payload = request.body as ShopifyWebhookPayload;
 
       const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
       if (!config) {
-        return reply.status(400).send({
-          success: false,
-          error: "Shopify is not configured",
-        });
+        return reply.status(400).send({ success: false, error: "Shopify is not configured" });
       }
 
       const validation = WebhookValidator.validateShopifySignature(body, signature, config.webhookSecret);
       if (!validation.isValid) {
-        console.warn("[ShopifyWebhooks] refunds/create — invalid signature");
-        return reply.status(401).send({
-          success: false,
-          error: validation.error,
+        // `externalId: null` on purpose. Nothing about an unverified body is
+        // trustworthy, and `(channel, externalId)` is UNIQUE: a forged delivery id
+        // naming a real one would occupy that slot and make the genuine delivery look
+        // like a duplicate, suppressing it. Null keys the row on the body digest,
+        // which nobody can use to collide with a verified event.
+        await legacyIngress(() =>
+          recordInbound({
+            channel: "SHOPIFY",
+            eventType,
+            externalId: null,
+            rawBody: body ?? null,
+            payload: payload ?? {},
+            signatureOk: false,
+            verifiedBy: "shopify_hmac",
+            status: "failed",
+            lastError: `signature rejected: ${validation.error ?? "invalid"}${shopDomain ? ` (claimed shop ${String(shopDomain).slice(0, 80)})` : ""}`,
+          }),
+        );
+        logger.warn("[ShopifyWebhooks] signature rejected", { eventType, shopDomain });
+        return reply.status(401).send({ success: false, error: validation.error });
+      }
+
+      let route: { workspaceId: string; connectionId: string };
+      try {
+        route = await resolveShopifyRoute(shopDomain);
+      } catch (error) {
+        // The signature passed, so the body is genuinely Shopify's — we simply do not
+        // know whose shop it is. Record it before answering, so the event exists even
+        // though nothing can act on it, then let Shopify retry.
+        await legacyIngress(() =>
+          recordInbound({
+            channel: "SHOPIFY",
+            eventType,
+            externalId: deliveryId ?? null,
+            rawBody: body ?? null,
+            payload: payload ?? {},
+            signatureOk: true,
+            verifiedBy: "shopify_hmac",
+            providerTimestamp: parseShopifyTriggeredAt(request),
+            status: "failed",
+            lastError: `no connected shop matches ${shopDomain ?? "(no shop domain header)"}: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+        );
+        logger.error("[ShopifyWebhooks] verified webhook needs account routing", { eventType, shopDomain });
+        return reply.status(503).send({ success: false, error: "The shop on this webhook is not connected." });
+      }
+
+      return withIngressWorkspace(route.workspaceId, async () => {
+        const written = await recordInbound({
+          channel: "SHOPIFY",
+          eventType,
+          externalId: deliveryId ?? null,
+          rawBody: body ?? null,
+          payload: payload ?? {},
+          signatureOk: true,
+          verifiedBy: "shopify_hmac",
+          connectionId: route.connectionId,
+          providerTimestamp: parseShopifyTriggeredAt(request),
+          status: "pending",
         });
-      }
 
-      const payload = request.body as ShopifyWebhookPayload;
-      const externalId = String(payload.id);
-      const eventType = "refunds/create";
+        // No row means the ledger itself is unavailable. Answering 200 would ack an
+        // event nothing recorded and nothing handled; a 503 keeps it on Shopify's
+        // retry schedule. Same rule the Amazon poller follows: ledger first.
+        if (!written.id) {
+          logger.error("[ShopifyWebhooks] inbound ledger unavailable — webhook not acked", { eventType, deliveryId });
+          return reply.status(503).send({ success: false, error: "The inbound ledger is unavailable." });
+        }
 
-      // Top-level idempotency via the WebhookProcessor table covers
-      // duplicate webhook deliveries (Shopify retries on 5xx). The
-      // handler below ALSO dedupes via Return.channelReturnId so we
-      // stay correct even if the external_id table loses an entry.
-      const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
-      if (isProcessed) {
-        return reply.send({ success: true, message: "Already processed" });
-      }
+        // Only a FINISHED event is a duplicate worth short-circuiting. Shopify resends
+        // the same delivery id both when it never heard an answer and when we answered
+        // with a failure; treating the second as "already processed" would drop the
+        // very retry we asked for.
+        if (written.duplicate && written.existingStatus === "done") {
+          return reply.send({ success: true, message: "Already processed" });
+        }
 
-      const result = await handleRefundCreate(payload);
-      await WebhookProcessor.markWebhookProcessed(
-        "SHOPIFY",
-        externalId,
-        prisma,
-        undefined,
-        eventType,
-        payload,
-        parseShopifyTriggeredAt(request),
-      );
-
-      return reply.send({ success: true, ...result });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ShopifyWebhooks] refunds/create webhook failed:", message);
-      return reply.status(500).send({
-        success: false,
-        error: message,
+        try {
+          const result = await handle(payload);
+          await completeInbound(written.id, true);
+          const extra = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+          return reply.send({ success: true, ...extra });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await completeInbound(written.id, false, message);
+          logger.error(`[ShopifyWebhooks] ${eventType} failed`, { error: message });
+          return reply.status(500).send({ success: false, error: message });
+        }
       });
-    }
-  });
+    });
+  }
+
+  // The event-type strings are the ones already written to `WebhookEvent`, not
+  // Shopify's topic names. Changing them would orphan every stored row from the
+  // handler that can replay it.
+  receiveShopify("/webhooks/shopify/products/update", "product/update", handleProductUpdate);
+  receiveShopify("/webhooks/shopify/products/delete", "product/delete", handleProductDelete);
+  receiveShopify("/webhooks/shopify/inventory/update", "inventory/update", handleInventoryUpdate);
+  receiveShopify("/webhooks/shopify/orders/create", "order/create", handleOrderCreate);
+  receiveShopify("/webhooks/shopify/orders/update", "order/update", handleOrderUpdate);
+  receiveShopify("/webhooks/shopify/fulfillments/create", "fulfillment/create", handleFulfillmentCreate);
+  receiveShopify("/webhooks/shopify/refunds/create", "refunds/create", handleRefundCreate);
 
   // CX.0 (S8): the unsigned `refunds/create-test` route is gone. Verify
   // scripts sign a request to the real route with SHOPIFY_WEBHOOK_SECRET.
 }
 
 /**
- * L.17.0 — replay dispatcher.
+ * Replay one stored Shopify webhook through the handler that first received it.
  *
- * Maps eventType (the same string written to WebhookEvent) to the
- * corresponding handle* function. Used by the replay endpoint at
- * /api/sync-logs/webhooks/:id/replay so operators can re-dispatch
- * a stored webhook without re-receiving it from Shopify.
- *
- * Throws on unknown eventType so the replay endpoint can surface a
- * clear error.
+ * P2.1 — this used to BE the dispatch table: a switch listing every topic, beside the
+ * seven routes that listed the same topics again. The two drifted exactly as a
+ * duplicated list does — the switch answered `refund/create` while the route wrote
+ * `refunds/create`, so replaying a refund threw "Unknown Shopify eventType" and no
+ * refund was ever replayable. It now asks the one registry, which the routes and the
+ * retry worker also ask, so a topic cannot be known to one and unknown to another.
  */
-export async function dispatchShopifyWebhook(
-  eventType: string,
-  payload: unknown,
-): Promise<void> {
-  const p = payload as ShopifyWebhookPayload
-  switch (eventType) {
-    case 'product/update':
-      return handleProductUpdate(p)
-    case 'product/delete':
-      return handleProductDelete(p)
-    case 'inventory/update':
-      return handleInventoryUpdate(p)
-    case 'order/create':
-      return handleOrderCreate(p)
-    case 'order/update':
-      return handleOrderUpdate(p)
-    case 'fulfillment/create':
-      return handleFulfillmentCreate(p)
-    case 'refund/create':
-      await handleRefundCreate(p)
-      return
-    default:
-      throw new Error(`Unknown Shopify eventType: ${eventType}`)
-  }
+export async function dispatchShopifyWebhook(eventType: string, payload: unknown): Promise<void> {
+  const handler = await inboundHandlerFor('SHOPIFY', eventType)
+  if (!handler) throw new Error(`Unknown Shopify eventType: ${eventType}`)
+  await handler(payload)
 }

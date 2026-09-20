@@ -5146,7 +5146,11 @@ model WebhookEvent {
   // pending | done | failed | dlq. Derived from isProcessed at migration time
   // so the two can never disagree about the rows that predate this.
   status        String    @default("pending")
+  // P2.1 — two different counts, kept apart on purpose. `deliveries` is how often the
+  // CHANNEL sent this event; `attempts` is how often WE tried to handle it. A replay
+  // resets `attempts` and must not erase the delivery history.
   attempts      Int       @default(0)
+  deliveries    Int       @default(0)
   nextAttemptAt DateTime?
   // Tri-state on purpose: true = checked and passed, false = checked and
   // failed, null = this transport carries no signature. Amazon's SQS
@@ -19591,8 +19595,14 @@ model ChannelAccountRoute {
   channelType       String
   externalAccountId String?
   destinationIds    String[]          @default([])
+  // P2.1 — the names a CHANNEL puts on an inbound webhook, which are not always the
+  // id the connection is keyed by. Shopify sends `X-Shopify-Shop-Domain`, never the
+  // shop GID in `externalAccountId`. Kept apart from `destinationIds` because two
+  // triggers rewrite that column wholesale from ConnectionScope.
+  inboundAliases    String[]          @default([])
 
   @@index([destinationIds], type: Gin)
+  @@index([inboundAliases], type: Gin)
   @@index([channelType, externalAccountId])
   @@index([workspaceId])
 }

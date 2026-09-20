@@ -102,131 +102,22 @@ export class WebhookValidator {
 }
 
 /**
- * Webhook event processor
+ * P2.1 — `WebhookProcessor` was deleted here.
+ *
+ * Its two methods were the whole of Shopify's idempotency and its whole ledger write,
+ * and both were dead in production. Each one called `db.webhookEvent` from a receiver
+ * that ran with no business profile, so each threw `Select a business profile` into
+ * its own catch block: `isWebhookProcessed` swallowed the throw and returned `false`,
+ * so no delivery was ever recognised as a duplicate, and `markWebhookProcessed`
+ * swallowed it and returned, so no Shopify event was ever written. The receivers read
+ * as if both worked.
+ *
+ * They are not repaired, because a repair would have restored the second defect the
+ * first was hiding: the idempotency key was the RESOURCE id, so the first change to a
+ * product would have been handled and every later change to it dropped forever.
+ * Shopify now goes through `services/cx/ingress/ledger.ts` with the delivery id from
+ * `X-Shopify-Webhook-Id`, inside the workspace its shop routes to.
  */
-export class WebhookProcessor {
-  /**
-   * Extract event type from webhook payload based on marketplace
-   */
-  static getEventType(channel: MarketplaceChannel, payload: any): string {
-    switch (channel) {
-      case "SHOPIFY":
-        // Shopify sends event type in X-Shopify-Topic header, but we can infer from payload
-        return payload.id ? "shopify/event" : "unknown";
-
-      case "WOOCOMMERCE":
-        // WooCommerce sends event type in X-WC-Webhook-Topic header
-        return payload.action || "woocommerce/event";
-
-      case "ETSY":
-        // Etsy sends event type in X-Etsy-Event-Type header
-        return payload.type || "etsy/event";
-
-      default:
-        return "unknown";
-    }
-  }
-
-  /**
-   * Extract unique identifier from webhook payload for idempotency
-   */
-  static getExternalId(channel: MarketplaceChannel, payload: any): string {
-    switch (channel) {
-      case "SHOPIFY":
-        return payload.id?.toString() || "";
-
-      case "WOOCOMMERCE":
-        return payload.id?.toString() || "";
-
-      case "ETSY":
-        return payload.listing_id?.toString() || payload.receipt_id?.toString() || "";
-
-      default:
-        return "";
-    }
-  }
-
-  /**
-   * Check if webhook has already been processed (idempotency)
-   */
-  static async isWebhookProcessed(
-    channel: MarketplaceChannel,
-    externalId: string,
-    db: any
-  ): Promise<boolean> {
-    try {
-      const event = await db.webhookEvent.findUnique({
-        where: {
-          channel_externalId: {
-            channel,
-            externalId,
-          },
-        },
-      });
-
-      return event?.isProcessed || false;
-    } catch (error) {
-      console.error("[WebhookProcessor] Error checking webhook status:", error);
-      return false;
-    }
-  }
-
-  /**
-   * Mark webhook as processed.
-   *
-   * RT.1 added the optional eventType + payload params so push-health
-   * and the /sync-logs/webhooks viewer (RT.4) can show meaningful
-   * topic names instead of "unknown" placeholders. Existing 3-arg call
-   * sites keep working unchanged.
-   *
-   * RT.3 added providerTimestamp so /api/admin/push-latency can chart
-   * end-to-end latency per source. For Shopify the value comes from
-   * the X-Shopify-Triggered-At request header (RFC3339 UTC string).
-   */
-  static async markWebhookProcessed(
-    channel: MarketplaceChannel,
-    externalId: string,
-    db: any,
-    error?: string,
-    eventType?: string,
-    payload?: unknown,
-    providerTimestamp?: Date | null,
-  ): Promise<void> {
-    try {
-      await db.webhookEvent.upsert({
-        where: {
-          channel_externalId: {
-            channel,
-            externalId,
-          },
-        },
-        create: {
-          channel,
-          externalId,
-          eventType: eventType ?? "unknown",
-          payload: (payload as any) ?? {},
-          isProcessed: !error,
-          processedAt: !error ? new Date() : undefined,
-          error,
-          providerTimestamp: providerTimestamp ?? undefined,
-        },
-        update: {
-          isProcessed: !error,
-          processedAt: !error ? new Date() : undefined,
-          error,
-          // Only overwrite eventType/payload if the caller supplied them
-          // — keeps the record meaningful when a retry comes through a
-          // path that didn't pass the topic.
-          ...(eventType ? { eventType } : {}),
-          ...(payload !== undefined ? { payload: payload as any } : {}),
-          ...(providerTimestamp ? { providerTimestamp } : {}),
-        },
-      });
-    } catch (err) {
-      console.error("[WebhookProcessor] Error marking webhook processed:", err);
-    }
-  }
-}
 
 /**
  * Webhook signature generator (for testing)

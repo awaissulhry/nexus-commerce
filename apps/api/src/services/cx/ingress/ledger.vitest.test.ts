@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const created: Array<Record<string, any>> = []
 const updated: Array<Record<string, any>> = []
-let existingRow: { id: string } | null = null
+let existingRow: { id: string; status?: string } | null = null
 let failNext = false
 
 const prismaMock = {
@@ -88,11 +88,26 @@ describe('recordInbound verdicts', () => {
 
 describe('recordInbound redelivery', () => {
   it('counts a repeat without rewriting the original verdict', async () => {
-    existingRow = { id: 'row-existing' }
+    existingRow = { id: 'row-existing', status: 'pending' }
     const r = await recordInbound({ channel: 'EBAY', eventType: 'x', externalId: 'id', payload: {}, signatureOk: true, verifiedBy: 'ebay_ecdsa' })
-    expect(r).toEqual({ id: 'row-existing', duplicate: true })
+    expect(r.id).toBe('row-existing')
+    expect(r.duplicate).toBe(true)
     expect(created).toHaveLength(0)
-    expect(updated[0].data).toEqual({ attempts: { increment: 1 } })
+    // P2.1 — this counted `attempts` until the retry worker started using that column
+    // as its budget. A channel that redelivers eagerly would then have spent the
+    // retries of an event nobody had tried to handle even once. An arrival and a
+    // handling attempt are different numbers and now have different columns.
+    expect(updated[0].data).toEqual({ deliveries: { increment: 1 } })
+    expect(JSON.stringify(updated[0].data)).not.toContain('attempts')
+  })
+
+  it('reports the status the row already had, so a receiver can tell a retry from a duplicate', async () => {
+    // A channel resends the same delivery id both when it never heard an answer and
+    // when we answered with a failure. Without this, the retry it sent BECAUSE we
+    // failed reads as "already handled" and is dropped.
+    existingRow = { id: 'row-existing', status: 'failed' }
+    const r = await recordInbound({ channel: 'SHOPIFY', eventType: 'x', externalId: 'id', payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac' })
+    expect(r.existingStatus).toBe('failed')
   })
 })
 
