@@ -37,6 +37,13 @@ Read in this order:
 - "Start to implement the whole plan. I'll stop you where we need it." → packages run **in plan order**, no per-package "go". Commit each package when its proof is green.
 - **Ask first** for: any production **write**, any **live channel call**, each P7 drop, and the Owner-only steps in plan section 8. Production **reads** (Railway traffic and logs) are allowed since 2026-09-20.
 - **Pushing is allowed** (Owner, 2026-09-20) once the package's proof is green. A push deploys to production and **applies migrations there**.
+- 🔴 **CADENCE (Owner, 2026-09-20, after 16 pushes in one session): COMMIT per
+  slice, PUSH per PACKAGE.** Commits are free and keep the history reviewable.
+  **A push is not free**: it runs the full pre-push gate (~5 min) and **deploys to
+  production**. Splitting a package into slices is good; pushing each slice is
+  not — that is 16 production deploys where 4 would do. Let the slices pile up
+  locally and push once the package's proof is green, which is what the rule
+  above already said and what I stopped doing.
 - ~~Flat-file routes need a yes per change~~ — **LIFTED 2026-09-20.** The flat file is
   being rebuilt, so `apps/api/src/routes/{ebay,amazon}-flat-file.routes.ts` and
   `apps/web/src/app/products/*-flat-file/**` are ordinary files. No edit list, no ask.
