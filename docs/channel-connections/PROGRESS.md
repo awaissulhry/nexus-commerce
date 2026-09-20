@@ -77,6 +77,7 @@ Read in this order:
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
 | P4.3b | **The EU shared-quantity guard fails CLOSED (D9).** Its `catch` allowed the push and said so as a principle; the Owner had already ruled "hold the push and alert". 🔴 **The fourth fail-open found in one day** — a rule's `catch` is where it goes to die. Held + alerted under its own conflict type, because "we could not check" is a different fact from "we checked and found a conflict" | `<this push>` | `build/P4.3b.md` |
 | P4.3a | **Etsy does not get to write our stock.** 🔴 `syncInventoryFromEtsy` wrote Etsy's quantities into `ProductVariation.stock` and `Product.totalStock` directly, bypassing the resolver, the shared-stock pool and any audit. It had never run — a manual trigger one env var away from silently overwriting pooled stock. Refusal + a sentence; the behavioural test replaces prisma with a Proxy that THROWS on any access | `<this push>` | `build/P4.3a.md` |
+| P4.2d | **The sweep actually runs.** 🔴 P4.2c shipped it into `CRON_REGISTRY` only — a MANUAL trigger, which is the very state P4.2c called the defect — and I told the Owner "one variable starts detecting drift". False: nothing called it. Scheduled now, on the SAME switch (two switches would give a job that runs every 6 h and returns "off" every time) | `<this push>` | `build/P4.2d.md` |
 | P4.2c | **Image read-back for Amazon and Shopify + the R-5 census.** Census = counterweight (all publishers already gated). 🔴 Read-back existed on all three channels and was SCHEDULED on one — a read-back that runs only when somebody opens a screen cannot detect drift. Sweeps bounded per run, `unconfigured` counted apart from `empty` so a blind run cannot read as a clean one. OFF behind one variable (spend, not doubt) | `<this push>` | `build/P4.2c.md` |
 | P4.2b | **An eBay offer rejection reaches its listing.** The decision first: `pushVariationGroup`'s 12 result sites mix eBay's verdicts with OUR validation, and P3.2's contract says *"in the channel's words"* — so 4 file, 8 do not, derived in the test. Retryable answers dropped (the file already retries those ids itself); the answer is CLASSIFIED, not pasted. Covers the flat-file push too | `<this push>` | `build/P4.2b.md` |
 | P4.2a | **An Amazon image rejection reaches its listing.** 🔴 NO image publish on ANY channel filed an issue; the feed already built a per-SKU receipt with Amazon's codes and stored it for a drill-down screen nobody opens. Filed as a MERGE source (an image feed must not close a content rejection), with Amazon's attributeNames re-indexed from the raw report — without them distinct rejections on one SKU collapse to one row | `<this push>` | `build/P4.2a.md` |
@@ -445,11 +446,16 @@ Each is one command, and each converts a "built" into a "verified":
 11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
 12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
 13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-14b. **Image drift on Amazon and Shopify is invisible until somebody opens the
-   images panel.** `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true` starts the sweep that
-   eBay already has (P4.2c). Read-only, bounded to 400 products a run
-   (`NEXUS_IMAGE_READBACK_MAX_PER_RUN`). Off because it is new recurring API
-   traffic on the Owner's accounts — spend, not doubt.
+14b. **🟢 RECOMMENDED: turn the image read-back sweep ON.**
+   `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true`. Measured cost on the DEV database
+   (parents/standalone only): **AMAZON 29 reads, SHOPIFY 1 read per sweep**, four
+   times a day, against a 5/second quota and capped at 400 products
+   (`NEXUS_IMAGE_READBACK_MAX_PER_RUN`). Production is larger and **uncounted**,
+   but eBay's equivalent has run every 6 h all along. With it off, image drift on
+   Amazon and Shopify stays invisible until somebody opens the images panel.
+   🔴 **P4.2c shipped it registry-only — a MANUAL trigger** — and was reported
+   as "one variable starts detecting drift", which was FALSE. P4.2d added the
+   schedule (`build/P4.2d.md`). Env is the Owner's authority.
 14a. **🟢 THE OWNER CHOSE OPTION B (2026-09-20): one captured live read first.**
    `GET /api/admin/amazon-orders-2026-probe?days=7` — admin-gated, read-only, ONE
    `searchOrders` call. It does **not** turn the switch on. It reports the field
@@ -499,6 +505,12 @@ Each is one command, and each converts a "built" into a "verified":
   about ENV, not about a connection.** Etsy and Shopify log it while a CX OAuth
   connection may exist perfectly well. Check the connection table, not the boot
   warning.
+- 🔴🔴 **REGISTRY-ONLY IS A MANUAL TRIGGER, NOT A HABIT.** When the finding is
+  "nothing runs this", a `CRON_REGISTRY` entry does NOT fix it — that is still a
+  manual trigger. I shipped P4.2c that way while fixing exactly that shape, and
+  reported it as working. **Grep for what CALLS it, not what DEFINES it.** Seen
+  three times now: Etsy's sync (P4.3a), Amazon/Shopify read-back (P4.2c), and
+  P4.2c's own fix.
 - 🔴🔴 **A RULE'S `catch` IS WHERE IT GOES TO DIE.** FOUR fail-opens found in one
   day, all in code that was correct on the happy path: eBay policy reconciliation
   warned instead of refusing (P4.1d), the lane marker guessed (P4.1e), unmatched
