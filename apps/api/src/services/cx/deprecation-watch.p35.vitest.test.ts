@@ -243,10 +243,19 @@ describe('P3.5 — the watch raises ONE alert', () => {
   })
 
   it('does not grow its memory without limit', async () => {
+    // Deliberately run OUTSIDE a business profile. `raiseChannelAlert` needs one, fails
+    // fast without it and is swallowed by the watch — so the map is still filled 520
+    // times while the database is touched zero times.
+    //
+    // The first version of this test ran all 520 inside a profile: ~1,040 queries for
+    // an assertion about an in-memory Map. It passed alone and flaked under the full
+    // profiles-ON suite, which is how the pre-push gate first saw this package. A test
+    // should not need a database to prove a bound on a Map.
     for (let i = 0; i < 520; i++) {
-      await inWs(() => watch.watchForDeprecation({ channel: 'EBAY', endpoint: `/p${i}`, headers: h({ deprecation: 'true' }) }))
+      await watch.watchForDeprecation({ channel: 'EBAY', endpoint: `/p${i}`, headers: h({ deprecation: 'true' }) })
     }
     expect(watch.deprecationWatchSize()).toBeLessThanOrEqual(500)
+    expect(watch.deprecationWatchSize()).toBeGreaterThan(0) // control: it did fill
   })
 
   it('a malformed header fails the watch, never the call', async () => {
