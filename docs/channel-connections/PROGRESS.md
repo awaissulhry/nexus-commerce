@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 – P2.8 are built — P2 is COMPLETE**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P3.1** (errors back to you).
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2 is COMPLETE; P3.1 is built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P3.2** (every channel error lands on its listing).
 
 Read in this order:
 
@@ -41,7 +41,7 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P3.1 (errors back to you)
+## 3. Next — P3.2 (errors land on the listing)
 
 Read `build/P2.1.md`, `P2.2.md` and `P2.3.md` first. Between them they found five live
 production defects that none of the plan's package descriptions predicted. That is the
@@ -80,6 +80,11 @@ argument for measuring before building, every single time.
   spend again; the SQS message id that could have caught it was discarded in the
   transport layer. **Note for P2.8 and beyond: the ledger now carries AMAZON_ADS rows
   too.**
+
+- **P3.1** — the error vocabulary had no test at all, and running the **201 real failed
+  bodies** from `OutboundApiCallLog` through it found four defects. **161 of them are
+  double-encoded** and lost their error code entirely. `OutboundApiCallLog` holds
+  469,455 real calls — **use it as the fixture source for anything P3 or P4 touches.**
 
 **The pattern in all five:** a component that looks finished, is referenced by working
 code around it, and has never once run. Ask "what would I see if this had never
