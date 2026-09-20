@@ -1,25 +1,29 @@
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
- * IS.2 — eBay Notification Platform push webhook + Trading API subscription setup.
+ * eBay inbound notifications — the receiver, the ownership challenge, and setup.
  *
- * Receives real-time push events from eBay's Platform Notifications for:
- *   - AuctionCheckoutComplete  → order sold via auction
- *   - FixedPriceTransaction    → order sold via Buy It Now / fixed price
+ * P2.3 rewrote the setup half. It used to call `SetNotificationPreferences`, eBay's OLD
+ * delivery system, while the receiver branched on REST-looking topic names that eBay
+ * does not use. Nothing joined the two: there was no Notification API destination and
+ * no subscription, so **no genuine eBay notification had ever arrived**. Every EBAY row
+ * in the inbound ledger is one of this repository's own probes.
  *
- * Admin setup endpoint:
- *   POST /api/admin/setup-ebay-notifications
- *   Calls SetNotificationPreferences via Trading API to subscribe the seller
- *   account to the two order-completion events. Site 101 (Italy). One-time,
- *   idempotent. Uses EBAY_APP_ID / EBAY_CERT_ID / EBAY_DEV_ID / EBAY_TOKEN.
+ * Endpoints:
+ *   POST /api/admin/setup-ebay-notifications   create the destination, subscribe the
+ *                                              real topics, report any name eBay's own
+ *                                              catalogue does not contain
+ *   GET  /api/admin/ebay-notification-status   what eBay says exists right now
+ *   GET  /api/webhooks/ebay-notification?challenge_code=…
+ *                                              ownership check —
+ *                                              SHA256(code + token + endpoint)
+ *   POST /api/webhooks/ebay-notification       the receiver. Verifies X-EBAY-SIGNATURE,
+ *                                              records every arrival and every
+ *                                              rejection, then routes by topic.
  *
- * Challenge endpoint (ownership verification):
- *   GET /api/webhooks/ebay-notification?challenge_code=xxx
- *   Returns SHA256(challenge_code + verificationToken + endpointUrl).
- *
- * Push webhook:
- *   POST /api/webhooks/ebay-notification
- *   Verifies X-EBAY-SIGNATURE, processes order events.
+ * The lifecycle topics (account deletion, authorization revocation) are answered BEFORE
+ * account routing — see the comment at that branch; routing them was returning 503 on
+ * the one topic eBay requires a 200 for.
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -30,73 +34,32 @@ import { registerRawJsonParser } from '../utils/webhook.js'
 import type { RawBodyRequest } from '../utils/webhook.js'
 import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
 import { verifyEbayNotification, ebayChallengeResponse } from '../services/cx/ingress/ebay-signature.js'
+import { ebayTopicAction } from '../services/cx/ingress/ebay-topics.js'
 import { recordInbound } from '../services/cx/ingress/ledger.js'
 
-// ── Trading API helpers ────────────────────────────────────────────────
+// P2.3 — the Trading API helpers that stood here are gone.
+//
+// `tradingCredentialsMissing`, `resolveEbayAccessToken` and `callTradingApi` existed
+// only to drive `SetNotificationPreferences` and `GetNotificationPreferences`, eBay's
+// OLD notification system. Both routes now read and write the Notification API
+// instead, so all three were dead. The eBay Trading API itself is untouched and still
+// lives in services/ebay-trading-api.service.ts — only this file's private copies of
+// the plumbing are removed.
 
-function tradingCredentialsMissing(): string | null {
-  // Uses the same env var names as EbayAuthService (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET)
-  const required = ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_DEV_ID']
-  const missing = required.filter((k) => !process.env[k])
-  return missing.length ? missing.join(', ') : null
-}
-
-/** Resolve a fresh OAuth access token, and its account, from the primary eBay ChannelConnection. */
-async function resolveEbayAccessToken(): Promise<{ token: string; connectionId: string }> {
-  // MAP.3 — DECLARED. The doc comment above said "the first active eBay
-  // ChannelConnection", which is the assumption this phase removes.
-  const connection = await resolveConnection({ channel: 'EBAY', primary: true })
-  const { EbayAuthService } = await import('../services/ebay-auth.service.js')
-  const authService = new EbayAuthService()
-  return { token: await authService.getValidToken(connection.id), connectionId: connection.id }
-}
-
-async function callTradingApi(callName: string, xmlBody: string, connectionId: string): Promise<{
-  ack: string
-  shortMessage?: string
-  longMessage?: string
-  rawXml: string
-}> {
-  const compatLevel = process.env.EBAY_COMPAT_LEVEL ?? '1193'
-  const isSandbox = process.env.EBAY_ENVIRONMENT === 'sandbox' || process.env.EBAY_SANDBOX === 'true'
-  const endpoint = isSandbox
-    ? 'https://api.sandbox.ebay.com/ws/api.dll'
-    : 'https://api.ebay.com/ws/api.dll'
-
-  // P1.2 — through the channel gateway (account state, rate bucket, one ledger row with the Ack read as
-  // the outcome). The token travels in the XML's RequesterCredentials, as before.
-  const { gatewayFetch } = await import('../services/gateway/gateway.js')
-  const { tradingCallKind, tradingAnswerOk } = await import('../services/ebay-trading-api.service.js')
-  const res = await gatewayFetch({
-    channel: 'EBAY', operation: `trading.${callName}`, kind: tradingCallKind(callName), connectionId,
-    url: endpoint, method: 'POST', auth: 'none', marketHeaders: 'caller', answerOk: tradingAnswerOk,
-    headers: {
-      'X-EBAY-API-CALL-NAME':            callName,
-      'X-EBAY-API-COMPATIBILITY-LEVEL':  compatLevel,
-      'X-EBAY-API-DEV-NAME':             process.env.EBAY_DEV_ID!,
-      'X-EBAY-API-APP-NAME':             process.env.EBAY_CLIENT_ID!,   // App ID
-      'X-EBAY-API-CERT-NAME':            process.env.EBAY_CLIENT_SECRET!, // Cert ID
-      'X-EBAY-API-SITEID':               '101',  // Italy
-      'Content-Type':                    'text/xml',
-    },
-    body: xmlBody,
-  })
-
-  const rawXml = await res.text()
-  if (!res.ok) {
-    throw new Error(`eBay ${callName} HTTP ${res.status}: ${rawXml.slice(0, 300)}`)
-  }
-
-  const ack = rawXml.match(/<Ack>([^<]+)<\/Ack>/)?.[1] ?? 'Unknown'
-  const shortMessage = rawXml.match(/<ShortMessage>([^<]+)<\/ShortMessage>/)?.[1]
-  const longMessage  = rawXml.match(/<LongMessage>([^<]+)<\/LongMessage>/)?.[1]
-
-  return { ack, shortMessage, longMessage, rawXml }
-}
-
-
-// P4 — legacy Trading-API sale topics (what setup-ebay-notifications subscribes
-// to). Module-scope so the hot webhook handler doesn't re-allocate per request.
+// P4 — legacy Trading-API sale topics.
+//
+// P2.3 — the comment here used to say these are "what setup-ebay-notifications
+// subscribes to". That route no longer subscribes anything through the Trading API, so
+// these arrive only if the old delivery preferences are still configured in eBay's
+// developer portal from before. The branch stays because it works and costs nothing
+// when nothing arrives; removing it would drop real sales if those preferences are
+// still live.
+//
+// They are deliberately NOT in the topic table: `ItemSold` (Trading) and `ITEM_SOLD`
+// (Notification API) are different strings for different systems, and folding them
+// together would make one sale fire two syncs.
+//
+// Module-scope so the hot webhook handler doesn't re-allocate per request.
 const LEGACY_SALE_TOPICS = new Set([
   'AuctionCheckoutComplete',
   'FixedPriceTransaction',
@@ -193,132 +156,79 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   })
 
   // ── POST /api/admin/setup-ebay-notifications ───────────────────────
-  // Calls SetNotificationPreferences via Trading API to subscribe the
-  // production seller account (site 101 — Italy) to:
-  //   - AuctionCheckoutComplete  (auction BIN / true auction checkout)
-  //   - FixedPriceTransaction    (fixed-price / Buy It Now sale)
-  // Idempotent: re-running overwrites existing preferences safely.
-  app.post('/admin/setup-ebay-notifications', async (_req, reply) => {
-    const missing = tradingCredentialsMissing()
-    if (missing) {
-      return reply.status(400).send({
-        error: `Missing Trading API credentials: ${missing}`,
-        hint: 'Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_DEV_ID in Railway env vars',
-      })
+  // P2.3 — the Trading API setup that stood here is retired.
+  //
+  // `SetNotificationPreferences` is eBay's OLD delivery system, and its own comments
+  // recorded the confusion: someone had put REST topic names into it and eBay answered
+  // "Invalid input data", then `ItemRevised` was refused too, and the note concluded
+  // that returns and refunds "flow through the REST Notification API instead, which we
+  // already handle". Nothing handled them. There was no destination and no
+  // subscription, so **no genuine eBay notification had ever arrived** — every EBAY row
+  // in the ledger is one of this repository's own probes.
+  //
+  // This route now does the thing that was missing: create the destination eBay
+  // delivers to, and subscribe the real topics, checked against eBay's own catalogue.
+  app.post('/admin/setup-ebay-notifications', async (req, reply) => {
+    const { setupEbayNotifications } = await import('../services/cx/connectors/ebay/notifications.js')
+    const query = req.query as { environment?: string; onlyHandled?: string }
+    const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
+    const result = await setupEbayNotifications({
+      environment,
+      // Default: subscribe only the topics Nexus can act on. A topic with no handler
+      // would arrive, be recorded and then dead-letter (P2.1) — visible, but noise.
+      skipTopicsWithoutHandlers: query.onlyHandled !== 'false',
+    })
+    if (!result.configured) {
+      return reply.status(400).send({ ok: false, ...result })
     }
-
-    let token: string
-    let connectionId: string
-    try {
-      ;({ token, connectionId } = await resolveEbayAccessToken())
-    } catch (err: any) {
-      return reply.status(400).send({ error: err?.message ?? String(err) })
-    }
-
-    // RT.7 + RT.10 — Trading API events Nexus subscribes to.
-    //
-    // First production run rejected ItemMarkedAsPaid + ReturnOpened +
-    // ReturnClosed + EOR_OrderRefunded with eBay error code 37 "Invalid
-    // input data" — those are REST Notification API topics, NOT
-    // Trading API event names. Trading API's SetNotificationPreferences
-    // only accepts the enum values defined at:
-    // https://developer.ebay.com/devzone/xml/docs/reference/ebay/types/notificationeventtypecodetype.html
-    //
-    // Returns / refunds flow through the REST Notification API instead,
-    // which we already handle via /api/webhooks/ebay-notification with
-    // topics marketplace.order.* — those don't need this admin call.
-    // Second hotfix attempt: eBay rejected ItemRevised at index [4]
-    // even after dropping the 4 REST-only event names. Likely this
-    // seller account's Trading API permission level doesn't include
-    // inventory-revision notifications (those need a different scope
-    // / opt-in via eBay developer account). RT.10 push path now
-    // depends on REST Notification API setup instead — handled outside
-    // this admin call. Falls back to the CS-series polling ingester
-    // (same behaviour as before RT.10) when REST sub isn't configured.
-    const events = [
-      'AuctionCheckoutComplete',   // auction BIN / true auction sale
-      'FixedPriceTransaction',     // fixed-price / Buy It Now sale
-      'ItemSold',                  // broader sale event
-      'ItemMarkedAsShipped',       // buyer-facing shipped marker
-    ]
-    const eventXml = events
-      .map(
-        (e) => `    <NotificationEnable>
-      <EventType>${e}</EventType>
-      <EventEnable>Enable</EventEnable>
-    </NotificationEnable>`,
-      )
-      .join('\n')
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
-<SetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${token}</eBayAuthToken>
-  </RequesterCredentials>
-  <ApplicationDeliveryPreferences>
-    <ApplicationEnable>Enable</ApplicationEnable>
-    <AlertEnable>Enable</AlertEnable>
-  </ApplicationDeliveryPreferences>
-  <UserDeliveryPreferenceArray>
-${eventXml}
-  </UserDeliveryPreferenceArray>
-</SetNotificationPreferencesRequest>`
-
-    try {
-      const result = await callTradingApi('SetNotificationPreferences', xml, connectionId)
-      logger.info('[eBay setup] SetNotificationPreferences', { ack: result.ack, shortMessage: result.shortMessage })
-
-      if (result.ack === 'Failure') {
-        return reply.status(502).send({
-          ok: false,
-          ack: result.ack,
-          error: result.shortMessage ?? 'eBay returned Failure',
-          detail: result.longMessage,
-          rawXml: result.rawXml,
-        })
-      }
-
-      return reply.send({
-        ok: true,
-        ack: result.ack,
-        message: `Subscribed to ${events.length} eBay events on site 101 (Italy)`,
-        events,
-        warning: result.ack === 'Warning' ? result.shortMessage : undefined,
-      })
-    } catch (err: any) {
-      logger.error('[eBay setup] SetNotificationPreferences failed', { error: err?.message })
-      return reply.status(500).send({ ok: false, error: err?.message ?? String(err) })
-    }
+    // A wrong topic id is reported as its own thing, not folded into "failed". It is
+    // the finding this package exists to surface.
+    return reply.send({
+      ok: result.notOffered.length === 0,
+      ...result,
+      hint: result.notOffered.length
+        ? `eBay's catalogue does not contain: ${result.notOffered.join(', ')}. Correct them in services/cx/ingress/ebay-topics.ts.`
+        : undefined,
+    })
   })
 
   // ── GET /api/admin/ebay-notification-status ────────────────────────
-  // Calls GetNotificationPreferences to verify the subscription is live.
-  app.get('/admin/ebay-notification-status', async (_req, reply) => {
-    const missing = tradingCredentialsMissing()
-    if (missing) {
-      return reply.status(400).send({ error: `Missing Trading API credentials: ${missing}` })
-    }
-
-    let token: string
-    let connectionId: string
+  //
+  // P2.3 — reads the Notification API, not `GetNotificationPreferences`.
+  //
+  // The Trading-API answer this used to return could only ever describe the OLD
+  // delivery system, so it reported healthy preferences for a path nothing listened on
+  // while the REST destination — the one eBay would actually deliver to — did not
+  // exist. A status endpoint that cannot see the thing that is broken is worse than
+  // none, because it is quoted.
+  app.get('/admin/ebay-notification-status', async (req, reply) => {
+    const {
+      getEbayTopics, getEbayDestinations, getEbaySubscriptions, EBAY_DESIRED_TOPICS,
+    } = await import('../services/cx/connectors/ebay/notifications.js')
+    const query = req.query as { environment?: string }
+    const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
+    const endpoint = process.env.EBAY_NOTIFICATION_ENDPOINT ?? null
     try {
-      ;({ token, connectionId } = await resolveEbayAccessToken())
-    } catch (err: any) {
-      return reply.status(400).send({ error: err?.message ?? String(err) })
-    }
-
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
-<GetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${token}</eBayAuthToken>
-  </RequesterCredentials>
-  <PreferenceLevel>User</PreferenceLevel>
-</GetNotificationPreferencesRequest>`
-
-    try {
-      const result = await callTradingApi('GetNotificationPreferences', xml, connectionId)
+      const [topics, destinations, subscriptions] = await Promise.all([
+        getEbayTopics(environment), getEbayDestinations(environment), getEbaySubscriptions(environment),
+      ])
+      const offered = new Set(topics.map((t) => t.topicId))
+      const ours = destinations.find((d) => d.endpoint === endpoint) ?? null
       return reply.send({
-        ack: result.ack,
-        rawXml: result.rawXml,
+        environment,
+        endpoint,
+        destination: ours,
+        // The number that matters: a subscription pointed anywhere but our destination
+        // delivers into the void, the same failure RT.3 found on the Amazon side.
+        subscriptions: subscriptions.map((s) => ({
+          ...s, pointsAtOurDestination: !!ours && s.destinationId === ours.destinationId,
+        })),
+        catalogueSize: offered.size,
+        wanted: EBAY_DESIRED_TOPICS.map((t) => ({
+          ...t,
+          offeredByEbay: offered.has(t.topicId),
+          subscribed: subscriptions.some((s) => s.topicId === t.topicId && (!ours || s.destinationId === ours.destinationId)),
+        })),
       })
     } catch (err: any) {
       return reply.status(500).send({ error: err?.message ?? String(err) })
@@ -333,8 +243,13 @@ ${eventXml}
       return reply.status(400).send({ error: 'Missing challenge_code' })
     }
 
-    const token = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN ?? ''
-    const endpoint = process.env.EBAY_NOTIFICATION_ENDPOINT_URL ?? ''
+    // P2.3 — through the one accessor the destination setup also uses, so the hash eBay
+    // computes from the destination and the hash we answer with cannot be built from
+    // two different pairs of environment variables.
+    const { ebayNotificationConfig } = await import('../services/cx/connectors/ebay/notifications.js')
+    const config = ebayNotificationConfig()
+    const token = config.verificationToken ?? ''
+    const endpoint = config.endpoint ?? ''
 
     // CX.4a — an unset token or endpoint still produces a well-formed hash, and it is
     // the WRONG hash. eBay reads that as a failed ownership check and marks the
@@ -412,6 +327,9 @@ ${eventXml}
     const ebayOrderId: string = notifData.orderId ?? notifData.orderId ?? ''
     const notificationId: string =
       payload?.metadata?.notificationId ?? payload?.notification?.notificationId ?? ''
+    // P2.3 — one topic table (services/cx/ingress/ebay-topics.ts) instead of four topic
+    // strings written inline here, three of which were not eBay topic ids at all.
+    const { action: topicAction, via: topicVia } = ebayTopicAction(topic, payload)
 
     logger.info('[eBay notification] received', { topic, ebayOrderId })
 
@@ -453,7 +371,7 @@ ${eventXml}
     // is the Owner's decision and its own unit, and doing it as a side effect of an
     // inbound message would be the most destructive thing in this codebase.
     // Logged at error level so it cannot pass unseen while that decision is pending.
-    if (topic === 'MARKETPLACE_ACCOUNT_DELETION') {
+    if (topicAction === 'account_deletion') {
       logger.error('[eBay notification] MARKETPLACE_ACCOUNT_DELETION received — acknowledged and recorded; erasure is NOT automated', {
         notificationId: notificationId || null,
         username: notifData?.username ?? null,
@@ -470,7 +388,7 @@ ${eventXml}
     // Topic shapes seen:
     //   Trading API (legacy): ItemRevised (XML notification)
     //   REST notification API: marketplace.inventory_item.updated
-    if (topic === 'ItemRevised' || topic === 'marketplace.inventory_item.updated') {
+    if (topicAction === 'listing_changed') {
       void (async () => {
         try {
           const data = payload?.notification?.data ?? payload?.notification ?? payload
@@ -565,7 +483,7 @@ ${eventXml}
       return reply.status(204).send()
     }
 
-    if (topic === 'marketplace.order.created') {
+    if (topicAction === 'order_created') {
       // Trigger an immediate eBay orders sync scoped to a short window.
       // The service is idempotent on (channel, channelOrderId) so re-running
       // it is safe even if the cron already picked up the same order.
@@ -599,7 +517,7 @@ ${eventXml}
           })
         }
       })()
-    } else if (topic === 'marketplace.order.cancelled') {
+    } else if (topicAction === 'order_cancelled') {
       void (async () => {
         try {
           const order = await prisma.order.findUnique({
@@ -636,8 +554,19 @@ ${eventXml}
           })
         }
       })()
+    } else if (topicAction === 'authorization_revoked') {
+      // P2.3 subscribes this topic; P2.6 is the package that acts on it (mark the
+      // account revoked, pause writes, alert). Recorded at error level meanwhile, so a
+      // seller withdrawing our access is never a silent 204 — the ledger row carries
+      // the payload and the reason, which is what P2.6 will build from.
+      logger.error('[eBay notification] AUTHORIZATION_REVOCATION received — recorded; the account is NOT yet marked revoked (P2.6)', {
+        notificationId: notificationId || null,
+        username: notifData?.username ?? notifData?.userId ?? null,
+      })
     } else {
-      logger.info('[eBay notification] unhandled topic', { topic })
+      // `topicVia` matters as much as the topic: 'none' means nothing in the payload
+      // identified it either, which is the only case that is genuinely unhandled.
+      logger.info('[eBay notification] unhandled topic', { topic, via: topicVia })
     }
 
     // eBay expects 204 for successful receipt — always return quickly.
@@ -645,6 +574,30 @@ ${eventXml}
     }
     if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return processVerified()
     const event = req.body as any
+
+    // P2.3 — the lifecycle topics are answered BEFORE any account routing, and this is
+    // not a tidiness point.
+    //
+    // MARKETPLACE_ACCOUNT_DELETION carries a `username`, never a seller object, so the
+    // seller extraction below yields undefined and `verifiedChannelWorkspace('EBAY')`
+    // is left to pick one row out of however many eBay accounts are connected. With
+    // two it raises `ingress_account_ambiguous` and the endpoint answers **503**.
+    // Measured, with a control: no seller id -> throws 503; a known seller id ->
+    // resolves. eBay requires a 200 for this topic, marks an endpoint that fails it as
+    // down, and answering it is a condition of holding production keys — so the more
+    // eBay accounts are connected, the more certainly the erasure notice is refused.
+    //
+    // AUTHORIZATION_REVOCATION has the same shape: it is about the grant, not about an
+    // order, so it cannot name a seller to route by either.
+    //
+    // Both are handled in the platform's own workspace, which is the honest home for a
+    // notification no single business owns — the same choice the rejected-signature row
+    // above makes.
+    const lifecycle = ebayTopicAction(event?.metadata?.topic, event).action
+    if (lifecycle === 'account_deletion' || lifecycle === 'authorization_revoked') {
+      return await legacyIngress(processVerified)
+    }
+
     const data = event?.notification?.data
     const seller = data?.seller?.userId ?? data?.sellerUser?.userId ?? data?.user?.userId ?? data?.sellerId
     try {

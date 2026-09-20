@@ -138,14 +138,23 @@ describe('P0.7 — the batch form checks each SKU on its own', () => {
 // ── Part 2: census ──────────────────────────────────────────────────────────────────────────────
 const SRC = fileURLToPath(new URL('../', import.meta.url))
 const PRIMARY_EBAY = /channel:\s*['"]EBAY['"],\s*primary:\s*true/
-/** Files that pick the primary eBay account but send no eBay LISTING write (read, or Nexus-only). */
+/**
+ * Files that pick the primary eBay account but send no eBay LISTING write (read, or
+ * Nexus-only).
+ *
+ * P2.3 removed `routes/ebay-notification.routes.ts` from this list, and the census is
+ * what noticed: that file's entry read "notification preferences (P2.3), not a
+ * listing", and P2.3 retired exactly those Trading-API preferences. With
+ * `resolveEbayAccessToken` gone the file no longer picks the primary account at all,
+ * so listing it here would be a stale exemption — the thing the second test below
+ * exists to catch.
+ */
 const NOT_A_LISTING_WRITE: Record<string, string> = {
   'jobs/ebay-status-reconcile.job.ts': 'reads listing status from eBay into Nexus',
   'jobs/ebay-feed-poll.job.ts': 'reads feed task results',
   'routes/listings-syndication.routes.ts': 'creates a local DRAFT campaign row; no eBay call',
   'routes/ebay-description-push.routes.ts': 'relink-item-id reads eBay and writes Nexus; inventory-drift is GET-only',
   'routes/ebay.routes.ts': 'GET inventory item and GET policies (reads)',
-  'routes/ebay-notification.routes.ts': 'notification preferences (P2.3), not a listing',
   'services/ebay-import.service.ts': 'imports listings into Nexus (reads)',
   'services/ebay-category.service.ts': 'taxonomy reads',
   'services/ebay-inventory-readback.service.ts': 'read-back (reads)',

@@ -209,6 +209,7 @@ import { startAmazonSecretRotationCron } from "./jobs/amazon-secret-rotation.job
 import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { startAmazonNotificationReconcileCron } from "./jobs/amazon-notification-reconcile.job.js";
+import { startEbayNotificationReconcileCron } from "./jobs/ebay-notification-reconcile.job.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
@@ -1305,6 +1306,12 @@ async function start() {
       // which looks like a quiet day. Idempotent; heals a subscription pointed at a
       // foreign destination. Opt out via NEXUS_ENABLE_AMAZON_NOTIFICATION_RECONCILE=0.
       startAmazonNotificationReconcileCron();
+
+      // P2.3 — the same for eBay, which had NO destination and NO subscription at all,
+      // so no genuine eBay notification had ever arrived. Makes no call until
+      // EBAY_NOTIFICATION_ENDPOINT_URL and EBAY_NOTIFICATION_VERIFICATION_TOKEN are
+      // both set. Opt out via NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=0.
+      startEbayNotificationReconcileCron();
 
       // Amazon financial events — daily 02:00 UTC, pulls yesterday's
       // /finances/v0/financialEvents and writes FinancialTransaction rows.

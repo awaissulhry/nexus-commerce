@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED** and **P2.2 is built** (`build/P2.1.md`, `build/P2.2.md`). The next package is **P2.3 — and it needs the Owner's yes, because it starts live traffic (D3).**
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 and P2.3 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.4**.
 
 Read in this order:
 
@@ -41,40 +41,30 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P2.3 (**needs the Owner's yes**)
+## 3. Next — P2.4
 
-P2.3 creates the eBay Notification API destination and subscriptions. That is live
-traffic, and decision D3 makes it an explicit yes. **Do not start it without one.**
+Read `build/P2.1.md`, `P2.2.md` and `P2.3.md` first. Between them they found five live
+production defects that none of the plan's package descriptions predicted. That is the
+argument for measuring before building, every single time.
 
-Read `build/P2.1.md` and `build/P2.2.md` first. Between them they found four live
-production defects that the plan's own package descriptions did not predict, which is
-the argument for measuring before building every single time.
+- **P2.1** — Shopify had never recorded a webhook (no business profile on the routes);
+  its idempotency key was the resource id, not the delivery id. Retry worker, dead
+  letters, replay. Guard: `node scripts/check-inbound-ledger.mjs`.
+- **P2.2** — Amazon's order-change parse read one level too high: `fulfillmentType`
+  "MFN" on **1413 / 1413** real payloads when the truth was AFN 1071. A test was green
+  about it because its fixture copied the parser's mistake.
+- **P2.3** — there was no eBay destination and no subscription, so **no genuine eBay
+  notification had ever arrived**, and `MARKETPLACE_ACCOUNT_DELETION` was answered
+  **503**.
 
-**P2.1** — the inbound ledger retries, dead-letters and replays. Shopify had never
-recorded a single webhook (the routes ran with no business profile); its idempotency key
-was the resource id, not the delivery id; eBay rejects were recorded only when profiles
-were off. `WebhookProcessor` is deleted. Guard: `node scripts/check-inbound-ledger.mjs`.
+**The standing rule the Owner kept:** the flat-file routes still need a yes per change
+(`apps/api/src/routes/{ebay,amazon}-flat-file.routes.ts`,
+`apps/web/src/app/products/*-flat-file/**`). A blanket "implement the plan" does not
+lift a no-touch rule. Grep for those paths before starting a package, and if one is
+needed, write the edit list and ask.
 
-**P2.2** — the Amazon order-change parse read one level too high. Over the 1,413 real
-payloads in the ledger it produced `orderStatus` undefined and `fulfillmentType` "MFN"
-**1413 / 1413**, while the truth was **AFN 1071 / MFN 342**. That had kept an
-`if (AFN) skip` branch dead since the day it was written, and a test was green about it
-because its fixture copied the parser's mistake. Per-type payload versions and
-destination support now exist; a nightly reconcile now exists.
-
-**What P2.2 deliberately did NOT do**, and the next session must not assume otherwise:
-
-- **No new Amazon subscription was created.** That is a live channel call and a
-  production write. The seven types the plan names are declared in
-  `NEXUS_SP_API_NOTIFICATION_SPECS` and gated behind
-  `NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES` (default off). With it off, the six live types are
-  subscribed exactly as before.
-- **No handlers for the new types.** Their payloads have never been seen here. P2.1
-  makes the honest order possible: subscribe, let the real payload land in the ledger,
-  then write the handler from it.
-
-After P2.3: P2.4 → P2.5 → P2.6 → P2.7 → P2.8 → P3.x → **P5.1 before 2026-12-15** →
-P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+After P2.4: P2.5 → P2.6 → P2.7 → P2.8 → P3.x → **P5.1 before 2026-12-15** → P4.x → P5 →
+P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
 ## 4. Open items the Owner owns
 
@@ -83,16 +73,23 @@ P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → 
 3. **Shopify order-action switches** now reach the connected account when set to `true`: `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new in P1.7).
 4. **Re-publishing an ended listing has no path**: the push lock refuses it and nothing in the code relists. Presence's relist verb is the planned answer.
 5. **A live stock round-trip on a real Shopify dev store** is still unproven (P1.4 done-when 2) — it is a live channel call, so it needs the Owner's yes.
-6. **Turn on the new Amazon notification types** when you want them: set
+6. **Start eBay's live notifications** by setting `EBAY_NOTIFICATION_ENDPOINT_URL`
+   (the public `/api/webhooks/ebay-notification` URL) and
+   `EBAY_NOTIFICATION_VERIFICATION_TOKEN` (32–80 characters) in production. Until both
+   are set, `setupEbayNotifications` makes **no call at all**. Once set, the nightly
+   reconcile creates the destination and subscribes the topics. Check the result with
+   `GET /api/admin/ebay-notification-status`; a topic listed under `notOffered` means
+   its id in `services/cx/ingress/ebay-topics.ts` is wrong.
+7. **Turn on the new Amazon notification types** when you want them: set
    `NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES=true`. That makes the next boot, the nightly
    reconcile and the admin endpoint attempt `LISTINGS_ITEM_ISSUES_CHANGE` and the four
    types whose SQS support is unverified. A 400 InvalidInput on one of those is a
    finding, not a fault — it means that type needs an EventBridge destination. Two types
    already need one: `LISTINGS_ITEM_STATUS_CHANGE` and `BRANDED_ITEM_CONTENT_CHANGE`.
-7. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
-8. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
-9. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-10. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
+8. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
+9. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
+10. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+11. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 5. Traps that cost time here — read before measuring anything
 
@@ -103,6 +100,15 @@ P4.x → P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → 
 - A full suite **under load** fails files that pass alone (PGlite setup timeouts). Re-run a file alone before calling it a regression.
 - Known-failing baseline of the full API suite: `clients/amazon-validation-preview` (5) and `services/marketplaces/amazon-classifications` (1) — both read a local Amazon account.
 - **`scripts/check-push-lock.mjs` is RED and has been since before P2.1**: `studio-publication-amazon.ts:164 sendAmazonPublication -> fetch, callAPI`. Verified at clean `HEAD` 5b5ca6166 in a separate worktree. Do not treat it as yours; do not "fix" it inside another package without saying so.
+- **Two names for one fact is the shape of every drift defect here.** P2.3 nearly
+  shipped a setup reading `EBAY_NOTIFICATION_ENDPOINT` while the challenge handler read
+  `EBAY_NOTIFICATION_ENDPOINT_URL` — which would have failed eBay's ownership check and
+  taken the endpoint down. One accessor, called by both sides, is the only fix that
+  holds.
+- **A derived census guard is worth more than it costs.** `write-account-guard.p07`
+  noticed that a file had stopped picking the primary eBay account and that its
+  exemption was now stale. It was right and the code had moved — do not adjust a guard
+  to pass without establishing which of the two is wrong.
 - **A fixture written by hand can agree with the bug.** P2.2's order fixture put the
   fields where the broken parser read them, so the test was green about behaviour
   production had never had, for as long as both were wrong together. Where real payloads
