@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({
-  findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), queue: vi.fn(), patch: vi.fn(), get: vi.fn(),
+  findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), queue: vi.fn(), patch: vi.fn(), get: vi.fn(), grants: vi.fn(),
 }))
-vi.mock('../db.js', () => ({ default: { channelListing: { findFirst: s.findFirst, findMany: s.findMany, update: s.update }, outboundSyncQueue: { updateMany: s.queue, create: s.queue } } }))
+// P1.3 — a queue row is created through `createOutboundRow`, which asks the BP.S3
+// preflight whether this seller account is SHARED. This coordinate's account is not
+// shared with anyone (no ChannelAccountGrant rows), so no claim is needed; the model
+// has to exist on the stand-in for the preflight to be able to ask.
+vi.mock('../db.js', () => ({ default: { channelListing: { findFirst: s.findFirst, findMany: s.findMany, update: s.update }, channelAccountGrant: { findMany: s.grants }, outboundSyncQueue: { updateMany: s.queue, create: s.queue } } }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'seller' }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { patchPurchasableOffer: s.patch, getListingsItem: s.get } }))
 vi.mock('./amazon/flat-file.service.js', () => ({ MARKETPLACE_ID_MAP: { IT: 'it', DE: 'de' } }))
@@ -11,7 +15,7 @@ const c = { productId: 'p', channel: 'AMAZON', marketplace: 'IT', channelConnect
 const offer = [{ marketplace_id: 'it', currency: 'EUR', our_price: [{ schedule: [{ value_with_tax: 10 }] }] }]
 const row = () => ({ ...c, id: 'listing', fulfillmentMethod: 'FBM', product: { sku: 'SKU', fulfillmentMethod: 'FBM', productType: 'AUTO_ACCESSORY' }, price: 10, offerClosedAt: null, offerCloseSnapshot: { purchasableOffer: offer, productType: 'AUTO_ACCESSORY' }, followMasterQuantity: true, quantityOverride: null, quantity: 5, syncPaused: false })
 beforeEach(() => {
-  vi.clearAllMocks(); s.findFirst.mockResolvedValue(row()); s.findMany.mockResolvedValue([row()])
+  vi.clearAllMocks(); s.findFirst.mockResolvedValue(row()); s.findMany.mockResolvedValue([row()]); s.grants.mockResolvedValue([])
   s.get.mockResolvedValue({ rawResponse: { attributes: { purchasable_offer: offer } } })
   s.patch.mockResolvedValue({ success: true, dryRun: false })
   vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('NO CHANNEL') }))

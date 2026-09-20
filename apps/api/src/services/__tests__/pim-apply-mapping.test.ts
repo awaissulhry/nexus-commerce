@@ -11,18 +11,29 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 const { mockPrisma, txMock, mockPlan, mockTranslate, mockQueueAdd } = vi.hoisted(() => {
+  /*
+   * P1.3 — a queue row is now created through `createOutboundRow`, which reads the
+   * listing (for the BP.S3 shared-account preflight and for the row's destination
+   * account) through the CALLER's client. Inside the cascade that client is the
+   * transaction, so the transaction stand-in reads the same listing table as the
+   * outer one — one stand-in, one set of rows, no second truth.
+   */
+  const channelListingFindMany = vi.fn()
   const txMock = {
     product: { findUnique: vi.fn(), update: vi.fn() },
     productTranslation: { upsert: vi.fn() },
     channelListingOverride: { create: vi.fn() },
     outboundSyncQueue: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-    channelListing: { update: vi.fn() },
+    channelListing: { update: vi.fn(), findMany: channelListingFindMany },
+    // No account here is shared with a second business, so no coordinate claim is needed.
+    channelAccountGrant: { findMany: vi.fn(async () => []) },
   }
   return {
     txMock,
     mockPrisma: {
       product: { findUnique: vi.fn() },
-      channelListing: { findMany: vi.fn() },
+      channelListing: { findMany: channelListingFindMany },
+      channelAccountGrant: txMock.channelAccountGrant,
       terminologyPreference: { findMany: vi.fn() },
       $transaction: vi.fn(async (fn: any) => fn(txMock)),
     },

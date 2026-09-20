@@ -57,6 +57,33 @@ export async function reserveSharedCoordinates(
    * top-level import here turned into a suite-load failure.
    */
   const { claimCoordinate, sharedConnectionIds } = await import('./listing-claim.service.js')
+  // P1.3 — read through the caller's client: inside a transaction, no second connection is taken.
+  const grantReader = typeof (db as { channelAccountGrant?: { findMany?: unknown } }).channelAccountGrant?.findMany === 'function' ? db as never : undefined
+
+  /*
+   * The GATE first, the listing read only if the gate opens.
+   *
+   * A P1.3 row names the account it will be sent through (`channelConnectionId`), and
+   * that account — the one the gateway opens, services/gateway/account.js — is the
+   * namespace a claim protects: a coordinate on an account nothing publishes to cannot
+   * collide. So when every row names its account, the gate is answerable from the one
+   * indexed grant read this feature promised, and the listing read below (a join over
+   * product + offers) is not paid at all on the single-business path.
+   *
+   * It stays the documented no-op: a row that names no account still takes the full
+   * path, and an account that IS shared falls through to exactly the code below.
+   *
+   * Why this matters beyond a query count: creation sites call this once per row inside
+   * a chunked interactive transaction (follow-master), where a per-row read is the P2028
+   * shape those chunks exist to keep out.
+   */
+  const namedAccounts = rows
+    .filter(r => typeof r.channelListingId === 'string' && r.channelListingId)
+    .map(r => (typeof r.channelConnectionId === 'string' && r.channelConnectionId ? r.channelConnectionId : null))
+  if (namedAccounts.length > 0 && namedAccounts.every((id): id is string => !!id)) {
+    const sharedNamed = await sharedConnectionIds(namedAccounts, grantReader)
+    if (sharedNamed.size === 0) return { allowed: rows, blocked: [] }
+  }
 
   const listings = await (db as unknown as { channelListing: { findMany: (a: unknown) => Promise<Array<Record<string, unknown>>> } }).channelListing.findMany({
     where: { id: { in: listingIds } },
@@ -67,8 +94,6 @@ export async function reserveSharedCoordinates(
     },
   })
   const byId = new Map(listings.map(l => [l.id as string, l]))
-  // P1.3 — read through the caller's client: inside a transaction, no second connection is taken.
-  const grantReader = typeof (db as { channelAccountGrant?: { findMany?: unknown } }).channelAccountGrant?.findMany === 'function' ? db as never : undefined
   const shared = await sharedConnectionIds(listings.map(l => l.channelConnectionId as string).filter(Boolean), grantReader)
   if (shared.size === 0) return { allowed: rows, blocked: [] }
 

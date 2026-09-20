@@ -7,7 +7,13 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     // LX.F R-LX-13 — the three stores LX added. Without them an apply failed with
     // "Cannot read properties of undefined (reading 'create')" and the job read
     // PARTIAL, with the real cause invisible in the outcome rows.
-    'productTranslation', 'channelListingTranslation', 'readinessIndex', 'outboundSyncQueue'].map(k => [k, new Map()]))
+    'productTranslation', 'channelListingTranslation', 'readinessIndex', 'outboundSyncQueue',
+    // P1.3 — every queue row is now created through `createOutboundRow`, whose BP.S3
+    // preflight asks the grant table whether the seller account is SHARED with a second
+    // business. Without the store an apply failed with "Cannot read properties of
+    // undefined (reading 'findMany')" and the job read PARTIAL. Empty = nothing shared
+    // here, which is this fixture's world: one business, two of its own accounts.
+    'channelAccountGrant'].map(k => [k, new Map()]))
   const queries: { model: string; method: string; args: Row; returned: number }[] = []
   const failures = new Map<string, Error>()
   let sequence = 0, undo: (() => void)[] | null = null

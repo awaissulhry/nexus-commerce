@@ -17,6 +17,7 @@ const state = vi.hoisted(() => {
   const s = {
     txOpts: [] as Array<{ timeout?: number; maxWait?: number } | undefined>,
     txBufferReads: 0,
+    txGrantReads: 0,
     updates: [] as string[],
     queueCreates: 0,
     failOnTx: -1 as number, // index of the $transaction call that should fail AFTER running fn
@@ -38,7 +39,16 @@ const state = vi.hoisted(() => {
       },
     },
     outboundSyncQueue: {
-      create: async () => ({ id: `q${++s.queueCreates}` }),
+      // P1.3 — a chunk's queue rows are written in ONE createManyAndReturn. The per-row
+      // `create` is deliberately absent, like the per-row findUnique above: a regression
+      // to a row-at-a-time write (whose BP.S3 preflight reads inside the tx) throws here.
+      createManyAndReturn: async ({ data }: any) =>
+        (data as any[]).map((d) => ({ id: `q${++s.queueCreates}`, channelListingId: d.channelListingId })),
+    },
+    // BP.S3 — the shared-account gate reads through the caller's client. No account here
+    // is shared, and the gate must ask ONCE per chunk (s.txGrantReads pins that).
+    channelAccountGrant: {
+      findMany: async () => { s.txGrantReads++; return [] },
     },
     // Per-chunk pool freshness read (added with the stale-snapshot fix). Since shared stock it goes
     // through loadSyncLedgers: this business's WAREHOUSE rows, the pool door (no product is pooled
@@ -75,7 +85,7 @@ const state = vi.hoisted(() => {
   // Return `s` ITSELF (not a spread — a spread copies the primitives, so the
   // closures above would mutate a different object than the tests read).
   return Object.assign(s, { prisma, reset() {
-    s.txOpts.length = 0; s.txBufferReads = 0; s.updates.length = 0
+    s.txOpts.length = 0; s.txBufferReads = 0; s.txGrantReads = 0; s.updates.length = 0
     s.queueCreates = 0; s.failOnTx = -1; s.listings.length = 0
     s.addJob.mockClear(); s.coalesce.mockClear()
     prisma.__reset()
@@ -124,6 +134,9 @@ describe('setFollowMasterQuantity — chunked transactions (P2028)', () => {
       expect(o?.timeout ?? 0, 'every chunk tx must carry an explicit timeout').toBeGreaterThanOrEqual(15_000)
     }
     expect(state.txBufferReads, 'ONE buffer findMany per chunk — never per-row').toBe(3)
+    // With business profiles OFF the BP.S3 gate is not reached at all; with them ON it
+    // asks once per chunk. Exact in both modes — never a ceiling.
+    expect(state.txGrantReads, 'ONE BP.S3 gate read per chunk — never per-row').toBe(process.env.NEXUS_WORKSPACES_ENABLED === '1' ? 3 : 0)
     expect(state.addJob).toHaveBeenCalledTimes(60)
   })
 

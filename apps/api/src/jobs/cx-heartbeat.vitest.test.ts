@@ -102,7 +102,18 @@ type HeartbeatResult = import('../services/cx/catalog.js').HeartbeatResult
 type ErrorClass = import('../services/cx/catalog.js').ErrorClass
 type ConnectionRow = import('../services/connection-resolver.service.js').ConnectionRow
 const { encryptCredentials } = await import('../lib/crypto.js')
+const { withWorkspace } = await import('../lib/workspace-context.js')
 const { runHeartbeatFor, runHeartbeatSweep } = await import('./cx-heartbeat.job.js')
+
+/**
+ * The sweep NEVER runs unscoped in production. `lib/cron/clustered.ts` wraps every
+ * tick in `withWorkspace(...)` — once per active business when profiles are ON — and
+ * P6.5 made the sweep read only the accounts of the profile it runs in. So a sweep
+ * test must run inside a profile, and its rows must belong to that profile; calling it
+ * bare exercises a path no caller has.
+ */
+const TEST_WORKSPACE = { workspaceId: 'ws-test', actorUserId: null, membershipId: null, roleKeys: [] }
+const sweepInProfile = () => withWorkspace(TEST_WORKSPACE, () => runHeartbeatSweep())
 
 // The job's import of connectors/index registered the real eBay entry; keep it for the real-path tests.
 const realEbay = getChannelSpec('EBAY')
@@ -137,6 +148,7 @@ function seedRow(over: Record<string, unknown> = {}): ConnectionRow {
   const id = String(over.id ?? `hb-${++seq}`)
   const row: Row = {
     id,
+    workspaceId: TEST_WORKSPACE.workspaceId,
     channelType: 'EBAY',
     managedBy: 'oauth',
     isActive: true,
@@ -495,7 +507,7 @@ describe('runHeartbeatSweep', () => {
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
     apps = [{ id: 'app-sp', channelKey: 'AMAZON_SP', environment: 'production', secretExpiresAt: new Date(Date.now() + 7 * 86_400_000 + 60_000) }]
-    const summary = await runHeartbeatSweep()
+    const summary = await sweepInProfile()
     expect(summary).toBe('connections=2 ok=1 failed=1 refreshed=0 sessionsSwept=0')
     expect(heartbeat).toHaveBeenCalledTimes(2)
     // P0.5 — plain title with the date; the level rules live in services/cx/app-secret-expiry.p05 tests.
@@ -510,7 +522,7 @@ describe('runHeartbeatSweep', () => {
   it('warns 30 / 7 / 1 days before a refresh token expires, once per day', async () => {
     heartbeat.mockResolvedValue({ ok: true, latencyMs: 1 })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000), refreshTokenExpiresAt: new Date(Date.now() + 30 * 86_400_000 + 3_600_000) })
-    await runHeartbeatSweep()
+    await sweepInProfile()
     expect(alertTitles()).toEqual(['EBAY account "HB Shop" must be reconnected within 30 days'])
     const warn = events.find((e) => e.type === 'status_change' && (e.detail as Record<string, unknown>).expiryWarnDays === 30)
     expect(warn).toBeTruthy()
@@ -518,7 +530,7 @@ describe('runHeartbeatSweep', () => {
     // The same threshold within 20 h is not repeated.
     createAlert.mockClear()
     prismaMock.connectionEvent.findFirst.mockResolvedValueOnce({ id: 'seen' } as never)
-    await runHeartbeatSweep()
+    await sweepInProfile()
     expect(createAlert).not.toHaveBeenCalled()
   })
 })
@@ -526,7 +538,6 @@ describe('runHeartbeatSweep', () => {
 // ── P6.5 — shared (guest) accounts ───────────────────────────────────────────
 describe('P6.5 — the sweep heartbeats only the accounts the profile owns', () => {
   it('in a guest profile, an account shared with it is left to its owner; its own account is heartbeated', async () => {
-    const { withWorkspace } = await import('../lib/workspace-context.js')
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
     try {
       heartbeat.mockResolvedValue({ ok: true, latencyMs: 1 })
@@ -544,7 +555,7 @@ describe('P6.5 — the sweep heartbeats only the accounts the profile owns', () 
     heartbeat.mockRejectedValueOnce(new Error('connector crashed')).mockResolvedValue({ ok: true, latencyMs: 1 })
     const first = seedRow()
     const second = seedRow()
-    const summary = await runHeartbeatSweep()
+    const summary = await sweepInProfile()
     expect(summary).toMatch(/connections=2 ok=1 failed=1/)
     expect(updates.some((u) => u.id === second.id)).toBe(true)
     expect(updates.some((u) => u.id === first.id && 'lastHeartbeatAt' in u.data && u.data.consecutiveFailures === 0)).toBe(false)

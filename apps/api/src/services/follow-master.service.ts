@@ -21,7 +21,8 @@ import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordina
  * proven stock-import pinOverride path.
  */
 
-import { createOutboundRow } from './outbound-rows.js'
+import type { Prisma } from '@prisma/client'
+import { createOutboundRowsAndReturn } from './outbound-rows.js'
 import prisma from '../db.js'
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { isFbaListing } from './outbound-sync.service.js'
@@ -31,6 +32,9 @@ import { logger } from '../utils/logger.js'
 import { sellableAvailable } from './stock-pool/sync-ledgers.js'
 
 const FOLLOW_HOLD_MS = 30 * 1000
+
+/** One OutboundSyncQueue row of a chunk, held until the whole chunk is written at once. */
+type QueueRowData = Prisma.OutboundSyncQueueCreateManyInput
 
 /** P2028 guard — bulk calls run MANY SMALL transactions, never one giant one.
  *  The single interactive tx timed out above ~10 products (first hit in
@@ -226,6 +230,14 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
         const writeIds = plans.filter((p) => !p.noOp).map((p) => p.cl.id)
         if (writeIds.length) await coalescePendingQuantityRows(tx, writeIds)
 
+        /*
+         * P2028 — the queue rows of a chunk are created in ONE call, not one per row.
+         * `createOutboundRow` runs the BP.S3 shared-account preflight before the row
+         * exists, and that preflight reads the listing table; per-row it put a read
+         * back inside the interactive transaction — exactly the shape this chunking
+         * exists to keep out of it. Batched, the preflight costs one read per chunk.
+         */
+        const toQueue: Array<{ cl: (typeof plans)[number]['cl']; data: QueueRowData }> = []
         for (const { cl, write, noOp } of plans) {
           // Skip true no-ops so a routine save never fires a needless push.
           if (noOp) {
@@ -261,7 +273,8 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
           })
 
           if (VALID_SYNC_TARGETS.has(cl.channel)) {
-            const qRow = await createOutboundRow(tx, {
+            toQueue.push({
+              cl,
               data: {
                 productId: cl.productId,
                 channelListingId: cl.id,
@@ -284,9 +297,20 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
                   actor: actor ?? null,
                 },
               },
-              select: { id: true },
             })
-            acc.queued.push({ queueId: qRow.id, productId: cl.productId })
+          }
+        }
+        if (toQueue.length) {
+          // Zipped by the listing each row names, never by position: a returned order
+          // is not a promise, and a chunk holds each listing at most once.
+          const created = await createOutboundRowsAndReturn(tx, {
+            data: toQueue.map((q) => q.data),
+            select: { id: true, channelListingId: true },
+          })
+          const queueIdOf = new Map<string, string>(created.map((r: { id: string; channelListingId: string | null }) => [String(r.channelListingId), r.id]))
+          for (const { cl } of toQueue) {
+            const queueId = queueIdOf.get(cl.id)
+            if (queueId) acc.queued.push({ queueId, productId: cl.productId })
           }
         }
       }, BULK_TX_OPTS)
@@ -470,6 +494,9 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
         const willPushIds = plans.filter((p) => !p.noOp && p.write.pushQuantity !== null).map((p) => p.cl.id)
         if (willPushIds.length) await coalescePendingQuantityRows(tx, willPushIds)
 
+        // Same P2028 rule as setFollowMasterQuantity: ONE queue write per chunk, so the
+        // BP.S3 preflight inside it reads once per chunk and never once per row.
+        const toQueue: Array<{ cl: (typeof plans)[number]['cl']; data: QueueRowData }> = []
         for (const { cl, write, noOp } of plans) {
           if (noOp) {
             acc.unchanged++
@@ -492,15 +519,25 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
           acc.results.push({ listingId: cl.id, sku: cl.product?.sku ?? null, channel: cl.channel, marketplace: cl.marketplace, action: 'BUFFER', buffer: write.stockBuffer, quantity: write.quantity })
 
           if (write.pushQuantity !== null && VALID_SYNC_TARGETS.has(cl.channel)) {
-            const qRow = await createOutboundRow(tx, {
+            toQueue.push({
+              cl,
               data: {
                 productId: cl.productId, channelListingId: cl.id, channelConnectionId: cl.channelConnectionId, targetChannel: cl.channel as any, targetRegion: cl.region,
                 syncStatus: 'PENDING' as any, syncType: 'QUANTITY_UPDATE', holdUntil, externalListingId: cl.externalListingId, maxRetries: 3,
                 payload: { source: 'STOCK_BUFFER', productId: cl.productId, channel: cl.channel, marketplace: cl.marketplace, quantity: write.pushQuantity, oldQuantity: cl.quantity, stockBuffer: write.stockBuffer, actor: actor ?? null },
               },
-              select: { id: true },
             })
-            acc.queued.push({ queueId: qRow.id, productId: cl.productId })
+          }
+        }
+        if (toQueue.length) {
+          const created = await createOutboundRowsAndReturn(tx, {
+            data: toQueue.map((q) => q.data),
+            select: { id: true, channelListingId: true },
+          })
+          const queueIdOf = new Map<string, string>(created.map((r: { id: string; channelListingId: string | null }) => [String(r.channelListingId), r.id]))
+          for (const { cl } of toQueue) {
+            const queueId = queueIdOf.get(cl.id)
+            if (queueId) acc.queued.push({ queueId, productId: cl.productId })
           }
         }
       }, BULK_TX_OPTS)
