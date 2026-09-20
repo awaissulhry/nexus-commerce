@@ -1,8 +1,9 @@
 'use client'
 
 /**
- * CX.2 — the two event lists on the channels pages (the connection ledger and a
- * channel's recent inbound events) on the sanctioned engine: `NexusGrid`
+ * CX.2 / P3.3 — the three event lists on the channels pages (the connection ledger, a
+ * channel's recent inbound events, and P3.3's OUTGOING calls) on the sanctioned engine:
+ * `NexusGrid`
  * (design-system/grid). autoHeight + page scroll, density from the page, column
  * defs memoised at module scope so the column model is built once
  * (reference_ag_react_inline_options_rerun_column_model).
@@ -134,6 +135,64 @@ const INBOUND_COLUMNS: ColDef<InboundRow>[] = [
   },
 ]
 
+/**
+ * P3.3 — one outgoing call to a channel, as the account view returns it.
+ *
+ * The three error fields are P3.1's vocabulary: `errorClass` is ours (what KIND of
+ * failure), `errorCode` and `errorMessage` are the channel's own. The screen shows the
+ * channel's words, never ours, because "the change was rejected" helps nobody.
+ */
+export interface CallRow {
+  id: string
+  operation: string
+  method: string | null
+  statusCode: number | null
+  success: boolean | null
+  latencyMs: number | null
+  errorClass: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  marketplace: string | null
+  triggeredBy: string | null
+  createdAt: string
+}
+
+function CallOutcomeCell(p: ICellRendererParams<CallRow>) {
+  if (!p.data) return null
+  if (p.data.success) return <Pill tone="success" size="sm">{p.data.statusCode ?? 'ok'}</Pill>
+  // A retryable class is not the same news as a rejection: one clears itself, the other
+  // needs the operator. Same split the inbound grid makes between "will retry" and
+  // "dead letter", for the same reason.
+  const retryable = p.data.errorClass != null && RETRYABLE_CLASSES.has(p.data.errorClass)
+  return (
+    <Pill tone={retryable ? 'warning' : 'danger'} size="sm">
+      {p.data.errorClass ?? p.data.statusCode ?? 'failed'}
+    </Pill>
+  )
+}
+
+/** Mirrors the gateway vocabulary's RETRYABLE set (services/gateway/vocabulary.ts). */
+const RETRYABLE_CLASSES = new Set(['rate_limited', 'transient', 'network', 'timeout'])
+
+const CALL_COLUMNS: ColDef<CallRow>[] = [
+  { field: 'createdAt', headerName: 'When', width: 150, cellRenderer: WhenCell, sortable: true },
+  { field: 'operation', headerName: 'Operation', width: 240 },
+  { colId: 'outcome', headerName: 'Outcome', width: 130, cellRenderer: CallOutcomeCell },
+  {
+    field: 'latencyMs', headerName: 'Took', width: 100,
+    valueFormatter: (p) => (p.value == null ? '—' : `${p.value} ms`),
+  },
+  {
+    colId: 'reason', headerName: 'What the channel said', flex: 1, minWidth: 240,
+    valueGetter: (p) => {
+      if (!p.data || p.data.success) return ''
+      const code = p.data.errorCode ? `${p.data.errorCode} — ` : ''
+      return readableAccountText(`${code}${p.data.errorMessage ?? ''}`.trim())
+    },
+    cellClass: 'nds-ag-cell nds-channels-detail-cell',
+  },
+]
+
 const getRowId = (p: { data: { id: string } }) => p.data.id
 
 export function LedgerGrid({ rows, emptyTitle, emptyDescription, accountNames }: { rows: LedgerRow[]; emptyTitle: string; emptyDescription: string; accountNames?: AccountNames }) {
@@ -148,4 +207,10 @@ export function InboundGrid({ rows, emptyTitle, emptyDescription }: { rows: Inbo
   const columnDefs = useMemo(() => INBOUND_COLUMNS, [])
   if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />
   return <NexusGrid<InboundRow> density="compact" domLayout="autoHeight" rowData={rows} columnDefs={columnDefs} getRowId={getRowId} />
+}
+
+export function CallsGrid({ rows, emptyTitle, emptyDescription }: { rows: CallRow[]; emptyTitle: string; emptyDescription: string }) {
+  const columnDefs = useMemo(() => CALL_COLUMNS, [])
+  if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />
+  return <NexusGrid<CallRow> density="compact" domLayout="autoHeight" rowData={rows} columnDefs={columnDefs} getRowId={getRowId} />
 }

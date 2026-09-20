@@ -6,6 +6,13 @@
  * (`POST …/refresh`), the connection ledger (`GET …/events`), the channel's
  * recent inbound events, and — for eBay — the pre-existing category probe,
  * labelled for what it is (the primary account's token against the IT site).
+ *
+ * P3.3 adds the OUTGOING side: this account's call ledger, its rate headroom and its
+ * last error (`GET …/calls`). Until then the tab showed grants, refreshes and
+ * heartbeats — everything except what the account actually sent to its channel.
+ *
+ * The numbers come from `services/cx/account-calls.service.ts`, which is also what the
+ * studio's "Errors & Sync" console reads, so the two screens cannot drift apart.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -13,9 +20,34 @@ import { Card, Banner, Listbox, MetricStrip, EmptyState } from '@/design-system/
 import { Button, Pill, Tag, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelName, relativeTime, STATUS_LABEL, type AccountRow } from './channels-data'
-import { LedgerGrid, InboundGrid, type LedgerRow, type InboundRow } from './ChannelEventsGrid'
+import { LedgerGrid, InboundGrid, CallsGrid, type LedgerRow, type InboundRow, type CallRow } from './ChannelEventsGrid'
 import { readableAccountText } from './channel-event-details'
 import { AppSecretsCard } from './AppSecretsCard'
+
+/**
+ * P3.3 — what `GET /api/cx/connections/:id/calls` answers. Mirrors
+ * `AccountCallsView` in services/cx/account-calls.service.ts.
+ *
+ * `successRate` is null when there were no calls, NOT 100 — a rate over zero calls is
+ * not a rate, and a green "100%" on a silent account is the exact lie this programme
+ * keeps finding. `rateHeadroom.note` is always a sentence, including when the number is
+ * unknown, because a blank box reads as zero.
+ */
+interface AccountCallsView {
+  connectionId: string
+  channel: string
+  window: { since: string; until: string }
+  summary: { total: number; failed: number; successRate: number | null }
+  lastError: CallRow | null
+  rateHeadroom: {
+    state: 'known' | 'not_reported_per_call' | 'no_calls_yet'
+    remaining: number | null
+    limit: number | null
+    asOf: string | null
+    note: string
+  }
+  recent: CallRow[]
+}
 
 interface HeartbeatResult {
   ok: boolean
@@ -52,6 +84,19 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   const [ledger, setLedger] = useState<{ rows: LedgerRow[] | null; error: string | null }>({ rows: null, error: null })
   const [inbound, setInbound] = useState<{ rows: InboundRow[] | null; stats: { success: number; failed: number; pending: number; total: number } | null; error: string | null }>({ rows: null, stats: null, error: null })
   const [probe, setProbe] = useState<{ busy: boolean; ok: boolean | null; recommendation: string | null; details: string | null; error: string | null }>({ busy: false, ok: null, recommendation: null, details: null, error: null })
+  const [calls, setCalls] = useState<{ view: AccountCallsView | null; error: string | null }>({ view: null, error: null })
+
+  const loadCalls = useCallback(async () => {
+    if (!accountId) return
+    setCalls({ view: null, error: null })
+    try {
+      const res = await fetch(`${api}/api/cx/connections/${accountId}/calls?hours=24&take=25`, { credentials: 'include', cache: 'no-store' })
+      if (!res.ok) throw new Error(`The call ledger answered ${res.status}.`)
+      setCalls({ view: (await res.json()) as AccountCallsView, error: null })
+    } catch (err) {
+      setCalls({ view: null, error: err instanceof Error ? err.message : 'Failed to load this account’s calls' })
+    }
+  }, [api, accountId])
 
   const loadLedger = useCallback(async () => {
     if (!accountId) return
@@ -90,7 +135,8 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
   useEffect(() => {
     void loadLedger()
     void loadInbound()
-  }, [loadLedger, loadInbound])
+    void loadCalls()
+  }, [loadLedger, loadInbound, loadCalls])
 
   async function runHeartbeat() {
     if (!accountId) return
@@ -253,6 +299,69 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
         ) : (
           <LedgerGrid rows={ledger.rows} accountNames={accountNames} emptyTitle="No ledger rows yet" emptyDescription="The first heartbeat or refresh writes the first row." />
         )}
+      </Card>
+
+      {/*
+        P3.3 — the OUTGOING side. The connection ledger above says what happened to the
+        account's credentials; this says what the account has actually been sending, and
+        what came back. Same service the studio console reads.
+      */}
+      <Card
+        header="Channel calls (24 hours)"
+        description={`Every call this account made to ${channelName(account.channel)}, with the channel's own answer.`}
+      >
+        {calls.error && (
+          <Banner tone="danger" title="Call ledger unavailable">
+            {displayMessage(calls.error)}
+          </Banner>
+        )}
+        {calls.view === null && !calls.error ? (
+          <Skeleton height={200} />
+        ) : calls.view ? (
+          <>
+            <MetricStrip
+              metrics={[
+                { label: 'Calls', value: calls.view.summary.total },
+                { label: 'Failed', value: calls.view.summary.failed },
+                {
+                  label: 'Succeeded',
+                  // Never "100%" on an account that made no calls.
+                  value: calls.view.summary.successRate === null ? '—' : `${calls.view.summary.successRate}%`,
+                },
+                {
+                  label: 'Headroom',
+                  value: calls.view.rateHeadroom.state === 'known' && calls.view.rateHeadroom.remaining !== null
+                    ? (calls.view.rateHeadroom.limit !== null
+                        ? `${calls.view.rateHeadroom.remaining}/${calls.view.rateHeadroom.limit}`
+                        : String(calls.view.rateHeadroom.remaining))
+                    : 'not reported',
+                },
+              ]}
+            />
+            {/*
+              The headroom sentence is ALWAYS shown, not only when a number is missing.
+              eBay reports nothing per call and Amazon reports a rate rather than a
+              remaining count — an operator who sees a blank tile needs to be told that
+              is the channel's doing, not a broken panel.
+            */}
+            <p className="nds-diag-result">{calls.view.rateHeadroom.note}</p>
+            {calls.view.lastError && (
+              <Banner
+                tone="warning"
+                title={`Last error — ${calls.view.lastError.operation}${calls.view.lastError.errorCode ? ` (${calls.view.lastError.errorCode})` : ''}`}
+              >
+                {displayMessage(calls.view.lastError.errorMessage ?? calls.view.lastError.errorClass ?? 'No message was returned.')}
+                {' · '}
+                {relativeTime(calls.view.lastError.createdAt)}
+              </Banner>
+            )}
+            <CallsGrid
+              rows={calls.view.recent}
+              emptyTitle="No calls in the last 24 hours"
+              emptyDescription={`Nexus has not called ${channelName(account.channel)} with this account today.`}
+            />
+          </>
+        ) : null}
       </Card>
 
       <Card header="Recent inbound events" description={`The last 50 notifications ${channelName(account.channel)} sent us.`}>

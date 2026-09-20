@@ -1,7 +1,7 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, P3.1 and P3.2 are built.**
-The next package is **P3.3**.
+Updated **2026-09-20**. **P0, P1, P2, P3.1, P3.2 and P3.3 are built.**
+The next package is **P3.4**.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -64,30 +64,34 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 | P2.7 | AMS hourly writes **increment** and nothing deduped, while SQS is at-least-once — a redelivery silently added the same spend again. Nightly subscription check | `ffdb2494b` | `build/P2.7.md` |
 | P2.8 | **P2 complete.** The API exposed none of the lifecycle, so a dead letter looked identical to a retry. Ingress tab on the design system | `8a1853b94` | `build/P2.8.md` |
 | P3.1 | The error vocabulary had no test at all. **161 of 201 real failed bodies are double-encoded** and lost their error code entirely. `attribute` + `severity` added; a mapping table per connector | `2f4f9d3bd` | `build/P3.1.md` |
+| P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | see below | `build/P3.3.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | see below | `build/P3.2.md` |
 
-**Production proofs.** P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
+**Production proofs.** P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P3.3, then P3.4 … in plan order
+## 3. Next — P3.4, then P3.5 … in plan order
 
-P3.3: *screens — the studio "Errors & Sync" console (owned by the studio programme)
-reads this store; the Channels page Diagnostics shows the call ledger, rate headroom and
-last error per account.* Done when: both screens read the same numbers.
+P3.4: *alerts — dead-letter growth, signature failures, feed rejections over a
+threshold, secret expiry, deprecation headers — to the owning profile's owners.* Done
+when: each alert fired once in a test.
 
-**P3.2 filled the store P3.3 reads.** `ListingIssue` now takes Amazon feed rejections,
-Amazon suppression, Amazon issue notifications, eBay Trading failures and Shopify
-`userErrors`, each with the channel's own code, the channel's own words, the attribute
-and an as-of time. The flat-file grid's health chip reads it already.
+**P3.2 and P3.3 built what P3.4 alerts on.** Feed rejections now land in `ListingIssue`
+with a code, an attribute and an as-of time; dead letters have had a lifecycle since
+P2.1/P2.8; and `accountCallsView` is the per-account error source.
 
-**Two things P3.2 left open and P3.3/P4.1 inherit** (full list in `build/P3.2.md` §6):
+**What P3.2 and P3.3 left open** (full lists in `build/P3.2.md` §6 and `build/P3.3.md` §6):
 
 1. **No eBay caller passes `ctx.listingId`.** `callTradingApi` accepts and uses it, and
-   it is tested — but `studio-publication-ebay.ts` and `ebay-shared-fanout.service.ts`
-   still call without it, so a real eBay rejection reaches the ledger and not the
-   listing. Small change; belongs with P4.1, where those builders are rewritten.
-2. **Amazon put/patch issues have no producer.** `putListingsItem` / `patchListingsItem`
-   are **0 occurrences in `apps/api/src`** — Amazon content goes out as
-   `JSON_LISTINGS_FEED`. That part of the P3.2 plan row is P4.1's to build.
+   it is tested, but the publication paths still call without it. Belongs with P4.1.
+2. **Amazon put/patch issues have no producer** — `putListingsItem` is 0 occurrences in
+   `apps/api/src`. P4.1's to build.
+3. **eBay rate headroom has no source.** eBay's `getRateLimits` Analytics call is never
+   made. The Diagnostics screen says so in eBay's terms rather than showing a blank.
+4. **`connectionId` is unset by most senders**, so the per-account screen under-counts
+   until each sender names its account. P4.x, package by package.
+5. **The studio "Errors & Sync" console's rejections pane** is the studio programme's.
+   Its `DORMANT_SOURCES` entry for `ListingIssue` measured zero on prod 2026-09-01 and
+   was right; **P3.2 made that source live**, so the pane can now be built on real rows.
 
 ### 3a. Start here, every time
 
@@ -121,6 +125,10 @@ fixture by hand.
   a failure that retries in four minutes.
 - **P3.1** — **161 of 201** real failed bodies are double-encoded and lost their error
   code entirely.
+- **P3.3** — the call ledger could not be asked about an account at all: every other
+  identifier on the row was filterable and `connectionId` was not. Two apparent gaps
+  turned out to be correct behaviour — eBay reports no per-call headroom, Amazon reports
+  a rate not a remaining count — which is a result, not a wasted step.
 - **P3.2** — `ListingIssue` was **empty** while 140 real rejections sat in a JSON column
   nothing joined to a listing; the flat-file grid's health chip had been reading that
   empty table since it was written. And the attribute was lost on **140/140**, so
@@ -185,16 +193,23 @@ Settings → Channels.
    reconcile creates the destination and subscribes the topics. Check the result with
    `GET /api/admin/ebay-notification-status`; a topic listed under `notOffered` means
    its id in `services/cx/ingress/ebay-topics.ts` is wrong.
-9. **Turn on the new Amazon notification types** when you want them: set
+9. **Turn on the Amazon suppression pull** (P3.2) with
+   `NEXUS_ENABLE_AMAZON_SUPPRESSION_PULL=true`. It is **off** by default because it
+   asks SP-API for a `GET_MERCHANT_LISTINGS_DEFECT_DATA` **report** per marketplace,
+   and reports are quota-limited — the same reason `amazon-returns-poll` is off. The
+   cron's local mirror half runs daily either way and is what resolves a stale issue.
+   Until the pull is on, `AmazonSuppression` stays at 0 rows and no suppression reaches
+   a listing.
+10. **Turn on the new Amazon notification types** when you want them: set
    `NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES=true`. That makes the next boot, the nightly
    reconcile and the admin endpoint attempt `LISTINGS_ITEM_ISSUES_CHANGE` and the four
    types whose SQS support is unverified. A 400 InvalidInput on one of those is a
    finding, not a fault — it means that type needs an EventBridge destination. Two types
    already need one: `LISTINGS_ITEM_STATUS_CHANGE` and `BRANDED_ITEM_CONTENT_CHANGE`.
-10. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
-11. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
-12. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-13. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
+11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
+12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
+13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+14. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 6. Traps that cost time here — read before measuring anything
 

@@ -53,6 +53,8 @@ interface CallsQuery {
   operation?: string
   success?: string
   errorType?: string
+  /** P3.3 — the account. Its absence was why no screen could ask about one. */
+  connectionId?: string
   requestId?: string
   productId?: string
   listingId?: string
@@ -81,6 +83,10 @@ function buildWhere(
   if (q.success === 'true') where.success = true
   else if (q.success === 'false') where.success = false
   if (q.errorType) where.errorType = q.errorType
+  // P3.3 — every other identifier on the row was filterable and this one was not, so
+  // the call ledger could be asked about a product, a listing or an order but never
+  // about the account that made the call.
+  if (q.connectionId) where.connectionId = q.connectionId
   if (q.requestId) where.requestId = q.requestId
   if (q.productId) where.productId = q.productId
   if (q.listingId) where.listingId = q.listingId

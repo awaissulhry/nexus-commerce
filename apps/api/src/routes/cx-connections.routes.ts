@@ -5,6 +5,8 @@
  *   POST /api/cx/connections/:id/revoke    revoke at the channel + null credentials (one disconnect path)
  *   POST /api/cx/connections/:id/heartbeat run the catalogue heartbeat now (Diagnostics "Test")
  *   GET  /api/cx/connections/:id/events    the ledger for this connection
+ *   GET  /api/cx/connections/:id/calls     P3.3: this account's OUTGOING calls, its rate
+ *                                          headroom and its last error
  *   GET  /api/cx/channels                  the catalogue as the UI sees it
  *   GET  /api/cx/apps                      P0.5: each app's secret expiry date (never a secret)
  *   PUT  /api/cx/apps/:channelKey/secret-expiry   P0.5: record or clear that date
@@ -18,6 +20,7 @@ import { listConnectionEvents } from '../services/cx/events.service.js'
 import { refreshNow, revoke, RefreshFailed, RefreshContended } from '../services/cx/token.service.js'
 import { runHeartbeatFor } from '../jobs/cx-heartbeat.job.js'
 import { listAppSecrets, setAppSecretExpiry } from '../services/cx/app-secret-expiry.js'
+import { accountCallsById } from '../services/cx/account-calls.service.js'
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_AHEAD_DAYS = 400
@@ -112,6 +115,32 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       events,
     }
   })
+
+  /**
+   * P3.3 — this account's outgoing calls: the call ledger, the rate headroom and the
+   * last error, in the channel's own words.
+   *
+   * Everything is scoped to this connection. `OutboundApiCallLog` could not be asked
+   * about an account at all before this — `/sync-logs/api-calls` has no `connectionId`
+   * filter — so the Diagnostics tab showed grants and heartbeats and never a call.
+   *
+   * The same service answers the studio console, so the two screens cannot disagree.
+   */
+  app.get<{ Params: { id: string }; Querystring: { hours?: string; take?: string } }>(
+    '/cx/connections/:id/calls',
+    async (request, reply) => {
+      // The lookup and the window rule both live in the service: a query in an HTTP
+      // handler cannot be extracted later, because the handler IS the coupling. (A bad
+      // `hours` falls back to the default rather than 0 — a zero-hour window would
+      // answer "no calls" for a busy account, which is a lie with a clean face.)
+      const view = await accountCallsById(request.params.id, {
+        hours: request.query.hours,
+        take: Number(request.query.take ?? 25) || 25,
+      })
+      if (!view) return reply.code(404).send({ error: 'Connection not found' })
+      return view
+    },
+  )
 
   // ── P0.5 — our app secrets' expiry dates ────────────────────────────────────────────────────
   app.get('/cx/apps', async () => ({ apps: await listAppSecrets() }))

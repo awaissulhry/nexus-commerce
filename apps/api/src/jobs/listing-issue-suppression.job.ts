@@ -19,6 +19,23 @@
  * Self-guards: no Amazon credentials, or no Amazon listings, and it does nothing. A
  * non-platform `cron.schedule` already visits every active business profile and runs
  * the handler inside each one, so this reads only its own profile's rows.
+ *
+ * ## Why the Amazon pull is OFF by default
+ *
+ * The mirror is local and cheap, so it runs on every tick. The PULL is not: it asks
+ * SP-API for a `GET_MERCHANT_LISTINGS_DEFECT_DATA` **report**, once per marketplace,
+ * and reports are a scarce, slow, quota-limited resource. Five EU marketplaces on an
+ * hourly schedule would be 120 report requests a day, in every business profile, on
+ * every clone of this database.
+ *
+ * `amazon-returns-poll.job.ts` sets the precedent in as many words — default-OFF
+ * because "we don't want a fresh dev clone burning the operator's report quota" — and
+ * this job follows it. Set `NEXUS_ENABLE_AMAZON_SUPPRESSION_PULL=true` in production to
+ * turn the pull on; the mirror half needs no switch.
+ *
+ * The schedule is DAILY, not hourly, for the same reason. Suppression is a slow-moving
+ * state Amazon reports in a batch file; the fast path for a rejection is the feed report
+ * and the issues notification, both of which land within a minute.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -46,16 +63,22 @@ export interface SuppressionSweepResult {
 /** Chunk size for the mirror — a business can hold thousands of Amazon listings. */
 const CHUNK = 200
 
+/** The Amazon report pull is an Owner switch, like P1.8's contract run and P6.1. */
+export function suppressionPullEnabled(): boolean {
+  return process.env.NEXUS_ENABLE_AMAZON_SUPPRESSION_PULL === 'true'
+}
+
 export async function runSuppressionIssueSweep(opts: { ingest?: boolean } = {}): Promise<SuppressionSweepResult> {
   const empty: SuppressionSweepResult = { scanned: 0, listings: 0, issues: 0, resolved: 0, ingested: false }
   if (!(await amazonCredsConfigured())) return empty
 
-  // 1. Refresh from Amazon. A failure here is not fatal: mirroring the suppression rows
-  //    we already hold is still better than a grid that shows nothing, and the next tick
+  // 1. Refresh from Amazon — a REPORT request per marketplace, so it is off unless the
+  //    Owner turns it on. A failure here is not fatal: mirroring the suppression rows we
+  //    already hold is still better than a grid that shows nothing, and the next tick
   //    tries again. Reporting a stale mirror as fresh would be the worse error, so the
   //    result says which happened.
   let ingested = false
-  if (opts.ingest !== false) {
+  if (opts.ingest === true || (opts.ingest !== false && suppressionPullEnabled())) {
     try {
       const { ingestAmazonSuppressionAllMarketplaces } = await import(
         '../services/amazon-suppression-ingest.service.js'
@@ -94,10 +117,9 @@ export function startSuppressionIssueCron(): void {
     logger.warn('suppression-issues cron already started')
     return
   }
-  // Hourly by default. Suppression is a slow-moving state that Amazon reports through a
-  // defect-data report, not a push, so a tighter schedule would only cost report quota.
-  // The fast path for a rejection is the feed report and the issues notification.
-  const schedule = process.env.NEXUS_SUPPRESSION_ISSUE_SCHEDULE ?? '25 * * * *'
+  // Daily. See the header: the pull costs an SP-API report per marketplace, and the
+  // fast path for a rejection is the feed report and the issues notification.
+  const schedule = process.env.NEXUS_SUPPRESSION_ISSUE_SCHEDULE ?? '25 4 * * *'
   if (!cron.validate(schedule)) {
     logger.error('suppression-issues cron: invalid schedule', { schedule })
     return
@@ -105,10 +127,10 @@ export function startSuppressionIssueCron(): void {
   scheduledTask = cron.schedule(schedule, async () => {
     await recordCronRun('suppression-issues', async () => {
       const r = await runSuppressionIssueSweep()
-      return `scanned=${r.scanned} listings=${r.listings} issues=${r.issues} resolved=${r.resolved} ingested=${r.ingested}`
+      return `scanned=${r.scanned} listings=${r.listings} issues=${r.issues} resolved=${r.resolved} ingested=${r.ingested} pull=${suppressionPullEnabled() ? 'on' : 'off'}`
     })
   })
-  logger.info('suppression-issues cron: scheduled', { schedule })
+  logger.info('suppression-issues cron: scheduled', { schedule, amazonPull: suppressionPullEnabled() ? 'on' : 'off' })
 }
 
 export function stopSuppressionIssueCron(): void {
