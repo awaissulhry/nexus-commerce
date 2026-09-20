@@ -144,6 +144,42 @@ for (const [eventType, registeredPath] of registered) {
   }
 }
 
+// ── Rule 4: an account's auth status changes through ONE state machine ─────────
+// `transition()` in services/cx/token.service.ts guards the terminal states, writes
+// with a compare-and-set so two racing signals cannot both win, records a
+// ConnectionEvent, and raises the CONNECTION_HEALTH alert. A raw column write skips all
+// four — P2.4 did exactly that for the Shopify uninstall, and an account that revokes
+// itself in SILENCE is the failure this programme exists to end.
+//
+// Two exits are legitimately written directly and are named here: an operator pressing
+// disconnect, and the initial 'unknown' on a connection being created.
+const STATUS_WRITE = /authStatus:\s*["'](revoked|needs_reauth|degraded|connected)["']/
+const STATUS_WRITERS_ALLOWED = new Set([
+  'services/cx/token.service.ts',        // the state machine itself
+  'services/cx/account-lifecycle.service.ts', // calls it, writes no status of its own
+  'test-support/gateway-stubs.ts',
+])
+/**
+ * Comments stripped before matching.
+ *
+ * The first run of this rule failed on its OWN explanatory comment, which quotes the
+ * very literal it forbids. A guard that counts comments can be tripped by prose and
+ * silenced by it, which makes both its red and its green worth less than they look.
+ * Crude but sufficient here: block comments, then line comments.
+ */
+function withoutComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+for (const file of files) {
+  const relative = path.relative(apiSrc, file)
+  if (STATUS_WRITERS_ALLOWED.has(relative)) continue
+  const text = withoutComments(fs.readFileSync(file, 'utf8'))
+  const hit = text.match(STATUS_WRITE)
+  if (hit) {
+    failures.push(`${path.relative(root, file)}: writes ${hit[0]} directly. Go through transition() / revokeChannelConnection() — a raw write skips the compare-and-set, the ConnectionEvent and the alert.`)
+  }
+}
+
 // ── Positive control ────────────────────────────────────────────────────────────
 // A check that found nothing to look at is not a pass. State what was examined, so a
 // green caused by an empty file list is visible rather than reassuring.
@@ -160,4 +196,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('[inbound-ledger] OK — no inbound event is deleted, every written event type is replayable or named, and what we receive is what Shopify is told to send.')
+console.log('[inbound-ledger] OK — no inbound event is deleted, every written event type is replayable or named, what we receive is what Shopify is told to send, and no account status is written by hand.')

@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 – P2.5 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.6** (account lifecycle).
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 – P2.6 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.7** (Amazon Marketing Stream).
 
 Read in this order:
 
@@ -41,7 +41,7 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P2.6 (account lifecycle)
+## 3. Next — P2.7 (Amazon Marketing Stream)
 
 Read `build/P2.1.md`, `P2.2.md` and `P2.3.md` first. Between them they found five live
 production defects that none of the plan's package descriptions predicted. That is the
@@ -65,6 +65,12 @@ argument for measuring before building, every single time.
 - **P2.5** — no Etsy order had ever entered Nexus by any route: no receiver existed, and
   the only Etsy order code has **no call site** and reads five env vars production does
   not have.
+
+- **P2.6** — the opposite lesson, and worth as much: **most of it already worked.** The
+  gateway already held writes for a revoked account and `transition()` was already the
+  state machine. Only two signals went around it — one of them written by **P2.4, in
+  this programme**, as a raw column write that skipped the alert. Measure before
+  building even when you expect to find nothing.
 
 **The pattern in all five:** a component that looks finished, is referenced by working
 code around it, and has never once run. Ask "what would I see if this had never

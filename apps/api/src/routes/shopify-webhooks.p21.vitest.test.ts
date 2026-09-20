@@ -52,6 +52,13 @@ vi.mock('../services/shopify/content-webhook.service.js', () => ({
 // P2.4 — the connection writes must be observable: `app/uninstalled` revoking a shop
 // is the one handler whose failure leaves Nexus writing to a shop that removed the app.
 const dbCalls: Array<{ model: string; method: string; args: any }> = []
+const revoked: Array<{ connectionId: string; source: string }> = []
+vi.mock('../services/cx/account-lifecycle.service.js', () => ({
+  revokeChannelConnection: async (connectionId: string, _reason: string, source: string) => {
+    revoked.push({ connectionId, source })
+    return { ok: Boolean(connectionId), connectionId, ...(connectionId ? {} : { skipped: 'not_found' as const }) }
+  },
+}))
 let updateManyCount = 1
 vi.mock('../db.js', () => ({
   default: new Proxy({}, {
@@ -99,6 +106,7 @@ beforeEach(() => {
   handlerThrows = false
   appSecret = SECRET
   dbCalls.length = 0
+  revoked.length = 0
   updateManyCount = 1
   vi.clearAllMocks()
 })
@@ -263,26 +271,27 @@ describe('P2.4 — the app lifecycle and privacy topics', () => {
     expect(recorded[0].eventType).toBe('shop/redact')
   })
 
-  it('app/uninstalled revokes the shop the notice NAMES, not every Shopify connection', async () => {
+  it('app/uninstalled revokes the connection the receiver ROUTED to', async () => {
+    // P2.6 changed the mechanism, and for the better. P2.4 narrowed an `updateMany`
+    // by shop domain — correct, but still a lookup, and a lookup is how the wrong shop
+    // is cut off the day a second one is connected. The revoke is now handed the
+    // connection id the receiver already resolved from `inboundAliases`, so there is
+    // no lookup left to get wrong, and it goes through the state machine that raises
+    // the CONNECTION_HEALTH alert instead of writing the column by hand.
     const body = JSON.stringify({ id: 1, myshopify_domain: 'a-shop.myshopify.com' })
     const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
     expect(res.statusCode).toBe(200)
-    const update = dbCalls.find((c) => c.model === 'channelConnection' && c.method === 'updateMany')
-    expect(update).toBeDefined()
-    expect(update!.args.data).toMatchObject({ authStatus: 'revoked', isActive: false })
-    // A profile may hold more than one Shopify connection. Revoking a shop that is
-    // still installed because a different one was removed is the worst kind of
-    // correct-looking write.
-    expect(JSON.stringify(update!.args.where)).toContain('a-shop.myshopify.com')
+    expect(revoked).toEqual([{ connectionId: 'conn-1', source: 'shopify_app_uninstalled' }])
   })
 
-  it('says so loudly when an uninstall matched nothing, instead of reporting success', async () => {
-    updateManyCount = 0
+  it('hands the revoke NO account when no shop routed, rather than guessing one', async () => {
+    routeThrowsFor = '*'
     const body = JSON.stringify({ id: 1, myshopify_domain: 'a-shop.myshopify.com' })
     const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
-    // Still 200 — Shopify measures the answer — but the handler ran and found nothing,
-    // which is worth knowing before someone asks why writes to a removed shop continue.
     expect(res.statusCode).toBe(200)
-    expect(completed[0]).toMatchObject({ ok: true })
+    // An empty id is refused by the lifecycle as `not_found` and logged. Passing an
+    // account it worked out for itself would be the ambient resolution the MAP.3
+    // ratchet forbids — in the one place where getting it wrong cuts off a live shop.
+    expect(revoked).toEqual([{ connectionId: '', source: 'shopify_app_uninstalled' }])
   })
 })

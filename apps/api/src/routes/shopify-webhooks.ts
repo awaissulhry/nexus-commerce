@@ -919,31 +919,31 @@ export async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): P
  * handler fails — which matters most for `app/uninstalled`, the one whose failure
  * leaves Nexus writing to a shop that has removed the app.
  */
-export async function handleAppUninstalled(payload: ShopifyWebhookPayload): Promise<void> {
+export async function handleAppUninstalled(
+  payload: ShopifyWebhookPayload,
+  context?: { connectionId: string | null },
+): Promise<void> {
   const domain = String((payload as any)?.myshopify_domain ?? (payload as any)?.domain ?? "");
-  // Routed by `inboundAliases`, which is exactly this domain (P2.1), so the
-  // connection is the one this receiver already resolved. Marked by domain rather
-  // than by id so the write is correct even if the row was re-created.
-  // Narrowed to the shop the notice names. `updateMany` is already scoped to the
-  // business profile this webhook routed to, but a profile may hold more than one
-  // Shopify connection, and revoking a shop that is still installed because another
-  // one was removed is the worst kind of correct-looking write.
-  const updated = await (prisma as any).channelConnection.updateMany({
-    where: {
-      channelType: "SHOPIFY",
-      isActive: true,
-      ...(domain ? { OR: [{ displayName: domain }, { identity: { path: ["extra", "myshopifyDomain"], equals: domain } }] } : {}),
-    },
-    data: { authStatus: "revoked", isActive: false, lastError: `The app was uninstalled from ${domain || "this shop"}.`, lastErrorAt: new Date() },
-  });
-  if (updated.count === 0) {
-    // Not silent. Either the domain did not match any row, or the connection was
-    // already inactive; both are worth knowing before someone asks why writes to a
-    // removed shop are still being attempted.
-    logger.error("[ShopifyWebhooks] app/uninstalled matched NO connection — nothing was revoked", { domain });
-  }
-  logger.error("[ShopifyWebhooks] app/uninstalled — the account is revoked and writes are stopped", {
-    domain, connectionsRevoked: updated.count,
+  // P2.6 — through the account lifecycle, not a raw column write.
+  //
+  // P2.4 set `authStatus: "revoked"` here with `updateMany`, which skipped the state
+  // machine's compare-and-set, its ConnectionEvent and — the one that matters — its
+  // CONNECTION_HEALTH alert. An account that revokes itself in silence is the exact
+  // failure this programme exists to end, so introducing one inside it was the wrong
+  // shortcut however narrow the write looked.
+  //
+  // The connection is the one the receiver already routed to by shop domain (P2.1's
+  // `inboundAliases`), so no lookup is needed and none is made: a revoke that has to
+  // work out WHICH account it means is how the wrong shop is cut off the day a second
+  // one is connected.
+  const { revokeChannelConnection } = await import("../services/cx/account-lifecycle.service.js");
+  const outcome = await revokeChannelConnection(
+    context?.connectionId ?? "",
+    `The app was uninstalled from ${domain || "this shop"}.`,
+    "shopify_app_uninstalled",
+  );
+  logger.error("[ShopifyWebhooks] app/uninstalled — the account is revoked and writes are held", {
+    domain, connectionId: context?.connectionId ?? null, outcome: outcome.skipped ?? "revoked",
   });
 }
 
@@ -1066,7 +1066,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
    * credential path makes for a message no business owns — and its claimed shop is
    * kept as text in the reason rather than trusted as a routing key.
    */
-  type ShopifyTopicHandler = (payload: ShopifyWebhookPayload) => Promise<unknown>;
+  type ShopifyTopicHandler = (payload: ShopifyWebhookPayload, context?: { connectionId: string | null }) => Promise<unknown>;
 
   function receiveShopify(path: string, eventType: string, handle: ShopifyTopicHandler, options: { lifecycle?: boolean } = {}) {
     app.post(path, async (request, reply) => {
@@ -1143,7 +1143,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
               providerTimestamp: parseShopifyTriggeredAt(request), status: "pending",
             });
             try {
-              await handle(payload);
+              // No connected shop routes here — that is the normal case for
+              // `shop/redact`. The handler is told so explicitly rather than left to
+              // guess an account.
+              await handle(payload, { connectionId: null });
               await completeInbound(written.id, true);
             } catch (handlerError) {
               const message = handlerError instanceof Error ? handlerError.message : String(handlerError);
@@ -1207,7 +1210,9 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
         }
 
         try {
-          const result = await handle(payload);
+          // P2.6 — the handler is told WHICH account this webhook routed to, so a
+          // revoke never has to work it out for itself.
+          const result = await handle(payload, { connectionId: route.connectionId });
           await completeInbound(written.id, true);
           const extra = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
           return reply.send({ success: true, ...extra });

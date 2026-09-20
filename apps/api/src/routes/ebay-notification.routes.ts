@@ -555,14 +555,40 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
         }
       })()
     } else if (topicAction === 'authorization_revoked') {
-      // P2.3 subscribes this topic; P2.6 is the package that acts on it (mark the
-      // account revoked, pause writes, alert). Recorded at error level meanwhile, so a
-      // seller withdrawing our access is never a silent 204 — the ledger row carries
-      // the payload and the reason, which is what P2.6 will build from.
-      logger.error('[eBay notification] AUTHORIZATION_REVOCATION received — recorded; the account is NOT yet marked revoked (P2.6)', {
-        notificationId: notificationId || null,
-        username: notifData?.username ?? notifData?.userId ?? null,
-      })
+      // P2.6 — act on it.
+      //
+      // The notification names the eBay USERNAME, not the user id the connection is
+      // keyed by, so P2.6's migration added the username to `inboundAliases` and the
+      // routing index answers with the exact connection. That matters more here than
+      // anywhere: a revoke that has to work out WHICH account it means cuts off the
+      // wrong seller the day a second one is connected, and this endpoint is reachable
+      // by anyone who can forge a signature — which is why the revoke only happens on
+      // the VERIFIED path, inside the routed workspace.
+      const revokedUser = String(notifData?.username ?? notifData?.userId ?? '')
+      await (async () => {
+        try {
+          const target = await verifiedChannelWorkspace('EBAY', revokedUser || undefined)
+          const { revokeChannelConnection } = await import('../services/cx/account-lifecycle.service.js')
+          const outcome = await withIngressWorkspace(target.workspaceId, () =>
+            revokeChannelConnection(
+              target.connectionId,
+              `eBay reported AUTHORIZATION_REVOCATION for ${revokedUser || 'this seller'}.`,
+              'ebay_authorization_revocation',
+            ),
+          )
+          logger.error('[eBay notification] AUTHORIZATION_REVOCATION — the account is revoked and writes are held', {
+            notificationId: notificationId || null, username: revokedUser || null,
+            connectionId: target.connectionId, outcome: outcome.skipped ?? 'revoked',
+          })
+        } catch (error) {
+          // Recorded, never thrown: eBay must still get its 204, and the ledger row
+          // already holds the payload for an operator to act on by hand.
+          logger.error('[eBay notification] AUTHORIZATION_REVOCATION could not be attributed to a connection', {
+            notificationId: notificationId || null, username: revokedUser || null,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      })()
     } else {
       // `topicVia` matters as much as the topic: 'none' means nothing in the payload
       // identified it either, which is the only case that is genuinely unhandled.
