@@ -1,13 +1,31 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and ALL of P4.1 are
-built** (slices a–e; `build/P4.1e.md` §6 has the row-by-row table). P5.3 is
-measured. Next is **P4.2 (images)**, then P4.3 / P4.4 / P4.5.
+Updated **2026-09-20 (evening)**. **P0, P1, P2, ALL of P3, P5.1, ALL of P4.1,
+ALL of P4.2, and P4.3 a–b are built and deployed.**
 
-🔴 **Four of P4.1's seven rows were COUNTERWEIGHTS** — already built, or built
-better than the row described. The real defects were not the gaps the plan
-named: they were **failure paths and drifts inside work that already existed**.
-Measure the row before building it.
+## ▶ START HERE — the next package is the REST OF P4.3 (stock)
+
+Four rows remain in P4.3, none of them measured yet. Take them in this order:
+
+1. **Every quantity producer through the resolver** — *"fix the catalog PATCH
+   first"* says the plan row. A census: which code paths decide a quantity, and
+   which of them bypass the resolver. Start with the catalog PATCH.
+2. **Amazon clamp on routed rows.**
+3. **Coalesce shared eBay rows.**
+4. **Shopify read-back** — ⚠️ note P5.3 first: `shopify-live-images` is guarded by
+   `hasCreds()` and production has **no `SHOPIFY_*` variable**, so a Shopify
+   read-back cannot run there today whatever you build. Establish that before
+   building, or you will build something that cannot run.
+
+Then **P4.4** (price), **P4.5** (advertising), the rest of **P5**, then P6/P7/P8.
+§3c has the full order.
+
+🔴 **THE LESSON OF THIS SESSION, and it held for every single package: the plan
+row is usually NOT the defect.** Of the 11 rows touched across P4.1 / P4.2 / P4.3,
+**five were counterweights** — already built, or built better than the row
+described. The real defects were in **failure paths** (`catch` blocks that gave
+up) and **drifts** (one builder learning a lesson the other never did). **Measure
+the row before you build it**, and read the `catch` of every rule you rely on.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -131,7 +149,7 @@ statement about production, ask which profile it came from — and look for the 
 profile's line.**
 Earlier: P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P4.x
+## 3. What was built today, and what each package found
 
 **P5.1 is built and P5.3 is measured.** The deadline package is done, so the
 plan's order now points at **P4**.
@@ -413,6 +431,23 @@ Each is one command, and each converts a "built" into a "verified":
    reading an empty table since it was written — lights up.
 
 ## 5. Open items the Owner owns
+
+### 🟢 5.0 The three live right now (2026-09-20 evening)
+
+1. **Run the P5.1 probe and paste the answer.** `GET /api/admin/amazon-orders-2026-probe?days=7`
+   — admin-gated, read-only, ONE `searchOrders` call, does NOT turn the switch on.
+   The Owner chose option B (one captured live read before the migration goes
+   live). Until it runs, P5.1 is proven against Amazon's published model and its
+   own example response, and against **no real payload**. See §14a.
+2. **Decide the image read-back sweep.** 🟢 **Recommended: ON.**
+   `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true`. See §14b for the measured cost.
+3. **Etsy and Shopify: are they connected?** The Owner believes Etsy is and is
+   unsure about Shopify. ⚠️ **The logs cannot answer this** — see §4's table. Do
+   not read `[ConfigManager] ⚠ … configuration incomplete (missing env vars)` as
+   "not connected"; that is the LEGACY env config, not the CX connection table.
+   One look at the **Channels** screen settles it.
+
+
 
 1. **P1.8 is off.** Turn it on with `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN=true` plus one sandbox account per channel (`NEXUS_CONTRACT_ACCOUNT_EBAY`, `…_AMAZON_SP`, `…_AMAZON_ADS`, `…_SHOPIFY`, `…_ETSY`, and `NEXUS_CONTRACT_AMAZON_SELLER_ID`). Shopify needs a development-store account named; Etsy has no sandbox and needs the Owner's decision about a test listing marked "test".
 2. **P6.1 is off** until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (`build/P6.1.md` section 4).
