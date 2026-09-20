@@ -37,6 +37,22 @@ const AMS_DESTINATION_ARN = process.env.NEXUS_AMS_DESTINATION_ARN || ''
 // The change streams matter most. They are the ONLY push signal that someone
 // edited in Seller Central — without them the system cannot tell an external
 // edit from a write of ours that has not landed.
+/**
+ * P2.7 — which AMS region a marketplace's profile lives in.
+ *
+ * This was a local `const` inside `advertising-intel.routes.ts`, invisible to anything
+ * else. The subscription check's first draft imported a same-named export that does not
+ * exist and fell back to 'NA' for every profile — which would have asked the wrong
+ * region for every list and reported every profile unreadable, while looking like a
+ * working default. One exported function instead of a default nobody can see is wrong.
+ */
+export function amsRegionFor(marketplace?: string | null): 'NA' | 'EU' | 'FE' {
+  if (!marketplace) return 'EU'
+  if (['US', 'CA', 'MX', 'BR'].includes(marketplace)) return 'NA'
+  if (['JP', 'AU', 'SG', 'IN'].includes(marketplace)) return 'FE'
+  return 'EU'
+}
+
 export const AMS_DATASETS = AMS_ALL_DATASETS
 export type AmsDataset = (typeof AMS_ALL_DATASETS)[number]
 

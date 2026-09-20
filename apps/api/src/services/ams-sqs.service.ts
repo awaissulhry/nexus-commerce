@@ -46,7 +46,21 @@ function buildClient(): SQSClient | null {
   return new SQSClient({ region: amsRegion() })
 }
 
-export interface AmsRawMessage { receiptHandle: string; body: string }
+export interface AmsRawMessage {
+  receiptHandle: string
+  body: string
+  /**
+   * P2.7 — SQS's id for this message, which was being thrown away here.
+   *
+   * It is the only thing that can tell a redelivery from a new message, and AMS needs
+   * that more than most queues: the hourly write INCREMENTS, because Amazon sends
+   * corrections as deltas. So a message delivered twice does not overwrite, it adds —
+   * silently inflating spend, clicks and impressions with no error anywhere. SQS is
+   * at-least-once by definition, and the visibility timeout is 30 seconds against a
+   * batch that routes each record to its own business profile.
+   */
+  messageId: string
+}
 
 export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
   const client = buildClient()
@@ -60,7 +74,7 @@ export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
   }))
   return (res.Messages ?? [])
     .filter((m) => m.ReceiptHandle && m.Body)
-    .map((m) => ({ receiptHandle: m.ReceiptHandle as string, body: m.Body as string }))
+    .map((m) => ({ receiptHandle: m.ReceiptHandle as string, body: m.Body as string, messageId: m.MessageId ?? '' }))
 }
 
 export async function deleteAmsMessage(receiptHandle: string): Promise<void> {

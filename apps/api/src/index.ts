@@ -211,6 +211,7 @@ import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { startAmazonNotificationReconcileCron } from "./jobs/amazon-notification-reconcile.job.js";
 import { startEbayNotificationReconcileCron } from "./jobs/ebay-notification-reconcile.job.js";
+import { startAmsSubscriptionCheckCron } from "./jobs/ams-subscription-check.job.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
@@ -1318,6 +1319,13 @@ async function start() {
       // EBAY_NOTIFICATION_ENDPOINT_URL and EBAY_NOTIFICATION_VERIFICATION_TOKEN are
       // both set. Opt out via NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=0.
       startEbayNotificationReconcileCron();
+
+      // P2.7 — check the Amazon Marketing Stream subscriptions per profile and dataset.
+      // Nothing checked them, and the failure is silent: a subscription that was never
+      // created, or that Amazon dropped, produces no error — just an hour of
+      // advertising data that never arrives. Reports only; it creates nothing.
+      // Opt out via NEXUS_ENABLE_AMS_SUBSCRIPTION_CHECK=0.
+      startAmsSubscriptionCheckCron();
 
       // Amazon financial events — daily 02:00 UTC, pulls yesterday's
       // /finances/v0/financialEvents and writes FinancialTransaction rows.

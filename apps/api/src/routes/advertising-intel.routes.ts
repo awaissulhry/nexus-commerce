@@ -1920,8 +1920,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   // subscriptions (sp-traffic + sp-conversion) is what makes Amazon push hourly data → SQS →
   // AmazonAdsHourlyPerformance → the rank loss-proxy + intraday spend circuit-breaker. Until a
   // subscription exists, hourlyRows stays 0 and those signals are inert. ──────────────────────────
-  const amsRegionFor = (m?: string | null): 'NA' | 'EU' | 'FE' =>
-    !m ? 'EU' : ['US', 'CA', 'MX', 'BR'].includes(m) ? 'NA' : ['JP', 'AU', 'SG', 'IN'].includes(m) ? 'FE' : 'EU'
+  // P2.7 — moved to services/advertising/ads-marketing-stream.service.ts so the nightly
+  // subscription check and this route cannot drift to two different region maps.
+  const { amsRegionFor } = await import('../services/advertising/ads-marketing-stream.service.js')
 
   fastify.get('/advertising/ams/status', async (_request, reply) => {
     const { amsStatus } = await import('../services/advertising/ads-marketing-stream.service.js')

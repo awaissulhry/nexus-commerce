@@ -11,7 +11,8 @@
  */
 
 import cron, { schedulePlatform } from '../lib/cron/clustered.js'
-import { verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { isAmsSqsConfigured, pollAmsRaw, deleteAmsMessage, parseAmsBody } from '../services/ams-sqs.service.js'
@@ -34,6 +35,7 @@ export async function runAmsSqsPoll(): Promise<void> {
       let budgetEvents = 0
       let unmatched = 0
       let unknownDs = 0
+      let duplicates = 0
       for (let batch = 0; batch < MAX_BATCHES_PER_TICK; batch++) {
         const raw = await pollAmsRaw(10)
         if (raw.length === 0) break
@@ -41,6 +43,54 @@ export async function runAmsSqsPoll(): Promise<void> {
           try {
             const records = parseAmsBody(msg.body)
             received += records.length
+
+            // P2.7 — dedupe, through the P2.1 inbound ledger.
+            //
+            // The hourly write INCREMENTS: Amazon sends corrections as deltas, so the
+            // upsert's `update` adds rather than replaces. SQS is at-least-once, and
+            // the visibility timeout here is 30 seconds against a batch that routes
+            // each record to its own business profile — so a slow batch is redelivered
+            // while the first pass is still applying, and the second pass adds the
+            // same numbers again. Nothing errors. Spend, clicks and impressions are
+            // simply larger than they were.
+            //
+            // The queue's own message id is the only thing that can tell those apart,
+            // and `pollAmsRaw` was discarding it. It is now the ledger's key, which
+            // also gives AMS the retry, dead-letter and replay the other channels got
+            // in P2.1 — rather than a second dedupe table beside the first.
+            //
+            // Recorded in the platform's workspace: one message carries records for
+            // several advertisers, so it belongs to no single business. The per-record
+            // routing below is unchanged and still decides where the DATA goes.
+            const seen = await legacyIngress(() => recordInbound({
+              channel: 'AMAZON_ADS',
+              eventType: String((records[0] as Record<string, unknown> | undefined)?.dataset_id ?? 'ams'),
+              externalId: msg.messageId || undefined,
+              payload: { messageId: msg.messageId, recordCount: records.length },
+              // The queue's IAM policy is what establishes trust, as on the SP-API
+              // side. `null` says that; `false` would claim a check failed.
+              signatureOk: null,
+              verifiedBy: 'sqs_iam',
+              status: 'pending',
+            }))
+            if (!seen.id) {
+              // Ledger first, same rule as the SP-API poller: without a row we cannot
+              // tell a redelivery from a new message, and with an incrementing write
+              // that is the one situation where guessing is expensive. Leave it on the
+              // queue.
+              logger.error('[ams-sqs-poll] inbound ledger unavailable — message retained', { messageId: msg.messageId })
+              failed += 1
+              continue
+            }
+            if (seen.duplicate && seen.existingStatus === 'done') {
+              // Already applied. Ack it so it stops coming back, and do NOT ingest:
+              // that is the double-count this whole block exists to prevent.
+              duplicates += 1
+              await deleteAmsMessage(msg.receiptHandle)
+              deleted += 1
+              continue
+            }
+
             if (records.length > 0) {
               // AX-ZD.2 — three families arrive down one queue and answer
               // different questions. Previously everything went to the metrics
@@ -82,10 +132,13 @@ export async function runAmsSqsPoll(): Promise<void> {
             }
             // Ack even when 0 records (e.g. a non-perf dataset we skip) — leaving
             // it would just redeliver forever.
+            await legacyIngress(() => completeInbound(seen.id, true))
             await deleteAmsMessage(msg.receiptHandle)
             deleted += 1
           } catch (err) {
-            // Don't delete → SQS redelivers after the visibility timeout.
+            // Don't delete → SQS redelivers after the visibility timeout. The ledger
+            // row stays at `failed` with its reason, so a redelivery is recognised as
+            // a retry of THIS message rather than as new data.
             failed += 1
             logger.warn('[ams-sqs-poll] message failed (will redeliver)', { error: err instanceof Error ? err.message : String(err) })
           }
@@ -94,7 +147,7 @@ export async function runAmsSqsPoll(): Promise<void> {
       if (unknownDs > 0) {
         logger.warn('[ams-sqs-poll] unrecognised AMS dataset(s) received', { count: unknownDs })
       }
-      return `received=${received} upserted=${upserted} changed=${changed} budget=${budgetEvents} unmatched=${unmatched} unknownDataset=${unknownDs} deleted=${deleted} failed=${failed}`
+      return `received=${received} upserted=${upserted} changed=${changed} budget=${budgetEvents} unmatched=${unmatched} unknownDataset=${unknownDs} duplicates=${duplicates} deleted=${deleted} failed=${failed}`
     })
   } catch (err) {
     logger.error('ams-sqs-poll cron: failure', { error: err instanceof Error ? err.message : String(err) })
