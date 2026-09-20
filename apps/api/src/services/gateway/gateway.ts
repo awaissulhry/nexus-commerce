@@ -41,6 +41,7 @@ import {
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
 import { classifyChannelAnswer, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
+import { watchForDeprecation } from '../cx/deprecation-watch.service.js'
 
 export type GatewayOutcome = 'sent' | 'would_send' | 'gated' | 'refused' | 'held'
 export type GatewayBody = string | FormData | Uint8Array | null
@@ -336,6 +337,16 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       continue
     }
     break
+  }
+
+  // 7b. P3.5 — deprecation watch. The channel telling us an endpoint is going away
+  //     arrives on a SUCCESSFUL answer, which is why it is read here and not in the
+  //     error path: `Sunset` rides on a 200 for months before anything starts failing.
+  //     Fire-and-forget: this reports on a call, it is not part of one, and a slow
+  //     notification must never be added to a channel call's latency.
+  if (status >= 200 && status < 400) {
+    void watchForDeprecation({ channel: req.channel, endpoint: safePath(url), headers: responseHeaders })
+      .catch(() => { /* the watch logs its own failures; a call is never failed by it */ })
   }
 
   // 8. classify

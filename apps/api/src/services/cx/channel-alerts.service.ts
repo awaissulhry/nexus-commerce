@@ -281,7 +281,14 @@ export function deprecationAlert(channel: string, endpoint: string, sunsetAt: st
       ? `${channel} has marked ${endpoint} as deprecated and says it stops working on ${sunsetAt}. Nexus still calls it.`
       : `${channel} has marked ${endpoint} as deprecated. It has not said when it stops working. Nexus still calls it.`,
     entityType: 'ChannelEndpoint',
-    entityId: `${channel}:${endpoint}`,
+    // P3.5 — the SUNSET DATE is part of the identity, not just the endpoint.
+    //
+    // Keyed on the endpoint alone, a channel that MOVES its shutdown date earlier is
+    // folded into the unread notice that still names the old one, and the operator
+    // plans around a date that is no longer true. The date is the whole value of this
+    // notice, so a different date is a different fact. An endpoint whose date never
+    // moves still gets exactly one notice.
+    entityId: `${channel}:${endpoint}${sunsetAt ? `:${sunsetAt}` : ''}`,
     href: '/settings/channels',
     meta: { channel, endpoint, sunsetAt },
   }

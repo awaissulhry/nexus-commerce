@@ -1,7 +1,7 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, P3.1 – P3.4 are built.**
-The next package is **P3.5**.
+Updated **2026-09-20**. **P0, P1, P2, P3.1 – P3.5 are built.**
+The next package is **P3.6**.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -64,40 +64,44 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 | P2.7 | AMS hourly writes **increment** and nothing deduped, while SQS is at-least-once — a redelivery silently added the same spend again. Nightly subscription check | `ffdb2494b` | `build/P2.7.md` |
 | P2.8 | **P2 complete.** The API exposed none of the lifecycle, so a dead letter looked identical to a retry. Ingress tab on the design system | `8a1853b94` | `build/P2.8.md` |
 | P3.1 | The error vocabulary had no test at all. **161 of 201 real failed bodies are double-encoded** and lost their error code entirely. `attribute` + `severity` added; a mapping table per connector | `2f4f9d3bd` | `build/P3.1.md` |
+| P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | see below | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | see below | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | see below | `build/P3.3.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | see below | `build/P3.2.md` |
 
 **Production proofs.** P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P3.5, then P3.6 … in plan order
+## 3. Next — P3.6, then P4.1 … in plan order
 
-P3.5: *deprecation watch — the gateway reads `Deprecation` and `Sunset` headers, and
-Shopify's deprecation header, and raises an alert.* Done when: a fixture with the header
-raises one alert.
+P3.6: *live dashboards and target levels (SLOs) per channel and operation, plus one
+trace ID per change (details in 13.7).* Done when: each channel shows error rate, slow
+calls, backlog age and dead letters against a target.
 
-**P3.4 already built the alert.** `deprecationAlert()` in
-`services/cx/channel-alerts.service.ts` has its wording and its delivery, and it is
-tested through its shape. P3.5 only has to read the headers in the gateway and call
-`raiseChannelAlert` — it must NOT invent a sixth alert path.
+**P3.3 built the per-account half of that.** `accountCallsView` already answers error
+rate, latency and last error for one account; P3.6 is the per-CHANNEL, per-OPERATION
+view with targets, plus the trace ID. Read plan §13.7 before starting.
 
-**What P3.2 – P3.4 left open** (full lists in each `build/<ID>.md` §6 / §4):
+**🔴 Read the honest denominator first.** Of the 395 calls since the gateway landed,
+**only 48 are real traffic** (Shopify); every eBay row is a test artefact. A dashboard
+built and "verified" against that is verified against nothing.
 
-1. **No eBay caller passes `ctx.listingId`.** The plumbing is in and tested; the
-   publication paths still call without it. Belongs with P4.1.
+**What P3.2 – P3.5 left open** (full lists in each `build/<ID>.md`):
+
+1. **No eBay caller passes `ctx.listingId`.** Plumbing in and tested; the publication
+   paths still call without it. Belongs with P4.1.
 2. **Amazon put/patch issues have no producer** — `putListingsItem` is 0 occurrences in
-   `apps/api/src`. P4.1's to build.
-3. **eBay rate headroom has no source.** eBay's `getRateLimits` Analytics call is never
-   made; the Diagnostics screen says so in eBay's terms rather than showing a blank.
+   `apps/api/src`. P4.1's.
+3. **eBay rate headroom has no source** — `getRateLimits` is never called.
 4. **`connectionId` is unset by most senders**, so the per-account screen under-counts.
-5. **Three of P3.4's four live alerts have no fuel yet** — 0 dead letters ever, 0
-   listing issues until a feed runs, and no `ChannelApp` has a secret expiry date set.
-   **Signature failures can fire now: 7 real rows are waiting.**
-6. **`alert.service.ts`'s in-app channel is still a `console.log`.** Other programmes
+5. **Three of P3.4's four live alerts have no fuel** — 0 dead letters ever, 0 listing
+   issues until a feed runs, no `ChannelApp` has a secret expiry date set. **Signature
+   failures can fire now: 7 real rows are waiting.**
+6. **No channel has ever sent a deprecation header here**, so P3.5 is unproven by real
+   traffic. The first real notice is worth reading.
+7. **`alert.service.ts`'s in-app channel is still a `console.log`.** Other programmes
    still call it and still reach nobody. Named, not fixed — it is shared.
-7. **The studio "Errors & Sync" console's rejections pane** is the studio programme's.
-   Its `DORMANT_SOURCES` entry for `ListingIssue` was right when written; **P3.2 made
-   that source live.**
+8. **The studio "Errors & Sync" console's rejections pane** is the studio programme's;
+   P3.2 made its `ListingIssue` source live.
 
 ### 3a. Start here, every time
 
@@ -131,6 +135,9 @@ fixture by hand.
   a failure that retries in four minutes.
 - **P3.1** — **161 of 201** real failed bodies are double-encoded and lost their error
   code entirely.
+- **P3.5** — nothing read the deprecation headers at all; and the alert dedupe from
+  P3.4 would have hidden a MOVED shutdown date behind the old one, which a failing test
+  found and the design had missed.
 - **P3.4** — the alert path reached nobody: an in-app `console.log` stub plus an email
   channel disabled in production, while the thing that delivers (`Notification`, 391,197
   rows) sat beside it unused by this programme. P0.5's alert had **two** independent
