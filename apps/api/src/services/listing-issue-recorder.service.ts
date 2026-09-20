@@ -366,3 +366,111 @@ export async function recordNotificationIssues(args: {
   return result ? { listings: 1, issues: result.open } : null
 }
 
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  P4.1 — every eBay Trading rejection reaches its listing                    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The listings an eBay Trading call is about, resolved from the call itself.
+ *
+ * ## What was measured (2026-09-20)
+ *
+ * P3.2 built the whole path — `callTradingApi` accepts `ctx.listingId`, uses it,
+ * and is tested — and left it to the callers to supply one. The handover recorded
+ * that two callers still did not. **A derived census of the source says 14 write
+ * call sites across 12 files, and NOT ONE of them passes a listingId.** (One of
+ * the two the handover named, `ebay-shared-fanout.service.ts`, makes no Trading
+ * call at all.) So every real eBay rejection has been reaching the ledger and
+ * never the listing, on every write path, since P3.2 shipped.
+ *
+ * Editing fourteen call sites would fix it until the fifteenth is written. The
+ * rule belongs where every eBay write already passes, so this resolves the
+ * listing from what the call ALREADY carries: the `<ItemID>` in its request and
+ * the account in its context.
+ *
+ * ## The three rules it has to get right
+ *
+ * 1. **A named listing wins.** If the caller says which listing this is about, we
+ *    use it and never look anything up. Explicit beats inference — a caller that
+ *    knows more than the ItemID must not be overruled by a query.
+ *
+ * 2. **Never resolve without the account.** The lookup is keyed on
+ *    `externalListingId` AND `channelConnectionId`. The MAP.3 ratchet refused a
+ *    push for falling back to "the only connected shop"; the same mistake here
+ *    would file one seller's rejection on another seller's listing.
+ *
+ * 3. **A shared eBay item is MANY listings, and the rejection is about all of
+ *    them.** One eBay ItemID carries every product in a shared listing, so
+ *    `findFirst` would file a real rejection on an arbitrary one of them and
+ *    leave the rest showing a healthy listing. Every member row gets the issue.
+ *
+ * And a fourth that is about honesty rather than correctness: when nothing
+ * resolves, that is **returned as a count**, not swallowed. "No listing is linked
+ * to this ItemID" and "we did not look" must never look alike.
+ */
+export async function resolveEbayListingIds(args: {
+  /** The ItemID in the call, taken from its request XML (a revise) or its answer (an add). */
+  itemId: string | null | undefined
+  /** The eBay account the call went out on. Required — never resolve without it. */
+  connectionId: string | null | undefined
+  /** What the caller named, if it named one. Wins outright. */
+  listingId?: string | null
+  prisma?: PrismaClient
+}): Promise<string[]> {
+  if (args.listingId) return [args.listingId]
+  if (!args.itemId || !args.connectionId) return []
+  const prisma = args.prisma ?? (prismaDefault as unknown as PrismaClient)
+  try {
+    const rows = await prisma.channelListing.findMany({
+      where: { channel: 'EBAY', externalListingId: args.itemId, channelConnectionId: args.connectionId },
+      select: { id: true },
+    })
+    return rows.map((r) => r.id)
+  } catch (err: any) {
+    logger.warn('[listing-issues] could not resolve the eBay listing', {
+      itemId: args.itemId, connectionId: args.connectionId, error: err?.message,
+    })
+    return []
+  }
+}
+
+/** The `<ItemID>` a Trading request or answer names, if it names one. */
+export function itemIdOfTradingXml(xml: string | null | undefined): string | null {
+  const found = /<ItemID>([^<]+)<\/ItemID>/.exec(String(xml ?? ''))?.[1]?.trim()
+  return found && /^\d+$/.test(found) ? found : null
+}
+
+/**
+ * One rejected eBay Trading write → an issue on every listing it is about.
+ *
+ * Returns the number of listings written and the number of issues opened, so a
+ * caller (and the guard) can tell "filed on none" from "never asked".
+ */
+export async function recordEbayTradingRejection(args: {
+  itemId: string | null | undefined
+  connectionId: string | null | undefined
+  listingId?: string | null
+  issues: MirrorIssueInput[]
+  occurredAt?: Date | null
+  prisma?: PrismaClient
+}): Promise<{ listings: number; issues: number }> {
+  const listingIds = await resolveEbayListingIds(args)
+  if (listingIds.length === 0 || args.issues.length === 0) return { listings: 0, issues: 0 }
+  let issues = 0
+  let listings = 0
+  for (const listingId of listingIds) {
+    const result = await recordListingIssues({
+      listingId,
+      source: 'ebay-write',
+      issues: args.issues,
+      occurredAt: args.occurredAt ?? null,
+      prisma: args.prisma,
+    })
+    if (result) {
+      listings++
+      issues += result.open
+    }
+  }
+  return { listings, issues }
+}

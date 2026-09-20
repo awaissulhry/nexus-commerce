@@ -349,6 +349,20 @@ export async function callTradingApi(
   // P1.2 — through the channel gateway: the account's state, the rate bucket, one ledger row with the
   // Trading Ack read as the outcome. The token stays in the IAF header; the P0.1 switches above stay the
   // mode check for this client.
+  // P4.1 — the ledger's own listingId was filled on 0 of 469,462 rows because no
+  // sender ever named one. For a Trading call the listing is derivable from the
+  // request's `<ItemID>` and this account, so the ledger gets it too. Resolved
+  // BEFORE the send, because the row is written by the send. A shared eBay item
+  // belongs to several listings and the ledger column holds one, so the ledger
+  // records a listing only when exactly ONE resolves; the issue path, which can
+  // hold many, files on all of them. One is a column, the other is the truth.
+  const { itemIdOfTradingXml: itemIdOf, resolveEbayListingIds } = await import('./listing-issue-recorder.service.js')
+  const ledgerListingIds = await resolveEbayListingIds({
+    listingId: ctx.listingId ?? null,
+    itemId: itemIdOf(xml),
+    connectionId: ctx.connectionId,
+  })
+
   const { gatewayFetch } = await import('./gateway/gateway.js')
   const res = await gatewayFetch({
     channel: 'EBAY',
@@ -373,7 +387,7 @@ export async function callTradingApi(
     marketHeaders: 'caller',
     modeAppliedByCaller: true,
     answerOk: tradingAnswerOk,
-    ledger: { listingId: ctx.listingId ?? null },
+    ledger: { listingId: ledgerListingIds.length === 1 ? ledgerListingIds[0] : (ctx.listingId ?? null) },
   })
 
   if (!res.ok) throw new Error(`eBay ${callName} HTTP ${res.status}`)
@@ -400,11 +414,20 @@ export async function callTradingApi(
     // Awaited, not fire-and-forget: the done-when is "within one minute", and an
     // un-awaited write in a process that is about to throw can be lost. The recorder
     // never throws of its own accord.
-    if (ctx.listingId) {
-      const { recordListingIssues } = await import('./listing-issue-recorder.service.js')
-      await recordListingIssues({
-        listingId: ctx.listingId,
-        source: 'ebay-write',
+    //
+    // P4.1 — and it no longer depends on the caller naming the listing. A derived
+    // census found **14 Trading write call sites across 12 files and NOT ONE passed
+    // a listingId**, so this path has never once filed an issue in production. The
+    // listing is resolved from what the call already carries: the `<ItemID>` in its
+    // request (a revise) or in eBay's answer (an add), plus the account in ctx. A
+    // caller that names a listing still wins outright.
+    const { itemIdOfTradingXml, recordEbayTradingRejection } = await import('./listing-issue-recorder.service.js')
+    const rejectionItemId = itemIdOfTradingXml(xml) ?? itemIdOfTradingXml(raw)
+    if (ctx.listingId || rejectionItemId) {
+      await recordEbayTradingRejection({
+        listingId: ctx.listingId ?? null,
+        itemId: rejectionItemId,
+        connectionId: ctx.connectionId,
         issues: channelErrors.map((e) => ({
           code: e.code,
           message: e.message,

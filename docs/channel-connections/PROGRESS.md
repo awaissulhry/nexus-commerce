@@ -1,7 +1,7 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3 and now P5.1 are built.**
-P5.3 is measured (see below). The next package is **P4.x**.
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and the first slice of
+P4.1 are built.** P5.3 is measured. Next is the rest of **P4.1**.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -69,10 +69,21 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.1a | **Every eBay Trading rejection reaches its listing.** 🔴 The handover said "two callers"; a derived census says **14 write sites across 12 files, 0 passing a listing** — and one of the two files it named makes no Trading call at all. Resolved centrally from the `<ItemID>` + the account, so a fifteenth caller cannot forget it. A shared eBay item is MANY listings and all are filed | `<this push>` | `build/P4.1a.md` |
 | P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
-**Production proofs.** P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
+**Production proofs.** P5.1 deploy `470f20fd` from `d3f1228dc`: **SUCCESS**, the app
+booted and every cron scheduled, with `NEXUS_ENABLE_AMAZON_ORDERS_2026` unset so the
+Orders path is unchanged — which is the proof that shipping it changed nothing.
+🔴🔴 **And the same deploy log says Amazon is NOT CONNECTED in production right
+now:** `amazon-orders cron: Amazon SP-API not configured — skipping`,
+`amazon-inventory cron: … skipping`, and `data-kiosk-poll cron: failure {"error":
+"WorkspaceError: Connect an Amazon seller account in Channels before using Amazon."}`.
+Section 4's table calls Amazon **Live**; on this deploy its own crons disagree. That
+changes P5.1's verification plan — a live 2026-01-01 read has nothing to read until an
+Amazon seller account is connected — and it is worth checking before ANY Amazon package.
+Earlier: P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
 ## 3. Next — P4.x
 
@@ -121,13 +132,24 @@ read is not like-for-like on `2026-07`. Details in `build/P5.1.md` §5.
 
 ### 3.1 🔴 What P3 left open — most of it is P4.1's
 
-1. **No eBay caller passes `ctx.listingId`.** `callTradingApi` accepts it, uses it and
-   is tested; `studio-publication-ebay.ts` and `ebay-shared-fanout.service.ts` still
-   call without it, so a real eBay rejection reaches the ledger and **not** the listing.
-   Small, and it belongs with P4.1 where those builders are rewritten anyway.
-2. **Amazon put/patch issues have no producer.** `putListingsItem` / `patchListingsItem`
-   are **0 occurrences in `apps/api/src`** — Amazon content goes out as
-   `JSON_LISTINGS_FEED`. That part of the P3.2 plan row is P4.1's to build.
+1. ~~No eBay caller passes `ctx.listingId`.~~ **CLOSED 2026-09-20 by P4.1a**
+   (`build/P4.1a.md`). 🔴 **And this entry was wrong twice.** A derived census
+   says **14 write call sites across 12 files, 0 passing a listing** — not two —
+   and `ebay-shared-fanout.service.ts`, one of the two named here, makes **no
+   Trading call at all**. `callTradingApi` now resolves the listing itself from
+   the `<ItemID>` in the call plus the account, so it cannot be forgotten by a
+   fifteenth caller. A shared eBay item is MANY listings and every member is
+   filed; the ledger's single column takes one only when exactly one resolves.
+2. **Amazon put/patch issues have no producer** — but 🔴 **not for the reason
+   written here.** Measured 2026-09-20: `putListingsItem` is **28 occurrences**,
+   not 0. The "0" is true only of the SDK operation STRING (`operation:
+   'putListingsItem'`, 2 places, both tests). `AmazonSpApiClient.putListingsItem()`
+   is a real method (`clients/amazon-sp-api.client.ts:801`) that sends its own
+   request and **has a live call site** at `routes/marketplaces.routes.ts:1038`,
+   with P1.7's preview in front of it. The real gap: that route maps
+   `spResult.issues` straight into its HTTP response and writes **nothing** to
+   `ListingIssue`. Same shape as P4.1a — the recorder exists, the issues exist,
+   nobody joins them. Next slice.
 3. **eBay rate headroom has no source.** eBay does not report quota on a call (its
    parser returning null is CORRECT); `getRateLimits` is never called. P3.3's screen
    says so in eBay's own terms rather than showing a blank.
@@ -242,7 +264,7 @@ screens say so on the screen itself.
 | **eBay** | The nightly reconcile at **03:55 UTC** creates the destination and subscribes, because `EBAY_NOTIFICATION_ENDPOINT_URL` + `EBAY_NOTIFICATION_VERIFICATION_TOKEN` are already set in production. **Check `GET /api/admin/ebay-notification-status` after it runs** — a topic under `notOffered` means its id in `ebay-topics.ts` is wrong |
 | **Shopify** | Sends nothing until the registration is run per shop (section 5) |
 | **Etsy** | Sends nothing until the Owner configures the portal (section 5) |
-| **Amazon** | Live, but no ORDER_CHANGE arrived in the deploy window, so the P2.2 parse fix is unexercised by real traffic |
+| **Amazon** | 🔴 **Its own crons say NOT CONFIGURED** on deploy `470f20fd` (2026-09-20 16:15 UTC): `amazon-orders`, `amazon-inventory` and `amazon-mcf-status` all skip, and `data-kiosk-poll` fails with "Connect an Amazon seller account in Channels". This row used to read "Live". Check `amazonCredsConfigured()` per business profile before believing any Amazon measurement — and no ORDER_CHANGE arrived in the deploy window either, so the P2.2 parse fix is still unexercised |
 | **AMS** | The subscription check's first run is the answer to P2.7's done-when |
 
 ### 4.1 The three cheapest proofs available right now
@@ -314,6 +336,21 @@ Each is one command, and each converts a "built" into a "verified":
 
 ## 6. Traps that cost time here — read before measuring anything
 
+- 🔴🔴 **A BANKED RULE CAN GO FALSE, and a cited one gets LESS scrutiny.** This
+  handover's own §3.1 was wrong twice in one section: "two eBay callers" was
+  fourteen across twelve files (and one of the two named makes no Trading call at
+  all), and "`putListingsItem`: 0 occurrences" was 28 — true only of the SDK
+  operation STRING, while a real method with a live call site sat beside it.
+  **Re-derive a count before building on it.** Both cost one command.
+- 🔴 **A GUARD WHOSE CLAIM IS TOO BROAD gets relaxed until it passes.** P4.1a's
+  first guard claimed one sender of eBay Trading XML; there are six. The fix is
+  to NARROW the claim to what is true (no listing WRITE outside `callTradingApi`),
+  write the exemptions down with reasons, and add a second test that CHECKS each
+  reason — not to loosen the pattern until it goes green.
+- 🔴 **A literal-only regex UNDER-COUNTS a census.** A call whose operation is a
+  ternary (`plan.itemId ? 'Revise…' : 'Add…'`) is invisible to
+  `fn\('([A-Za-z]+)'`. Make the census fail when any member's identity cannot be
+  read: a hole in the denominator is not a pass.
 - 🔴🔴 **A STARTUP ERROR and a FAILING TEST have the same exit code.** A mutation
   harness passing `--reporter=basic` (not a vitest 4 reporter) killed every run
   before a single test executed, and reported **nine rules "guarded"** that it
