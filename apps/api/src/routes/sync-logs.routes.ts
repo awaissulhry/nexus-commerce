@@ -924,6 +924,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: {
       channel?: string
       processed?: string
+      /** P2.8 — one or more of pending,done,failed,dlq (comma separated). */
+      status?: string
       eventType?: string
       since?: string
       limit?: string
@@ -945,8 +947,18 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       if (q.eventType) where.eventType = q.eventType
       if (q.processed === 'true') where.isProcessed = true
       else if (q.processed === 'false') where.isProcessed = false
+      // P2.8 — filter on the LIFECYCLE, not just the old boolean.
+      //
+      // `isProcessed` has two values and the lifecycle has four: pending, done, failed
+      // and dlq. Reading the list through the boolean cannot tell a dead letter from an
+      // event that arrived a second ago, which is the single distinction an operator
+      // opens this screen to make.
+      if (q.status) {
+        const wanted = q.status.split(',').map((value) => value.trim()).filter(Boolean)
+        if (wanted.length) where.status = { in: wanted }
+      }
 
-      const [rows, byChannel, byProcessed] = await Promise.all([
+      const [rows, byChannel, byProcessed, byStatus] = await Promise.all([
         prisma.webhookEvent.findMany({
           where,
           orderBy: { createdAt: 'desc' },
@@ -964,6 +976,19 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
             updatedAt: true,
             // RT.4 — needed by the latency column on /sync-logs/webhooks.
             providerTimestamp: true,
+            // P2.8 — the lifecycle the Ingress tab is built on. Every one of these was
+            // added by CX.4a or P2.1 and none of them was ever read by an API: the
+            // screen could show that something went wrong but not what, how often it
+            // had been tried, when it would be tried again, or whether the signature
+            // had been checked at all.
+            status: true,
+            attempts: true,
+            deliveries: true,
+            nextAttemptAt: true,
+            lastError: true,
+            signatureOk: true,
+            verifiedBy: true,
+            archivedAt: true,
             // Skip the heavy payload + signature fields on the list.
           },
         }),
@@ -974,6 +999,15 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         }),
         prisma.webhookEvent.groupBy({
           by: ['isProcessed'],
+          where: { createdAt: { gte: since } },
+          _count: { _all: true },
+        }),
+        // P2.8 — counted over the WHOLE window, not just the page, and not filtered by
+        // the caller's own status filter. A tally that moves when you click a filter is
+        // describing the page rather than the system, which is the opposite of what the
+        // number is for.
+        prisma.webhookEvent.groupBy({
+          by: ['status'],
           where: { createdAt: { gte: since } },
           _count: { _all: true },
         }),
@@ -994,6 +1028,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
             byProcessed.find((g) => g.isProcessed === true)?._count._all ?? 0,
           unprocessed:
             byProcessed.find((g) => g.isProcessed === false)?._count._all ?? 0,
+          byStatus: byStatus.map((g) => ({ status: g.status, count: g._count._all })),
         },
       })
     } catch (err) {
@@ -1002,6 +1037,43 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: message })
     }
   })
+
+  /**
+   * P2.8 — queue an event for the retry worker: POST /api/sync-logs/webhooks/:id/retry
+   *
+   * Distinct from replay on purpose, and the difference is not cosmetic.
+   *
+   *   retry   puts the event back in the worker's queue and returns immediately.
+   *   replay  runs the handler INLINE and answers with what happened.
+   *
+   * An operator clearing a hundred dead letters after fixing a channel wants the first:
+   * a hundred inline replays would hold a request open for as long as the slowest one
+   * and time out somewhere in the middle, leaving nobody able to say which had run.
+   * An operator investigating ONE event wants the second, because the answer is the
+   * point.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/sync-logs/webhooks/:id/retry',
+    async (request, reply) => {
+      try {
+        const queued = await replayInbound({ id: request.params.id })
+        if (!queued.ok) {
+          const message =
+            queued.reason === 'archived'
+              ? 'This event is archived; its payload is no longer on the row.'
+              : queued.reason === 'already_pending'
+                ? 'This event is already queued for the retry worker.'
+                : 'Webhook event not found'
+          return reply.code(queued.reason === 'not_found' ? 404 : 409).send({ error: message })
+        }
+        return reply.send({ success: true, queued: true, channel: queued.channel, eventType: queued.eventType })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[sync-logs/webhooks/:id/retry] failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
 
   /**
    * Webhook replay — POST /api/sync-logs/webhooks/:id/replay

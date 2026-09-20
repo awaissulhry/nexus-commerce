@@ -22,10 +22,11 @@ import { ConnectAccountDialog } from './ConnectAccountDialog'
 import { AccountsTab } from './AccountsTab'
 import { ConnectTab } from './ConnectTab'
 import { DiagnosticsTab } from './DiagnosticsTab'
+import { IngressTab } from './IngressTab'
 import './channels.css'
 
-type Tab = 'accounts' | 'connect' | 'diagnostics'
-const TAB_IDS: Tab[] = ['accounts', 'connect', 'diagnostics']
+type Tab = 'accounts' | 'connect' | 'ingress' | 'diagnostics'
+const TAB_IDS: Tab[] = ['accounts', 'connect', 'ingress', 'diagnostics']
 
 export function ChannelsClient() {
   const router = useRouter()
@@ -94,6 +95,9 @@ export function ChannelsClient() {
   const tabs = [
     { id: 'accounts', label: 'Accounts', count: accounts.data ? accounts.data.accounts.length : null },
     { id: 'connect', label: 'Connect', count: catalogue.data ? catalogue.data.filter((c) => c.available).length : null },
+    // P2.8 — Ingress sits before Diagnostics: it answers "did anything arrive, and what
+    // became of it", which is the question asked first when a channel goes quiet.
+    { id: 'ingress', label: 'Ingress' },
     { id: 'diagnostics', label: 'Diagnostics' },
   ]
 
@@ -130,6 +134,7 @@ export function ChannelsClient() {
             onStart={requestConnection}
           />
         )}
+        {tab === 'ingress' && <IngressTab />}
         {tab === 'diagnostics' && (
           <DiagnosticsTab accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />
         )}

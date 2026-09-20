@@ -212,3 +212,66 @@
     flex-wrap: wrap;
   }
 }
+
+/* ── P2.8 — Ingress tab ────────────────────────────────────────────────────────
+   Layout and domain content only. Every colour, size and space is a semantic
+   `--nds-*` token; nothing here restyles a shared control. */
+
+.nds-ingress {
+  display: grid;
+  gap: var(--nds-space-4);
+}
+
+.nds-ingress-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-3);
+  margin-block-end: var(--nds-space-3);
+}
+
+.nds-ingress-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2);
+}
+
+.nds-ingress-stuck {
+  display: grid;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nds-ingress-stuck > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-3);
+  padding: var(--nds-space-3);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+}
+
+.nds-ingress-stuck-what {
+  display: grid;
+  gap: var(--nds-space-1);
+  min-width: 0;
+  /* The reason is the useful half of the row and is often long. It wraps rather than
+     being clipped: a truncated reason is the one thing an operator opened this for. */
+  overflow-wrap: anywhere;
+}
+
+.nds-ingress-stuck-what > span {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+.nds-ingress-stuck-do {
+  display: flex;
+  gap: var(--nds-space-2);
+  flex-shrink: 0;
+}

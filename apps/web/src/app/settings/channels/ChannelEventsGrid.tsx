@@ -24,14 +24,36 @@ export interface LedgerRow {
   createdAt: string
 }
 
+/** The four states an inbound event can be in. */
+export type InboundStatus = 'pending' | 'done' | 'failed' | 'dlq'
+
 export interface InboundRow {
   id: string
+  channel?: string
   eventType: string
   externalId: string | null
   isProcessed: boolean
   processedAt: string | null
   error: string | null
   createdAt: string
+  /**
+   * P2.8 — the lifecycle, which this grid could not show.
+   *
+   * It rendered three states from a boolean and an error string: yes / pending /
+   * failed. A DEAD LETTER — an event that has run out of attempts and is waiting for a
+   * person — came out as "failed", identical to one that will be tried again in four
+   * minutes. Those are the two rows an operator most needs to tell apart, because one
+   * needs them and the other does not.
+   *
+   * Optional so the older shape still renders while a caller catches up.
+   */
+  status?: InboundStatus
+  attempts?: number
+  deliveries?: number
+  nextAttemptAt?: string | null
+  lastError?: string | null
+  signatureOk?: boolean | null
+  verifiedBy?: string | null
 }
 
 /**
@@ -52,12 +74,36 @@ function WhenCell(p: ICellRendererParams<{ createdAt: string }>) {
 function TypeCell(p: ICellRendererParams<LedgerRow>) {
   return p.data ? <Tag>{p.data.type}</Tag> : null
 }
+/** The status a row is really in, falling back to the old boolean for older callers. */
+export function inboundStatusOf(row: InboundRow): InboundStatus {
+  if (row.status) return row.status
+  if (row.error) return 'failed'
+  return row.isProcessed ? 'done' : 'pending'
+}
+
+const STATUS_TONE: Record<InboundStatus, 'success' | 'danger' | 'warning' | 'neutral'> = {
+  done: 'success',
+  // A dead letter is not a worse "failed" — it is a DIFFERENT state, because nothing
+  // will try it again. It gets its own tone so the two never read as one.
+  dlq: 'danger',
+  failed: 'warning',
+  pending: 'neutral',
+}
+
+const STATUS_LABEL: Record<InboundStatus, string> = {
+  done: 'done',
+  dlq: 'dead letter',
+  failed: 'will retry',
+  pending: 'pending',
+}
+
 function ProcessedCell(p: ICellRendererParams<InboundRow>) {
   if (!p.data) return null
-  const r = p.data
+  const status = inboundStatusOf(p.data)
+  const attempts = p.data.attempts ?? 0
   return (
-    <Pill tone={r.error ? 'danger' : r.isProcessed ? 'success' : 'neutral'} size="sm">
-      {r.error ? 'failed' : r.isProcessed ? 'yes' : 'pending'}
+    <Pill tone={STATUS_TONE[status]} size="sm">
+      {STATUS_LABEL[status]}{status === 'failed' && attempts > 0 ? ` (${attempts})` : ''}
     </Pill>
   )
 }
@@ -79,8 +125,13 @@ const INBOUND_COLUMNS: ColDef<InboundRow>[] = [
   { field: 'createdAt', headerName: 'When', width: 150, cellRenderer: WhenCell, sortable: true },
   { field: 'eventType', headerName: 'Type', width: 220 },
   { field: 'externalId', headerName: 'External id', width: 200, valueFormatter: (p) => p.value ?? '—' },
-  { colId: 'processed', headerName: 'Processed', width: 120, cellRenderer: ProcessedCell },
-  { field: 'error', headerName: 'Error', flex: 1, minWidth: 200, valueFormatter: (p) => readableAccountText(p.value ?? '') },
+  { colId: 'processed', headerName: 'Status', width: 140, cellRenderer: ProcessedCell },
+  {
+    colId: 'error', headerName: 'Reason', flex: 1, minWidth: 200,
+    // `lastError` is the lifecycle's field and `error` is the one that predates it.
+    // Both are written, but only the first is updated by a retry, so it is preferred.
+    valueGetter: (p) => readableAccountText(p.data?.lastError ?? p.data?.error ?? ''),
+  },
 ]
 
 const getRowId = (p: { data: { id: string } }) => p.data.id

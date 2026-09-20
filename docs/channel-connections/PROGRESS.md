@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 – P2.7 are built**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P2.8** (the Ingress tab on the Channels page).
+Updated **2026-09-20**. P0, P1 and three P6 packages are **built, pushed and live in production**. **P2.1 is PROD-VERIFIED**; **P2.2 – P2.8 are built — P2 is COMPLETE**. The Owner gave a standing yes on 2026-09-20: *implement the whole plan in order, without stopping, unless I stop you.* The next package is **P3.1** (errors back to you).
 
 Read in this order:
 
@@ -41,7 +41,7 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 
 **Production proofs taken (2026-09-20):** P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P2.8 (Ingress tab)
+## 3. Next — P3.1 (errors back to you)
 
 Read `build/P2.1.md`, `P2.2.md` and `P2.3.md` first. Between them they found five live
 production defects that none of the plan's package descriptions predicted. That is the
@@ -72,6 +72,9 @@ argument for measuring before building, every single time.
   this programme**, as a raw column write that skipped the alert. Measure before
   building even when you expect to find nothing.
 
+- **P2.8** — the API exposed none of the lifecycle the previous packages added, so the
+  UI could not tell a dead letter from a retry. Ingress tab now live on the design
+  system.
 - **P2.7** — the AMS hourly write INCREMENTS (Amazon sends corrections as deltas) and
   nothing deduped, while SQS is at-least-once. A redelivery silently added the same
   spend again; the SQS message id that could have caught it was discarded in the
