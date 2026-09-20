@@ -118,6 +118,66 @@ export async function reserveSharedCoordinates(
   return { allowed: rows.filter(r => !refusedListingIds.has(r.channelListingId as string)), blocked }
 }
 
+
+/**
+ * P4.3c — a quantity push must name what it is pushing to.
+ *
+ * `syncToAmazon` loads the ChannelListing ONLY from `queueItem.channelListingId`
+ * (there is no product fallback there, although `pushLockListings` two hundred
+ * lines above has one — the same function, two resolutions of "which listing is
+ * this row for"). With no listing:
+ *
+ *   - the send-time re-read (`resolveDispatchQuantity`) is skipped, so the
+ *     enqueue-time snapshot goes out even if a fresher value was committed;
+ *   - `stockBuffer` reads as 0, so the buffer is not held back;
+ *   - the Amazon EU shared-quantity guard never runs at all — it is gated on
+ *     `AMAZON_EU_SHARED_MARKETS.has(cl?.marketplace ?? '')`, and `''` is in no
+ *     set. That is D9's guard, silently off.
+ *
+ * `PATCH /api/catalog/products/:id` produced exactly that row, carrying the
+ * product's GROSS `totalStock` — beside the resolver-derived, per-listing rows
+ * that the same request's stock movement cascade had just enqueued correctly.
+ * Its twin, `PATCH /api/products/:id`, leaves the cascade to do it and queues
+ * nothing. Two builders, one lesson learned in only one of them.
+ *
+ * The shared eBay fan-out is the one legitimate row with no listing: a shared
+ * SKU is not a ChannelListing, so the row names its ItemID instead and the
+ * dispatcher routes it by `payload.pushVia === 'TRADING'`.
+ */
+export type QuantityRowTarget = 'NOT_A_QUANTITY_ROW' | 'LISTING' | 'SHARED_ITEM' | 'UNNAMED'
+
+const namedString = (value: unknown): boolean => typeof value === 'string' && value.trim() !== ''
+
+export function quantityRowTarget(row: unknown): QuantityRowTarget {
+  const r = (row ?? {}) as Record<string, any>
+  const payload = (r.payload ?? {}) as Record<string, any>
+  // Either half is enough: a QUANTITY_UPDATE whose number is re-read at dispatch
+  // carries no `payload.quantity`, and a FULL_SYNC can carry one.
+  const carriesQuantity =
+    r.syncType === 'QUANTITY_UPDATE' ||
+    payload.quantity !== undefined ||
+    (Array.isArray(payload.updates) && payload.updates.length > 0)
+  if (!carriesQuantity) return 'NOT_A_QUANTITY_ROW'
+  // The checked create form names its listing through `connect`; a loaded row
+  // carries the relation. Read every form, never one.
+  if (namedString(r.channelListingId) || namedString(r.channelListing?.connect?.id) || namedString(r.channelListing?.id)) return 'LISTING'
+  if (payload.pushVia === 'TRADING' && (namedString(payload.itemId) || namedString(r.externalListingId))) return 'SHARED_ITEM'
+  return 'UNNAMED'
+}
+
+/** The sentence a refused quantity row answers with, at birth and at dispatch. */
+export function unnamedQuantitySentence(channel: string): string {
+  return `Nothing was sent to ${channel}: this stock change does not say which listing it is for, so the market, the stock buffer and the Amazon EU shared-quantity check cannot be applied to it. Change the stock on the product and the listings follow, or save it from the listing itself.`
+}
+
+export class UnnamedQuantityRowError extends Error {
+  readonly code = 'UNNAMED_QUANTITY_ROW'
+  constructor(channel: string) {
+    super(unnamedQuantitySentence(channel))
+    this.name = 'UnnamedQuantityRowError'
+  }
+}
+
 /**
  * P1.3 (docs/channel-connections/FINAL-PLAN.md) — the ONE way an OutboundSyncQueue row is created.
  *
@@ -142,6 +202,16 @@ async function prepareRows(db: object, rows: QueueRowData[]): Promise<QueueRowDa
     if (allowed.length === 0) {
       const { WorkspaceError } = await import('../lib/workspace-context.js')
       throw new WorkspaceError('listing_coordinate_claimed', blocked[0].reason, 409)
+    }
+  }
+  // P4.3c — refuse an unnamed quantity row HERE, before it exists. Every creation
+  // site passes through this function (P1.3, and a ratchet keeps it that way), so
+  // this is the one place the rule cannot be forgotten by a new producer.
+  for (const row of allowed) {
+    if (quantityRowTarget(row) === 'UNNAMED') {
+      const channel = String((row as Record<string, unknown>).targetChannel ?? 'the channel')
+      logger.warn('P4.3c: refused an outbound quantity row that names no listing', { channel, syncType: (row as Record<string, unknown>).syncType })
+      throw new UnnamedQuantityRowError(channel)
     }
   }
   const { resolveDestinations } = await import('./outbound-destination.js')

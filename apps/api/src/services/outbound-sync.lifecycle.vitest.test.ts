@@ -24,7 +24,10 @@ describe('W1.2 dispatchSync lifecycle containment', () => {
     })
   }
   it.each(['PRICE_UPDATE', 'QUANTITY_UPDATE', 'STATUS_UPDATE', 'CONTENT_UPDATE', 'FULL_SYNC', 'ATTRIBUTE_UPDATE'])('positive control: ordinary %s reaches its existing adapter', async (syncType) => {
-    expect(await service.dispatchSync({ id: 'q-normal', targetChannel: 'SHOPIFY', syncType, payload: {} })).toEqual({ success: true })
+    // P4.3c — the fixture names a listing, as every real row of these types does.
+    // The proposition is unchanged (an ordinary row reaches its adapter); what
+    // changed is that a listing-less QUANTITY_UPDATE is no longer an ordinary row.
+    expect(await service.dispatchSync({ id: 'q-normal', targetChannel: 'SHOPIFY', channelListingId: 'cl-1', syncType, payload: {} })).toEqual({ success: true })
     expect(service.syncToShopify).toHaveBeenCalledOnce()
   })
   for (const syncType of ['UNPUBLISH_LISTING', 'DELETE_LISTING']) {

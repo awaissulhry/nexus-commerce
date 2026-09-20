@@ -3,7 +3,7 @@ import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/ama
 import { amazonContentRefusal, isAmazonContentPatchSet } from './amazon/validate-before-send.js'
 import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
 import { syncShopifyLinkedListing, type LinkedListingWork } from './shopify/listing-write.service.js';
-import { createOutboundRow } from './outbound-rows.js'
+import { createOutboundRow, quantityRowTarget, unnamedQuantitySentence } from './outbound-rows.js'
 import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
@@ -681,6 +681,21 @@ export class OutboundSyncService {
         if (error?.code !== 'content_review_required') throw error;
         return { success: false, queueId: item.id, channel: item.targetChannel, status: "FAILED", message: error.message, error: error.message, errorCode: "CONTENT_REVIEW_REQUIRED", retryable: false };
       }
+    }
+    // P4.3c — a quantity row that names no listing is not sent. Rows born after
+    // P4.3c cannot be in this state (services/outbound-rows.ts refuses them at
+    // creation), so this arm exists for rows ALREADY in the queue — the catalog
+    // PATCH's product-level gross-stock rows among them.
+    //
+    // Placed LAST of the shared refusals on purpose: the lifecycle refusal and the
+    // content-review verdict above both still answer first, so neither is masked.
+    // It sits before the channel switch rather than inside each channel because
+    // every channel resolves its listing from `channelListingId` alone and every
+    // one of them loses its re-read without it.
+    if (quantityRowTarget(item) === 'UNNAMED') {
+      const error = unnamedQuantitySentence(String(item.targetChannel));
+      return { success: false, queueId: item.id, channel: item.targetChannel, status: "FAILED",
+        message: error, error, errorCode: "UNNAMED_QUANTITY_ROW", retryable: false };
     }
     switch (item.targetChannel) {
       case "AMAZON": return this.syncToAmazon(item);

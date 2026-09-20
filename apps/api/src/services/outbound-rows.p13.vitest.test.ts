@@ -62,8 +62,12 @@ describe('P1.3 — the destination account is written with the row', () => {
   })
 
   it('createManyAndReturn: a product two accounts hold in one market gets NO account (the sender refuses it)', async () => {
+    // P4.3c — a PRICE_UPDATE carries the product-level shape this test is about.
+    // The proposition (an ambiguous destination writes no account) is unchanged;
+    // it can no longer be posed with a QUANTITY_UPDATE, because a quantity row
+    // that names no listing is now refused before the destination is looked up.
     const [row] = await inLegacy(() => rows.createOutboundRowsAndReturn(database.client as never, {
-      data: [{ productId: 'P2', targetChannel: 'EBAY', targetRegion: 'IT', syncType: 'QUANTITY_UPDATE', payload: {} }],
+      data: [{ productId: 'P2', targetChannel: 'EBAY', targetRegion: 'IT', syncType: 'PRICE_UPDATE', payload: {} }],
       select: { id: true },
     }))
     expect(await stored(row.id)).toBeNull()

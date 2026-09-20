@@ -12,7 +12,6 @@ import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
 import { masterPriceService } from "../services/master-price.service.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
-import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 
 // ── Request/Response Types ───────────────────────────────────────────────
 
@@ -917,13 +916,18 @@ export async function catalogRoutes(app: FastifyInstance) {
         shouldSync = true;
       }
 
-      // Shared stock — a pooled product's listings follow the pool, not this business's own total;
-      // the stock movement's cascade already sent them the pool's number.
-      const pooled = totalStock !== undefined && (await loadSyncLedgers(prisma, [id])).get(id)?.source.kind === 'pool';
-      if (totalStock !== undefined && totalStock !== product.totalStock && !pooled) {
-        syncPayload.quantity = totalStock;
-        shouldSync = true;
-      }
+      // P4.3c — `totalStock` does NOT go in this payload, and no quantity row is
+      // queued here. `applyStockMovement` above already ran the ChannelListing
+      // cascade, which resolves the quantity PER LISTING through the sync-control
+      // core (routing, pause, pin, buffer, the pool) and queues one row per
+      // listing, each naming its listing. What used to be here was a SECOND row —
+      // product-level, naming no listing, carrying the GROSS total — racing those.
+      // Naming no listing turned off the send-time re-read, the buffer and D9's
+      // Amazon EU shared-quantity guard (gated on the listing's marketplace).
+      // `PATCH /api/products/:id`, the same edit from the product drawer, already
+      // left it to the cascade; only this twin did not. Unnamed quantity rows are
+      // now refused at birth in services/outbound-rows.ts, so this is the producer
+      // catching up with the rule rather than the rule alone.
 
       if (categoryAttributes !== undefined) {
         syncPayload.categoryAttributes = categoryAttributes;
@@ -939,16 +943,15 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (shouldSync) {
         const queueResults = [];
         for (const channel of syncChannels) {
+          // P4.3c — derived from what the payload ACTUALLY carries, not from which
+          // request fields were present: `totalStock` no longer reaches the payload,
+          // so a stock-only edit must not still be labelled QUANTITY_UPDATE.
           const result = await outboundSyncService.queueProductUpdate(
             id,
             channel,
-            basePrice !== undefined && totalStock !== undefined
-              ? "FULL_SYNC"
-              : basePrice !== undefined
-                ? "PRICE_UPDATE"
-                : totalStock !== undefined
-                  ? "QUANTITY_UPDATE"
-                  : "ATTRIBUTE_UPDATE",
+            syncPayload.price !== undefined
+              ? (Object.keys(syncPayload).length > 1 ? "FULL_SYNC" : "PRICE_UPDATE")
+              : "ATTRIBUTE_UPDATE",
             syncPayload
           );
           queueResults.push({
