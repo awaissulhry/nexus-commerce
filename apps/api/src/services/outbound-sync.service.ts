@@ -1143,10 +1143,37 @@ export class OutboundSyncService {
           return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message, error: "eu-shared-qty-conflict" };
         }
       } catch (guardErr) {
-        // Guard infrastructure failing must not stop legitimate pushes — but say so.
-        logger.warn('[outbound-sync] EU shared-qty guard check failed (push allowed)', {
-          sku, error: guardErr instanceof Error ? guardErr.message : String(guardErr),
-        })
+        // P4.3b / D9 — FAIL CLOSED. This used to say "Guard infrastructure
+        // failing must not stop legitimate pushes" and allow the send. The Owner
+        // ruled the other way in decision D9: *hold the push and alert — a wrong
+        // EU quantity is worse than a short delay.*
+        //
+        // The reason the ruling is right: Amazon holds ONE merchant quantity per
+        // SKU across the EU markets. If the guard cannot run, we do not know
+        // whether this push fights a sibling market's intent — and the incident
+        // this guard exists for is a scoped Zero that blanked an entire
+        // storefront. "We could not check" is not "there is no conflict".
+        //
+        // A retry is cheap: the row stays queued and the next attempt runs the
+        // guard again. Sending blind is not reversible.
+        const detail = guardErr instanceof Error ? guardErr.message : String(guardErr)
+        const message = `EU shared-quantity guard could not run for ${sku} (${detail}). Push held rather than sent blind: Amazon holds one EU quantity per SKU, so an unchecked push can overwrite another market's intent. It will be retried. ${EU_GUARD_REMEDY}`
+        logger.warn('[outbound-sync] EU shared-qty guard check failed (push HELD)', { sku, error: detail })
+        try {
+          const { syncHealthService } = await import('./sync-health.service.js')
+          await syncHealthService.logConflict({
+            channel: 'AMAZON',
+            // Its own type: "the guard could not run" is a different fact from
+            // "the guard found a conflict", and an operator must be able to tell
+            // them apart on the screen.
+            conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE',
+            message,
+            productId: product.id,
+            localData: { guardError: detail },
+            remoteData: { attemptedQuantity: payload.quantity, marketplace: cl?.marketplace ?? marketplaceId },
+          })
+        } catch { /* observability best-effort — it must not decide the push */ }
+        return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message, error: "eu-shared-qty-guard-unavailable" };
       }
     }
     const hasContent = payload.title !== undefined || payload.description !== undefined || payload.bulletPoints !== undefined || payload.keywords !== undefined;

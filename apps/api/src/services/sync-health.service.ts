@@ -35,6 +35,11 @@ export type ConflictType =
   // SCT.4 — Amazon EU rows disagree on the ONE shared merchant quantity; a
   // push was refused so no market's intent got silently overwritten.
   | 'EU_SHARED_QTY_CONFLICT'
+  // P4.3b / D9 — the guard COULD NOT RUN, so the push was held rather than sent
+  // blind. Its own type on purpose: "we could not check" is a different fact
+  // from "we checked and found a conflict", and an operator must be able to tell
+  // them apart. The first is ours to fix; the second is theirs.
+  | 'EU_SHARED_QTY_GUARD_UNAVAILABLE'
   // P0c — per-channel publish failure-rate breach (last hour)
   | 'PUBLISH_FAILURE_RATE'
   // P0c — auth-class publish failures (403/Unauthorized/invalid_grant): the

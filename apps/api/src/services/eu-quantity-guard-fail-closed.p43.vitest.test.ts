@@ -1,0 +1,137 @@
+/**
+ * P4.3b / D9 — the EU shared-quantity guard fails CLOSED.
+ *
+ * ## The Owner's ruling, already made
+ *
+ * `FINAL-PLAN.md` decision **D9**:
+ *
+ * > *The EU shared-quantity guard when its own check fails.*
+ * > A: let the push through (today).  **B: hold the push and alert.**
+ * > **Decision: B. A wrong EU quantity is worse than a short delay.**
+ *
+ * ## What the code did
+ *
+ * ```ts
+ * } catch (guardErr) {
+ *   // Guard infrastructure failing must not stop legitimate pushes — but say so.
+ *   logger.warn('[outbound-sync] EU shared-qty guard check failed (push allowed)', …)
+ * }
+ * ```
+ *
+ * **"push allowed".** The comment states the fail-open as a principle. D9 ruled
+ * the other way, and the ruling is right for a reason worth keeping: Amazon holds
+ * **ONE merchant quantity per SKU across the EU markets**. If the guard cannot
+ * run, we do not know whether this push fights a sibling market's intent — and
+ * the incident this guard exists for is a scoped Zero that blanked an entire
+ * storefront. **"We could not check" is not "there is no conflict."**
+ *
+ * A retry is cheap: the row stays queued and the next attempt runs the guard
+ * again. Sending blind is not reversible.
+ *
+ * This is the fourth fail-open found in one day, after P4.1d (policy
+ * reconciliation warned instead of refusing), P4.1e (the lane marker guessed) and
+ * P4.2a's unmatched SKUs. **A rule's `catch` is where it goes to die.**
+ */
+
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+const SRC = join(import.meta.dirname, '..')
+const file = readFileSync(join(SRC, 'services', 'outbound-sync.service.ts'), 'utf8')
+const health = readFileSync(join(SRC, 'services', 'sync-health.service.ts'), 'utf8')
+
+/** Comments stripped — a claim about what the code DOES. */
+const code = file
+  .split('\n')
+  .filter((l) => {
+    const t = l.trim()
+    return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*')
+  })
+  .join('\n')
+
+/** The guard's catch block, so a return elsewhere is not credited to it. */
+const catchBlock = (() => {
+  const start = code.indexOf('} catch (guardErr) {')
+  return code.slice(start, start + 1800)
+})()
+
+describe('the guard fails CLOSED', () => {
+  it('the catch block exists and is the one under test', () => {
+    expect(catchBlock).toContain('} catch (guardErr) {') // positive control
+  })
+
+  it('HOLDS the push instead of allowing it', () => {
+    expect(catchBlock).toContain('return { success: false')
+    expect(catchBlock).toContain("status: \"SKIPPED\"")
+    expect(catchBlock).toContain("error: \"eu-shared-qty-guard-unavailable\"")
+  })
+
+  it('no longer says the push was allowed', () => {
+    // The old log line was the marker of the fail-open. Its absence is the
+    // assertion; the new one names what happens instead.
+    expect(code).not.toContain('(push allowed)')
+    expect(catchBlock).toContain('(push HELD)')
+  })
+
+  it('does not swallow the failure silently', () => {
+    // A `catch {}` would also "fail closed" by accident if the surrounding code
+    // happened to return — but nobody would know why.
+    // Assert the CALL, not the name. A mutation that left `void syncHealthService`
+    // in place kept the name and removed the alert, and this test stayed green —
+    // the name-versus-value lesson again.
+    expect(catchBlock).toContain('logger.warn')
+    expect(catchBlock).toContain('await syncHealthService.logConflict({')
+  })
+})
+
+describe('the alert says WHICH fact it is', () => {
+  it('uses its own conflict type, not the conflict one', () => {
+    // 🔴 "we could not check" and "we checked and found a conflict" are
+    // different facts. Reusing EU_SHARED_QTY_CONFLICT would tell the operator
+    // their listings disagree when the truth is that OUR guard broke — theirs
+    // to fix versus ours to fix.
+    expect(catchBlock).toContain("conflictType: 'EU_SHARED_QTY_GUARD_UNAVAILABLE'")
+    expect(catchBlock).not.toContain("conflictType: 'EU_SHARED_QTY_CONFLICT'")
+  })
+
+  it('the type is declared, so this is not a string that type-checks by luck', () => {
+    expect(health).toContain("| 'EU_SHARED_QTY_GUARD_UNAVAILABLE'")
+    expect(health).toContain("| 'EU_SHARED_QTY_CONFLICT'") // both still exist
+  })
+
+  it('carries the guard error, the SKU and what was attempted', () => {
+    expect(catchBlock).toContain('guardError: detail')
+    expect(catchBlock).toContain('attemptedQuantity: payload.quantity')
+    expect(catchBlock).toContain('sku')
+  })
+
+  it('never lets the alert decide the push', () => {
+    // The alert is best-effort and wrapped; if logging the conflict throws, the
+    // push must STILL be held. An alert failure must not re-open the gate.
+    const afterAlert = catchBlock.slice(catchBlock.indexOf('syncHealthService'))
+    const iCatch = afterAlert.indexOf('} catch {')
+    const iReturn = afterAlert.indexOf('return { success: false')
+    expect(iCatch).toBeGreaterThan(0)
+    expect(iReturn).toBeGreaterThan(iCatch) // the return is OUTSIDE the alert's try
+  })
+})
+
+describe('the operator sentence explains itself', () => {
+  it('says it was held, why, and that it will retry', () => {
+    expect(catchBlock).toContain('Push held rather than sent blind')
+    expect(catchBlock).toContain('one EU quantity per SKU')
+    expect(catchBlock).toContain('It will be retried')
+    expect(catchBlock).toContain('EU_GUARD_REMEDY')
+  })
+})
+
+describe('the CONFLICT path is untouched', () => {
+  it('still refuses on a real conflict, with its own message', () => {
+    // The change is only to the failure path. A mutation that "fixed" the
+    // fail-open by deleting the whole block would break this.
+    expect(code).toContain('if (verdict.conflict) {')
+    expect(code).toContain('Push refused so no market\'s intent is silently overwritten')
+    expect(code).toContain('error: "eu-shared-qty-conflict"')
+  })
+})
