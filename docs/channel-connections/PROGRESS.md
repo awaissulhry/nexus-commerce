@@ -75,6 +75,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.3a | **Etsy does not get to write our stock.** 🔴 `syncInventoryFromEtsy` wrote Etsy's quantities into `ProductVariation.stock` and `Product.totalStock` directly, bypassing the resolver, the shared-stock pool and any audit. It had never run — a manual trigger one env var away from silently overwriting pooled stock. Refusal + a sentence; the behavioural test replaces prisma with a Proxy that THROWS on any access | `<this push>` | `build/P4.3a.md` |
 | P4.2c | **Image read-back for Amazon and Shopify + the R-5 census.** Census = counterweight (all publishers already gated). 🔴 Read-back existed on all three channels and was SCHEDULED on one — a read-back that runs only when somebody opens a screen cannot detect drift. Sweeps bounded per run, `unconfigured` counted apart from `empty` so a blind run cannot read as a clean one. OFF behind one variable (spend, not doubt) | `<this push>` | `build/P4.2c.md` |
 | P4.2b | **An eBay offer rejection reaches its listing.** The decision first: `pushVariationGroup`'s 12 result sites mix eBay's verdicts with OUR validation, and P3.2's contract says *"in the channel's words"* — so 4 file, 8 do not, derived in the test. Retryable answers dropped (the file already retries those ids itself); the answer is CLASSIFIED, not pasted. Covers the flat-file push too | `<this push>` | `build/P4.2b.md` |
 | P4.2a | **An Amazon image rejection reaches its listing.** 🔴 NO image publish on ANY channel filed an issue; the feed already built a per-SKU receipt with Amazon's codes and stored it for a drill-down screen nobody opens. Filed as a MERGE source (an image feed must not close a content rejection), with Amazon's attributeNames re-indexed from the raw report — without them distinct rejections on one SKU collapse to one row | `<this push>` | `build/P4.2a.md` |
@@ -208,6 +209,18 @@ list is a set claim.** And read-back: all three channels had the FUNCTION, only
 eBay had the HABIT — a read-back that runs only when somebody opens a screen
 cannot detect drift. Amazon + Shopify sweeps built, OFF behind
 `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` (`build/P4.2c.md`).
+
+**P4.3 (stock) started.** 🔴 P4.3a removed the **Etsy inbound stock write**, and
+it was worse than the row said: `syncInventoryFromEtsy` wrote Etsy's numbers
+straight into `ProductVariation.stock` AND `Product.totalStock` with
+`prisma.update` — bypassing the stock resolver, the shared-stock POOL (where a
+pooled product's own stock is deliberately 0) and any audit. **It had almost
+certainly never run** (registry-only manual trigger + no Etsy env config), and
+**that is what made it dangerous rather than harmless**: one environment variable
+away from overwriting pooled stock silently. Now a refusal that says why
+(`build/P4.3a.md`). Still open in P4.3: the quantity-producer census (fix the
+catalog PATCH first), the Amazon clamp on routed rows, the EU guard failing
+closed (D9), coalescing shared eBay rows, and Shopify read-back.
 
 **The only P4.2 row left is the eBay Media-API decision (R-1)** — our own image
 URLs or eBay-hosted copies. That is a design choice about where images live, not
@@ -473,6 +486,14 @@ Each is one command, and each converts a "built" into a "verified":
   about ENV, not about a connection.** Etsy and Shopify log it while a CX OAuth
   connection may exist perfectly well. Check the connection table, not the boot
   warning.
+- 🔴 **"IT NEVER RAN" CAN BE THE ONLY REASON NOTHING IS BROKEN.** The usual
+  finding here is dead code that does not exist in practice. Etsy's inbound stock
+  write was a MANUAL trigger, gated on an env config production lacks — and one
+  variable away from overwriting pooled stock with no audit. Ask whether "never
+  ran" means harmless or means **not yet**.
+- 🟢 **To prove a function touches no database, replace prisma with a Proxy
+  that THROWS on any property access.** Stronger than asserting a string is
+  absent, and it convicts a write added anywhere in the call tree.
 - 🔴🔴 **A BEHAVIOURAL TEST THAT CANNOT DISCRIMINATE IS NOT A TEST.** P4.2c's
   ceiling arm used 6 fixtures with the cap at 999,999 and asserted "not capped";
   deleting `Math.min(raw, 5000)` changed nothing at that size. It would take

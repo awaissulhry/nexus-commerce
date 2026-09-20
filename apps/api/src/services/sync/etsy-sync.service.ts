@@ -290,84 +290,63 @@ export class EstySyncService {
   }
 
   /**
-   * Sync inventory from Etsy
+   * P4.3 — REMOVED. Etsy does not get to write our stock.
+   *
+   * ## What it used to do
+   *
+   * It read the Etsy listing and wrote Etsy's numbers straight into our
+   * database — `ProductVariation.stock` per variation, and `Product.totalStock`
+   * for the parent. Directly, with `prisma.update`, bypassing:
+   *
+   *   - the stock resolver, which is the one place a quantity is decided;
+   *   - the shared-stock POOL, where a pooled product's own stock is
+   *     deliberately 0 and `StockLevel` holds the truth (writing `totalStock`
+   *     from a channel makes every screen that reads it lie);
+   *   - any audit — nothing recorded that a channel had moved our stock.
+   *
+   * Inbound stock from a channel is backwards. Nexus owns the quantity and
+   * pushes it OUT; a channel telling us what it thinks it has is at best stale
+   * and at worst a silent overwrite of a pool that several listings share. D6
+   * also keeps Etsy read-only.
+   *
+   * ## Had it ever run?
+   *
+   * Almost certainly not, and the evidence is worth keeping. `etsy-sync` is
+   * registry-only — a manual trigger, never scheduled — and both entry points
+   * need `ConfigManager.getConfig('ETSY')`, while production boots with
+   * `[ConfigManager] ⚠ Etsy configuration incomplete (missing env vars)`. P2.5
+   * separately measured that **no Etsy order had ever entered Nexus by any
+   * route**.
+   *
+   * That is what made it dangerous rather than harmless: a manual trigger nobody
+   * had pulled, one environment variable away from overwriting pooled stock with
+   * no audit trail and no error.
+   *
+   * ## Why a refusal and not a deletion
+   *
+   * Two callers exist (`jobs/etsy-sync.job.ts`, `routes/etsy.ts`). They keep
+   * working and now get a sentence that says what happened and what to do
+   * instead — a silently removed feature is how the next person rebuilds it.
    */
   async syncInventoryFromEtsy(
     productId: string
   ): Promise<EstyInventorySyncResult> {
-    const result: EstyInventorySyncResult = {
-      success: true,
+    console.warn(
+      "[EstySyncService] Refused inbound Etsy stock write (P4.3)",
+      { productId }
+    );
+    return {
+      success: false,
       updated: 0,
       failed: 0,
-      errors: [],
+      errors: [
+        {
+          variantId: productId,
+          error:
+            "Etsy cannot write stock into Nexus. Nexus owns the quantity and pushes it out; an inbound write would bypass the stock resolver and overwrite pooled stock that several listings share, with no audit. Set the quantity in Nexus instead.",
+        },
+      ],
     };
-
-    try {
-      const product = await (prisma as any).product.findUnique({
-        where: { id: productId },
-        include: { variations: true },
-      });
-
-      if (!product || !product.etsyListingId) {
-        throw new Error("Product or Etsy listing not found");
-      }
-
-      const estyListing = await this.estyService.getListing(
-        product.etsyListingId
-      );
-
-      // Update product stock
-      let totalStock = 0;
-
-      if (estyListing.isParent && estyListing.variations.length > 0) {
-        // Update variant stocks
-        for (const estyVariation of estyListing.variations) {
-          try {
-            const variant = product.variations.find(
-              (v) => v.etsyListingId === estyVariation.variationId
-            );
-
-            if (variant) {
-              await (prisma as any).productVariation.update({
-                where: { id: variant.id },
-                data: { stock: estyVariation.quantity },
-              });
-              totalStock += estyVariation.quantity;
-              result.updated++;
-            }
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            result.errors.push({
-              variantId: String(estyVariation.variationId),
-              error: message,
-            });
-            result.failed++;
-            result.success = false;
-          }
-        }
-      } else {
-        // Update product stock directly
-        totalStock = estyListing.quantity;
-        result.updated++;
-      }
-
-      // Update product total stock
-      await (prisma as any).product.update({
-        where: { id: productId },
-        data: { totalStock },
-      });
-
-      console.log(
-        `[EstySyncService] Synced inventory from Etsy: product ${productId} = ${totalStock}`
-      );
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[EstySyncService] Inventory sync failed:", message);
-      result.success = false;
-      return result;
-    }
   }
 
   /**
