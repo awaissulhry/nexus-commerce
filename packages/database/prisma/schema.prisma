@@ -2274,15 +2274,26 @@ model ListingIssue {
   message        String
   attributeNames String[] // the failing attributes Amazon named
   categories     String[] // SP-API issue categories
-  source         String   @default("listings-api") // listings-api | validation-preview
+  // P3.2 — the producer. Scopes the resolve sweep so one source never closes another's
+  // issue. listings-api | validation-preview | amazon-feed | amazon-suppression |
+  // amazon-notification | ebay-write | ebay-feed | shopify-write
+  source         String   @default("listings-api")
 
   // Stable identity for an issue on a listing = code + sorted attributeNames.
   // Lets a re-sync upsert (bump lastSeenAt) instead of duplicating.
+  //
+  // P3.2 — this is why the attribute matters beyond the label: with no attribute, all
+  // five "X is required but missing" issues on one SKU share the fingerprint `90220::`
+  // and four are lost. On the 140 stored real rejections that was 80 of 140.
   fingerprint String
 
   firstSeenAt DateTime  @default(now())
   lastSeenAt  DateTime  @default(now())
   resolvedAt  DateTime?
+  // P3.2 — the AS-OF time the plan row asks for: when the CHANNEL says this was true,
+  // where that differs from when we read it (a feed completed at 03:00 and reconciled
+  // at 04:00 is as of 03:00). Null when the source has no time of its own.
+  occurredAt  DateTime?
 
   @@unique([workspaceId, listingId, fingerprint], name: "listingId_fingerprint", map: "ListingIssue_listingId_fingerprint_key")
   @@index([listingId, resolvedAt])

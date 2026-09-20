@@ -17,7 +17,7 @@
  * read-back throws with one plain sentence; the queue records it.
  */
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { shopifyAdmin, assertShopifyResult as checked, type ShopifyGraphql } from './admin-client.js'
+import { shopifyAdmin, assertShopifyResult as checked, ShopifyUserErrors, type ShopifyGraphql } from './admin-client.js'
 import { toGid } from './content-publisher.js'
 import { idempotencyKeyFor } from '../gateway/gateway.js'
 import { checkShopifyCircuit, recordShopifyOutcome } from '../shopify-publish-gate.service.js'
@@ -86,7 +86,43 @@ async function identify(gql: ShopifyGraphql, row: LinkedListingRow) {
 }
 
 /** Send one queued change to a linked Shopify listing through `accountId`. Returns the result sentence. */
+/**
+ * P3.2 — the same write, with any rejection recorded on the listing before it is
+ * re-thrown.
+ *
+ * A Shopify `userErrors` is the channel telling us which field it refused and why, in
+ * its own words. Before this it reached the queue row as a sentence and reached the
+ * listing not at all, so an operator looking at the listing saw a healthy listing.
+ *
+ * The throw is unchanged — the queue's error handling, the circuit breaker and every
+ * caller behave exactly as before. Only a row is added alongside.
+ */
 export async function syncShopifyLinkedListing(row: LinkedListingRow, accountId: string, work: LinkedListingWork): Promise<string> {
+  try {
+    return await syncShopifyLinkedListingInner(row, accountId, work)
+  } catch (err: any) {
+    const listingId = row.channelListing?.id
+    if (listingId && err instanceof ShopifyUserErrors) {
+      const { recordListingIssues } = await import('../listing-issue-recorder.service.js')
+      await recordListingIssues({
+        listingId,
+        source: 'shopify-write',
+        issues: err.userErrors.map((e) => ({
+          // Shopify names the field as a path; the LAST segment is the field, the
+          // earlier ones are the mutation's own envelope ('input', 'variants').
+          code: e.code ?? err.operation,
+          message: e.message,
+          severity: 'ERROR',
+          attributeNames: e.field?.length ? [String(e.field[e.field.length - 1])] : [],
+          categories: ['userErrors'],
+        })),
+      })
+    }
+    throw err
+  }
+}
+
+async function syncShopifyLinkedListingInner(row: LinkedListingRow, accountId: string, work: LinkedListingWork): Promise<string> {
   // The push lock (paused, closed, ended, Presence intent), here as well as at the callers: this module
   // is the one place every linked Shopify write passes (Presence W1.5).
   const refusal = assertPushAllowed(row.channelListing ?? null)

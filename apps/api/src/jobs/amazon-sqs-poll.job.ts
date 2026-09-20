@@ -170,6 +170,38 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
           continue
         }
 
+        // P3.2 — the listing's issues changed. Amazon pushes the issues it currently
+        // holds for one SKU; they go onto that SKU's listing in Amazon's own words.
+        // This is the fastest path a rejection has to a listing, and the one that makes
+        // the "within one minute" done-when reachable without a poll.
+        if (msg.listingsItemIssuesNotification) {
+          const note = msg.listingsItemIssuesNotification
+          try {
+            const { recordNotificationIssues } = await import(
+              '../services/listing-issue-recorder.service.js'
+            )
+            const result = await recordNotificationIssues({
+              sellerSku: note.sku,
+              marketplaceId: note.marketplaceId,
+              issues: note.issues,
+              occurredAt: note.eventTime ? new Date(note.eventTime) : null,
+            })
+            logger.info('[SQS poll] listing issues recorded', {
+              sku: note.sku, marketplaceId: note.marketplaceId,
+              issues: note.issues.length, placed: result?.listings ?? 0,
+            })
+          } catch (err) {
+            logger.warn('[SQS poll] listing-issues handler failed', {
+              sku: note.sku,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+          await deleteSqsMessage(msg.receiptHandle)
+          await completeInbound(webhookEventId, true)
+          tally.processed++
+          continue
+        }
+
         // RT.15 — feed processing finished. Resolves the matching
         // AmazonImageFeedJob row (if any) by feedId and fires the
         // feed.processing.finished SSE event so the images-tab UI
@@ -201,6 +233,27 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
                   where: { id: job.id },
                   data: { status: note.processingStatus, completedAt: null },
                 })
+              }
+            }
+            // P3.2 — a FLAT-FILE feed finishing was pushed here and ignored: this
+            // handler only ever looked at AmazonImageFeedJob, so a JSON_LISTINGS_FEED
+            // result was learned only from the poll cron, whose backoff grows with the
+            // poll count. Reconciling on the push is what puts a rejection on its
+            // listing within a minute rather than within the backoff.
+            if (!job && note.feedId) {
+              const flatFile = await prisma.amazonFlatFileFeedJob.findFirst({
+                where: { feedId: note.feedId },
+                select: { id: true },
+              })
+              if (flatFile) {
+                const { reconcileFeedJob } = await import(
+                  '../services/amazon-flat-file-feed.service.js'
+                )
+                await reconcileFeedJob(note.feedId).catch((e) =>
+                  logger.warn('[SQS poll] flat-file reconcile from push failed', {
+                    feedId: note.feedId, error: e instanceof Error ? e.message : String(e),
+                  }),
+                )
               }
             }
             const { publishOrderEvent } = await import(

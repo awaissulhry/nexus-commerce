@@ -115,6 +115,30 @@ export interface ListingsItemStatusChangedNotification {
 }
 
 /**
+ * P3.2 — LISTINGS_ITEM_ISSUES_CHANGE notification (payload version 2023-12-13).
+ *
+ * Amazon pushes the issues it currently holds for ONE SKU when they change. It is the
+ * fastest route a rejection has to a listing — the alternative is a feed poll that backs
+ * off, or a listings sync sweep.
+ *
+ * 🔶 SHAPE, not REAL. No LISTINGS_ITEM_ISSUES_CHANGE message has ever arrived here —
+ * the subscription is still behind `NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES` (PROGRESS section
+ * 5 item 9). The field names come from Amazon's documented envelope, and the parser
+ * accepts both the PascalCase and camelCase spellings for every one of them, as the
+ * other five notification parsers in this file already do. The first real message is
+ * worth reading — the ledger stores the payload.
+ */
+export interface ListingsItemIssuesChangedNotification {
+  sellerId: string
+  asin: string
+  sku: string
+  marketplaceId: string
+  issues: Array<{ code: string; message: string; severity: string; attributeNames: string[] }>
+  /** Amazon's own EventTime — the as-of for the issue rows. */
+  eventTime: string | null
+}
+
+/**
  * RT.13 — ANY_OFFER_CHANGED notification. Fires when Buy Box winner
  * or competing offer price changes. Lets us alert on Buy Box loss in
  * ~30s instead of waiting for the periodic ANY_OFFER_CHANGED REST
@@ -157,6 +181,8 @@ export interface SqsOrderMessage {
   anyOfferChangedNotification?: AnyOfferChangedNotification
   /** RT.14 — present on LISTINGS_ITEM_STATUS_CHANGE messages. */
   listingsItemStatusNotification?: ListingsItemStatusChangedNotification
+  /** P3.2 — present on LISTINGS_ITEM_ISSUES_CHANGE messages. */
+  listingsItemIssuesNotification?: ListingsItemIssuesChangedNotification
   /** RT.15 — present on FEED_PROCESSING_FINISHED messages. */
   feedProcessingFinishedNotification?: FeedProcessingFinishedNotification
   /** RT.16 — present on ACCOUNT_STATUS_CHANGED messages. */
@@ -266,6 +292,43 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
             ),
             marketplaceId: root.MarketplaceId ?? root.marketplaceId ?? '',
             message: root.Message ?? root.message,
+          },
+          receiptHandle: msg.ReceiptHandle,
+          messageId: msg.MessageId ?? '',
+          rawPayload: inner,
+          notificationType: notifType,
+        })
+        continue
+      }
+
+      // P3.2 — the listing's issues changed. Routes to ListingIssue in the poller.
+      if (notifType === 'LISTINGS_ITEM_ISSUES_CHANGE') {
+        const root =
+          inner.Payload?.ListingsItemIssuesChangeNotification ??
+          inner.Payload?.ListingsItemIssuesChange ??
+          inner.Payload?.listingsItemIssuesChangeNotification
+        if (!root) {
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
+          continue
+        }
+        const rawIssues: any[] = Array.isArray(root.Issues ?? root.issues) ? (root.Issues ?? root.issues) : []
+        results.push({
+          listingsItemIssuesNotification: {
+            sellerId: String(root.SellerId ?? root.sellerId ?? ''),
+            asin: String(root.Asin ?? root.asin ?? ''),
+            sku: String(root.Sku ?? root.sku ?? root.SellerSku ?? root.sellerSku ?? ''),
+            marketplaceId: String(root.MarketplaceId ?? root.marketplaceId ?? ''),
+            issues: rawIssues.map((i) => ({
+              code: String(i?.Code ?? i?.code ?? ''),
+              message: String(i?.Message ?? i?.message ?? ''),
+              severity: String(i?.Severity ?? i?.severity ?? 'ERROR'),
+              // Amazon documents the plural; a single AttributeName is accepted too
+              // because three of its other envelopes spell it that way.
+              attributeNames: Array.isArray(i?.AttributeNames ?? i?.attributeNames)
+                ? (i.AttributeNames ?? i.attributeNames).map(String)
+                : (i?.AttributeName ?? i?.attributeName) ? [String(i.AttributeName ?? i.attributeName)] : [],
+            })),
+            eventTime: root.EventTime ?? root.eventTime ?? inner.EventTime ?? null,
           },
           receiptHandle: msg.ReceiptHandle,
           messageId: msg.MessageId ?? '',

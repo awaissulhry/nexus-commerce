@@ -8,6 +8,8 @@
  * classes themselves are the contract other packages build on.
  */
 
+import { resolveIssueAttributes } from '../channel-issue-attributes.js'
+
 export type GatewayErrorClass =
   | 'auth_revoked'
   | 'auth_expired'
@@ -186,7 +188,16 @@ function amazonSp(status: number, text: string): ChannelVerdict {
     : (typeof body?.message === 'string' ? body.message : null) ?? text ?? null
   // SP-API names the offending attributes on a listings issue. `attributeNames` is a
   // list; the first is the one to put the error on.
-  const attribute = Array.isArray(first?.attributeNames) ? first.attributeNames[0] : first?.attributeName ?? null
+  //
+  // P3.2 — but Amazon sends `attributeNames: []` on every real rejection we hold (140
+  // of 140 stored feed issues), and an `Array.isArray` read of that yields `undefined`.
+  // The attribute is in the message, in the seller's language; resolveIssueAttributes
+  // reads the identifier out of it. ONE accessor, shared with the feed-report parser.
+  const attribute = resolveIssueAttributes(
+    Array.isArray(first?.attributeNames) ? first.attributeNames
+      : first?.attributeName ? [first.attributeName] : [],
+    message,
+  )[0] ?? null
   if (/invalid_grant/i.test(text)) return verdict('auth_revoked', code ?? 'invalid_grant', message, { attribute })
   if (/invalid_client|LWA secret token you provided has expired/i.test(text)) return verdict('configuration', code ?? 'invalid_client', message, { attribute })
   if (code === 'QuotaExceeded' || status === 429) return verdict('rate_limited', code ?? 429, message, { attribute })
@@ -206,7 +217,12 @@ function shopify(status: number, text: string): ChannelVerdict {
   // ['input','title']) and `path` on a GraphQL error. The LAST segment is the field;
   // the earlier ones are the mutation's own envelope.
   const fieldPath = Array.isArray(first?.field) ? first.field : Array.isArray(first?.path) ? first.path : null
-  const attribute = fieldPath?.length ? String(fieldPath[fieldPath.length - 1]) : null
+  // P3.2 — a Shopify userError can carry `field: []`, and a plain GraphQL error carries
+  // no path at all. Fall back to the message, which names the field often enough to be
+  // worth reading, through the same accessor the other connectors use.
+  const attribute = fieldPath?.length
+    ? String(fieldPath[fieldPath.length - 1])
+    : resolveIssueAttributes([], message)[0] ?? null
   if (code === 'THROTTLED' || status === 429) return verdict('rate_limited', code ?? 429, message, { attribute })
   if (code === 'ACCESS_DENIED') return verdict('forbidden', code, message, { attribute })
   if (status === 401) return verdict('auth_revoked', code ?? 401, message, { attribute })

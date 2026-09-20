@@ -18,32 +18,21 @@ import prisma from '../db.js'
 import { getAmazonSpClient } from '../lib/amazon-sp-client.js'
 import { logger } from '../utils/logger.js'
 import { publishOrderEvent } from './order-events.service.js'
+import { attributeNamesFromMessage, resolveIssueAttributes } from './channel-issue-attributes.js'
 import type {
   FeedIssue, FeedIssueSeverity, SkuStatus, PerSkuResult, FeedReportSummary,
 } from './feed-report-types.js'
 export type { SkuStatus, PerSkuResult, FeedReportSummary, FeedIssue, FeedIssueColumn, ParsedFeedReport } from './feed-report-types.js'
 
 /**
- * P2.1 — Extract column IDs from Amazon SP-API error messages.
- * Amazon embeds the field name in messages like:
- *   "Missing required attribute - item_name"
- *   "Invalid value for attribute: bullet_point_1"
- *   "Attribute 'brand_name' cannot be updated"
+ * P3.2 — the attribute names an issue is about.
+ *
+ * Was a private, English-only `extractFields` here. It returned nothing for all 140
+ * stored real rejections, which are Italian and use typographic quotes, so every issue
+ * reached the table with no attribute at all. The shared accessor reads identifiers
+ * rather than words, so it is locale-proof. See channel-issue-attributes.ts.
  */
-function extractFields(message: string): string[] {
-  if (!message) return []
-  const fields: string[] = []
-  // "attribute - field_name" or "attribute: field_name"
-  const m1 = message.match(/attribute\s*[-:]\s*(\w+)/i)
-  if (m1) fields.push(m1[1])
-  // "attribute 'field_name'" or 'attribute "field_name"'
-  const m2 = message.match(/attribute\s+['"](\w+)['"]/i)
-  if (m2 && !fields.includes(m2[1])) fields.push(m2[1])
-  // "for attribute: field_name" or "for attribute field_name"
-  const m3 = message.match(/for\s+attribute[:\s]+['"]?(\w+)['"]?/i)
-  if (m3 && !fields.includes(m3[1])) fields.push(m3[1])
-  return fields
-}
+const extractFields = (message: string): string[] => attributeNamesFromMessage(message)
 export interface ParsedReport { summary: FeedReportSummary; perSku: PerSkuResult[]; feedError?: string; pending?: boolean }
 
 const TERMINAL = new Set(['DONE', 'FATAL', 'CANCELLED'])
@@ -189,7 +178,10 @@ export function parseProcessingReport(
         i?.code != null ? String(i.code) : '',
         sevToIssueSeverity(i?.severity),
         String(i?.message ?? ''),
-        Array.isArray(i?.attributeNames) ? i.attributeNames.map(String).filter(Boolean) : extractFields(String(i?.message ?? '')),
+        // P3.2 — `Array.isArray([])` is TRUE, and `[]` is exactly what Amazon sends on
+        // every real rejection we hold, so the old isArray guard suppressed the fallback
+        // on 140 of 140. resolveIssueAttributes tests for a NAME, not for an array.
+        resolveIssueAttributes(i?.attributeNames, String(i?.message ?? '')),
       ))
       const status: SkuStatus = feedIssues.some((i) => i.severity === 'error') || hasErr ? 'error'
         : feedIssues.some((i) => i.severity === 'warning') ? 'warning' : 'success'
@@ -413,6 +405,34 @@ export async function reconcileFeedJob(feedId: string, opts?: { force?: boolean 
         nextPollAt: effectiveTerminal ? null : new Date(Date.now() + backoffMs(pollCount)),
       },
     }).catch((e) => logger.warn('[flat-file-feed] job update failed', { feedId, error: e?.message }))
+  }
+
+  // P3.2 — the rejections go onto their listings, in Amazon's own words.
+  //
+  // This is the join that did not exist. The 25 stored feed jobs already held 140 real
+  // rejections on 48 real SKUs; `ListingIssue` held 0 rows, and the flat-file grid's
+  // health chip — which reads open ListingIssue rows — had never had anything to show.
+  //
+  // `merge`, via the recorder: a JSON_LISTINGS_FEED is PARTIAL_UPDATE by default, so
+  // this report speaks only about the attributes this feed carried, and silence about
+  // any other issue is not evidence that it is fixed.
+  //
+  // The as-of is the feed's own completion time, not the poll's — a feed that completed
+  // at 03:00 and is reconciled at 04:00 is as of 03:00, which is what an operator judges
+  // their fix against. Non-blocking: a feed result must never be lost because we could
+  // not file a note about it.
+  if (effectiveTerminal && job && perSku.some((p) => (p.issues ?? []).length > 0)) {
+    try {
+      const { recordFeedReportIssues } = await import('./listing-issue-recorder.service.js')
+      await recordFeedReportIssues({
+        perSku,
+        marketplace: job.marketplace,
+        occurredAt: job.completedAt ?? new Date(),
+        prisma: prisma as any,
+      })
+    } catch (e: any) {
+      logger.warn('[flat-file-feed] listing-issue record failed', { feedId, error: e?.message })
+    }
   }
 
   // FFS.4 — push a live status change to any open flat-file tab (cron + manual

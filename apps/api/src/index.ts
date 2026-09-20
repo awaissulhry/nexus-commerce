@@ -234,6 +234,7 @@ import { startSchemaRefreshCron } from "./jobs/schema-refresh.job.js";
 import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "./jobs/amazon-flat-file-feed-poll.job.js";
+import { startSuppressionIssueCron } from './jobs/listing-issue-suppression.job.js'
 import { startEbayFeedPollCron } from "./jobs/ebay-feed-poll.job.js";
 import { startAttrHydrateCron } from "./jobs/amazon-attr-hydrate.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
@@ -1180,6 +1181,13 @@ async function start() {
       // (self-guards on Amazon creds + only polls due in-flight jobs); schedule
       // overridable via NEXUS_FLAT_FILE_FEED_POLL_SCHEDULE.
       startFlatFileFeedPollCron();
+
+      // P3.2 — mirror Amazon suppression onto each listing's issue list, and RESOLVE
+      // the listings that came off suppression. Hourly; self-guards on Amazon creds.
+      // Without it a suppressed listing reads as healthy on the flat-file grid, whose
+      // health chip reads ListingIssue rather than AmazonSuppression.
+      markCronStep('suppression-issues')
+      startSuppressionIssueCron();
 
       // H.5 — eBay feed-mode push poller. Resolves SUBMITTED EbayPushJob rows
       // by checking eBay Sell Feed API every 2 min. Fires ebay_push.status_changed SSE.

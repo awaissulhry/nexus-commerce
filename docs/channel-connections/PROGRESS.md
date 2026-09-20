@@ -1,16 +1,22 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2 and P3.1 are built, pushed and live.**
-The next package is **P3.2**.
+Updated **2026-09-20**. **P0, P1, P2, P3.1 and P3.2 are built.**
+The next package is **P3.3**.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
 accepted by default — take the pick and carry on. Do not pause between packages for
 approval; commit, push and move to the next one.
 
-**The rules that still bind, and are NOT lifted by that instruction:** the flat-file
-no-touch rule (section 1), and asking first for a production write, a live channel call
-or a P7 drop. A blanket "implement the plan" does not lift a no-touch rule.
+**The rules that still bind:** ask first for a production **write**, a **live channel
+call**, or a **P7 drop**. A blanket "implement the plan" does not lift those.
+
+**🔴 The flat-file no-touch rule is LIFTED (Owner, 2026-09-20):** *"we recently had a
+flat file no-touch rule, which is no longer valid… because we're rebuilding the flat
+file as well. If there's any work related to that, please do not hesitate."* The
+flat-file routes and pages are now ordinary files. P3.2 was the first package to need
+it — the Amazon feed path lives inside the flat-file service, and that is where 140 real
+rejections were stranded.
 
 Read in this order:
 
@@ -25,7 +31,9 @@ Read in this order:
 - "Start to implement the whole plan. I'll stop you where we need it." → packages run **in plan order**, no per-package "go". Commit each package when its proof is green.
 - **Ask first** for: any production **write**, any **live channel call**, each P7 drop, and the Owner-only steps in plan section 8. Production **reads** (Railway traffic and logs) are allowed since 2026-09-20.
 - **Pushing is allowed** (Owner, 2026-09-20) once the package's proof is green. A push deploys to production and **applies migrations there**.
-- **Flat-file routes need a yes per change**: `apps/api/src/routes/ebay-flat-file.routes.ts`, `apps/api/src/routes/amazon-flat-file.routes.ts`, `apps/web/src/app/products/*-flat-file/**`. Write an edit list first (`build/P1.7-flat-file-edit-list.md` is the pattern), then ask.
+- ~~Flat-file routes need a yes per change~~ — **LIFTED 2026-09-20.** The flat file is
+  being rebuilt, so `apps/api/src/routes/{ebay,amazon}-flat-file.routes.ts` and
+  `apps/web/src/app/products/*-flat-file/**` are ordinary files. No edit list, no ask.
 - Never `--no-verify`. **Never lower a ratchet baseline to make it pass.** **Never weaken a test to make it pass** — if a test proves a real defect, fix the code (that is how the P1.3 per-row read was caught).
 - Migrations: apply to the **local** database only (check the host is `127.0.0.1` first); production gets them from the deploy.
 - Other sessions share this tree. `git status` first. Do not touch their files: the assortment files, `.githooks/post-commit`, `.githooks/pre-push.backup`, `docs/channel-connections/PLAN.md`, `RESEARCH.md`, `full/`, `apps/web/src/app/settings/sharing/`.
@@ -56,19 +64,30 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 | P2.7 | AMS hourly writes **increment** and nothing deduped, while SQS is at-least-once — a redelivery silently added the same spend again. Nightly subscription check | `ffdb2494b` | `build/P2.7.md` |
 | P2.8 | **P2 complete.** The API exposed none of the lifecycle, so a dead letter looked identical to a retry. Ingress tab on the design system | `8a1853b94` | `build/P2.8.md` |
 | P3.1 | The error vocabulary had no test at all. **161 of 201 real failed bodies are double-encoded** and lost their error code entirely. `attribute` + `severity` added; a mapping table per connector | `2f4f9d3bd` | `build/P3.1.md` |
+| P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | see below | `build/P3.2.md` |
 
 **Production proofs.** P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P3.2, then P3.3 … in plan order
+## 3. Next — P3.3, then P3.4 … in plan order
 
-P3.2: *every channel error lands on its listing in `ListingIssue`, with an as-of time —
-Amazon put/patch issues, previews, feed reports, issue notifications and suppression
-(add a scheduled job); eBay bulk, feed and Trading errors; Shopify `userErrors`.* Done
-when: a rejected change shows on the listing within one minute, in the channel's words.
+P3.3: *screens — the studio "Errors & Sync" console (owned by the studio programme)
+reads this store; the Channels page Diagnostics shows the call ledger, rate headroom and
+last error per account.* Done when: both screens read the same numbers.
 
-**P3.1 built the `attribute` field specifically to feed this.** `classifyChannelAnswer`
-now returns `{ errorClass, retryable, channelCode, channelMessage, attribute, severity }`
-for all five connectors.
+**P3.2 filled the store P3.3 reads.** `ListingIssue` now takes Amazon feed rejections,
+Amazon suppression, Amazon issue notifications, eBay Trading failures and Shopify
+`userErrors`, each with the channel's own code, the channel's own words, the attribute
+and an as-of time. The flat-file grid's health chip reads it already.
+
+**Two things P3.2 left open and P3.3/P4.1 inherit** (full list in `build/P3.2.md` §6):
+
+1. **No eBay caller passes `ctx.listingId`.** `callTradingApi` accepts and uses it, and
+   it is tested — but `studio-publication-ebay.ts` and `ebay-shared-fanout.service.ts`
+   still call without it, so a real eBay rejection reaches the ledger and not the
+   listing. Small change; belongs with P4.1, where those builders are rewritten.
+2. **Amazon put/patch issues have no producer.** `putListingsItem` / `patchListingsItem`
+   are **0 occurrences in `apps/api/src`** — Amazon content goes out as
+   `JSON_LISTINGS_FEED`. That part of the P3.2 plan row is P4.1's to build.
 
 ### 3a. Start here, every time
 
@@ -102,6 +121,10 @@ fixture by hand.
   a failure that retries in four minutes.
 - **P3.1** — **161 of 201** real failed bodies are double-encoded and lost their error
   code entirely.
+- **P3.2** — `ListingIssue` was **empty** while 140 real rejections sat in a JSON column
+  nothing joined to a listing; the flat-file grid's health chip had been reading that
+  empty table since it was written. And the attribute was lost on **140/140**, so
+  mirroring them would itself have dropped 80.
 
 **The pattern in eight of the nine:** a component that looks finished, is referenced by
 working code around it, and **has never once run.** Ask *"what would I see if this had
@@ -175,6 +198,26 @@ Settings → Channels.
 
 ## 6. Traps that cost time here — read before measuring anything
 
+- **`Array.isArray([])` is TRUE, and `[]` is what a channel actually sends.** An
+  `isArray` guard reads an empty array as "the channel told us" and suppresses the
+  fallback behind it. It cost P3.2 the attribute on **140 of 140** real rejections.
+  Guard on whether there is a VALUE, not on whether there is an array.
+- **A fingerprint built from a field that is always empty is not an identity.**
+  `ListingIssue` is keyed on `code + attributeNames`; with the attribute empty, five
+  different rejections on one SKU became one row and four vanished. Before mirroring a
+  real population into a keyed table, count the distinct keys it produces.
+- **A test that reads state an EARLIER test created proves nothing under `-t`.** P3.2's
+  marketplace-scope mutation passed because, run alone, no record call had happened. It
+  found a real defect once the test was made self-contained. Every mutation check runs
+  the named test ALONE — so every test must set up its own arm and carry a positive
+  control.
+- **`TIMESTAMP(3)` read by node-pg shifts by your local offset.** A correctly stored
+  03:00 UTC comes back as 01:00 on a UTC+2 machine. Read through Prisma (as the app
+  does) and assert the raw stored text with `TO_CHAR` as the control.
+- **A count of rows is not a count of what is stored in them.** `OutboundApiCallLog`
+  keeps `responsePayload` only on failures: 184 of 184 failures have one, **0 of
+  468,185 successes do**. Searching successes for errors-inside-a-200 was "could not
+  measure", not "measured empty".
 - **`@nexus/shared` runs from `packages/shared/dist`, which is not in git.** Edit the source and local tests still run the OLD code until `cd packages/shared && npm run build`. A green suite straight after a shared-package edit is a stale measurement, not a pass.
 - **The pre-push gate runs the API suite with business profiles ON** (`node apps/api/scripts/profiles-on-ratchet.mjs`, baseline `apps/api/scripts/profiles-on-baseline.json`). It fails on any new failure, any baselined file getting worse, **and on a fixed file left in the list**. Production runs with profiles on: give the code a business (`withWorkspace`) and seed rows that belong to it.
 - **The local database drifts** as other sessions add migrations: the generated client then expects columns your database lacks and DB-backed tests fail with `The column (not available) does not exist`. Fix from `packages/database`: `DATABASE_URL="<the one in apps/api/.env>" npx prisma migrate deploy --schema=prisma/schema.prisma` (check the host is `127.0.0.1` first — the repo's prisma config points somewhere else).

@@ -233,6 +233,15 @@ export interface TradingCallContext {
   connectionId: string
   /** The market (IT, DE, …) for the call ledger. */
   market?: string
+  /**
+   * P3.2 — the ChannelListing this call is about, when the caller knows it.
+   *
+   * With it, an eBay rejection is filed on the listing in eBay's own words; without it
+   * the call behaves exactly as before. `OutboundApiCallLog` has carried a `listingId`
+   * column since P1.2 and it was filled on 0 of 469,462 rows, because no sender ever
+   * named one — so it is passed to the gateway ledger from here too.
+   */
+  listingId?: string | null
 }
 export interface TradingCallResult {
   ack: string
@@ -243,9 +252,23 @@ export interface TradingCallResult {
 
 /** A duplicate failure can describe a previously accepted write, not a rejected submission. */
 export class TradingApiFailure extends Error {
-  constructor(message: string, public readonly duplicateSubmission: boolean, public readonly priorItemId?: string) {
+  /**
+   * P3.2 — eBay's own error codes and messages, still in parts.
+   *
+   * The `message` is the operator's sentence and is unchanged. These are what the
+   * listing needs: eBay's ErrorCode is the issue code, and its LongMessage names the
+   * offending tag ("Input data for tag <Item.X> is invalid"), which is the attribute.
+   */
+  readonly channelErrors: Array<{ code: string; message: string }>
+  constructor(
+    message: string,
+    public readonly duplicateSubmission: boolean,
+    public readonly priorItemId?: string,
+    channelErrors: Array<{ code: string; message: string }> = [],
+  ) {
     super(message)
     this.name = 'TradingApiFailure'
+    this.channelErrors = channelErrors
   }
 }
 
@@ -350,6 +373,7 @@ export async function callTradingApi(
     marketHeaders: 'caller',
     modeAppliedByCaller: true,
     answerOk: tradingAnswerOk,
+    ledger: { listingId: ctx.listingId ?? null },
   })
 
   if (!res.ok) throw new Error(`eBay ${callName} HTTP ${res.status}`)
@@ -370,8 +394,29 @@ export async function callTradingApi(
   if (ack === 'Failure' || duplicateSubmission) {
     const detail = errors.slice(0, 2).join(' | ') || 'unknown'
     const code = errorCodes.length ? ` (code ${errorCodes[0]})` : ''
+    // eBay pairs each ErrorCode with its message positionally in the response.
+    const channelErrors = errors.map((message, i) => ({ code: errorCodes[i] ?? errorCodes[0] ?? 'EBAY_FAILURE', message }))
+    // P3.2 — the rejection goes onto the listing in eBay's own words before the throw.
+    // Awaited, not fire-and-forget: the done-when is "within one minute", and an
+    // un-awaited write in a process that is about to throw can be lost. The recorder
+    // never throws of its own accord.
+    if (ctx.listingId) {
+      const { recordListingIssues } = await import('./listing-issue-recorder.service.js')
+      await recordListingIssues({
+        listingId: ctx.listingId,
+        source: 'ebay-write',
+        issues: channelErrors.map((e) => ({
+          code: e.code,
+          message: e.message,
+          severity: 'ERROR',
+          // The attribute is inside eBay's sentence: "Input data for tag <Item.X>".
+          attributeNames: [...e.message.matchAll(/<([A-Za-z][\w.]*)>/g)].map((m) => m[1]).slice(0, 4),
+          categories: [`trading.${callName}`],
+        })),
+      })
+    }
     throw new TradingApiFailure(`eBay ${callName} Failure: ${detail}${code}`, duplicateSubmission,
-      duplicateSubmission ? duplicateItemId(callName, xml, raw) : undefined)
+      duplicateSubmission ? duplicateItemId(callName, xml, raw) : undefined, channelErrors)
   }
   return { ack, itemId, errors, raw }
 }

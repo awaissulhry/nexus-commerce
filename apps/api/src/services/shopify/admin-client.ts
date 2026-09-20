@@ -34,8 +34,30 @@ export async function shopifyAdmin(accountId: string): Promise<{ graphql: Shopif
   }
   return { graphql, domain }
 }
-export function assertShopifyResult<T extends { userErrors?: { field?: string[]; message: string }[] }>(payload: T | undefined, operation: string): T {
+/**
+ * P3.2 — a Shopify `userErrors` failure, with the errors still readable.
+ *
+ * The thrown sentence is for the operator's queue row; `userErrors` is for the listing.
+ * Flattening them into a string here was why a Shopify rejection could not be put on
+ * its listing with Shopify's own field name attached.
+ */
+export interface ShopifyUserError { field?: string[]; message: string; code?: string }
+
+export class ShopifyUserErrors extends Error {
+  readonly userErrors: ShopifyUserError[]
+  readonly operation: string
+  constructor(operation: string, userErrors: ShopifyUserError[]) {
+    super(`${operation}: ${userErrors.map(e => `${e.field?.join('.') ?? ''} ${e.message}`).join('; ')}`)
+    this.name = 'ShopifyUserErrors'
+    this.operation = operation
+    this.userErrors = userErrors
+  }
+}
+
+export function assertShopifyResult<T extends { userErrors?: ShopifyUserError[] }>(payload: T | undefined, operation: string): T {
   if (!payload) throw new Error(`${operation} returned no result.`)
-  if (payload.userErrors?.length) throw new Error(`${operation}: ${payload.userErrors.map(e => `${e.field?.join('.') ?? ''} ${e.message}`).join('; ')}`)
+  // The message is byte-for-byte what it was; only the type is richer, so every existing
+  // caller that reads `error.message` is unaffected.
+  if (payload.userErrors?.length) throw new ShopifyUserErrors(operation, payload.userErrors)
   return payload
 }
