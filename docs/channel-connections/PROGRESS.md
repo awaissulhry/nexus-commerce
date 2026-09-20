@@ -83,7 +83,9 @@ Read in this order:
 | P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
-**Production proofs.** P4.1a deploy `09b971c9` from `11cb9d31d`: **SUCCESS**. Nothing to
+**Production proofs.** P4.1d deploy `68ab8a33` from `f356688ad`: **SUCCESS** (P4.1b and
+P4.1c are inside the deploys between it and P4.1a; P4.1e's was still building when this
+was written — check it before trusting the row). Earlier: P4.1a deploy `09b971c9` from `11cb9d31d`: **SUCCESS**. Nothing to
 switch on — the change only fills a value the code already accepted — so the proof is
 that the app boots and nothing changed. ⚠️ **Neither P4.1 slice can be proven by real
 traffic yet:** both are WRITE paths, eBay's last real traffic is a test artefact (§4's
