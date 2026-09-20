@@ -1843,6 +1843,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // base) have no __offerIds → shared/Trading lane. Replaces the it_item_id
     // heuristic, which misrouted Trading primaries into the Inventory lane.
     const inventoryManagedProducts = new Set<string>();
+    /** P4.1e — true when the lane marker could not be read at all. */
+    let laneMarkersUnavailable = false;
     try {
       const pushProductIds = [...new Set(rows.map((r) => String((r as Record<string, unknown>)._productId ?? '')).filter(Boolean))];
       if (pushProductIds.length > 0) {
@@ -1859,7 +1861,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         }
       }
     } catch (err) {
-      request.log.warn({ err }, 'ebay/flat-file/push: lane-marker prefetch failed — shared flag decides alone');
+      // P4.1e — was: "shared flag decides alone", i.e. GUESS the lane. An
+      // Inventory-managed family then took the Trading/shared lane, which is the
+      // exact misrouting Incident #23's deterministic marker was introduced to
+      // stop. A family whose lane cannot be established is REFUSED below rather
+      // than sent down the other one; every family whose lane does not depend on
+      // the marker is unaffected.
+      laneMarkersUnavailable = true;
+      request.log.warn({ err }, 'ebay/flat-file/push: lane-marker prefetch failed — shared families will be refused, not guessed');
     }
 
     // ── API mode — family-aware per row × market ────────────────────
@@ -2138,6 +2147,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             (r as Record<string, unknown>)._isParent !== true &&
             inventoryManagedProducts.has(String((r as Record<string, unknown>)._productId ?? '')),
           )
+          // P4.1e — the lane marker is the ONLY thing separating an
+          // Inventory-managed family from a Trading-managed one, and only a
+          // shared-flagged family reads it. If it could not be read, say so and
+          // send nothing for this family. The shared lane's adopt-don't-duplicate
+          // belt would catch most misroutes, but it relies on the row carrying a
+          // live ItemID — which an Inventory-published family need not do.
+          if (sharedParent?.shared_sku_listing === true && laneMarkersUnavailable) {
+            for (const r of familyRows) {
+              perRowResults.push({
+                sku: String((r as Record<string, unknown>).sku ?? ''),
+                market: mp,
+                status: 'ERROR',
+                message: "Could not read this listing's lane marker (the database was unavailable). A shared family can be Inventory-managed or Trading-managed and the two need different calls, so nothing was sent. Retry in a minute.",
+              })
+            }
+            continue
+          }
           if (sharedParent?.shared_sku_listing === true && inventoryManagedFamily) {
             request.log.info({ familyKey, market: mp }, 'ebay/push: shared flag on Inventory-managed family — routed via Inventory group (offers exist)')
           }

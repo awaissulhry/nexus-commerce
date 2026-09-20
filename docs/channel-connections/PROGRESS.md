@@ -1,9 +1,13 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and P4.1 a/b/c/d are
-built.** P5.3 and Shopify's `productSet` row are measured. The last unmeasured
-P4.1 row is **eBay's Inventory/Trading split** (Inventory for unique SKUs,
-Trading for shared).
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and ALL of P4.1 are
+built** (slices a–e; `build/P4.1e.md` §6 has the row-by-row table). P5.3 is
+measured. Next is **P4.2 (images)**, then P4.3 / P4.4 / P4.5.
+
+🔴 **Four of P4.1's seven rows were COUNTERWEIGHTS** — already built, or built
+better than the row described. The real defects were not the gaps the plan
+named: they were **failure paths and drifts inside work that already existed**.
+Measure the row before building it.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -71,6 +75,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.1e | **eBay's Inventory/Trading split — keep it, never GUESS it.** The split is deterministic (Incident #23 replaced a heuristic that "misrouted Trading primaries"). 🔴 But its prefetch `catch` said "shared flag decides alone" — so a database hiccup routed an Inventory-managed family down the Trading lane, the exact misrouting #23 exists to stop. Refused per family now | `<this push>` | `build/P4.1e.md` |
 | P4.1d | **eBay business policies — one reconciliation, both builders.** Per ACCOUNT was already right (P0.7's guard + the connection's own metadata). 🔴 Per MARKET had a DRIFT: on an unavailable account snapshot the group publisher REFUSED (FFP.12, learned from an incident) while the single-SKU publisher WARNED and wrote the unverified ids — the exact behaviour FFP.12 exists to prevent. Three copies of one rule across two files, now one accessor + a parity gate | `<this push>` | `build/P4.1d.md` |
 | P4.1c | **The description engine in every builder — it already was.** A counterweight: 7 render call sites across BOTH channel models. But the rule lived in the CALLERS: `pushVariationGroup` fell back to the RAW body when its parent content was omitted, dead only until a third caller. Now required at compile time and refused at run time. 🔴 The refusal was placed FIRST and masked the publish mode, the push lock, the presentation lock and the review gate — **14 existing tests caught it** | `<this push>` | `build/P4.1c.md` |
 | P4.1b | **An Amazon single-item rejection reaches its listing.** 🔴 The handover said `putListingsItem` was "0 occurrences"; it is **28** — the 0 is true only of the SDK operation STRING while a real client method with a live call site sat beside it, parsing Amazon's `issues`, logging them and filing nothing. An accepted write files an EMPTY set on purpose, because `listings-api` REPLACES and that is what CLOSES a fixed listing's stale rejection | `<this push>` | `build/P4.1b.md` |
@@ -155,8 +160,10 @@ that and its gateway ratchet holds it at 0.
 **"Business policies per account" — CLOSED as P4.1d.** Per account was already
 right. Per MARKET had a real drift and it is fixed; see `build/P4.1d.md`.
 
-Still genuinely open in P4.1, and not yet measured: **eBay's Inventory/Trading
-split** for unique vs shared SKUs.
+**"Keep the eBay Inventory/Trading split" — CLOSED as P4.1e.** The split is
+deterministic and correct; its FAILURE path guessed. See `build/P4.1e.md`.
+
+**P4.1 is complete.** The row-by-row table is `build/P4.1e.md` §6.
 
 ### 3.0a P5.3 — measured, not built
 
@@ -386,6 +393,21 @@ Each is one command, and each converts a "built" into a "verified":
   to NARROW the claim to what is true (no listing WRITE outside `callTradingApi`),
   write the exemptions down with reasons, and add a second test that CHECKS each
   reason — not to loosen the pattern until it goes green.
+- 🔴🔴 **A RULE LEARNED FROM AN INCIDENT IS OFTEN ABANDONED ON ITS FAILURE PATH.**
+  Twice in one day, in two files: eBay's policy reconciliation warned instead of
+  refusing when the snapshot was unavailable, and the lane marker's `catch` said
+  "shared flag decides alone" — which routes an Inventory-managed family down
+  the Trading lane, the exact misrouting Incident #23 exists to stop. When you
+  find a rule with an incident number, **read its `catch`**.
+- 🔴🔴 **A `toContain` ON PART OF A CONDITION DOES NOT TEST THAT CONDITION.**
+  `if (false && cond)` and `cond && Date.now() < 0` both keep the substring, so
+  the rule is off and the test is green. Two P4.1e mutations proved it. Match the
+  WHOLE trimmed line (with its `if (` and `) {`), and assert only ONE line tests
+  the flag.
+- 🔴 **A GUARD CAN BE SILENCED BY ITS OWN EXPLANATORY COMMENT.** P4.1e's "the old
+  sentence is gone" test failed because the NEW code quotes it in a comment.
+  Strip comments before matching, with a positive control that the stripper did
+  not empty the file.
 - 🔴🔴 **TWO BUILDERS, ONE LESSON LEARNED IN ONLY ONE OF THEM.** eBay's group
   publisher REFUSES an unverifiable policy snapshot (FFP.12, after an incident);
   the single-SKU publisher WARNED and wrote the unverified ids anyway (R12,
