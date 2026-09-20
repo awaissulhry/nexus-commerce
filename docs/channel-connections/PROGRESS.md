@@ -39,7 +39,9 @@ Read in this order:
 | P1.4b part 3 gateway: a Shopify change only on 2026-07 GraphQL with an account | bc9baf734 | `build/P1.4.md` 6.3 |
 | P1.4 the shop's single location for a linked listing (Owner 09-20) | (this commit) | `build/P1.4.md` 4.1 |
 
-**Push is blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
+**PUSHED 2026-09-20** — `e124f24ac` is on `origin/main`; the grid-kit blocker cleared when the sharing session moved its grids to the DS DataGrid, and the profiles-ON gate passed after the fixes in that commit. Production deploy `a05565cc` built from it. Production proofs (per build record) can now be taken.
+
+**Old note, kept for the history — push was blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 
 ## 3. P1.4 — BUILT (committed locally, not pushed)
 
