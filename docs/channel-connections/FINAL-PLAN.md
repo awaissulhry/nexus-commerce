@@ -684,7 +684,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 |---|---|---|---|
 | Owner items (section 8) | NOT STARTED | — | Secret date first |
 | P0.1 | BUILT (2026-09-19) | `build/P0.1.md` | Not committed. Prod switches read: eBay + Amazon live. Prod proof waits for a push |
-| P0.2 | BUILT (2026-09-19) | `build/P0.2.md` | Committed locally, not pushed. Prod proof: anonymous GET /api/monitoring/queue-stats → 401 after a push |
+| P0.2 | PROD-VERIFIED (2026-09-20) | `build/P0.2.md` | Pushed and deployed (`a05565cc`). Anonymous GET /api/monitoring/queue-stats → 401, with /api/health → 200 as the control |
 | P0.3 | BUILT (2026-09-19) | `build/P0.3.md` | Committed locally, not pushed. Prod read (encryption key set?) refused by the permission system; prod proof after a push |
 | P0.4 | BUILT (2026-09-19) | `build/P0.4.md` | Committed locally, not pushed. Also fixes a P0.3 test break (see P0.3.md section 4). Prod proof: the next real eBay refund |
 | P0.5 | BUILT (2026-09-19) | `build/P0.5.md` | Committed locally, not pushed. The Owner records the Amazon date on the page after a push (R-3) |

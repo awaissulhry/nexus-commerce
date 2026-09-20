@@ -39,7 +39,9 @@ Read in this order:
 | P1.4b part 3 gateway: a Shopify change only on 2026-07 GraphQL with an account | bc9baf734 | `build/P1.4.md` 6.3 |
 | P1.4 the shop's single location for a linked listing (Owner 09-20) | (this commit) | `build/P1.4.md` 4.1 |
 
-**PUSHED 2026-09-20** — `e124f24ac` is on `origin/main`; the grid-kit blocker cleared when the sharing session moved its grids to the DS DataGrid, and the profiles-ON gate passed after the fixes in that commit. Production deploy `a05565cc` built from it. Production proofs (per build record) can now be taken.
+**PUSHED 2026-09-20** — `e124f24ac` is on `origin/main`; the grid-kit blocker cleared when the sharing session moved its grids to the DS DataGrid, and the profiles-ON gate passed after the fixes in that commit. Production deploy `a05565cc` built from it, status SUCCESS, migrations applied (including `20260919a_p11_gateway_call_ledger`). First proofs taken: monitoring route 401 with /api/health 200 as the control (P0.2), the contract cron reports itself OFF (P1.8), 0 × 5xx since the deploy.
+
+**Seen in production while checking, NOT from this push:** the dashboard's tax panel query reads `OrderItem."vatRate"`, a column that exists in neither the schema nor the database (the query dates from 2026-05-09, `6c5c6d79a`), and its `.catch(() => 0)` shows the tax as **0** instead of saying it could not be read. Also pre-existing: the eBay readback cron errors with `EBAY_APP_ID and EBAY_CERT_ID environment variables must be set` (the same lines are in the previous deployment's log). Production proofs (per build record) can now be taken.
 
 **Old note, kept for the history — push was blocked.** The grid-kit ratchet in `.githooks/pre-push` fails on another session's untracked files in `apps/web/src/app/settings/sharing/`. It is not our code. Ask the Owner. Production proofs for every package wait for a push.
 
