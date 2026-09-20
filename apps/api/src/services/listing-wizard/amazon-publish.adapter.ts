@@ -33,6 +33,7 @@ import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
+import { amazonContentRefusal } from '../amazon/validate-before-send.js'
 import { logger } from '../../utils/logger.js'
 import {
   acquireAmazonPublishToken,
@@ -246,6 +247,12 @@ export class AmazonPublishAdapter {
         })
         return { success: false, sku, error: acquired.error }
       }
+
+      // P1.7 — Amazon's own dry run first: a full PUT replaces the listing, so it is a content write.
+      const previewRefusal = await amazonContentRefusal({
+        sellerId, sku, marketplaceId: marketplaceCode, productType: payload.productType, attributes, requirements: 'LISTING',
+      })
+      if (previewRefusal) return { success: false, sku, error: previewRefusal }
 
       // 4. Real call (or dry-run short-circuit inside the client)
       const t0 = tokenStart

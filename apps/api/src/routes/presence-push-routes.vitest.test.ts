@@ -6,6 +6,8 @@ const s = vi.hoisted(() => {
   // P1.2 — the gateway reads a real Response; the fake's answers are turned into one.
   vi.stubGlobal('fetch', async (...args: unknown[]) => (await import('../test-support/gateway-stubs.js')).asResponse(send(...args)))
   return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn(), ebayRefusal: null as string | null,
+    // P1.7 — Amazon's own dry run before the direct route's PUT; this is its answer.
+    preview: { ok: true, available: true, errors: null as string | null, warnings: [] as string[] },
     // P0.7 — who owns the fixture listing / SKU, and the account's own listing when asked for it.
     owner: null as string | null, own: null as Record<string, unknown> | null, skuOwner: null as string | null }
 })
@@ -31,7 +33,11 @@ vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn() })
 vi.mock('../services/content-auto-publish.service.js', () => ({ enqueueContentSyncIfEnabled: vi.fn() }))
 vi.mock('../services/listing-activation-sync.service.js', () => ({ syncActivatedListings: vi.fn() }))
 vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class { isConfigured = async () => true } }))
-vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putListingsItem: s.amazon } }))
+// P1.7 — the direct publish route asks Amazon first (mode=VALIDATION_PREVIEW); `s.preview` is its answer.
+vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: {
+  putListingsItem: s.amazon,
+  validateListing: vi.fn(async () => s.preview),
+} }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'seller' }))
 vi.mock('../services/categories/marketplace-ids.js', () => ({ configuredAmazonMarketplaceId: async () => 'AMAZON_IT' }))
 vi.mock('../services/pim/amazon-content-payload.js', () => ({ buildAmazonContentAttributes: async () => ({}) }))

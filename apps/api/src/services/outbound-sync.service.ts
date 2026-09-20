@@ -1,4 +1,5 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { amazonContentRefusal, isAmazonContentPatchSet } from './amazon/validate-before-send.js'
 import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
 import { syncShopifyLinkedListing, type LinkedListingWork } from './shopify/listing-write.service.js';
 import { createOutboundRow } from './outbound-rows.js'
@@ -1182,9 +1183,11 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid }) => {
-        if (payload.source === 'FM_CATALOG_CASCADE') {
-          const check = await amazonSpApiClient.validateListing({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
-          if (!check.available || !check.ok) return { ok: false, error: !check.available ? 'Amazon validation is unavailable; no mapping update was submitted.' : `Amazon validation failed: ${check.errors}` };
+        // P1.7 — Amazon's own dry run before any CONTENT write (it was run for the mapping source only).
+        // A price- or stock-only patch set needs no preview; anything else does.
+        if (payload.source === 'FM_CATALOG_CASCADE' || isAmazonContentPatchSet(amazonPayload.patches)) {
+          const refusal = await amazonContentRefusal({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
+          if (refusal) return { ok: false, error: refusal };
         }
         const res = await amazonSpApiClient.submitListingPayload({
           sellerId: sid,

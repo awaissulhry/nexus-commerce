@@ -7,6 +7,7 @@ import { marketLanguages, languageTag } from '../services/pim/market-languages.j
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { assertInformationLocale } from '../services/pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { amazonContentRefusal } from '../services/amazon/validate-before-send.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
@@ -1027,6 +1028,13 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             content: { product: product as any, parent: product.parent as any, listing } })
 
           const sellerId = (await getAmazonSellerId())
+          // P1.7 — Amazon's own dry run first; a full PUT replaces the listing's content.
+          const previewRefusal = await amazonContentRefusal({
+            sellerId, sku, marketplaceId: mpId, productType: resolvedProductType, attributes: spAttrs,
+          })
+          if (previewRefusal) {
+            return reply.send({ ok: false, published: false, error: previewRefusal })
+          }
           const spResult = await amazonSpApiClient.putListingsItem({
             sellerId,
             sku,

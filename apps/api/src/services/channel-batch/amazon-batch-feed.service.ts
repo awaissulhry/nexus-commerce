@@ -1,4 +1,5 @@
 import { closedMarketSet } from '../amazon-market-offer.service.js'
+import { amazonContentRefusal } from '../amazon/validate-before-send.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from '../listing-push-controls.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
@@ -280,6 +281,19 @@ export async function submitAmazonListingsBatch(
       ?? (closed.has(`${row.productId}|${row.marketplace.toUpperCase()}`) ? assertPushAllowed({offerClosedAt:'closed'}) : null)
     if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
   }
+  // P1.7 — Amazon's own dry run for every CONTENT message in this feed. Images are content; price,
+  // stock and status are not. A feed is all-or-nothing at Amazon, so one refused message stops the whole
+  // submission before the document is even created.
+  const previewMessages = JSON.parse(buildJsonListingsFeedBody(input)).messages as Array<{ patches?: Array<{ op: string; path: string; value?: unknown }> }>
+  for (const [index, operation] of input.operations.entries()) {
+    if (operation.type !== 'image') continue
+    const refusal = await amazonContentRefusal({
+      sellerId: input.sellerId, sku: operation.sku, marketplaceId: input.marketplaceIds[0] ?? '',
+      productType: operation.productType, patches: previewMessages[index]?.patches,
+    })
+    if (refusal) throw Object.assign(new Error(refusal), { code: 'AMAZON_PREVIEW_REFUSED' })
+  }
+
   // Lazy-load the SP-API client so dry-run paths never pay the
   // import cost (the client pulls in AWS auth chain + a 1MB+ tree).
   const sp: any = amazonSpClient()
