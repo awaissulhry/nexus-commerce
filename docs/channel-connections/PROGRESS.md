@@ -39,9 +39,10 @@ Read in this order:
 - Other sessions share this tree. `git status` first. Do not touch their files: the assortment files, `.githooks/post-commit`, `.githooks/pre-push.backup`, `docs/channel-connections/PLAN.md`, `RESEARCH.md`, `full/`, `apps/web/src/app/settings/sharing/`.
 - Reports to the Owner: simple English, short sentences, **max 2 options with a pick**.
 
-## 2. Done — on `origin/main` and live
+## 2. Done — on `origin/main`
 
-Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
+**P0 – P3.6 are all deployed and live.** The newest is deployment `92ec6158` from
+`22eafb4bf`: SUCCESS, `Applying migration 20260920e_p36_trace_id`, both crons scheduled.
 
 | Package | What | Commits | Record |
 |---|---|---|---|
@@ -64,47 +65,61 @@ Deployment `a05565cc` from commit `e124f24ac`: SUCCESS, migrations applied.
 | P2.7 | AMS hourly writes **increment** and nothing deduped, while SQS is at-least-once — a redelivery silently added the same spend again. Nightly subscription check | `ffdb2494b` | `build/P2.7.md` |
 | P2.8 | **P2 complete.** The API exposed none of the lifecycle, so a dead letter looked identical to a retry. Ingress tab on the design system | `8a1853b94` | `build/P2.8.md` |
 | P3.1 | The error vocabulary had no test at all. **161 of 201 real failed bodies are double-encoded** and lost their error code entirely. `attribute` + `severity` added; a mapping table per connector | `2f4f9d3bd` | `build/P3.1.md` |
-| P3.6 | **P3 complete.** No target level existed anywhere, and the trace followed a **RUN not a change** — one cron tick id covers **1,243 calls**, and the change's id died at the queue (no id column). `traceId` beside `requestId`; a Health tab where `no_data` is never a pass | see below | `build/P3.6.md` |
-| P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | see below | `build/P3.5.md` |
-| P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | see below | `build/P3.4.md` |
-| P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | see below | `build/P3.3.md` |
-| P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | see below | `build/P3.2.md` |
+| P3.6 | **P3 complete.** No target level existed anywhere, and the trace followed a **RUN not a change** — one cron tick id covers **1,243 calls**, and the change's id died at the queue (no id column). `traceId` beside `requestId`; a Health tab where `no_data` is never a pass | `22eafb4bf` | `build/P3.6.md` |
+| P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
+| P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
+| P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
-**Production proofs.** P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
+**Production proofs.** P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P5.1 before 2026-12-15, then P4.x
+## 3. Next — P5.1, then P4.x
 
-**P3 is complete.** The plan's own order (section 3c) puts **P5.1 before 2026-12-15**
-ahead of P4, because it is the one with a deadline. Read its row in plan section 6
-before starting, and check the deadline is still the binding reason.
+**P3 is complete.** The plan's own order puts **P5.1 before P4**, because it is the one
+with a date on it.
 
-**🔴 Read the honest denominator first, every time.** Of the 395 calls since the
-gateway landed, **only 48 are real traffic** (Shopify); every eBay row is a test
-artefact (a `conn-1` account, a sandbox host, no status code). Anything "verified"
-against that is verified against nothing. P3.3's and P3.6's screens both say so on the
-screen itself.
+> **P5.1** — *Amazon Orders v0 → v2026-01-01 (`searchOrders`, `getOrder`). Set the
+> version on every library call so it never falls back to the oldest one.*
+> Deadline **2027-03-27**, target **2026-12-15**. Size M.
+> (`FINAL-PLAN.md` section 6, the P5 table.)
 
-**What P3 left open** (full lists in each `build/<ID>.md`):
+**Check two things before you start, because the plan may be out of date on both:**
 
-1. **No eBay caller passes `ctx.listingId`.** Plumbing in and tested; the publication
-   paths still call without it, so an eBay rejection reaches the ledger and not the
-   listing. Belongs with P4.1.
-2. **Amazon put/patch issues have no producer** — `putListingsItem` is 0 occurrences in
-   `apps/api/src`. P4.1's to build.
-3. **eBay rate headroom has no source** — `getRateLimits` is never called.
+1. **P5.3** (`Shopify: remove or move the 6 2024-01 clients to 2026-07`) says *"With
+   P1.4"*, and P1.4 shipped. Grep for `2024-01` in the Shopify clients: if it is
+   already done, say so and mark the row rather than rebuilding it. **That is a result,
+   not a wasted step** — P2.6 is the precedent.
+2. **Is the 2026-12-15 target still the binding reason to go before P4?** If the Owner
+   would rather have P4.1 (which owns two of the open items below), that is their call —
+   present it as two options with a pick.
+
+### 3.1 🔴 What P3 left open — most of it is P4.1's
+
+1. **No eBay caller passes `ctx.listingId`.** `callTradingApi` accepts it, uses it and
+   is tested; `studio-publication-ebay.ts` and `ebay-shared-fanout.service.ts` still
+   call without it, so a real eBay rejection reaches the ledger and **not** the listing.
+   Small, and it belongs with P4.1 where those builders are rewritten anyway.
+2. **Amazon put/patch issues have no producer.** `putListingsItem` / `patchListingsItem`
+   are **0 occurrences in `apps/api/src`** — Amazon content goes out as
+   `JSON_LISTINGS_FEED`. That part of the P3.2 plan row is P4.1's to build.
+3. **eBay rate headroom has no source.** eBay does not report quota on a call (its
+   parser returning null is CORRECT); `getRateLimits` is never called. P3.3's screen
+   says so in eBay's own terms rather than showing a blank.
 4. **`connectionId` is unset by most senders**, so P3.3's per-account screen
-   under-counts until each sender names its account.
+   under-counts until each sender names its account. P4.x, package by package.
 5. **Three of P3.4's four live alerts have no fuel** — 0 dead letters ever, 0 listing
-   issues until a feed runs, no `ChannelApp` has a secret expiry date set. **Signature
-   failures can fire now: 7 real rows are waiting.**
-6. **No channel has sent a deprecation header here**, so P3.5 is unproven by real
-   traffic.
-7. **No `traceId` exists in any row yet** — the first queued change after the deploy is
-   P3.6's proof, and it is one query: `GET /api/cx/trace/<id>`.
-8. **`alert.service.ts`'s in-app channel is still a `console.log`.** Other programmes
-   still call it and still reach nobody. Named, not fixed — it is shared.
-9. **The studio "Errors & Sync" console's rejections pane** is the studio programme's;
-   P3.2 made its `ListingIssue` source live.
+   issues until a feed runs, and **no `ChannelApp` has a secret expiry date set** (which
+   is the second, independent reason P0.5's alert never fired). **Signature failures can
+   fire now: 7 real rows are waiting.**
+6. **`alert.service.ts`'s in-app channel is still a `console.log`** and its destination
+   is the string `'admin'`. Other programmes still call it and still reach nobody. Named
+   in `build/P3.4.md`, **not fixed** — it is shared, so it needs its own decision.
+7. **No `traceId` exists in any row yet.** The first queued change after the P3.6 deploy
+   creates the first one.
+8. **The studio "Errors & Sync" console's rejections pane** is the studio programme's.
+   Its `DORMANT_SOURCES` entry for `ListingIssue` was right when written (measured 0 on
+   prod 2026-09-01); **P3.2 made that source live**, so the pane can now be built on
+   real rows. That is the handoff.
 
 ### 3a. Start here, every time
 
@@ -117,7 +132,7 @@ It is the fixture source for anything P3 or P4 touches — P3.1 found four defec
 hour by running its 201 stored failures through the classifier. Use it before writing a
 fixture by hand.
 
-### 3b. What the nine packages found, in one line each
+### 3b. What each package found, in one line
 
 - **P2.1** — Shopify had never recorded a webhook; the idempotency key was the resource
   id, not the delivery id.
@@ -157,18 +172,25 @@ fixture by hand.
   empty table since it was written. And the attribute was lost on **140/140**, so
   mirroring them would itself have dropped 80.
 
-**The pattern in eight of the nine:** a component that looks finished, is referenced by
+**The pattern in most of them:** a component that looks finished, is referenced by
 working code around it, and **has never once run.** Ask *"what would I see if this had
 never executed?"* before believing it does. The cheapest test is a grep for its call
 site with a known-live function as the control.
 
-**P2.6 is the counterweight:** sometimes it already works. Measure anyway, and say so
-when the answer is "nothing to build here" — that is a result, not a wasted step.
+**Three counterweights, and they matter as much:**
 
-### 3c. Everything after P3.2
+- **P2.6** — sometimes it already works. Say so; that is a result, not a wasted step.
+- **P3.3** — two apparent gaps were **correct behaviour**: eBay reports no per-call
+  headroom, Amazon reports a rate and not a remaining count. The fix was to say so on
+  the screen in the channel's own terms, not to build a number.
+- **P3.6** — a third shape: the thing **works, for a different question than the one
+  being asked.** `requestId` is real and well-filled and answers "what did this run
+  do". Check what a component is FOR before recording that it is broken.
 
-P3.3 → P3.4 → P3.5 → P3.6 → **P5.1 before 2026-12-15** → P4.x → P5 → P6.2 / 6.4 / 6.6 /
-6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+### 3c. The order from here
+
+**P5.1** (target 2026-12-15) → **P4.x** → the rest of P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8
+→ P7 (each drop needs a yes) → P8.
 
 ## 4. 🔴 What is NOT proven by real traffic
 
@@ -176,6 +198,13 @@ Everything from P2.2 onward is proven by test, by mutation check and by local
 end-to-end runs. **Almost none of it has been exercised by a real event**, because
 almost none can arrive until the switches in section 5 are thrown. Do not read a green
 deploy as a working channel.
+
+**🔴 The honest denominator, and it governs every P3 screen.** Of the 395 calls since
+the gateway landed (2026-09-19), **only the 48 Shopify ones are real traffic**. Every
+eBay row is a test artefact — a `conn-1` account, an `apiz.sandbox.ebay.com` host, a
+null `statusCode`, counts repeating in multiples of 42. Amazon has 2. Anything
+"verified" against that population is verified against nothing. P3.3's and P3.6's
+screens say so on the screen itself.
 
 | Channel | State |
 |---|---|
@@ -185,11 +214,20 @@ deploy as a working channel.
 | **Amazon** | Live, but no ORDER_CHANGE arrived in the deploy window, so the P2.2 parse fix is unexercised by real traffic |
 | **AMS** | The subscription check's first run is the answer to P2.7's done-when |
 
-**The first real event on any channel is worth stopping to read.** Three of the nine
-packages had to guess a name or a shape because nothing real had ever arrived; the
-ledger now records every arrival with its payload, so those guesses can finally be
-checked. `GET /api/sync-logs/webhooks?status=failed,dlq` or the **Ingress tab** on
-Settings → Channels.
+### 4.1 The three cheapest proofs available right now
+
+Each is one command, and each converts a "built" into a "verified":
+
+1. **P3.6's trace.** Make any change that queues an outbound row, then
+   `GET /api/cx/trace/<traceId>`. **No `traceId` exists in any row yet** — the first
+   queued change after the deploy creates the first one.
+2. **P3.4's signature alert.** **7 real `signatureOk = false` rows are waiting.** The
+   sweep runs every 15 minutes; if production holds any of those in its 24-hour window
+   the notice appears on the bell. It is the only one of the five alerts with fuel
+   today.
+3. **P3.2's listing issues.** The next Amazon flat-file feed that gets a rejection
+   writes to `ListingIssue`, and the flat-file grid's health chip — which has been
+   reading an empty table since it was written — lights up.
 
 ## 5. Open items the Owner owns
 
@@ -256,6 +294,41 @@ Settings → Channels.
   keeps `responsePayload` only on failures: 184 of 184 failures have one, **0 of
   468,185 successes do**. Searching successes for errors-inside-a-200 was "could not
   measure", not "measured empty".
+- **A gate can be FLAKY, and a retry can push the un-fixed version.** The profiles-ON
+  ratchet refused P3.5, the file passed alone under the ratchet's exact environment, and
+  a full profiles-ON run captured to JSON showed it passing. While reading that error a
+  second `git push` hit a green run of the same flake and **pushed the un-fixed
+  commit**. Two rules follow: re-read a gate's error from the LOG, not by re-running
+  `git push`; and when a gate flakes, the cause is usually yours — P3.5's was a test
+  doing ~1,040 queries to assert a bound on an in-memory Map.
+- **A mutation harness must assert its own edit landed.** P3.4's script was edited by a
+  `replace` that matched nothing, so it silently kept running the OLD mutation and the
+  ❌ looked like a weak rule for two rounds. Every mutation now asserts the marker was
+  found and that the file changed.
+- **An efficiency guard is asserted by counting the WORK, not the outcome.** Deleting
+  P3.5's in-process quiet period left "one endpoint = one alert" passing, because the
+  DATABASE dedupe is what guarantees that. Two guards, two propositions.
+- **`Array.isArray([])` is TRUE.** An `isArray` guard reads a channel's empty array as
+  "it told us" and kills the fallback behind it — 140 of 140 real Amazon rejections lost
+  their attribute that way. Guard on whether there is a VALUE.
+- **A fingerprint built from an always-empty field is not an identity.** Before mirroring
+  a real population into a keyed table, COUNT the distinct keys it produces: 140 real
+  issues collapsed to 60 rows.
+- **`requestId` is a RUN id, not a change.** One cron tick's id covers **1,243 calls**.
+  P3.6 added `traceId` beside it; `getTraceId()` deliberately does not fall back on a
+  cron.
+- **A wrong CSS token is silently dropped.** `--nds-font-family-mono` does not exist
+  (it is `--nds-font-mono`). Grep every token in a new block against
+  `design-system/styles/*.css` before committing.
+- **A Prisma field that looks like an enum may be TEXT.** `OutboundSyncQueue.syncType`
+  is plain text; casting it to `"SyncType"` made the suite report
+  `type "SyncType" does not exist`. Read `information_schema`, do not guess.
+- **The real model names are `UserProfile`, `Role`, `WorkspaceMemberRole`** — not
+  `User` / `WorkspaceRole` / `WorkspaceMembershipRole`. Inventing them made a suite fail
+  to LOAD, which prints as `N skipped`, not `N failed`.
+- **A new route outside an existing prefix needs an RBAC rule** in
+  `lib/auth/permissions-manifest.ts`, or the pre-push gate refuses the push.
+  `/api/cx/connections/*` is covered by a prefix; `/api/cx/health` was not.
 - **`@nexus/shared` runs from `packages/shared/dist`, which is not in git.** Edit the source and local tests still run the OLD code until `cd packages/shared && npm run build`. A green suite straight after a shared-package edit is a stale measurement, not a pass.
 - **The pre-push gate runs the API suite with business profiles ON** (`node apps/api/scripts/profiles-on-ratchet.mjs`, baseline `apps/api/scripts/profiles-on-baseline.json`). It fails on any new failure, any baselined file getting worse, **and on a fixed file left in the list**. Production runs with profiles on: give the code a business (`withWorkspace`) and seed rows that belong to it.
 - **The local database drifts** as other sessions add migrations: the generated client then expects columns your database lacks and DB-backed tests fail with `The column (not available) does not exist`. Fix from `packages/database`: `DATABASE_URL="<the one in apps/api/.env>" npx prisma migrate deploy --schema=prisma/schema.prisma` (check the host is `127.0.0.1` first — the repo's prisma config points somewhere else).
