@@ -12,6 +12,7 @@ import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { ebayWriteRefusal, ebayHostOf } from './ebay-publish-gate.service.js'
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
+import { reconcileEbayPolicies } from './ebay-policy-reconcile.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
 import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
@@ -1771,40 +1772,20 @@ export async function pushVariationGroup(
   //   2. ChannelConnection.connectionMetadata.ebayPolicies (account default)
   //   3. ebayAccountService.getSnapshot() — live eBay Account + Inventory API
   //   Hard-fail if any required field is still missing after all three tiers.
-  const configured = ((connectionMeta.ebayPolicies ?? {}) as {
-    fulfillmentPolicyId?: string
-    paymentPolicyId?: string
-    returnPolicyId?: string
-    merchantLocationKey?: string
+  // P4.1d — the waterfall, the market reconciliation and the FFP.12 refusal now
+  // live in ONE place (`ebay-policy-reconcile.service.ts`), because the
+  // single-SKU publisher had the same waterfall and the OPPOSITE failure rule:
+  // it warned and wrote the unverified ids. One accessor, called by both sides.
+  const resolution = await reconcileEbayPolicies({
+    connectionId, marketplaceId, market: mp,
+    rowOverrides: parentRow as Record<string, unknown>,
+    accountDefaults: (connectionMeta.ebayPolicies ?? {}) as Record<string, string>,
   })
-  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) || configured.fulfillmentPolicyId || ''
-  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) || configured.paymentPolicyId     || ''
-  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
-  let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
-
-  // MARKET-SPECIFIC policy guard. eBay business policies belong to ONE marketplace; a
-  // policy id from another market (e.g. a DE default applied to an IT offer) is the
-  // classic 25007 "invalid shipping policy" cause — often surfacing as a mixed IT/DE
-  // error. Reconcile against THIS market's policies (snapshot is per-market, cached
-  // 5min) and REPLACE any id that isn't in this market's list — not just missing ones.
-  try {
-    const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
-    const fSet = new Set(snapshot.fulfillmentPolicies.map((p) => p.id))
-    const pSet = new Set(snapshot.paymentPolicies.map((p) => p.id))
-    const rSet = new Set(snapshot.returnPolicies.map((p) => p.id))
-    if (!fulfillmentPolicyId || !fSet.has(fulfillmentPolicyId)) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
-    if (!paymentPolicyId     || !pSet.has(paymentPolicyId))     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
-    if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
-    if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
-  } catch (err) {
-    // FFP.12 — NEVER proceed with UNVERIFIED policy ids. The old fallback
-    // ("keep whatever ids we have") is exactly how another market's policy
-    // got written onto DE offers — creating unpublishable drafts that then
-    // failed EVERY publish of the family with a mixed-locale 25007. Policies
-    // are per-marketplace; if we can't verify them for THIS market, stop.
-    const msg = `Couldn't verify ${mp} business policies (${err instanceof Error ? err.message : String(err)}) — refusing to write unverified policy ids onto ${mp} offers (a wrong-market policy is the classic persistent 25007). Retry in a minute.`
-    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
+  if (resolution.message || !resolution.policies) {
+    const refusal = resolution.message ?? 'Could not resolve this market\'s business policies.'
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: refusal }))
   }
+  let { fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey } = resolution.policies
 
   const missing: string[] = []
   if (!merchantLocationKey) missing.push('merchantLocation (configure in eBay Seller Hub > Inventory > Locations)')
@@ -2242,40 +2223,20 @@ export async function pushOffersOnly(
   const parentRow = rows.find(r => r._isParent === true) ?? rows[0] ?? {}
   const variantRows = rows.filter(r => r._isParent !== true)
 
-  const configured = ((connectionMeta.ebayPolicies ?? {}) as {
-    fulfillmentPolicyId?: string
-    paymentPolicyId?: string
-    returnPolicyId?: string
-    merchantLocationKey?: string
+  // P4.1d — the waterfall, the market reconciliation and the FFP.12 refusal now
+  // live in ONE place (`ebay-policy-reconcile.service.ts`), because the
+  // single-SKU publisher had the same waterfall and the OPPOSITE failure rule:
+  // it warned and wrote the unverified ids. One accessor, called by both sides.
+  const resolution = await reconcileEbayPolicies({
+    connectionId, marketplaceId, market: mp,
+    rowOverrides: parentRow as Record<string, unknown>,
+    accountDefaults: (connectionMeta.ebayPolicies ?? {}) as Record<string, string>,
   })
-  let fulfillmentPolicyId = (parentRow.fulfillment_policy_id as string | undefined) || configured.fulfillmentPolicyId || ''
-  let paymentPolicyId     = (parentRow.payment_policy_id     as string | undefined) || configured.paymentPolicyId     || ''
-  let returnPolicyId      = (parentRow.return_policy_id      as string | undefined) || configured.returnPolicyId      || ''
-  let merchantLocationKey = (parentRow.merchant_location_key as string | undefined) || configured.merchantLocationKey || ''
-
-  // MARKET-SPECIFIC policy guard. eBay business policies belong to ONE marketplace; a
-  // policy id from another market (e.g. a DE default applied to an IT offer) is the
-  // classic 25007 "invalid shipping policy" cause — often surfacing as a mixed IT/DE
-  // error. Reconcile against THIS market's policies (snapshot is per-market, cached
-  // 5min) and REPLACE any id that isn't in this market's list — not just missing ones.
-  try {
-    const snapshot = await ebayAccountService.getSnapshot(connectionId, marketplaceId)
-    const fSet = new Set(snapshot.fulfillmentPolicies.map((p) => p.id))
-    const pSet = new Set(snapshot.paymentPolicies.map((p) => p.id))
-    const rSet = new Set(snapshot.returnPolicies.map((p) => p.id))
-    if (!fulfillmentPolicyId || !fSet.has(fulfillmentPolicyId)) fulfillmentPolicyId = snapshot.fulfillmentPolicies[0]?.id ?? ''
-    if (!paymentPolicyId     || !pSet.has(paymentPolicyId))     paymentPolicyId     = snapshot.paymentPolicies[0]?.id     ?? ''
-    if (!returnPolicyId      || !rSet.has(returnPolicyId))      returnPolicyId      = snapshot.returnPolicies[0]?.id      ?? ''
-    if (!merchantLocationKey) merchantLocationKey = snapshot.locations[0]?.key ?? ''
-  } catch (err) {
-    // FFP.12 — NEVER proceed with UNVERIFIED policy ids. The old fallback
-    // ("keep whatever ids we have") is exactly how another market's policy
-    // got written onto DE offers — creating unpublishable drafts that then
-    // failed EVERY publish of the family with a mixed-locale 25007. Policies
-    // are per-marketplace; if we can't verify them for THIS market, stop.
-    const msg = `Couldn't verify ${mp} business policies (${err instanceof Error ? err.message : String(err)}) — refusing to write unverified policy ids onto ${mp} offers (a wrong-market policy is the classic persistent 25007). Retry in a minute.`
-    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
+  if (resolution.message || !resolution.policies) {
+    const refusal = resolution.message ?? 'Could not resolve this market\'s business policies.'
+    return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: refusal }))
   }
+  let { fulfillmentPolicyId, paymentPolicyId, returnPolicyId, merchantLocationKey } = resolution.policies
 
   if (!merchantLocationKey) {
     const msg = 'Missing merchantLocation — configure in eBay Seller Hub > Inventory > Locations'

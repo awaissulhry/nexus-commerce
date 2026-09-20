@@ -1,8 +1,9 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and P4.1 a/b/c are built.**
-P5.3 and Shopify's `productSet` row are measured. Next in **P4.1**: eBay's
-Inventory/Trading split, and business policies per account.
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and P4.1 a/b/c/d are
+built.** P5.3 and Shopify's `productSet` row are measured. The last unmeasured
+P4.1 row is **eBay's Inventory/Trading split** (Inventory for unique SKUs,
+Trading for shared).
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -70,6 +71,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.1d | **eBay business policies — one reconciliation, both builders.** Per ACCOUNT was already right (P0.7's guard + the connection's own metadata). 🔴 Per MARKET had a DRIFT: on an unavailable account snapshot the group publisher REFUSED (FFP.12, learned from an incident) while the single-SKU publisher WARNED and wrote the unverified ids — the exact behaviour FFP.12 exists to prevent. Three copies of one rule across two files, now one accessor + a parity gate | `<this push>` | `build/P4.1d.md` |
 | P4.1c | **The description engine in every builder — it already was.** A counterweight: 7 render call sites across BOTH channel models. But the rule lived in the CALLERS: `pushVariationGroup` fell back to the RAW body when its parent content was omitted, dead only until a third caller. Now required at compile time and refused at run time. 🔴 The refusal was placed FIRST and masked the publish mode, the push lock, the presentation lock and the review gate — **14 existing tests caught it** | `<this push>` | `build/P4.1c.md` |
 | P4.1b | **An Amazon single-item rejection reaches its listing.** 🔴 The handover said `putListingsItem` was "0 occurrences"; it is **28** — the 0 is true only of the SDK operation STRING while a real client method with a live call site sat beside it, parsing Amazon's `issues`, logging them and filing nothing. An accepted write files an EMPTY set on purpose, because `listings-api` REPLACES and that is what CLOSES a fixed listing's stale rejection | `<this push>` | `build/P4.1b.md` |
 | P4.1a | **Every eBay Trading rejection reaches its listing.** 🔴 The handover said "two callers"; a derived census says **14 write sites across 12 files, 0 passing a listing** — and one of the two files it named makes no Trading call at all. Resolved centrally from the `<ItemID>` + the account, so a fifteenth caller cannot forget it. A shared eBay item is MANY listings and all are filed | `<this push>` | `build/P4.1a.md` |
@@ -150,11 +152,11 @@ make one operator's title edit overwrite another's concurrent price edit.
 "fix" it. If the plan's intent was "no REST product writes", P1.4 already did
 that and its gateway ratchet holds it at 0.
 
-Still genuinely open in P4.1, and not yet measured: eBay's Inventory/Trading
-split for unique vs shared SKUs, and business policies per account
-(`fulfillmentPolicyId` / `paymentPolicyId` / `returnPolicyId` exist in
-`routes/ebay-cockpit.routes.ts`; whether they resolve per connected account is
-unmeasured).
+**"Business policies per account" — CLOSED as P4.1d.** Per account was already
+right. Per MARKET had a real drift and it is fixed; see `build/P4.1d.md`.
+
+Still genuinely open in P4.1, and not yet measured: **eBay's Inventory/Trading
+split** for unique vs shared SKUs.
 
 ### 3.0a P5.3 — measured, not built
 
@@ -384,6 +386,21 @@ Each is one command, and each converts a "built" into a "verified":
   to NARROW the claim to what is true (no listing WRITE outside `callTradingApi`),
   write the exemptions down with reasons, and add a second test that CHECKS each
   reason — not to loosen the pattern until it goes green.
+- 🔴🔴 **TWO BUILDERS, ONE LESSON LEARNED IN ONLY ONE OF THEM.** eBay's group
+  publisher REFUSES an unverifiable policy snapshot (FFP.12, after an incident);
+  the single-SKU publisher WARNED and wrote the unverified ids anyway (R12,
+  which stopped one step short). Same waterfall, same market rule, opposite
+  failure rule — visible only by reading both. When you find a rule with an
+  incident number on it, **grep for the other builder**.
+- 🔴 **A DISCRIMINATED UNION DOES NOT NARROW IN `apps/api`.** Its tsconfig sets
+  `"strict": false`, so without `strictNullChecks` TypeScript never eliminates
+  the `{ ok: true }` member and `resolution.message` is a compile error after
+  `if (!resolution.ok)`. The `ok`-flag result type is a reflex that buys nothing
+  here — use two nullable fields.
+- 🔴 **A PARITY REGEX MUST USE A BACKREFERENCE.** `\w+\.message \|\| !\w+\.policies`
+  counts `a.message || !b.policies` as a check. `(\w+)\.message \|\| !\1\.policies`
+  does not. And when a source-shape test fails, check the PATTERN before
+  loosening it: the first version assumed one variable name.
 - 🔴🔴 **A NEW REFUSAL PLACED TOO EARLY MASKS EVERY REFUSAL BEHIND IT.** P4.1c's
   theme check sat before the publish mode, the push lock, the presentation lock
   and the review gate, so a PAUSED listing reported "no theme-rendered content"

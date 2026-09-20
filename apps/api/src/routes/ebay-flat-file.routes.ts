@@ -23,7 +23,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
-import { ebayAccountService, resolvePolicyDisplayNames } from '../services/ebay-account.service.js';
+import { resolvePolicyDisplayNames } from '../services/ebay-account.service.js';
+import { reconcileEbayPolicies } from '../services/ebay-policy-reconcile.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
@@ -2635,32 +2636,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             // Policy waterfall — row data → connectionMetadata → live snapshot.
             // Hard-fail if merchantLocationKey cannot be resolved (causes error 25002).
             const connMeta = ((connection.connectionMetadata ?? {}) as Record<string, unknown>)
-            const connPolicies = ((connMeta.ebayPolicies ?? {}) as {
-              fulfillmentPolicyId?: string; paymentPolicyId?: string;
-              returnPolicyId?: string; merchantLocationKey?: string;
+            // P4.1d — the same reconciliation the GROUP publisher runs, from the
+            // one accessor. 🔴 This path used to WARN and continue when the
+            // account snapshot was unavailable, writing the unverified ids
+            // anyway — which is precisely the behaviour FFP.12 was written to
+            // stop in the other builder: another market's policy on the offer
+            // creates an unpublishable draft that then fails EVERY publish with
+            // an opaque, mixed-locale 25007. Two builders, one lesson learned in
+            // only one of them. It refuses here too now.
+            const sPolicies = await reconcileEbayPolicies({
+              connectionId: connection.id, marketplaceId, market: mp,
+              rowOverrides: row as Record<string, unknown>,
+              accountDefaults: (connMeta.ebayPolicies ?? {}) as Record<string, string>,
             })
-            let sFulfillmentId  = (row.fulfillment_policy_id  as string | undefined) || connPolicies.fulfillmentPolicyId  || ''
-            let sPaymentId      = (row.payment_policy_id      as string | undefined) || connPolicies.paymentPolicyId      || ''
-            let sReturnId       = (row.return_policy_id       as string | undefined) || connPolicies.returnPolicyId       || ''
-            let sMlk            = (row.merchant_location_key  as string | undefined) || connPolicies.merchantLocationKey   || ''
-            // MARKET-SPECIFIC policy guard: a policy id from another marketplace (a DE
-            // default on an IT offer) → eBay 25007. Always reconcile against THIS market's
-            // policies and REPLACE any id not in its list — not just missing ones.
-            try {
-              const snap = await ebayAccountService.getSnapshot(connection.id, marketplaceId)
-              const fSet = new Set(snap.fulfillmentPolicies.map((p) => p.id))
-              const pSet = new Set(snap.paymentPolicies.map((p) => p.id))
-              const rSet = new Set(snap.returnPolicies.map((p) => p.id))
-              if (!sFulfillmentId || !fSet.has(sFulfillmentId)) sFulfillmentId = snap.fulfillmentPolicies[0]?.id ?? ''
-              if (!sPaymentId     || !pSet.has(sPaymentId))     sPaymentId     = snap.paymentPolicies[0]?.id     ?? ''
-              if (!sReturnId      || !rSet.has(sReturnId))      sReturnId      = snap.returnPolicies[0]?.id      ?? ''
-              if (!sMlk)          sMlk           = snap.locations[0]?.key ?? ''
-            } catch (snapErr) {
-              // Audit R12 — silent skip left cross-market policy IDs unvalidated
-              // and eBay later failed with an opaque 25007. Warn once per push.
-              const wmsg = `policy validation skipped for ${mp} (account snapshot unavailable: ${snapErr instanceof Error ? snapErr.message : String(snapErr)}) — a wrong-market policy ID may fail at publish`
-              if (!axisWarnings.includes(wmsg)) axisWarnings.push(wmsg)
+            if (sPolicies.message || !sPolicies.policies) {
+              perRowResults.push({ sku, market: mp, status: 'ERROR',
+                message: sPolicies.message ?? `Could not resolve ${mp} business policies.` })
+              continue
             }
+            let sFulfillmentId = sPolicies.policies.fulfillmentPolicyId
+            let sPaymentId     = sPolicies.policies.paymentPolicyId
+            let sReturnId      = sPolicies.policies.returnPolicyId
+            let sMlk           = sPolicies.policies.merchantLocationKey
             if (!sMlk) {
               perRowResults.push({ sku, market: mp, status: 'ERROR',
                 message: 'Missing merchantLocation: add an inventory location in eBay Seller Hub > Inventory > Locations' })
