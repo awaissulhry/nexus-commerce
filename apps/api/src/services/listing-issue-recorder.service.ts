@@ -591,3 +591,119 @@ export async function recordAmazonListingIssues(args: {
   }
   return { listings, issues }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  P4.2b — an eBay Inventory-API offer rejection reaches its listing          */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The eBay listing for a SKU in one market on one account.
+ *
+ * P4.1a resolves an eBay listing from the `<ItemID>` in a Trading call. The
+ * Inventory API has no ItemID at the point it fails — an offer create that eBay
+ * refuses never produced one — so the key here is the SKU, exactly as it is for
+ * Amazon in `resolveAmazonListingIds`.
+ *
+ * The same three rules: a named listing wins, never resolve without the account,
+ * and a SKU may hold several listings (a second account's alias row is that
+ * shape) so all of them are returned.
+ */
+export async function resolveEbayListingIdsBySku(args: {
+  sku: string | null | undefined
+  /** The 2-letter market this offer is for. */
+  marketplace: string | null | undefined
+  /** The eBay account the call went out on. Required. */
+  connectionId: string | null | undefined
+  listingId?: string | null
+  prisma?: PrismaClient
+}): Promise<string[]> {
+  if (args.listingId) return [args.listingId]
+  if (!args.sku || !args.marketplace || !args.connectionId) return []
+  const prisma = args.prisma ?? (prismaDefault as unknown as PrismaClient)
+  try {
+    const rows = await prisma.channelListing.findMany({
+      where: {
+        channel: 'EBAY',
+        marketplace: args.marketplace.toUpperCase(),
+        channelConnectionId: args.connectionId,
+        product: { sku: args.sku },
+      },
+      select: { id: true },
+    })
+    return rows.map((r) => r.id)
+  } catch (err: any) {
+    logger.warn('[listing-issues] could not resolve the eBay listing by SKU', {
+      sku: args.sku, marketplace: args.marketplace, error: err?.message,
+    })
+    return []
+  }
+}
+
+/**
+ * One refused eBay Inventory-API call → an issue on every listing it is about.
+ *
+ * ## What was measured (2026-09-20)
+ *
+ * `pushVariationGroup` — the Inventory-API publisher shared by the flat-file push
+ * and the image publish — has **12 `results.push` sites**, and they are two
+ * different kinds of thing:
+ *
+ *   eBay's verdicts   `inventory_item PUT 400: …`, `offer create 400: …`,
+ *                     `offer update 400: …`  → a real rejection of the listing
+ *   OUR validation    "No images found for this SKU", "No DE price set",
+ *                     "No existing offer — run Full Publish first"
+ *
+ * Only the first kind belongs on a listing. P3.2's contract is *"a rejected
+ * change shows on the listing **in the channel's words**"*, and our own
+ * validation is not the channel's words — it already reaches the operator as a
+ * per-row result in the push response. Filing it here would dress our own
+ * message up as an eBay rejection.
+ *
+ * So this is called from the four sites that hold an eBay HTTP answer, and
+ * nowhere else.
+ *
+ * **A retryable answer is not filed.** `classifyChannelAnswer` marks a 5xx or
+ * eBay's own retry errorIds (25604, 25001) retryable, and `recordVerdictOnListing`
+ * drops those — P3.1's rule, so a thousand throttles cannot bury four real
+ * rejections. The same file already marks those ids `isTransientItemErr` and
+ * retries them itself, so filing them would contradict its own behaviour.
+ */
+export async function recordEbayOfferRejection(args: {
+  sku: string | null | undefined
+  marketplace: string | null | undefined
+  connectionId: string | null | undefined
+  /** eBay's HTTP status. */
+  status: number
+  /** eBay's raw answer body — classified, not pasted. */
+  body: string
+  listingId?: string | null
+  occurredAt?: Date | null
+  prisma?: PrismaClient
+}): Promise<{ listings: number; issues: number }> {
+  try {
+    const { classifyChannelAnswer } = await import('./gateway/vocabulary.js')
+    const verdict = classifyChannelAnswer('EBAY', args.status, args.body ?? '')
+    // P3.1 / P3.2: our problem to retry, not a defect in the operator's listing.
+    if (verdict.retryable) return { listings: 0, issues: 0 }
+    const listingIds = await resolveEbayListingIdsBySku(args)
+    if (listingIds.length === 0) return { listings: 0, issues: 0 }
+    let listings = 0
+    let issues = 0
+    for (const listingId of listingIds) {
+      const result = await recordVerdictOnListing({
+        listingId, source: 'ebay-write', verdict,
+        occurredAt: args.occurredAt ?? null, prisma: args.prisma,
+      })
+      if (result) {
+        listings++
+        issues += result.open
+      }
+    }
+    return { listings, issues }
+  } catch (err: any) {
+    logger.warn('[listing-issues] could not file the eBay offer rejection', {
+      sku: args.sku, marketplace: args.marketplace, error: err?.message,
+    })
+    return { listings: 0, issues: 0 }
+  }
+}

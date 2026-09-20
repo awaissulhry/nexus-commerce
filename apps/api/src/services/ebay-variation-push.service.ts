@@ -13,6 +13,8 @@ import { ebayWriteRefusal, ebayHostOf } from './ebay-publish-gate.service.js'
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { reconcileEbayPolicies } from './ebay-policy-reconcile.service.js'
+// P4.2b — only eBay's OWN verdicts are filed on a listing; our validation is not.
+import { recordEbayOfferRejection } from './listing-issue-recorder.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
 import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
@@ -1536,6 +1538,9 @@ export async function pushVariationGroup(
       const isTransientItemErr = itemRes.status >= 500
         || err.includes('"errorId":25604') || err.includes('"errorId":25001')
       if (isTransientItemErr) transientItemFailures.push({ sku, url: itemUrl, body: itemBodyJson })
+      // P4.2b — eBay's own answer, onto the listing. A transient one is dropped
+      // by the classifier, which is the same call this file retries.
+      await recordEbayOfferRejection({ sku, marketplace: mp, connectionId, status: itemRes.status, body: err })
       results.push({
         sku, market: mp, status: 'ERROR',
         message: `inventory_item PUT ${itemRes.status} (we sent quantity=${Number(qty)}): ${err.slice(0, 300)}${isTransientItemErr ? ' — eBay inventory-service hiccup (their own message says retry); auto-retries ran, press Publish again in ~30s if this variant is still listed as blocked.' : ''}`,
@@ -1877,6 +1882,7 @@ export async function pushVariationGroup(
       })
       if (!upd.ok) {
         const err = await upd.text().catch(() => '')
+        await recordEbayOfferRejection({ sku, marketplace: mp, connectionId, status: upd.status, body: err })
         const msg = `offer update ${upd.status}: ${err.slice(0, 300)}`
         const idx = results.findIndex(r => r.sku === sku)
         if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
@@ -1891,6 +1897,7 @@ export async function pushVariationGroup(
       })
       if (!cre.ok) {
         const err = await cre.text().catch(() => '')
+        await recordEbayOfferRejection({ sku, marketplace: mp, connectionId, status: cre.status, body: err })
         const msg = `offer create ${cre.status}: ${err.slice(0, 300)}`
         const idx = results.findIndex(r => r.sku === sku)
         if (idx >= 0) results[idx] = { ...results[idx], status: 'ERROR', message: msg }
@@ -2336,6 +2343,7 @@ export async function pushOffersOnly(
     })
     if (!upd.ok) {
       const err = await upd.text().catch(() => '')
+      await recordEbayOfferRejection({ sku, marketplace: mp, connectionId, status: upd.status, body: err })
       results.push({ sku, market: mp, status: 'ERROR', message: `offer update ${upd.status}: ${err.slice(0, 300)}` })
       continue
     }

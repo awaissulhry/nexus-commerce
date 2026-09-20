@@ -75,6 +75,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.2b | **An eBay offer rejection reaches its listing.** The decision first: `pushVariationGroup`'s 12 result sites mix eBay's verdicts with OUR validation, and P3.2's contract says *"in the channel's words"* — so 4 file, 8 do not, derived in the test. Retryable answers dropped (the file already retries those ids itself); the answer is CLASSIFIED, not pasted. Covers the flat-file push too | `<this push>` | `build/P4.2b.md` |
 | P4.2a | **An Amazon image rejection reaches its listing.** 🔴 NO image publish on ANY channel filed an issue; the feed already built a per-SKU receipt with Amazon's codes and stored it for a drill-down screen nobody opens. Filed as a MERGE source (an image feed must not close a content rejection), with Amazon's attributeNames re-indexed from the raw report — without them distinct rejections on one SKU collapse to one row | `<this push>` | `build/P4.2a.md` |
 | P4.1e | **eBay's Inventory/Trading split — keep it, never GUESS it.** The split is deterministic (Incident #23 replaced a heuristic that "misrouted Trading primaries"). 🔴 But its prefetch `catch` said "shared flag decides alone" — so a database hiccup routed an Inventory-managed family down the Trading lane, the exact misrouting #23 exists to stop. Refused per family now | `<this push>` | `build/P4.1e.md` |
 | P4.1d | **eBay business policies — one reconciliation, both builders.** Per ACCOUNT was already right (P0.7's guard + the connection's own metadata). 🔴 Per MARKET had a DRIFT: on an unavailable account snapshot the group publisher REFUSED (FFP.12, learned from an incident) while the single-SKU publisher WARNED and wrote the unverified ids — the exact behaviour FFP.12 exists to prevent. Three copies of one rule across two files, now one accessor + a parity gate | `<this push>` | `build/P4.1d.md` |
@@ -173,10 +174,16 @@ channel filed a single issue** — `amazon-image-feed` 0, `ebay-inventory-image-
 0, `ebay-shared-image-publish` 0, `shopify-live-images` 0 — while P3.2's
 `recordFeedReportIssues` had exactly ONE caller. P4.2a files the Amazon image
 feed's rejections (`build/P4.2a.md`). eBay's shared image publish is covered by
-P4.1a; Shopify's is a READ. **P4.2b is measured and NOT built** because it needs a
-decision: `pushVariationGroup`'s 12 `results.push` sites mix eBay's verdicts with
-OUR validation ("No images found", "No DE price set"), and only the first kind
-belongs on a listing — see `build/P4.2a.md` §4.
+P4.1a; Shopify's is a READ. **P4.2b is now built too** (`build/P4.2b.md`): the
+decision was decidable from P3.2's own contract — *"in the channel's words"* — so
+**4 of `pushVariationGroup`'s 12 `results.push` sites file and 8 do not**. Our own
+validation ("No images found", "No DE price set") stays a per-row result and never
+reaches a listing. A RETRYABLE answer is not filed either (P3.1: a thousand
+throttles must not bury four real rejections), and the same file already retries
+those errorIds itself. Covers the flat-file push too — one home.
+
+Still open in P4.2: the R-5 census, the eBay Media-API decision (R-1), and
+image read-back per channel.
 
 ### 3.0a P5.3 — measured, not built
 
