@@ -76,7 +76,12 @@ Read in this order:
 | P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
-**Production proofs.** P5.1 deploy `470f20fd` from `d3f1228dc`: **SUCCESS**, the app
+**Production proofs.** P4.1a deploy `09b971c9` from `11cb9d31d`: **SUCCESS**. Nothing to
+switch on — the change only fills a value the code already accepted — so the proof is
+that the app boots and nothing changed. ⚠️ **Neither P4.1 slice can be proven by real
+traffic yet:** both are WRITE paths, eBay's last real traffic is a test artefact (§4's
+honest denominator), and Amazon is not connected at all (below). The done-when for each
+is one real rejection appearing on its listing. Earlier: P5.1 deploy `470f20fd` from `d3f1228dc`: **SUCCESS**, the app
 booted and every cron scheduled, with `NEXUS_ENABLE_AMAZON_ORDERS_2026` unset so the
 Orders path is unchanged — which is the proof that shipping it changed nothing.
 🔴🔴 **And the same deploy log says Amazon is NOT CONNECTED in production right
@@ -121,6 +126,28 @@ plan's order now points at **P4**.
    harness reported all nine rules "guarded" while `--reporter=basic` (which
    vitest 4 does not have) killed every run at startup. It now demands evidence
    that tests actually ran. **"Could not measure" was reading as "measured".**
+
+### 3.0b P4.1's remaining rows — measured 2026-09-20, read before building
+
+**"Shopify: `productSet` only" is NOT a gap. It is a stale plan row against a
+deliberate design, and the code is right.** `productSet` is already used —
+`services/shopify/content-publisher.ts:260`, `mutation NexusProductSet(...)
+{ productSet(input:, identifier:, synchronous:true) }` — for the product and its
+variant structure. The targeted mutations beside it (`productUpdate`,
+`productVariantsBulkUpdate`, `inventorySetQuantities`) are there on purpose:
+`services/shopify/information-gateway.ts:123` says so in as many words —
+*"Each operation patches exactly one field. No broad productSet or variant
+replacement."* Rewriting every field write as a whole-product `productSet` would
+make one operator's title edit overwrite another's concurrent price edit.
+
+**This is the P2.6 / P3.3 counterweight.** Say so and mark the row; do not
+"fix" it. If the plan's intent was "no REST product writes", P1.4 already did
+that and its gateway ratchet holds it at 0.
+
+Still genuinely open in P4.1, and not yet measured: eBay's Inventory/Trading
+split for unique vs shared SKUs, business policies per account, and the
+description engine in every builder (note the 🔴 *TWO column builders DRIFT*
+lesson — a master-only piece is a silent channel gap).
 
 ### 3.0a P5.3 — measured, not built
 
