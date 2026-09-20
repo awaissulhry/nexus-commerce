@@ -89,6 +89,8 @@ function mockDb(members: any[]) {
     outboundSyncQueue: {
       createMany: vi.fn(async ({ data }: any) => { created.push(...data); return { count: data.length } }),
       findMany: vi.fn(async () => created.map((_, i) => ({ id: `q${i}` }))),
+      // P4.3e — the coalesce of superseded shared rows runs before the insert.
+      updateMany: vi.fn(async () => ({ count: 0 })),
     },
   }
 }

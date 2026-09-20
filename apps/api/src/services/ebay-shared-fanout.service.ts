@@ -10,6 +10,7 @@
 import { createOutboundRows } from './outbound-rows.js'
 // Shared stock — the fan-out reads ONE ledger (loadSyncLedgers), which knows a pooled product's pool.
 import { resolveMembershipIntended, type SyncLedger } from './sync-control-core.js'
+import { coalescePendingSharedQuantityRows } from './sync-coalesce.js'
 import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
 
 export interface SharedMembershipRow {
@@ -114,7 +115,11 @@ export function buildSharedFanoutRows(
 
 export interface SharedFanoutDeps {
   sharedListingMembership: { findMany: Function }
-  outboundSyncQueue: { createMany: Function; findMany: Function }
+  // P4.3e — `updateMany` is how superseded rows are coalesced before the fresh
+  // ones are written. Both callers pass a Prisma client or transaction, which
+  // has it; a test double must declare it so the coalesce cannot be skipped by
+  // a narrow mock and read as "nothing to cancel".
+  outboundSyncQueue: { createMany: Function; findMany: Function; updateMany: Function }
 }
 
 export interface SharedFanoutArgs {
@@ -178,6 +183,19 @@ export async function enqueueSharedTradingFanout(
   const rows = buildSharedFanoutRows(eligible, qtyFor, args.holdUntil)
   if (rows.length === 0) return []
 
+  // P4.3e — cancel this product's superseded PENDING rows for exactly the
+  // ItemIDs we are about to replace, in the SAME transaction as the insert, so
+  // an older snapshot cannot dispatch after the new value. The ChannelListing
+  // lane has done this since P1; this lane never did.
+  //
+  // 🔴 Skipped when `args.sku` narrowed the run: it then covers only that SKU's
+  // memberships, so its rows cannot claim to supersede a pending row that may
+  // carry the product's other SKUs. Neither caller sets `args.sku` today.
+  // Kill-switch: NEXUS_SYNC_ORDERING_V2=0, the same one the sibling uses.
+  if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && !args.sku) {
+    await coalescePendingSharedQuantityRows(db as never, args.productId, rows.map((r) => r.externalListingId))
+  }
+
   await createOutboundRows(db, { data: rows as never }) // SharedFanoutRow is the createMany input (its payload type has no index signature)
 
   // Re-read the rows we just enqueued so we can return their DB ids to the
@@ -185,9 +203,10 @@ export async function enqueueSharedTradingFanout(
   // `channelListingId: null` is essential: the same transaction may have also
   // enqueued ChannelListing rows for this product; keeping this scope to null
   // isolates the shared-SKU rows and prevents id collisions.
-  // A same-millisecond `createdAt` tie across rows is harmless — BullMQ
-  // deduplicates by jobId and the push is idempotent; the backstop drain
-  // heals any row that is missed here.
+  // P4.3e — and since the coalesce above cancelled this product's older PENDING
+  // shared rows first, the rows this reads back ARE the rows just written. The
+  // `createdAt` ordering used to be the only thing separating them from a
+  // superseded row sitting in the same scope.
   const justEnqueued = (await db.outboundSyncQueue.findMany({
     where: {
       productId: args.productId,
