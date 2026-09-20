@@ -272,6 +272,7 @@ import { startStockPoolWorker } from "./services/stock-pool/pool-tasks.js";
 import { startListingEndTimesCron } from "./jobs/listing-end-times.job.js";
 import { startAssortmentSync } from "./jobs/assortment-sync.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
+import { startChannelContractCron } from "./jobs/channel-contract.job.js";
 import { startListingQualityKeeperCron } from "./jobs/listing-quality-keeper.job.js";
 import { startPricingWatchdogCron } from "./jobs/pricing-watchdog.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
@@ -1522,6 +1523,12 @@ async function start() {
       if (process.env.NEXUS_ENABLE_ABC_CRON !== '0') {
         startAbcClassificationCron();
       }
+
+      // P1.8 — the nightly channel contract run: one read and one dry-run write per operation against
+      // each channel's SANDBOX, so a channel change turns red here before it reaches a live listing.
+      // OFF until the Owner sets NEXUS_ENABLE_CHANNEL_CONTRACT_RUN=true and names a sandbox account per
+      // channel; the starter itself checks that and schedules nothing otherwise.
+      startChannelContractCron();
 
       // ACP.4a — Listing-Quality Keeper. Daily 06:45 UTC. Autonomous agent
       // that scans active products for content gaps and QUEUES reversible
