@@ -1,31 +1,39 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20 (evening)**. **P0, P1, P2, ALL of P3, P5.1, ALL of P4.1,
-ALL of P4.2, and P4.3 a–b are built and deployed.**
+Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2
+and P4.3 are built.** P4.3 was finished in this session (slices c, d, e, f).
 
-## ▶ START HERE — the next package is the REST OF P4.3 (stock)
+## ▶ START HERE — the next package is P4.4 (price)
 
-Four rows remain in P4.3, none of them measured yet. Take them in this order:
+**Its first row is already measured, so do not re-measure it.**
+`build/P4.3c.md` §5: `syncPayload.price` in `PATCH /api/catalog/products/:id` is
+the identical duplicate producer that P4.3c removed for stock —
+`masterPriceService.update` already cascades `PRICE_UPDATE` rows **per listing**
+inside the same transaction, and then the route queues a second, product-level
+price row beside them. Start there.
 
-1. **Every quantity producer through the resolver** — *"fix the catalog PATCH
-   first"* says the plan row. A census: which code paths decide a quantity, and
-   which of them bypass the resolver. Start with the catalog PATCH.
-2. **Amazon clamp on routed rows.**
-3. **Coalesce shared eBay rows.**
-4. **Shopify read-back** — ⚠️ note P5.3 first: `shopify-live-images` is guarded by
-   `hasCreds()` and production has **no `SHOPIFY_*` variable**, so a Shopify
-   read-back cannot run there today whatever you build. Establish that before
-   building, or you will build something that cannot run.
+The rest of P4.4 from the plan row: a currency per market from data, not a
+hard-coded GBP/EUR (Sweden SEK, Poland PLN, Turkey TRY — `outbound-sync.service
+.ts:310`); build the eBay price push (today a `NOT_IMPLEMENTED` stub in
+`pricing-outbound`); a min/max guard on every price write; a price read-back.
 
-Then **P4.4** (price), **P4.5** (advertising), the rest of **P5**, then P6/P7/P8.
-§3c has the full order.
+Then **P4.5** (advertising), **P4.6** (needs D6), the rest of **P5** (P5.3
+measured, P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7
+(each drop needs a yes) → P8. §3c has the full order.
 
-🔴 **THE LESSON OF THIS SESSION, and it held for every single package: the plan
-row is usually NOT the defect.** Of the 11 rows touched across P4.1 / P4.2 / P4.3,
-**five were counterweights** — already built, or built better than the row
-described. The real defects were in **failure paths** (`catch` blocks that gave
-up) and **drifts** (one builder learning a lesson the other never did). **Measure
-the row before you build it**, and read the `catch` of every rule you rely on.
+🔴 **THE LESSON, and it has now held for fifteen rows: the plan row is usually
+NOT the defect.** Of the rows touched across P4.1 / P4.2 / P4.3, **six were
+counterweights** — already built, or built better than the row described. The
+real defects were in **failure paths** (`catch` blocks that gave up) and
+**drifts** (one builder learning a lesson the other never did). **Measure the row
+before you build it**, and read the `catch` of every rule you rely on.
+
+🔴 **New this session, and it is the sharpest one: ask what a failure path's
+PREMISE is before hardening it.** P4.3e found a `catch` that falls back to
+enqueue-time quantities. That is the right answer for a *current* row and the
+wrong one for a *superseded* row — so the fix was not to harden the `catch` but
+to make its premise true by coalescing the superseded rows away. Not every
+fail-open wants a refusal.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -38,9 +46,14 @@ call**, or a **P7 drop**. A blanket "implement the plan" does not lift those.
 **🔴 The flat-file no-touch rule is LIFTED (Owner, 2026-09-20):** *"we recently had a
 flat file no-touch rule, which is no longer valid… because we're rebuilding the flat
 file as well. If there's any work related to that, please do not hesitate."* The
-flat-file routes and pages are now ordinary files. P3.2 was the first package to need
-it — the Amazon feed path lives inside the flat-file service, and that is where 140 real
-rejections were stranded.
+flat-file routes and pages are now ordinary files.
+
+⚠️ **Blocked for the 2026-09-21 session, and it may be blocked for you too:**
+the auto-mode classifier refused **Railway `list-variables`** (*Production
+Reads*) and **`set-variables`** (*Feature Flag Writes*). So every production
+measurement in P4.3d–f says "dev only", and the Owner's three open items in §5.0
+could not be actioned from the session. If your session can read Railway, the
+cheapest first move is to check them.
 
 Read in this order:
 
@@ -257,9 +270,41 @@ conflict type would blame the operator for OUR failure (`build/P4.3b.md`).
 ⚠️ **Watch after the deploy:** a rise in that type means the guard's query is
 failing, not that listings disagree.
 
-Still open in P4.3: the quantity-producer census (fix the catalog PATCH first),
-the Amazon clamp on routed rows, coalescing shared eBay rows, and Shopify
-read-back.
+**P4.3 is COMPLETE (2026-09-21).** Four more slices, each with its own record:
+
+- **P4.3c** — 🔴 `PATCH /api/catalog/products/:id` ran the stock cascade AND
+  queued a second, product-level row carrying the product's **gross**
+  `totalStock` with no listing named. With no listing, `syncToAmazon`'s `cl` is
+  null, so the send-time re-read is skipped, `stockBuffer` reads 0 and **D9's EU
+  shared-quantity guard never runs at all** (it is gated on `cl?.marketplace`,
+  and `''` is in no set) — P4.3b had made that guard fail closed one slice
+  earlier and this row walked around it. Its twin `PATCH /api/products/:id` had
+  always left it to the cascade. The rule is in the engine now: `prepareRows`
+  refuses an unnamed quantity row, so a 75th producer cannot forget it.
+  🔴 **My first census was wrong in the banked way** — a literal scan for
+  `syncType: 'QUANTITY_UPDATE'` misses a producer that passes it as a ternary
+  ARGUMENT. Re-derived over the 74 creation CALL SITES: exactly two.
+- **P4.3d** — the oversell clamp's ceiling summed **every** warehouse row the
+  product held, routed or not, while the quantity being clamped was routed. Two
+  derivations of one number, and the cap was the wider one. One routing filter
+  now (`routedLedgerRows` / `routedAvailable`), shared with the resolver, in all
+  **three** lanes — the plan named Amazon, but fixing only Amazon re-creates the
+  drift. 🟡 On the dev database the gap is **latent**: 0 of 3 locations set
+  `syncRoutes` and 0 of 1,003 listings pin a source. "Nothing routed" is refused
+  (`NO_ROUTED_LOCATION`), never capped to 0 and sent.
+- **P4.3e** — the shared eBay fan-out never coalesced, because its rows have no
+  `channelListingId`. The dispatch re-read is a real counterweight (no stale
+  number reached eBay), **but its `catch` falls back to enqueue-time
+  quantities.** See the header: the fix was to make that fallback's premise true,
+  not to harden it.
+- **P4.3f** — Shopify had no scheduled quantity read-back. Its write-time check
+  is the **strongest of the three channels** (read, compare-and-set, read back,
+  throw), but a read-back that only runs when we push cannot detect drift.
+  🟢 **P5.3's `hasCreds()` warning does not apply to it**: `hasCreds` has one
+  definition and one call site, both in the legacy REST image reader, while the
+  stock path runs on the CX connection's token and reads no `SHOPIFY_*` variable.
+  Scheduled in `index.ts`, ON with an opt-out, because registry-only is a manual
+  trigger.
 
 **The only P4.2 row left is the eBay Media-API decision (R-1)** — our own image
 URLs or eBay-hosted copies. That is a design choice about where images live, not
@@ -388,8 +433,9 @@ site with a known-live function as the control.
 
 ### 3c. The order from here
 
-**P4.x** → the rest of P5 (P5.3 measured, P5.2 / P5.4; P5.5 not needed)
-→ P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+**P4.4 (price) → P4.5 (advertising) → P4.6 (needs D6)** → the rest of P5 (P5.3
+measured, P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7
+(each drop needs a yes) → P8.
 
 ## 4. 🔴 What is NOT proven by real traffic
 
@@ -519,6 +565,36 @@ Each is one command, and each converts a "built" into a "verified":
 15. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 6. Traps that cost time here — read before measuring anything
+
+- 🔴🔴 **ASK WHAT A FAILURE PATH'S PREMISE IS BEFORE HARDENING IT.** P4.3e found
+  a `catch` that falls back to enqueue-time quantities. Four fail-opens had been
+  fixed by refusing, so refusing looked like the answer — but this fallback is
+  RIGHT for a current row and wrong only for a superseded one. The fix was to
+  coalesce the superseded rows away, so the premise ("this row is current") is
+  true. **Not every fail-open wants a refusal.** Scepticism has to be symmetric:
+  raise the bar on the convicting claim too.
+- 🔴🔴 **A LITERAL SCAN MISSES A PRODUCER THAT PASSES ITS TYPE AS AN ARGUMENT.**
+  P4.3c's first census, over `syncType: 'QUANTITY_UPDATE'` literals, reported
+  **zero** bare producers. The defect the plan NAMED passes its syncType as a
+  ternary argument to `queueProductUpdate` and is invisible to any scan for the
+  string. Census the **call sites** of the creation helper (74 of them), not the
+  spellings. *Ask what could carry the fact other than the spelling you searched.*
+- 🔴 **A `toContain` ON A SUBSTRING THAT ALSO APPEARS IN THE BODY PROVES
+  NOTHING.** P4.3d's lane census matched `ceiling.refusal`, which survives inside
+  `if (false) { … message: ceiling.refusal … }`. Match the **whole trimmed
+  condition** and assert **exactly one** line per call site tests it.
+- 🔴 **`String.replace` TAKES THE FIRST MATCH, AND TWO SIBLINGS SHARE THEIR
+  LINES.** P4.3e's IN_PROGRESS mutation went green because its marker,
+  `syncStatus: 'PENDING',`, appears in both coalescers — it mutated the other
+  function. Anchor a mutation on a line unique to the thing you are convicting.
+- 🔴 **A NEW FIELD READ FROM A `select` THAT DOES NOT FETCH IT IS DEAD ON
+  ARRIVAL.** P4.3d's `cl?.sourceLocationCodes ?? []` would have been `[]` forever
+  on two of three lanes, with every test green. *A fingerprint built from an
+  always-empty field is not an identity* — check the `select` when you add a read.
+- 🔴 **A WARNING IN A HANDOVER CAN BE NARROWER THAN IT READS.** *"A Shopify
+  read-back cannot run there whatever you build"* was true of the legacy REST
+  image reader and false of the stock path, which uses the CX connection's token.
+  `hasCreds` has ONE call site. Establishing that took one grep and saved the row.
 
 - 🔴🔴 **A BANKED RULE CAN GO FALSE, and a cited one gets LESS scrutiny.** This
   handover's own §3.1 was wrong twice in one section: "two eBay callers" was
