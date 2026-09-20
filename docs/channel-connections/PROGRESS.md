@@ -407,6 +407,15 @@ Each is one command, and each converts a "built" into a "verified":
 11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
 12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
 13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+14a. **🟢 THE OWNER CHOSE OPTION B (2026-09-20): one captured live read first.**
+   `GET /api/admin/amazon-orders-2026-probe?days=7` — admin-gated, read-only, ONE
+   `searchOrders` call. It does **not** turn the switch on. It reports the field
+   PATHS Amazon actually sent (no values), the mapping checked against them, the
+   mapped v0 order with buyer data redacted, and `wouldStoreUnitPrice` so the
+   money question needs no arithmetic from the reader. It also answers the two
+   things only a live call can: whether `paginationToken` may travel with
+   `includedData`, and whether `marketplaceIds` is accepted as the SDK sends it.
+   **Run it, paste the answer, and P5.1 is verified rather than argued.**
 14. **Amazon Orders 2026-01-01 is BUILT and OFF** (P5.1). Turn it on with
    `NEXUS_ENABLE_AMAZON_ORDERS_2026=true`. It is off because the mapping is
    proven against Amazon's published model and its own example response, not
