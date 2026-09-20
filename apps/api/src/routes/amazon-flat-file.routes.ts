@@ -1,4 +1,5 @@
 import { assertWriteAccountPerSku, isWrongAccountWriteError } from '../services/write-account-guard.js'
+import { amazonContentRefusal } from '../services/amazon/validate-before-send.js'
 import { marketLanguages } from '../services/pim/market-languages.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../lib/amazon-sp-client.js'
@@ -664,6 +665,41 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       request.log.warn({ skus: skippedRows.map((s) => s.sku) }, 'flat-file/submit: rows skipped (no resolvable product type)')
     }
 
+    // P1.7 (Owner, 2026-09-20) — Amazon's own dry run for every row before the feed is created.
+    // A row Amazon refuses is skipped with Amazon's own sentence; the good rows still submit, because a
+    // JSON listings feed reports each message on its own. Above the cap the wait would be longer than the
+    // submission itself, so a big sheet goes as it did before (the feed report still names bad rows).
+    const PREVIEW_ROW_CAP = Math.max(0, Number(process.env.NEXUS_AMAZON_FLAT_FILE_PREVIEW_CAP ?? 200))
+    let feedBody = body
+    const previewSkipped: Array<{ sku: string; error: string }> = []
+    const envelope = messageCount > 0 && messageCount <= PREVIEW_ROW_CAP
+      ? JSON.parse(body) as { header?: unknown; messages?: Array<Record<string, any>> } : null
+    if (envelope?.messages?.length) {
+      const kept: Array<Record<string, any>> = []
+      for (const message of envelope.messages) {
+        const refusal = message.attributes || message.patches
+          ? await amazonContentRefusal({
+              sellerId, sku: String(message.sku ?? ''), marketplaceId,
+              productType: String(message.productType ?? ''),
+              attributes: message.attributes, patches: message.patches,
+            }).catch((err: unknown) => `Amazon validation could not run for ${String(message.sku ?? '')}: ${err instanceof Error ? err.message : String(err)}. Nothing was submitted for this row.`)
+          : null
+        if (refusal) { previewSkipped.push({ sku: String(message.sku ?? ''), error: refusal }); continue }
+        kept.push(message)
+      }
+      if (kept.length === 0) {
+        return reply.code(400).send({
+          error: `Amazon refused every row in its own check (${previewSkipped.length}). Nothing was submitted.`,
+          skippedRows: [...skippedRows, ...previewSkipped],
+        })
+      }
+      if (previewSkipped.length > 0) {
+        request.log.warn({ skus: previewSkipped.map((row) => row.sku) }, 'flat-file/submit: rows skipped (Amazon validation preview refused them)')
+        feedBody = JSON.stringify({ ...envelope, messages: kept })
+      }
+    }
+    const submittedCount = messageCount - previewSkipped.length
+
     try {
       const sp = await getSpClient()
 
@@ -679,7 +715,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       const uploadRes = await fetch(docRes.url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-        body,
+        body: feedBody,
       })
       if (!uploadRes.ok) {
         throw new Error(`Feed document upload failed: HTTP ${uploadRes.status}`)
@@ -725,12 +761,12 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         feedDocumentId: docRes.feedDocumentId,
         // UFX P6d — the count of messages actually in the feed (skipped rows
         // excluded), plus the per-row skip report (additive).
-        messageCount,
+        messageCount: submittedCount,
         dryRun: false,
         preflight,
         created: ffcCreated,
         syncErrors: ffcSyncErrors,
-        skippedRows,
+        skippedRows: [...skippedRows, ...previewSkipped],
       })
     } catch (err: any) {
       request.log.error(err, 'flat-file/submit failed')
