@@ -58,7 +58,9 @@ All three parts of P1.4b and P1.4a are committed. Record: `build/P1.4.md` (secti
 
 The Owner approved groups A, B and C of `build/P1.6-delete-list.md`, and picked the API lane for big eBay pushes. Four commits: `7f2d43422` (group A), `8666b9d29` (group B, after moving the Shopify locations discovery to the connected account), `96ed9c65c` (WooCommerce), `cb1677123` (the eBay feed lane + the push-lock gate script). 26 files gone; ratchet still 0; suite at baseline. Record section 8 lists everything. Group D (5 live items) stays and is fixed in later packages.
 
-**Next package: P1.7** (validate before send: Amazon `VALIDATION_PREVIEW` for every content write; eBay `Verify…` before Add; the push lock also blocks `ENDED` listings).
+**P1.7 BUILT (2026-09-20)** — `04166df5d` the push lock refuses an ENDED listing, `ee9fe18ea` eBay verifies before every Add, `986b2862e` Amazon previews every content write. Record `build/P1.7.md`; 14/14 mutation checks. **Waiting for the Owner:** the Amazon flat-file route (neither a preview nor a push lock today) — edit list with two options in `build/P1.7-flat-file-edit-list.md`.
+
+**Next package: P1.8** (validate before send: Amazon `VALIDATION_PREVIEW` for every content write; eBay `Verify…` before Add; the push lock also blocks `ENDED` listings).
 
 ## 5. After P1.4
 
