@@ -544,6 +544,8 @@ export class AmazonSpApiClient {
           errors: errorMessage,
         })
 
+        // P4.1b — onto the listing, in Amazon's own words.
+        await this.fileListingIssues(sku, marketplaceId, data.issues)
         return {
           success: false,
           sku,
@@ -551,6 +553,10 @@ export class AmazonSpApiClient {
           rawResponse: data,
         }
       }
+
+      // P4.1b — accepted, so the open `listings-api` issues for this item are no
+      // longer true. A REPLACE source closes them by saying what is true now.
+      await this.fileListingIssues(sku, marketplaceId, data.issues)
 
       // Success
       logger.info('Listing submitted successfully to Amazon SP-API', {
@@ -786,6 +792,52 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * P4.1b — Amazon's verdict on an item goes onto that item's listing.
+   *
+   * `issues` was parsed, logged and handed back to the caller, and nothing ever
+   * wrote it to `ListingIssue`: `routes/marketplaces.routes.ts` maps it straight
+   * into its HTTP response, so the operator sees a rejection once, in the answer
+   * to the request that caused it, and never again on the listing.
+   *
+   * This is called from the two methods whose `issues` array is Amazon's verdict
+   * on the WHOLE item — `putListingsItem` and `submitListingPayload`. It is
+   * deliberately NOT called from `patchListingPrice` / `patchPurchasableOffer`:
+   * `listings-api` is a REPLACE source, so recording an offer patch's answer
+   * would resolve open CONTENT rejections the offer call never spoke about.
+   *
+   * On success it records an EMPTY set on purpose. That is what closes a
+   * rejection once the listing is fixed; without it a stale issue would sit on a
+   * healthy listing for ever.
+   *
+   * Never throws and never blocks the write: an issue row is a report about a
+   * call, not part of one.
+   */
+  private async fileListingIssues(
+    sku: string,
+    marketplaceId: string | null | undefined,
+    issues: SPAPIIssue[] | undefined,
+  ): Promise<void> {
+    try {
+      const { recordAmazonListingIssues } = await import('../services/listing-issue-recorder.service.js')
+      await recordAmazonListingIssues({
+        sku,
+        marketplaceId: marketplaceId ?? null,
+        issues: (issues ?? []).map((i) => ({
+          code: String(i.code ?? 'UNKNOWN'),
+          message: String(i.message ?? ''),
+          severity: String(i.severity ?? 'ERROR'),
+          attributeNames: Array.isArray(i.attributeNames) ? i.attributeNames.map(String) : [],
+          categories: Array.isArray(i.categories) ? i.categories.map(String) : [],
+        })),
+      })
+    } catch (error) {
+      logger.warn('SP-API: could not file the listing issues', {
+        sku, error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  /**
    * E.8 — putListingsItem (full create-or-replace).
    *
    * Listings Items v2021-08-01 PUT endpoint. Use for first-time publish; the
@@ -922,6 +974,7 @@ export class AmazonSpApiClient {
           errors: errorMessage,
           warningCount: warnings.length,
         })
+        await this.fileListingIssues(sku, options.marketplaceId, data.issues)
         return {
           success: false,
           sku,
@@ -941,6 +994,10 @@ export class AmazonSpApiClient {
           firstWarning: warnings[0]?.message,
         })
       }
+      // Amazon accepted the item, so its open `listings-api` issues are no longer
+      // true. `listings-api` is a REPLACE source: recording what Amazon says now
+      // (the warnings, or nothing) closes the rest.
+      await this.fileListingIssues(sku, options.marketplaceId, data.issues)
       return {
         success: true,
         sku,

@@ -474,3 +474,120 @@ export async function recordEbayTradingRejection(args: {
   }
   return { listings, issues }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  P4.1b — an Amazon single-item rejection reaches its listing too            */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The Amazon listing a Listings-API write is about, resolved from the call.
+ *
+ * ## What was measured (2026-09-20), and how the handover was wrong
+ *
+ * `PROGRESS.md` §3.1 item 2 said `putListingsItem` / `patchListingsItem` are
+ * "**0 occurrences in `apps/api/src`** — Amazon content goes out as
+ * `JSON_LISTINGS_FEED`". Measured: **28 occurrences of `putListingsItem`.**
+ *
+ * The "0" is true only of the SDK **operation string** (`operation:
+ * 'putListingsItem'`, which appears twice, both in tests). Beside it,
+ * `AmazonSpApiClient.putListingsItem()` is a real method that sends its own
+ * request, and it has a **live call site** at `routes/marketplaces.routes.ts`,
+ * with P1.7's `amazonContentRefusal` preview in front of it. Four more client
+ * methods write content or offers the same way: `submitListingPayload`,
+ * `patchListingPrice`, `patchPurchasableOffer` and `deleteListingsItem`.
+ *
+ * So the real gap was never "there is no producer". Amazon's `issues` array is
+ * parsed, logged, and handed back to the caller — `marketplaces.routes.ts` maps
+ * it straight into its HTTP response — and **nothing writes it to
+ * `ListingIssue`**. The operator sees it once, in the answer to the request that
+ * caused it, and never again on the listing.
+ *
+ * The same shape as P4.1a: the recorder exists, the issues exist, nobody joins
+ * them. And the same fix: resolve centrally from what the call already carries —
+ * the seller SKU and the marketplace — so a sixth write method cannot forget.
+ *
+ * ## The rules, and they are P4.1a's rules in Amazon's vocabulary
+ *
+ * 1. **A named listing wins outright**, and nothing is looked up.
+ * 2. **Never resolve without the marketplace.** A SKU is listed in several
+ *    marketplaces at once; `findFirst` on the SKU alone would file Italy's
+ *    rejection on the German listing. `marketplaceId` is the SP-API id
+ *    (`APJ6JRA9NG5V4`), and `ChannelListing.marketplace` holds the 2-letter code,
+ *    so it goes through the canonical `MARKETPLACE_ID_TO_CODE` map rather than a
+ *    second copy of it — two names for one fact is the shape of every drift
+ *    defect here.
+ * 3. **A SKU can still resolve to several listings** (different accounts, or an
+ *    alias). All of them get the issue: the rejection is about the SKU in that
+ *    marketplace, whoever holds it.
+ * 4. **Nothing filed comes back as a COUNT**, so "no listing carries this SKU"
+ *    and "we never asked" do not look alike.
+ */
+export async function resolveAmazonListingIds(args: {
+  /** The seller SKU the write was for. */
+  sku: string | null | undefined
+  /** The SP-API marketplace id, or the 2-letter code. Required. */
+  marketplaceId: string | null | undefined
+  /** What the caller named, if it named one. Wins outright. */
+  listingId?: string | null
+  prisma?: PrismaClient
+}): Promise<string[]> {
+  if (args.listingId) return [args.listingId]
+  if (!args.sku || !args.marketplaceId) return []
+  // 🔴 `normalizeMarketplaceCode` NEVER returns null: an id it does not know
+  // becomes the literal string `'UNKNOWN'`. Querying for that reads as a clean
+  // "no listing carries this SKU" while the truth is "we could not tell which
+  // marketplace this was" — and it would match any row that really does store
+  // 'UNKNOWN'. The fallback is made unmistakable and refused.
+  const marketplace = normalizeMarketplaceCode(args.marketplaceId, '')
+  if (!marketplace) return []
+  const prisma = args.prisma ?? (prismaDefault as unknown as PrismaClient)
+  try {
+    const rows = await prisma.channelListing.findMany({
+      where: { channel: 'AMAZON', marketplace, product: { sku: args.sku } },
+      select: { id: true },
+    })
+    return rows.map((r) => r.id)
+  } catch (err: any) {
+    logger.warn('[listing-issues] could not resolve the Amazon listing', {
+      sku: args.sku, marketplaceId: args.marketplaceId, error: err?.message,
+    })
+    return []
+  }
+}
+
+/**
+ * One rejected Amazon Listings-API write → an issue on every listing it is about.
+ *
+ * `source` is `listings-api`, which is a REPLACE source: Amazon's `issues` array
+ * is the listing's complete current verdict for that call, not a partial report
+ * the way a PARTIAL_UPDATE feed report is. Passing an empty array therefore
+ * RESOLVES the open `listings-api` issues — which is correct, and is how a fixed
+ * listing stops showing a stale rejection.
+ */
+export async function recordAmazonListingIssues(args: {
+  sku: string | null | undefined
+  marketplaceId: string | null | undefined
+  listingId?: string | null
+  issues: MirrorIssueInput[]
+  occurredAt?: Date | null
+  prisma?: PrismaClient
+}): Promise<{ listings: number; issues: number }> {
+  const listingIds = await resolveAmazonListingIds(args)
+  if (listingIds.length === 0) return { listings: 0, issues: 0 }
+  let issues = 0
+  let listings = 0
+  for (const listingId of listingIds) {
+    const result = await recordListingIssues({
+      listingId,
+      source: 'listings-api',
+      issues: args.issues,
+      occurredAt: args.occurredAt ?? null,
+      prisma: args.prisma,
+    })
+    if (result) {
+      listings++
+      issues += result.open
+    }
+  }
+  return { listings, issues }
+}

@@ -1,7 +1,9 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and the first slice of
-P4.1 are built.** P5.3 is measured. Next is the rest of **P4.1**.
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and the first two slices of
+P4.1 (a and b) are built.** P5.3 is measured. Next is the rest of **P4.1**:
+eBay's Inventory/Trading split, business policies per account, the description
+engine in every builder, and Shopify on `productSet` only.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -69,6 +71,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.1b | **An Amazon single-item rejection reaches its listing.** 🔴 The handover said `putListingsItem` was "0 occurrences"; it is **28** — the 0 is true only of the SDK operation STRING while a real client method with a live call site sat beside it, parsing Amazon's `issues`, logging them and filing nothing. An accepted write files an EMPTY set on purpose, because `listings-api` REPLACES and that is what CLOSES a fixed listing's stale rejection | `<this push>` | `build/P4.1b.md` |
 | P4.1a | **Every eBay Trading rejection reaches its listing.** 🔴 The handover said "two callers"; a derived census says **14 write sites across 12 files, 0 passing a listing** — and one of the two files it named makes no Trading call at all. Resolved centrally from the `<ItemID>` + the account, so a fifteenth caller cannot forget it. A shared eBay item is MANY listings and all are filed | `<this push>` | `build/P4.1a.md` |
 | P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
@@ -140,16 +143,16 @@ read is not like-for-like on `2026-07`. Details in `build/P5.1.md` §5.
    the `<ItemID>` in the call plus the account, so it cannot be forgotten by a
    fifteenth caller. A shared eBay item is MANY listings and every member is
    filed; the ledger's single column takes one only when exactly one resolves.
-2. **Amazon put/patch issues have no producer** — but 🔴 **not for the reason
-   written here.** Measured 2026-09-20: `putListingsItem` is **28 occurrences**,
-   not 0. The "0" is true only of the SDK operation STRING (`operation:
-   'putListingsItem'`, 2 places, both tests). `AmazonSpApiClient.putListingsItem()`
-   is a real method (`clients/amazon-sp-api.client.ts:801`) that sends its own
-   request and **has a live call site** at `routes/marketplaces.routes.ts:1038`,
-   with P1.7's preview in front of it. The real gap: that route maps
-   `spResult.issues` straight into its HTTP response and writes **nothing** to
-   `ListingIssue`. Same shape as P4.1a — the recorder exists, the issues exist,
-   nobody joins them. Next slice.
+2. ~~Amazon put/patch issues have no producer.~~ **CLOSED 2026-09-20 by P4.1b**
+   (`build/P4.1b.md`). 🔴 **And this entry was wrong too.** `putListingsItem` is
+   **28 occurrences**, not 0 — the "0" is true only of the SDK operation STRING
+   (2 places, both tests), while `AmazonSpApiClient.putListingsItem()` is a real
+   method with a live call site at `routes/marketplaces.routes.ts:1038`. The real
+   gap was that Amazon's `issues` were parsed, logged and handed back, and never
+   written to `ListingIssue`. Filed from both paths of `putListingsItem` and
+   `submitListingPayload`; an accepted write records an EMPTY set on purpose,
+   because `listings-api` REPLACES and that is what closes a fixed listing's
+   stale rejection. Offer patches deliberately do NOT file, for the same reason.
 3. **eBay rate headroom has no source.** eBay does not report quota on a call (its
    parser returning null is CORRECT); `getRateLimits` is never called. P3.3's screen
    says so in eBay's own terms rather than showing a blank.
@@ -347,6 +350,18 @@ Each is one command, and each converts a "built" into a "verified":
   to NARROW the claim to what is true (no listing WRITE outside `callTradingApi`),
   write the exemptions down with reasons, and add a second test that CHECKS each
   reason — not to loosen the pattern until it goes green.
+- 🔴 **A COUNT OF A NAME is not a count of the THING.** "`putListingsItem`: 0
+  occurrences" was true of the SDK operation STRING and false of the method: a
+  real client method with a live call site sat beside it. Before believing a
+  zero, ask WHICH SPELLING was counted and what else could carry the same fact.
+- 🔴 **`normalizeMarketplaceCode` returns the STRING `'UNKNOWN'`, never null.**
+  An unrecognised id becomes a query for a marketplace called "UNKNOWN", which
+  reads as a clean miss and can match a row that really stores it. Pass `''` as
+  the fallback and refuse it (P3.2's notification path already does).
+- 🔴 **A mutation that adds a NEW function does not mutate the one under test.**
+  P4.1b's offer-patch mutation created `patchListingPriceUnused`, so the guard's
+  `not.toContain('patchListingPrice')` still passed and the red carried the wrong
+  message. Mutate INSIDE the thing you are convicting, and match on the message.
 - 🔴 **A literal-only regex UNDER-COUNTS a census.** A call whose operation is a
   ternary (`plan.itemId ? 'Revise…' : 'Add…'`) is invisible to
   `fn\('([A-Za-z]+)'`. Make the census fail when any member's identity cannot be
