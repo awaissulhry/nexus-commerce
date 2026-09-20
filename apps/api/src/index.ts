@@ -235,6 +235,7 @@ import { startEbayReturnsPollCron } from "./jobs/ebay-returns-poll.job.js";
 import { startAmazonReturnsPollCron } from "./jobs/amazon-returns-poll.job.js";
 import { startFlatFileFeedPollCron } from "./jobs/amazon-flat-file-feed-poll.job.js";
 import { startSuppressionIssueCron } from './jobs/listing-issue-suppression.job.js'
+import { startChannelAlertsCron } from './jobs/channel-alerts.job.js'
 import { startEbayFeedPollCron } from "./jobs/ebay-feed-poll.job.js";
 import { startAttrHydrateCron } from "./jobs/amazon-attr-hydrate.job.js";
 import { startRefundRetryCron } from "./jobs/refund-retry.job.js";
@@ -1188,6 +1189,13 @@ async function start() {
       // health chip reads ListingIssue rather than AmazonSuppression.
       markCronStep('suppression-issues')
       startSuppressionIssueCron();
+
+      // P3.4 — the four measurable channel problems become notices the owning
+      // profile's OWNERS receive. Before this they went to an alert service whose
+      // in-app channel is a console.log and whose email channel is off in production,
+      // so P0.5's secret-expiry alerts reached nobody.
+      markCronStep('channel-alerts')
+      startChannelAlertsCron();
 
       // H.5 — eBay feed-mode push poller. Resolves SUBMITTED EbayPushJob rows
       // by checking eBay Sell Feed API every 2 min. Fires ebay_push.status_changed SSE.
