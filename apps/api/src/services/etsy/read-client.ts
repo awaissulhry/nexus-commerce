@@ -13,9 +13,12 @@ export async function etsyReader(accountId: string) {
   const get = async <T>(path: string): Promise<T> => {
     if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) throw new Error('Invalid Etsy resource path.')
     const token = await getAccessToken(accountId)
-    const response = await fetch(`https://api.etsy.com/v3/application${path}`, {
-      headers: { Accept: 'application/json', 'x-api-key': `${app.clientId}:${app.clientSecret}`, Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(20_000), redirect: 'error',
+    // P1.2 — through the channel gateway (the account's state, rate bucket, call ledger).
+    const { gatewayFetch } = await import('../gateway/gateway.js')
+    const response = await gatewayFetch({
+      channel: 'ETSY', operation: `GET ${path.split('?')[0].replace(/\/\d+(?=\/|$)/g, '/:id')}`, kind: 'read', connectionId: accountId,
+      url: `https://api.etsy.com/v3/application${path}`, method: 'GET',
+      headers: { 'x-api-key': `${app.clientId}:${app.clientSecret}` }, auth: { token }, timeoutMs: 20_000,
     })
     if (!response.ok) throw new Error(`Etsy could not read this resource (HTTP ${response.status}).${response.status === 429 ? ' Retry after the Etsy rate limit resets.' : ''}`)
     return await response.json() as T

@@ -9,6 +9,9 @@ vi.mock('../db.js', () => ({ default: { channelListing: { findMany: s.all } } })
 vi.mock('./listing-push-controls.js', () => ({ readPushControls: s.read }))
 vi.mock('./connection-resolver.service.js', () => ({ tryResolveConnection: s.connection }))
 vi.mock('./ebay-auth.service.js', () => ({ EbayAuthService: class { getValidToken = s.token } }))
+// P1.2 — the promotion POST goes through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { postEbayMarketing } from './ebay-marketing-dispatch.service.js'
 import { pushMarkdownToEbay } from './ebay-markdown.service.js'
 import { pushVolumePromotion } from './ebay-volume-pricing-push.service.js'

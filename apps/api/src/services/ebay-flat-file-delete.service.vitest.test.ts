@@ -46,6 +46,9 @@ vi.mock('../db.js', () => ({
     channelConnection: {
       findFirst: vi.fn().mockResolvedValue({ id: 'conn-1' }),
     },
+    // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
+    channelListing: { findMany: vi.fn().mockResolvedValue([]) },
+    sharedListingMembership: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }))
 

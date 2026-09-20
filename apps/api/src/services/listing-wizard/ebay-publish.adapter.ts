@@ -1,3 +1,5 @@
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
+import { ebayTransport } from '../gateway/ebay.js'
 import { marketLanguages, languageTag } from '../pim/market-languages.js'
 import { assertLegacyPresentationPublishAllowed } from '../ebay-presentation-consumer.service.js'
 import { assertListingContentReviewed } from '../pim/publish-review-gate.js'
@@ -49,15 +51,19 @@ const EBAY_RETRY_DELAYS_MS = [1000, 2000, 4000] as const
 const EBAY_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
 
 async function ebayFetchWithRetry(
+  connectionId: string,
   url: string,
   init: RequestInit,
   label: string,
 ): Promise<Response> {
+  // P1.2 — each attempt goes through the channel gateway; this loop keeps the retry policy, so the
+  // gateway does not retry again.
+  const send = ebayTransport(connectionId, { maxTransientRetries: 0, max429Retries: 0 })
   let lastErr: unknown = null
   const maxAttempts = EBAY_RETRY_DELAYS_MS.length + 1
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const response = await fetch(url, init)
+      const response = await send(url, init)
       if (!EBAY_RETRY_DELAYS_MS[attempt]) return response
       if (!EBAY_RETRYABLE_STATUSES.has(response.status)) return response
       try {
@@ -311,6 +317,13 @@ export class EbayPublishAdapter {
           'No active eBay connection — link an eBay account in Settings first.',
       }
     }
+    // P0.7 — this publish can only use the primary account: refuse a SKU whose listing here
+    // belongs only to another eBay account (nothing sent).
+    try { await assertWriteAccount('EBAY', connection.id, { skus: [payload.sku], marketplace: payload.marketplaceId }) }
+    catch (e) {
+      if (!isWrongAccountWriteError(e)) throw e
+      return { ok: false, sku: payload.sku, failedStep: 'account', error: e.message }
+    }
 
     // C.7 — circuit breaker check. Per (connectionId, marketplaceId)
     // so a broken sandbox account doesn't trip the prod connection.
@@ -464,7 +477,7 @@ export class EbayPublishAdapter {
         shipToLocationAvailability: { quantity: 1 },
       },
     }
-    const invRes = await ebayFetchWithRetry(
+    const invRes = await ebayFetchWithRetry(connection.id,
       `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(
         payload.sku,
       )}`,
@@ -498,7 +511,7 @@ export class EbayPublishAdapter {
     const compatBody = buildEbayCompatibilityBody(payload.compatibility)
     if (compatBody) {
       try {
-        const compatRes = await ebayFetchWithRetry(
+        const compatRes = await ebayFetchWithRetry(connection.id,
           `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(
             payload.sku,
           )}/product_compatibility`,
@@ -669,7 +682,7 @@ export class EbayPublishAdapter {
     const regulatory = buildEbayRegulatory(payload.compliance)
     if (regulatory) offerBody.regulatory = regulatory
 
-    let offerRes = await ebayFetchWithRetry(
+    let offerRes = await ebayFetchWithRetry(connection.id,
       `${apiBase}/sell/inventory/v1/offer`,
       {
         method: 'POST',
@@ -686,7 +699,7 @@ export class EbayPublishAdapter {
         status: offerRes.status,
       })
       delete offerBody.regulatory
-      offerRes = await ebayFetchWithRetry(
+      offerRes = await ebayFetchWithRetry(connection.id,
         `${apiBase}/sell/inventory/v1/offer`,
         { method: 'POST', headers, body: JSON.stringify(offerBody) },
         `createOffer(${payload.sku}) [no-regulatory retry]`,
@@ -715,7 +728,7 @@ export class EbayPublishAdapter {
     }
 
     // ── Step 3: publishOffer ─────────────────────────────────────
-    const pubRes = await ebayFetchWithRetry(
+    const pubRes = await ebayFetchWithRetry(connection.id,
       `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(
         offerId,
       )}/publish`,

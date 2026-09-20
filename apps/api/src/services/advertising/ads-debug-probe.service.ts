@@ -38,6 +38,7 @@ async function probeLwaToken(creds: ProbeCredentials): Promise<{
   status: number
   responseSnippet: string
 }> {
+  // gateway-exempt: OAuth token exchange (LWA) for a diagnostic probe
   const res = await fetch('https://api.amazon.com/auth/o2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -414,7 +415,9 @@ async function runProbe(
   let snippet = ''
   let responseHeaders: Record<string, string> = {}
   try {
-    const res = await fetch(url, {
+    // P1.2 — through the channel gateway as an app-level diagnostic call (its own LWA token).
+    const { adsTransport } = await import('../gateway/ads.js')
+    const res = await adsTransport(null, { appLevel: true, maxTransientRetries: 0, max429Retries: 0 })(url, {
       method: variant.method,
       headers,
       body: variant.body != null ? JSON.stringify(variant.body) : undefined,

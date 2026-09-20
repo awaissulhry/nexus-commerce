@@ -1,4 +1,6 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { createOutboundRow } from '../services/outbound-rows.js'
+import { ebaySend } from '../services/gateway/ebay.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -41,7 +43,8 @@ import {
   startEbayPullPreviewJob,
   getEbayPullPreviewJobStatus,
 } from '../services/ebay-flat-file-pull-preview.service.js';
-import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, toListingLanguage, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { pushVariationGroup, pushOffersOnly, buildPackageWeightAndSize, CONDITION_ID_TO_ENUM } from '../services/ebay-variation-push.service.js';
+import { ebayListingLanguage } from '../services/gateway/channels.js';
 import { parseThemeAxes, canonicalizeRowAspects } from '../services/ebay-theme-axes.js';
 import { stampPendingSync } from '../services/flat-file/pending-sync-stamp.js';
 import { pushSharedListings, POOL_DEFAULT_QTY_SENTINEL, type SharedListingResult } from '../services/ebay-shared-listing-push.service.js';
@@ -62,6 +65,7 @@ import { renderExport } from '../services/export/renderers.js';
 import { parseCsv, parseFile, sniffDelimiter, detectFileKind, type ParsedFile } from '../services/import/parsers.js';
 import { detectAmazonTemplate, parseOoxmlSheet, listOoxmlSheets } from '../services/amazon/template-workbook.js';
 import { upsertSharedMembershipsFromRows, normalizeEbaySharedFlags, type SharedMembershipUpsertResult } from '../services/ebay-shared-membership-upsert.service.js';
+import { assertWriteAccount, assertWriteAccountPerSku, isWrongAccountWriteError, ownListingFor } from '../services/write-account-guard.js';
 // P1.2 — eBay flat-file create/reparent pre-pass (new products persist under their parent before ChannelListing loop runs)
 import { runEbayFlatFileCreates, type CreateResult } from '../services/ebay-flat-file-create.service.js';
 import { ebayFamilyKey } from '../services/ebay-flat-file-create.logic.js';
@@ -77,6 +81,7 @@ import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 import { tryResolveConnection } from '../services/connection-resolver.service.js';
 import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 
+// P1.2 — every eBay REST send in this file goes through the channel gateway (ebaySend).
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
 
@@ -784,14 +789,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // covers BOTH stores (ChannelListing + SharedListingMembership), which is
     // what drifted apart in the VENTRA incident. Token is fetched lazily — only
     // a row that actually CHANGES an ItemID pays for it.
-    let _relinkToken: string | null = null;
-    const getRelinkToken = async (): Promise<string> => {
-      if (_relinkToken) return _relinkToken;
+    let _relinkAuth: { oauthToken: string; connectionId: string } | null = null;
+    const getRelinkAuth = async (): Promise<{ oauthToken: string; connectionId: string }> => {
+      if (_relinkAuth) return _relinkAuth;
       // MAP.6 — DECLARED: no row in scope here names an account.
       const conn = await tryResolveConnection({ channel: 'EBAY', primary: true });
       if (!conn) throw new Error('No active eBay connection');
-      _relinkToken = await ebayAuthService.getValidToken(conn.id);
-      return _relinkToken;
+      _relinkAuth = { oauthToken: await ebayAuthService.getValidToken(conn.id), connectionId: conn.id };
+      return _relinkAuth;
     };
 
     // FM Phase 1 — the flat-file save no longer writes the shared warehouse pool.
@@ -983,7 +988,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 const relink = await relinkEbayItemId(
                   prisma,
                   { parentSku: sku, marketplace: mp, itemId, apply: true },
-                  { oauthToken: await getRelinkToken() },
+                  await getRelinkAuth(),
                 );
                 if (!relink.applied) {
                   rowErrors.push({ sku, rowId, error: `${mp} Item ID ${itemId} NOT applied (${relink.verdict}): ${relink.reason}` });
@@ -1096,7 +1101,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const qtyChanged = newQty != null && oldQty !== newQty;
 
           if (priceChanged) {
-            const qRow = await prisma.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,
@@ -1114,7 +1119,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           if (qtyChanged) {
-            const qRow = await prisma.outboundSyncQueue.create({
+            const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
                 channelListingId: listingId,
@@ -1310,13 +1315,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                       (await tryResolveConnection({ itemId })) ??
                       (await tryResolveConnection({ channel: 'EBAY', primary: true }))
                     if (!connection) continue
+                    // P0.7 — never heal an item of another eBay account through this one.
+                    try {
+                      await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+                    } catch (err) {
+                      if (!isWrongAccountWriteError(err)) throw err
+                      request.log.warn({ itemId, error: err.message }, 'ebay/save: shell auto-heal refused (wrong account)')
+                      continue
+                    }
                     const token = await ebayAuthService.getValidToken(connection.id)
                     const { reconcileMembershipsFromEbay: reconcileFn } = await import('../services/ebay-membership-reconcile.service.js')
                     const { adoptSkulessVariations: adoptFn } = await import('../services/ebay-variation-relabel.service.js')
-                    let rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                    let rec = await reconcileFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
                     if (rec.skuless > 0) {
-                      const adopted = await adoptFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
-                      if (adopted.adopted > 0) rec = await reconcileFn(itemId, activeMp, { oauthToken: token }, shellCl.product.sku)
+                      const adopted = await adoptFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
+                      if (adopted.adopted > 0) rec = await reconcileFn(itemId, activeMp, { oauthToken: token, connectionId: connection.id }, shellCl.product.sku)
                       request.log.info({ itemId, adopted: adopted.adopted, unmatched: adopted.unmatched }, 'ebay/save: SKU-less shell listing auto-adopted')
                     }
                     request.log.info({ itemId, matched: rec.matched, rewritten: rec.rewritten }, 'ebay/save: half-adopted shell listing auto-reconciled')
@@ -1559,6 +1572,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       });
     }
 
+    // P0.7 — this push can only use the primary account: refuse it (409, nothing sent) when a row's
+    // SKU belongs only to another eBay account in a target market.
+    try {
+      const pushSkus = [...rows, ...(Array.isArray(pooledRows) ? pooledRows : [])].map((row) => String((row as { sku?: unknown }).sku ?? ''));
+      for (const m of targetMarkets) await assertWriteAccountPerSku('EBAY', connection.id, pushSkus, m);
+    } catch (err) {
+      if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message });
+      throw err;
+    }
+
     let token: string;
     try {
       token = await ebayAuthService.getValidToken(connection.id);
@@ -1752,8 +1775,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         });
 
         const ndjson = buildInventoryNdjson(feedRows);
-        const taskId = await createInventoryTask(mp, token);
-        await uploadFeedFile(taskId, ndjson, token);
+        const taskId = await createInventoryTask(mp, token, connection.id);
+        await uploadFeedFile(taskId, ndjson, token, connection.id);
 
         // Durable push-history record (feed mode). Non-fatal — never blocks the push.
         let feedJobId = '';
@@ -1957,7 +1980,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const sku = String(row.sku ?? '');
         if (!sku) continue;
         const region = mp === 'UK' ? 'GB' : mp;
-        const lang = toListingLanguage(marketplaceId);
+        const lang = await ebayListingLanguage(marketplaceId);
         const endHeaders = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -1980,7 +2003,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
           if (row._isParent === true) {
             // Parent row → end the WHOLE listing (all variations) on this market.
-            const wr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/withdraw_by_inventory_item_group`, {
+            const wr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/withdraw_by_inventory_item_group`, {
               method: 'POST', headers: endHeaders,
               body: JSON.stringify({ inventoryItemGroupKey: sku, marketplaceId }),
             });
@@ -1999,14 +2022,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
           } else {
             // Child row → end just this variation's offer.
-            const gr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
+            const gr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
             const gj = gr.ok ? (await gr.json() as { offers?: Array<{ offerId?: string }> }) : {};
             const offerId = gj.offers?.[0]?.offerId;
             if (!offerId) {
               perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'no live offer on this market — nothing to end' });
               continue;
             }
-            const dr = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, { method: 'DELETE', headers: endHeaders });
+            const dr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, { method: 'DELETE', headers: endHeaders });
             if (dr.ok || dr.status === 204) {
               const pid = row._productId as string | undefined;
               if (pid) {
@@ -2120,7 +2143,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (sharedParent?.shared_sku_listing === true && !inventoryManagedFamily) {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               familyRows as Array<Record<string, unknown>>,
-              { oauthToken: token, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
             )
             for (const r of sharedResults) {
               perRowResults.push({
@@ -2154,7 +2177,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               // properly by reconciling memberships from eBay truth first.
               if (memberSkus.size === 0) {
                 try {
-                  const rec = await reconcileMembershipsFromEbay(famItemIdForAdd, mp, { oauthToken: token })
+                  const rec = await reconcileMembershipsFromEbay(famItemIdForAdd, mp, { oauthToken: token, connectionId: connection.id })
                   request.log.info({ itemId: famItemIdForAdd, rewritten: rec.rewritten }, 'ebay/push: first-adopt reconcile')
                   const again = await prisma.sharedListingMembership.findMany({
                     where: { marketplace: mp, itemId: famItemIdForAdd },
@@ -2183,7 +2206,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 .filter((c) => c.price > 0)
               if (memberSkus.size > 0 && candidates.length > 0) {
                 try {
-                  const addRes = await addVariationsToListing(famItemIdForAdd, mp, candidates, { oauthToken: token })
+                  const addRes = await addVariationsToListing(famItemIdForAdd, mp, candidates, { oauthToken: token, connectionId: connection.id })
                   if (addRes.added > 0) for (const c of candidates.slice(0, addRes.added + addRes.skippedExisting)) addedSkus.add(c.sku)
                   request.log.info({ itemId: famItemIdForAdd, added: addRes.added, ack: addRes.ebayAck }, 'ebay/push: variations added to live listing')
                 } catch (err: unknown) {
@@ -2352,7 +2375,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             const groupOk = groupResults.every((g) => g.status !== 'ERROR')
             if (groupOk && /^\d+$/.test(famItemId)) {
               const parityXml = `<?xml version="1.0" encoding="utf-8"?>\n<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${famItemId}</ItemID></GetItemRequest>`
-              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp) })
+              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp), connectionId: connection.id, market: mp })
               const liveVars = parseLiveVariations(parityGot.raw)
               const childRowsP = familyRows.filter((r) => (r as Record<string, unknown>)._isParent !== true && String((r as Record<string, unknown>).sku ?? '').trim())
               if (liveVars.length > 0 && liveVars.length < childRowsP.length) {
@@ -2382,7 +2405,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           try {
             const sharedResults: SharedListingResult[] = await pushSharedListings(
               [row] as Array<Record<string, unknown>>,
-              { oauthToken: token, market: mp, capQty: capToFbm },
+              { oauthToken: token, connectionId: connection.id, market: mp, capQty: capToFbm },
             )
             for (const sr of sharedResults) {
               perRowResults.push({
@@ -2429,7 +2452,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
-        const lang = toListingLanguage(mp);
+        const lang = await ebayListingLanguage(mp);
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
 
         // P0: reject before touching eBay API so the operator gets a clear message
@@ -2573,7 +2596,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             ...(pkgSize ? { packageWeightAndSize: pkgSize } : {}),
           };
 
-          const invRes = await fetch(invUrl, {
+          const invRes = await ebaySend(connection.id, invUrl, {
             method: 'PUT',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -2692,7 +2715,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
             // Check if offer exists
             const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-            const getOfferRes = await fetch(getOfferUrl, { headers: singleHeaders });
+            const getOfferRes = await ebaySend(connection.id, getOfferUrl, { headers: singleHeaders });
 
             let offerId: string | null = null;
             if (getOfferRes.ok) {
@@ -2701,7 +2724,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
 
             if (offerId) {
-              const updateOfferRes = await fetch(
+              const updateOfferRes = await ebaySend(connection.id,
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`,
                 { method: 'PUT', headers: singleHeaders, body: JSON.stringify(offerBody) },
               );
@@ -2712,7 +2735,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 continue;
               }
             } else {
-              const createOfferRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer`, {
+              const createOfferRes = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer`, {
                 method: 'POST', headers: singleHeaders, body: JSON.stringify(offerBody),
               });
               if (createOfferRes.ok) {
@@ -2727,7 +2750,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             }
 
             if (offerId) {
-              const publishRes = await fetch(
+              const publishRes = await ebaySend(connection.id,
                 `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
                 { method: 'POST', headers: singleHeaders, body: '{}' },
               );
@@ -2987,6 +3010,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3004,7 +3035,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
   <OutputSelector>Item.Variations.Variation.SellingStatus.QuantitySold</OutputSelector>
 </GetItemRequest>`
-        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace), connectionId: connection.id, market: marketplace })
         const raw = res.raw
         const title = /<Title>([^<]*)<\/Title>/.exec(raw)?.[1] ?? ''
         const status = /<ListingStatus>([^<]*)<\/ListingStatus>/.exec(raw)?.[1] ?? (raw ? 'Unknown' : 'DRY-RUN')
@@ -3059,6 +3090,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3078,16 +3117,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           if (ownerCl?.product?.sku && !/^\d+$/.test(ownerCl.product.sku)) preferredParentSku = ownerCl.product.sku
         } catch { /* preferred parent is best-effort */ }
 
-        let result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+        let result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
         // Incident #42 — SKU-less variations (the Saponette case) can't become
         // memberships until pool SKUs exist on eBay. Adopt them (write pool
         // SKUs onto the live variations by specifics match), then reconcile
         // again so the final state is ordinary: one operation for the operator.
         let skulessAdoption: Awaited<ReturnType<typeof adoptSkulessVariations>> | undefined
         if (result.skuless > 0) {
-          skulessAdoption = await adoptSkulessVariations(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+          skulessAdoption = await adoptSkulessVariations(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
           if (skulessAdoption.adopted > 0) {
-            result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token }, preferredParentSku)
+            result = await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id }, preferredParentSku)
           }
         }
         await clearFileExclusionForItem(itemId, marketplace, request.log)
@@ -3123,6 +3162,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3131,12 +3178,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
       try {
         const { convertListingAxesToItalian } = await import('../services/ebay-axes-convert.service.js')
-        const result = await convertListingAxesToItalian(itemId, marketplace, { oauthToken: token })
+        const result = await convertListingAxesToItalian(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
         // A live rename changes the axis names — reconcile so our store (and the
         // drift flag that reads it) reflect the new Italian names.
         if (result.outcome === 'converted') {
           try {
-            await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token })
+            await reconcileMembershipsFromEbay(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
           } catch (e) {
             request.log.warn({ err: e }, 'post-convert reconcile failed (non-fatal)')
           }
@@ -3206,6 +3253,14 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         (await tryResolveConnection({ itemId, marketplace })) ??
         (await tryResolveConnection({ channel: 'EBAY', primary: true }))
       if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
+      // P0.7 — refuse (409, nothing sent) when this item belongs only to another eBay account; the
+      // primary fallback above exists for items with no recorded account yet, not for those.
+      try {
+        await assertWriteAccount('EBAY', connection.id, { itemIds: [itemId] })
+      } catch (err) {
+        if (isWrongAccountWriteError(err)) return reply.code(409).send({ error: err.code, message: err.message })
+        throw err
+      }
       let token: string
       try {
         token = await ebayAuthService.getValidToken(connection.id)
@@ -3213,7 +3268,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token })
+        const result = await relabelListingToPoolSkus(itemId, marketplace, { oauthToken: token, connectionId: connection.id })
         await clearFileExclusionForItem(itemId, marketplace, request.log)
         return reply.send(result)
       } catch (err: unknown) {
@@ -3246,7 +3301,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         return reply.code(503).send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        const result = await applyVariationOrderForFamily(parentProductId, marketplace, { oauthToken: token }, { dryRun })
+        const result = await applyVariationOrderForFamily(parentProductId, marketplace, { oauthToken: token, connectionId: connection.id }, { dryRun })
         return reply.send(result)
       } catch (err: unknown) {
         request.log.error(err, 'apply-variation-order failed')
@@ -3363,10 +3418,22 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         try {
           // Find the listing
-          const listing = await prisma.channelListing.findFirst({
+          let listing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
             include: { product: { select: { sku: true } } },
           });
+
+          // P0.7 — this route sends through the primary account only: act on that account's listing,
+          // and refuse (nothing sent) when this product's listing here belongs to another account.
+          if (listing?.channelConnectionId && listing.channelConnectionId !== connection.id) {
+            const own = await ownListingFor('EBAY', connection.id, { productId, region });
+            if (!own) {
+              const refusal = await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] }).then(() => null, (err: unknown) => err as Error);
+              results.push({ productId, market: mpUpper, status: 'REFUSED', message: refusal?.message ?? 'This listing belongs to another eBay account. Nothing was sent.' });
+              continue;
+            }
+            listing = own;
+          }
 
           if (!listing) {
             results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No listing found' });
@@ -3380,7 +3447,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const lang = toListingLanguage(mpUpper);
+          const lang = await ebayListingLanguage(mpUpper);
           const publishHeaders = {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -3392,7 +3459,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           const encodedSku = encodeURIComponent(listing.product.sku);
           const getOfferUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`;
-          const getOfferRes = await fetch(getOfferUrl, { headers: publishHeaders });
+          const getOfferRes = await ebaySend(connection.id, getOfferUrl, { headers: publishHeaders });
 
           if (!getOfferRes.ok) {
             results.push({ productId, market: mpUpper, status: 'ERROR', message: `Could not fetch offer: ${getOfferRes.status}` });
@@ -3422,12 +3489,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               ...(existingOffer?.merchantLocationKey ? { merchantLocationKey: existingOffer.merchantLocationKey } : {}),
               ...(existingOffer?.categoryId ? { categoryId: existingOffer.categoryId } : {}),
             };
-            await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+            await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
               method: 'PUT', headers: publishHeaders, body: JSON.stringify(updBody),
             });
           }
 
-          const publishRes = await fetch(
+          const publishRes = await ebaySend(connection.id,
             `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}/publish`,
             { method: 'POST', headers: publishHeaders, body: '{}' },
           );
@@ -3516,7 +3583,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
         const region = mpUpper === 'UK' ? 'GB' : mpUpper;
         const marketplaceId = toMarketplaceId(mpUpper);
-        const lang = toListingLanguage(mpUpper);
+        const lang = await ebayListingLanguage(mpUpper);
         const deleteHeaders = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -3526,10 +3593,21 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         };
 
         try {
-          const listing = await prisma.channelListing.findFirst({
+          let listing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
             include: { product: { select: { sku: true } } },
           });
+          // P0.7 — this route sends through the primary account only: act on that account's listing,
+          // and refuse (nothing sent) when this product's listing here belongs to another account.
+          if (listing?.channelConnectionId && listing.channelConnectionId !== connection.id) {
+            const own = await ownListingFor('EBAY', connection.id, { productId, region });
+            if (!own) {
+              const refusal = await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] }).then(() => null, (err: unknown) => err as Error);
+              results.push({ productId, market: mpUpper, status: 'REFUSED', message: refusal?.message ?? 'This listing belongs to another eBay account. Nothing was sent.' });
+              continue;
+            }
+            listing = own;
+          }
 
           // FFP.6 — shared-SKU (Trading API) listings have no Inventory offer.
           // The old flow found none, then reset the DB row to DRAFT and nulled
@@ -3552,7 +3630,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           const encodedSku = encodeURIComponent(listing.product.sku);
-          const getOfferRes = await fetch(
+          const getOfferRes = await ebaySend(connection.id,
             `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodedSku}&marketplace_id=${marketplaceId}`,
             { headers: deleteHeaders },
           );
@@ -3575,7 +3653,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const delRes = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
+          const delRes = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer/${offerId}`, {
             method: 'DELETE', headers: deleteHeaders,
           });
 
@@ -3623,7 +3701,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     try {
       const token = await ebayAuthService.getValidToken(connection.id);
-      const status = await getTaskStatus(taskId, token);
+      const status = await getTaskStatus(taskId, token, connection.id);
       return reply.send({ taskId, ...status });
     } catch (err: unknown) {
       request.log.error(err, 'ebay/flat-file/feed poll failed');
@@ -3669,9 +3747,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const base = `${EBAY_API_BASE}/sell/account/v1`;
 
       const [fRes, pmRes, rRes] = await Promise.allSettled([
-        fetch(`${base}/fulfillment_policy?marketplace_id=${marketplace}`, { headers }),
-        fetch(`${base}/payment_policy?marketplace_id=${marketplace}`,     { headers }),
-        fetch(`${base}/return_policy?marketplace_id=${marketplace}`,      { headers }),
+        ebaySend(connection.id, `${base}/fulfillment_policy?marketplace_id=${marketplace}`, { headers }),
+        ebaySend(connection.id, `${base}/payment_policy?marketplace_id=${marketplace}`,     { headers }),
+        ebaySend(connection.id, `${base}/return_policy?marketplace_id=${marketplace}`,      { headers }),
       ]);
 
       async function extract<T>(r: PromiseSettledResult<Response>, key: string): Promise<T[]> {

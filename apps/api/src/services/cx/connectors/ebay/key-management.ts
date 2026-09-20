@@ -110,7 +110,9 @@ async function call(op: string, method: 'GET' | 'POST', url: string, auth: EbayK
     headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(url, init);
+  // P1.2 — through the channel gateway as an app-level call (the app's own signing keys).
+  const { ebayTransport } = await import('../../../gateway/ebay.js');
+  const res = await ebayTransport(null, { appLevel: true })(url, init);
   const text = await res.text();
   if (!res.ok) {
     // eBay error bodies are `{ errors: [{ errorId, domain, category, message, ... }] }`;

@@ -20,6 +20,7 @@
  * `channel-pricing` PATCH, `pricing/bulk-override` and the Matrix door delegate here. No snapshot refresh: the
  * pricing engine's chain is in no publish path (M8) and its hourly cron re-materialises the snapshot.
  */
+import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger.js'
@@ -134,7 +135,7 @@ export async function writeChannelPrices(input: {
       if (VALID_SYNC_TARGETS.has(l.channel)) {
         await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
         const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
-        const row = await tx.outboundSyncQueue.create({
+        const row = await createOutboundRow(tx, {
           data: {
             productId: l.productId, channelListingId: l.id, targetChannel: l.channel as never, targetRegion: l.region,
             syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,

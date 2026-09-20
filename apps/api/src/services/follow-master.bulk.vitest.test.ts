@@ -96,6 +96,7 @@ function makeListings(n: number) {
     channel: 'EBAY',
     region: 'EBAY_IT',
     marketplace: 'EBAY_IT',
+    channelConnectionId: 'ebay-account-1', // P1.3 — a listing names its account (the queue row takes it, no extra read)
     quantity: 0,
     quantityOverride: 5, // pinned → FOLLOW is a real write, not a no-op
     followMasterQuantity: false,

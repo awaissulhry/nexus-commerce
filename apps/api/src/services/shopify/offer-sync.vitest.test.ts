@@ -18,7 +18,11 @@ vi.mock('./admin-client.js', () => ({ assertShopifyResult: (value: any) => { if 
     if (query.includes('query NexusOffer')) return { productVariant: { id: 'gid://shopify/ProductVariant/2', sku: state.sku, price: state.price, product: { id: 'gid://shopify/Product/1' }, inventoryItem: { id: 'gid://shopify/InventoryItem/3', inventoryLevel: { quantities: [{ name: 'available', quantity: state.quantity }] } } } }
     state.writes.push(variables)
     if (query.includes('NexusOfferInventory')) {
-      expect(variables.input.quantities[0].compareQuantity).toBe(3)
+      // P1.4 — API 2026-04+: compare-and-set is `changeFromQuantity`, and the mutation carries `@idempotent(key)`.
+      expect(variables.input.quantities[0].changeFromQuantity).toBe(3)
+      expect(variables.input.quantities[0]).not.toHaveProperty('compareQuantity')
+      expect(query).toMatch(/@idempotent\(key:\$key\)/)
+      expect(variables.key).toMatch(/^[0-9a-f]{40}$/)
       if (!state.stale) state.quantity = variables.input.quantities[0].quantity
       return { inventorySetQuantities: { userErrors: [] } }
     }
@@ -35,7 +39,7 @@ beforeEach(() => {
 })
 it('follows canonical stock, applies the buffer and clamps to warehouse availability before a compared write', async () => {
   await syncNativeShopifyOffer(item)
-  expect(state.writes[0].input.quantities[0]).toEqual({ inventoryItemId: 'gid://shopify/InventoryItem/3', locationId: 'gid://shopify/Location/4', quantity: 5, compareQuantity: 3 })
+  expect(state.writes[0].input.quantities[0]).toEqual({ inventoryItemId: 'gid://shopify/InventoryItem/3', locationId: 'gid://shopify/Location/4', quantity: 5, changeFromQuantity: 3 })
 })
 it('uses the explicit account offer when master following is disabled', async () => {
   state.listing.followMasterQuantity = false; state.listing.quantityOverride = 4

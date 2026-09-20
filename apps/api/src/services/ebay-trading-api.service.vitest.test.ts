@@ -1,5 +1,8 @@
 // apps/api/src/services/ebay-trading-api.service.vitest.test.ts
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+// P1.2 — Trading calls go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { escapeXml, siteIdForMarket } from './ebay-trading-api.service.js'
 
 describe('escapeXml', () => {
@@ -143,7 +146,7 @@ describe('buildAddFixedPriceItemXml', () => {
 import { callTradingApi } from './ebay-trading-api.service.js'
 
 describe('callTradingApi', () => {
-  const ctx = { oauthToken: 'OAUTH123', siteId: '101' }
+  const ctx = { oauthToken: 'OAUTH123', siteId: '101', connectionId: 'conn-1' }
   const OLD = { ...process.env }
   // P0.1 — the real-call cases model production: eBay publish mode `live`.
   beforeEach(() => {
@@ -186,6 +189,28 @@ describe('callTradingApi', () => {
     expect((fetchSpy.mock.calls[0][1] as RequestInit).body).not.toContain('eBayAuthToken')
   })
 
+  it('P1.2 — each Trading call is ONE gateway ledger row: account, operation, Ack read as the outcome, eBay code classed', async () => {
+    const { gatewayLedger } = await import('../test-support/gateway-stubs.js')
+    gatewayLedger.length = 0
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('<R><Ack>Failure</Ack><Errors><ErrorCode>931</ErrorCode><LongMessage>Auth token is invalid.</LongMessage></Errors></R>', { status: 200 }))
+    await expect(callTradingApi('GetItem', '<x/>', ctx)).rejects.toThrow('Auth token is invalid.')
+    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'EBAY', connectionId: 'conn-1', operation: 'trading.GetItem', statusCode: 200, success: false, errorClass: 'auth_revoked', errorCode: '931' })])
+  })
+
+  it('P1.2 — a Trading call that names no account is refused before anything is sent', async () => {
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    await expect(callTradingApi('GetItem', '<x/>', { oauthToken: 'T', siteId: '101' } as never)).rejects.toMatchObject({ code: 'ACCOUNT_REQUIRED' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('P1.2 — read, listing write, order action or setup per Trading call', async () => {
+    const { tradingCallKind } = await import('./ebay-trading-api.service.js')
+    expect(['GetItem', 'VerifyAddFixedPriceItem', 'ReviseFixedPriceItem', 'EndFixedPriceItem', 'CompleteSale', 'LeaveFeedback', 'SetNotificationPreferences'].map(tradingCallKind))
+      .toEqual(['read', 'read', 'write', 'write', 'action', 'action', 'setup'])
+  })
+
   it('real call throws on Ack=Failure with the short message', async () => {
     process.env.NEXUS_EBAY_REAL_API = 'true'
     const body = '<R><Ack>Failure</Ack><Errors><ShortMessage>Bad category</ShortMessage></Errors></R>'
@@ -221,7 +246,7 @@ describe('callTradingApi', () => {
 import { addFixedPriceItem, reviseInventoryStatus } from './ebay-trading-api.service.js'
 
 describe('addFixedPriceItem / reviseInventoryStatus (dry-run composition)', () => {
-  const base = { oauthToken: 'OAUTH', market: 'IT' }
+  const base = { oauthToken: 'OAUTH', market: 'IT', connectionId: 'conn-1' }
   beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'false'; process.env.NODE_ENV = 'test' })
 
   it('addFixedPriceItem returns the dry-run ItemID', async () => {
@@ -246,7 +271,7 @@ describe('addFixedPriceItem / reviseInventoryStatus (dry-run composition)', () =
     await expect(
       addFixedPriceItem(
         { title: 'X', description: 'x', categoryId: '1', conditionId: '1000', country: 'IT', currency: 'EUR', variationSpecificNames: ['Size'], variations: [{ sku: 'A', price: 1, quantity: 1, specifics: { Size: 'M' } }] },
-        { oauthToken: 'O', market: 'ZZ' },
+        { oauthToken: 'O', market: 'ZZ', connectionId: 'conn-1' },
       ),
     ).rejects.toThrow(/unknown eBay market/i)
   })

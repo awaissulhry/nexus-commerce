@@ -1,4 +1,5 @@
 import { WorkspaceCache } from '../lib/workspace-cache.js'
+import { createOutboundRow, createOutboundRows } from './outbound-rows.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Stock Import Service — IM.1
@@ -1426,7 +1427,7 @@ async function executeApplyImport(args: {
       .filter((id): id is string => Boolean(id))
     if (coalesceIds.length > 0) await coalescePendingQuantityRows(tx, coalesceIds)
     if (queueRows.length > 0) {
-      await tx.outboundSyncQueue.createMany({
+      await createOutboundRows(tx, {
         data: queueRows.map((q) => ({ ...q.data, id: q.id })),
       })
     }
@@ -2021,7 +2022,7 @@ export async function revertImport(jobId: string, actor?: string | null): Promis
                   : {}),
               },
             })
-            await tx.outboundSyncQueue.create({
+            await createOutboundRow(tx, {
               data: {
                 id: qid,
                 productId: r.productId,

@@ -11,10 +11,6 @@ const m = vi.hoisted(() => {
 })
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: m.seller }))
 vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { deleteListingsItem: m.removeAmazon } }))
-vi.mock('./marketplaces/shopify.service.js', () => ({ ShopifyService: class {
-  deleteProduct = m.removeShopify
-  updateProduct = m.updateShopify
-} }))
 vi.mock('@nexus/database', () => { const db = { outboundSyncQueue: { updateMany: m.update, findUnique: m.read }, productEvent: { create: m.event } }; return { prisma: { ...db, $transaction: async (run: any) => run(db) } } })
 vi.mock('./ebay-trading-api.service.js', async (original) => ({
   ...await original<typeof import('./ebay-trading-api.service.js')>(), endFixedPriceItem: m.end,
@@ -194,7 +190,7 @@ describe('W1.3 exact targeting', () => {
   })
   it.each(['GB', 'UK'])('%s ends only at site 3', async (targetRegion) => {
     await dispatchChannelDelist({ ...job('EBAY', 'DELETE_LISTING'), targetRegion })
-    expect(m.end).toHaveBeenCalledWith(expect.anything(), { oauthToken: 'fake-token', siteId: '3' })
+    expect(m.end).toHaveBeenCalledWith(expect.anything(), { oauthToken: 'fake-token', siteId: '3', connectionId: 'account-owner' })
   })
   it.each([null, 'ZZ'])('market %s refuses before auth', async (targetRegion) => {
     expect(await dispatchChannelDelist({ ...job('EBAY', 'DELETE_LISTING'), targetRegion })).toMatchObject({ errorCode: targetRegion === null ? 'EBAY_DELIST_NO_REGION' : 'EBAY_UNKNOWN_MARKET', retryable: false })

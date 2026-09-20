@@ -1,4 +1,5 @@
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { createOutboundRow } from '../outbound-rows.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
 import { writeTranslation } from './translation-write.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -285,7 +286,7 @@ export async function applyCatalogCascade(
         })
         queueId = existing.id
       } else {
-        const row = await tx.outboundSyncQueue.create({
+        const row = await createOutboundRow(tx, {
           data: {
             productId: input.productId,
             channelListingId: listing.id,

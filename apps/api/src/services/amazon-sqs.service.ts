@@ -21,6 +21,7 @@ import {
   type Message,
 } from '@aws-sdk/client-sqs'
 import { logger } from '../utils/logger.js'
+import { credentialNotificationType } from './cx/amazon-secret-rotation.service.js'
 
 export interface OrderChangeNotification {
   amazonOrderId: string
@@ -167,6 +168,23 @@ export interface SqsOrderMessage {
   rawPayload: unknown
   /** The raw NotificationType string from the envelope. */
   notificationType: string
+  /**
+   * P0.6 — why this message cannot be handled (unknown type, missing payload, unparseable body).
+   * The poller records it in the inbound ledger with this reason and only then deletes it; before
+   * P0.6 the parser deleted these messages itself, before any ledger row existed.
+   */
+  unhandled?: string
+  /**
+   * P6.1 — an app-credential notification (a new client SECRET, or its expiry date) that arrived on
+   * this queue. The raw body is kept in memory only, for the rotation handler; `rawPayload` is
+   * redacted, so the secret never reaches the ledger.
+   */
+  credentialBody?: string
+}
+
+/** A message we keep a record of but cannot act on. */
+function unhandledMessage(msg: Message, rawPayload: unknown, notificationType: string, reason: string): SqsOrderMessage {
+  return { receiptHandle: msg.ReceiptHandle!, messageId: msg.MessageId ?? '', rawPayload, notificationType, unhandled: reason }
 }
 
 function buildClient(): SQSClient | null {
@@ -212,6 +230,17 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
   const results: SqsOrderMessage[] = []
   for (const msg of raw) {
     if (!msg.Body || !msg.ReceiptHandle) continue
+    const credentialType = credentialNotificationType(msg.Body)
+    if (credentialType) {
+      results.push({
+        receiptHandle: msg.ReceiptHandle,
+        messageId: msg.MessageId ?? '',
+        notificationType: credentialType,
+        rawPayload: { notificationType: credentialType, redacted: 'An app-credential notification; its body is never stored.' },
+        credentialBody: msg.Body,
+      })
+      continue
+    }
     try {
       // SP-API wraps the notification in an SNS envelope when delivered
       // via SQS. Body may be: raw notification JSON OR SNS JSON with a
@@ -227,7 +256,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
           inner.Payload?.AccountStatusChangedNotification ??
           inner.Payload?.AccountStatusChanged
         if (!root) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         results.push({
@@ -253,7 +282,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
           inner.Payload?.FeedProcessingFinishedNotification ??
           inner.Payload?.FeedProcessingFinished
         if (!root) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         results.push({
@@ -279,7 +308,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
           inner.Payload?.ListingsItemStatusChangeNotification ??
           inner.Payload?.ListingsItemStatusChange
         if (!root) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         const status =
@@ -315,7 +344,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
         const root =
           inner.Payload?.AnyOfferChangedNotification ?? inner.Payload?.AnyOfferChanged
         if (!root) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         const summary = root.Summary ?? root.summary ?? {}
@@ -382,7 +411,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
             ? root.InventoryAvailability
             : []
         if (items.length === 0) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         results.push({
@@ -416,7 +445,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
           inner.Payload?.FBAOutboundShipmentStatus ??
           inner.Payload?.FBAOutboundShipmentStatusNotification
         if (!payload) {
-          await deleteSqsMessage(msg.ReceiptHandle)
+          results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
           continue
         }
         results.push({
@@ -443,8 +472,8 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
       // — we normalise to the same SqsOrderMessage downstream so the
       // poller doesn't need a per-type code path.
       if (notifType !== 'ORDER_CHANGE' && notifType !== 'ORDER_STATUS_CHANGE') {
-        // Silently ack everything else (test events, etc.)
-        await deleteSqsMessage(msg.ReceiptHandle)
+        // P0.6 — recorded, then acked (was: deleted silently, no row).
+        results.push(unhandledMessage(msg, inner, String(notifType ?? 'UNKNOWN'), `Nexus has no handler for ${String(notifType ?? 'an untyped')} notifications.`))
         continue
       }
 
@@ -452,7 +481,10 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
         notifType === 'ORDER_STATUS_CHANGE'
           ? inner.Payload?.OrderStatusChangeNotification
           : inner.Payload?.OrderChangeNotification
-      if (!payload) continue
+      if (!payload) {
+        results.push(unhandledMessage(msg, inner, notifType, `The ${notifType} notification has no payload Nexus can read.`))
+        continue
+      }
 
       results.push({
         notification: {
@@ -469,11 +501,9 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
         notificationType: notifType,
       })
     } catch (err) {
-      logger.warn('[SQS] message parse error — deleting', {
-        body: msg.Body?.slice(0, 200),
-        error: err instanceof Error ? err.message : String(err),
-      })
-      await deleteSqsMessage(msg.ReceiptHandle)
+      const error = err instanceof Error ? err.message : String(err)
+      logger.warn('[SQS] message parse error — recorded, then acked', { body: msg.Body?.slice(0, 200), error })
+      results.push(unhandledMessage(msg, { unparsedBody: msg.Body.slice(0, 64_000) }, 'UNPARSEABLE', `The message body could not be read: ${error}`))
     }
   }
 

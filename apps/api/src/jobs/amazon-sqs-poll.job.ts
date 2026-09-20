@@ -15,13 +15,14 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import cron, { schedulePlatform } from '../lib/cron/clustered.js'
-import { verifiedChannelWorkspace, withIngressWorkspace, amazonNotificationSeller } from '../lib/workspace-ingress.js'
-import { isSqsConfigured, pollSqsMessages, deleteSqsMessage } from '../services/amazon-sqs.service.js'
+import { verifiedChannelWorkspace, withIngressWorkspace, amazonNotificationSeller, legacyIngress } from '../lib/workspace-ingress.js'
+import { isSqsConfigured, pollSqsMessages, deleteSqsMessage, type SqsOrderMessage } from '../services/amazon-sqs.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import prisma from '../db.js'
-import { recordInbound } from '../services/cx/ingress/ledger.js'
+import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { LEGACY_WORKSPACE_ID } from '../lib/workspace-context.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -42,8 +43,7 @@ async function runSqsPoll(): Promise<void> {
       const LONG_POLL_SECONDS = 20
       const tickStarted = Date.now()
       let totalMessages = 0
-      let processed = 0
-      let skipped = 0
+      const tally = { processed: 0, skipped: 0 }
 
       // Drain loop — the `for` body below is the pre-RT.3 per-message
       // processing, unchanged (indentation preserved to keep the diff exact).
@@ -51,8 +51,29 @@ async function runSqsPoll(): Promise<void> {
       const messages = await pollSqsMessages(10, LONG_POLL_SECONDS)
       totalMessages += messages.length
 
-      for (const message of messages) {
-        const processMessage = async () => { for (const msg of [message]) {
+      for (const message of messages) await handleSqsMessage(message, tally)
+
+      // Stop when another full long-poll wouldn't fit in this tick's budget;
+      // the next cron minute continues seamlessly.
+      if (Date.now() - tickStarted >= TICK_BUDGET_MS - LONG_POLL_SECONDS * 1000) break
+      }
+
+      return totalMessages === 0
+        ? 'no messages'
+        : `messages=${totalMessages} processed=${tally.processed} skipped=${tally.skipped}`
+    })
+  } finally {
+    running = false
+  }
+}
+
+/**
+ * One SQS message: route it to its business profile, record it in the inbound ledger, handle it.
+ * Exported for tests (P0.6); the poll loop above is its only production caller.
+ */
+export async function handleSqsMessage(message: SqsOrderMessage, tally: { processed: number; skipped: number }): Promise<void> {
+  if (message.credentialBody !== undefined) { await handleCredentialOnNotificationsQueue(message, tally); return }
+  const processMessage = async () => { for (const msg of [message]) {
         // P3.4 — Persist to WebhookEvent so the message appears in
         // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
         // so polling the same message twice (before ack) is idempotent.
@@ -61,7 +82,7 @@ async function runSqsPoll(): Promise<void> {
         // notification) so /api/admin/push-latency can compute the
         // (ingestedAt - providerTimestamp) percentile per source.
         let webhookEventId: string | null = null
-        if (msg.messageId) {
+        {
           const raw = msg.rawPayload as any
           const eventTimeRaw =
             raw?.EventTime ?? raw?.eventTime ?? raw?.Payload?.EventTime ?? null
@@ -76,7 +97,7 @@ async function runSqsPoll(): Promise<void> {
             const written = await recordInbound({
               channel: 'AMAZON',
               eventType: msg.notificationType,
-              externalId: msg.messageId,
+              externalId: msg.messageId || undefined,
               payload: msg.rawPayload,
               // SP-API notifications arrive as plain JSON on a queue we own; there is
               // no signature on them, and the queue's IAM policy is what establishes
@@ -89,8 +110,22 @@ async function runSqsPoll(): Promise<void> {
             })
             webhookEventId = written.id
           } catch {
-            // Non-fatal — proceed with processing regardless
+            webhookEventId = null
           }
+        }
+        // P0.6 — ledger first. Without a row, nothing is handled and nothing is deleted: the message
+        // stays on the queue and comes back after its visibility timeout.
+        if (!webhookEventId) {
+          logger.error('[SQS poll] inbound ledger unavailable — message retained for retry', { messageId: msg.messageId, type: msg.notificationType })
+          tally.skipped++
+          continue
+        }
+        // P0.6 — a message we cannot act on is recorded with its reason, then acked.
+        if (msg.unhandled) {
+          await completeInbound(webhookEventId, false, msg.unhandled)
+          await deleteSqsMessage(msg.receiptHandle)
+          tally.skipped++
+          continue
         }
 
         // RT.16 — CRITICAL: account-health change. Always emits the
@@ -118,13 +153,8 @@ async function runSqsPoll(): Promise<void> {
             message: note.message,
           })
           await deleteSqsMessage(msg.receiptHandle)
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
-          processed++
+          await completeInbound(webhookEventId, true)
+          tally.processed++
           continue
         }
 
@@ -184,13 +214,8 @@ async function runSqsPoll(): Promise<void> {
             })
           }
           await deleteSqsMessage(msg.receiptHandle)
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
-          processed++
+          await completeInbound(webhookEventId, true)
+          tally.processed++
           continue
         }
 
@@ -219,13 +244,8 @@ async function runSqsPoll(): Promise<void> {
             })
           }
           await deleteSqsMessage(msg.receiptHandle)
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
-          processed++
+          await completeInbound(webhookEventId, true)
+          tally.processed++
           continue
         }
 
@@ -270,13 +290,8 @@ async function runSqsPoll(): Promise<void> {
             }
           }
           await deleteSqsMessage(msg.receiptHandle)
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
-          processed++
+          await completeInbound(webhookEventId, true)
+          tally.processed++
           continue
         }
 
@@ -315,17 +330,8 @@ async function runSqsPoll(): Promise<void> {
               }
             }
             await deleteSqsMessage(msg.receiptHandle)
-            if (webhookEventId) {
-              await prisma.webhookEvent.update({
-                where: { id: webhookEventId },
-                data: {
-                  isProcessed: true,
-                  processedAt: new Date(),
-                  error: recordedErrors > 0 ? `${recordedErrors} sku(s) failed` : null,
-                },
-              }).catch(() => {})
-            }
-            processed++
+            await completeInbound(webhookEventId, recordedErrors === 0, `${recordedErrors} sku(s) failed`)
+            tally.processed++
             logger.info('[SQS poll] processed FBA_INVENTORY_AVAILABILITY_CHANGES', {
               recordedCount,
               recordedErrors,
@@ -333,12 +339,7 @@ async function runSqsPoll(): Promise<void> {
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err)
             logger.warn('[SQS poll] FBA inventory handler failed', { error: errMsg })
-            if (webhookEventId) {
-              await prisma.webhookEvent.update({
-                where: { id: webhookEventId },
-                data: { error: errMsg.slice(0, 2000) },
-              }).catch(() => {})
-            }
+            await completeInbound(webhookEventId, false, errMsg)
             // Don't delete — let SQS retry.
           }
           continue
@@ -360,13 +361,8 @@ async function runSqsPoll(): Promise<void> {
               await syncMCFStatus(resolveMcfAdapter(), sellerFulfillmentOrderId)
             }
             await deleteSqsMessage(msg.receiptHandle)
-            if (webhookEventId) {
-              await prisma.webhookEvent.update({
-                where: { id: webhookEventId },
-                data: { isProcessed: true, processedAt: new Date() },
-              }).catch(() => {})
-            }
-            processed++
+            await completeInbound(webhookEventId, true)
+            tally.processed++
             logger.info('[SQS poll] processed FBA_OUTBOUND_SHIPMENT_STATUS', {
               sellerFulfillmentOrderId,
               status,
@@ -378,17 +374,8 @@ async function runSqsPoll(): Promise<void> {
             const isUnconfigured = /not configured|unconfigured/i.test(errMsg)
             if (isUnconfigured) {
               await deleteSqsMessage(msg.receiptHandle)
-              if (webhookEventId) {
-                await prisma.webhookEvent.update({
-                  where: { id: webhookEventId },
-                  data: {
-                    isProcessed: true,
-                    processedAt: new Date(),
-                    error: 'MCF adapter not configured — see AMAZON_MCF_LIVE',
-                  },
-                }).catch(() => {})
-              }
-              skipped++
+              await completeInbound(webhookEventId, false, 'MCF adapter not configured — see AMAZON_MCF_LIVE')
+              tally.skipped++
               logger.info('[SQS poll] MCF adapter unconfigured — acked', {
                 sellerFulfillmentOrderId,
               })
@@ -397,12 +384,7 @@ async function runSqsPoll(): Promise<void> {
                 sellerFulfillmentOrderId,
                 error: errMsg,
               })
-              if (webhookEventId) {
-                await prisma.webhookEvent.update({
-                  where: { id: webhookEventId },
-                  data: { error: errMsg.slice(0, 2000) },
-                }).catch(() => {})
-              }
+              await completeInbound(webhookEventId, false, errMsg)
               // Don't delete — let SQS retry (visibility timeout will expire)
             }
           }
@@ -412,8 +394,9 @@ async function runSqsPoll(): Promise<void> {
         if (!msg.notification) {
           // Defensive — unknown notification shape. Persisted to
           // WebhookEvent for forensics; ack so we don't loop.
+          await completeInbound(webhookEventId, false, 'The notification had no shape Nexus can handle.')
           await deleteSqsMessage(msg.receiptHandle)
-          skipped++
+          tally.skipped++
           continue
         }
         const { amazonOrderId, orderStatus, fulfillmentType } = msg.notification
@@ -421,13 +404,8 @@ async function runSqsPoll(): Promise<void> {
         // FBA orders are managed by Amazon's warehouse — no stock action needed here.
         if (fulfillmentType === 'AFN') {
           await deleteSqsMessage(msg.receiptHandle)
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
-          skipped++
+          await completeInbound(webhookEventId, true)
+          tally.skipped++
           continue
         }
 
@@ -486,52 +464,90 @@ async function runSqsPoll(): Promise<void> {
             }
           }
 
-          processed++
+          tally.processed++
           logger.info('[SQS poll] processed ORDER_CHANGE', { amazonOrderId, orderStatus })
 
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { isProcessed: true, processedAt: new Date() },
-            }).catch(() => {})
-          }
+          await completeInbound(webhookEventId, true)
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err)
           logger.warn('[SQS poll] order sync failed', { amazonOrderId, error: errMsg })
 
-          if (webhookEventId) {
-            await prisma.webhookEvent.update({
-              where: { id: webhookEventId },
-              data: { error: errMsg.slice(0, 2000) },
-            }).catch(() => {})
-          }
+          await completeInbound(webhookEventId, false, errMsg)
           // Don't delete — let SQS retry (visibility timeout will expire)
           continue
         }
 
         await deleteSqsMessage(msg.receiptHandle)
-      } };
-        if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') { await processMessage(); continue }
-        try {
-          const owner = await verifiedChannelWorkspace('AMAZON', amazonNotificationSeller(message.rawPayload));
-          await withIngressWorkspace(owner.workspaceId, processMessage);
-        } catch (error) {
-          logger.error('Amazon notification retained for retry: profile routing or processing failed', { messageId: message.messageId, error: String(error) });
-        }
-      }
-
-      // Stop when another full long-poll wouldn't fit in this tick's budget;
-      // the next cron minute continues seamlessly.
-      if (Date.now() - tickStarted >= TICK_BUDGET_MS - LONG_POLL_SECONDS * 1000) break
-      }
-
-      return totalMessages === 0
-        ? 'no messages'
-        : `messages=${totalMessages} processed=${processed} skipped=${skipped}`
-    })
-  } finally {
-    running = false
+  } }
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') { await processMessage(); return }
+  let owner: Awaited<ReturnType<typeof verifiedChannelWorkspace>>
+  try {
+    owner = await verifiedChannelWorkspace('AMAZON', amazonNotificationSeller(message.rawPayload))
+  } catch (error) {
+    await quarantineUnroutable(message, error)
+    return
   }
+  try {
+    await withIngressWorkspace(owner.workspaceId, processMessage)
+  } catch (error) {
+    logger.error('Amazon notification retained for retry: processing failed', { messageId: message.messageId, error: String(error) })
+  }
+}
+
+/**
+ * P6.1 — an app-credential notification on the notifications queue (the Owner may register one queue
+ * for both). It belongs to the platform, not a profile: recorded in the legacy profile with a
+ * REDACTED payload (it can carry the new secret), handed to the rotation handler, and deleted only
+ * when the handler is done with it — a new secret that could not be tested or stored stays queued.
+ */
+async function handleCredentialOnNotificationsQueue(message: SqsOrderMessage, tally: { processed: number; skipped: number }): Promise<void> {
+  const written = await legacyIngress(() => recordInbound({
+    channel: 'AMAZON',
+    eventType: message.notificationType,
+    externalId: message.messageId || undefined,
+    payload: message.rawPayload,
+    signatureOk: null,
+    verifiedBy: 'sqs_iam',
+    status: 'pending',
+  }))
+  if (!written.id) {
+    logger.error('[SQS poll] inbound ledger unavailable — credential notification retained', { messageId: message.messageId })
+    tally.skipped++
+    return
+  }
+  const { handleAmazonCredentialMessage } = await import('../services/cx/amazon-secret-rotation.service.js')
+  const outcome = await withIngressWorkspace(LEGACY_WORKSPACE_ID, () => handleAmazonCredentialMessage(message.credentialBody!))
+  const kept = outcome === 'test_failed' || outcome === 'store_failed'
+  await legacyIngress(() => completeInbound(written.id, !kept && outcome !== 'ignored', kept ? `The new secret could not be ${outcome === 'test_failed' ? 'verified' : 'stored'}; kept on the queue.` : outcome === 'ignored' ? 'Not for this app.' : undefined))
+  if (kept) { tally.skipped++; return }
+  await deleteSqsMessage(message.receiptHandle)
+  tally.processed++
+}
+
+/**
+ * P0.6 — a message no business profile owns (no seller id, an unknown seller, or two profiles with
+ * the same seller). Before P0.6 it left only a log line. Now it is recorded in the legacy profile
+ * (the platform's own) as `failed` with the reason, so it can be found and replayed. A message
+ * Nexus could not act on anyway is then acked; any other one stays on the queue, so connecting the
+ * seller later still processes it (each redelivery counts itself on the same ledger row).
+ */
+async function quarantineUnroutable(message: SqsOrderMessage, error: unknown): Promise<void> {
+  const reason = `Not routed to a business profile: ${error instanceof Error ? error.message : String(error)}`
+  const written = await legacyIngress(() => recordInbound({
+    channel: 'AMAZON',
+    eventType: message.notificationType,
+    externalId: message.messageId || undefined,
+    payload: message.rawPayload,
+    signatureOk: null,
+    verifiedBy: 'sqs_iam',
+    status: 'failed',
+    lastError: (message.unhandled ? `${reason} ${message.unhandled}` : reason).slice(0, 500),
+  }))
+  if (written.id && message.unhandled) {
+    await deleteSqsMessage(message.receiptHandle)
+    return
+  }
+  logger.error('Amazon notification retained for retry: no business profile owns it', { messageId: message.messageId, recorded: !!written.id, error: String(error) })
 }
 
 export function startAmazonSqsPollCron(): void {

@@ -33,12 +33,11 @@ describe('LX.2 market language guard', () => {
     // the `flat-file[^/]*` glob matched. The other 11 had nothing to exempt and
     // were unguarded forever; they are checked like every other file now.
     expect(exempt).toHaveLength(2)
-    // LX.F P2-9 — one violation remains, found by a rule the guard did not have:
-    // `toListingLanguage`'s `{ IT:'it-IT', DE:'de-DE', … }` (Appendix A's eBay map).
-    // It is VT.1's file and the fix changes a signature used by the Owner-untouchable
-    // flat-file routes, so it is baselined in `scripts/market-languages-baseline.json`
-    // and requested from VT.1 (LX.F finding F-LX-6) rather than edited here.
-    expect(violations).toEqual([expect.stringMatching(/^services\/ebay-variation-push\.service\.ts:\d+: market to language map; the only authority is Marketplace\.languages$/)])
+    // LX.F P2-9 left one violation: `toListingLanguage`'s `{ IT:'it-IT', DE:'de-DE', … }` (Appendix A's
+    // eBay map, finding F-LX-6), baselined because its fix touched the flat-file routes. Channel P1.5
+    // (2026-09-19, with the Owner's yes for the flat-file routes) removed it: every eBay language now comes
+    // from the Marketplace row (gateway/channels.ts `ebayListingLanguage` / `ebayMarketHeaders`).
+    expect(violations).toEqual([])
   }, 30000)
 
   it('detects the three shapes Appendix A deletes, each with the arm that must NOT fire', () => {

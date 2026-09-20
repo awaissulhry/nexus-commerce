@@ -1,3 +1,4 @@
+import { assertWriteAccount } from './write-account-guard.js'
 import { requireTranslationGeneration, previewCatalogTranslation } from './pim/catalog-translate.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -22,7 +23,8 @@ import { isFbaListing } from './outbound-sync.service.js';
 import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
-import { tryResolveConnection } from './connection-resolver.service.js';
+import { listActiveConnections, tryResolveConnection } from './connection-resolver.service.js';
+import { assertPushAllowed } from '@nexus/shared/push-lock';
 // Shared stock — a pooled product's fallback is the pool's number, not its business's own total.
 import { sellableQuantity } from './stock-pool/sync-ledgers.js';
 // W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
@@ -2398,6 +2400,11 @@ export class BulkActionService {
           'CHANNEL_BATCH AMAZON: AMAZON_SELLER_ID env required',
         );
       }
+      // P0.7 — the feed goes through the default seller: this listing must belong to it.
+      {
+        const account = await import('../lib/amazon-sp-client.js').then((m) => m.amazonAccount({ sellerId })).catch(() => null);
+        if (account) await assertWriteAccount('AMAZON', account.id, { listingIds: [listing.id] });
+      }
       const marketplaceIds = marketplace ? [marketplace] : [];
       if (operation === 'price') {
         const value = Number(listing.price ?? item.basePrice ?? 0);
@@ -2442,6 +2449,8 @@ export class BulkActionService {
       if (!connection) {
         throw new Error('CHANNEL_BATCH EBAY: no active eBay connection');
       }
+      // P0.7 — this batch can only use the primary account: the listing must belong to it.
+      await assertWriteAccount('EBAY', connection.id, { listingIds: [listing.id] });
       const offerId = listing.externalListingId;
       let batch: Awaited<ReturnType<typeof submitEbayParallelBatch>>;
       if (operation === 'price') {
@@ -2464,45 +2473,44 @@ export class BulkActionService {
       return { status: 'processed' };
     }
 
-    // SHOPIFY
-    const { submitShopifyBulkMutation } = await import(
-      './channel-batch/shopify-bulk-mutation.service.js'
-    );
-    if (operation === 'price') {
-      const variantId = listing.externalListingId;
-      if (!variantId) return { status: 'skipped' };
-      const value = String(listing.price ?? item.basePrice ?? 0);
-      await submitShopifyBulkMutation({
-        mutation:
-          'mutation Update($input: ProductVariantInput!) { productVariantUpdate(input: $input) { userErrors { message } } }',
-        operations: [{ input: { id: variantId, price: value } }],
-      });
+    // SHOPIFY — P1.4b: each listing through its own account on the 2026-07 GraphQL client, the same
+    // code as the outbound queue (services/shopify/listing-write.service.ts; a native family through
+    // offer-sync). It replaces a bulk operation on the env credentials that set ONE env inventory item
+    // (SHOPIFY_DEFAULT_INVENTORY_ITEM_GID) for every product and used the removed productVariantUpdate.
+    const shopifyListings = await this.prisma.channelListing.findMany({
+      where: { productId: item.id, channel: 'SHOPIFY', ...(marketplace ? { marketplace } : {}) },
+    });
+    const accounts = [...new Set(shopifyListings.map((l) => l.channelConnectionId ?? ''))];
+    if (accounts.length > 1) {
+      // D7 — refuse loudly; never pick one of several shops.
+      throw new Error('CHANNEL_BATCH SHOPIFY: this product is on more than one Shopify account (or one listing records none). Nothing was sent.');
+    }
+    const shopifyListing = shopifyListings[0];
+    // The push lock (paused, closed, ended, Presence intent) — the bulk operation checked it per line.
+    const refusal = assertPushAllowed(shopifyListing);
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
+    let accountId = shopifyListing.channelConnectionId;
+    if (!accountId) {
+      const active = await listActiveConnections('SHOPIFY');
+      if (active.length !== 1) throw new Error('CHANNEL_BATCH SHOPIFY: the listing records no Shopify account and Nexus cannot tell which one it is. Nothing was sent.');
+      accountId = active[0].id;
+    }
+    const syncType = operation === 'price' ? 'PRICE_UPDATE' : 'QUANTITY_UPDATE';
+    const shopifyRow = { id: `bulk-${shopifyListing.id}-${operation}`, syncType, product: item, channelListing: shopifyListing, payload: {} as Record<string, unknown> };
+    const platform = (shopifyListing.platformAttributes ?? {}) as Record<string, unknown>;
+    if (platform.nexusFamilyId) {
+      const { syncNativeShopifyOffer } = await import('./shopify/offer-sync.service.js');
+      await syncNativeShopifyOffer(shopifyRow);
       return { status: 'processed' };
     }
-    // stock — Shopify needs (inventoryItemId, locationId) which
-    // aren't on ChannelListing in this schema. Operators set them
-    // in env; reject cleanly when unset.
-    const inventoryItemId = process.env.SHOPIFY_DEFAULT_INVENTORY_ITEM_GID;
-    const locationId = process.env.SHOPIFY_DEFAULT_LOCATION_GID;
-    if (!inventoryItemId || !locationId) {
-      throw new Error(
-        'CHANNEL_BATCH SHOPIFY stock: SHOPIFY_DEFAULT_INVENTORY_ITEM_GID + SHOPIFY_DEFAULT_LOCATION_GID env required',
-      );
+    const { syncShopifyLinkedListing } = await import('./shopify/listing-write.service.js');
+    if (operation === 'price') {
+      const value = Number(shopifyListing.price ?? item.basePrice ?? 0);
+      if (!Number.isFinite(value) || value <= 0) return { status: 'skipped' };
+      await syncShopifyLinkedListing(shopifyRow, accountId, { price: value });
+    } else {
+      await syncShopifyLinkedListing(shopifyRow, accountId, { quantity: Number(shopifyListing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0) });
     }
-    const qty = Number(listing.quantity ?? (await sellableQuantity(this.prisma as never, [item])).get(item.id) ?? 0);
-    await submitShopifyBulkMutation({
-      mutation:
-        'mutation Set($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { message } } }',
-      operations: [
-        {
-          input: {
-            reason: 'correction',
-            name: 'available',
-            quantities: [{ inventoryItemId, locationId, quantity: qty }],
-          },
-        },
-      ],
-    });
     return { status: 'processed' };
   }
 

@@ -4,6 +4,7 @@
  * Includes in-memory caching by marketplace and category ID
  */
 
+import { ebayTransport } from './gateway/ebay.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
 import { lookupEnglishAspectName } from './ebay-aspect-names.js'
 
@@ -106,7 +107,7 @@ export class EbayCategoryService {
     const token = await this.getAccessToken()
     const base = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
     const read = async (path: string) => {
-      const response = await fetch(`${base}/commerce/taxonomy/v1/${path}`, {
+      const response = await this.send(`${base}/commerce/taxonomy/v1/${path}`, {
         signal: AbortSignal.timeout(120_000), headers: { Authorization: `Bearer ${token}` },
       })
       if (!response.ok) throw new Error(`eBay taxonomy download failed (${response.status}).`)
@@ -210,7 +211,7 @@ export class EbayCategoryService {
           triggeredBy: 'api',
         },
         async () => {
-          const res = await fetch(url, {
+          const res = await this.send(url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -337,7 +338,7 @@ export class EbayCategoryService {
     }
     const apiBase = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
     try {
-      const res = await fetch(`${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}`, {
+      const res = await this.send(`${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(15_000),
       })
@@ -423,6 +424,17 @@ export class EbayCategoryService {
     return out
   }
 
+  /** P1.2 — the account whose token is cached (null = the app's client-credentials token). */
+  private tokenConnectionId: string | null = null
+
+  /**
+   * P1.2 — every eBay call of this service goes through the channel gateway, against the account whose
+   * token it sends (the primary seller account), or as an app-level call with the app token.
+   */
+  private send(input: string, init: RequestInit): Promise<Response> {
+    return ebayTransport(this.tokenConnectionId, { appLevel: !this.tokenConnectionId })(input, init)
+  }
+
   private async getAccessToken(): Promise<string> {
     if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return this.accessToken
     if (this.tokenRequest) return this.tokenRequest
@@ -441,7 +453,9 @@ export class EbayCategoryService {
       const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
       if (conn && conn.authStatus !== 'disconnected' && conn.authStatus !== 'revoked') {
         const { ebayAuthService } = await import('./ebay-auth.service.js')
-        return await ebayAuthService.getValidToken(conn.id)
+        const token = await ebayAuthService.getValidToken(conn.id)
+        this.tokenConnectionId = conn.id
+        return token
       }
     } catch (err) {
       // Fall through to client-credentials. Don't swallow — log so
@@ -453,6 +467,7 @@ export class EbayCategoryService {
     }
 
     // 2. Application credentials can read public taxonomy independently of seller access.
+    this.tokenConnectionId = null
     const looksLikePlaceholder = (v?: string) =>
       !v || /^your_/i.test(v) || v.length < 8
     // The OAuth connection flow uses CLIENT_ID / CLIENT_SECRET. Keep legacy deployments
@@ -483,6 +498,7 @@ export class EbayCategoryService {
           triggeredBy: 'api',
         },
         async () => {
+          // gateway-exempt: OAuth token exchange (client_credentials) — the app token this service may send
           const response = await fetch(authUrl, {
             method: "POST",
             signal: AbortSignal.timeout(15_000),
@@ -585,7 +601,7 @@ export class EbayCategoryService {
             triggeredBy: 'api',
           },
           async () => {
-            const response = await fetch(url, {
+            const response = await this.send(url, {
               method: "GET",
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -706,7 +722,7 @@ export class EbayCategoryService {
             triggeredBy: 'api',
           },
           async () => {
-            const response = await fetch(url, {
+            const response = await this.send(url, {
               method: "GET",
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -890,7 +906,7 @@ export class EbayCategoryService {
           triggeredBy: 'api',
         },
         async () => {
-          const res = await fetch(url, {
+          const res = await this.send(url, {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -1037,7 +1053,7 @@ export class EbayCategoryService {
           triggeredBy: 'api',
         },
         async () => {
-          const res = await fetch(url, {
+          const res = await this.send(url, {
             headers: {
               Authorization: `Bearer ${token}`,
               "Accept-Language": "en-US",

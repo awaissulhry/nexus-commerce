@@ -3,6 +3,11 @@ import { readPushControls } from '../listing-push-controls.js'
 import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
 import { assertEbayWriteAllowed, ebayHostOf } from "../ebay-publish-gate.service.js";
+import { ebayTransport } from "../gateway/ebay.js";
+
+// P1.2 — this service sends with the APP token (no seller account), so its calls go through the channel
+// gateway as app-level calls. P1.6 candidate (FINAL-PLAN): the app-token eBay service is retired there.
+const ebayAppSend = ebayTransport(null, { appLevel: true });
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
 
@@ -79,6 +84,7 @@ export class EbayService {
           triggeredBy: 'api',
         },
         async () => {
+          // gateway-exempt: OAuth token exchange (client_credentials) — the app token this service sends
           const response = await fetch(EBAY_AUTH_URL, {
             method: "POST",
             headers: {
@@ -134,7 +140,7 @@ export class EbayService {
           triggeredBy: 'api',
         },
         async () => {
-          const res = await fetch(url, {
+          const res = await ebayAppSend(url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -197,7 +203,7 @@ export class EbayService {
             productId,
           },
           async () => {
-            const getResponse = await fetch(url, {
+            const getResponse = await ebayAppSend(url, {
               method: "GET",
               headers: {
                 Authorization: `Bearer ${token}`,
@@ -242,7 +248,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const putResponse = await fetch(url, {
+          const putResponse = await ebayAppSend(url, {
             method: "PUT",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -304,7 +310,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const offersResponse = await fetch(offersUrl, {
+          const offersResponse = await ebayAppSend(offersUrl, {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -359,7 +365,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const updateResponse = await fetch(updateUrl, {
+          const updateResponse = await ebayAppSend(updateUrl, {
             method: "PUT",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -484,7 +490,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebayAppSend(url, {
             method: "PUT",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -568,7 +574,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebayAppSend(url, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -640,7 +646,7 @@ export class EbayService {
           triggeredBy: 'api',
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebayAppSend(url, {
             method: "PUT",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -707,7 +713,7 @@ export class EbayService {
           triggeredBy: 'api',
         },
         async () => {
-          const inventoryResponse = await fetch(
+          const inventoryResponse = await ebayAppSend(
             `${EBAY_API_BASE}/sell/inventory/v1/inventory`,
             {
               method: "GET",
@@ -751,7 +757,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const offersResponse = await fetch(
+          const offersResponse = await ebayAppSend(
             `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${variantSku}`,
             {
               method: "GET",
@@ -793,7 +799,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const updateResponse = await fetch(
+          const updateResponse = await ebayAppSend(
             `${EBAY_API_BASE}/sell/inventory/v1/offer/${offer.offerId}`,
             {
               method: "PATCH",
@@ -861,7 +867,7 @@ export class EbayService {
           productId,
         },
         async () => {
-          const response = await fetch(url, {
+          const response = await ebayAppSend(url, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -956,7 +962,7 @@ export class EbayService {
         },
         async () => {
           const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-          const res = await fetch(url, {
+          const res = await ebayAppSend(url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -999,7 +1005,7 @@ export class EbayService {
         },
         async () => {
           const url = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`;
-          const res = await fetch(url, {
+          const res = await ebayAppSend(url, {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${token}`,

@@ -2037,9 +2037,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // has any A+ Content published for this seller. If 0, Phase 9 is
   // a no-op (nothing to reconcile). If non-zero, we build the pull.
   fastify.get('/aplus/probe', async () => {
-    const access_token = await getAmazonAccessToken()
+    const { amazonSellerFetch } = await import('../services/gateway/amazon-sdk.js')
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-    const host = `sellingpartnerapi-${await getAmazonRegion()}.amazon.com`
     const probes: Array<{ name: string; path: string }> = [
       { name: 'aplus-listDocs', path: `/aplus/2020-11-01/contentDocuments?marketplaceId=${marketplaceId}&pageSize=20` },
       { name: 'aplus-listAsins', path: `/aplus/2020-11-01/contentAsinRelations?marketplaceId=${marketplaceId}&asinSet=B0BMSC91YK` },
@@ -2047,9 +2046,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     const results: Array<{ name: string; status: number; sample?: unknown; error?: string }> = []
     for (const p of probes) {
       try {
-        const r = await fetch(`https://${host}${p.path}`, {
-          headers: { 'x-amz-access-token': access_token },
-        })
+        const r = await amazonSellerFetch({ path: p.path, operation: `probe.${p.name}` })
         const body = await r.text()
         let sample: unknown
         let errMsg: string | undefined
@@ -2112,9 +2109,8 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // ones grant access. Used to determine whether Amazon's Finance role grant
   // is partial (some endpoints work, others don't) or fully blocked.
   fastify.get('/finance/probe', async () => {
-    const accessToken = await getAmazonAccessToken()
+    const { amazonSellerFetch } = await import('../services/gateway/amazon-sdk.js')
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-    const host = `sellingpartnerapi-${await getAmazonRegion()}.amazon.com`
     const since = new Date(Date.now() - 30 * 86400_000).toISOString()
     const sinceShort = new Date(Date.now() - 7 * 86400_000).toISOString()
     const endpoints = [
@@ -2129,9 +2125,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     const results: Array<{ name: string; status: number; ok: boolean; error?: string; sample?: unknown }> = []
     for (const ep of endpoints) {
       try {
-        const r = await fetch(`https://${host}${ep.path}`, {
-          headers: { 'x-amz-access-token': accessToken, 'Content-Type': 'application/json' },
-        })
+        const r = await amazonSellerFetch({ path: ep.path, operation: `probe.${ep.name}` })
         const body = await r.text()
         let errMsg: string | undefined
         let sample: unknown = undefined

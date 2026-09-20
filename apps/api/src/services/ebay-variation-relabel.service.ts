@@ -64,7 +64,7 @@ export interface RelabelResult {
 export async function relabelListingToPoolSkus(
   itemId: string,
   marketplace: string,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
 ): Promise<RelabelResult> {
   const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
   for (const row of pushControls) {
@@ -112,6 +112,7 @@ export async function relabelListingToPoolSkus(
     const res = await callTradingApi('ReviseFixedPriceItem', xml, {
       oauthToken: ctx.oauthToken,
       siteId: siteIdForMarket(market),
+      connectionId: ctx.connectionId,
     })
     ebayAck = res.ack
     // eBay acked — rewrite our memberships to the new SKUs (per-listing price,
@@ -225,7 +226,7 @@ export interface SkulessAdoptionResult {
 export async function adoptSkulessVariations(
   itemId: string,
   marketplace: string,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
   preferredParentSku?: string,
 ): Promise<SkulessAdoptionResult> {
   const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
@@ -236,7 +237,7 @@ export async function adoptSkulessVariations(
   const market = marketplace.toUpperCase()
   const getXml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID></GetItemRequest>`
-  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market: market })
   const live = parseLiveVariations(got.raw)
   // per-variation price (StartPrice) by specifics — parseLiveVariations
   // doesn't carry it and the membership should record the LIVE price.
@@ -328,6 +329,7 @@ export async function adoptSkulessVariations(
   const res = await callTradingApi('ReviseFixedPriceItem', buildRelabelXml(itemId, entries), {
     oauthToken: ctx.oauthToken,
     siteId: siteIdForMarket(market),
+    connectionId: ctx.connectionId,
   })
   base.ebayAck = res.ack
   base.adopted = entries.length

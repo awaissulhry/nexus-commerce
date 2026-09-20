@@ -4324,6 +4324,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!job.location) return { info, note: 'no download location' }
     try {
       const { gunzipSync } = await import('node:zlib')
+      // gateway-exempt: pre-signed report file on Amazon's storage, not the API
       const dl = await fetch(job.location)
       const buf = Buffer.from(await dl.arrayBuffer())
       let parsed: unknown
@@ -4567,6 +4568,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!job.location) return reply.code(400).send({ error: 'no_url_on_job' })
     try {
       const { gunzipSync } = await import('zlib')
+      // gateway-exempt: pre-signed report file on Amazon's storage, not the API
       const res = await fetch(job.location)
       if (!res.ok) return reply.code(502).send({ error: `s3_${res.status}` })
       const buf = Buffer.from(await res.arrayBuffer())
@@ -4701,6 +4703,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (url) {
       try {
         const { gunzipSync } = await import('zlib')
+        // gateway-exempt: pre-signed report file on Amazon's storage, not the API
         const res = await fetch(url)
         const contentType = res.headers.get('content-type') ?? ''
         const buf = await res.arrayBuffer()

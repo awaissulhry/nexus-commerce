@@ -9,9 +9,10 @@ import {
   type ConnectionHandle,
   type ConnectionIdentity,
   type HeartbeatResult,
-  type RateLimitReading,
 } from '../../catalog.js'
+import { shopifyRateReading } from '../../rate-readings.js'
 import { shopifyShopDomain } from './auth.js'
+import { SHOPIFY_API_VERSION } from '../../../shopify/api-version.js'
 
 export const SHOPIFY_REQUIRED_SCOPES = [
   'read_products', 'write_products', 'read_inventory', 'write_inventory', 'read_locations', 'write_locations',
@@ -56,7 +57,8 @@ async function connectionData(handle: ConnectionHandle): Promise<{
   const domain = shopifyShopDomain(handle.region)
   if (!domain) throw new Error('The Shopify connection has no valid myshopify.com domain.')
   const token = await handle.token()
-  const response = await fetch(`https://${domain}/admin/api/2026-07/graphql.json`, {
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
+  const response = await fetch(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
     body: JSON.stringify({
@@ -180,19 +182,9 @@ export const shopifySpec: ChannelSpec = {
       metadata: { storeUrl: identity.storeUrl ?? null },
     }]
   },
-  rateLimit: {
-    parse: (headers: Headers, status: number): RateLimitReading | null => {
-      const call = headers.get('x-shopify-shop-api-call-limit')
-      if (call) {
-        const [used, max] = call.split('/').map(Number)
-        return { model: 'leaky_bucket', remaining: max - used, limit: max, retryAfterSec: status === 429 ? Number(headers.get('retry-after') ?? 1) : undefined }
-      }
-      return status === 429 ? { model: 'points', retryAfterSec: 1 } : null
-    },
-    model: 'points',
-  },
+  rateLimit: { parse: shopifyRateReading, model: 'points' },
   webhooks: { scheme: 'shopify-hmac', subscriptionApi: true, lifecycleTopics: ['app/uninstalled', 'app/scopes_update', 'shop/redact', 'customers/data_request', 'customers/redact'] },
-  apiVersion: '2026-07',
+  apiVersion: SHOPIFY_API_VERSION,
   sandbox: { available: true },
 }
 

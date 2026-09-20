@@ -12,6 +12,7 @@
  * Now pushes jobs to BullMQ queue after creating Prisma records
  */
 
+import { createOutboundRow } from './outbound-rows.js'
 import { prisma } from '@nexus/database'
 import { OutboundSyncStatus } from '@prisma/client'
 import { logger } from '../utils/logger.js'
@@ -164,7 +165,7 @@ export class OutboundSyncServicePhase9 {
           continue
         }
 
-        await (prisma as any).outboundSyncQueue.create({
+        await createOutboundRow((prisma as any), {
           data: {
             productId: parentProduct.id,
             channelListingId: amazonListing.id,

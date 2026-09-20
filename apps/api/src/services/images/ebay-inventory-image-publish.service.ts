@@ -14,6 +14,8 @@
  * Images come from the child ProductImage rows (the publisher's default).
  * Per-colour curation overrides arrive in Phase 3.
  */
+import { ebaySend } from '../gateway/ebay.js'
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
 import prisma from '../../db.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
 import {
@@ -166,6 +168,13 @@ export async function publishEbayImagesViaInventory(
   const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) {
     return { success: false, message: 'No active eBay connection found', pictureCount: 0, colorSetCount: 0, error: 'No connection' }
+  }
+  // P0.7 — refuse (before any job row) when this product's eBay listings belong only to another account.
+  try {
+    await assertWriteAccount('EBAY', connection.id, { productIds: [productId] })
+  } catch (err) {
+    if (!isWrongAccountWriteError(err)) throw err
+    return { success: false, message: err.message, pictureCount: 0, colorSetCount: 0, error: err.code }
   }
   let token: string
   try {
@@ -369,7 +378,7 @@ export async function publishEbayImagesViaInventory(
       if (!sku || intended.length === 0) continue
       try {
         const read = async () => {
-          const res = await fetch(`${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+          const res = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
             headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'it-IT', 'Content-Language': 'it-IT' },
           })
           if (!res.ok) return null

@@ -21,6 +21,7 @@
  * the node-cron fallback (existing) drains it on its next tick.
  */
 
+import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
@@ -220,7 +221,7 @@ async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
 async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promise<string> {
-  const row = await tx.outboundSyncQueue.create({
+  const row = await createOutboundRow(tx, {
     data: {
       // Campaign-level entities don't tie to a product/channel listing.
       // Leave both FKs null; the worker reads entityType from payload.

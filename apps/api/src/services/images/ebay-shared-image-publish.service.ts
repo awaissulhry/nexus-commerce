@@ -1,3 +1,4 @@
+import { assertWriteAccount, isWrongAccountWriteError } from '../write-account-guard.js'
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from '../listing-push-controls.js'
 /**
@@ -282,6 +283,13 @@ export async function publishEbaySharedListingImages(
     ? await tryResolveConnection({ itemId: targets[0].itemId, marketplace: targets[0].marketplace })
     : await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!connection) return fail('No active eBay connection found', 'No connection')
+  // P0.7 — the first target's account is used for every target: each listing must belong to it.
+  try {
+    for (const t of targets) await assertWriteAccount('EBAY', connection.id, { itemIds: [t.itemId] })
+  } catch (err) {
+    if (!isWrongAccountWriteError(err)) throw err
+    return fail(err.message, err.code)
+  }
   let token: string
   try {
     token = await ebayAuthService.getValidToken(connection.id)
@@ -315,7 +323,7 @@ export async function publishEbaySharedListingImages(
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <ItemID>${escapeXml(target.itemId)}</ItemID>
-</GetItemRequest>`, { oauthToken: token, siteId })
+</GetItemRequest>`, { oauthToken: token, siteId, connectionId: connection.id })
       const liveSet = parseVariationSpecificsSet(got.raw)
 
       const payload = buildSharedPicturePayload({
@@ -338,7 +346,7 @@ export async function publishEbaySharedListingImages(
         axisName: payload.axisName,
         byValue: payload.byValue,
       })
-      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId })
+      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId, connectionId: connection.id })
       pictureCount += payload.galleryUrls.length + Object.values(payload.byValue).reduce((n, u) => n + u.length, 0)
       colorSetCount = Math.max(colorSetCount, Object.keys(payload.byValue).length)
       allResults.push({

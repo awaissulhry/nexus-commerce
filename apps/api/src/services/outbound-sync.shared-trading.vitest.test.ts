@@ -13,6 +13,8 @@ vi.mock('../db.js', () => {
         findMany: vi.fn(async () => []),
         // RT.2 debounce read — default: never pushed, no debounce
         aggregate: vi.fn(async () => ({ _max: { lastPushedAt: null } })),
+        // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
+        findMany: vi.fn(async () => []),
       },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },
@@ -77,6 +79,7 @@ describe('syncToEbay TRADING branch', () => {
 
   const queueItem = {
     id: 'q1',
+    channelConnectionId: 'conn1', // P1.3 — every row names its account
     externalListingId: '110556677',
     product: { id: 'p1', sku: 'PARENT' },
     payload: {
@@ -91,7 +94,7 @@ describe('syncToEbay TRADING branch', () => {
     const res = await (svc as any).syncToEbay(queueItem)
     expect(spy).toHaveBeenCalledWith(
       { itemId: '110556677', entries: [{ sku: 'LNR-M', quantity: 7 }] },
-      { oauthToken: 'TOKEN-XYZ', market: 'IT' },
+      { oauthToken: 'TOKEN-XYZ', market: 'IT', connectionId: 'conn1' },
     )
     expect(res.success).toBe(true)
     expect(res.channel).toBe('EBAY')

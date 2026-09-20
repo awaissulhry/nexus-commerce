@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { ebayTransport } from '../gateway/ebay.js'
 import { readPushControls } from '../listing-push-controls.js'
 /**
  * W12.3 — eBay parallel-batch wrapper.
@@ -132,6 +133,7 @@ async function runOne(
   op: EbayBatchOperation,
   accessToken: string,
   maxRetries: number,
+  connectionId: string,
 ): Promise<EbayBatchOpResult> {
   // Withdraw is a lifecycle operation. Price and stock are ordinary pushes.
   if (op.type !== 'withdraw') {
@@ -154,7 +156,8 @@ async function runOne(
   while (attempt <= maxRetries) {
     attempt++
     try {
-      const res = await fetch(`${EBAY_API_BASE}${call.path}`, {
+      // P1.2 — through the channel gateway; this loop keeps its own retry policy.
+      const res = await ebayTransport(connectionId, { maxTransientRetries: 0, max429Retries: 0 })(`${EBAY_API_BASE}${call.path}`, {
         method: call.method,
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -283,7 +286,7 @@ export async function submitEbayParallelBatch(
 
   const results = await runWithConcurrency(
     input.operations,
-    (op) => runOne(op, accessToken, maxRetries),
+    (op) => runOne(op, accessToken, maxRetries, input.connectionId),
     concurrency,
   )
   const succeeded = results.filter((r) => r.status !== 'failed').length

@@ -20,6 +20,7 @@ import { marketLanguages } from '../pim/market-languages.js'
  * cover the health-nudge rules.
  */
 
+import { createOutboundRows } from '../outbound-rows.js'
 import { ACTION_HANDLERS, getFieldPath, type ActionResult } from '../automation-rule.service.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -102,7 +103,7 @@ ACTION_HANDLERS.sync_price_to_marketplaces = async (action, context, meta): Prom
     return { type: action.type, ok: true, output: { dryRun: true, wouldEnqueue: targets.length, price, skippedCurrency, coordinates } }
   }
 
-  await prisma.outboundSyncQueue.createMany({
+  await createOutboundRows(prisma, {
     data: targets.map((l) => ({
       productId: l.productId ?? productId,
       channelListingId: l.id,
@@ -148,7 +149,7 @@ ACTION_HANDLERS.sync_inventory_to_marketplaces = async (action, context, meta): 
     return { type: action.type, ok: true, output: { dryRun: true, wouldEnqueue: listings.length, quantity, coordinates } }
   }
 
-  await prisma.outboundSyncQueue.createMany({
+  await createOutboundRows(prisma, {
     data: listings.map((l) => ({
       productId: l.productId ?? productId,
       channelListingId: l.id,
@@ -280,7 +281,7 @@ ACTION_HANDLERS.cascade_translate_content = async (action, context, meta): Promi
     .filter((r): r is NonNullable<typeof r> => r != null)
 
   if (rows.length > 0) {
-    await prisma.outboundSyncQueue.createMany({ data: rows as never, skipDuplicates: true })
+    await createOutboundRows(prisma, { data: rows as never, skipDuplicates: true })
   }
   logger.info('[listing-automation] cascade_translate enqueued', { ruleId: meta.ruleId, productId, count: rows.length, langCalls })
   return { type: action.type, ok: true, output: { enqueued: rows.length, languages: plan, budgetHit } }

@@ -55,7 +55,7 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
       const result = await relinkEbayItemId(
         prisma,
         { parentSku: parentSku.trim(), marketplace: mp, itemId: String(itemId), apply: apply === true, acknowledgeUnverifiable: acknowledgeUnverifiable === true },
-        { oauthToken: token },
+        { oauthToken: token, connectionId: connection.id },
       )
       return reply.send(result)
     } catch (err: unknown) {
@@ -91,7 +91,7 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
           .send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
       }
       try {
-        return reply.send(await collectInventoryDrift(prisma, { marketplace, oauthToken: token }))
+        return reply.send(await collectInventoryDrift(prisma, { marketplace, oauthToken: token, connectionId: connection.id }))
       } catch (err: unknown) {
         request.log.error(err, 'ebay/inventory-drift failed')
         return reply.code(502).send({ error: err instanceof Error ? err.message : 'drift check failed' })

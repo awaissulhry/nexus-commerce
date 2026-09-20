@@ -59,6 +59,7 @@ export async function fetchAmazonVocFeed(opts: AmazonVocOptions = {}): Promise<A
     if (process.env.NEXUS_AMAZON_REVIEW_FEED_TOKEN) {
       headers.Authorization = `Bearer ${process.env.NEXUS_AMAZON_REVIEW_FEED_TOKEN}`
     }
+    // gateway-exempt: an operator-configured third-party review feed (NEXUS_AMAZON_REVIEW_FEED_URL), not Amazon's API
     const res = await fetch(url, { headers })
     if (!res.ok) {
       return { reviews, error: `feed HTTP ${res.status}` }

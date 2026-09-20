@@ -17,7 +17,6 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
 
 import type { SellingPartner } from 'amazon-sp-api'
 import { logger } from '../utils/logger.js'
-import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 import {
   startReportRun,
   completeReportRun,

@@ -550,8 +550,6 @@ export async function syncFinancialTransactions(
   const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
   const authorization = await import('../lib/amazon-sp-client.js')
   const account = await authorization.amazonAccount()
-  const region = await authorization.getAmazonRegion(account.id)
-  const host = `sellingpartnerapi-${region}.amazon.com`
 
   // Clamp upper bound to "now - 3min" — same SP-API data-propagation guard
   // we use for getOrders.
@@ -571,8 +569,9 @@ export async function syncFinancialTransactions(
           marketplaceId: mid,
         }
     const qs = new URLSearchParams(params).toString()
-    const res = await fetch(`https://${host}/finances/2024-06-19/transactions?${qs}`, {
-      headers: { 'x-amz-access-token': await authorization.getAmazonAccessToken(account.id), 'Content-Type': 'application/json' },
+    // P1.2 — through the channel gateway (the same account; rate bucket; call ledger).
+    const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
+      accountId: account.id, path: `/finances/2024-06-19/transactions?${qs}`, operation: 'finances.listTransactions',
     })
     if (!res.ok) {
       const body = await res.text()

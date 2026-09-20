@@ -279,7 +279,14 @@ export class EtsyService {
     }
 
     try {
-      const response = await fetch(url, options);
+      // P1.2 — through the channel gateway as an app-level call (legacy env credentials, no account row).
+      // P1.6 candidate (FINAL-PLAN): this legacy Etsy writer is retired there.
+      const { gatewayFetch } = await import("../gateway/gateway.js");
+      const response = await gatewayFetch({
+        channel: "ETSY", operation: `${method} ${endpoint.split("?")[0].replace(/\/\d+(?=\/|$)/g, "/:id")}`,
+        kind: method === "GET" ? "read" : "write", connectionId: null, appLevel: true, url, method: method as "GET",
+        headers: options.headers as Record<string, string>, body: (options.body as string | undefined) ?? null, auth: "none",
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

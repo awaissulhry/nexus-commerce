@@ -3,12 +3,27 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const s = vi.hoisted(() => {
   const send = vi.fn()
-  vi.stubGlobal('fetch', send)
-  return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn(), ebayRefusal: null as string | null }
+  // P1.2 — the gateway reads a real Response; the fake's answers are turned into one.
+  vi.stubGlobal('fetch', async (...args: unknown[]) => (await import('../test-support/gateway-stubs.js')).asResponse(send(...args)))
+  return { send, read: vi.fn(), amazon: vi.fn(), job: vi.fn(), update: vi.fn(), feed: vi.fn(), upload: vi.fn(), review: vi.fn(), ebayRefusal: null as string | null,
+    // P1.7 — Amazon's own dry run before the direct route's PUT; this is its answer.
+    preview: { ok: true, available: true, errors: null as string | null, warnings: [] as string[] },
+    // P0.7 — who owns the fixture listing / SKU, and the account's own listing when asked for it.
+    owner: null as string | null, own: null as Record<string, unknown> | null, skuOwner: null as string | null }
 })
 vi.mock('../db.js', () => ({ default: {
   product: { findUnique: async () => ({ id: 'p', sku: 'SKU', name: 'Fixture', basePrice: 20, productType: 'COAT', translations: [] }), findFirst: async () => ({ brand: 'Fixture' }) },
-  channelListing: { findMany: async () => [], findFirst: async () => ({ id: 'listing', productId: 'p', product: { sku: 'SKU' }, quantity: 2 }), update: s.update, updateMany: s.update },
+  channelListing: {
+    findMany: async (args?: { where?: { product?: { sku?: { in?: string[] } } } }) =>
+      s.skuOwner && args?.where?.product?.sku?.in?.includes('SKU') ? [{ channelConnectionId: s.skuOwner, product: { sku: 'SKU' } }] : [],
+    findFirst: async (args?: { where?: { channelConnectionId?: string } }) => args?.where?.channelConnectionId
+      ? s.own
+      : ({ id: 'listing', productId: 'p', product: { sku: 'SKU' }, quantity: 2, ...(s.owner ? { channelConnectionId: s.owner } : {}) }),
+    update: s.update, updateMany: s.update },
+  // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
+  sharedListingMembership: { findMany: async () => [] },
+  // P1.5 — eBay listing writes take their language from the Marketplace row (the seeded IT row).
+  marketplace: { findFirst: async ({ where }: { where: { code: string } }) => where.code === 'IT' ? { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it' } : null },
   stockLevel: { findMany: async () => [] }, fbaInventoryDetail: { findMany: async () => [] },
   ebayPushJob: { findFirst: async () => null, create: async () => ({ id: 'job' }), update: s.job },
 } }))
@@ -18,7 +33,11 @@ vi.mock('../services/outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn() })
 vi.mock('../services/content-auto-publish.service.js', () => ({ enqueueContentSyncIfEnabled: vi.fn() }))
 vi.mock('../services/listing-activation-sync.service.js', () => ({ syncActivatedListings: vi.fn() }))
 vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class { isConfigured = async () => true } }))
-vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: { putListingsItem: s.amazon } }))
+// P1.7 — the direct publish route asks Amazon first (mode=VALIDATION_PREVIEW); `s.preview` is its answer.
+vi.mock('../clients/amazon-sp-api.client.js', () => ({ amazonSpApiClient: {
+  putListingsItem: s.amazon,
+  validateListing: vi.fn(async () => s.preview),
+} }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'seller' }))
 vi.mock('../services/categories/marketplace-ids.js', () => ({ configuredAmazonMarketplaceId: async () => 'AMAZON_IT' }))
 vi.mock('../services/pim/amazon-content-payload.js', () => ({ buildAmazonContentAttributes: async () => ({}) }))
@@ -30,11 +49,14 @@ vi.mock('../services/ebay-account.service.js', () => ({ ebayAccountService: {}, 
 vi.mock('../services/ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => (s.ebayRefusal ? 'dry-run' : 'live'), ebayWriteRefusal: () => s.ebayRefusal, ebayHostOf: () => 'production' }))
 vi.mock('../services/amazon-mcf.service.js', () => ({ getPendingMcfReservedByProduct: async () => new Map() }))
 vi.mock('../services/order-events.service.js', () => ({ publishOrderEvent: vi.fn() }))
+// P1.2 — the eBay sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../services/ebay-feed.service.js', () => ({ buildInventoryNdjson: () => 'fixture', createInventoryTask: s.feed, uploadFeedFile: s.upload, getTaskStatus: vi.fn() }))
 vi.mock('../services/ebay-flat-file-pull-preview.service.js', () => ({ startEbayPullPreviewJob: vi.fn(), getEbayPullPreviewJobStatus: vi.fn() }))
 vi.mock('../services/ebay-variation-push.service.js', () => ({
   MARKETS: ['IT', 'DE', 'UK'], toMarketplaceId: (m: string) => `EBAY_${m}`, toChannelMarket: (m: string) => `EBAY_${m}`,
-  toListingLanguage: () => 'it-IT', CONDITION_ID_TO_ENUM: {}, buildPackageWeightAndSize: () => null,
+  CONDITION_ID_TO_ENUM: {}, buildPackageWeightAndSize: () => null,
   resolvePerMarketContent: (_listing: unknown, fallback: unknown) => fallback,
   buildFlatRow: vi.fn(), packSharedFields: vi.fn(), applyEbayFlatFileSnapshot: vi.fn(), buildBestOfferTerms: vi.fn(), resolveQuantityLimitPerBuyer: vi.fn(),
   pushVariationGroup: vi.fn(), pushOffersOnly: vi.fn(), axisSynonymKey: (v: string) => v.toLowerCase(),
@@ -62,6 +84,7 @@ afterAll(async () => { await app?.close(); vi.unstubAllGlobals() })
 beforeEach(() => {
   vi.clearAllMocks()
   s.ebayRefusal = null
+  s.owner = null; s.own = null; s.skuOwner = null
   s.read.mockResolvedValue([{}])
   s.review.mockResolvedValue({})
   s.amazon.mockResolvedValue({ success: true, status: 'SUBMITTED' })
@@ -165,5 +188,35 @@ describe('P0.1 — Amazon direct publish dry run', () => {
     expect(response.json()).toMatchObject({ ok: true, status: 'SUBMITTED' })
     expect(s.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublished: true, listingStatus: 'ACTIVE' }) }))
     expect(syncActivatedListings).toHaveBeenCalledWith(['listing'])
+  })
+})
+
+describe('P0.7 — the primary-only eBay flat-file writers never act for another account', () => {
+  it.each([
+    ['POST', '/api/ebay/flat-file/publish'],
+    ['DELETE', '/api/ebay/flat-file/offer'],
+  ] as const)('%s %s: the product\'s listing here belongs to another account and this one has none → REFUSED, 0 calls', async (method, url) => {
+    s.owner = 'other'
+    const response = await app.inject({ method, url, payload: { rowIds: ['p'], markets: ['IT'] } })
+    expect(response.statusCode).toBe(200)
+    expect(response.json().results).toEqual([expect.objectContaining({ productId: 'p', status: 'REFUSED', message: expect.stringMatching(/another eBay account|Nothing was sent/) })])
+    expect(s.send).not.toHaveBeenCalled()
+  })
+  it('positive control: when this account has its own listing of the product, publish acts on that one', async () => {
+    s.owner = 'other'
+    s.own = { id: 'own', productId: 'p', product: { sku: 'SKU' }, quantity: 2, channelConnectionId: 'account' }
+    const response = await app.inject({ method: 'POST', url: '/api/ebay/flat-file/publish', payload: { rowIds: ['p'], markets: ['IT'] } })
+    expect(response.json().results).not.toEqual([expect.objectContaining({ status: 'REFUSED' })])
+    expect(s.send).toHaveBeenCalled()
+  })
+  it('push: a SKU of another account refuses the whole push (409, 0 calls); its own SKU goes through (positive control)', async () => {
+    s.skuOwner = 'other'
+    const refused = await app.inject({ method: 'POST', url: '/api/ebay/flat-file/push', payload: { rows: [row], markets: ['IT'], mode: 'api' } })
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json()).toMatchObject({ error: 'WRONG_ACCOUNT_WRITE' })
+    expect(s.send).not.toHaveBeenCalled()
+    s.skuOwner = 'account'
+    const allowed = await app.inject({ method: 'POST', url: '/api/ebay/flat-file/push', payload: { rows: [row], markets: ['IT'], mode: 'api' } })
+    expect(allowed.statusCode).not.toBe(409)
   })
 })

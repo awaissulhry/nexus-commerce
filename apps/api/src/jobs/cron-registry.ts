@@ -31,6 +31,7 @@ import { evaluateEbayAdsRules, runAnomalyGuard, generateWeeklyDigest } from '../
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runHeartbeatSweep as runCxHeartbeat } from './cx-heartbeat.job.js'
+import { runAmazonSecretRotationTick } from './amazon-secret-rotation.job.js'
 import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
 import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runAdsDecisionsReseed } from './cx3b-ads-decisions-reseed.job.js'
@@ -84,8 +85,6 @@ import {
   runCompetitiveRefresh,
 } from './pricing-refresh.job.js'
 import { runAllEstySyncJobs } from './etsy-sync.job.js'
-import { runAllShopifySyncJobs } from './shopify-sync.job.js'
-import { runAllWooCommerceSyncJobs } from './woocommerce-sync.job.js'
 // AD.1 + AD.2 — Trading Desk cron entrypoints.
 // H.2e: runAdsSyncCron + runAdsMetricsIngestCron retired (replaced by
 // v1 export pipeline + Phase 11 async reports respectively).
@@ -175,6 +174,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // CX.1 — the heartbeat replaced the eBay-only token refresh sweep; the old key stays as an alias.
   'ebay-token-refresh': () => runCxHeartbeat(),
   'cx-heartbeat': () => runCxHeartbeat(),
+  // P6.1 — automatic Amazon app-secret rotation (no-op without AMAZON_APP_CREDENTIAL_QUEUE_URL).
+  'amazon-secret-rotation': () => runAmazonSecretRotationTick(),
   'cx1-credentials-backfill': () => runCredentialsBackfill(),
   'cx1-credentials-restore': () => runCredentialsRestore(),
   'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
@@ -233,8 +234,6 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // who only want a single sub-tick re-trigger from CLI today —
   // fine-grained sub-tick triggers can be exposed later.
   'etsy-sync': () => runAllEstySyncJobs(),
-  'shopify-sync': () => runAllShopifySyncJobs(),
-  'woocommerce-sync': () => runAllWooCommerceSyncJobs(),
 
   // AD.1 + AD.2 — Trading Desk substrate + metrics ingest.
   // AD.3 — advertising-domain AutomationRule evaluator.

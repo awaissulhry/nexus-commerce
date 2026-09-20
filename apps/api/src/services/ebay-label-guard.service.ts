@@ -199,14 +199,18 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       continue
     }
     if (!controls.length) { refuse('PUSH_CONTROL_UNAVAILABLE', 'No owning listing controls were found; label repair was not sent.'); continue }
-    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null)
+    // P1.7 — the shared push lock now refuses an ENDED listing as well (`PUSH_LISTING_ENDED`). This
+    // guard keeps its own sentence for that case, so both codes its tests pin stay exactly as they are:
+    // a deliberate `presenceIntent` still answers PUSH_INTENT_ENDED, an ENDED listing status answers
+    // PUSH_LEGACY_ENDED below.
+    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null && refusal.code !== 'PUSH_LISTING_ENDED')
     if (locked) { refuse(locked.code, locked.sentence); continue }
     if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
     try {
       const token = await ebayAuthService.getValidToken(t.channelConnectionId)
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${t.itemId}</ItemID><OutputSelector>Item.SKU</OutputSelector></GetItemRequest>`,
-        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+        { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       if (!got.raw) continue // dry-run/neutralized — indeterminate, never touch
       const liveSku = /<SKU>([^<]*)<\/SKU>/.exec(got.raw)?.[1] ?? ''
       if (liveSku === t.parentSku) {
@@ -215,7 +219,7 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       }
       await callTradingApi('ReviseFixedPriceItem', `<?xml version="1.0" encoding="utf-8"?>
 <ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${t.itemId}</ItemID><SKU>${t.parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`,
-        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+        { oauthToken: token, siteId: siteIdForMarket(t.marketplace), connectionId: t.channelConnectionId, market: t.marketplace })
       summary.set++
       logger.info('ebay-label-guard: custom label set', { itemId: t.itemId, parentSku: t.parentSku })
     } catch (err) {

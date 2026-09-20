@@ -17,6 +17,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *  - resolver getLiveEbayItemIds() = the UNION the E0 map called for.
  */
 
+import { ebayTradingSend } from '../gateway/ebay.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
@@ -53,7 +54,8 @@ async function tradingCall(callName: string, bodyXml: string, token: string, sit
 <${callName}Request xmlns="urn:ebay:apis:eBLBaseComponents">
 ${bodyXml}
 </${callName}Request>`
-  const r = await fetch(TRADING_URL, {
+  // P1.2 — through the channel gateway; the account is the one the token was handed out for.
+  const r = await ebayTradingSend(null, TRADING_URL, {
     method: 'POST',
     headers: {
       'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',

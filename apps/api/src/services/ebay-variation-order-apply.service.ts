@@ -161,7 +161,7 @@ export async function applyVariationOrderToListing(
   marketplace: string,
   storedAxisSeq: string[] | undefined,
   valueOrderByAxis: Record<string, string[]> | undefined,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
   opts?: { dryRun?: boolean; expectedLiveToken?: string; beforeWrite?: () => Promise<void> },
 ): Promise<ApplyOrderListingResult> {
   if (opts?.dryRun !== true) {
@@ -181,7 +181,7 @@ export async function applyVariationOrderToListing(
   let raw: string
   let title: string | undefined
   try {
-    const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId })
+    const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId })
     raw = got.raw
     title = /<Title>([^<]*)<\/Title>/.exec(raw)?.[1] || undefined
   } catch (err: unknown) {
@@ -215,6 +215,7 @@ export async function applyVariationOrderToListing(
     await callTradingApi('ReviseFixedPriceItem', buildReorderXml(itemId, plan), {
       oauthToken: ctx.oauthToken,
       siteId,
+      connectionId: ctx.connectionId,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
@@ -227,7 +228,7 @@ export async function applyVariationOrderToListing(
   // Read-back verify (FFT invariant style): the live set now IS the plan.
   let verified = false
   try {
-    const again = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId })
+    const again = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId })
     const liveNow = parseOrderSpecifics(again.raw)
     verified =
       JSON.stringify(Object.keys(liveNow)) === JSON.stringify(plan.names) &&
@@ -256,7 +257,7 @@ export interface ApplyOrderFamilyResult {
 export async function applyVariationOrderForFamily(
   parentProductId: string,
   marketplace: string,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
   opts?: { dryRun?: boolean },
 ): Promise<ApplyOrderFamilyResult> {
   throw new MappingConflict('Family-wide order revision cannot select an account or alternate listing safely. Use /api/ebay/presentation-publications/review with explicit destinations, then execute that review')

@@ -24,15 +24,9 @@ async function spApiGrantless<T>(method: 'GET' | 'POST', path: string, body?: un
   const token = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
   const slug = (amazonSpApiClient as any).region as string
   const host = `sellingpartnerapi-${slug}.amazon.com`
-  const url = `https://${host}${path}`
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'x-amz-access-token': token,
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  })
+  // P1.2 — through the channel gateway (app-level connection setup; recorded on the call ledger).
+  const { amazonGrantlessFetch } = await import('../services/gateway/amazon-sdk.js')
+  const res = await amazonGrantlessFetch({ token, host, method, path, operation: method === 'GET' ? 'notifications.getDestinations' : 'notifications.createDestination', body })
   const text = await res.text()
   if (res.status === 204) return undefined as T
   if (res.status >= 200 && res.status < 300) return text ? JSON.parse(text) as T : undefined as T
@@ -64,7 +58,8 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
     const secretKey = process.env.AWS_SECRET_ACCESS_KEY ?? null
     const awsRegion = process.env.AWS_REGION ?? null
     const amzRegion = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion() ?? null
-    const lwaId     = process.env.AMAZON_LWA_CLIENT_ID ?? process.env.AMAZON_CLIENT_ID ?? null
+    // P6.1 — the app id the token exchanges really use (ChannelApp), not the env copy.
+    const lwaId     = await import('../services/cx/apps.service.js').then((m) => m.getChannelApp('AMAZON_SP')).then((app) => app.clientId).catch(() => null)
     const spSlug    = mapAwsRegionToSpApiSlug(amzRegion ?? awsRegion ?? 'na')
     const spApiHost = `sellingpartnerapi-${spSlug}.amazon.com`
 
@@ -129,10 +124,8 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       try {
         const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
         const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
-        const url = `https://${spApiHost}/notifications/v1/destinations`
-        const res = await fetch(url, {
-          headers: { 'x-amz-access-token': grantlessToken },
-        })
+        const { amazonGrantlessFetch } = await import('../services/gateway/amazon-sdk.js')
+        const res = await amazonGrantlessFetch({ token: grantlessToken, host: spApiHost, method: 'GET', path: '/notifications/v1/destinations', operation: 'notifications.getDestinations' })
         const body = await res.text()
         if (res.ok) {
           const parsed = body ? JSON.parse(body) : {}
@@ -183,24 +176,19 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       })
     }
 
-    // Respond immediately — SP-API calls for all 8 types take 30-60s
+    // Respond immediately — SP-API calls for every type take 30-60s
     // total and Railway cuts the connection at 30s. Work runs in
     // background; check status with GET /api/admin/amazon-notification-
     // status after ~60 seconds.
+    // P0.6 — the list is the canonical one, not a hand-typed copy (the copy
+    // still named ORDER_STATUS_CHANGE and LISTINGS_ITEM_STATUS_CHANGE).
+    const { NEXUS_SP_API_NOTIFICATION_TYPES } = await import(
+      '../services/amazon-notifications-boot.service.js'
+    )
     reply.status(202).send({
       status: 'setup started',
-      message:
-        'SP-API destination + 8 subscriptions running in background. Check GET /api/admin/amazon-notification-status in ~60s.',
-      expectedSubscriptions: [
-        'ORDER_CHANGE',
-        'ORDER_STATUS_CHANGE',
-        'FBA_OUTBOUND_SHIPMENT_STATUS',
-        'FBA_INVENTORY_AVAILABILITY_CHANGES',
-        'ANY_OFFER_CHANGED',
-        'LISTINGS_ITEM_STATUS_CHANGE',
-        'FEED_PROCESSING_FINISHED',
-        'ACCOUNT_STATUS_CHANGED',
-      ],
+      message: `SP-API destination + ${NEXUS_SP_API_NOTIFICATION_TYPES.length} subscriptions running in background. Check GET /api/admin/amazon-notification-status in ~60s.`,
+      expectedSubscriptions: [...NEXUS_SP_API_NOTIFICATION_TYPES],
     })
 
     // Background work — detached from the HTTP response. Reuses the

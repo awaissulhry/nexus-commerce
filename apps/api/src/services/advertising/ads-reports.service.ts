@@ -616,6 +616,7 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
   // Download from S3 presigned URL — no auth header needed.
   let bytes: Buffer
   try {
+    // gateway-exempt: pre-signed report file on Amazon's storage, not the API
     const dlRes = await fetch(job.location)
     if (!dlRes.ok) {
       throw new Error(`download failed ${dlRes.status}`)

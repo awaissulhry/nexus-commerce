@@ -21,6 +21,7 @@
  * `token()` closure calls back in here.
  */
 
+import { rememberTokenAccount } from '../gateway/token-accounts.js'
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -293,7 +294,17 @@ export async function assertWritable(connectionId: string): Promise<void> {
   }
 }
 
+/**
+ * P1.2 — the access token for an account; the channel gateway is told which account it belongs to, so a
+ * call site that holds only the token is still recorded and checked against the right account.
+ */
 export async function getAccessToken(connectionId: string, opts: { forceRefresh?: boolean } = {}): Promise<string> {
+  const token = await accessTokenFor(connectionId, opts)
+  rememberTokenAccount(token, connectionId)
+  return token
+}
+
+async function accessTokenFor(connectionId: string, opts: { forceRefresh?: boolean }): Promise<string> {
   if (typeof connectionId !== 'string' || !connectionId) {
     throw new Error(`getAccessToken expects a connection id string, got ${typeof connectionId}`)
   }
@@ -480,14 +491,14 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
           : creds.refreshTokenExpiresAt ?? null,
       extra: creds.extra,
     }
-    await writeCredentials(connectionId, next, {
+    await saveRefreshedCredentials(connectionId, next, {
       lastRefreshAt: new Date(),
       consecutiveFailures: 0,
       lastError: null,
       lastErrorAt: null,
       authStatus: 'connected',
       ...(typeof json.scope === 'string' ? { grantedScopes: json.scope.split(/[\s,]+/).filter(Boolean) } : {}),
-    }, row)
+    }, row, spec.auth.rotatesRefreshToken && rotated)
     if (row.authStatus !== 'connected') await announceTransition(row, 'connected', 'refresh succeeded', SYSTEM_ACTOR)
     await recordConnectionEvent({
       connectionId,
@@ -500,6 +511,48 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
   } finally {
     await releaseLease(connectionId).catch(() => undefined)
   }
+}
+
+/**
+ * P6.3 (docs/channel-connections/FINAL-PLAN.md) — a rotating channel (Etsy) invalidates the old refresh
+ * token the moment it answers, so a save that is refused or fails loses the only working refresh token
+ * and the operator must reconnect. For a rotated token: when the row moved underneath but the GRANT did
+ * not (same stored credentials, still active, not disconnected or revoked — e.g. the heartbeat changed
+ * the status or the failure count), save against the fresh row; retry a failed write. A grant replaced
+ * meanwhile (a reconnect) or an account disconnected meanwhile still wins, as before. Every other
+ * refresh keeps the strict one-shot compare-and-set.
+ */
+async function saveRefreshedCredentials(connectionId: string, next: Credentials, extraData: Record<string, unknown>, row: ConnRow, rotatedMustLand: boolean): Promise<void> {
+  if (!rotatedMustLand) return writeCredentials(connectionId, next, extraData, row)
+  const sameGrant = (fresh: ConnRow) =>
+    fresh.isActive && !['disconnected', 'revoked'].includes(fresh.authStatus) &&
+    fresh.credentialsEnc === row.credentialsEnc && fresh.accessToken === row.accessToken && fresh.refreshToken === row.refreshToken &&
+    fresh.ebayAccessToken === row.ebayAccessToken && fresh.ebayRefreshToken === row.ebayRefreshToken
+  let expected = row
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await writeCredentials(connectionId, next, extraData, expected)
+      if (attempt > 1) logger.info('[cx-token] rotated refresh token saved on retry', { connectionId, attempt })
+      return
+    } catch (err) {
+      lastError = err
+      const fresh = (await prisma.channelConnection.findUnique({ where: { id: connectionId } }).catch(() => null)) as ConnRow | null
+      if (fresh && !sameGrant(fresh)) throw err
+      if (fresh) expected = fresh
+      if (!(err instanceof RefreshContended)) await new Promise((resolve) => setTimeout(resolve, 100 * attempt))
+    }
+  }
+  const { key } = specFor(row)
+  await recordConnectionEvent({ connectionId, channelKey: key, type: 'refresh_failed', detail: { errorClass: 'unknown', message: 'A rotated refresh token could not be saved.' } })
+  await alertService.createAlert(
+    AlertType.CONNECTION_HEALTH,
+    `${row.channelType} account "${row.displayName ?? row.id}": a new refresh token could not be saved`,
+    'The channel issued a new refresh token and Nexus could not store it after three attempts. The account may need to be reconnected in Settings → Channels.',
+    1,
+    [row.id],
+  ).catch(() => null)
+  throw lastError
 }
 
 async function failRefresh(row: ConnRow, errorClass: ErrorClass, message: string): Promise<void> {

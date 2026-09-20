@@ -1,4 +1,3 @@
-import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * M1 — refresh SP-API marketplace participations and persist to DB.
  *
@@ -51,7 +50,6 @@ export interface ParticipationRefreshResult {
   warnings: string[]
 }
 
-async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
 function deriveStatus(p: SpapiParticipation): ParticipationStatus {
   if (p.participation?.isParticipating === false) return 'NOT_PARTICIPATING'
@@ -63,13 +61,9 @@ function deriveStatus(p: SpapiParticipation): ParticipationStatus {
 export async function refreshAmazonParticipations(): Promise<ParticipationRefreshResult> {
   const t0 = Date.now()
   const warnings: string[] = []
-  const region = await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()
-  const host = `sellingpartnerapi-${region}.amazon.com`
-
-  const accessToken = await getLwaAccessToken()
-
-  const res = await fetch(`https://${host}/sellers/v1/marketplaceParticipations`, {
-    headers: { 'x-amz-access-token': accessToken },
+  // P1.2 — through the channel gateway (account, rate bucket, call ledger).
+  const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
+    path: '/sellers/v1/marketplaceParticipations', operation: 'sellers.getMarketplaceParticipations',
   })
   if (!res.ok) {
     const body = await res.text()

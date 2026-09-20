@@ -21,9 +21,11 @@ const owned = new Set([
   'services/shopify/offer-sync.service.ts', 'services/shopify/content-sync.service.ts',
   'services/amazon/flat-file.service.ts',
 ])
+// P1.6 (2026-09-20): the old env-credential Shopify and WooCommerce clients were deleted, so they are
+// no longer in this list. A Shopify change now leaves only through the gateway rule (2026-07 GraphQL
+// with a named account), and the linked-listing writer asserts the push lock itself.
 const clientFiles = [
   'clients/amazon-sp-api.client.ts', 'services/ebay-trading-api.service.ts',
-  'services/marketplaces/shopify.service.ts', 'services/marketplaces/woocommerce.service.ts',
 ]
 const nodes = []
 function visit(node, fn) { fn(node); ts.forEachChild(node, child => visit(child, fn)) }

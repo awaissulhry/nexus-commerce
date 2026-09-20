@@ -36,6 +36,7 @@
  * Default-on; opt out via NEXUS_ENABLE_REPRICING_EVALUATOR=0.
  */
 
+import { createOutboundRow } from '../services/outbound-rows.js'
 import cron from '../lib/cron/clustered.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -196,7 +197,7 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
 
       // CE.3: when live and applied, enqueue PRICE_UPDATE to OutboundSyncQueue.
       if (repricerLive && result.changed) {
-        await prisma.outboundSyncQueue.create({
+        await createOutboundRow(prisma, {
           data: {
             productId: rule.productId,
             targetChannel: rule.channel as never,

@@ -1,4 +1,9 @@
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { amazonContentRefusal, isAmazonContentPatchSet } from './amazon/validate-before-send.js'
+import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
+import { syncShopifyLinkedListing, type LinkedListingWork } from './shopify/listing-write.service.js';
+import { createOutboundRow } from './outbound-rows.js'
+import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
 import { readSaleWindows } from './pim/sale-window.js' // MX.1 (D-MX4) — the stored sale window a price push must carry
@@ -6,6 +11,7 @@ import { assertListingContentReviewed, PUBLISH_CONTENT_FIELDS } from './pim/publ
 import { marketLanguages, languageTag } from './pim/market-languages.js'
 import { assertInformationLocale } from './pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { assertWriteAccount, isWrongAccountWriteError } from './write-account-guard.js'
 import prisma from "../db.js";
 import { DELIST_OPERATOR_COPY } from './delist-error-codes.js';
 import { logger } from "../utils/logger.js";
@@ -23,12 +29,7 @@ import {
   getEbayPublishMode,
   recordEbayOutcome,
 } from "./ebay-publish-gate.service.js";
-import {
-  acquireShopifyPublishToken,
-  checkShopifyCircuit,
-  recordShopifyOutcome,
-  getShopifyPublishMode,
-} from "./shopify-publish-gate.service.js";
+import { getShopifyPublishMode } from "./shopify-publish-gate.service.js";
 import {
   digestPayload,
   writeAttemptLog,
@@ -48,7 +49,7 @@ import {
   reviseInventoryStatusBatch as ebayReviseInventoryStatusBatch,
   REVISE_INVENTORY_STATUS_MAX_ENTRIES,
 } from "./ebay-trading-api.service.js";
-import { toListingLanguage } from "./ebay-variation-push.service.js";
+import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
 
@@ -213,9 +214,9 @@ export function ebayCurrencyForMarket(marketplaceId: string | undefined): string
 
 /** eBay Inventory API requires BOTH language headers set to the marketplace
  *  locale, plus the marketplace id, on every call (error 25709 otherwise). */
-export function ebayInventoryHeaders(token: string, marketplaceId: string): Record<string, string> {
+export async function ebayInventoryHeaders(token: string, marketplaceId: string): Promise<Record<string, string>> {
   const mp2 = (marketplaceId ?? "EBAY_IT").replace(/^EBAY_/, "");
-  const lang = toListingLanguage(mp2);
+  const lang = await ebayListingLanguage(mp2);
   return {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
@@ -580,7 +581,7 @@ export class OutboundSyncService {
       }
 
       // Create queue entry
-      const queueEntry = await prisma.outboundSyncQueue.create({
+      const queueEntry = await createOutboundRow(prisma, {
         data: {
           productId,
           targetChannel,
@@ -642,6 +643,16 @@ export class OutboundSyncService {
     } });
   }
 
+  /**
+   * P1.3 — the channel account this row goes to: the one written with it (services/outbound-rows.ts),
+   * else — a row from before P1.3 — resolved by the same rule. `connectionId: null` = refuse the row.
+   */
+  private async destinationOf(queueItem: any): Promise<Destination> {
+    if (queueItem.channelConnectionId) return { connectionId: queueItem.channelConnectionId, reason: "NAMED" };
+    const [destination] = await resolveDestinations(prisma as never, [queueItem]);
+    return destination;
+  }
+
   private async dispatchSync(item: any): Promise<SyncResult> {
     // Presence W1.2 / D10 / SHOP-P4: the legacy dispatcher has no lifecycle
     // implementation. Refuse before content preparation or any update path.
@@ -689,7 +700,8 @@ export class OutboundSyncService {
   async processSingle(queueId: string): Promise<SyncResult> {
     const item = await prisma.outboundSyncQueue.findUnique({
       where: { id: queueId },
-      include: { product: true },
+      // P1.4 — the listing too: the Shopify native lane reads its mapping (it was never reached).
+      include: { product: true, channelListing: true },
     });
     if (!item) {
       return { success: false, queueId, channel: "UNKNOWN", status: "FAILED", message: `Queue row ${queueId} not found`, error: "queue-row-not-found" };
@@ -767,10 +779,14 @@ export class OutboundSyncService {
         },
         include: {
           product: true,
+          channelListing: true, // P1.4 — the Shopify native lane reads the listing's mapping
         },
         orderBy: {
           createdAt: "asc",
         },
+        // P1.3 — the 1-minute backup loop takes the oldest N rows per tick (it read every pending row,
+        // which after an outage or a bulk edit could be tens of thousands in one tick).
+        take: Math.max(1, Number(process.env.NEXUS_OUTBOUND_BACKUP_BATCH) || 200),
       });
 
       console.log(`Processing ${pendingItems.length} pending syncs`);
@@ -940,8 +956,14 @@ export class OutboundSyncService {
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId =
       payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
+    // P1.3 — the seller of the account this row was created for (never the default seller).
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("Amazon", destination.reason);
+      return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
     const sellerId =
-      (await getAmazonSellerId());
+      (await getAmazonSellerId(destination.connectionId));
 
     // A4.0 — resolve the Amazon product type (required by the Listings PATCH) and
     // build the CORRECT patch body (schema attribute names + value shapes),
@@ -1128,6 +1150,17 @@ export class OutboundSyncService {
       };
     }
 
+    // P0.7 → P1.3 — the row goes to its own account; this stays as a consistency check (the listing or
+    // SKU must belong to that account), refused and terminal if not.
+    if (sellerId) {
+      try {
+        await assertWriteAccount("AMAZON", destination.connectionId, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [sku], marketplace: marketplaceId });
+      } catch (err) {
+        if (!isWrongAccountWriteError(err)) throw err;
+        return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
+      }
+    }
+
     // A1.3 — delegate the gate→circuit→rate-limit→dry-run→audit chain to the
     // shared ListingPublishService; inject Amazon's gate functions + the actual
     // SP-API call. (Behavior-preserving extraction of the former inline chain.)
@@ -1148,9 +1181,11 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid }) => {
-        if (payload.source === 'FM_CATALOG_CASCADE') {
-          const check = await amazonSpApiClient.validateListing({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
-          if (!check.available || !check.ok) return { ok: false, error: !check.available ? 'Amazon validation is unavailable; no mapping update was submitted.' : `Amazon validation failed: ${check.errors}` };
+        // P1.7 — Amazon's own dry run before any CONTENT write (it was run for the mapping source only).
+        // A price- or stock-only patch set needs no preview; anything else does.
+        if (payload.source === 'FM_CATALOG_CASCADE' || isAmazonContentPatchSet(amazonPayload.patches)) {
+          const refusal = await amazonContentRefusal({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
+          if (refusal) return { ok: false, error: refusal };
         }
         const res = await amazonSpApiClient.submitListingPayload({
           sellerId: sid,
@@ -1316,7 +1351,13 @@ export class OutboundSyncService {
     // MAP.3 — DECLARED. 🔴 MAP.6/7: an outbound push SHOULD derive its account
     // from the listing it is pushing; that needs the product→account intent this
     // programme calls labels.
-    const connection = await tryResolveConnection(payload?.source === 'FM_CATALOG_CASCADE' && payload.channelConnectionId ? { accountId: payload.channelConnectionId } : { channel: "EBAY", primary: true });
+    // P1.3 — the account this row was created for (never "the primary"): the one written with the row,
+    // else resolved the same way for rows from before P1.3; none → refused, terminal.
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      return { ...fail("failed", mode, "(no-destination)", noDestinationSentence("eBay", destination.reason)), errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
+    const connection = await tryResolveConnection({ accountId: destination.connectionId });
     if (!connection) {
       return fail(
         "failed",
@@ -1324,6 +1365,14 @@ export class OutboundSyncService {
         "(no-connection)",
         "No active eBay connection — link an eBay account in Settings first.",
       );
+    }
+    // P0.7 → P1.3 — the row now goes to its own account; this stays as a consistency check (the listing
+    // or SKU must belong to that account), refused and terminal if not.
+    try {
+      await assertWriteAccount("EBAY", connection.id, queueItem.channelListingId ? { listingIds: [queueItem.channelListingId] } : { skus: [product?.sku], marketplace: marketplaceId });
+    } catch (err) {
+      if (!isWrongAccountWriteError(err)) throw err;
+      return { ...fail("failed", mode, connection.id, err.message), errorCode: err.code, retryable: false };
     }
 
     // 3. Circuit breaker
@@ -1392,7 +1441,7 @@ export class OutboundSyncService {
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
     const currency = ebayCurrencyForMarket(marketplaceId);
-    const headers = ebayInventoryHeaders(token, marketplaceId);
+    const headers = await ebayInventoryHeaders(token, marketplaceId);
 
     // Task 3: gate the new per-listing isolation behind an env flag (default ON).
     // Set NEXUS_EBAY_FAILURE_ISOLATION=0 to fall back to pre-Task-3 behavior.
@@ -1467,7 +1516,7 @@ export class OutboundSyncService {
         // Offer id (read of the OFFER, never the item — zero image risk).
         let offerId: string | null = null;
         try {
-          const bySku = await fetch(
+          const bySku = await ebaySend(connection.id,
             `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
             { headers },
           );
@@ -1480,7 +1529,7 @@ export class OutboundSyncService {
             ...(offerId ? { offers: [{ offerId, availableQuantity: payload.quantity }] } : {}),
           }],
         };
-        const bulkRes = await fetch(`${apiBase}/sell/inventory/v1/bulk_update_price_quantity`, {
+        const bulkRes = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/bulk_update_price_quantity`, {
           method: "POST", headers, body: JSON.stringify(bulkBody),
         });
         const bulkJson = bulkRes.ok
@@ -1496,7 +1545,7 @@ export class OutboundSyncService {
       } else if (touchesItem) {
         const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         let existing: Record<string, any> = {};
-        const getRes = await fetch(itemUrl, { method: "GET", headers });
+        const getRes = await ebaySend(connection.id, itemUrl, { method: "GET", headers });
         if (getRes.ok) existing = (await getRes.json().catch(() => ({}))) as Record<string, any>;
         // WIPE GUARD: createOrReplace REPLACES the whole item. If the GET
         // failed (rate-limit, blip) `existing` is {}, and a content PUT built
@@ -1509,7 +1558,7 @@ export class OutboundSyncService {
           );
         }
         const itemBodyJson = JSON.stringify(mergeEbayInventoryItem(existing, payload));
-        const putRes = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
+        const putRes = await ebaySend(connection.id, itemUrl, { method: "PUT", headers, body: itemBodyJson });
         if (!(putRes.ok || putRes.status === 204)) {
           const errBody = (await putRes.text().catch(() => "")).slice(0, 500);
           // RT.4 — 25004 self-heal, ported from the manual flat-file push
@@ -1522,7 +1571,7 @@ export class OutboundSyncService {
           // upstream — never more than available) and retry the PUT once.
           if (errBody.includes('"errorId":25004') && payload.quantity !== undefined) {
             try {
-              const bySku = await fetch(
+              const bySku = await ebaySend(connection.id,
                 `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
                 { headers },
               );
@@ -1530,16 +1579,16 @@ export class OutboundSyncService {
                 ? ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null
                 : null;
               if (offerId) {
-                const getFull = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
+                const getFull = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
                 if (getFull.ok) {
                   const fullOffer = (await getFull.json().catch(() => ({}))) as Record<string, unknown>;
-                  const raised = await fetch(`${apiBase}/sell/inventory/v1/offer/${offerId}`, {
+                  const raised = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/offer/${offerId}`, {
                     method: "PUT",
                     headers,
                     body: JSON.stringify({ ...fullOffer, availableQuantity: payload.quantity }),
                   });
                   if (raised.ok || raised.status === 204) {
-                    const retryItem = await fetch(itemUrl, { method: "PUT", headers, body: itemBodyJson });
+                    const retryItem = await ebaySend(connection.id, itemUrl, { method: "PUT", headers, body: itemBodyJson });
                     if (retryItem.ok || retryItem.status === 204) {
                       logger.info("syncToEbay: recovered from 25004 — raised parked offer + retried", {
                         sku, offerId, quantity: payload.quantity,
@@ -1567,7 +1616,7 @@ export class OutboundSyncService {
 
       // 7b. Price → offer (resolve the offer by SKU, then PUT its pricingSummary).
       if (payload.price !== undefined) {
-        const offersRes = await fetch(
+        const offersRes = await ebaySend(connection.id,
           `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
           { method: "GET", headers },
         );
@@ -1584,7 +1633,7 @@ export class OutboundSyncService {
           // non-retryable + does not trip the marketplace circuit.
           return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`, "failed", 404);
         }
-        const offerRes = await fetch(
+        const offerRes = await ebaySend(connection.id,
           `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
           {
             method: "PUT",
@@ -1738,14 +1787,26 @@ export class OutboundSyncService {
       };
     }
 
-    // 2. Connection lookup — MAP.3, DECLARED (see the note on the sibling path).
-    const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
+    // 2. P1.3 — the account this row was created for (never "the primary").
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("eBay", destination.reason);
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
+    const connection = await tryResolveConnection({ accountId: destination.connectionId });
     if (!connection) {
       return {
         success: false, queueId, channel: "EBAY", status: "FAILED",
         message: "No active eBay connection",
         error: "No active eBay connection — link an eBay account in Settings first.",
       };
+    }
+    // P0.7 — the shared listing (ItemID) must belong to the account this row is about to use.
+    try {
+      await assertWriteAccount("EBAY", connection.id, { itemIds: [itemId] });
+    } catch (err) {
+      if (!isWrongAccountWriteError(err)) throw err;
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: err.message, error: err.message, errorCode: err.code, retryable: false };
     }
 
     // 3. Circuit breaker
@@ -1835,7 +1896,7 @@ export class OutboundSyncService {
         const chunk = updates.slice(i, i + REVISE_INVENTORY_STATUS_MAX_ENTRIES);
         await __ebayTrading.reviseInventoryStatusBatch(
           { itemId, entries: chunk },
-          { oauthToken: token, market },
+          { oauthToken: token, market, connectionId: connection.id },
         );
         const dayCount = countEbayReviseCall(itemId);
         if (dayCount === EBAY_REVISE_DAILY_WARN) {
@@ -1919,11 +1980,8 @@ export class OutboundSyncService {
   }
 
   /**
-   * Sync product to Shopify via inventory_levels/set.
-   *
-   * IS.1 — real implementation that updates the Shopify inventory level
-   * for the SKU's inventory_item_id at the configured location. Replaces
-   * the NOT_IMPLEMENTED gate from C.8.
+   * Sync one queued change to Shopify. A native family goes to `syncNativeShopifyOffer`; a linked listing
+   * goes to `syncShopifyLinkedListing` (P1.4: the 2026-07 GraphQL client with the row's own account).
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
     const pushRefusal = (await this.pushLockListings(queueItem, 'SHOPIFY'))
@@ -1955,178 +2013,55 @@ export class OutboundSyncService {
       }
     }
 
-    const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";
-    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN ?? process.env.SHOPIFY_ADMIN_API_TOKEN ?? "";
-
-    if (!shopName || !accessToken) {
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName || "(unset)",
-        sku, productId: product?.id ?? null, mode: "gated", outcome: "gated",
-        payloadDigest: digestPayload(payload),
-        errorMessage: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN not configured.",
-      });
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify outbound sync not configured",
-        error: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN env vars missing." };
+    // P1.3 / P1.4 — the row's own Shopify account, on the 2026-07 GraphQL client (services/shopify/
+    // listing-write.service.ts). The REST 2024-01 path with env credentials is gone: it picked "the first"
+    // variant for a SKU and "the first" shop location, and wrote with a token of no named account.
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("Shopify", destination.reason);
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
     }
-
-    // P3.0 — circuit breaker check
-    const circuitCheck = checkShopifyCircuit(shopName);
-    if (!circuitCheck.ok) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify circuit open", error: circuitCheck.error };
+    // The consistency check (as P0.7 for eBay / Amazon): a row may not name one shop for a listing of another.
+    // Its stored ids — or its SKU — would then be looked up in the wrong shop.
+    const listingAccount: string | null = channelListing?.channelConnectionId ?? null;
+    if (listingAccount && listingAccount !== destination.connectionId) {
+      const error = `This Shopify listing belongs to another Shopify account than the one this change was queued for. Nothing was sent.`;
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
     }
-
-    // P3.0 — rate limiter
-    const tokenResult = await acquireShopifyPublishToken(shopName);
-    if (!tokenResult.ok) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Shopify rate limited", error: tokenResult.error };
-    }
-
-    const apiBase = `https://${shopName}.myshopify.com/admin/api/2024-01`;
-    const headers = {
-      "X-Shopify-Access-Token": accessToken,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-
-    // Resolve variant (needed for price + inventory_item_id for qty) and the
-    // parent product id (B3 — content lives on the product, not the variant).
-    let variantId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.variantId ?? null;
-    let inventoryItemId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.inventoryItemId ?? null;
-    let shopifyProductId: string | null =
-      (channelListing?.platformAttributes as Record<string, any>)?.shopifyProductId ?? null;
-
-    if (!variantId || !inventoryItemId || !shopifyProductId) {
-      const varRes = await fetch(
-        `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id,product_id`,
-        { headers },
-      ).catch(() => null);
-      if (varRes?.ok) {
-        const varData = await varRes.json().catch(() => null) as {
-          variants?: Array<{ id: string; inventory_item_id: string; product_id: string }>
-        } | null;
-        const v = varData?.variants?.[0];
-        if (v) {
-          variantId = String(v.id);
-          inventoryItemId = String(v.inventory_item_id);
-          shopifyProductId = String(v.product_id);
-        }
-      }
-    }
-
-    // ── B3 — Content update (title/description → Shopify product) ─────────
-    // Keyed on syncType so a content sync can NEVER fall through to the
-    // quantity path below (which sets inventory to payload.quantity ?? 0 and
-    // would zero stock on a content-only change).
+    const work: LinkedListingWork = {};
     if (syncType === "CONTENT_UPDATE") {
-      // B3 content (title/body_html) + C3 GPSR compliance metafields, in ONE
-      // product PUT. Compliance rides the content sync (a dedicated compliance-
-      // only trigger is a follow-up). Both best-effort.
-      const update = buildShopifyProductUpdate(shopifyProductId, payload);
+      // B3 content (title / description) + C3 GPSR compliance metafields. Keyed on syncType so a content
+      // sync can never fall through to the stock path.
       let metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [];
       if (product?.id) {
         const cp = await resolveComplianceById(product.id).catch(() => null);
         if (cp) metafields = buildShopifyComplianceMetafields(cp);
       }
-
-      if (!shopifyProductId) {
-        // Hard error only when there's actually something to push.
-        if (update || metafields.length > 0) {
-          return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-            message: `No Shopify product for SKU ${sku} — publish the listing first`,
-            error: "shopify product_id not resolved." };
-        }
-        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-          message: `Shopify content: nothing to push for ${sku} (skipped)` };
-      }
-      // Nothing pushable (no content field, no compliance metafield) → skip.
-      if (!update && metafields.length === 0) {
-        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-          message: `Shopify content: no pushable field for ${sku} (skipped)` };
-      }
-
-      const productBody: Record<string, any> = update?.product ?? { id: parseInt(shopifyProductId, 10) };
-      if (metafields.length > 0) productBody.metafields = metafields;
-
-      const t0 = Date.now();
-      const contentRes = await fetch(`${apiBase}/products/${shopifyProductId}.json`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ product: productBody }),
-      }).catch((err: Error) => ({ ok: false, status: 0, text: async () => err.message } as any));
-
-      const succeeded = contentRes.ok;
-      const errBody = succeeded ? null : await contentRes.text().catch(() => "");
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-        sku, productId: product?.id ?? null, mode: "live",
-        outcome: succeeded ? "success" : "failed",
-        payloadDigest: digestPayload(payload),
-        errorMessage: succeeded ? null : `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}`,
-        durationMs: Date.now() - t0,
-      });
-      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `products PUT ${contentRes.status}`);
-
-      if (!succeeded) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: "Failed to update Shopify product content",
-          error: `products PUT ${contentRes.status}: ${(errBody ?? "").slice(0, 300)}` };
-      }
-      const metaNote = metafields.length > 0 ? ` + ${metafields.length} compliance metafield(s)` : "";
-      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-        message: `Shopify content updated: ${sku}${metaNote}` };
+      work.content = { title: payload?.title, description: payload && "description" in payload ? payload.description : undefined, metafields };
+    } else if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+      work.price = payload?.price ?? null;
+    } else {
+      work.quantity = await this.shopifyDispatchQuantity(queueItem, sku);
     }
-
-    // ── P3.0 — Price update ──────────────────────────────────────────────
-    if (syncType === "PRICE_UPDATE" || payload?.price != null) {
-      const newPrice: number | null = payload?.price ?? null;
-      if (newPrice == null || !variantId) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: `Cannot update Shopify price for SKU ${sku}: missing price or variantId`,
-          error: "price or variantId not resolved." };
-      }
-
-      const t0 = Date.now();
-      const priceStr = Number(newPrice).toFixed(2);
-      const priceRes = await fetch(`${apiBase}/variants/${variantId}.json`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ variant: { id: parseInt(variantId, 10), price: priceStr } }),
-      }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
-
-      const succeeded = priceRes.ok;
-      const errBody = succeeded ? null : await priceRes.text().catch(() => "");
-
-      writeAttemptLog({
-        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-        sku, productId: product?.id ?? null, mode: "live",
-        outcome: succeeded ? "success" : "failed",
-        payloadDigest: digestPayload(payload),
-        errorMessage: succeeded ? null : `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}`,
-        durationMs: Date.now() - t0,
-      });
-
-      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `variants PUT ${priceRes.status}`);
-
-      if (!succeeded) {
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-          message: "Failed to update Shopify variant price",
-          error: `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}` };
-      }
-
-      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-        message: `Shopify price updated: ${sku} → €${priceStr}` };
+    const t0 = Date.now();
+    try {
+      const message = await syncShopifyLinkedListing(queueItem, destination.connectionId, work);
+      writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
+      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS", message };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message };
     }
+  }
 
-    // ── Quantity update (existing path) ─────────────────────────────────
-    // RT.4 — parity with Amazon/eBay: re-read the live committed quantity at
-    // dispatch (a stale payload from a superseded-but-undelivered row must
-    // not overwrite a fresher value) and clamp to the warehouse pool so
-    // Shopify can never advertise units the pool doesn't have.
+  /**
+   * RT.4 — parity with Amazon/eBay: re-read the live committed quantity at dispatch (a stale payload from
+   * a superseded-but-undelivered row must not overwrite a fresher value) and clamp to the warehouse pool
+   * so Shopify can never advertise units the pool doesn't have. (Moved unchanged from the REST path.)
+   */
+  private async shopifyDispatchQuantity(queueItem: any, sku: string): Promise<number> {
+    const { product, payload, channelListing } = queueItem;
     let newQty: number = payload?.quantity ?? 0;
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0") {
       const cl = channelListing?.id
@@ -2168,59 +2103,7 @@ export class OutboundSyncService {
       }
     }
 
-    if (!inventoryItemId) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: `No Shopify inventory_item_id found for SKU ${sku}`,
-        error: "inventory_item_id not in ChannelListing and SKU lookup returned nothing." };
-    }
-
-    let locationId: string | null = process.env.SHOPIFY_LOCATION_ID ?? null;
-    if (!locationId) {
-      const locRes = await fetch(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
-      if (locRes?.ok) {
-        const locData = await locRes.json().catch(() => null) as { locations?: Array<{ id: string }> } | null;
-        locationId = String(locData?.locations?.[0]?.id ?? "");
-      }
-    }
-
-    if (!locationId) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Could not resolve Shopify location ID",
-        error: "Set SHOPIFY_LOCATION_ID env var or connect a Shopify location." };
-    }
-
-    const t0 = Date.now();
-    const setRes = await fetch(`${apiBase}/inventory_levels/set.json`, {
-      method: "POST", headers,
-      body: JSON.stringify({
-        location_id: parseInt(locationId, 10),
-        inventory_item_id: parseInt(inventoryItemId, 10),
-        available: newQty,
-      }),
-    }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
-
-    const succeeded = setRes.ok;
-    const errorBody = succeeded ? null : await setRes.text().catch(() => "");
-
-    writeAttemptLog({
-      channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
-      sku, productId: product?.id ?? null, mode: "live",
-      outcome: succeeded ? "success" : "failed",
-      payloadDigest: digestPayload(payload),
-      errorMessage: succeeded ? null : `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
-      durationMs: Date.now() - t0,
-    });
-
-    recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `inventory_levels/set ${setRes.status}`);
-
-    if (!succeeded) {
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
-        message: "Failed to update Shopify inventory",
-        error: `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}` };
-    }
-
-    return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
-      message: `Shopify inventory updated: ${sku} → ${newQty} at location ${locationId}` };
+    return newQty;
   }
 
   /**

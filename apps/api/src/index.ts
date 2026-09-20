@@ -22,10 +22,8 @@ import rateLimit from "@fastify/rate-limit";
 import { listingsRoutes } from "./routes/listings.js";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { aiRoutes } from "./routes/ai.js";
-import { marketplaceRoutes } from "./routes/marketplaces.js";
 import { adminRoutes } from "./routes/admin.js";
 import { monitoringRoutes } from "./routes/monitoring.js";
-import { shopifyRoutes } from "./routes/shopify.js";
 import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
 import { estyRoutes } from "./routes/etsy.js";
 import { syncRoutes } from "./routes/sync.routes.js";
@@ -206,8 +204,8 @@ import outboundLatencyRoutes from "./routes/outbound-latency.routes.js";
 import inventorySyncDiagnosticsRoutes from "./routes/inventory-sync-diagnostics.routes.js";
 import syncControlRoutes from "./routes/sync-control.routes.js";
 import controlTowerRoutes from "./routes/control-tower.routes.js";
-import shopifySetupRoutes from "./routes/shopify-setup.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
+import { startAmazonSecretRotationCron } from "./jobs/amazon-secret-rotation.job.js";
 import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
@@ -663,10 +661,8 @@ app.register(teamRoutes);
 app.register(listingsRoutes);
 app.register(inventoryRoutes, { prefix: '/api' });
 app.register(aiRoutes);
-app.register(marketplaceRoutes);
 app.register(adminRoutes);
 app.register(monitoringRoutes);
-app.register(shopifyRoutes);
 app.register(shopifyWebhookRoutes);
 app.register(estyRoutes);
 app.register(syncRoutes, { prefix: '/api' });
@@ -862,7 +858,6 @@ app.register(controlTowerRoutes, { prefix: '/api' });
 // setup-shopify-webhooks registers every topic our handlers
 // listen for so push delivery is no longer a manual partner-dashboard
 // step.
-app.register(shopifySetupRoutes, { prefix: '/api' });
 // L.0d — BullMQ admin endpoints. Routes declare full /api/monitoring/...
 // paths inline, so register without a prefix. Coexists with
 // monitoringRoutes (which uses /monitoring/* without /api/).
@@ -1286,6 +1281,10 @@ async function start() {
       // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
       // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
       startAmazonSqsPollCron();
+
+      // P6.1 — automatic Amazon app-secret rotation. Off until the Owner registers the
+      // credential queue with Amazon and sets AMAZON_APP_CREDENTIAL_QUEUE_URL.
+      startAmazonSecretRotationCron();
 
       // RT.2 — Amazon SQS dead-letter-queue depth monitor (5min). Fires
       // sync.dlq.threshold on the order-events bus whenever DLQ depth

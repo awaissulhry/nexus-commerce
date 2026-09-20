@@ -34,6 +34,7 @@ import { QueueEvents } from 'bullmq'
 import { WorkspaceQueue as Queue } from './workspace-jobs.js'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
+import { registerRateRedis } from '../services/gateway/rate.js'
 
 // ── Lazy Redis client (the only thing that stays lazy) ────────────────────
 let _redis: Redis | null = null
@@ -87,6 +88,8 @@ function getRedisConnection(): Redis {
       target.kind === 'url'
         ? new Redis(target.url, target.options)
         : new Redis({ host: target.host, port: target.port, ...target.options })
+    // P1.2 — the channel gateway's rate buckets share this connection (used only while it is ready).
+    registerRateRedis(() => _redis)
   }
   return _redis
 }

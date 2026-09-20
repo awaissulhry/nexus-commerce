@@ -174,6 +174,7 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
     }
     sp = await getAmazonSpClient(accountId)
     const document = await sp.callAPI({ operation: 'createFeedDocument', endpoint: 'feeds', body: { contentType: 'application/json; charset=UTF-8' } })
+    // gateway-exempt: pre-signed feed document on Amazon's storage; the feed itself goes through the gateway
     const uploaded = await fetch(document.url, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(plan.feed), signal: AbortSignal.timeout(60_000) })
     if (!uploaded.ok) throw new Error(`Amazon feed upload failed (${uploaded.status}).`)
@@ -192,6 +193,7 @@ export async function readAmazonPublication(feedId: string, accountId: string, s
   if (feed.processingStatus === 'CANCELLED') return { failed: true, results: skus.map(sku => ({ sku, failed: true, message: 'Amazon feed cancelled.' })) }
   if (!feed.resultFeedDocumentId) return null
   const document = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: feed.resultFeedDocumentId } })
+  // gateway-exempt: pre-signed feed document on Amazon's storage; the feed itself goes through the gateway
   const response = await fetch(document.url, { signal: AbortSignal.timeout(20_000) })
   if (!response.ok) throw new Error(`Amazon processing report is unavailable (${response.status}).`)
   const { decodeReportBytes, parseProcessingReport } = await import('../amazon-flat-file-feed.service.js')

@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 vi.mock('../connectors/ebay/client.js', () => ({ ebayAppToken: vi.fn(async () => 'app-token') }))
+vi.mock('../../gateway/ledger.js', () => import('../../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 
 const {
   parseEbaySignatureHeader,
@@ -38,11 +39,8 @@ function header(signature: string, kid = 'key-1'): string {
 }
 
 function mockKeyServer(key: crypto.KeyObject | null, status = 200) {
-  vi.stubGlobal('fetch', vi.fn(async () => ({
-    ok: status === 200,
-    status,
-    json: async () => (key ? { key: ebayStyleKey(key) } : {}),
-  })))
+  // P1.2 — the key lookup goes through the channel gateway, which reads a real Response.
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(key ? { key: ebayStyleKey(key) } : {}), { status })))
 }
 
 const BODY = { metadata: { topic: 'MARKETPLACE_ACCOUNT_DELETION' }, notification: { data: { username: 'someone' } } }
@@ -119,7 +117,7 @@ describe('verifyEbayNotification', () => {
   it('names OUR broken credential differently from an unknown key id', async () => {
     // These are opposite problems: one rejects a forgery, the other rejects
     // everything genuine. A shared reason would hide the second behind the first.
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403, json: async () => ({}) })))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 403 })))
     const raw = Buffer.from(JSON.stringify(BODY), 'utf8')
     const v = await verifyEbayNotification({ rawBody: raw, header: header(sign(JSON.stringify(BODY))) })
     expect(v.reason).toBe('public_key_forbidden')

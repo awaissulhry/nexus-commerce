@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import prisma from '../db.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 
@@ -166,7 +167,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
 
           // 3. Enqueue OutboundSyncQueue for every active channel listing.
           if (product.channelListings.length > 0) {
-            const queueRows = await tx.outboundSyncQueue.createManyAndReturn({
+            const queueRows = await createOutboundRowsAndReturn(tx, {
               data: product.channelListings.map((cl) => ({
                 productId,
                 channelListingId: cl.id,
@@ -318,7 +319,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, channel: true, marketplace: true },
       })
       if (listings.length > 0) {
-        const queueRows = await tx.outboundSyncQueue.createManyAndReturn({
+        const queueRows = await createOutboundRowsAndReturn(tx, {
           select: { id: true },
           data: listings.map((cl) => ({
             productId: change.productId,

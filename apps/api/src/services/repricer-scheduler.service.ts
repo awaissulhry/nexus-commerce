@@ -47,6 +47,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * (indexed). Scales with delta volume, not catalog size.
  */
 
+import { createOutboundRow } from './outbound-rows.js'
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 
@@ -193,7 +194,7 @@ export async function runRepricerTick(
             lastSyncedAt: null,
           },
         })
-        await tx.outboundSyncQueue.create({
+        await createOutboundRow(tx, {
           data: {
             productId,
             channelListingId: listing.id,

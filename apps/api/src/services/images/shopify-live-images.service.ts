@@ -19,6 +19,7 @@
  *   sees the right hint instead of a 500.
  */
 
+import { shopifyTransport } from '../gateway/shopify.js'
 import prisma from '../../db.js'
 
 export interface RefreshShopifyLiveImagesResult {
@@ -98,7 +99,8 @@ export async function refreshShopifyLiveImages(
 
   let data: ShopifyProductResponse
   try {
-    const res = await fetch(url, {
+    // P1.2 — through the channel gateway (env credential → app-level).
+    const res = await shopifyTransport(null)(url, {
       method: 'GET',
       headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
     })

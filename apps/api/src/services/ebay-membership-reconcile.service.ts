@@ -168,7 +168,7 @@ export interface ReconcileResult {
 export async function reconcileMembershipsFromEbay(
   itemId: string,
   marketplace: string,
-  ctx: { oauthToken: string },
+  ctx: { oauthToken: string; connectionId: string },
   /** Incident #42 — the listing's OWN parent SKU when the caller knows it
    *  (a CL-linked shell). Without it, first-touch resolution walks pool
    *  children to the POOL family parent — right for adopted primary
@@ -189,7 +189,7 @@ export async function reconcileMembershipsFromEbay(
   <OutputSelector>Item.Variations.Variation.Quantity</OutputSelector>
   <OutputSelector>Item.Variations.Variation.VariationSpecifics</OutputSelector>
 </GetItemRequest>`
-  const res = await callTradingApi('GetItem', xml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+  const res = await callTradingApi('GetItem', xml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market: market })
   const live = parseLiveVariations(res.raw)
 
   const existing = await prisma.sharedListingMembership.findMany({
@@ -328,7 +328,7 @@ export async function reconcileMembershipsFromEbay(
       customLabel = 'kept'
     } else {
       const reviseXml = `<?xml version="1.0" encoding="utf-8"?>\n<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>${itemId}</ItemID><SKU>${parentSku}</SKU></Item></ReviseFixedPriceItemRequest>`
-      await callTradingApi('ReviseFixedPriceItem', reviseXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+      await callTradingApi('ReviseFixedPriceItem', reviseXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market), connectionId: ctx.connectionId, market: market })
       customLabel = 'set'
     }
   } catch (err) {

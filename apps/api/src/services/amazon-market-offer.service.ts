@@ -1,5 +1,6 @@
 import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
 export { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
+import { createOutboundRow } from './outbound-rows.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * SCT.6 — per-market Amazon offer CLOSE / REOPEN.
@@ -312,7 +313,7 @@ export async function reopenMarketOffers(opts: {
           lastSyncedAt: null,
         },
       })
-      await prisma.outboundSyncQueue.create({
+      await createOutboundRow(prisma, {
         data: {
           productId: cl.productId,
           channelListingId: cl.id,

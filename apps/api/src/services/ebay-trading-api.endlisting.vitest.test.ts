@@ -59,10 +59,7 @@ vi.mock('./ebay-auth.service.js', () => ({
   ebayAuthService: { getValidToken: mockGetValidToken },
 }))
 
-// Mock shopify + amazon clients imported transitively by channel-delist.service
-vi.mock('./marketplaces/shopify.service.js', () => ({
-  ShopifyService: class {},
-}))
+// Mock the amazon client imported transitively by channel-delist.service
 vi.mock('../clients/amazon-sp-api.client.js', () => ({
   amazonSpApiClient: {},
 }))

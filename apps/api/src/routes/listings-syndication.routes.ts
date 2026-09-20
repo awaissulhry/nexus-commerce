@@ -1,4 +1,5 @@
 import { resolveContent } from '../services/pim/content-resolver.js'
+import { createOutboundRow } from '../services/outbound-rows.js'
 import { contentListing } from '../services/pim/content-read.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
 import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
@@ -3733,7 +3734,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         // Enqueue outbound sync for price/qty changes (RT.2 — instant lane)
         const currency = mp === 'UK' ? 'GBP' : 'EUR'
         if ('price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
-          const qRow = await prisma.outboundSyncQueue.create({
+          const qRow = await createOutboundRow(prisma, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               channelListingId: listingId,
@@ -3748,7 +3749,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           void fireOutboundJobs([qRow], { source: 'CASCADE' })
         }
         if ('quantity' in valueMap && valueMap.quantity != null && prevQty !== valueMap.quantity) {
-          const qRow = await prisma.outboundSyncQueue.create({
+          const qRow = await createOutboundRow(prisma, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
               channelListingId: listingId,

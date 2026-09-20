@@ -82,6 +82,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS)
   try {
+    // gateway-exempt: downloads our own product images (Cloudinary), not a channel API call
     return await fetch(url, { signal: controller.signal })
   } finally {
     clearTimeout(timer)

@@ -128,7 +128,9 @@ async function publicKeyFor(kid: string, environment: EbayEnvironment): Promise<
   }
 
   try {
-    const res = await fetch(`${EBAY_NOTIFICATION_BASE[environment]}/commerce/notification/v1/public_key/${encodeURIComponent(kid)}`, {
+    // P1.2 — through the channel gateway as an app-level read (eBay's public key for a notification).
+    const { ebayTransport } = await import('../../gateway/ebay.js')
+    const res = await ebayTransport(null, { appLevel: true })(`${EBAY_NOTIFICATION_BASE[environment]}/commerce/notification/v1/public_key/${encodeURIComponent(kid)}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     })
     if (res.status === 401 || res.status === 403) {

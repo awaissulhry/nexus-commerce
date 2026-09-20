@@ -1,5 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonAccessToken: vi.fn().mockResolvedValue('test-token'), getAmazonRegion: vi.fn().mockResolvedValue('eu') }))
+vi.mock('../services/gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../services/gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { getAmazonRegion } from '../lib/amazon-sp-client.js'
 import { AmazonSpApiClient } from './amazon-sp-api.client.js'
 

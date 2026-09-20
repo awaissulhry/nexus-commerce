@@ -30,6 +30,9 @@ vi.mock('../connection-resolver.service.js', () => ({ tryResolveConnection: asyn
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'user-token' } }))
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: async () => 'user-token' }))
 vi.mock('../cx/events.service.js', () => ({ recordConnectionEvent: vi.fn() }))
+// P1.2 — ebayFetch sends through the channel gateway; its account check and ledger are stood in.
+vi.mock('../gateway/account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../gateway/ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/apps.service.js', () => ({
   getChannelApp: async () => ({ clientId: 'app', clientSecret: 'secret', signingKey: h.signingKey }),
   storeSigningKey: vi.fn(),

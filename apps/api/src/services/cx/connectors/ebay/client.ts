@@ -24,6 +24,8 @@ export interface EbayRequestOptions {
   environment?: 'production' | 'sandbox'
   /** Force signing even when the path is not in the catalogue's list. */
   sign?: boolean
+  /** Stable name for the call ledger; default: method + path without ids. */
+  operation?: string
 }
 
 export class EbayApiError extends Error {
@@ -61,9 +63,19 @@ async function signingKeyFor(environment: 'production' | 'sandbox', appToken: ()
   return { signingKeyId: created.signingKeyId, jwe: created.jwe, privateKey: created.privateKey, cipher: created.signingKeyCipher }
 }
 
+/**
+ * P1.1 — the RFC 9421 signature headers for one eBay request, made with the app's Key Management key
+ * (created on first use). The gateway calls this for every path on eBay's must-sign list.
+ */
+export async function ebaySigningHeaders(input: { environment: 'production' | 'sandbox'; method: string; url: string; body: string | null }): Promise<Record<string, string>> {
+  const key = await signingKeyFor(input.environment, () => ebayAppToken(input.environment))
+  return signEbayRequest({ method: input.method, url: input.url, body: input.body, jwe: key.jwe, privateKeyPem: key.privateKey })
+}
+
 /** Application (client-credentials) token — used only for Key Management and Notification public keys. */
 export async function ebayAppToken(environment: 'production' | 'sandbox' = 'production', scope = 'https://api.ebay.com/oauth/api_scope'): Promise<string> {
   const app = await getChannelApp('EBAY', environment)
+  // gateway-exempt: OAuth token exchange (client_credentials) — the gateway's own app-token source
   const res = await fetch(`${EBAY_HOSTS[environment].api}/identity/v1/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -85,20 +97,17 @@ export async function ebayFetch(connectionId: string, url: string, opts: EbayReq
   const environment = opts.environment ?? 'production'
   const method = opts.method ?? 'GET'
   const absolute = url.startsWith('http') ? url : `${EBAY_HOSTS[environment].api}${url}`
-  const token = await getAccessToken(connectionId)
   const body = opts.body === undefined ? undefined : typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body)
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
     Accept: 'application/json',
     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...(opts.marketplaceId ? { 'X-EBAY-C-MARKETPLACE-ID': opts.marketplaceId } : {}),
     ...(opts.headers ?? {}),
   }
-  if (opts.sign ?? ebaySignatureAppliesTo(absolute, method)) {
-    const key = await signingKeyFor(environment, () => ebayAppToken(environment))
-    Object.assign(headers, signEbayRequest({ method, url: absolute, body: body ?? null, jwe: key.jwe, privateKeyPem: key.privateKey }))
-  }
-  const res = await fetch(absolute, { method, headers, body })
+  // P1.2 — through the channel gateway: the account's token and state, the publish mode for writes, the
+  // eBay signature on its must-sign paths (or when `sign` asks), the rate bucket and the call ledger.
+  const { ebayGatewayFetch } = await import('../../../gateway/ebay.js')
+  const res = await ebayGatewayFetch({ connectionId, url: absolute, method, headers, body: body ?? null, sign: opts.sign, operation: opts.operation })
   if (!res.ok) {
     const text = await res.clone().text().catch(() => '')
     const err = new EbayApiError(res.status, text, absolute)

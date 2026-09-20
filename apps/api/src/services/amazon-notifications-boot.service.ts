@@ -1,40 +1,47 @@
 /**
  * IS.2 — Ensure SP-API order-notification subscriptions exist.
  *
- * RT.5 — now ensures BOTH ORDER_CHANGE (legacy) and ORDER_STATUS_CHANGE
- * (Amazon's replacement) are subscribed in parallel so we collect 7
- * days of side-by-side coverage. After that window the verifier
- * scripts/verify-rt5-order-status-coverage.mjs confirms equivalence
- * and a follow-up phase removes ORDER_CHANGE. Both feed into the
- * same SQS destination — amazon-sqs.service accepts either type.
+ * P0.6 (docs/channel-connections/FINAL-PLAN.md) — ORDER_STATUS_CHANGE is no
+ * longer subscribed: Amazon retired it on 2026-07-29 (it had been added by
+ * RT.5 as ORDER_CHANGE's "replacement"; it was the other way round).
+ * ORDER_CHANGE stays. The parser still reads a stray ORDER_STATUS_CHANGE.
  *
  * Called once at server boot (fire-and-forget from index.ts).
  * Idempotent: checks each subscription's current state and skips
  * everything already in place. Railway's 30s response timeout is
  * never a factor.
+ *
+ * P0.6 — with business profiles ON, a subscription belongs to a seller, and
+ * the seller's token is only reachable inside its profile. The boot run
+ * therefore visits each active profile that has an Amazon account and runs
+ * there (before P0.6 it ran outside any profile and failed with "Select a
+ * business profile", so no subscription was kept).
  */
 
 import { logger } from '../utils/logger.js'
 import { isSqsConfigured } from './amazon-sqs.service.js'
 import { mapAwsRegionToSpApiSlug } from '../clients/amazon-sp-api.client.js'
+import { amazonGrantlessFetch } from './gateway/amazon-sdk.js'
 
 const NOTIFICATIONS_SCOPE = 'sellingpartnerapi::notifications'
 
+/**
+ * P1.2 — the app's own (grantless) notification calls go through the channel gateway as app-level
+ * connection setup: sent in every publish mode, recorded on the call ledger.
+ */
+function grantlessSend(token: string, slug: string, method: 'GET' | 'POST' | 'DELETE', path: string, operation: string, body?: unknown): Promise<Response> {
+  return amazonGrantlessFetch({ token, host: `sellingpartnerapi-${slug}.amazon.com`, method, path, operation, body })
+}
+
 async function grantlessGet<T>(token: string, slug: string, path: string): Promise<T> {
-  const res = await fetch(`https://sellingpartnerapi-${slug}.amazon.com${path}`, {
-    headers: { 'x-amz-access-token': token },
-  })
+  const res = await grantlessSend(token, slug, 'GET', path, 'notifications.getDestinations')
   const text = await res.text()
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} — ${text.slice(0, 300)}`), { statusCode: res.status })
   return JSON.parse(text) as T
 }
 
 async function grantlessPost<T>(token: string, slug: string, path: string, body: unknown): Promise<T> {
-  const res = await fetch(`https://sellingpartnerapi-${slug}.amazon.com${path}`, {
-    method: 'POST',
-    headers: { 'x-amz-access-token': token, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const res = await grantlessSend(token, slug, 'POST', path, 'notifications.createDestination', body)
   const text = await res.text()
   if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status} — ${text.slice(0, 300)}`), { statusCode: res.status })
   return JSON.parse(text) as T
@@ -81,10 +88,7 @@ export async function ensureSubscriptionForType(
       logger.warn(`[amazon-notifications-boot] ${notifType} points at FOREIGN destination — deleting + recreating`, {
         subscriptionId: subId, foreignDestinationId: subDest, expectedDestinationId: destinationId,
       })
-      const res = await fetch(
-        `https://sellingpartnerapi-${grantless.slug}.amazon.com/notifications/v1/subscriptions/${notifType}/${subId}`,
-        { method: 'DELETE', headers: { 'x-amz-access-token': grantless.token } },
-      )
+      const res = await grantlessSend(grantless.token, grantless.slug, 'DELETE', `/notifications/v1/subscriptions/${notifType}/${subId}`, 'notifications.deleteSubscriptionById')
       if (!res.ok && res.status !== 404) {
         const text = await res.text().catch(() => '')
         throw new Error(`delete foreign ${notifType} sub failed: HTTP ${res.status} — ${text.slice(0, 200)}`)
@@ -155,8 +159,8 @@ export async function ensureSubscriptionForType(
  * Add a new RT.* notification type here and both code paths pick it up.
  */
 export const NEXUS_SP_API_NOTIFICATION_TYPES = [
-  'ORDER_CHANGE',                       // RT.5 legacy
-  'ORDER_STATUS_CHANGE',                // RT.5 replacement
+  'ORDER_CHANGE',
+  // ORDER_STATUS_CHANGE removed (P0.6): Amazon retired it on 2026-07-29.
   'FBA_OUTBOUND_SHIPMENT_STATUS',       // RT.6 (MCF)
   'FBA_INVENTORY_AVAILABILITY_CHANGES', // RT.9
   'ANY_OFFER_CHANGED',                  // RT.13
@@ -247,19 +251,13 @@ export async function setupAllAmazonNotifications(): Promise<{
           const existing = await amazonSpApiClient.request<any>('GET', `/notifications/v1/subscriptions/${t}`)
           const subId = existing?.payload?.subscriptionId
           if (subId) {
-            const res = await fetch(
-              `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/subscriptions/${t}/${subId}`,
-              { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
-            )
+            const res = await grantlessSend(grantlessToken, slug, 'DELETE', `/notifications/v1/subscriptions/${t}/${subId}`, 'notifications.deleteSubscriptionById')
             steps.push(`delSub:${t}=${res.status}`)
           }
         } catch { steps.push(`delSub:${t}=absent`) }
       }
       if (existingDest?.destinationId) {
-        const res = await fetch(
-          `https://sellingpartnerapi-${slug}.amazon.com/notifications/v1/destinations/${existingDest.destinationId}`,
-          { method: 'DELETE', headers: { 'x-amz-access-token': grantlessToken } },
-        )
+        const res = await grantlessSend(grantlessToken, slug, 'DELETE', `/notifications/v1/destinations/${existingDest.destinationId}`, 'notifications.deleteDestination')
         steps.push(`delDest=${res.status}`)
       }
       const destResp = await grantlessPost<any>(grantlessToken, slug, '/notifications/v1/destinations', {
@@ -341,23 +339,46 @@ export function ensureAmazonNotificationSubscription(): void {
   if (!isSqsConfigured()) return
   if (!process.env.NEXUS_ENABLE_AMAZON_SQS_POLL || process.env.NEXUS_ENABLE_AMAZON_SQS_POLL !== '1') return
 
-  void (async () => {
+  void runAmazonNotificationSetup().catch((err: any) => {
+    logger.error('[amazon-notifications-boot] setup failed (non-fatal)', { error: err?.message ?? String(err) })
+  })
+}
+
+/**
+ * One setup run per place a seller token lives: the whole app with profiles OFF, else each active
+ * profile that has an active Amazon account. A failure in one profile is recorded (CronRun) and
+ * does not stop the others. Returns the profiles visited, for tests and the log.
+ */
+export async function runAmazonNotificationSetup(): Promise<{ visited: number; ran: number }> {
+  // RT.3 — record the per-type result to CronRun so subscription state
+  // is DB-readable (Railway logs required archaeology before; the local
+  // seller refresh-token being stale makes local probing impossible).
+  const { recordCronRun } = await import('../utils/cron-observability.js')
+  const setupHere = () => recordCronRun('amazon-notifications-setup', async () => {
+    const result = await setupAllAmazonNotifications()
+    const parts = result.perType.map((p) =>
+      `${p.type}=${p.status}${p.subscriptionId ? `(sub=${p.subscriptionId.slice(0, 8)},dest=${p.destinationId?.slice(0, 8)})` : ''}${p.error ? `(${p.error.slice(0, 80)})` : ''}`,
+    )
+    return `dest=${result.destinationId ?? 'NONE'} ${parts.join(' ')}`
+  })
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') {
+    await setupHere()
+    return { visited: 1, ran: 1 }
+  }
+  const { visitActiveWorkspaces } = await import('../lib/workspace-sweep.js')
+  const { listActiveConnections } = await import('./connection-resolver.service.js')
+  let visited = 0
+  let ran = 0
+  await visitActiveWorkspaces(async () => {
+    visited++
     try {
-      // RT.3 — record the per-type result to CronRun so subscription state
-      // is DB-readable (Railway logs required archaeology before; the local
-      // seller refresh-token being stale makes local probing impossible).
-      const { recordCronRun } = await import('../utils/cron-observability.js')
-      await recordCronRun('amazon-notifications-setup', async () => {
-        const result = await setupAllAmazonNotifications()
-        const parts = result.perType.map((p) =>
-          `${p.type}=${p.status}${p.subscriptionId ? `(sub=${p.subscriptionId.slice(0, 8)},dest=${p.destinationId?.slice(0, 8)})` : ''}${p.error ? `(${p.error.slice(0, 80)})` : ''}`,
-        )
-        return `dest=${result.destinationId ?? 'NONE'} ${parts.join(' ')}`
-      })
+      if ((await listActiveConnections('AMAZON')).length === 0) return
+      ran++
+      await setupHere()
     } catch (err: any) {
-      logger.error('[amazon-notifications-boot] setup failed (non-fatal)', {
-        error: err?.message ?? String(err),
-      })
+      logger.error('[amazon-notifications-boot] setup failed in a business profile (non-fatal)', { error: err?.message ?? String(err) })
     }
-  })()
+  })
+  logger.info('[amazon-notifications-boot] setup visited business profiles', { visited, ran })
+  return { visited, ran }
 }

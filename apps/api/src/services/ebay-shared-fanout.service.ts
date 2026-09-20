@@ -7,6 +7,8 @@
 // Inventory-API path. Pure + side-effect-free so it is unit-testable without
 // the stock transaction or the network.
 
+import { createOutboundRows } from './outbound-rows.js'
+// Shared stock — the fan-out reads ONE ledger (loadSyncLedgers), which knows a pooled product's pool.
 import { resolveMembershipIntended, type SyncLedger } from './sync-control-core.js'
 import { policyFor, type PolicyMap } from './sync-control-policy.service.js'
 
@@ -176,7 +178,7 @@ export async function enqueueSharedTradingFanout(
   const rows = buildSharedFanoutRows(eligible, qtyFor, args.holdUntil)
   if (rows.length === 0) return []
 
-  await db.outboundSyncQueue.createMany({ data: rows })
+  await createOutboundRows(db, { data: rows as never }) // SharedFanoutRow is the createMany input (its payload type has no index signature)
 
   // Re-read the rows we just enqueued so we can return their DB ids to the
   // caller for BullMQ dispatch.

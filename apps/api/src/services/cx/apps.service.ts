@@ -161,6 +161,24 @@ export async function storeSigningKey(
   cache.delete(`${key}:${environment}`)
 }
 
+/**
+ * P6.1 — store a rotated client secret (sealed like every other credential) with its expiry date.
+ * The cache entry is dropped, so the next token exchange uses the new secret.
+ */
+export async function storeClientSecret(
+  key: ChannelKey,
+  environment: Environment,
+  clientSecret: string,
+  secretExpiresAt: Date | null,
+): Promise<void> {
+  const { blob } = await encryptCredentials({ clientSecret })
+  await prisma.channelApp.update({
+    where: { channelKey_environment: { channelKey: key, environment } },
+    data: { clientSecretEnc: blob, secretExpiresAt, rotatedAt: new Date() },
+  })
+  cache.delete(`${key}:${environment}`)
+}
+
 export function __appsTest() {
   cache.clear()
 }

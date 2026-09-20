@@ -3,6 +3,7 @@
  * Handles eBay inventory sync, listing management, and order synchronization
  */
 
+import { ebaySend } from '../services/gateway/ebay.js';
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { ebaySyncService } from "../services/ebay-sync.service.js";
@@ -369,7 +370,7 @@ export async function ebayRoutes(app: FastifyInstance) {
 
         const token = await ebayAuthService.getValidToken(connection.id);
         const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
-        const res = await fetch(
+        const res = await ebaySend(connection.id,
           `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
           {
             method: "GET",

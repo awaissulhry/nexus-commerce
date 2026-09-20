@@ -34,6 +34,12 @@ export type ConnectionEventType =
   // inverse. The ledger is archive-never-delete, so both directions leave a record.
   | 'credentials_archived'
   | 'credentials_restored'
+  // P0.5 — an operator recorded our app secret's expiry date; an expiry alert level was raised.
+  | 'app_secret_expiry_set'
+  | 'app_secret_expiry_warn'
+  // P6.1 — automatic app-secret rotation asked Amazon for a new secret; or a step failed.
+  | 'secret_rotation_requested'
+  | 'secret_rotation_failed'
 
 export interface Actor {
   userId?: string | null

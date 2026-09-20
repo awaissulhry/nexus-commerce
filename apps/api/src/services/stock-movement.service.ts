@@ -1,4 +1,5 @@
 import { workspaceKey } from '@nexus/database/workspace-context'
+import { createOutboundRows } from './outbound-rows.js'
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
@@ -911,7 +912,7 @@ async function cascadeQuantityToListings(
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0') {
       await coalescePendingQuantityRows(tx, replacedListingIds)
     }
-    await tx.outboundSyncQueue.createMany({ data: queueRowsToCreate })
+    await createOutboundRows(tx, { data: queueRowsToCreate })
     const justEnqueued = await tx.outboundSyncQueue.findMany({
       where: {
         channelListingId: { in: replacedListingIds },

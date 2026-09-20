@@ -112,14 +112,19 @@ export class AmazonCatalogService {
     const endpoint = `https://sellingpartnerapi-${region}.amazon.com/catalogs/2022-04-01/productTypes/${productType}`;
 
     try {
-      const response = await fetch(endpoint, {
+      // P1.2 — through the channel gateway, unchanged: an app-level read with the static env token.
+      // P1.6 candidate (FINAL-PLAN): this path is not an SP-API endpoint and the token is not an account's.
+      const { gatewayFetch } = await import("./gateway/gateway.js");
+      const response = await gatewayFetch({
+        channel: "AMAZON_SP",
+        operation: "catalog.productTypeSchema.legacy",
+        kind: "read",
+        connectionId: null,
+        appLevel: true,
+        url: endpoint,
         method: "GET",
-        headers: {
-          // AS.0 — same wrong-header bug as the listings write client:
-          // SP-API wants x-amz-access-token, not Authorization:Bearer.
-          'x-amz-access-token': accessToken,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        auth: { token: accessToken },
       });
 
       if (!response.ok) {

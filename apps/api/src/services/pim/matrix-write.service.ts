@@ -26,6 +26,7 @@
  * every touched cell BY VALUE, and answers `VerbOperation`. REVERT restores every captured cell by value through the
  * same door (versions bump) and marks the operation `REVERTED` (or `PARTIAL`, never a lie).
  */
+import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import { previewVerb, type PreviewContext } from '@nexus/shared/matrix-preview'
@@ -272,11 +273,11 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
       const rows = await prisma.$transaction(async (tx) => {
         if (!(await bumpAll(tx, targets, { quantity: intended, lastSyncStatus: 'PENDING' }))) throw new Conflict(cells.version)
         await coalescePendingQuantityRows(tx, targets.map((t) => t.id))
-        const listings = await tx.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { id: true, region: true, externalListingId: true, marketplace: true } })
+        const listings = await tx.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { id: true, region: true, externalListingId: true, marketplace: true, channelConnectionId: true } })
         const out: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
         for (const l of listings) {
-          const q = await tx.outboundSyncQueue.create({
-            data: { productId: row.id, channelListingId: l.id, targetChannel: coord.channel as never, targetRegion: l.region, syncStatus: 'PENDING' as never, syncType: 'QUANTITY_UPDATE', holdUntil: new Date(), externalListingId: l.externalListingId, maxRetries: 3, payload: { quantity: intended, source: 'MATRIX_PUSH_NOW', marketplace: l.marketplace, actor: ctx.actor } },
+          const q = await createOutboundRow(tx, {
+            data: { productId: row.id, channelListingId: l.id, channelConnectionId: l.channelConnectionId, targetChannel: coord.channel as never, targetRegion: l.region, syncStatus: 'PENDING' as never, syncType: 'QUANTITY_UPDATE', holdUntil: new Date(), externalListingId: l.externalListingId, maxRetries: 3, payload: { quantity: intended, source: 'MATRIX_PUSH_NOW', marketplace: l.marketplace, actor: ctx.actor } },
             select: { id: true, productId: true, syncType: true, holdUntil: true },
           })
           out.push(q)

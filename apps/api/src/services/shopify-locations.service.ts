@@ -8,8 +8,9 @@
  * in; Nexus operator changes go through IT-MAIN and only push to
  * Shopify via the existing sync queue).
  *
- * Discovery: ShopifyEnhancedService.makeRequest('/locations.json')
- * returns the channel-side list. We upsert each on (externalChannel='SHOPIFY',
+ * Discovery (P1.6): the connected account's own locations on the 2026-07 GraphQL Admin API
+ * (`services/shopify/admin-client.ts`), not the old env-credential REST client. We upsert each on
+ * (externalChannel='SHOPIFY',
  * externalLocationId=...) — the unique partial index from S.22's
  * migration prevents duplicates if the cron runs twice in parallel.
  *
@@ -19,6 +20,8 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { listActiveConnections } from './connection-resolver.service.js'
+import { shopifyAdmin } from './shopify/admin-client.js'
 
 export interface ShopifyLocationRaw {
   id: string | number
@@ -131,37 +134,56 @@ export async function upsertShopifyLocation(raw: ShopifyLocationRaw): Promise<{
   return { status: 'updated', locationId: existing.id }
 }
 
+const LOCATIONS = `query NexusLocationDiscovery($cursor: String) { locations(first: 100, after: $cursor, includeInactive: true, includeLegacy: true) { nodes { id name isActive address { address1 address2 city province country zip } } pageInfo { hasNextPage endCursor } } }`
+
+/** The Shopify account to read locations from: the one named, else the only connected one. */
+async function discoveryAccount(accountId?: string | null): Promise<string> {
+  if (accountId) return accountId
+  const active = await listActiveConnections('SHOPIFY')
+  if (active.length === 1) return active[0].id
+  throw new Error(active.length === 0
+    ? 'No Shopify account is connected, so Nexus cannot read its locations.'
+    : 'More than one Shopify account is connected. Say which account\'s locations to read.')
+}
+
 /**
- * Pull every location from the Shopify Admin API and upsert each as
- * a Nexus StockLocation. The shopifyService argument is parameter-
- * injected so the cron path and tests can pass a mock without import-
- * order drama.
+ * Pull every location from the connected Shopify account and upsert each as a Nexus StockLocation.
+ * The external id stays the numeric one (`gid://shopify/Location/123` → `123`), because the inventory
+ * webhooks and the outbound push resolve rows by that value.
  */
-export async function discoverShopifyLocations(
-  shopifyService: { makeRequest: (method: 'GET', path: string) => Promise<unknown> } | null,
-): Promise<DiscoverySummary> {
+export async function discoverShopifyLocations(accountId?: string | null): Promise<DiscoverySummary> {
   const summary: DiscoverySummary = { total: 0, created: 0, updated: 0, unchanged: 0, errors: [] }
-  if (!shopifyService) {
-    logger.info('shopify-locations: shopifyService null — skipping discovery')
-    return summary
-  }
-
-  let response: { locations?: ShopifyLocationRaw[] }
+  let raws: ShopifyLocationRaw[]
   try {
-    response = (await shopifyService.makeRequest('GET', '/locations.json')) as {
-      locations?: ShopifyLocationRaw[]
-    }
+    const { graphql } = await shopifyAdmin(await discoveryAccount(accountId))
+    raws = []
+    let cursor: string | null = null
+    do {
+      const page = (await graphql(LOCATIONS, { cursor })).locations
+      for (const node of page?.nodes ?? []) {
+        raws.push({
+          id: String(node.id).split('/').at(-1) ?? String(node.id),
+          name: node.name,
+          active: node.isActive !== false,
+          address1: node.address?.address1 ?? null,
+          address2: node.address?.address2 ?? null,
+          city: node.address?.city ?? null,
+          province: node.address?.province ?? null,
+          country: node.address?.country ?? null,
+          zip: node.address?.zip ?? null,
+        })
+      }
+      cursor = page?.pageInfo?.hasNextPage ? page.pageInfo.endCursor : null
+    } while (cursor)
   } catch (err) {
-    logger.error('shopify-locations: discover request failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-    summary.errors.push({ externalLocationId: '*', error: err instanceof Error ? err.message : String(err) })
+    const error = err instanceof Error ? err.message : String(err)
+    logger.error('shopify-locations: discover request failed', { error })
+    summary.errors.push({ externalLocationId: '*', error })
     return summary
   }
-  const locations = response.locations ?? []
-  summary.total = locations.length
+  summary.total = raws.length
 
-  for (const raw of locations) {
+  for (const raw of raws) {
     try {
       const r = await upsertShopifyLocation(raw)
       if (r.status === 'created') summary.created++

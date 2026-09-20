@@ -28,6 +28,7 @@
  * NEXUS_EBAY_STATUS_RECONCILE_SCHEDULE.
  */
 
+import { ebaySend } from '../services/gateway/ebay.js'
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
@@ -181,7 +182,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
           let desiredStatus: string | null = null
 
           try {
-            const res = await fetch(
+            const res = await ebaySend(connection.id,
               `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
               { headers },
             )

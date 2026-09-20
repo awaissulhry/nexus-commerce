@@ -69,6 +69,7 @@ export async function importAmazonEnvironmentAuthorization(input: {
     const app = await getChannelApp('AMAZON_SP')
     let tokenResponse: Response
     try {
+      // gateway-exempt: OAuth token exchange (LWA refresh) while the account is being authorised
       tokenResponse = await fetch('https://api.amazon.com/auth/o2/token', {
         method: 'POST',
         signal: AbortSignal.timeout(25_000),

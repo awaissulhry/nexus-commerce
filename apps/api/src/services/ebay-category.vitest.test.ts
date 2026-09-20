@@ -5,6 +5,9 @@ vi.mock('../db.js', () => ({ default: {} }))
 vi.mock('./connection-resolver.service.js', () => ({ tryResolveConnection: mocks.connection }))
 vi.mock('./ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: mocks.token } }))
 vi.mock('./outbound-api-call-log.service.js', () => ({ recordApiCall: (_meta: unknown, run: () => Promise<unknown>) => run() }))
+// P1.2 — the category reads go through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 import { EbayCategoryService } from './ebay-category.service.js'
 
 const tree = (name: string) => ({ rootCategoryNode: { category: { categoryId: 'root', categoryName: 'Root' }, childCategoryTreeNodes: [
@@ -21,7 +24,7 @@ beforeEach(() => {
   mocks.fetch.mockImplementation(async (url: string) => url.includes('/oauth2/token')
     ? { ok: true, json: async () => ({ access_token: 'test-token', expires_in: 7200 }) }
     : { ok: true, json: async () => tree(url.endsWith('/101') ? 'Italy' : 'UK') })
-  vi.stubGlobal('fetch', mocks.fetch)
+  vi.stubGlobal('fetch', async (...args: unknown[]) => (await import('../test-support/gateway-stubs.js')).asResponse((mocks.fetch as (...a: unknown[]) => unknown)(...args)))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
@@ -86,12 +89,13 @@ describe('category name lookup', () => {
 
   it('distinguishes outages from unknown IDs and retries a failed tree instead of caching it', async () => {
     mocks.token.mockResolvedValue('seller-token')
-    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 503 })
+    // P1.2 — the gateway retries a read once after a 5xx, so an outage is two failed answers in a row.
+    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValueOnce({ ok: false, status: 503 })
     const service = new EbayCategoryService()
     await expect(service.getCategoryBreadcrumbs(['177104'], 'IT', { throwOnError: true })).rejects.toThrow('Check the eBay connection')
     expect(await service.getCategoryBreadcrumbs(['177104'], 'IT', { throwOnError: true })).toEqual({ '177104': { local: 'Italy › Jackets' } })
     expect(await service.getCategoryBreadcrumbs(['unknown-id'], 'IT', { throwOnError: true })).toEqual({})
-    expect(mocks.fetch).toHaveBeenCalledTimes(2)
+    expect(mocks.fetch).toHaveBeenCalledTimes(3)
   })
 
   it('rejects placeholder application credentials without sending them to eBay', async () => {

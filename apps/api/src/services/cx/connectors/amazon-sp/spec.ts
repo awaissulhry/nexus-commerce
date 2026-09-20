@@ -7,7 +7,8 @@
  * application roles approved by Amazon, not OAuth scopes chosen in this flow.
  */
 
-import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type RateLimitReading, type ScopeInput } from '../../catalog.js'
+import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type ScopeInput } from '../../catalog.js'
+import { amazonSpRateReading } from '../../rate-readings.js'
 
 const REGION_HOSTS = {
   EU: { api: 'https://sellingpartnerapi-eu.amazon.com', sandbox: 'https://sandbox.sellingpartnerapi-eu.amazon.com', consent: 'https://sellercentral-europe.amazon.com' },
@@ -22,6 +23,7 @@ function apiHost(handle: ConnectionHandle) {
 }
 
 export async function amazonParticipations(handle: ConnectionHandle): Promise<any[]> {
+  // gateway-exempt: connector identity / heartbeat: runs while the account is made or checked; it decides the state the gateway reads
   const response = await fetch(`${apiHost(handle)}/sellers/v1/marketplaceParticipations`, {
     signal: AbortSignal.timeout(25_000),
     headers: { 'x-amz-access-token': await handle.token() },
@@ -66,11 +68,6 @@ async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
   }))
 }
 
-function parseRateLimit(headers: Headers, status: number): RateLimitReading | null {
-  const rate = headers.get('x-amzn-ratelimit-limit')
-  if (status === 429) return { model: 'token_bucket', retryAfterSec: rate ? Math.ceil(1 / Number(rate)) : undefined }
-  return rate ? { model: 'token_bucket', limit: Number(rate) } : null
-}
 
 export const amazonSpSpec: ChannelSpec = {
   key: 'AMAZON_SP',
@@ -105,7 +102,7 @@ export const amazonSpSpec: ChannelSpec = {
   identity,
   heartbeat,
   discoverScopes,
-  rateLimit: { parse: parseRateLimit, model: 'token_bucket' },
+  rateLimit: { parse: amazonSpRateReading, model: 'token_bucket' },
   webhooks: { scheme: 'sqs', subscriptionApi: true, lifecycleTopics: [] },
   apiVersion: 'orders-2026-01-01 · listings-2021-08-01 · finances-2024-06-19',
   sandbox: { available: true },

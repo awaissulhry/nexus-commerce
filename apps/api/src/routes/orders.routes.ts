@@ -1032,6 +1032,7 @@ export async function ordersRoutes(app: FastifyInstance) {
               channelAck = await channelCancel.cancelOnShopify(
                 existing.channelOrderId,
                 reason,
+                id,
               )
             }
           } catch (err: any) {

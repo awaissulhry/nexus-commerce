@@ -2,6 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const s=vi.hoisted(()=>({controls:[] as any[],read:vi.fn(),send:vi.fn()}))
 vi.mock('./listing-push-controls.js',()=>({readPushControls:s.read}))
 vi.mock('./outbound-api-call-log.service.js',()=>({recordApiCall:(_input:unknown,run:()=>unknown)=>run()}))
+// P1.2 — the sends go through the channel gateway; its account check and ledger are stood in.
+vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+import { asResponse } from '../test-support/gateway-stubs.js'
 import { EbayService } from './marketplaces/ebay.service.js'
 const service = new EbayService()
 const data={itemSpecifics:{},ebayTitle:'Fixture',htmlDescription:'Fixture',categoryId:'123'}
@@ -14,7 +18,7 @@ const writers:Array<[string,()=>Promise<unknown>,number]>=[
 const locks=[{syncPaused:true},{offerClosedAt:new Date('2026-09-13')},...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent=>({presenceIntent}))]
 beforeEach(()=>{
  vi.clearAllMocks();s.controls=[{}];s.read.mockImplementation(async()=>s.controls)
- s.send.mockResolvedValue({ok:true,json:async()=>({offerId:'offer',listingId:'listing'})});vi.stubGlobal('fetch',s.send)
+ s.send.mockResolvedValue({ok:true,json:async()=>({offerId:'offer',listingId:'listing'})});vi.stubGlobal('fetch',(...args:unknown[])=>asResponse(s.send(...args)))
  vi.spyOn(service as any,'getAccessToken').mockResolvedValue('fixture');vi.spyOn(service,'ensureMerchantLocation').mockResolvedValue()
  // P0.1 — these model production: eBay publish mode `live`.
  vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH','true');vi.stubEnv('EBAY_PUBLISH_MODE','live')

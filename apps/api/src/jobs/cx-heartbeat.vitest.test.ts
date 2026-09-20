@@ -34,7 +34,9 @@ const prismaMock = {
       const r = rows.get(where.id)
       return r ? pick(r, select) : null
     }),
-    findMany: vi.fn(async () => [...rows.values()].map((r) => ({ ...r }))),
+    // P6.5 — honours the owning-profile filter the sweep adds when business profiles are ON.
+    findMany: vi.fn(async (args?: { where?: { workspaceId?: string } }) =>
+      [...rows.values()].filter((r) => !args?.where?.workspaceId || r.workspaceId === args.where.workspaceId).map((r) => ({ ...r }))),
     update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const r = rows.get(where.id)
       if (!r) throw new Error(`fake prisma: no row ${where.id}`)
@@ -492,11 +494,12 @@ describe('runHeartbeatSweep', () => {
     heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1 }).mockResolvedValueOnce({ ok: false, latencyMs: 1, errorClass: 'network', message: 'down' })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
     seedRow({ accessTokenExpiresAt: new Date(Date.now() + 24 * 3_600_000) })
-    apps = [{ channelKey: 'AMAZON_SP', secretExpiresAt: new Date(Date.now() + 7 * 86_400_000 + 60_000) }]
+    apps = [{ id: 'app-sp', channelKey: 'AMAZON_SP', environment: 'production', secretExpiresAt: new Date(Date.now() + 7 * 86_400_000 + 60_000) }]
     const summary = await runHeartbeatSweep()
     expect(summary).toBe('connections=2 ok=1 failed=1 refreshed=0 sessionsSwept=0')
     expect(heartbeat).toHaveBeenCalledTimes(2)
-    expect(alertTitles()).toEqual(['AMAZON_SP app secret expires in 7 day(s)'])
+    // P0.5 — plain title with the date; the level rules live in services/cx/app-secret-expiry.p05 tests.
+    expect(alertTitles()).toEqual([expect.stringMatching(/^Amazon SP-API app secret expires in 7 days \(\d{4}-\d{2}-\d{2}\)$/)])
     expect(prismaMock.oAuthSession.deleteMany).toHaveBeenCalled()
     expect(prismaMock.channelConnection.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { refreshLeaseUntil: null, refreshLeaseOwner: null } }),
@@ -517,5 +520,33 @@ describe('runHeartbeatSweep', () => {
     prismaMock.connectionEvent.findFirst.mockResolvedValueOnce({ id: 'seen' } as never)
     await runHeartbeatSweep()
     expect(createAlert).not.toHaveBeenCalled()
+  })
+})
+
+// ── P6.5 — shared (guest) accounts ───────────────────────────────────────────
+describe('P6.5 — the sweep heartbeats only the accounts the profile owns', () => {
+  it('in a guest profile, an account shared with it is left to its owner; its own account is heartbeated', async () => {
+    const { withWorkspace } = await import('../lib/workspace-context.js')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    try {
+      heartbeat.mockResolvedValue({ ok: true, latencyMs: 1 })
+      const own = seedRow({ workspaceId: 'ws-guest' })
+      const shared = seedRow({ workspaceId: 'ws-owner' })
+      await withWorkspace({ workspaceId: 'ws-guest', actorUserId: null, membershipId: null, roleKeys: [] }, () => runHeartbeatSweep())
+      expect(prismaMock.channelConnection.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ workspaceId: 'ws-guest' }) }))
+      expect(updates.some((u) => u.id === own.id)).toBe(true)
+      expect(updates.some((u) => u.id === shared.id)).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+  it('one account that throws no longer stops the sweep for the others', async () => {
+    heartbeat.mockRejectedValueOnce(new Error('connector crashed')).mockResolvedValue({ ok: true, latencyMs: 1 })
+    const first = seedRow()
+    const second = seedRow()
+    const summary = await runHeartbeatSweep()
+    expect(summary).toMatch(/connections=2 ok=1 failed=1/)
+    expect(updates.some((u) => u.id === second.id)).toBe(true)
+    expect(updates.some((u) => u.id === first.id && 'lastHeartbeatAt' in u.data && u.data.consecutiveFailures === 0)).toBe(false)
   })
 })

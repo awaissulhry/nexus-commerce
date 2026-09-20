@@ -17,6 +17,7 @@ import { WorkspaceCache } from '../../lib/workspace-cache.js'
  * 429 handling reuses channel-batch/rate-limit.ts (Retry-After ladder).
  */
 
+import { ebaySend } from '../gateway/ebay.js'
 import { logger } from '../../utils/logger.js'
 import { EbayAuthService } from '../ebay-auth.service.js'
 import prisma from '../../db.js'
@@ -114,7 +115,8 @@ async function marketingFetch(
 
   for (let attempt = 0; attempt < 4; attempt++) {
     await reserveOne(kind)
-    const r = await fetch(`${API_BASE}${path}`, {
+    // P1.2 — through the channel gateway; the account is the one the token was handed out for.
+    const r = await ebaySend(null, `${API_BASE}${path}`, {
       method: opts.method ?? 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -281,7 +283,7 @@ export async function downloadReport(token: string, reportHref: string): Promise
   // the 301 to https ("Missing access token"). Normalize the scheme first.
   const url = (reportHref.startsWith('http') ? reportHref : `${API_BASE}${reportHref}`).replace(/^http:\/\//, 'https://')
   await reserveOne('report')
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  const r = await ebaySend(null, url, { headers: { Authorization: `Bearer ${token}` } })
   if (!r.ok) throw await ebayError('downloadReport', r)
   return Buffer.from(await r.arrayBuffer())
 }

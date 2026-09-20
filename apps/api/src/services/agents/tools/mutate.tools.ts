@@ -20,6 +20,7 @@
  *                          suppression check
  */
 
+import { createOutboundRow } from '../../outbound-rows.js'
 import { Prisma } from '@nexus/database'
 import prisma from '../../../db.js'
 import { outboundSyncQueue, addJobSafely } from '../../../lib/queue.js'
@@ -152,7 +153,7 @@ const publishListing: AgentTool = {
     })
     if (!cl)
       return { ok: false, error: `no ${channel} listing exists for this product` }
-    const row = await prisma.outboundSyncQueue.create({
+    const row = await createOutboundRow(prisma, {
       data: {
         productId: id,
         channelListingId: cl.id,

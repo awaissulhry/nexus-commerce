@@ -242,6 +242,17 @@ echo "→ Checking connection-resolver ratchet (MAP.3)..."
   exit 1
 }
 
+# P1.2 (docs/channel-connections/FINAL-PLAN.md) — channel-gateway ratchet. Every send to
+# eBay / Amazon / Shopify / Ads / Etsy goes through services/gateway/gateway.ts (account check,
+# publish mode, rate bucket, error class, call ledger). The count of sends outside it may only go
+# DOWN; a send that is not a channel API call carries `// gateway-exempt: <reason>`.
+echo "→ Checking channel-gateway ratchet (P1.2)..."
+( cd apps/api && npx tsx scripts/channel-gateway-ratchet.mts --check >/dev/null 2>&1 ) || {
+  ( cd apps/api && npx tsx scripts/channel-gateway-ratchet.mts --check 2>&1 | tail -6 )
+  echo "❌ channel-gateway ratchet FAILED — see message above"
+  exit 1
+}
+
 echo "→ Checking tokens.css is in sync with css-vars.ts..."
 npm run tokens:check --silent || {
   echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"

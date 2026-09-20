@@ -16,6 +16,7 @@
  *   GET /sell/inventory/v1/location
  */
 
+import { ebaySend } from './gateway/ebay.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
 
@@ -157,7 +158,7 @@ async function fetchPolicy(
         triggeredBy: 'api',
       },
       async () => {
-        const res = await fetch(url, { headers, ...(requireComplete ? { signal: AbortSignal.timeout(15_000) } : {}) })
+        const res = await ebaySend(connectionId, url, { headers, ...(requireComplete ? { signal: AbortSignal.timeout(15_000) } : {}) })
         if (!res.ok) {
           const errorBody = await res.text().catch(() => '')
           const err = new Error(
@@ -233,7 +234,7 @@ async function fetchLocations(
         triggeredBy: 'api',
       },
       async () => {
-        const res = await fetch(url, { headers })
+        const res = await ebaySend(connectionId, url, { headers })
         if (!res.ok) {
           const errorBody = await res.text().catch(() => '')
           const err = new Error(

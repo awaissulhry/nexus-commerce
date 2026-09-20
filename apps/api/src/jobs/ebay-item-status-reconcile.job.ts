@@ -72,7 +72,7 @@ export async function runEbayItemStatusReconcile(): Promise<string> {
 
     for (const g of forAccount) {
     try {
-      const status = await getItemListingStatus(g.itemId, { oauthToken: token, market: g.marketplace })
+      const status = await getItemListingStatus(g.itemId, { oauthToken: token, market: g.marketplace, connectionId: connection.id })
       checked++
       if (status && ENDED_STATUSES.has(status)) {
         const res = await prisma.sharedListingMembership.updateMany({

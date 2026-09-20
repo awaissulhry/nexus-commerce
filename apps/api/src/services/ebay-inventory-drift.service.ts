@@ -18,8 +18,10 @@
  * reported as eBay holds them, flagged `comparable: false`, because
  * re-deriving them here would risk a diff that lies in either direction.
  */
+import { ebaySend } from './gateway/ebay.js'
 import type { PrismaClient } from '@prisma/client'
-import { resolvePerMarketContent, toListingLanguage } from './ebay-variation-push.service.js'
+import { resolvePerMarketContent } from './ebay-variation-push.service.js'
+import { ebayListingLanguage } from './gateway/channels.js';
 
 export interface DriftField {
   field: string
@@ -85,7 +87,7 @@ export function diffLiveGroup(
 
 export async function collectInventoryDrift(
   prisma: PrismaClient,
-  opts: { marketplace: string; oauthToken: string; apiBase?: string },
+  opts: { marketplace: string; oauthToken: string; apiBase?: string; /** P1.2 — the account the token belongs to. */ connectionId: string },
 ): Promise<DriftReport> {
   const marketplace = opts.marketplace.toUpperCase()
   const region = marketplace === 'UK' ? 'GB' : marketplace
@@ -95,7 +97,7 @@ export async function collectInventoryDrift(
   // Accept-Language" — which reads like a bad group key but is not. Mirrors the
   // header set pushVariationGroup already uses (see its note at the headers
   // object), so this reader authenticates exactly like the writer.
-  const lang = toListingLanguage(marketplace)
+  const lang = await ebayListingLanguage(marketplace)
   const headers = {
     Authorization: `Bearer ${opts.oauthToken}`,
     'Content-Type': 'application/json',
@@ -143,7 +145,7 @@ export async function collectInventoryDrift(
     }
 
     try {
-      const res = await fetch(
+      const res = await ebaySend(opts.connectionId,
         `${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`,
         { headers },
       )

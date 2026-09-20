@@ -5,6 +5,7 @@ import { toGid } from './content-publisher.js'
 import { object, digest } from './content-workspace.service.js'
 import { previewContentSync, synchronizeContent } from './content-sync.service.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
+import { idempotencyKeyFor } from '../gateway/gateway.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 
 /** Activated native families use named accounts and exact IDs; SKU searches never choose a variant. */
@@ -52,7 +53,9 @@ export async function syncNativeShopifyOffer(item: any) {
   }
   const observed = remote.inventoryItem.inventoryLevel?.quantities.find((q: any) => q.name === 'available')?.quantity
   if (!Number.isSafeInteger(observed)) throw new Error('Shopify stock is not active at the reviewed location. No location was selected automatically.')
-  if (quantity !== observed) checked((await gql(`mutation NexusOfferInventory($input:InventorySetQuantitiesInput!) { inventorySetQuantities(input:$input) { userErrors { field message } } }`, { input: { name: 'available', reason: 'correction', referenceDocumentUri: `nexus://shopify-sync/${item.id}`, quantities: [{ inventoryItemId, locationId, quantity, compareQuantity: observed }] } })).inventorySetQuantities, 'Update variant inventory')
+  // P1.4 — since API 2026-04 `compareQuantity` is gone (compare-and-set is `changeFromQuantity`) and the
+  // mutation must carry `@idempotent(key)`; the old form failed on every call on the 2026-07 client.
+  if (quantity !== observed) checked((await gql(`mutation NexusOfferInventory($input:InventorySetQuantitiesInput!, $key:String!) { inventorySetQuantities(input:$input) @idempotent(key:$key) { userErrors { field message } } }`, { key: idempotencyKeyFor('shopify-stock', item.id, inventoryItemId, locationId, observed, quantity), input: { name: 'available', reason: 'correction', referenceDocumentUri: `nexus://shopify-sync/${item.id}`, quantities: [{ inventoryItemId, locationId, quantity, changeFromQuantity: observed }] } })).inventorySetQuantities, 'Update variant inventory')
   if ((await read())?.inventoryItem.inventoryLevel?.quantities.find((q: any) => q.name === 'available')?.quantity !== quantity) throw new Error('Shopify inventory changed during readback. Reconcile before retrying.')
   return `Verified Shopify inventory for ${item.product.sku}.`
 }

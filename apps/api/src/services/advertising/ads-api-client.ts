@@ -225,6 +225,7 @@ async function getLwaToken(
   logger.debug('[ADS-LIVE] refreshing LWA token', { profileId })
 
   const refreshPromise = (async (): Promise<string> => {
+    // gateway-exempt: OAuth token exchange (LWA refresh) — the gateway's own token source
     const res = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -346,16 +347,21 @@ const RETRYABLE_STATUS = new Set([429, 423])
 async function fetchWithRetry(
   url: string,
   opts: RequestInit,
-  ctx: { region: string; isWrite: boolean },
+  ctx: { region: string; isWrite: boolean; connectionId: string | null },
   maxAttempts = 3,
   maxLockAttempts = 5,
 ): Promise<Response> {
   let rateAttempts = 0
   let lockAttempts = 0
+  // P1.2 — each attempt goes through the channel gateway (account state, call ledger); this loop keeps
+  // the retry policy and the quota reservation, so the gateway does not retry again. No account (legacy
+  // env credentials, profiles OFF) → an app-level call.
+  const { adsTransport } = await import('../gateway/ads.js')
+  const send = adsTransport(ctx.connectionId, { appLevel: !ctx.connectionId, maxTransientRetries: 0, max429Retries: 0 })
 
   for (;;) {
     await reserveAmazon(ctx.region, ctx.isWrite)
-    const res = await fetch(url, opts)
+    const res = await send(url, opts)
     if (res.ok) return res
 
     const retryable = RETRYABLE_STATUS.has(res.status) || res.status >= 500
@@ -570,6 +576,7 @@ async function adsConnectionIdForToken(): Promise<string | null> {
 export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   let clientId: string
   let token: string
+  let connectionId: string | null
   if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
     const { requireWorkspace, WorkspaceError } = await import('../../lib/workspace-context.js')
     const { resolveConnectionForProfile, NoConnectionError, AmbiguousConnectionError } = await import('../connection-resolver.service.js')
@@ -582,10 +589,12 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
     const { getChannelApp } = await import('../cx/apps.service.js')
     clientId = (await getChannelApp('AMAZON_ADS', environment)).clientId
     token = await (await import('../cx/token.service.js')).getAccessToken(account.id)
+    connectionId = account.id
   } else {
     const creds = await resolveCredentials(opts.profileId)
     clientId = creds.clientId
     token = await adsAccessToken(opts.profileId, creds)
+    connectionId = await adsConnectionIdForToken()
   }
   const base = REGION_ENDPOINT[opts.region]
   const headers: Record<string, string> = {
@@ -609,7 +618,7 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
       method: opts.method,
       headers,
       body: opts.body != null ? JSON.stringify(opts.body) : undefined,
-    }, { region: opts.region, isWrite: isMutatingCall(opts.method, opts.path) })
+    }, { region: opts.region, isWrite: isMutatingCall(opts.method, opts.path), connectionId })
     if (!res.ok) {
       const text = await res.text()
       // ACR.0.6 — carry the status and body ON the error, not only inside the
@@ -2225,6 +2234,7 @@ export async function fetchReport(
     const downloadUrl = status.url ?? status.location
     if (status.status === 'COMPLETED' && downloadUrl) {
       logger.info('[ADS-LIVE] report ready, downloading', { reportId, fileSize: status.fileSize })
+      // gateway-exempt: pre-signed report file on Amazon's storage (no auth header), not the API
       const dlRes = await fetch(downloadUrl) // presigned URL — no auth header
       if (!dlRes.ok) throw new Error(`[ADS-LIVE] report download failed ${dlRes.status}`)
 

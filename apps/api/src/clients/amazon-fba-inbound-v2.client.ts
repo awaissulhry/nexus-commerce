@@ -1,4 +1,3 @@
-import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * F.1 (TECH_DEBT #50) — SP-API FBA Inbound v2024-03-20 client wrappers.
  *
@@ -19,17 +18,6 @@ import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 
 import { logger } from '../utils/logger.js'
 
-// ── Region + auth (mirrors fba-inbound.service.ts) ───────────────────
-
-const REGION_ENDPOINTS: Record<string, string> = {
-  na: 'https://sellingpartnerapi-na.amazon.com',
-  eu: 'https://sellingpartnerapi-eu.amazon.com',
-  fe: 'https://sellingpartnerapi-fe.amazon.com',
-}
-
-
-async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
-
 const V2_BASE = '/inbound/fba/2024-03-20'
 
 async function spFetch(
@@ -37,17 +25,9 @@ async function spFetch(
   path: string,
   body?: unknown,
 ): Promise<{ status: number; json: any; text: string }> {
-  const token = await getLwaAccessToken()
-  const url = `${REGION_ENDPOINTS[await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()]}${path}`
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'x-amz-access-token': token,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: body == null ? undefined : JSON.stringify(body),
-  })
+  // P1.2 — through the channel gateway (account, publish mode for writes, rate bucket, call ledger).
+  const { amazonSellerFetch } = await import('../services/gateway/amazon-sdk.js')
+  const res = await amazonSellerFetch({ method, path, body: body == null ? undefined : body })
   const text = await res.text()
   let json: any = null
   try {

@@ -16,6 +16,7 @@
  * production mode invokes the real APIs.
  */
 
+import { createOutboundRow } from './outbound-rows.js'
 import prisma from '../db.js'
 
 interface EnqueueInput {
@@ -89,7 +90,7 @@ export async function enqueueCascadeRepublish(
       })
       continue
     }
-    const row = await prisma.outboundSyncQueue.create({
+    const row = await createOutboundRow(prisma, {
       data: {
         product: { connect: { id: product.id } },
         targetChannel: channel,

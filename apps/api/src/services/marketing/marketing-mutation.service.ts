@@ -15,6 +15,7 @@
  * external write fires; cancel reverts the optimistic local change.
  */
 
+import { createOutboundRow } from '../outbound-rows.js'
 import type { MktChannel } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -85,7 +86,7 @@ export async function enqueueCampaignMutation(args: EnqueueArgs): Promise<Enqueu
   const valueCents =
     typeof args.payload.budgetCents === 'number' ? (args.payload.budgetCents as number) : 0
 
-  const queueRow = await prisma.outboundSyncQueue.create({
+  const queueRow = await createOutboundRow(prisma, {
     data: {
       targetChannel: channelToSyncChannel(campaign.channel),
       targetRegion: link?.marketplace ?? campaign.primaryMarketplace ?? null,
