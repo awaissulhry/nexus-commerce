@@ -75,6 +75,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.2c | **Image read-back for Amazon and Shopify + the R-5 census.** Census = counterweight (all publishers already gated). 🔴 Read-back existed on all three channels and was SCHEDULED on one — a read-back that runs only when somebody opens a screen cannot detect drift. Sweeps bounded per run, `unconfigured` counted apart from `empty` so a blind run cannot read as a clean one. OFF behind one variable (spend, not doubt) | `<this push>` | `build/P4.2c.md` |
 | P4.2b | **An eBay offer rejection reaches its listing.** The decision first: `pushVariationGroup`'s 12 result sites mix eBay's verdicts with OUR validation, and P3.2's contract says *"in the channel's words"* — so 4 file, 8 do not, derived in the test. Retryable answers dropped (the file already retries those ids itself); the answer is CLASSIFIED, not pasted. Covers the flat-file push too | `<this push>` | `build/P4.2b.md` |
 | P4.2a | **An Amazon image rejection reaches its listing.** 🔴 NO image publish on ANY channel filed an issue; the feed already built a per-SKU receipt with Amazon's codes and stored it for a drill-down screen nobody opens. Filed as a MERGE source (an image feed must not close a content rejection), with Amazon's attributeNames re-indexed from the raw report — without them distinct rejections on one SKU collapse to one row | `<this push>` | `build/P4.2a.md` |
 | P4.1e | **eBay's Inventory/Trading split — keep it, never GUESS it.** The split is deterministic (Incident #23 replaced a heuristic that "misrouted Trading primaries"). 🔴 But its prefetch `catch` said "shared flag decides alone" — so a database hiccup routed an Inventory-managed family down the Trading lane, the exact misrouting #23 exists to stop. Refused per family now | `<this push>` | `build/P4.1e.md` |
@@ -198,8 +199,19 @@ reaches a listing. A RETRYABLE answer is not filed either (P3.1: a thousand
 throttles must not bury four real rejections), and the same file already retries
 those errorIds itself. Covers the flat-file push too — one home.
 
-Still open in P4.2: the R-5 census, the eBay Media-API decision (R-1), and
-image read-back per channel.
+**P4.2c closes two more rows.** The R-5 census is a COUNTERWEIGHT: every image
+publisher already goes through the gateway and a gate — proven by the ratchet at
+`{"EBAY":0,…}`, not by a grep. 🔴 My own first grep said
+`amazon-media-publish.service.ts` was ungated; it was WRONG (it reaches both
+through `amazon-media-client.ts`). **A census built from a hand-written pattern
+list is a set claim.** And read-back: all three channels had the FUNCTION, only
+eBay had the HABIT — a read-back that runs only when somebody opens a screen
+cannot detect drift. Amazon + Shopify sweeps built, OFF behind
+`NEXUS_ENABLE_IMAGE_READBACK_SWEEP` (`build/P4.2c.md`).
+
+**The only P4.2 row left is the eBay Media-API decision (R-1)** — our own image
+URLs or eBay-hosted copies. That is a design choice about where images live, not
+a defect, and it is the Owner's with R-1.
 
 ### 3.0a P5.3 — measured, not built
 
@@ -407,6 +419,11 @@ Each is one command, and each converts a "built" into a "verified":
 11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
 12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
 13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
+14b. **Image drift on Amazon and Shopify is invisible until somebody opens the
+   images panel.** `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true` starts the sweep that
+   eBay already has (P4.2c). Read-only, bounded to 400 products a run
+   (`NEXUS_IMAGE_READBACK_MAX_PER_RUN`). Off because it is new recurring API
+   traffic on the Owner's accounts — spend, not doubt.
 14a. **🟢 THE OWNER CHOSE OPTION B (2026-09-20): one captured live read first.**
    `GET /api/admin/amazon-orders-2026-probe?days=7` — admin-gated, read-only, ONE
    `searchOrders` call. It does **not** turn the switch on. It reports the field
@@ -456,6 +473,18 @@ Each is one command, and each converts a "built" into a "verified":
   about ENV, not about a connection.** Etsy and Shopify log it while a CX OAuth
   connection may exist perfectly well. Check the connection table, not the boot
   warning.
+- 🔴🔴 **A BEHAVIOURAL TEST THAT CANNOT DISCRIMINATE IS NOT A TEST.** P4.2c's
+  ceiling arm used 6 fixtures with the cap at 999,999 and asserted "not capped";
+  deleting `Math.min(raw, 5000)` changed nothing at that size. It would take
+  5,000 fixtures to see it. Export the function and assert the VALUE. (Third
+  variant of the same lesson in one day — with the two below.)
+- 🔴 **A CENSUS BUILT FROM A HAND-WRITTEN PATTERN LIST IS A SET CLAIM.** Mine
+  reported `amazon-media-publish.service.ts` as ungated; it reaches the gateway
+  through `amazon-media-client.ts`, which my list did not name. Prefer a DERIVED
+  gate (the ratchet) over a grep whose patterns you chose.
+- 🔴 **A CRON EXPRESSION CAN CLOSE A BLOCK COMMENT.** `45 */6 * * *` contains
+  `*/`. It ended the doc comment mid-sentence and produced four bogus syntax
+  errors pointing at the wrong line.
 - 🔴🔴 **A SHAPE TEST CANNOT CARRY A RULE ABOUT A VALUE.** P4.2a asserted
   `toContain('attrsByCode')` and `toContain('attributeNames')`; replacing the
   expression with `attributeNames: []` left both names in the file and the test

@@ -378,6 +378,20 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const s = await readbackAllEbayLiveImages()
     return `scanned ${s.scanned} · refreshed ${s.refreshed} · empty ${s.empty} · skipped ${s.skipped} · errored ${s.errored}`
   },
+  // P4.2c — the other two channels. eBay has had a read-back sweep since before
+  // P4.2; Amazon and Shopify had the FUNCTION and no habit, and a read-back that
+  // only runs when somebody opens a screen cannot detect drift.
+  //
+  // `unconfigured` is reported separately from `empty` on purpose: "it ran and
+  // found nothing" and "it could not run" are different answers.
+  'image-readback-sweep': async () => {
+    const { runImageReadbackSweep } = await import('../services/images/live-image-readback.service.js')
+    const runs = await runImageReadbackSweep()
+    if (runs.length === 0) return 'off (set NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true)'
+    return runs
+      .map((s) => `${s.channel}: eligible ${s.eligible} · scanned ${s.scanned} · refreshed ${s.refreshed} · empty ${s.empty} · skipped ${s.skipped} · unconfigured ${s.unconfigured} · errored ${s.errored}${s.capped ? ' · CAPPED' : ''}`)
+      .join(' | ')
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {
