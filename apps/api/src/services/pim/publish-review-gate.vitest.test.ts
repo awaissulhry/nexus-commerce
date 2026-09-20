@@ -119,7 +119,15 @@ describe('the fourth eBay direct push (pushVariationGroup)', () => {
   const rows = [{ sku: 'GALE-JACKET', _isParent: true }]
   const push = async () => {
     const { pushVariationGroup } = await import('../ebay-variation-push.service.js')
-    return pushVariationGroup('group', rows as any, 'DE', 'token', 'connection', {}, 'https://api.ebay.test', 'EBAY_DE')
+    // P4.1c — `opts.parentContent` is the theme-rendered parent content, and it is
+    // now required: a push without it is refused before it sends, because the raw
+    // body would reach eBay unthemed and silently. Every real caller resolves it
+    // through renderListingDescriptionSafe, so the fixture does too. This test is
+    // about the REVIEW gate; without it the positive control below would be
+    // measuring P4.1c's refusal instead of the gate letting a reviewed row past.
+    return pushVariationGroup('group', rows as any, 'DE', 'token', 'connection', {}, 'https://api.ebay.test', 'EBAY_DE',
+      undefined as any, undefined, undefined, undefined, undefined,
+      { parentContent: { title: 'Gale Jacket', subtitle: '', description: '<div class="nexus-theme">Themed body</div>' } })
   }
   beforeEach(() => {
     // The presentation assert runs first and reads these two.

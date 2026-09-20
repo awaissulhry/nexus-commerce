@@ -768,6 +768,25 @@ export async function pushVariationGroup(
   // When true, variants with no price are silently skipped in the offer step
   // instead of failing the whole push. Used by the images tab which only needs
   // inventory_item + group updates — not offer updates — to deliver images.
+  /**
+   * P4.1c — REQUIRED, and `parentContent` inside it is required too.
+   *
+   * It used to be optional, falling back to `parentRow.description` "byte-identical
+   * to pre-P9e". Both callers resolve the parent's per-market content and run it
+   * through the description engine first (`renderListingDescriptionSafe`), so the
+   * fallback is dead — but it is dead only as long as nobody writes a third caller.
+   * A third caller that omitted it would publish the RAW body to eBay with no theme
+   * around it, silently and with no error: the listing would simply look wrong.
+   *
+   * That is the "two builders drift" shape, so the rule is put where it cannot be
+   * forgotten. TypeScript refuses the call rather than a guard noticing afterwards.
+   * `opts` itself cannot be made a required parameter — the ones before it are
+   * optional, and TypeScript refuses a required parameter after an optional one.
+   * So the rule is held twice: `parentContent` is REQUIRED inside `opts` (a caller
+   * passing `opts: {}` will not compile), and omitting `opts` altogether is
+   * REFUSED at run time with a sentence, the same way this function already
+   * refuses a disallowed publish host.
+   */
   opts?: {
     skipOffersOnNoPrice?: boolean
     /** FFP.15 — shared-gallery mode (single-colour families): publish ONE
@@ -784,12 +803,14 @@ export async function pushVariationGroup(
      *  (title/subtitle/description). A variation listing has ONE parent-level
      *  title/subtitle/description, so the caller resolves it from the parent
      *  product's ChannelListing for this market (via resolvePerMarketContent,
-     *  falling back to the active-market parent row) and threads it in. When
-     *  omitted, the group falls back to the parentRow.* values (byte-identical to
-     *  pre-P9e). Only the group-level title/description + offer subtitle use this;
-     *  per-variant inventory_item title/description are non-surfacing on grouped
-     *  listings (the group title/description is authoritative) and stay as-is. */
-    parentContent?: { title: string; subtitle: string; description: string }
+     *  falling back to the active-market parent row) and threads it in.
+     *
+     *  P4.1c — REQUIRED. The description here must already have been through
+     *  `renderListingDescriptionSafe`: this is the ONE description a buyer sees on
+     *  a grouped eBay listing. The per-variant inventory_item title/description are
+     *  non-surfacing on grouped listings (the group's are authoritative) and stay
+     *  as-is. Only the group-level title/description + offer subtitle use this. */
+    parentContent: { title: string; subtitle: string; description: string }
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   // P1.2 — every eBay call of this push goes through the channel gateway (account, rate bucket, call
@@ -816,6 +837,22 @@ export async function pushVariationGroup(
   // title/description this push sends are resolved content; an unreviewed machine
   // draft must not reach eBay any more than it reaches an Amazon payload.
   await assertListingContentReviewed({ sku: String((rows.find(r => r._isParent) ?? rows[0])?.sku ?? ''), channel: 'EBAY', marketplace: mp, accountId: connectionId })
+
+  // P4.1c — the group description is the ONE a buyer sees, and it must already
+  // have been through the description engine. Refused rather than published raw:
+  // an unthemed live listing is worse than a push that did not happen, and it is
+  // silent — no error, nothing in the ledger, the listing just looks wrong.
+  //
+  // Placed AFTER the publish mode, the push lock, the presentation lock and the
+  // review gate, and deliberately: this refusal used to sit first and MASKED all
+  // four. A paused listing then reported a missing theme instead of the pause,
+  // which the existing tests caught. The most important reason wins.
+  if (!opts?.parentContent) {
+    return rows.map(input => ({
+      sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const,
+      message: 'EBAY_WRITE_REFUSED: this push has no theme-rendered parent content. Resolve it with renderListingDescriptionSafe and pass it as opts.parentContent; nothing was sent.',
+    }))
+  }
 
   // EFX P5 — cap consistency. eBay allows at most 12 pictures per variation in
   // a multiple-variation listing (Inventory API "Managing images"; same cap as

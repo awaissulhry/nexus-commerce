@@ -1,9 +1,8 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and the first two slices of
-P4.1 (a and b) are built.** P5.3 is measured. Next is the rest of **P4.1**:
-eBay's Inventory/Trading split, business policies per account, the description
-engine in every builder, and Shopify on `productSet` only.
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3, P5.1 and P4.1 a/b/c are built.**
+P5.3 and Shopify's `productSet` row are measured. Next in **P4.1**: eBay's
+Inventory/Trading split, and business policies per account.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -71,6 +70,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.1c | **The description engine in every builder — it already was.** A counterweight: 7 render call sites across BOTH channel models. But the rule lived in the CALLERS: `pushVariationGroup` fell back to the RAW body when its parent content was omitted, dead only until a third caller. Now required at compile time and refused at run time. 🔴 The refusal was placed FIRST and masked the publish mode, the push lock, the presentation lock and the review gate — **14 existing tests caught it** | `<this push>` | `build/P4.1c.md` |
 | P4.1b | **An Amazon single-item rejection reaches its listing.** 🔴 The handover said `putListingsItem` was "0 occurrences"; it is **28** — the 0 is true only of the SDK operation STRING while a real client method with a live call site sat beside it, parsing Amazon's `issues`, logging them and filing nothing. An accepted write files an EMPTY set on purpose, because `listings-api` REPLACES and that is what CLOSES a fixed listing's stale rejection | `<this push>` | `build/P4.1b.md` |
 | P4.1a | **Every eBay Trading rejection reaches its listing.** 🔴 The handover said "two callers"; a derived census says **14 write sites across 12 files, 0 passing a listing** — and one of the two files it named makes no Trading call at all. Resolved centrally from the `<ItemID>` + the account, so a fifteenth caller cannot forget it. A shared eBay item is MANY listings and all are filed | `<this push>` | `build/P4.1a.md` |
 | P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
@@ -129,6 +129,12 @@ plan's order now points at **P4**.
 
 ### 3.0b P4.1's remaining rows — measured 2026-09-20, read before building
 
+**"The description engine in every builder" is NOT a gap either.** — CLOSED as
+P4.1c. 7 render call sites on both channel models, one engine. What WAS wrong is
+that the rule lived in the callers: the Inventory group publisher fell back to
+the raw, unthemed body when its parent content was omitted. Required now. See
+`build/P4.1c.md`.
+
 **"Shopify: `productSet` only" is NOT a gap. It is a stale plan row against a
 deliberate design, and the code is right.** `productSet` is already used —
 `services/shopify/content-publisher.ts:260`, `mutation NexusProductSet(...)
@@ -145,9 +151,10 @@ make one operator's title edit overwrite another's concurrent price edit.
 that and its gateway ratchet holds it at 0.
 
 Still genuinely open in P4.1, and not yet measured: eBay's Inventory/Trading
-split for unique vs shared SKUs, business policies per account, and the
-description engine in every builder (note the 🔴 *TWO column builders DRIFT*
-lesson — a master-only piece is a silent channel gap).
+split for unique vs shared SKUs, and business policies per account
+(`fulfillmentPolicyId` / `paymentPolicyId` / `returnPolicyId` exist in
+`routes/ebay-cockpit.routes.ts`; whether they resolve per connected account is
+unmeasured).
 
 ### 3.0a P5.3 — measured, not built
 
@@ -377,6 +384,16 @@ Each is one command, and each converts a "built" into a "verified":
   to NARROW the claim to what is true (no listing WRITE outside `callTradingApi`),
   write the exemptions down with reasons, and add a second test that CHECKS each
   reason — not to loosen the pattern until it goes green.
+- 🔴🔴 **A NEW REFUSAL PLACED TOO EARLY MASKS EVERY REFUSAL BEHIND IT.** P4.1c's
+  theme check sat before the publish mode, the push lock, the presentation lock
+  and the review gate, so a PAUSED listing reported "no theme-rendered content"
+  instead of the pause. **14 existing tests caught it in one run.** Put a new
+  refusal last unless it is genuinely the most important reason, and assert its
+  position by index.
+- 🔴 **AN ESCAPE HATCH IN A TEST IS A PASS THAT PROVES NOTHING.** "If a lock threw
+  first, accept that instead" would have let P4.1c's behavioural test never reach
+  the refusal. WITNESS which arm runs — write the outcome to a file from inside
+  the test — then delete the branch that does not.
 - 🔴 **A COUNT OF A NAME is not a count of the THING.** "`putListingsItem`: 0
   occurrences" was true of the SDK operation STRING and false of the method: a
   real client method with a live call site sat beside it. Before believing a
