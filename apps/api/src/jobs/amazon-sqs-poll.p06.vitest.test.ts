@@ -101,7 +101,20 @@ import { NEXUS_SP_API_NOTIFICATION_TYPES, runAmazonNotificationSetup } from '../
 import { LEGACY_WORKSPACE_ID } from '../lib/workspace-context.js'
 
 const envelope = (type: string, payload: Record<string, unknown>) => JSON.stringify({ NotificationType: type, EventTime: '2026-09-19T10:00:00Z', Payload: payload })
-const orderPayload = (fulfillment: 'MFN' | 'AFN', seller = 'A1') => ({ OrderChangeNotification: { SellerId: seller, AmazonOrderId: '402-1', OrderStatus: 'Unshipped', FulfillmentType: fulfillment } })
+// P2.2 — the ORDER_CHANGE shape Amazon ACTUALLY sends: the order's own details sit
+// under `Summary`. This fixture used to put them at the top level, which is where the
+// parser was reading them, so the two agreed with each other and neither agreed with
+// Amazon. Checked against every one of the 1,413 real ORDER_CHANGE payloads in the
+// ledger: 0 carry `OrderStatus` at the top level, 1,413 carry it under `Summary`.
+const orderPayload = (fulfillment: 'MFN' | 'AFN', seller = 'A1') => ({
+  OrderChangeNotification: {
+    SellerId: seller,
+    AmazonOrderId: '402-1',
+    NotificationLevel: 'OrderLevel',
+    OrderChangeType: 'OrderStatusChange',
+    Summary: { OrderStatus: 'Unshipped', FulfillmentType: fulfillment, OrderType: 'StandardOrder', MarketplaceId: 'A1PA6795UKMFR9' },
+  },
+})
 function enqueue(id: string, Body: string) { h.queue.push({ Body, ReceiptHandle: `rh-${id}`, MessageId: `m-${id}` }) }
 async function drain() {
   const tally = { processed: 0, skipped: 0 }
@@ -188,10 +201,22 @@ describe('P0.6 — every message is in the ledger before it leaves the queue', (
     expect(deleted('7')).toBe(false)
   })
 
-  it('an FBA order is recorded, closed done and deleted without a sync', async () => {
+  it('an FBA order is recorded, SYNCED like any other, closed done and deleted', async () => {
+    // P2.2 — this asserted `syncNewOrders` was NOT called, for an `if (AFN) skip`
+    // branch in the poller. That branch never ran in production: the parser read
+    // `FulfillmentType` one level too high and answered 'MFN' for all 1,413 stored
+    // ORDER_CHANGE notifications, 1,071 of which were really AFN. The test passed only
+    // because its fixture was written in the same wrong shape as the parser.
+    //
+    // Fixing the parse would have switched the skip on for three quarters of Amazon's
+    // order traffic and delayed every FBA order to the next cron tick. The Owner's
+    // decision (2026-09-20) is to keep what production actually does, so the branch is
+    // gone and an FBA order syncs like any other. The assertion is inverted to match
+    // the decision, not relaxed: it still pins exactly one sync, the ledger-first
+    // order, the ack and the outcome.
     enqueue('8', envelope('ORDER_CHANGE', orderPayload('AFN')))
     await drain()
-    expect(h.syncNewOrders).not.toHaveBeenCalled()
+    expect(h.syncNewOrders).toHaveBeenCalledTimes(1)
     expect(recordIndex('8')).toBe(0)
     expect(deleted('8')).toBe(true)
     expect(h.timeline.find((t) => t.op === 'complete')).toMatchObject({ ok: true })

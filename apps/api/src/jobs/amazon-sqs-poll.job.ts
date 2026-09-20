@@ -86,6 +86,18 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
           const raw = msg.rawPayload as any
           const eventTimeRaw =
             raw?.EventTime ?? raw?.eventTime ?? raw?.Payload?.EventTime ?? null
+          // P2.2 — dedupe on AMAZON's id for the notification, which is what the plan
+          // asks for and what survives a redelivery Amazon publishes twice. The SQS
+          // `MessageId` used before is the QUEUE's id for one send: stable while a
+          // message sits unacked, but a second publish of the same notification gets a
+          // new one and lands as a second row. All 1,413 stored ORDER_CHANGE payloads
+          // carry `NotificationMetadata.NotificationId`, so this is not a hopeful read.
+          //
+          // The MessageId stays as the fallback rather than being replaced: a
+          // notification Amazon sends without metadata would otherwise fall through to
+          // a body digest and lose the queue-level idempotency the poller already had.
+          const amazonNotificationId =
+            raw?.NotificationMetadata?.NotificationId ?? raw?.notificationMetadata?.notificationId ?? null
           const providerTimestamp =
             typeof eventTimeRaw === 'string' && !Number.isNaN(Date.parse(eventTimeRaw))
               ? new Date(eventTimeRaw)
@@ -97,7 +109,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
             const written = await recordInbound({
               channel: 'AMAZON',
               eventType: msg.notificationType,
-              externalId: msg.messageId || undefined,
+              externalId: amazonNotificationId || msg.messageId || undefined,
               payload: msg.rawPayload,
               // SP-API notifications arrive as plain JSON on a queue we own; there is
               // no signature on them, and the queue's IAM policy is what establishes
@@ -399,15 +411,24 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
           tally.skipped++
           continue
         }
-        const { amazonOrderId, orderStatus, fulfillmentType } = msg.notification
+        const { amazonOrderId, orderStatus } = msg.notification
 
-        // FBA orders are managed by Amazon's warehouse — no stock action needed here.
-        if (fulfillmentType === 'AFN') {
-          await deleteSqsMessage(msg.receiptHandle)
-          await completeInbound(webhookEventId, true)
-          tally.skipped++
-          continue
-        }
+        // P2.2 — an `if (fulfillmentType === 'AFN') skip` stood here, and it had never
+        // run. The parser read `FulfillmentType` one level too high in the payload, so
+        // it answered 'MFN' for all 1,413 stored ORDER_CHANGE notifications while the
+        // truth was AFN for 1,071 of them. Every FBA order has therefore been synced on
+        // its notification since the day the branch was written.
+        //
+        // Fixing the parse would have switched that skip on for three quarters of
+        // Amazon's order traffic, and FBA orders would have stopped appearing in Nexus
+        // until the next cron tick. The Owner's decision (2026-09-20) is to keep
+        // today's behaviour: every order notification syncs. So the branch is removed
+        // rather than left to spring into life — dead code that silently changes
+        // meaning when an unrelated bug is fixed is worse than no code.
+        //
+        // `fulfillmentType` is still parsed, and now correctly, in amazon-sqs.service.ts;
+        // nothing here reads it any more. Skipping FBA to save SP-API quota stays
+        // available as its own decision, taken deliberately, with its own proof.
 
         try {
           // syncNewOrders with a very short window covers this specific order

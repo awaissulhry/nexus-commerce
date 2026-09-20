@@ -58,6 +58,16 @@ async function grantlessPost<T>(token: string, slug: string, path: string, body:
 // permanently empty while the poller ran fine, 2026-07-20). When the
 // grantless context is supplied, such a sub is deleted (deleteSubscriptionById
 // is a grantless op) and recreated against our destination.
+/**
+ * The payload version Amazon expects for this type.
+ *
+ * Falls back to '1.0' for a type with no spec so an unlisted caller behaves as it did
+ * before, rather than sending `undefined` and getting an opaque 400.
+ */
+export function payloadVersionFor(notifType: string): string {
+  return NEXUS_SP_API_NOTIFICATION_SPECS.find((spec) => spec.type === notifType)?.payloadVersion ?? '1.0'
+}
+
 export async function ensureSubscriptionForType(
   notifType: string,
   destinationId: string,
@@ -130,7 +140,10 @@ export async function ensureSubscriptionForType(
     `/notifications/v1/subscriptions/${notifType}`,
     {
       body: {
-        payloadVersion: '1.0',
+        // P2.2 — from the type's own spec, not a constant. '1.0' stood here for every
+        // type; LISTINGS_ITEM_ISSUES_CHANGE needs '2023-12-13' and Amazon withdrew its
+        // 1.0 on 2024-09-25, so the constant would have been refused outright.
+        payloadVersion: payloadVersionFor(notifType),
         destinationId,
         ...processingDirective,
       },
@@ -158,19 +171,107 @@ export async function ensureSubscriptionForType(
  *
  * Add a new RT.* notification type here and both code paths pick it up.
  */
-export const NEXUS_SP_API_NOTIFICATION_TYPES = [
-  'ORDER_CHANGE',
-  // ORDER_STATUS_CHANGE removed (P0.6): Amazon retired it on 2026-07-29.
-  'FBA_OUTBOUND_SHIPMENT_STATUS',       // RT.6 (MCF)
-  'FBA_INVENTORY_AVAILABILITY_CHANGES', // RT.9
-  'ANY_OFFER_CHANGED',                  // RT.13
-  // LISTINGS_ITEM_STATUS_CHANGE removed (RT.3): EventBridge-only per SP-API
-  // docs — subscribing it to an SQS destination returns 400 InvalidInput
-  // (observed in the 2026-07-20 boot self-report). Revisit with an
-  // EventBridge destination alongside LISTINGS_ITEM_MFN_QUANTITY_CHANGE.
-  'FEED_PROCESSING_FINISHED',           // RT.15
-  'ACCOUNT_STATUS_CHANGED',             // RT.16
-] as const
+export type NotificationDestinationKind = 'SQS' | 'EVENTBRIDGE'
+
+/**
+ * How well we actually know a type's shape, kept beside the claim.
+ *
+ * `live`     — Nexus is subscribed to it in production today and messages arrive.
+ * `docs`     — Amazon's documentation states it; nothing of ours has exercised it.
+ * `observed` — Amazon's API told us, by accepting or rejecting a real subscribe.
+ * `unknown`  — neither. The subscribe attempt IS the measurement, and its result is
+ *              recorded per type rather than guessed at here.
+ */
+export type NotificationEvidence = 'live' | 'docs' | 'observed' | 'unknown'
+
+export interface AmazonNotificationSpec {
+  type: string
+  /**
+   * P2.2 — NOT always '1.0'. One hardcoded version stood here for every type, and
+   * Amazon rejects a version it does not recognise for a given notification.
+   */
+  payloadVersion: string
+  /** Where Amazon will deliver this type. An SQS destination cannot serve the rest. */
+  destinations: NotificationDestinationKind[]
+  evidence: NotificationEvidence
+  why: string
+}
+
+/**
+ * Every SP-API notification type P2.2 names, with the two facts a subscribe needs.
+ *
+ * A flat list of type names could not carry either fact, so both were assumed: the
+ * payload version was hardcoded to '1.0' for all of them, and a type that only exists
+ * on EventBridge was simply deleted from the list with the reason in a comment.
+ */
+export const NEXUS_SP_API_NOTIFICATION_SPECS: AmazonNotificationSpec[] = [
+  // ── Live on the SQS destination today ────────────────────────────────────────
+  // ORDER_STATUS_CHANGE is absent (P0.6): Amazon retired it on 2026-07-29.
+  { type: 'ORDER_CHANGE', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: '1,413 messages received and stored' },
+  { type: 'FBA_OUTBOUND_SHIPMENT_STATUS', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: 'RT.6 — MCF shipment transitions' },
+  { type: 'FBA_INVENTORY_AVAILABILITY_CHANGES', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: 'RT.9' },
+  { type: 'ANY_OFFER_CHANGED', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: 'RT.13 — 2,823 messages received and stored' },
+  { type: 'FEED_PROCESSING_FINISHED', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: 'RT.15' },
+  { type: 'ACCOUNT_STATUS_CHANGED', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'live', why: 'RT.16 — account-health alerts' },
+
+  // ── EventBridge only. Declared rather than deleted, so the reason is data an
+  //    operator can read, not a comment someone has to find. ───────────────────
+  {
+    type: 'LISTINGS_ITEM_STATUS_CHANGE', payloadVersion: '1.0', destinations: ['EVENTBRIDGE'], evidence: 'observed',
+    why: 'Subscribing it to the SQS destination returned 400 InvalidInput (2026-07-20 boot self-report). The SQS poller already parses it, so only a destination is missing.',
+  },
+  {
+    type: 'BRANDED_ITEM_CONTENT_CHANGE', payloadVersion: '1.0', destinations: ['EVENTBRIDGE'], evidence: 'docs',
+    why: "SP-API notification-type-values states the Amazon EventBridge workflow for this type.",
+  },
+
+  // ── New on SQS, with a version that is NOT 1.0 ──────────────────────────────
+  {
+    type: 'LISTINGS_ITEM_ISSUES_CHANGE', payloadVersion: '2023-12-13', destinations: ['SQS'], evidence: 'docs',
+    why: 'Delivered on both EventBridge and SQS. Payload version 1.0 was withdrawn on 2024-09-25, so the hardcoded 1.0 would have been rejected outright.',
+  },
+
+  // ── Named by P2.2, destination and version NOT established ──────────────────
+  // Deliberately not guessed. Amazon's own answer to a subscribe is the measurement,
+  // and `setupAllAmazonNotifications` records it per type. A 400 InvalidInput here is
+  // a finding — "not available on an SQS destination" — not a failure to hide.
+  { type: 'LISTINGS_ITEM_MFN_QUANTITY_CHANGE', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'unknown', why: 'Named by P2.2; destination support and payload version unverified.' },
+  { type: 'REPORT_PROCESSING_FINISHED', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'unknown', why: 'Named by P2.2; destination support and payload version unverified.' },
+  { type: 'PRICING_HEALTH', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'unknown', why: 'Named by P2.2; destination support and payload version unverified.' },
+  { type: 'ITEM_PRODUCT_TYPE_CHANGE', payloadVersion: '1.0', destinations: ['SQS'], evidence: 'unknown', why: 'Named by P2.2; destination support and payload version unverified.' },
+]
+
+/**
+ * Whether a type whose support is only assumed may be attempted against the live
+ * Amazon API. **Default off.** Creating a subscription is a production write and a
+ * live channel call, and the Owner's standing rule is that both are asked for first.
+ *
+ * With this off, boot and the admin endpoint subscribe exactly the six types that are
+ * live today — the behaviour before P2.2 — while the rest sit in the table above,
+ * visible and ready.
+ */
+export function newTypeSubscriptionsEnabled(): boolean {
+  return process.env.NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES === 'true'
+}
+
+/** The specs this destination can actually carry, honouring the gate above. */
+export function sqsNotificationSpecs(): AmazonNotificationSpec[] {
+  return NEXUS_SP_API_NOTIFICATION_SPECS.filter(
+    (spec) =>
+      spec.destinations.includes('SQS') && (spec.evidence === 'live' || newTypeSubscriptionsEnabled()),
+  )
+}
+
+/**
+ * The type names to subscribe on the SQS destination.
+ *
+ * Kept as a string array because the admin route and the boot path both read it that
+ * way, but it is now DERIVED: a type that only exists on EventBridge can no longer be
+ * subscribed here by someone adding a name to a list.
+ */
+export const NEXUS_SP_API_NOTIFICATION_TYPES: readonly string[] = NEXUS_SP_API_NOTIFICATION_SPECS
+  .filter((spec) => spec.destinations.includes('SQS') && spec.evidence === 'live')
+  .map((spec) => spec.type)
 
 /**
  * Idempotent: ensures the destination + all 8 subscriptions exist.
@@ -246,7 +347,7 @@ export async function setupAllAmazonNotifications(): Promise<{
     })
     const steps: string[] = []
     try {
-      for (const t of NEXUS_SP_API_NOTIFICATION_TYPES) {
+      for (const t of sqsNotificationSpecs().map((spec) => spec.type)) {
         try {
           const existing = await amazonSpApiClient.request<any>('GET', `/notifications/v1/subscriptions/${t}`)
           const subId = existing?.payload?.subscriptionId
@@ -288,7 +389,11 @@ export async function setupAllAmazonNotifications(): Promise<{
     destinationId?: string
     error?: string
   }> = []
-  for (const t of NEXUS_SP_API_NOTIFICATION_TYPES) {
+  // P2.2 — the specs this destination can carry, which is the six live types unless
+  // NEXUS_AMAZON_SUBSCRIBE_NEW_TYPES is on. A type that only exists on EventBridge is
+  // never attempted here: a guaranteed 400 teaches nobody anything and buries the real
+  // failures in the report.
+  for (const t of sqsNotificationSpecs().map((spec) => spec.type)) {
     try {
       // Probe first so we can distinguish created / already-exists / healed.
       let alreadyActive = false

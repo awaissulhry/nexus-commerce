@@ -486,14 +486,28 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
         continue
       }
 
+      // P2.2 — ORDER_CHANGE nests the order's own details under `Summary`. Everything
+      // below `AmazonOrderId` and `SellerId` was being read one level too high, so it
+      // came back undefined every single time. Measured over the 1,413 real ORDER_CHANGE
+      // payloads this workspace has stored:
+      //
+      //   orderStatus     undefined  1413 / 1413
+      //   marketplaceId   empty      1413 / 1413
+      //   fulfillmentType 'MFN'      1413 / 1413   — the truth was AFN 1071, MFN 342
+      //
+      // The `?? payload.X` fallbacks keep the retired ORDER_STATUS_CHANGE shape working,
+      // which is flat, and would also survive Amazon flattening ORDER_CHANGE again. They
+      // are second on purpose: `Summary` is where a live ORDER_CHANGE actually puts these.
+      const summary = payload.Summary ?? {}
       results.push({
         notification: {
           amazonOrderId: payload.AmazonOrderId,
-          orderStatus: payload.OrderStatus,
-          fulfillmentType: payload.FulfillmentType ?? payload.OrderType ?? 'MFN',
-          marketplaceId: payload.MarketplaceId ?? '',
+          orderStatus: summary.OrderStatus ?? payload.OrderStatus,
+          fulfillmentType:
+            summary.FulfillmentType ?? payload.FulfillmentType ?? summary.OrderType ?? payload.OrderType ?? 'MFN',
+          marketplaceId: summary.MarketplaceId ?? payload.MarketplaceId ?? '',
           sellerId: payload.SellerId ?? '',
-          purchaseDate: payload.PurchaseDate,
+          purchaseDate: summary.PurchaseDate ?? payload.PurchaseDate,
         },
         receiptHandle: msg.ReceiptHandle,
         messageId: msg.MessageId ?? '',

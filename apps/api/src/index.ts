@@ -208,6 +208,7 @@ import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
 import { startAmazonSecretRotationCron } from "./jobs/amazon-secret-rotation.job.js";
 import { startDlqMonitorCron } from "./jobs/dlq-monitor.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
+import { startAmazonNotificationReconcileCron } from "./jobs/amazon-notification-reconcile.job.js";
 import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
@@ -1297,6 +1298,13 @@ async function start() {
       // Idempotent: skips if subscription already active. Fire-and-forget;
       // a failure here is logged but never crashes the server.
       ensureAmazonNotificationSubscription();
+
+      // P2.2 — and again every night. The boot call above was the ONLY thing keeping
+      // the subscriptions alive, so the gap between two deploys was a gap in which
+      // nobody checked — and this failure is silent: notifications just stop arriving,
+      // which looks like a quiet day. Idempotent; heals a subscription pointed at a
+      // foreign destination. Opt out via NEXUS_ENABLE_AMAZON_NOTIFICATION_RECONCILE=0.
+      startAmazonNotificationReconcileCron();
 
       // Amazon financial events — daily 02:00 UTC, pulls yesterday's
       // /finances/v0/financialEvents and writes FinancialTransaction rows.
