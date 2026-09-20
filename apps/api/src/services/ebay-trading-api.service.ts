@@ -376,13 +376,35 @@ export async function callTradingApi(
   return { ack, itemId, errors, raw }
 }
 
+/**
+ * P1.7 — every Add goes through eBay's own dry run first. `VerifyAddFixedPriceItem` takes the same XML
+ * and answers with the errors the real Add would raise, without creating a listing. eBay's answer must
+ * be Success or Warning; anything else refuses here, so a listing that eBay would reject is never
+ * created. (The studio has its own copy of this step for the XML it builds itself.)
+ */
+export async function verifyAddFixedPriceItem(
+  xml: string,
+  ctx: { oauthToken: string; siteId: string; connectionId: string; market: string },
+): Promise<{ warnings: string[] }> {
+  const check = await callTradingApi('VerifyAddFixedPriceItem', xml.replace(/AddFixedPriceItemRequest/g, 'VerifyAddFixedPriceItemRequest'), ctx)
+  // A local rehearsal answers `DRYRUN-…` with no body: nothing was validated, and the Add that follows
+  // is neutralized the same way. Any other empty body is a real answer we cannot read — refuse.
+  if (check.itemId?.startsWith('DRYRUN-')) return { warnings: [] }
+  if (!check.raw || !['Success', 'Warning'].includes(check.ack)) {
+    throw Object.assign(new Error('eBay did not validate this listing. Nothing was submitted.'), { notSent: true })
+  }
+  return { warnings: check.errors ?? [] }
+}
+
 export async function addFixedPriceItem(
   input: AddFixedPriceItemInput,
   ctx: { oauthToken: string; market: string; connectionId: string },
 ): Promise<{ itemId: string }> {
   const siteId = siteIdForMarket(ctx.market)
   const xml = buildAddFixedPriceItemXml(input)
-  const res = await callTradingApi('AddFixedPriceItem', xml, { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId, market: ctx.market })
+  const call = { oauthToken: ctx.oauthToken, siteId, connectionId: ctx.connectionId, market: ctx.market }
+  await verifyAddFixedPriceItem(xml, call)
+  const res = await callTradingApi('AddFixedPriceItem', xml, call)
   if (!res.itemId) throw new Error('eBay AddFixedPriceItem succeeded but returned no ItemID')
   return { itemId: res.itemId }
 }

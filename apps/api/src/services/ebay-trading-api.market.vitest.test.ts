@@ -31,8 +31,14 @@ describe('W1.3 GB / UK fold at Trading callers (only synthetic fetch)', () => {
   ] as const
   for (const [name, run] of calls) it.each(['GB', 'UK'])(`${name} accepts %s and sends site 3 to the stub`, async (market) => {
     await run(market)
-    expect(m.fetch).toHaveBeenCalledOnce()
-    expect(m.fetch.mock.calls[0][1].headers['X-EBAY-API-SITEID']).toBe('3')
+    expect(m.fetch).toHaveBeenCalled()
+    // P1.7 — addFixedPriceItem verifies with eBay before it adds, so that caller makes two calls.
+    // Every call of every caller must carry site 3.
+    for (const call of m.fetch.mock.calls) expect(call[1].headers['X-EBAY-API-SITEID']).toBe('3')
+    if (name === 'addFixedPriceItem') {
+      expect(m.fetch.mock.calls.map(call => call[1].headers['X-EBAY-API-CALL-NAME']))
+        .toEqual(['VerifyAddFixedPriceItem', 'AddFixedPriceItem'])
+    }
   })
 })
 
