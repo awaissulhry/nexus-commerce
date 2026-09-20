@@ -60,7 +60,9 @@ The Owner approved groups A, B and C of `build/P1.6-delete-list.md`, and picked 
 
 **P1.7 BUILT (2026-09-20)** — `04166df5d` the push lock refuses an ENDED listing, `ee9fe18ea` eBay verifies before every Add, `986b2862e` Amazon previews every content write. Record `build/P1.7.md`; 14/14 mutation checks. The Amazon flat-file route previews every row too (Owner chose option A, `9e4f2cbf2` + the flat-file commit); it already had the push lock through `prepareRowsForPush`.
 
-**Next package: P1.8** (validate before send: Amazon `VALIDATION_PREVIEW` for every content write; eBay `Verify…` before Add; the push lock also blocks `ENDED` listings).
+**P1.8 BUILT (2026-09-20)** — `314916688`, record `build/P1.8.md`. The nightly run is OFF until the Owner sets `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN=true` and one sandbox account per channel. 🔴 Local test runs now hit two UNAPPLIED migrations from other sessions (`20260919c_shared_warehouses`, `20260919d_ae4_live_sync`): three DB-backed test files fail with "The column (not available) does not exist in the current database".
+
+**Next package: P2.1** (the incoming event ledger), per section 5 of this file (validate before send: Amazon `VALIDATION_PREVIEW` for every content write; eBay `Verify…` before Add; the push lock also blocks `ENDED` listings).
 
 ## 5. After P1.4
 

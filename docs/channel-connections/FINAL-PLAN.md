@@ -699,7 +699,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 | P1.4 | BUILT (2026-09-19) | `build/P1.4.md` | Committed locally, not pushed. P1.4a queue + P1.4b order actions, bulk action, gateway rule: a Shopify change leaves only on the `2026-07` GraphQL API with a named account (0 REST 2024-01 writes). Live stock round-trip needs a dev store + the Owner's yes. A linked listing with no reviewed location uses the shop's location when it has exactly one (Owner, 2026-09-20) |
 | P1.6 | BUILT (2026-09-20) | `build/P1.6-delete-list.md` | Committed locally, not pushed. The Owner approved groups A, B and C; 26 files gone, the ratchet still 0. The eBay feed lane is no longer chosen by row count (R-6). Group D stays and is fixed later |
 | P1.7 | BUILT (2026-09-20) | `build/P1.7.md` | Committed locally, not pushed. Amazon previews every content write (queue, wizard, direct route, image feed); eBay verifies before every Add; the push lock refuses an ENDED listing. The flat-file submit route previews every row up to 200 (Owner, option A) |
-| P1.8 | NOT STARTED | — | Nightly sandbox contract run; it also proves the eBay feed lane (R-6) |
+| P1.8 | BUILT (2026-09-20) | `build/P1.8.md` | Committed locally, not pushed. Nightly sandbox contract run; every check is a read on a sandbox host, a channel with no sandbox host is reported not-configured. **OFF** until the Owner sets `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` + one sandbox account per channel |
 | P2.1 – P2.8 | NOT STARTED | — | P2.3 needs D3 |
 | P3.1 – P3.6 | NOT STARTED | — | |
 | P4.1 – P4.6 | NOT STARTED | — | P4.6 needs D6 |
