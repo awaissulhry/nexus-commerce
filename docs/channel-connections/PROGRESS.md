@@ -75,6 +75,7 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P4.2a | **An Amazon image rejection reaches its listing.** 🔴 NO image publish on ANY channel filed an issue; the feed already built a per-SKU receipt with Amazon's codes and stored it for a drill-down screen nobody opens. Filed as a MERGE source (an image feed must not close a content rejection), with Amazon's attributeNames re-indexed from the raw report — without them distinct rejections on one SKU collapse to one row | `<this push>` | `build/P4.2a.md` |
 | P4.1e | **eBay's Inventory/Trading split — keep it, never GUESS it.** The split is deterministic (Incident #23 replaced a heuristic that "misrouted Trading primaries"). 🔴 But its prefetch `catch` said "shared flag decides alone" — so a database hiccup routed an Inventory-managed family down the Trading lane, the exact misrouting #23 exists to stop. Refused per family now | `<this push>` | `build/P4.1e.md` |
 | P4.1d | **eBay business policies — one reconciliation, both builders.** Per ACCOUNT was already right (P0.7's guard + the connection's own metadata). 🔴 Per MARKET had a DRIFT: on an unavailable account snapshot the group publisher REFUSED (FFP.12, learned from an incident) while the single-SKU publisher WARNED and wrote the unverified ids — the exact behaviour FFP.12 exists to prevent. Three copies of one rule across two files, now one accessor + a parity gate | `<this push>` | `build/P4.1d.md` |
 | P4.1c | **The description engine in every builder — it already was.** A counterweight: 7 render call sites across BOTH channel models. But the rule lived in the CALLERS: `pushVariationGroup` fell back to the RAW body when its parent content was omitted, dead only until a third caller. Now required at compile time and refused at run time. 🔴 The refusal was placed FIRST and masked the publish mode, the push lock, the presentation lock and the review gate — **14 existing tests caught it** | `<this push>` | `build/P4.1c.md` |
@@ -84,8 +85,8 @@ Read in this order:
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
 **Production proofs.** P4.1d deploy `68ab8a33` from `f356688ad`: **SUCCESS** (P4.1b and
-P4.1c are inside the deploys between it and P4.1a; P4.1e's was still building when this
-was written — check it before trusting the row). Earlier: P4.1a deploy `09b971c9` from `11cb9d31d`: **SUCCESS**. Nothing to
+P4.1c are inside the deploys between it and P4.1a). P4.1e deploy `ff4a5d94` from
+`2f9fbd661`: **SUCCESS** — all of P4.1 is live. Earlier: P4.1a deploy `09b971c9` from `11cb9d31d`: **SUCCESS**. Nothing to
 switch on — the change only fills a value the code already accepted — so the proof is
 that the app boots and nothing changed. ⚠️ **Neither P4.1 slice can be proven by real
 traffic yet:** both are WRITE paths, eBay's last real traffic is a test artefact (§4's
@@ -166,6 +167,16 @@ right. Per MARKET had a real drift and it is fixed; see `build/P4.1d.md`.
 deterministic and correct; its FAILURE path guessed. See `build/P4.1e.md`.
 
 **P4.1 is complete.** The row-by-row table is `build/P4.1e.md` §6.
+
+**P4.2 (images) — first slice done.** 🔴 Measured: **no image publish on any
+channel filed a single issue** — `amazon-image-feed` 0, `ebay-inventory-image-publish`
+0, `ebay-shared-image-publish` 0, `shopify-live-images` 0 — while P3.2's
+`recordFeedReportIssues` had exactly ONE caller. P4.2a files the Amazon image
+feed's rejections (`build/P4.2a.md`). eBay's shared image publish is covered by
+P4.1a; Shopify's is a READ. **P4.2b is measured and NOT built** because it needs a
+decision: `pushVariationGroup`'s 12 `results.push` sites mix eBay's verdicts with
+OUR validation ("No images found", "No DE price set"), and only the first kind
+belongs on a listing — see `build/P4.2a.md` §4.
 
 ### 3.0a P5.3 — measured, not built
 
@@ -401,6 +412,11 @@ Each is one command, and each converts a "built" into a "verified":
   "shared flag decides alone" — which routes an Inventory-managed family down
   the Trading lane, the exact misrouting Incident #23 exists to stop. When you
   find a rule with an incident number, **read its `catch`**.
+- 🔴🔴 **A SHAPE TEST CANNOT CARRY A RULE ABOUT A VALUE.** P4.2a asserted
+  `toContain('attrsByCode')` and `toContain('attributeNames')`; replacing the
+  expression with `attributeNames: []` left both names in the file and the test
+  green. Export the function and test the VALUE. (Second time in one hour — see
+  the next line.)
 - 🔴🔴 **A `toContain` ON PART OF A CONDITION DOES NOT TEST THAT CONDITION.**
   `if (false && cond)` and `cond && Date.now() < 0` both keep the substring, so
   the rule is off and the test is green. Two P4.1e mutations proved it. Match the

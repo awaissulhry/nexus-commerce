@@ -474,7 +474,9 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
 }> {
   const job = await prisma.amazonImageFeedJob.findUnique({
     where: { id: jobId },
-    select: { id: true, feedId: true, productId: true, skus: true, status: true, resultSummary: true },
+    // P4.2a — `marketplace` joins a rejected SKU to its listing. Without it the
+    // receipt below can be built but never filed.
+    select: { id: true, feedId: true, productId: true, skus: true, status: true, resultSummary: true, marketplace: true },
   })
   if (!job) throw new Error(`AmazonImageFeedJob ${jobId} not found`)
 
@@ -514,6 +516,20 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
     // so existing readers (raw Amazon report) still work, while the
     // ImagePublishHistory drill-down can pivot on `perSku` directly.
     const perSku = await buildPerSkuReceipt(job.productId, skus, summary)
+
+    // P4.2a — the rejections go onto the listing, not only into this job row.
+    //
+    // The receipt already carried Amazon's own codes and messages per SKU, and
+    // was stored on `AmazonImageFeedJob.resultSummary.perSku` for a drill-down
+    // screen. Nothing wrote it to `ListingIssue`, so an image rejection was
+    // visible only to somebody who opened that one job. Same shape as P4.1a/b:
+    // the recorder existed, the issues existed, nobody joined them.
+    //
+    // Source `amazon-feed` is a MERGE source on purpose: an image feed speaks
+    // only about the images it carried, so it must never resolve a content
+    // rejection it said nothing about.
+    await recordImageFeedIssues(job.marketplace, perSku, summary)
+
     const summaryWithReceipt = {
       ...((summary as Record<string, unknown> | null) ?? {}),
       perSku,
@@ -607,6 +623,68 @@ export interface PerSkuReceipt {
   asin: string | null
   accepted: boolean
   errors: Array<{ code: string; message: string }>
+}
+
+/**
+ * P4.2a — the image feed's receipt, in the channel-neutral feed shape, filed on
+ * every listing that carries the SKU.
+ *
+ * `recordFeedReportIssues` (P3.2) already resolves one SKU to MANY listings, files
+ * on all of them and reports the SKUs it could not place. This only adapts the
+ * shapes: the image receipt calls them `errors` with no severity, the feed shape
+ * calls them `issues` and keeps Amazon's attributeNames.
+ *
+ * 🔴 `AmazonImageFeedJob.marketplace` may be the string `'ALL'`. That matches no
+ * `ChannelListing.marketplace`, so every SKU comes back UNMATCHED rather than
+ * silently filing nowhere — and it is logged, so "nothing was placed" is a
+ * measurement and not a silence.
+ *
+ * Never throws: an issue row reports on a publish, it is not part of one.
+ */
+export async function recordImageFeedIssues(
+  marketplace: string,
+  receipt: PerSkuReceipt[],
+  report: unknown,
+): Promise<void> {
+  try {
+    const rejected = receipt.filter((r) => !r.accepted && (r.errors?.length ?? 0) > 0)
+    if (rejected.length === 0) return
+    // Amazon's attributeNames live on the raw issue, not on the flattened
+    // receipt — index them by code so the fingerprint keeps its attribute.
+    // (P3.2: with the attribute empty, five distinct rejections on one SKU
+    // share one fingerprint and four vanish.)
+    const rawIssues: Array<{ code?: string; attributeNames?: string[]; severity?: string }> =
+      (report as any)?.processingReport?.issues ?? []
+    const attrsByCode = new Map<string, string[]>()
+    for (const issue of rawIssues) {
+      if (!issue?.code || !Array.isArray(issue.attributeNames) || issue.attributeNames.length === 0) continue
+      if (!attrsByCode.has(issue.code)) attrsByCode.set(issue.code, issue.attributeNames.map(String))
+    }
+    const { recordFeedReportIssues } = await import('../listing-issue-recorder.service.js')
+    const result = await recordFeedReportIssues({
+      marketplace,
+      source: 'amazon-feed',
+      perSku: rejected.map((r) => ({
+        sku: r.sku,
+        status: 'error' as const,
+        issues: r.errors.map((e) => ({
+          code: e.code,
+          severity: 'error' as const,
+          message: e.message,
+          attributeNames: attrsByCode.get(e.code) ?? [],
+        })),
+      })),
+    })
+    if (result.unmatchedSkus.length > 0) {
+      logger.warn('image feed: rejections could not be placed on a listing', {
+        marketplace, unmatched: result.unmatchedSkus.length, skus: result.unmatchedSkus.slice(0, 10),
+      })
+    }
+  } catch (err) {
+    logger.warn('image feed: could not file the rejections', {
+      marketplace, error: err instanceof Error ? err.message : String(err),
+    })
+  }
 }
 
 async function buildPerSkuReceipt(
