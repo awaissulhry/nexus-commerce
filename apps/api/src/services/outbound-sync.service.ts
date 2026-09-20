@@ -40,8 +40,8 @@ import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
-import { resolveMembershipIntended } from "./sync-control-core.js";
-import { ledgerInputs, loadSyncLedgers, sellableAvailable } from "./stock-pool/sync-ledgers.js";
+import { resolveMembershipIntended, routedAvailable } from "./sync-control-core.js";
+import { ledgerInputs, loadSyncLedgers } from "./stock-pool/sync-ledgers.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
 import { productEventService } from "./product-event.service.js";
@@ -623,6 +623,58 @@ export class OutboundSyncService {
   }
 
   /** A2.1 — route one queue item to the right channel sync method. */
+  /**
+   * P4.3d — the ceiling of the send-time oversell clamp, ROUTED the same way the
+   * intended quantity is.
+   *
+   * Before this, all three lanes summed `sellableAvailable` — every warehouse row
+   * the product holds, routed or not — and subtracted the buffer. The quantity a
+   * listing may promise was routed (`resolveIntendedQuantity`); the cap on it was
+   * not. Two derivations of one number, and the cap was the WIDER one, so it
+   * caught nothing a routed push could do wrong: a pinned quantity, a stale row
+   * or a legacy producer could promise units held in a warehouse that does not
+   * serve that market at all.
+   *
+   * `routed: false` — no location is routed here — is returned, never turned into
+   * a ceiling of 0. For a pooled product that means "we do not know" (the
+   * resolver answers UNCOUNTED and pushes nothing), and capping an unknown to
+   * zero and sending it is the scoped-Zero incident. The caller decides.
+   */
+  async routedCeiling(args: {
+    productId: string
+    channel: string
+    channelLabel: string
+    marketplace: string
+    sourceLocationCodes: string[]
+    stockBuffer: number
+  }): Promise<{ available: number; routedAvailable: number; locationCodes: string[]; refusal: string | null }> {
+    const productLedger = (await loadSyncLedgers(prisma, [args.productId])).get(args.productId);
+    const inputs = ledgerInputs(productLedger, args.sourceLocationCodes);
+    const routed = routedAvailable({
+      ledger: inputs.ledger,
+      channel: args.channel,
+      marketplace: args.marketplace,
+      sourceLocationCodes: inputs.sourceLocationCodes,
+    });
+    // Two nullable fields, not an `ok` union: `apps/api` sets "strict": false, so a
+    // discriminated union never narrows and `refusal` would be a compile error
+    // after the guard.
+    return {
+      // The listing's own hold-back is applied on top, exactly as before.
+      available: computeAvailableToPublish({
+        fulfillmentMethod: 'FBM',
+        warehouseAvailable: routed.available,
+        fbaSellable: 0,
+        stockBuffer: args.stockBuffer,
+      }).available,
+      routedAvailable: routed.available,
+      locationCodes: routed.locationCodes,
+      refusal: !routed.routed && !inputs.uncountedIsZero
+        ? `Nothing was sent to ${args.channelLabel}: no stock location is routed to ${args.marketplace} for this listing, so the quantity it may promise cannot be worked out. Route a location to this market in Sync Control.`
+        : null,
+    };
+  }
+
   private async pushLockListings(queueItem: any, channel: string): Promise<PushLockListing[]> {
     if (queueItem.channelListingId) {
       const listing = await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId } });
@@ -1017,7 +1069,7 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true, salePrice: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true, salePrice: true, sourceLocationCodes: true },
         })
         .catch(() => null);
     }
@@ -1081,14 +1133,25 @@ export class OutboundSyncService {
       payload.quantity !== undefined &&
       product?.id
     ) {
-      // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
-      const warehouseAvailable = (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0
-      const { available } = computeAvailableToPublish({
-        fulfillmentMethod: 'FBM',
-        warehouseAvailable,
-        fbaSellable: 0,
+      // P4.3d — shared stock AND routing: the limit is what the ledger the product
+      // follows holds IN THE LOCATIONS ROUTED TO THIS MARKET, minus the listing's
+      // buffer. Same filter as the intended quantity, so the promise and its cap
+      // cannot be computed two ways.
+      const ceiling = await this.routedCeiling({
+        productId: product.id,
+        channel: 'AMAZON',
+        channelLabel: 'Amazon',
+        marketplace: String(cl?.marketplace ?? marketplaceId),
+        sourceLocationCodes: (cl?.sourceLocationCodes as string[] | undefined) ?? [],
         stockBuffer: cl?.stockBuffer ?? 0,
       })
+      // Nothing routed here and the ledger does not treat uncounted as zero (a
+      // pooled product): we do not know the ceiling, so we do not cap to 0 and
+      // send it — that is the scoped Zero. Refuse, as the EU guard does (D9).
+      if (ceiling.refusal) {
+        return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: ceiling.refusal, error: ceiling.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false }
+      }
+      const available = ceiling.available
       const requested = payload.quantity
       const { quantity, clamped } = applyOversellClamp(requested, available)
       if (clamped) {
@@ -1319,7 +1382,7 @@ export class OutboundSyncService {
       ? await prisma.channelListing
           .findUnique({
             where: { id: queueItem.channelListingId },
-            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true },
+            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true, sourceLocationCodes: true },
           })
           .catch(() => null)
       : null;
@@ -1332,21 +1395,27 @@ export class OutboundSyncService {
       }
     } catch { /* fail-open */ }
     if (payload.quantity !== undefined && product?.id) {
-      // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
-      const sellable = (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0;
       // P1 — base the eBay push on the CURRENT listing quantity, then apply the
-      // warehouse cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
+      // routed cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
       if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
         payload.quantity = resolveDispatchQuantity(cl.quantity, payload.quantity);
       }
       if (cl?.fulfillmentMethod !== "FBA") {
-        const warehouseAvailable = sellable;
-        const cap = computeAvailableToPublish({
-          fulfillmentMethod: "FBM",
-          warehouseAvailable,
-          fbaSellable: 0,
+        // P4.3d — the same routed ceiling as the Amazon lane. It used to sum every
+        // warehouse row the product held, routed to this market or not.
+        const ceiling = await this.routedCeiling({
+          productId: product.id,
+          channel: 'EBAY',
+          channelLabel: 'eBay',
+          marketplace: String((cl as { marketplace?: string } | null)?.marketplace ?? marketplaceId),
+          sourceLocationCodes: ((cl as { sourceLocationCodes?: string[] } | null)?.sourceLocationCodes) ?? [],
           stockBuffer: cl?.stockBuffer ?? 0,
-        }).available;
+        });
+        if (ceiling.refusal) {
+          return { success: false, queueId, channel: "EBAY", status: "FAILED", message: ceiling.refusal, error: ceiling.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false };
+        }
+        const warehouseAvailable = ceiling.routedAvailable;
+        const cap = ceiling.available;
         const requested = payload.quantity
         const { quantity: clampedQty, clamped } = applyOversellClamp(requested, cap)
         if (clamped) {
@@ -2110,7 +2179,11 @@ export class OutboundSyncService {
     } else if (syncType === "PRICE_UPDATE" || payload?.price != null) {
       work.price = payload?.price ?? null;
     } else {
-      work.quantity = await this.shopifyDispatchQuantity(queueItem, sku);
+      const dispatchQuantity = await this.shopifyDispatchQuantity(queueItem, sku);
+      if (dispatchQuantity.refusal) {
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: dispatchQuantity.refusal, error: dispatchQuantity.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false };
+      }
+      work.quantity = dispatchQuantity.quantity;
     }
     const t0 = Date.now();
     try {
@@ -2129,14 +2202,14 @@ export class OutboundSyncService {
    * a superseded-but-undelivered row must not overwrite a fresher value) and clamp to the warehouse pool
    * so Shopify can never advertise units the pool doesn't have. (Moved unchanged from the REST path.)
    */
-  private async shopifyDispatchQuantity(queueItem: any, sku: string): Promise<number> {
+  private async shopifyDispatchQuantity(queueItem: any, sku: string): Promise<{ quantity: number; refusal: string | null }> {
     const { product, payload, channelListing } = queueItem;
     let newQty: number = payload?.quantity ?? 0;
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0") {
       const cl = channelListing?.id
         ? await prisma.channelListing.findUnique({
             where: { id: channelListing.id },
-            select: { quantity: true, stockBuffer: true, fulfillmentMethod: true },
+            select: { quantity: true, stockBuffer: true, fulfillmentMethod: true, marketplace: true, sourceLocationCodes: true },
           })
         : null;
       const resolved = resolveDispatchQuantity(cl?.quantity, payload?.quantity);
@@ -2146,13 +2219,18 @@ export class OutboundSyncService {
         product?.id &&
         cl?.fulfillmentMethod !== "FBA"
       ) {
-        // Shared stock — the limit is what the product's ledger holds: its own warehouses, or the pool.
-        const available = computeAvailableToPublish({
-          fulfillmentMethod: "FBM",
-          warehouseAvailable: (await sellableAvailable(prisma, [product.id])).get(product.id) ?? 0,
-          fbaSellable: 0,
+        // P4.3d — the same routed ceiling as the Amazon and eBay lanes. It used to
+        // sum every warehouse row the product held, routed to this market or not.
+        const ceiling = await this.routedCeiling({
+          productId: product.id,
+          channel: 'SHOPIFY',
+          channelLabel: 'Shopify',
+          marketplace: String((cl as { marketplace?: string } | null)?.marketplace ?? 'GLOBAL'),
+          sourceLocationCodes: ((cl as { sourceLocationCodes?: string[] } | null)?.sourceLocationCodes) ?? [],
           stockBuffer: cl?.stockBuffer ?? 0,
-        }).available;
+        });
+        if (ceiling.refusal) return { quantity: newQty, refusal: ceiling.refusal };
+        const available = ceiling.available;
         const clamp = applyOversellClamp(newQty, available);
         if (clamp.clamped) {
           try {
@@ -2172,7 +2250,7 @@ export class OutboundSyncService {
       }
     }
 
-    return newQty;
+    return { quantity: newQty, refusal: null };
   }
 
   /**

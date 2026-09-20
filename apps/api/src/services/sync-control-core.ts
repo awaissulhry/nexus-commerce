@@ -166,6 +166,55 @@ export function validateServesTokens(
   return out
 }
 
+/**
+ * P4.3d — the ledger rows routed to one channel+market: the listing's own source
+ * pins first, then each location's `syncRoutes`.
+ *
+ * 🔴 This is THE routing filter, and it has two readers on purpose.
+ * `resolveIntendedQuantity` derives the quantity a listing may promise from it,
+ * and the send-time oversell clamp derives its CEILING from it. Before P4.3d the
+ * clamp summed every warehouse row the product held, routed or not, so the
+ * number a listing was allowed to promise and the number it was capped to were
+ * computed two different ways in two different files — and the cap was the wider
+ * of the two, which is the direction that does not catch anything.
+ */
+export function routedLedgerRows(i: {
+  ledger: SyncLedger
+  channel: string
+  marketplace: string
+  sourceLocationCodes: string[]
+}): ReadonlyArray<RoutedLedgerRow> {
+  const override = new Set(i.sourceLocationCodes.map(norm).filter(Boolean))
+  return i.ledger.filter((row) => {
+    if (!locationServes(row.syncRoutes, i.channel, i.marketplace)) return false
+    if (override.size > 0 && !override.has(norm(row.locationCode))) return false
+    return true
+  })
+}
+
+/**
+ * P4.3d — the units routed to this channel+market, before the listing's own
+ * hold-back, and whether ANY row routed there at all.
+ *
+ * `routed: false` is not "zero units". It is "no location is routed here", which
+ * for a pooled product means we do not know — the resolver answers `UNCOUNTED`
+ * and pushes nothing. A clamp cannot decline, so its caller must: capping to 0
+ * and sending it is the scoped-Zero incident, not a safe default.
+ */
+export function routedAvailable(i: {
+  ledger: SyncLedger
+  channel: string
+  marketplace: string
+  sourceLocationCodes: string[]
+}): { available: number; routed: boolean; locationCodes: string[] } {
+  const rows = routedLedgerRows(i)
+  return {
+    available: rows.reduce((sum, row) => sum + row.available, 0),
+    routed: rows.length > 0,
+    locationCodes: rows.map((row) => row.locationCode),
+  }
+}
+
 export function resolveIntendedQuantity(i: SyncControlInputs): IntendedResolution {
   // 1 — FBA beats everything. No pause, pin, routing, or policy may ever
   //     turn an FBA listing into a quantity push.
@@ -185,12 +234,7 @@ export function resolveIntendedQuantity(i: SyncControlInputs): IntendedResolutio
   if (!i.followMasterQuantity) return { kind: 'PINNED', quantity: i.pinnedQuantity }
 
   // 5 — follow: routed-ledger math.
-  const override = new Set(i.sourceLocationCodes.map(norm).filter(Boolean))
-  const routed = i.ledger.filter((row) => {
-    if (!locationServes(row.syncRoutes, i.channel, i.marketplace)) return false
-    if (override.size > 0 && !override.has(norm(row.locationCode))) return false
-    return true
-  })
+  const routed = routedLedgerRows(i)
   if (routed.length === 0) {
     return i.uncountedIsZero ? { kind: 'FOLLOW', quantity: 0, routedAvailable: 0, routedLocations: [] } : { kind: 'UNCOUNTED' }
   }
