@@ -3,6 +3,21 @@ import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
+// P5.1 — Orders v0 is removed 2027-03-27. `amazon-orders-2026.ts` speaks both
+// vocabularies so nothing downstream of this file has to.
+import {
+  AMAZON_ORDERS_2026_VERSION,
+  ORDERS_2026_INCLUDED_DATA,
+  amazonOrders2026Enabled,
+  rememberOrderItems,
+  takeOrderItems,
+  toV0Order,
+  toV0OrderItems,
+  toV0Page,
+  orderOf,
+  type GetOrderResponse2026,
+  type SearchOrdersResponse2026,
+} from './amazon-orders-2026.js'
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -916,37 +931,71 @@ export class AmazonService {
       query.CreatedAfter = cutoff.toISOString()
     }
 
+    // P5.1 — the same window, in the 2026-01-01 parameter names. Derived from
+    // the v0 query rather than decided a second time: two names for one fact is
+    // the shape of every drift defect in this area.
+    const query2026: Record<string, unknown> = Object.fromEntries(
+      Object.entries(query).map(([key, value]) => [key.charAt(0).toLowerCase() + key.slice(1), value]),
+    )
+    query2026.includedData = [...ORDERS_2026_INCLUDED_DATA]
+
+    const use2026 = amazonOrders2026Enabled()
+
     const collected: AmazonOrderRaw[] = []
     let nextToken: string | undefined
 
     while (true) {
       try {
-        const callQuery: Record<string, unknown> = nextToken
-          ? { MarketplaceIds: marketplaceIds, NextToken: nextToken }
-          : query
+        let orders: AmazonOrderRaw[]
 
-        const res: any = await sp.callAPI({
-          operation: 'getOrders',
-          endpoint: 'orders',
-          query: callQuery,
-        })
+        if (use2026) {
+          // `searchOrders` replaces `getOrders`; the cursor is `paginationToken`
+          // and the next one arrives under `pagination.nextToken`. The page also
+          // carries its items, so `fetchOrderItems` needs no second call.
+          const res = (await sp.callAPI({
+            operation: 'searchOrders',
+            endpoint: 'orders',
+            // The library reads the version from `options.version`. A top-level
+            // `version` key is accepted by the object literal and IGNORED by the
+            // client, which would send 2026 parameters to v0 — a silent no-op.
+            options: { version: AMAZON_ORDERS_2026_VERSION },
+            query: nextToken
+              ? { paginationToken: nextToken, includedData: [...ORDERS_2026_INCLUDED_DATA] }
+              : query2026,
+          })) as SearchOrdersResponse2026
+          const page = toV0Page(res)
+          orders = page.orders
+          nextToken = page.nextToken
+        } else {
+          const callQuery: Record<string, unknown> = nextToken
+            ? { MarketplaceIds: marketplaceIds, NextToken: nextToken }
+            : query
 
-        const payload = res?.payload ?? res
-        const orders: AmazonOrderRaw[] = payload?.Orders ?? []
+          const res: any = await sp.callAPI({
+            operation: 'getOrders',
+            endpoint: 'orders',
+            query: callQuery,
+          })
+
+          const payload = res?.payload ?? res
+          orders = payload?.Orders ?? []
+          nextToken = payload?.NextToken
+        }
+
         collected.push(...orders)
 
         if (collected.length >= limit) {
           return collected.slice(0, limit)
         }
 
-        nextToken = payload?.NextToken
         if (!nextToken) {
           return collected
         }
 
         // Be a polite citizen — getOrders is rate-limited to 0.0167 req/s
-        // burst 20. The library throttles for us when auto_request_throttled
-        // is on, but a small pause keeps log noise down.
+        // burst 20, and searchOrders declares a 180 s restore rate. The library
+        // throttles for us when auto_request_throttled is on, but a small pause
+        // keeps log noise down.
         await sleep(250)
       } catch (error) {
         console.error(
@@ -972,6 +1021,24 @@ export class AmazonService {
   async fetchOrderById(amazonOrderId: string): Promise<AmazonOrderRaw | null> {
     const sp = await this.getClient()
     try {
+      if (amazonOrders2026Enabled()) {
+        // P5.1 — `getOrder` exists in both versions, so the version must be
+        // named on the call. Without it the library picks the OLDEST one that
+        // has the operation, which is v0, and the pin would be a no-op.
+        const res = (await sp.callAPI({
+          operation: 'getOrder',
+          endpoint: 'orders',
+          options: { version: AMAZON_ORDERS_2026_VERSION },
+          path: { orderId: amazonOrderId },
+          query: { includedData: [...ORDERS_2026_INCLUDED_DATA] },
+        })) as GetOrderResponse2026 | null
+        const order = orderOf(res)
+        if (!order || !order.orderId) return null
+        // The items came with it; hold them for the ingest's separate call.
+        rememberOrderItems(order.orderId, toV0OrderItems(order))
+        return toV0Order(order)
+      }
+
       const res: any = await sp.callAPI({
         operation: 'getOrder',
         endpoint: 'orders',
@@ -1139,6 +1206,25 @@ export class AmazonService {
    */
   async fetchOrderItems(amazonOrderId: string): Promise<AmazonOrderItemRaw[]> {
     const sp = await this.getClient()
+
+    if (amazonOrders2026Enabled()) {
+      // P5.1 — Orders 2026-01-01 has NO getOrderItems. The items come attached
+      // to the order, so the usual path is a hand-off from the fetch that just
+      // ran, and only an order we have not seen costs a call.
+      const attached = takeOrderItems(amazonOrderId)
+      if (attached) return attached
+
+      const res = (await sp.callAPI({
+        operation: 'getOrder',
+        endpoint: 'orders',
+        options: { version: AMAZON_ORDERS_2026_VERSION },
+        path: { orderId: amazonOrderId },
+        query: { includedData: [...ORDERS_2026_INCLUDED_DATA] },
+      })) as GetOrderResponse2026 | null
+      const order = orderOf(res)
+      return order ? toV0OrderItems(order) : []
+    }
+
     const collected: AmazonOrderItemRaw[] = []
     let nextToken: string | undefined
 

@@ -1,7 +1,7 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-20**. **P0, P1, P2 and ALL of P3 are built.**
-The next package is **P5.1** (due before 2026-12-15), then P4.x.
+Updated **2026-09-20**. **P0, P1, P2, ALL of P3 and now P5.1 are built.**
+P5.3 is measured (see below). The next package is **P4.x**.
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -69,29 +69,55 @@ Read in this order:
 | P3.5 | **Nothing read `Deprecation` / `Sunset` / Shopify's header** — 0 occurrences, with a positive control. Read on the SUCCESS path; `Deprecation`'s date is never shown as the shutdown date; a MOVED sunset date is news | `b36fe4c80`, `ad0a45c04` | `build/P3.5.md` |
 | P3.4 | The alert path reached **nobody**: the in-app channel is a `console.log` stub and the email channel is off in production, so P0.5's secret-expiry alerts went to a log line. Five alert kinds moved onto `Notification` + the bell (391,197 rows, ads-only until now) | `d8923283c` | `build/P3.4.md` |
 | P3.3 | The call ledger could not be asked about an **account** — every other identifier was filterable, `connectionId` was not — and the Diagnostics tab had never shown an outgoing call. One shared service so both screens read the same numbers | `1cff6e219` | `build/P3.3.md` |
+| P5.1 | **Amazon Orders v0 → 2026-01-01, switch OFF.** The plan's own instruction is nearly a no-op: `version_fallback` sends 9 of 11 operations back to v0 **silently**, and the version must sit in `options.version` or it is ignored. 🔴 Amazon's own example proves the money trap — `unitPrice` is PER UNIT (49.99) while v0's `ItemPrice` is the LINE total (99.98 at qty 2) and the ingest DIVIDES by quantity | `<this push>` | `build/P5.1.md` |
 | P3.2 | `ListingIssue` held **0 rows**; 25 stored feed jobs held **140 real Amazon rejections on 48 SKUs**; `OutboundApiCallLog.listingId` was filled on **0 of 469,462** calls. The attribute was lost on **140/140**, which would have collapsed them to 60 rows and dropped 80 | `c86c20424` | `build/P3.2.md` |
 
 **Production proofs.** P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. Next — P5.1, then P4.x
+## 3. Next — P4.x
 
-**P3 is complete.** The plan's own order puts **P5.1 before P4**, because it is the one
-with a date on it.
+**P5.1 is built and P5.3 is measured.** The deadline package is done, so the
+plan's order now points at **P4**.
 
-> **P5.1** — *Amazon Orders v0 → v2026-01-01 (`searchOrders`, `getOrder`). Set the
-> version on every library call so it never falls back to the oldest one.*
-> Deadline **2027-03-27**, target **2026-12-15**. Size M.
-> (`FINAL-PLAN.md` section 6, the P5 table.)
+> **P5.1 — BUILT 2026-09-20, switch OFF.** `NEXUS_ENABLE_AMAZON_ORDERS_2026=true`
+> turns it on. Everything is proven by test and by Amazon's own published model
+> and example response; **no live 2026-01-01 call has been made**, which is the
+> Owner's step. Full record and the two options in `build/P5.1.md` §6.
 
-**Check two things before you start, because the plan may be out of date on both:**
+### 3.0 What P5.1 found — read this before any version migration
 
-1. **P5.3** (`Shopify: remove or move the 6 2024-01 clients to 2026-07`) says *"With
-   P1.4"*, and P1.4 shipped. Grep for `2024-01` in the Shopify clients: if it is
-   already done, say so and mark the row rather than rebuilding it. **That is a result,
-   not a wasted step** — P2.6 is the precedent.
-2. **Is the 2026-12-15 target still the binding reason to go before P4?** If the Owner
-   would rather have P4.1 (which owns two of the open items below), that is their call —
-   present it as two options with a pick.
+1. **A version pin can be a no-op.** `amazon-sp-api@1.2.1` defaults
+   `version_fallback: true`. `endpoints_versions: { orders: '2026-01-01' }`
+   moves **one** operation and silently sends nine back to v0. The census guard
+   (`amazon-orders-version.p51.vitest.test.ts`) walks the library's own resolver
+   so this can never be assumed again.
+2. **The version goes in `options.version`.** A top-level `version` key is
+   accepted by the object and **ignored** — 2026 parameters to the v0 path, no
+   error. TypeScript caught it only by luck (`ReqParams` is a closed type).
+3. 🔴 **`unitPrice` is PER UNIT; v0's `ItemPrice` is the LINE TOTAL.** Amazon's
+   example: quantity 2, unitPrice 49.99, ITEM breakdown 99.98. `upsertOrderItem`
+   **divides by quantity** (DA-RT.15), so the obvious mapping divides twice.
+   **38 lines** in the development database have quantity > 1 (36×2, 1×4, 1×8).
+4. **Three envelopes in one migration.** v0 wraps in `payload`; `searchOrders`
+   puts the list under `orders`; `getOrder` wraps one order in `order`. The
+   wrong one gives every field `undefined` and no error.
+5. **A screen was already claiming the work was done.** The CX connector spec
+   reported `orders-2026-01-01` while every call went to v0. It is a getter now.
+6. 🔴🔴 **A startup error and a failing test share an exit code.** The mutation
+   harness reported all nine rules "guarded" while `--reporter=basic` (which
+   vitest 4 does not have) killed every run at startup. It now demands evidence
+   that tests actually ran. **"Could not measure" was reading as "measured".**
+
+### 3.0a P5.3 — measured, not built
+
+P1.4 did most of it. `SHOPIFY_API_VERSION = '2026-07'` is the single accessor;
+the plan's "6 client files" are down to **two**, both READS:
+`utils/config.ts:45` (a stale default) and
+`services/images/shopify-live-images.service.ts:97` (a REST
+`GET /products/{id}.json`). 🔴 The second is guarded by `hasCreds()`, and **P2.4
+measured that production has no `SHOPIFY_*` variable at all** — so it has almost
+certainly never run. Establish that before moving its version: a REST products
+read is not like-for-like on `2026-07`. Details in `build/P5.1.md` §5.
 
 ### 3.1 🔴 What P3 left open — most of it is P4.1's
 
@@ -167,6 +193,11 @@ fixture by hand.
   identifier on the row was filterable and `connectionId` was not. Two apparent gaps
   turned out to be correct behaviour — eBay reports no per-call headroom, Amazon reports
   a rate not a remaining count — which is a result, not a wasted step.
+- **P5.1** — the plan's own instruction was nearly a no-op (a version pin that
+  moves one operation of eleven, silently), and the real defect was money: v0's
+  `ItemPrice` is a LINE total and 2026-01-01's `unitPrice` is PER UNIT, into an
+  ingest that already divides by quantity. A fourth shape: **the plan itself can
+  be the thing that is wrong**, not just the code.
 - **P3.2** — `ListingIssue` was **empty** while 140 real rejections sat in a JSON column
   nothing joined to a listing; the flat-file grid's health chip had been reading that
   empty table since it was written. And the attribute was lost on **140/140**, so
@@ -189,8 +220,8 @@ site with a known-live function as the control.
 
 ### 3c. The order from here
 
-**P5.1** (target 2026-12-15) → **P4.x** → the rest of P5 → P6.2 / 6.4 / 6.6 / 6.7 / 6.8
-→ P7 (each drop needs a yes) → P8.
+**P4.x** → the rest of P5 (P5.3 measured, P5.2 / P5.4; P5.5 not needed)
+→ P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
 ## 4. 🔴 What is NOT proven by real traffic
 
@@ -270,10 +301,46 @@ Each is one command, and each converts a "built" into a "verified":
 11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
 12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
 13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-14. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
+14. **Amazon Orders 2026-01-01 is BUILT and OFF** (P5.1). Turn it on with
+   `NEXUS_ENABLE_AMAZON_ORDERS_2026=true`. It is off because the mapping is
+   proven against Amazon's published model and its own example response, not
+   against a real payload — **no live 2026-01-01 call has been made**, and that
+   is a live channel call. Two details can only be settled by one: whether
+   `paginationToken` may be sent with `includedData` on page 2, and how
+   `marketplaceIds` is serialised. The safer order is one captured live read
+   first; `build/P5.1.md` §6 puts it as two options with a pick. The deadline is
+   **2027-03-27**, the target **2026-12-15** — there is no hurry.
+15. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 6. Traps that cost time here — read before measuring anything
 
+- 🔴🔴 **A STARTUP ERROR and a FAILING TEST have the same exit code.** A mutation
+  harness passing `--reporter=basic` (not a vitest 4 reporter) killed every run
+  before a single test executed, and reported **nine rules "guarded"** that it
+  had never checked. Demand positive evidence the runner ran — `Tests <n>` in
+  the output, no `Startup Error` — before believing a red.
+- 🔴 **An SDK can take the option in a DIFFERENT PLACE than you pass it.**
+  `amazon-sp-api` reads `callAPI({ options: { version } })`. A top-level
+  `version` key is accepted by the object and dropped: the call goes to the old
+  version with the new parameters, no error. Check where the library READS it.
+- 🔴 **A version pin can move almost nothing.** `version_fallback: true` is the
+  default, so pinning an endpoint to a new version silently falls back to the
+  oldest one for every operation the new version lacks. Derive the census of
+  operations you call from SOURCE and assert the version each one resolves to.
+- 🔴🔴 **PER-UNIT vs LINE TOTAL is a money defect with no error.** v0's
+  `ItemPrice.Amount` is the line total and the ingest divides it by quantity;
+  2026-01-01's `product.price.unitPrice` is per unit. The obvious mapping
+  divides twice. Amazon's own example carries both numbers (49.99 and 99.98 at
+  quantity 2) — and its second line is quantity 1, where the two are equal, the
+  coincidence arm a careless test would pass on.
+- 🔴 **One migration can have THREE envelopes.** v0 wraps in `payload`,
+  `searchOrders` puts the list under `orders`, `getOrder` wraps one order in
+  `order`. The wrong one yields an object whose every field is `undefined`, with
+  no error — P3.1's double encoding in a new place. Make the unwrapper return
+  **null** for an unrecognised envelope, never a fieldless object.
+- 🔴 **A connector spec can claim a version the code does not use.** The CX
+  screen read `orders-2026-01-01` while every call went to v0. A switch that is
+  OFF must not read as work that is DONE — derive the reported version.
 - **`Array.isArray([])` is TRUE, and `[]` is what a channel actually sends.** An
   `isArray` guard reads an empty array as "the channel told us" and suppresses the
   fallback behind it. It cost P3.2 the attribute on **140 of 140** real rejections.

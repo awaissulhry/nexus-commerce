@@ -14,6 +14,13 @@ import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import {
+  AMAZON_ORDERS_2026_VERSION,
+  ORDERS_2026_INCLUDED_DATA,
+  amazonOrders2026Enabled,
+  toV0Order,
+  type Order2026,
+} from './marketplaces/amazon-orders-2026.js'
 
 interface MetricCompare {
   channel: number | string
@@ -86,28 +93,47 @@ async function fetchChannelOrderTotals(
   let nextToken: string | undefined
   let pages = 0
 
+  // P5.1 — Orders v0 is removed 2027-03-27. This walk is a count and a sum, so
+  // it reads the same four facts out of whichever version is on: `searchOrders`
+  // 2026-01-01 when NEXUS_ENABLE_AMAZON_ORDERS_2026 is set, v0 otherwise. The
+  // 2026 arm asks for PROCEEDS (the total) and FULFILLMENT (the status) — both
+  // are omitted unless requested, and an absent section is "not asked", not
+  // "empty".
+  const use2026 = amazonOrders2026Enabled()
+
   // Cap at 5 pages = ~500 orders to stay inside Railway's HTTP gateway
   // timeout. For high-volume sellers, reduce daysBack to fit.
   while (pages < 5) {
     const params = new URLSearchParams(
-      nextToken
-        ? { NextToken: nextToken }
-        : {
-            MarketplaceIds: marketplaceId,
-            CreatedAfter: from.toISOString(),
-            CreatedBefore: upperBound.toISOString(),
-            MaxResultsPerPage: '100',
-          },
+      use2026
+        ? nextToken
+          ? { paginationToken: nextToken, includedData: ORDERS_2026_INCLUDED_DATA.join(',') }
+          : {
+              marketplaceIds: marketplaceId,
+              createdAfter: from.toISOString(),
+              createdBefore: upperBound.toISOString(),
+              maxResultsPerPage: '100',
+              includedData: ORDERS_2026_INCLUDED_DATA.join(','),
+            }
+        : nextToken
+          ? { NextToken: nextToken }
+          : {
+              MarketplaceIds: marketplaceId,
+              CreatedAfter: from.toISOString(),
+              CreatedBefore: upperBound.toISOString(),
+              MaxResultsPerPage: '100',
+            },
     )
-    const url = `https://${host}/orders/v0/orders?${params.toString()}`
+    const version = use2026 ? AMAZON_ORDERS_2026_VERSION : 'v0'
+    const url = `https://${host}/orders/${version}/orders?${params.toString()}`
     const res = await fetch(url, {
       headers: { 'x-amz-access-token': accessToken },
     })
     if (!res.ok) {
       const body = await res.text()
-      throw new Error(`getOrders ${res.status}: ${body.slice(0, 200)}`)
+      throw new Error(`${use2026 ? 'searchOrders' : 'getOrders'} ${res.status}: ${body.slice(0, 200)}`)
     }
-    const data = (await res.json()) as {
+    const body = (await res.json()) as {
       payload?: {
         Orders?: Array<{
           AmazonOrderId?: string
@@ -117,7 +143,17 @@ async function fetchChannelOrderTotals(
         }>
         NextToken?: string
       }
+      orders?: unknown[]
+      pagination?: { nextToken?: string }
     }
+    const data = use2026
+      ? {
+          payload: {
+            Orders: (body.orders ?? []).map((order) => toV0Order(order as Order2026)),
+            NextToken: body.pagination?.nextToken,
+          },
+        }
+      : body
     const orders = data.payload?.Orders ?? []
     for (const o of orders) {
       // Skip cancelled like our DB does

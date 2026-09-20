@@ -9,6 +9,7 @@
 
 import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type ScopeInput } from '../../catalog.js'
 import { amazonSpRateReading } from '../../rate-readings.js'
+import { amazonOrders2026Enabled } from '../../../marketplaces/amazon-orders-2026.js'
 
 const REGION_HOSTS = {
   EU: { api: 'https://sellingpartnerapi-eu.amazon.com', sandbox: 'https://sandbox.sellingpartnerapi-eu.amazon.com', consent: 'https://sellercentral-europe.amazon.com' },
@@ -104,7 +105,16 @@ export const amazonSpSpec: ChannelSpec = {
   discoverScopes,
   rateLimit: { parse: amazonSpRateReading, model: 'token_bucket' },
   webhooks: { scheme: 'sqs', subscriptionApi: true, lifecycleTopics: [] },
-  apiVersion: 'orders-2026-01-01 · listings-2021-08-01 · finances-2024-06-19',
+  /**
+   * P5.1 — this said `orders-2026-01-01` while every Orders call went to v0.
+   * The screen was telling the operator a version we did not use. It is a
+   * getter now, so it reports the version the code is ACTUALLY on: a switch
+   * that is off must not read as work that is done.
+   */
+  get apiVersion(): string {
+    const orders = amazonOrders2026Enabled() ? 'orders-2026-01-01' : 'orders-v0'
+    return `${orders} · listings-2021-08-01 · finances-2024-06-19`
+  },
   sandbox: { available: true },
 }
 
