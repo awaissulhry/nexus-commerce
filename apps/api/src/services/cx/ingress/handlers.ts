@@ -18,11 +18,25 @@
  * than retrying it five times to reach the same place eight hours later.
  */
 
-export type InboundHandler = (payload: unknown) => Promise<unknown>
+/**
+ * What a replay knows besides the payload.
+ *
+ * The stored payload is the CHANNEL's body and names no Nexus account, so a handler
+ * that needs one must be given it rather than deduce it — deducing it means "the only
+ * connected account", which the MAP.3 ratchet forbids for good reason.
+ */
+export interface InboundHandlerContext {
+  connectionId: string | null
+  eventType: string
+  channel: string
+}
+
+export type InboundHandler = (payload: unknown, context?: InboundHandlerContext) => Promise<unknown>
 
 type Loader = () => Promise<InboundHandler>
 
 const SHOPIFY_WEBHOOKS = '../../../routes/shopify-webhooks.js'
+const ETSY_WEBHOOKS = '../../../routes/etsy-webhooks.routes.js'
 
 /**
  * Keys are the event types the RECEIVERS write, not the channel's own topic strings.
@@ -46,6 +60,16 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
     'customers/data_request': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/data_request'),
     'customers/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('customers/redact'),
     'shop/redact': async () => (await import(SHOPIFY_WEBHOOKS)).privacyTopicHandler('shop/redact'),
+  },
+  // P2.5 — every Etsy order event goes through one handler, which reads the receipt
+  // back from Etsy rather than trusting the notification body. A replay resolves the
+  // account from the workspace it runs in, because the stored payload is Etsy's own
+  // body and carries no Nexus account.
+  ETSY: {
+    'order.paid': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    'order.shipped': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    'order.cancelled': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    'order.refunded': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
   },
 }
 

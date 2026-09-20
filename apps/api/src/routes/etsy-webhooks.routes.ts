@@ -1,0 +1,196 @@
+/**
+ * P2.5 — Etsy's inbound receiver.
+ *
+ * There was no Etsy webhook route at all. `connectors/etsy/spec.ts` declared
+ * `scheme: 'standard-webhooks'` and nothing implemented it, `utils/webhook.ts` carried
+ * a note that Etsy's real order webhooks "land in CX.6", and the only Etsy order code
+ * in the repository — `syncEstyOrders` — has no call site and reads five environment
+ * variables production does not have. So no Etsy order has ever entered Nexus by any
+ * route.
+ *
+ * Everything here goes through the P2.1 ledger: every arrival and every rejection is a
+ * row, deduped on Etsy's own `webhook-id`, retried on failure and replayable. That is
+ * what makes it safe to receive an event type nobody has seen yet — it is recorded with
+ * its payload rather than guessed at, which is how P2.2's and P2.3's wrong names were
+ * found.
+ *
+ * Etsy configures webhooks in its portal, not through an API (`subscriptionApi: false`),
+ * so the Owner sets the endpoint and the signing secret there. Until then this route
+ * exists and answers, and nothing arrives.
+ */
+import type { FastifyInstance } from 'fastify'
+import { logger } from '../utils/logger.js'
+import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
+import { verifyStandardWebhook } from '../services/cx/ingress/standard-webhooks.js'
+import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+
+/**
+ * Etsy's event names, and what Nexus does with each.
+ *
+ * `order.paid` is the one the plan names, so it is the one the done-when is written
+ * against. The other three are the rest of an order's life. They are marked by how well
+ * we know them, the same discipline P2.2 and P2.3 arrived at: an event name nobody has
+ * ever received is a belief, and a belief that is never contradicted is how
+ * `marketplace.order.created` survived in the eBay receiver for weeks.
+ */
+export const ETSY_ORDER_EVENTS: Record<string, { purpose: string; evidence: 'named_by_plan' | 'assumed' }> = {
+  'order.paid': { purpose: 'A receipt is paid — pull it and ingest the order.', evidence: 'named_by_plan' },
+  'order.shipped': { purpose: 'A receipt shipped — refresh it.', evidence: 'assumed' },
+  'order.cancelled': { purpose: 'A receipt was cancelled — refresh it.', evidence: 'assumed' },
+  'order.refunded': { purpose: 'A receipt was refunded — refresh it.', evidence: 'assumed' },
+}
+
+/** The receipt id an Etsy order event is about, wherever Etsy puts it. */
+export function etsyReceiptIdFrom(payload: unknown): string | null {
+  const body = payload as Record<string, any> | null
+  const candidates = [
+    body?.receipt_id, body?.receiptId,
+    body?.data?.receipt_id, body?.data?.receiptId,
+    body?.object?.receipt_id, body?.payload?.receipt_id,
+  ]
+  for (const candidate of candidates) {
+    const id = candidate === null || candidate === undefined ? '' : String(candidate)
+    if (/^[1-9]\d*$/.test(id)) return id
+  }
+  return null
+}
+
+/**
+ * Handle one Etsy order event by reading the receipt back from Etsy.
+ *
+ * The webhook says an order CHANGED; Etsy is asked what it now looks like. Nothing in
+ * the notification body is trusted as the new state — a payload is a claim, and the
+ * shop's own API is the record.
+ */
+export async function handleEtsyOrderEvent(
+  payload: unknown,
+  context?: { connectionId: string | null },
+): Promise<void> {
+  const receiptId = etsyReceiptIdFrom(payload)
+  if (!receiptId) {
+    throw new Error('The Etsy notification names no receipt.')
+  }
+  // The receiver passes the account it routed to. A REPLAY gets it from the LEDGER ROW,
+  // which recorded it at arrival — not from the stored payload, which is Etsy's own
+  // body and names no Nexus account.
+  //
+  // The first draft fell back to "the only connected Etsy shop in this workspace" and
+  // the MAP.3 ratchet refused the push, correctly: a site that resolves a connection
+  // without being told which account it means is how a write lands in the wrong store
+  // the day a second one is connected. Asking the ledger is both safer and simpler —
+  // it already knew.
+  const accountId = ((payload as any)?.__nexusAccountId as string | undefined) ?? context?.connectionId ?? null
+  if (!accountId) {
+    throw new Error('This Etsy notification has no connected account on its ledger row, so no shop can be asked about it.')
+  }
+  const { pullEtsyReceipt } = await import('../services/etsy/receipts.service.js')
+  const receipt = await pullEtsyReceipt(accountId, receiptId)
+  if (!receipt) {
+    throw new Error(`Etsy receipt ${receiptId} could not be read back for this shop.`)
+  }
+  // Ingesting a receipt into Order/OrderItem is not done here. Etsy's order shape has
+  // never been observed in this installation, and P2.1 means the payload and the
+  // read-back are both recorded — so the mapping can be written from a real receipt
+  // instead of from a guess. Writing it now would be the same mistake as the fixture
+  // in P2.2 that agreed with the bug.
+  logger.warn('[etsy-webhooks] receipt read back; order ingest is not implemented yet', {
+    receiptId, status: receipt.status ?? null, isPaid: receipt.is_paid ?? null,
+    transactions: receipt.transactions?.length ?? 0,
+  })
+}
+
+export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<void> {
+  // Etsy signs the exact bytes it sent.
+  registerRawJsonParser(app)
+
+  app.post('/webhooks/etsy', async (request, reply) => {
+    const body = (request as RawBodyRequest).rawBody
+    const payload = request.body as Record<string, any> | undefined
+    const eventType = String(
+      request.headers['x-etsy-event'] ?? payload?.event ?? payload?.type ?? 'unknown',
+    )
+
+    const secret = process.env.ETSY_WEBHOOK_SIGNING_SECRET || null
+    const verdict = verifyStandardWebhook({
+      rawBody: body ?? null,
+      headers: {
+        id: request.headers['webhook-id'],
+        timestamp: request.headers['webhook-timestamp'],
+        signature: request.headers['webhook-signature'],
+      },
+      secret,
+    })
+
+    if (!verdict.ok) {
+      // Recorded, as every rejection is since P2.1 — a forged notification and one that
+      // never arrived must not look the same afterwards. Keyed on the body digest, not
+      // on the `webhook-id` the sender claims: `(channel, externalId)` is unique, and a
+      // forgery naming a real delivery id would sit in that slot and make the genuine
+      // delivery look like a duplicate.
+      await legacyIngress(() =>
+        recordInbound({
+          channel: 'ETSY', eventType, externalId: null, rawBody: body ?? null,
+          payload: payload ?? {}, signatureOk: false, verifiedBy: 'none',
+          status: 'failed', lastError: `standard-webhooks verification failed: ${verdict.reason}`,
+        }),
+      )
+      logger.warn('[etsy-webhooks] signature rejected', { eventType, reason: verdict.reason })
+      // 401, not 204: a sender told nothing is a sender that believes it succeeded.
+      return reply.status(401).send({ error: 'Signature verification failed.' })
+    }
+
+    // Verified, so the shop it names can be trusted as a routing key.
+    const shopId = String(payload?.shop_id ?? payload?.shopId ?? payload?.data?.shop_id ?? '')
+    let route: { workspaceId: string; connectionId: string }
+    try {
+      route = await verifiedChannelWorkspace('ETSY', shopId || undefined)
+    } catch (error) {
+      await legacyIngress(() =>
+        recordInbound({
+          channel: 'ETSY', eventType, externalId: verdict.webhookId ?? null, rawBody: body ?? null,
+          payload: payload ?? {}, signatureOk: true, verifiedBy: 'none', status: 'failed',
+          lastError: `no connected Etsy shop matches ${shopId || '(no shop id in the payload)'}: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+      )
+      logger.error('[etsy-webhooks] verified notification needs a shop', { eventType, shopId })
+      return reply.status(503).send({ error: 'The shop on this notification is not connected.' })
+    }
+
+    return withIngressWorkspace(route.workspaceId, async () => {
+      const written = await recordInbound({
+        channel: 'ETSY', eventType,
+        // Etsy's own delivery id, which is stable across ITS retries and different for
+        // every new change to the same receipt.
+        externalId: verdict.webhookId ?? null,
+        rawBody: body ?? null, payload: payload ?? {},
+        signatureOk: true, verifiedBy: 'none', connectionId: route.connectionId, status: 'pending',
+      })
+      if (!written.id) {
+        logger.error('[etsy-webhooks] inbound ledger unavailable — not acked', { eventType })
+        return reply.status(503).send({ error: 'The inbound ledger is unavailable.' })
+      }
+      if (written.duplicate && written.existingStatus === 'done') {
+        return reply.send({ success: true, message: 'Already processed' })
+      }
+      if (!ETSY_ORDER_EVENTS[eventType]) {
+        // Not a failure. An event we have no use for is recorded and acknowledged; the
+        // ledger row is how its real name and shape get learned.
+        await completeInbound(written.id, true)
+        logger.info('[etsy-webhooks] recorded an event with no handler', { eventType })
+        return reply.send({ success: true, message: 'Recorded' })
+      }
+      try {
+        await handleEtsyOrderEvent({ ...(payload ?? {}), __nexusAccountId: route.connectionId })
+        await completeInbound(written.id, true)
+        return reply.send({ success: true })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await completeInbound(written.id, false, message)
+        logger.error('[etsy-webhooks] handling failed', { eventType, error: message })
+        return reply.status(500).send({ error: message })
+      }
+    })
+  })
+
+}

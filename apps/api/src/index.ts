@@ -25,6 +25,7 @@ import { aiRoutes } from "./routes/ai.js";
 import { adminRoutes } from "./routes/admin.js";
 import { monitoringRoutes } from "./routes/monitoring.js";
 import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
+import etsyWebhookRoutes from "./routes/etsy-webhooks.routes.js";
 import { estyRoutes } from "./routes/etsy.js";
 import { syncRoutes } from "./routes/sync.routes.js";
 import { ebayAuthRoutes } from "./routes/ebay-auth.js";
@@ -668,6 +669,11 @@ app.register(aiRoutes);
 app.register(adminRoutes);
 app.register(monitoringRoutes);
 app.register(shopifyWebhookRoutes);
+// P2.5 — Etsy's receiver. There was no Etsy webhook route at all, and the only Etsy
+// order code in the repository has no call site, so no Etsy order has ever entered
+// Nexus by any path. Etsy configures webhooks in its portal, not by API, so nothing
+// arrives until the Owner points it here and sets ETSY_WEBHOOK_SIGNING_SECRET.
+app.register(etsyWebhookRoutes);
 app.register(estyRoutes);
 app.register(syncRoutes, { prefix: '/api' });
 app.register(ebayAuthRoutes);

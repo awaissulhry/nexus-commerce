@@ -1074,7 +1074,7 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
               `Replay is not supported for ${event.channel}/${event.eventType}.`,
             )
           }
-          await handler(event.payload)
+          await handler(event.payload, { connectionId: event.connectionId, eventType: event.eventType, channel: event.channel })
         }
 
         try {

@@ -78,7 +78,11 @@ export async function runInboundRetrySweep(now: Date = new Date()): Promise<Inbo
         // module disagree — a wrong export name. Say so rather than reporting the
         // TypeError that calling null would raise.
         if (!handler) throw new Error(`The replay registry lists ${event.channel}/${event.eventType} but its handler could not be loaded.`)
-        await handler(event.payload)
+        // The account comes from the LEDGER ROW, not from the payload and not from a
+        // lookup: the stored payload is the channel's own body and names no Nexus
+        // account, and deducing one means "the only connected account" — the ambient
+        // resolution the MAP.3 ratchet forbids.
+        await handler(event.payload, { connectionId: event.connectionId, eventType: event.eventType, channel: event.channel })
         await completeInbound(event.id, true)
       })
       stats.succeeded++

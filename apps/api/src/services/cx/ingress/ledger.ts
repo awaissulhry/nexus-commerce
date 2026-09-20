@@ -214,6 +214,16 @@ export interface DueInboundEvent {
   externalId: string
   payload: unknown
   attempts: number
+  /**
+   * The connected account this event arrived on, recorded by the receiver.
+   *
+   * A replay runs from the STORED payload, which is the channel's own body and names
+   * no Nexus account. Without this a handler has to work the account out for itself,
+   * and "the only connected account" is exactly the ambient lookup the MAP.3 ratchet
+   * forbids — it is how a write lands in the wrong store the day a second account is
+   * connected. The ledger already knew; it just was not being asked.
+   */
+  connectionId: string | null
 }
 
 /**
@@ -247,7 +257,7 @@ export async function dueInboundEvents(limit = 50, now: Date = new Date()): Prom
       archivedAt: null,
       nextAttemptAt: { not: null, lte: now },
     },
-    select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true },
+    select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true, connectionId: true },
     orderBy: { nextAttemptAt: 'asc' },
     take: limit,
   })
