@@ -95,13 +95,29 @@ honest denominator), and Amazon is not connected at all (below). The done-when f
 is one real rejection appearing on its listing. Earlier: P5.1 deploy `470f20fd` from `d3f1228dc`: **SUCCESS**, the app
 booted and every cron scheduled, with `NEXUS_ENABLE_AMAZON_ORDERS_2026` unset so the
 Orders path is unchanged — which is the proof that shipping it changed nothing.
-🔴🔴 **And the same deploy log says Amazon is NOT CONNECTED in production right
-now:** `amazon-orders cron: Amazon SP-API not configured — skipping`,
-`amazon-inventory cron: … skipping`, and `data-kiosk-poll cron: failure {"error":
-"WorkspaceError: Connect an Amazon seller account in Channels before using Amazon."}`.
-Section 4's table calls Amazon **Live**; on this deploy its own crons disagree. That
-changes P5.1's verification plan — a live 2026-01-01 read has nothing to read until an
-Amazon seller account is connected — and it is worth checking before ANY Amazon package.
+🔴🔴 **CORRECTION (2026-09-20, after the Owner challenged it) — the claim below was
+WRONG and it is the most instructive mistake of the day.** I wrote *"Amazon is NOT
+CONNECTED in production"* from these lines: `amazon-orders cron: Amazon SP-API not
+configured — skipping`, `amazon-inventory cron: … skipping`, `data-kiosk-poll cron:
+failure {"error":"… Connect an Amazon seller account in Channels …"}`.
+
+**Those crons run ONCE PER BUSINESS PROFILE, and there are TWO.** I read one profile's
+skip as a fact about production. The same deploy says, in plain words:
+
+- `seedEnvManagedConnections: persisted Amazon authorization exists — skipping env synthesis {"existingId":"cmothu9bo0000nz01asw6wx8j"}`
+- `[amazon-notifications] reusing existing destination {"destinationId":"7e944042-…"}`
+- `[amazon-notifications-boot] setup visited business profiles {"visited":2,"ran":1}` — **two profiles, Amazon set up in one**
+- `📣 PUBLISH MODES at boot — Amazon=live eBay=live Shopify=gated`
+
+**Amazon IS connected**, in one of the two profiles. And eBay confirms the Owner's two
+accounts: `ebay-orders cron: tick complete {"connectionsTried":1,"connectionsOk":1,…}`
+appears **TWICE per tick** — one connection per profile, both OK.
+
+🔴 **The banked trap I walked into, written in this very file:** *"A non-platform
+`cron.schedule` already visits every active business profile and runs the handler inside
+each one."* A per-profile skip is not a global fact. **Before reading a cron line as a
+statement about production, ask which profile it came from — and look for the OTHER
+profile's line.**
 Earlier: P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
 ## 3. Next — P4.x
@@ -330,7 +346,9 @@ screens say so on the screen itself.
 | **eBay** | The nightly reconcile at **03:55 UTC** creates the destination and subscribes, because `EBAY_NOTIFICATION_ENDPOINT_URL` + `EBAY_NOTIFICATION_VERIFICATION_TOKEN` are already set in production. **Check `GET /api/admin/ebay-notification-status` after it runs** — a topic under `notOffered` means its id in `ebay-topics.ts` is wrong |
 | **Shopify** | Sends nothing until the registration is run per shop (section 5) |
 | **Etsy** | Sends nothing until the Owner configures the portal (section 5) |
-| **Amazon** | 🔴 **Its own crons say NOT CONFIGURED** on deploy `470f20fd` (2026-09-20 16:15 UTC): `amazon-orders`, `amazon-inventory` and `amazon-mcf-status` all skip, and `data-kiosk-poll` fails with "Connect an Amazon seller account in Channels". This row used to read "Live". Check `amazonCredsConfigured()` per business profile before believing any Amazon measurement — and no ORDER_CHANGE arrived in the deploy window either, so the P2.2 parse fix is still unexercised |
+| **Amazon** | **CONNECTED and live** — a persisted authorization (`cmothu9bo0000nz01asw6wx8j`), a reused notification destination, `Amazon=live` at boot. 🔴 An earlier version of this row said "not configured", read off a cron skip that came from the OTHER of the TWO business profiles. A per-profile skip is not a global fact. Still true: no ORDER_CHANGE arrived in a deploy window, so P2.2's parse fix remains unexercised by real traffic |
+| **eBay** | **TWO accounts connected, both OK** — `ebay-orders cron: tick complete {"connectionsTried":1,"connectionsOk":1}` appears twice per tick, one connection per business profile. 0 orders fetched so far |
+| **Etsy / Shopify** | 🟡 **UNKNOWN from the logs, and that is the honest answer.** The only lines are `[ConfigManager] ⚠ Etsy/Shopify configuration incomplete (missing env vars)` — that is the LEGACY env-based config, not the CX connection table, so it says nothing about a connection made through the Channels screen. P2.4 did measure that production has no `SHOPIFY_*` variable, which is consistent with both. **Do not read those two lines as "not connected"** — that is the same mistake as the Amazon one above |
 | **AMS** | The subscription check's first run is the answer to P2.7's done-when |
 
 ### 4.1 The three cheapest proofs available right now
@@ -419,6 +437,16 @@ Each is one command, and each converts a "built" into a "verified":
   "shared flag decides alone" — which routes an Inventory-managed family down
   the Trading lane, the exact misrouting Incident #23 exists to stop. When you
   find a rule with an incident number, **read its `catch`**.
+- 🔴🔴 **A PER-PROFILE CRON LINE IS NOT A FACT ABOUT PRODUCTION.** Business
+  profiles are ON, so every non-platform cron runs once PER PROFILE. Reading
+  `amazon-orders cron: not configured — skipping` as "Amazon is not connected"
+  was wrong: it came from one of TWO profiles, and the same boot log said
+  `persisted Amazon authorization exists` and `Amazon=live`. **Find the other
+  profile's line before you conclude.** The Owner caught this one.
+- 🔴 **A `ConfigManager` "configuration incomplete (missing env vars)" line is
+  about ENV, not about a connection.** Etsy and Shopify log it while a CX OAuth
+  connection may exist perfectly well. Check the connection table, not the boot
+  warning.
 - 🔴🔴 **A SHAPE TEST CANNOT CARRY A RULE ABOUT A VALUE.** P4.2a asserted
   `toContain('attrsByCode')` and `toContain('attributeNames')`; replacing the
   expression with `attributeNames: []` left both names in the file and the test
