@@ -1,3 +1,4 @@
+import { runWithTraceId } from '../utils/request-context.js'
 import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
 import { amazonContentRefusal, isAmazonContentPatchSet } from './amazon/validate-before-send.js'
 import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
@@ -697,12 +698,38 @@ export class OutboundSyncService {
    * final status write (the BullMQ worker's per-job update), so this never
    * touches any other row.
    */
+  /**
+   * P3.6 — the hop the trace used to die at.
+   *
+   * The row was created by an operator's click and carries that change's `traceId`.
+   * The worker, though, runs inside its own cron tick, so without this every channel
+   * call it makes is stamped with the TICK's id — and a tick id is shared by up to
+   * 1,243 calls. Binding the row's trace first means "show me everything my change
+   * did" is one indexed lookup.
+   */
   async processSingle(queueId: string): Promise<SyncResult> {
     const item = await prisma.outboundSyncQueue.findUnique({
       where: { id: queueId },
       // P1.4 — the listing too: the Shopify native lane reads its mapping (it was never reached).
       include: { product: true, channelListing: true },
     });
+    // P3.6 — bind the CHANGE's trace before anything else happens.
+    //
+    // The row was created by an operator's click and carries that change's `traceId`.
+    // Without this the worker runs inside its own cron tick and every channel call it
+    // makes is stamped with the TICK's id — and one tick id covers up to 1,243 calls.
+    //
+    // The row is read ONCE and handed down. A first draft read `traceId` in its own
+    // query before delegating, which doubled the per-row reads — the same waste the
+    // P1.3 follow-up was about, and a P1.4 test caught it by asserting on the first
+    // query's shape.
+    return runWithTraceId(item?.traceId ?? null, () => this.processSingleInner(queueId, item))
+  }
+
+  private async processSingleInner(
+    queueId: string,
+    item: Awaited<ReturnType<typeof prisma.outboundSyncQueue.findUnique>> & { product?: unknown; channelListing?: unknown } | null,
+  ): Promise<SyncResult> {
     if (!item) {
       return { success: false, queueId, channel: "UNKNOWN", status: "FAILED", message: `Queue row ${queueId} not found`, error: "queue-row-not-found" };
     }

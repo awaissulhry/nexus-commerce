@@ -3,9 +3,10 @@
 /**
  * CX.2 — /settings/channels on the design system.
  *
- * One route, three tabs (URL-synced `?tab=`): Accounts (the honest rows),
- * Connect (catalogue-driven), Diagnostics (live checks + ledger). The popup
- * bridge is one hook shared by Accounts' Reconnect and Connect's buttons.
+ * One route, five tabs (URL-synced `?tab=`): Accounts (the honest rows),
+ * Connect (catalogue-driven), Health (P3.6 — the four numbers against a target),
+ * Ingress (P2.8), Diagnostics (live checks + ledger). The popup bridge is one hook
+ * shared by Accounts' Reconnect and Connect's buttons.
  * Spec: docs/2026-08-29-cx2-channels-ui.md.
  */
 
@@ -23,10 +24,11 @@ import { AccountsTab } from './AccountsTab'
 import { ConnectTab } from './ConnectTab'
 import { DiagnosticsTab } from './DiagnosticsTab'
 import { IngressTab } from './IngressTab'
+import { HealthTab } from './HealthTab'
 import './channels.css'
 
-type Tab = 'accounts' | 'connect' | 'ingress' | 'diagnostics'
-const TAB_IDS: Tab[] = ['accounts', 'connect', 'ingress', 'diagnostics']
+type Tab = 'accounts' | 'connect' | 'health' | 'ingress' | 'diagnostics'
+const TAB_IDS: Tab[] = ['accounts', 'connect', 'health', 'ingress', 'diagnostics']
 
 export function ChannelsClient() {
   const router = useRouter()
@@ -97,6 +99,7 @@ export function ChannelsClient() {
     { id: 'connect', label: 'Connect', count: catalogue.data ? catalogue.data.filter((c) => c.available).length : null },
     // P2.8 — Ingress sits before Diagnostics: it answers "did anything arrive, and what
     // became of it", which is the question asked first when a channel goes quiet.
+    { id: 'health', label: 'Health' },
     { id: 'ingress', label: 'Ingress' },
     { id: 'diagnostics', label: 'Diagnostics' },
   ]
@@ -134,6 +137,7 @@ export function ChannelsClient() {
             onStart={requestConnection}
           />
         )}
+        {tab === 'health' && <HealthTab />}
         {tab === 'ingress' && <IngressTab />}
         {tab === 'diagnostics' && (
           <DiagnosticsTab accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />

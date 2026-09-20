@@ -68,6 +68,7 @@ import { recordErrorOccurrence } from './error-grouping.service.js'
 import {
   getRequestId,
   getRequestSource,
+  getTraceId,
 } from '../utils/request-context.js'
 import { logTraceEvent } from '../utils/trace-log.js'
 import { withSpan } from '../utils/otel-setup.js'
@@ -91,6 +92,8 @@ export interface ApiCallContext {
   method?: string
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   requestId?: string
+  /** P3.6 — the CHANGE this call belongs to. Distinct from requestId (the RUN). */
+  traceId?: string
   /**
    * Optional request payload. Stored on FAILURE only (success skips
    * to control volume). Caller must redact secrets / trim binary.
@@ -297,6 +300,7 @@ async function recordApiCallInner<T>(
           // recordCronRun's tickId) so callers don't have to pass
           // it explicitly. Same for triggeredBy.
           requestId: ctx.requestId ?? getRequestId(),
+          traceId: ctx.traceId ?? getTraceId() ?? null,
           triggeredBy:
             ctx.triggeredBy ?? getRequestSource() ?? 'api',
           // Retain payloads ONLY on failure to keep table volume sane.
@@ -432,6 +436,7 @@ export async function recordGatewayCall(row: GatewayLedgerRow): Promise<void> {
         errorCode: row.errorCode ?? undefined,
         errorType: row.errorClass ? LEGACY_ERROR_TYPE[row.errorClass] : undefined,
         requestId: getRequestId(),
+        traceId: getTraceId() ?? null,
         triggeredBy: row.triggeredBy ?? getRequestSource() ?? 'api',
         requestPayload: row.success ? undefined : (row.requestPayload as never),
         responsePayload: row.success ? undefined : (row.responsePayload as never),

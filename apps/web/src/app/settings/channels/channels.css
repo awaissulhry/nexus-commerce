@@ -275,3 +275,82 @@
   gap: var(--nds-space-2);
   flex-shrink: 0;
 }
+
+/* ── P3.6 — the Health tab ─────────────────────────────────────────────────────
+   Layout and domain content only: every colour and tone comes from the design
+   system's own components (Pill, Tag, Card), never from a local rule. A metric's
+   verdict must look the same here as it does anywhere else. */
+
+.nds-health {
+  display: grid;
+  gap: var(--nds-space-4);
+}
+
+.nds-health-controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nds-health-metric {
+  display: grid;
+  gap: var(--nds-space-1);
+  padding: var(--nds-space-3) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.nds-health-metric:last-of-type {
+  border-bottom: none;
+}
+
+.nds-health-metric-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2);
+}
+
+.nds-health-metric-label {
+  font-weight: var(--nds-font-weight-medium);
+  /* The label takes the room it needs and the pills sit after it, so a long
+     metric name never pushes its verdict off the row. */
+  margin-right: auto;
+}
+
+.nds-health-metric-note {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  /* The sentence is why a number is what it is. It wraps rather than truncating —
+     the same reason the Ingress reason does. */
+  overflow-wrap: anywhere;
+}
+
+.nds-health-ops {
+  display: grid;
+  gap: var(--nds-space-2);
+  margin-top: var(--nds-space-3);
+  padding-top: var(--nds-space-3);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.nds-health-ops-title {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+.nds-health-op {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2);
+}
+
+.nds-health-op-name {
+  min-width: 0;
+  margin-right: auto;
+  font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}

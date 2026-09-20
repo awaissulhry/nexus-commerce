@@ -171,6 +171,11 @@ export const ENTRIES: Entry[] = [
   // P0.5 — our app secrets' expiry dates (never a secret): the same people who manage connections.
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/cx/apps')),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
+  // P3.6 — the channel health dashboard and the per-change trace. Read-only, and the
+  // same people who manage connections: both answer questions ABOUT the channels this
+  // business has connected, and the trace names listings and products.
+  P(F.settingsIntegrationsManage, pfx('/api/cx/health')),
+  P(F.settingsIntegrationsManage, pfx('/api/cx/trace/')),
   RW(F.channelsConnect, F.channelsConnect, pfx('/api/ebay/auth')),
   RW(F.adsConnect, F.adsConnect, pfx('/api/amazon-ads/auth')), // (callback already PUBLIC above)
 

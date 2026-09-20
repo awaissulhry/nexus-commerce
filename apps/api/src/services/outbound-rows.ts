@@ -3,6 +3,7 @@
  * destination account, before any row exists. A light module on purpose: the enqueue module next door
  * loads the queue (a Redis connection); a creation site must not pay that to write a row.
  */
+import { getTraceId } from '../utils/request-context.js'
 import type { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { sellerSkuForClaim } from './listing-claim-identity.js'
@@ -150,7 +151,20 @@ async function prepareRows(db: object, rows: QueueRowData[]): Promise<QueueRowDa
     const r = row as Record<string, any>
     return { ...r, productId: connected(r, 'product', 'productId'), channelListingId: connected(r, 'channelListing', 'channelListingId') }
   }))
-  return allowed.map((row, i) => ({ ...row, channelConnectionId: destinations[i].connectionId }))
+  // P3.6 — the change's trace, stamped where every row is born.
+  //
+  // This is the only place an OutboundSyncQueue row is created (P1.3, and a ratchet
+  // keeps it that way), so it is the only place the operator's request id can be
+  // handed to the row. Without it the trace dies here: the worker picks the row up
+  // inside its own cron tick and stamps the tick's id on the channel call instead.
+  const traceId = getTraceId() ?? null
+  return allowed.map((row, i) => ({
+    ...row,
+    channelConnectionId: destinations[i].connectionId,
+    // Never overwrite a trace a caller set deliberately (a replay carries the
+    // ORIGINAL change's id, so the story stays one story).
+    traceId: (row as Record<string, unknown>).traceId ?? traceId,
+  }))
 }
 
 /** `db.outboundSyncQueue.create(args)`, with the claim check and the destination account. */

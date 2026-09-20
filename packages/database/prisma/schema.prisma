@@ -6884,6 +6884,10 @@ model OutboundSyncQueue {
   maxRetries   Int     @default(3)
 
   // ── Timestamps ─────────────────────────────────────────────────
+  // P3.6 — the id of the CHANGE that created this row, carried from the operator's
+  // click. The trace used to die here: the row held no id, so when the worker picked
+  // it up the worker's own cron tick id took over, and one tick id covers 1,243 calls.
+  traceId     String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   syncedAt    DateTime? // When successfully synced
@@ -11653,6 +11657,11 @@ model OutboundApiCallLog {
   // Correlation. requestId is the Fastify request.id (or cron tick id)
   // so a single user-facing operation can be reassembled across logs.
   requestId   String?
+  // P3.6 — the CHANGE this call belongs to, where there is one. Distinct from
+  // requestId, which correlates one process RUN: a cron tick id is shared by
+  // every call that tick made (1,243 on the largest measured), which answers
+  // "what did this run do" and never "what happened to my change".
+  traceId   String?
   triggeredBy String  @default("api") // 'cron' | 'manual' | 'api' | 'webhook'
 
   // Optional payloads. Heavy by nature — writers should slim them

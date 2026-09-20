@@ -7,6 +7,9 @@
  *   GET  /api/cx/connections/:id/events    the ledger for this connection
  *   GET  /api/cx/connections/:id/calls     P3.3: this account's OUTGOING calls, its rate
  *                                          headroom and its last error
+ *   GET  /api/cx/health                    P3.6: the four numbers per channel, against
+ *                                          their targets
+ *   GET  /api/cx/trace/:traceId            P3.6: everything ONE change did
  *   GET  /api/cx/channels                  the catalogue as the UI sees it
  *   GET  /api/cx/apps                      P0.5: each app's secret expiry date (never a secret)
  *   PUT  /api/cx/apps/:channelKey/secret-expiry   P0.5: record or clear that date
@@ -21,6 +24,7 @@ import { refreshNow, revoke, RefreshFailed, RefreshContended } from '../services
 import { runHeartbeatFor } from '../jobs/cx-heartbeat.job.js'
 import { listAppSecrets, setAppSecretExpiry } from '../services/cx/app-secret-expiry.js'
 import { accountCallsById } from '../services/cx/account-calls.service.js'
+import { channelHealth, callsForTrace, DEFAULT_WINDOW_HOURS } from '../services/cx/channel-health.service.js'
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_AHEAD_DAYS = 400
@@ -141,6 +145,33 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       return view
     },
   )
+
+  /**
+   * P3.6 — error rate, slow calls, backlog age and dead letters, per channel, each
+   * against a target a person agreed. `no_data` is its own verdict and never renders
+   * as a pass.
+   */
+  app.get<{ Querystring: { hours?: string; operations?: string } }>('/cx/health', async (request) => {
+    const raw = Number(request.query.hours)
+    // Same rule as P3.3: a bad window falls back to the default, never to zero. A
+    // zero-hour dashboard is all green and means nothing.
+    const hours = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 24 * 30) : DEFAULT_WINDOW_HOURS
+    const until = new Date()
+    const channels = await channelHealth({
+      since: new Date(until.getTime() - hours * 3_600_000),
+      until,
+      operationLimit: Number(request.query.operations ?? 5) || 5,
+    })
+    return { windowHours: hours, channels }
+  })
+
+  /**
+   * P3.6 — everything ONE change did, from the click to the channel's answer.
+   */
+  app.get<{ Params: { traceId: string } }>('/cx/trace/:traceId', async (request) => {
+    const calls = await callsForTrace(request.params.traceId)
+    return { traceId: request.params.traceId, calls }
+  })
 
   // ── P0.5 — our app secrets' expiry dates ────────────────────────────────────────────────────
   app.get('/cx/apps', async () => ({ apps: await listAppSecrets() }))
