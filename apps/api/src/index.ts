@@ -262,6 +262,7 @@ import { startOutboundQueueJanitorCron } from "./jobs/outbound-queue-janitor.job
 import { startEbayItemStatusReconcileCron } from "./jobs/ebay-item-status-reconcile.job.js";
 import { startAmazonQtyReadbackCron } from "./jobs/amazon-qty-readback.job.js";
 import { startEbayReadbackCron } from "./jobs/ebay-readback.job.js";
+import { startShopifyQtyReadbackCron } from "./jobs/shopify-qty-readback.job.js";
 import { startEbayAdsSyncCrons } from "./jobs/ebay-ads-sync.job.js";
 import { startReconcileCron } from "./jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
@@ -1411,6 +1412,9 @@ async function start() {
       startAmazonQtyReadbackCron();
       // P5.2 — eBay inventory read-back → ChannelStockEvent (NEXUS_EBAY_READBACK=0 to disable)
       startEbayReadbackCron();
+      // P4.3f — Shopify quantity read-back, the third channel's closed loop
+      // (NEXUS_SHOPIFY_QTY_READBACK=0 to disable). Scheduled, not registry-only.
+      startShopifyQtyReadbackCron();
       // E2 eBay Ads read-side sync (prod default-ON; NEXUS_ENABLE_EBAY_ADS_SYNC gates)
       startEbayAdsSyncCrons();
       // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation

@@ -85,6 +85,36 @@ async function identify(gql: ShopifyGraphql, row: LinkedListingRow) {
   return { variantId: exact[0].id as string, inventoryItemId: exact[0].inventoryItem.id as string, productId: exact[0].product.id as string }
 }
 
+/**
+ * P4.3f — Shopify's OWN `available` for this listing, read exactly as the write
+ * path reads it.
+ *
+ * 🔴 It lives HERE, beside the write, and reuses `identify` and `stockLocation`
+ * rather than re-deriving them in the read-back service. A reader that decides
+ * "which variant" or "which location" one line away from the writer is the drift
+ * this programme keeps finding: the read-back would then report a mismatch for a
+ * listing the writer sends to a different location, or miss one it does.
+ *
+ * `available: null` means the variant is not stocked at the reviewed location —
+ * "could not read", which is a different fact from "reads zero" and must never be
+ * diffed as a quantity.
+ */
+export async function readShopifyAvailable(
+  gql: ShopifyGraphql,
+  row: LinkedListingRow,
+): Promise<{ available: number | null; locationId: string; variantId: string }> {
+  const sku = row.product?.sku ?? '(no SKU)'
+  const ids = await identify(gql, row)
+  const locationId = await stockLocation(gql, row, sku)
+  const variant = (await gql(VARIANT_QUERY, { id: ids.variantId, location: locationId })).productVariant
+  const observed = variant?.inventoryItem?.inventoryLevel?.quantities?.find((q: any) => q.name === 'available')?.quantity
+  return {
+    available: Number.isSafeInteger(observed) ? Number(observed) : null,
+    locationId,
+    variantId: ids.variantId,
+  }
+}
+
 /** Send one queued change to a linked Shopify listing through `accountId`. Returns the result sentence. */
 /**
  * P3.2 — the same write, with any rejection recorded on the listing before it is

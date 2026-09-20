@@ -392,6 +392,14 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
       .map((s) => `${s.channel}: eligible ${s.eligible} · scanned ${s.scanned} · refreshed ${s.refreshed} · empty ${s.empty} · skipped ${s.skipped} · unconfigured ${s.unconfigured} · errored ${s.errored}${s.capped ? ' · CAPPED' : ''}`)
       .join(' | ')
   },
+  // P4.3f — Shopify quantity read-back. This entry is for an on-demand run ONLY:
+  // the job is SCHEDULED in index.ts (startShopifyQtyReadbackCron). A registry
+  // entry alone is a manual trigger, which is the very state P4.2c mistook for a
+  // habit and P4.2d had to correct.
+  'shopify-qty-readback': async () => {
+    const { runShopifyQtyReadback } = await import('./shopify-qty-readback.job.js')
+    return runShopifyQtyReadback()
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {
