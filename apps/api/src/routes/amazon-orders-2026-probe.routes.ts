@@ -53,6 +53,35 @@ import {
 const PII_PATHS = new Set(['buyer', 'recipient'])
 
 /** Every dotted path Amazon actually sent, to a shallow depth. Values are NOT included. */
+/**
+ * 🔴 Which order this probe reports on: the first one **that has line items**, not simply the
+ * first one.
+ *
+ * The money question — is `ItemPrice` the LINE total, as `upsertOrderItem` assumes when it
+ * divides by quantity — can only be answered by an order that HAS items. Reporting on
+ * `orders[0]` regardless meant nine consecutive live calls answered "no items", which is a true
+ * statement about that order and tells you nothing about the mapping.
+ *
+ * Worse, it invited a false finding: one call's field paths read against a later call's item
+ * count look like *"Amazon sent items and our mapper produced none"*, when they are simply two
+ * different orders. Every number below now comes from the SAME chosen order, so they can be
+ * compared.
+ *
+ * The fallback to index 0 is deliberate — an empty-handed answer must still report the field
+ * paths and the mapping — and `chosenHasItems: false` says plainly which case it is.
+ */
+export function chooseProbeOrder(orders: ReadonlyArray<{ orderItems?: unknown[] }>): {
+  chosenIndex: number
+  ordersWithItems: number
+  chosenHasItems: boolean
+} {
+  const hasItems = (o: { orderItems?: unknown[] }) => Array.isArray(o?.orderItems) && o.orderItems.length > 0
+  const ordersWithItems = orders.filter(hasItems).length
+  const withItems = orders.findIndex(hasItems)
+  const chosenIndex = withItems >= 0 ? withItems : orders.length > 0 ? 0 : -1
+  return { chosenIndex, ordersWithItems, chosenHasItems: withItems >= 0 }
+}
+
 function pathsOf(value: unknown, prefix = '', depth = 0, out: string[] = []): string[] {
   if (depth > 3 || value === null || typeof value !== 'object') return out
   if (Array.isArray(value)) {
@@ -107,7 +136,10 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
         marketplaceIds: [marketplaceId],
         createdAfter,
         createdBefore,
-        maxResultsPerPage: 5,
+        // 2026-09-21 — was 5. An order with line items is what the MONEY question needs,
+        // and with 5 the newest order had none on nine consecutive calls. A wider page is a
+        // better chance of finding one without asking Amazon more times.
+        maxResultsPerPage: 20,
         includedData: [...ORDERS_2026_INCLUDED_DATA],
       },
     }
@@ -143,7 +175,9 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
         }
       }
 
-      const first = orders[0] as Order2026 | undefined
+      const choice = chooseProbeOrder(orders as Order2026[])
+      const { chosenIndex, ordersWithItems, chosenHasItems } = choice
+      const first = chosenIndex >= 0 ? (orders[chosenIndex] as Order2026) : undefined
       const sent = first ? [...new Set(pathsOf(first))].sort() : []
 
       // The mapping, checked against what Amazon actually sent rather than
@@ -180,6 +214,10 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
           page2,
         },
         orders: orders.length,
+        /** How many of this page's orders carried line items, and which one is reported on. */
+        ordersWithItems,
+        chosenIndex,
+        chosenHasItems,
         nextTokenPresent: !!nextToken,
         /** Field PATHS only — no values, so no buyer data. */
         amazonSentPaths: sent,

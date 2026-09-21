@@ -59,7 +59,7 @@ describe('1. the probe does not change what it measures', () => {
 
   it('bounds the window so it cannot walk the whole account', () => {
     expect(probe).toContain('Math.min(Math.max(Number(query.days ?? 7) || 7, 1), 30)')
-    expect(probe).toContain('maxResultsPerPage: 5')
+    expect(probe).toContain('maxResultsPerPage: 20')
   })
 })
 
@@ -159,5 +159,49 @@ describe('the route is reachable and behind the admin gate', () => {
     // The prefix rule is why this route needs no manifest entry of its own; a
     // new route OUTSIDE an existing prefix is refused by the pre-push gate.
     expect(manifest).toContain("pfx('/api/admin')")
+  })
+})
+
+describe('chooseProbeOrder (2026-09-21) — report on an order that HAS items', () => {
+  const withItems = { orderItems: [{ orderItemId: 'L1' }] }
+  const without = { orderItems: [] }
+
+  it('🔴 skips the newest order when it has no items, and says which it used', async () => {
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    // This is the live shape that cost nine calls: the newest order had none.
+    expect(chooseProbeOrder([without, without, withItems])).toEqual({
+      chosenIndex: 2, ordersWithItems: 1, chosenHasItems: true,
+    })
+  })
+
+  it('takes the first when it does have items', async () => {
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    expect(chooseProbeOrder([withItems, without])).toEqual({
+      chosenIndex: 0, ordersWithItems: 1, chosenHasItems: true,
+    })
+  })
+
+  it('🔴 falls back to index 0 and SAYS SO when no order has items', async () => {
+    // The mapping and the field paths are still worth reporting; what must never happen is
+    // reporting "no items" as if it answered the money question.
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    expect(chooseProbeOrder([without, without])).toEqual({
+      chosenIndex: 0, ordersWithItems: 0, chosenHasItems: false,
+    })
+  })
+
+  it('an empty page chooses nothing', async () => {
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    expect(chooseProbeOrder([])).toEqual({ chosenIndex: -1, ordersWithItems: 0, chosenHasItems: false })
+  })
+
+  it('counts every order with items, not just the chosen one', async () => {
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    expect(chooseProbeOrder([without, withItems, withItems]).ordersWithItems).toBe(2)
+  })
+
+  it.each([undefined, null, 'x', {}])('an orderItems of %p is not items', async (bad) => {
+    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
+    expect(chooseProbeOrder([{ orderItems: bad as never }]).chosenHasItems).toBe(false)
   })
 })
