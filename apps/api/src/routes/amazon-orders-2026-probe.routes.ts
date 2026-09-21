@@ -74,12 +74,42 @@ export function chooseProbeOrder(orders: ReadonlyArray<{ orderItems?: unknown[] 
   chosenIndex: number
   ordersWithItems: number
   chosenHasItems: boolean
+  /** True when the chosen order has a line of quantity ≥ 2 — the only kind that answers the money question. */
+  chosenHasMultiQty: boolean
+  ordersWithMultiQty: number
 } {
-  const hasItems = (o: { orderItems?: unknown[] }) => Array.isArray(o?.orderItems) && o.orderItems.length > 0
+  const items = (o: { orderItems?: unknown[] }) => (Array.isArray(o?.orderItems) ? o.orderItems : [])
+  const hasItems = (o: { orderItems?: unknown[] }) => items(o).length > 0
+  /**
+   * 🔴 2026-09-21 — quantity 1 cannot answer the money question.
+   *
+   * The claim is that `ItemPrice` is the LINE total while `product.price.unitPrice` is PER UNIT,
+   * and that `upsertOrderItem` divides by the quantity. **At quantity 1 those two numbers are the
+   * same**, so a live answer of `ItemPrice 81.15 / qty 1 / wouldStoreUnitPrice 81.15` is
+   * consistent with BOTH the correct mapping and the defect. It proves nothing.
+   *
+   * That is the banked *a fixture PINS a dimension* trap arriving in live data: the order the
+   * probe happened to pick held constant the very thing the claim is about. So the chooser now
+   * prefers an order with a line of **quantity ≥ 2**, and reports plainly when it could not find
+   * one — `chosenHasMultiQty: false` means "still unanswered", not "answered and fine".
+   */
+  const multiQty = (o: { orderItems?: unknown[] }) =>
+    items(o).some((i) => Number((i as { quantityOrdered?: unknown })?.quantityOrdered) >= 2)
+
   const ordersWithItems = orders.filter(hasItems).length
-  const withItems = orders.findIndex(hasItems)
-  const chosenIndex = withItems >= 0 ? withItems : orders.length > 0 ? 0 : -1
-  return { chosenIndex, ordersWithItems, chosenHasItems: withItems >= 0 }
+  const ordersWithMultiQty = orders.filter(multiQty).length
+
+  const multiIndex = orders.findIndex(multiQty)
+  const itemsIndex = orders.findIndex(hasItems)
+  const chosenIndex = multiIndex >= 0 ? multiIndex : itemsIndex >= 0 ? itemsIndex : orders.length > 0 ? 0 : -1
+
+  return {
+    chosenIndex,
+    ordersWithItems,
+    chosenHasItems: chosenIndex >= 0 && hasItems(orders[chosenIndex] ?? {}),
+    chosenHasMultiQty: multiIndex >= 0,
+    ordersWithMultiQty,
+  }
 }
 
 function pathsOf(value: unknown, prefix = '', depth = 0, out: string[] = []): string[] {
@@ -176,7 +206,7 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
       }
 
       const choice = chooseProbeOrder(orders as Order2026[])
-      const { chosenIndex, ordersWithItems, chosenHasItems } = choice
+      const { chosenIndex, ordersWithItems, chosenHasItems, chosenHasMultiQty, ordersWithMultiQty } = choice
       const first = chosenIndex >= 0 ? (orders[chosenIndex] as Order2026) : undefined
       const sent = first ? [...new Set(pathsOf(first))].sort() : []
 
@@ -218,6 +248,9 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
         ordersWithItems,
         chosenIndex,
         chosenHasItems,
+        /** 🔴 The money question is only ANSWERED when this is true. */
+        chosenHasMultiQty,
+        ordersWithMultiQty,
         nextTokenPresent: !!nextToken,
         /** Field PATHS only — no values, so no buyer data. */
         amazonSentPaths: sent,

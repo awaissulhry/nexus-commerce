@@ -162,46 +162,51 @@ describe('the route is reachable and behind the admin gate', () => {
   })
 })
 
-describe('chooseProbeOrder (2026-09-21) — report on an order that HAS items', () => {
-  const withItems = { orderItems: [{ orderItemId: 'L1' }] }
+describe('chooseProbeOrder (2026-09-21) — report on an order that can ANSWER the question', () => {
+  const single = { orderItems: [{ orderItemId: 'L1', quantityOrdered: 1 }] }
+  const multi = { orderItems: [{ orderItemId: 'L2', quantityOrdered: 2 }] }
   const without = { orderItems: [] }
+  const load = async () => (await import('./amazon-orders-2026-probe.routes.js')).chooseProbeOrder
 
-  it('🔴 skips the newest order when it has no items, and says which it used', async () => {
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    // This is the live shape that cost nine calls: the newest order had none.
-    expect(chooseProbeOrder([without, without, withItems])).toEqual({
-      chosenIndex: 2, ordersWithItems: 1, chosenHasItems: true,
-    })
+  it('🔴 QUANTITY 1 CANNOT ANSWER IT — a multi-quantity order is preferred over a single', async () => {
+    // Live, 2026-09-21: the chosen order was qty 1, ItemPrice 81.15, wouldStoreUnitPrice 81.15.
+    // Those are equal under BOTH the correct mapping and the defect, so it proved nothing.
+    expect((await load())([single, single, multi])).toMatchObject({ chosenIndex: 2, chosenHasMultiQty: true })
   })
 
-  it('takes the first when it does have items', async () => {
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    expect(chooseProbeOrder([withItems, without])).toEqual({
-      chosenIndex: 0, ordersWithItems: 1, chosenHasItems: true,
-    })
+  it('takes a multi-quantity order when it is already first', async () => {
+    expect((await load())([multi, single])).toMatchObject({ chosenIndex: 0, chosenHasMultiQty: true })
   })
 
-  it('🔴 falls back to index 0 and SAYS SO when no order has items', async () => {
-    // The mapping and the field paths are still worth reporting; what must never happen is
-    // reporting "no items" as if it answered the money question.
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    expect(chooseProbeOrder([without, without])).toEqual({
-      chosenIndex: 0, ordersWithItems: 0, chosenHasItems: false,
+  it('🔴 falls back to an items order and SAYS the question is unanswered', async () => {
+    const r = (await load())([without, single])
+    expect(r).toMatchObject({ chosenIndex: 1, chosenHasItems: true, chosenHasMultiQty: false })
+  })
+
+  it('🔴 falls back to index 0 when nothing has items, and says so twice over', async () => {
+    expect((await load())([without, without])).toMatchObject({
+      chosenIndex: 0, chosenHasItems: false, chosenHasMultiQty: false, ordersWithItems: 0,
     })
   })
 
   it('an empty page chooses nothing', async () => {
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    expect(chooseProbeOrder([])).toEqual({ chosenIndex: -1, ordersWithItems: 0, chosenHasItems: false })
+    expect((await load())([])).toMatchObject({ chosenIndex: -1, chosenHasItems: false, chosenHasMultiQty: false })
   })
 
-  it('counts every order with items, not just the chosen one', async () => {
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    expect(chooseProbeOrder([without, withItems, withItems]).ordersWithItems).toBe(2)
+  it('counts both populations, not just the chosen one', async () => {
+    const r = (await load())([single, multi, multi, without])
+    expect(r.ordersWithItems).toBe(3)
+    expect(r.ordersWithMultiQty).toBe(2)
+  })
+
+  it.each([undefined, null, 'x', 0, 1, 1.5])('a quantityOrdered of %p is not multi-quantity', async (q) => {
+    const r = (await load())([{ orderItems: [{ quantityOrdered: q as never }] }])
+    expect(r.chosenHasMultiQty).toBe(false)
+    // POSITIVE CONTROL in the same run: 2 IS multi-quantity.
+    expect((await load())([{ orderItems: [{ quantityOrdered: 2 }] }]).chosenHasMultiQty).toBe(true)
   })
 
   it.each([undefined, null, 'x', {}])('an orderItems of %p is not items', async (bad) => {
-    const { chooseProbeOrder } = await import('./amazon-orders-2026-probe.routes.js')
-    expect(chooseProbeOrder([{ orderItems: bad as never }]).chosenHasItems).toBe(false)
+    expect((await load())([{ orderItems: bad as never }]).chosenHasItems).toBe(false)
   })
 })
