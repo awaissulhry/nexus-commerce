@@ -27,7 +27,10 @@ export async function runShopifyQtyReadback(): Promise<string> {
   const r = await readBackShopifyQuantities()
   // `unreadable` is reported beside `checked`, never folded into it: a run that
   // could not read anything must not print like a clean one.
-  return `checked=${r.checked} unreadable=${r.unreadable} skipped=${r.skipped} mismatched=${r.mismatches.length} logged=${r.logged} healed=${r.healed}${r.capped ? ' (capped)' : ''}`
+  // P4.4e — the price arm is reported beside the quantity arm, never folded in.
+  return `checked=${r.checked} unreadable=${r.unreadable} skipped=${r.skipped} mismatched=${r.mismatches.length} logged=${r.logged} healed=${r.healed}`
+    + ` | price: mismatched=${r.priceMismatches.length} logged=${r.priceLogged} (heal off)`
+    + `${r.capped ? ' (capped)' : ''}`
 }
 
 export function startShopifyQtyReadbackCron(): void {

@@ -32,6 +32,12 @@ export type ConflictType =
   | 'LATENCY_BREACH'
   // P0c — Amazon's actual quantity diverges from intended (read-back reconcile)
   | 'CHANNEL_QTY_READBACK'
+  // P4.4e — the channel's PRICE diverges from the listing's intent. Its own type,
+  // not CHANNEL_QTY_READBACK and not PRICE_MISMATCH: a read-back conflict is
+  // "the channel drifted from us", which an operator resolves differently from a
+  // mismatch found at import. Reported only — a price correction is a money
+  // write and nothing heals it automatically (NEXUS_ENABLE_PRICE_READBACK_HEAL).
+  | 'CHANNEL_PRICE_READBACK'
   // SCT.4 — Amazon EU rows disagree on the ONE shared merchant quantity; a
   // push was refused so no market's intent got silently overwritten.
   | 'EU_SHARED_QTY_CONFLICT'

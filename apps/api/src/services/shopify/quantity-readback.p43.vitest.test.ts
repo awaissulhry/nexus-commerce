@@ -88,7 +88,7 @@ const { readBackShopifyQuantities } = await import('./quantity-readback.service.
 const { syncLedgerOf } = await import('../sync-control-core.js')
 
 const listing = (over: Record<string, unknown> = {}) => ({
-  id: 'cl-1', productId: 'p-1', marketplace: 'GLOBAL', quantity: null, stockBuffer: 0,
+  id: 'cl-1', productId: 'p-1', marketplace: 'GLOBAL', quantity: null, price: 49.9, stockBuffer: 0,
   fulfillmentMethod: 'FBM', syncPaused: false, offerClosedAt: null, followMasterQuantity: true,
   sourceLocationCodes: [], channelConnectionId: 'conn-1', platformAttributes: {},
   externalListingId: 'gid://shopify/Product/1', listingStatus: 'ACTIVE', syncLocked: false,
@@ -115,7 +115,7 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('a listing that agrees with the pool is checked and produces nothing', async () => {
     onePage([listing()])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 5, locationId: 'gid://shopify/Location/1', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 49.9, locationId: 'gid://shopify/Location/1', variantId: 'v1' })
     const r = await readBackShopifyQuantities()
     expect(r).toMatchObject({ checked: 1, unreadable: 0, skipped: 0, logged: 0, healed: 0 })
     expect(r.mismatches).toEqual([])
@@ -126,7 +126,7 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('a drifted listing is logged once and healed with a row that NAMES its listing', async () => {
     onePage([listing()])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 2, locationId: 'gid://shopify/Location/1', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'gid://shopify/Location/1', variantId: 'v1' })
     const r = await readBackShopifyQuantities()
     expect(r).toMatchObject({ checked: 1, logged: 1, healed: 1 })
     expect(r.mismatches[0]).toMatchObject({ listingId: 'cl-1', shopifyQty: 2, intendedQty: 5 })
@@ -148,7 +148,7 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('a mismatch already logged in the last 24 h is not logged again — but is still healed', async () => {
     onePage([listing()])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 2, locationId: 'L', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'L', variantId: 'v1' })
     m.findFirst.mockResolvedValue({ id: 'existing' })
     const r = await readBackShopifyQuantities()
     expect(r).toMatchObject({ logged: 0, healed: 1 })
@@ -158,7 +158,7 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('🔴 an unreadable listing is counted apart and never healed', async () => {
     onePage([listing()])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: null, locationId: 'L', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: null, price: 49.9, locationId: 'L', variantId: 'v1' })
     const r = await readBackShopifyQuantities()
     // `checked` stays 0: a run that could not read must not print like a clean one.
     expect(r).toMatchObject({ checked: 0, unreadable: 1, logged: 0, healed: 0 })
@@ -185,14 +185,14 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('a PAUSED resolution is skipped, not compared', async () => {
     onePage([listing({ syncPaused: true })])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 2, locationId: 'L', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'L', variantId: 'v1' })
     expect(await readBackShopifyQuantities()).toMatchObject({ checked: 0, skipped: 1, healed: 0 })
   })
 
   it('healing can be turned off, and the mismatch is still logged', async () => {
     onePage([listing()])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 2, locationId: 'L', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'L', variantId: 'v1' })
     expect(await readBackShopifyQuantities({ heal: false })).toMatchObject({ logged: 1, healed: 0 })
     expect(m.createOutboundRow).not.toHaveBeenCalled()
   })
@@ -200,7 +200,7 @@ describe('P4.3f readBackShopifyQuantities', () => {
   it('the buffer is held back: Shopify showing the unbuffered number IS drift', async () => {
     onePage([listing({ stockBuffer: 2 })])
     m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
-    m.readShopifyAvailable.mockResolvedValue({ available: 5, locationId: 'L', variantId: 'v1' })
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 49.9, locationId: 'L', variantId: 'v1' })
     const r = await readBackShopifyQuantities()
     expect(r.mismatches[0]).toMatchObject({ shopifyQty: 5, intendedQty: 3 })
   })
@@ -229,5 +229,71 @@ describe('P4.3f: the job is SCHEDULED, not registry-only', () => {
     // And the schedule is validated before it is used, so a bad override does not
     // take the job down silently.
     expect(code).toMatch(/cron\.validate\(schedule\)/)
+  })
+})
+
+// ── P4.4e — the price arm, from the same response ───────────────────────────
+describe('P4.4e: the Shopify read-back also diffs the price', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    m.loadChannelPolicies.mockResolvedValue(new Map())
+    m.shopifyAdmin.mockResolvedValue({ graphql: vi.fn(), domain: 'shop.myshopify.com' })
+    m.findFirst.mockResolvedValue(null)
+    m.logConflict.mockResolvedValue(undefined)
+    m.createOutboundRow.mockResolvedValue({ id: 'q-1' })
+    m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
+  })
+  const onePage = (rows: unknown[]) => { m.findMany.mockResolvedValueOnce(rows).mockResolvedValue([]) }
+
+  it('a drifted price is reported, with no extra channel call', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 59.9, locationId: 'L', variantId: 'v1' })
+    const r = await readBackShopifyQuantities()
+    // One read for BOTH arms: `readShopifyAvailable` already selected `price`.
+    expect(m.readShopifyAvailable).toHaveBeenCalledOnce()
+    expect(r.priceMismatches).toEqual([{ listingId: 'cl-1', productId: 'p-1', sku: 'SKU-1', shopifyPrice: 59.9, intendedPrice: 49.9 }])
+    expect(r.priceLogged).toBe(1)
+    expect(m.logConflict).toHaveBeenCalledWith(expect.objectContaining({
+      channel: 'SHOPIFY', conflictType: 'CHANNEL_PRICE_READBACK', productId: 'p-1',
+      localData: { intendedPrice: 49.9 },
+    }))
+  })
+
+  it('🔴 nothing is HEALED for a price — it is reported only', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 59.9, locationId: 'L', variantId: 'v1' })
+    const r = await readBackShopifyQuantities()
+    expect(r.priceMismatches).toHaveLength(1)
+    expect(r.healed).toBe(0)
+    expect(m.createOutboundRow).not.toHaveBeenCalled()
+  })
+
+  it('🔴 a PAUSED listing is skipped for quantity but its PRICE is still checked', async () => {
+    onePage([listing({ syncPaused: true })])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 59.9, locationId: 'L', variantId: 'v1' })
+    const r = await readBackShopifyQuantities()
+    expect(r.skipped).toBe(1)
+    expect(r.priceMismatches).toHaveLength(1)
+  })
+
+  it('an agreeing price reports nothing', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 49.9, locationId: 'L', variantId: 'v1' })
+    expect((await readBackShopifyQuantities()).priceMismatches).toEqual([])
+  })
+
+  it('a price Shopify did not send is not a drift to zero', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: null, locationId: 'L', variantId: 'v1' })
+    expect((await readBackShopifyQuantities()).priceMismatches).toEqual([])
+  })
+
+  it('a 24 h duplicate is not logged again', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 59.9, locationId: 'L', variantId: 'v1' })
+    m.findFirst.mockResolvedValue({ id: 'existing' })
+    const r = await readBackShopifyQuantities()
+    expect(r.priceMismatches).toHaveLength(1)
+    expect(r.priceLogged).toBe(0)
   })
 })

@@ -20,6 +20,7 @@
  */
 
 import { createOutboundRow } from '../services/outbound-rows.js'
+import { priceDrift, priceDriftMessage, priceHealEnabled, type PriceDrift } from '../services/price-readback.service.js'
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
@@ -83,12 +84,49 @@ export function diffReadback(
   return out
 }
 
+export interface PriceReadbackMismatch {
+  sku: string
+  marketplace: string
+  channelListingId: string
+  productId: string
+  drift: PriceDrift
+}
+
+/**
+ * P4.4e — the SAME report rows, diffed on price.
+ *
+ * 🔴 `fetchActiveCatalog` has always parsed `price` out of
+ * `GET_MERCHANT_LISTINGS_ALL_DATA` (`CatalogItem.price`), and this job has
+ * always thrown it away. The read-back costs **no additional API call**.
+ *
+ * FBA rows are compared too, unlike the quantity arm: Amazon owns FBA STOCK, not
+ * FBA PRICE — a merchant sets the price either way.
+ */
+export function diffPriceReadback(
+  amazonRows: Array<{ sku: string; price: number }>,
+  ourRows: Array<{ sku: string; price: number | null; channelListingId: string; productId: string }>,
+  marketplace: string,
+): PriceReadbackMismatch[] {
+  const ours = new Map(ourRows.map((r) => [r.sku, r]))
+  const out: PriceReadbackMismatch[] = []
+  for (const a of amazonRows) {
+    const mine = ours.get(a.sku)
+    if (!mine) continue
+    const drift = priceDrift({ channelPrice: a.price, intendedPrice: mine.price })
+    if (!drift) continue
+    out.push({ sku: a.sku, marketplace, channelListingId: mine.channelListingId, productId: mine.productId, drift })
+  }
+  return out
+}
+
 export async function runAmazonQtyReadback(): Promise<string> {
   const { AmazonService } = await import('../services/marketplaces/amazon.service.js')
   const amazon = new AmazonService()
   const healMax = Number(process.env.NEXUS_QTY_READBACK_HEAL_MAX ?? 100)
 
   let compared = 0
+
+  let priceCompared = 0, priceMismatches = 0, priceLogged = 0
   let mismatches = 0
   let healed = 0
   let logged = 0
@@ -132,11 +170,12 @@ export async function runAmazonQtyReadback(): Promise<string> {
         // canonical FBA exclusion — explicit FBM or unresolved-with-FBM-product
         OR: [{ fulfillmentMethod: 'FBM' }, { fulfillmentMethod: null, product: { fulfillmentMethod: { not: 'FBA' } } }],
       },
-      select: { id: true, quantity: true, productId: true, product: { select: { sku: true } } },
+      select: { id: true, quantity: true, price: true, productId: true, product: { select: { sku: true } } },
     })
     const mine = ourRows.map((r) => ({
       sku: r.product?.sku ?? '',
       quantity: r.quantity,
+      price: r.price == null ? null : Number(r.price),
       channelListingId: r.id,
       productId: r.productId,
     }))
@@ -193,6 +232,40 @@ export async function runAmazonQtyReadback(): Promise<string> {
     marketSummaries.push(`${mp}:${mine.length}cmp/${diffs.length}diff`)
     for (const r of mine) if (r.productId) comparedProducts.add(r.productId)
     for (const d of diffs) if (d.productId) mismatchedProducts.add(d.productId)
+
+    // ── P4.4e — the PRICE arm, over the report rows already in hand ──────────
+    // No extra API call: `catalog` is the same response the quantity arm read.
+    const priceDiffs = diffPriceReadback(catalog, mine, mp)
+    priceCompared += mine.length
+    priceMismatches += priceDiffs.length
+    for (const d of priceDiffs) {
+      try {
+        const existing = await prisma.syncHealthLog.findFirst({
+          where: {
+            productId: d.productId,
+            channel: 'AMAZON',
+            conflictType: 'CHANNEL_PRICE_READBACK',
+            resolutionStatus: 'UNRESOLVED',
+            createdAt: { gte: new Date(Date.now() - 24 * 3600e3) },
+          },
+          select: { id: true },
+        })
+        if (existing) continue
+        const { syncHealthService } = await import('../services/sync-health.service.js')
+        await syncHealthService.logConflict({
+          channel: 'AMAZON',
+          conflictType: 'CHANNEL_PRICE_READBACK',
+          message: `${priceDriftMessage({ channel: 'Amazon', sku: d.sku, drift: d.drift })} (${d.marketplace})`,
+          productId: d.productId,
+          localData: { intendedPrice: d.drift.intendedPrice },
+          remoteData: { source: 'GET_MERCHANT_LISTINGS_ALL_DATA', amazonPrice: d.drift.channelPrice, difference: d.drift.difference, marketplace: d.marketplace },
+        })
+        priceLogged++
+      } catch { /* observability best-effort */ }
+      // 🔴 No heal. A price correction is a money write made by a machine on a
+      // schedule; the Owner has not ruled on it. `priceHealEnabled()` names the
+      // switch for the day that ruling exists.
+    }
   }
 
   // SC.5-fix — convergence auto-resolve (mirror of the eBay trading sweep):
@@ -219,7 +292,11 @@ export async function runAmazonQtyReadback(): Promise<string> {
     }
   } catch { /* observability best-effort */ }
 
-  const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} resolved=${resolved} [${marketSummaries.join(' ')}]`
+  // P4.4e — the price arm is reported BESIDE the quantity arm, never folded into
+  // it: a clean quantity run with drifted prices must not read as a clean run.
+  const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} resolved=${resolved}`
+    + ` | price: compared=${priceCompared} mismatches=${priceMismatches} logged=${priceLogged}${priceHealEnabled() ? '' : ' (heal off)'}`
+    + ` [${marketSummaries.join(' ')}]`
   logger.info(`[${JOB_NAME}] ${summary}`)
   return summary
 }

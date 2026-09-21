@@ -102,14 +102,19 @@ async function identify(gql: ShopifyGraphql, row: LinkedListingRow) {
 export async function readShopifyAvailable(
   gql: ShopifyGraphql,
   row: LinkedListingRow,
-): Promise<{ available: number | null; locationId: string; variantId: string }> {
+): Promise<{ available: number | null; price: number | null; locationId: string; variantId: string }> {
   const sku = row.product?.sku ?? '(no SKU)'
   const ids = await identify(gql, row)
   const locationId = await stockLocation(gql, row, sku)
   const variant = (await gql(VARIANT_QUERY, { id: ids.variantId, location: locationId })).productVariant
   const observed = variant?.inventoryItem?.inventoryLevel?.quantities?.find((q: any) => q.name === 'available')?.quantity
+  // P4.4e — `VARIANT_QUERY` has always selected `price`; the caller threw it
+  // away. Returning it costs no extra call. `null` = Shopify did not tell us,
+  // which is not the same fact as "Shopify says 0".
+  const rawPrice = Number(variant?.price)
   return {
     available: Number.isSafeInteger(observed) ? Number(observed) : null,
+    price: Number.isFinite(rawPrice) ? rawPrice : null,
     locationId,
     variantId: ids.variantId,
   }

@@ -44,6 +44,7 @@ import { createOutboundRow } from '../outbound-rows.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { resolveIntendedQuantity } from '../sync-control-core.js'
+import { priceDrift, priceDriftMessage } from '../price-readback.service.js'
 import { shopifyAdmin } from './admin-client.js'
 import { readShopifyAvailable, type LinkedListingRow } from './listing-write.service.js'
 
@@ -59,6 +60,14 @@ export interface ShopifyQtyMismatch {
   locationId: string
 }
 
+export interface ShopifyPriceMismatch {
+  listingId: string
+  productId: string
+  sku: string
+  shopifyPrice: number
+  intendedPrice: number
+}
+
 export interface ShopifyQtyReadbackResult {
   checked: number
   /** Shopify could not be asked, or the variant is not stocked at the reviewed location. */
@@ -68,6 +77,10 @@ export interface ShopifyQtyReadbackResult {
   mismatches: ShopifyQtyMismatch[]
   logged: number
   healed: number
+  /** P4.4e — the price arm, reported BESIDE the quantity arm and never folded
+   *  into it: a clean quantity run with drifted prices is not a clean run. */
+  priceMismatches: ShopifyPriceMismatch[]
+  priceLogged: number
   /** True when the run was cut short by its own cap — the census is partial, and says so. */
   capped: boolean
 }
@@ -116,7 +129,7 @@ async function candidates(take: number, after?: string) {
       product: { deletedAt: null },
     },
     select: {
-      id: true, productId: true, marketplace: true, quantity: true, stockBuffer: true,
+      id: true, productId: true, marketplace: true, quantity: true, price: true, stockBuffer: true,
       fulfillmentMethod: true, syncPaused: true, offerClosedAt: true, followMasterQuantity: true,
       sourceLocationCodes: true, channelConnectionId: true, platformAttributes: true,
       externalListingId: true, listingStatus: true, syncLocked: true,
@@ -129,7 +142,7 @@ async function candidates(take: number, after?: string) {
 }
 
 export async function readBackShopifyQuantities(options: { heal?: boolean } = {}): Promise<ShopifyQtyReadbackResult> {
-  const result: ShopifyQtyReadbackResult = { checked: 0, unreadable: 0, skipped: 0, mismatches: [], logged: 0, healed: 0, capped: false }
+  const result: ShopifyQtyReadbackResult = { checked: 0, unreadable: 0, skipped: 0, mismatches: [], logged: 0, healed: 0, priceMismatches: [], priceLogged: 0, capped: false }
   const maxPerRun = intEnv('NEXUS_SHOPIFY_QTY_READBACK_MAX_PER_RUN', 400)
   const maxHeal = intEnv('NEXUS_SHOPIFY_QTY_READBACK_MAX_HEAL', 25)
   const heal = options.heal ?? process.env.NEXUS_SHOPIFY_QTY_READBACK_HEAL !== '0'
@@ -186,6 +199,15 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
           uncountedIsZero: inputs.uncountedIsZero,
         })
 
+        // ── P4.4e — the PRICE arm, from the SAME response ──────────────────
+        // `readShopifyAvailable` ran one query that already selected `price`.
+        // No extra call. A PAUSED or PINNED listing is skipped for quantity but
+        // its price still matters, so this runs before the quantity verdict.
+        const drift = priceDrift({ channelPrice: live.price, intendedPrice: listing.price == null ? null : Number(listing.price) })
+        if (drift) {
+          result.priceMismatches.push({ listingId: listing.id, productId, sku, shopifyPrice: drift.channelPrice, intendedPrice: drift.intendedPrice })
+        }
+
         const verdict = readbackVerdict({
           shopifyAvailable: live.available,
           resolutionKind: resolution.kind,
@@ -240,6 +262,35 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
       result.logged++
     } catch (err) {
       logger.warn(`[${SHOPIFY_QTY_READBACK}] could not log a mismatch`, { listingId: mismatch.listingId, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  // P4.4e — one SyncHealthLog row per drifted price, deduped 24 h per product,
+  // exactly as the quantity arm does it. 🔴 Nothing heals: a price correction is
+  // a money write made by a machine on a schedule, and the Owner has not ruled
+  // on it. The switch is `NEXUS_ENABLE_PRICE_READBACK_HEAL`.
+  for (const mismatch of result.priceMismatches) {
+    try {
+      const existing = await prisma.syncHealthLog.findFirst({
+        where: {
+          productId: mismatch.productId, channel: 'SHOPIFY', conflictType: 'CHANNEL_PRICE_READBACK',
+          resolutionStatus: 'UNRESOLVED', createdAt: { gte: new Date(Date.now() - 24 * 3600e3) },
+        },
+        select: { id: true },
+      })
+      if (existing) continue
+      const { syncHealthService } = await import('../sync-health.service.js')
+      await syncHealthService.logConflict({
+        channel: 'SHOPIFY',
+        conflictType: 'CHANNEL_PRICE_READBACK',
+        message: priceDriftMessage({ channel: 'Shopify', sku: mismatch.sku || mismatch.listingId, drift: { channelPrice: mismatch.shopifyPrice, intendedPrice: mismatch.intendedPrice, difference: mismatch.shopifyPrice - mismatch.intendedPrice } }),
+        productId: mismatch.productId,
+        localData: { intendedPrice: mismatch.intendedPrice },
+        remoteData: { source: 'SHOPIFY_VARIANT', shopifyPrice: mismatch.shopifyPrice, listingId: mismatch.listingId },
+      })
+      result.priceLogged++
+    } catch (err) {
+      logger.warn(`[${SHOPIFY_QTY_READBACK}] could not log a price mismatch`, { listingId: mismatch.listingId, error: err instanceof Error ? err.message : String(err) })
     }
   }
 
