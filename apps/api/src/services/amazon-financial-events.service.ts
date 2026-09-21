@@ -76,6 +76,23 @@ interface FinancialSyncSummary {
   txCreated: number
   txSkipped: number
   durationMs: number
+  /**
+   * P5.2 dry run — true when NOTHING was written. `txCreated` is then **0**, which is
+   * the truth, and `txWouldCreate` carries the count. A field named `txCreated` holding
+   * a number of rows that were not created is a claim that does not match its
+   * measurement, and every existing reader of `txCreated` sums writes.
+   */
+  dryRun?: boolean
+  /** How many rows the write path IDENTIFIED as new. On a real run this equals `txCreated`. */
+  txWouldCreate?: number
+  /**
+   * 🔴 The number this mode exists for. §4b measured that the v0 path stores
+   * `amazonTransactionId` as the bare `amazonOrderId` while this path stores
+   * `orderId/sellerOrderItemId/postedDate`, so this path cannot see v0's rows and would
+   * write a SECOND one for the same money. This counts the would-be duplicates, over a
+   * real window, without writing any of them.
+   */
+  txWouldDuplicateV0?: number
   /** DA-RT.17 — diagnostics: first 10 AmazonOrderIds from fetched
    *  events whose row doesn't exist in our Order table, AND first 10
    *  channelOrderIds we DO have for AMAZON orders in the same window
@@ -491,17 +508,28 @@ function findRelatedId(
   return ids?.find((r) => r.relatedIdentifierName === name)?.relatedIdentifierValue
 }
 
+/**
+ * P5.2 — one 2024-06-19 transaction, either written or COUNTED.
+ *
+ * `opts.dryRun` skips exactly one statement: the `create`. Everything that decides
+ * *whether* a row would be written — the related-id lookup, the order match, the type
+ * map, the identifier build and the idempotency check — runs identically, because a
+ * count produced by a second, "equivalent" predicate is a count of something else. The
+ * banked rule is that a write's routing predicate binds its readers; re-deriving it one
+ * line away diverges on the first case that differs.
+ */
 async function processNewTransaction(
   tx: NewTransaction,
-): Promise<{ created: number; skipped: number }> {
+  opts: { dryRun?: boolean } = {},
+): Promise<{ created: number; skipped: number; wouldDuplicateV0: number }> {
   const amazonOrderId = findRelatedId(tx.relatedIdentifiers, 'AMAZON_ORDER_ID')
-  if (!amazonOrderId) return { created: 0, skipped: 1 }
+  if (!amazonOrderId) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
 
   const order = await prisma.order.findFirst({
     where: { channel: 'AMAZON', channelOrderId: amazonOrderId },
     select: { id: true, currencyCode: true },
   })
-  if (!order) return { created: 0, skipped: 1 }
+  if (!order) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
 
   // Map Amazon transactionType → Nexus transactionType
   // Shipment = Order revenue, Refund = Refund, all others kept as raw string
@@ -526,7 +554,7 @@ async function processNewTransaction(
     },
     select: { id: true },
   })
-  if (existing) return { created: 0, skipped: 1 }
+  if (existing) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
 
   // Sum breakdowns — Amazon uses negative numbers for fees, positive for revenue
   const principal = sumBreakdowns(tx.breakdowns, (t) => t === 'Principal')
@@ -556,6 +584,24 @@ async function processNewTransaction(
 
   const postedDate = tx.postedDate ? new Date(tx.postedDate) : new Date()
 
+  /**
+   * 🔴 The dry-run arm. It returns BEFORE the create and after everything that decides,
+   * so the count is the count the real write would produce.
+   *
+   * It also answers the question §4b raised and could not settle without writing: the v0
+   * path stored this money under the BARE `amazonOrderId`, so a v0 row is invisible to
+   * the idempotency check above, which looks for `txIdentifier`. Looking for the v0
+   * shape here turns "these two paths would double-write" from an argument about string
+   * formats into a number measured on a real window.
+   */
+  if (opts.dryRun) {
+    const v0Row = await prisma.financialTransaction.findFirst({
+      where: { orderId: order.id, transactionType: txType, amazonTransactionId: amazonOrderId },
+      select: { id: true },
+    })
+    return { created: 1, skipped: 0, wouldDuplicateV0: v0Row ? 1 : 0 }
+  }
+
   await prisma.financialTransaction.create({
     data: {
       amazonTransactionId: txIdentifier,
@@ -584,7 +630,7 @@ async function processNewTransaction(
     },
   })
 
-  return { created: 1, skipped: 0 }
+  return { created: 1, skipped: 0, wouldDuplicateV0: 0 }
 }
 
 /**
@@ -667,12 +713,38 @@ export async function probeFinancialTransactionsEnvelope(
   }
 }
 
+/**
+ * P5.2 — may this request run as a dry run? Returns the refusal, or `null` to proceed.
+ *
+ * 🔴 A dry run exists on the 2024-06-19 path ONLY. `syncFinancialEvents` (v0) has no
+ * dry-run arm, so letting the flag through on that path would accept a flag and IGNORE
+ * it — and the thing ignored is the difference between counting money and writing it.
+ * The rule lives here, next to the two paths, rather than in the route, so it is one
+ * predicate with one test rather than a sentence a reader has to trust.
+ */
+export function financialsDryRunRefusal(body: { useV0?: boolean; dryRun?: boolean }): string | null {
+  if (body.dryRun !== true) return null
+  if (body.useV0 === false) return null
+  return 'dryRun is only available on the 2024-06-19 path. Send {"useV0": false, "dryRun": true}. Nothing was written.'
+}
+
+/**
+ * P5.2 — pull the window and either WRITE it or COUNT it.
+ *
+ * `opts.dryRun` is the cheapest of the three safe comparisons §4b named. The plan's own
+ * next step — "one live `{useV0:false}` call, then compare counts against v0" — is a
+ * **write**, and over a window v0 has already synced it would create a second row for
+ * the same money. This runs the identical fetch and the identical decision path and
+ * writes nothing, so the comparison can be made before anything is at stake.
+ */
 export async function syncFinancialTransactions(
   windowStart: Date,
   windowEnd: Date,
   marketplaceId?: string,
+  opts: { dryRun?: boolean } = {},
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
+  const dryRun = opts.dryRun === true
   const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
   const authorization = await import('../lib/amazon-sp-client.js')
   const account = await authorization.amazonAccount()
@@ -713,16 +785,24 @@ export async function syncFinancialTransactions(
     await new Promise((r) => setTimeout(r, 200))
   }
 
-  logger.info('[fin-tx-2024] Fetched', { transactions: collected.length, pages })
+  logger.info('[fin-tx-2024] Fetched', { transactions: collected.length, pages, dryRun })
 
-  let txCreated = 0
+  let txWouldCreate = 0
   let txSkipped = 0
   let ordersMatched = 0
+  let txWouldDuplicateV0 = 0
   for (const tx of collected) {
-    const r = await processNewTransaction(tx)
-    txCreated += r.created
+    const r = await processNewTransaction(tx, { dryRun })
+    txWouldCreate += r.created
     txSkipped += r.skipped
+    txWouldDuplicateV0 += r.wouldDuplicateV0
     if (r.created > 0) ordersMatched++
+  }
+
+  if (dryRun) {
+    logger.info('[fin-tx-2024] DRY RUN — nothing written', {
+      txWouldCreate, txSkipped, txWouldDuplicateV0, transactions: collected.length,
+    })
   }
 
   return {
@@ -732,8 +812,13 @@ export async function syncFinancialTransactions(
     refundEventsFetched: 0,
     ordersMatched,
     ordersSkipped: 0,
-    txCreated,
+    // 🔴 Zero on a dry run, because zero rows were created. Every existing reader of
+    // this field sums writes, and a dry run must not add to that sum.
+    txCreated: dryRun ? 0 : txWouldCreate,
     txSkipped,
     durationMs: Date.now() - t0,
+    dryRun,
+    txWouldCreate,
+    txWouldDuplicateV0,
   }
 }

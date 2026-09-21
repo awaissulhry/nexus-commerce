@@ -31,7 +31,7 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 | # | Row | Owner | What closes it |
 |---|---|---|---|
 | 1 | ✅ **Orders money question — ANSWERED 2026-09-21** | **Owner** | `ItemPrice` **is the LINE total**, measured live at **quantity 4**: `ItemPrice 72.08` ÷ 4 = **18.02** stored per unit, and the independent `OrderTotal` **87.94** = 72.08 × 1.22 (IT VAT) to the cent — where the unit-price reading predicts **351.75**. Page 2 also came back with 20 orders, so the §5b pagination fix is proven live too. `build/P5.1.md` §5c. **Nothing is left that a read can answer**; `NEXUS_ENABLE_AMAZON_ORDERS_2026=true` is a production config change and is the Owner's yes. |
-| 2 | 🔴 **Finances: the comparison run is WITHDRAWN** | either | The probe answered (`envelope: "payload"` ✅) but the next step in `build/P5.2.md` §5 **double-writes**: v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them. §4b names three safe alternatives; the cheapest is a **dry-run counting mode**. |
+| 2 | 🟡 **Finances: the dry run is BUILT; running it is the Owner's** | **Owner** | The probe answered (`envelope: "payload"` ✅). The plan's next step **double-writes** — v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them — so §4b withdrew it and named a **dry-run counting mode** as the cheapest safe replacement. **Built 2026-09-21** (`build/P5.2.md` §4c): `POST /api/amazon/financials/sync {"useV0": false, "dryRun": true}` runs the real fetch and the real decision path, writes nothing, and reports `txWouldCreate` **and `txWouldDuplicateV0`** — the double-write as a number instead of an argument. 25 tests, 6 mutations killed, 1 null control survived. It is a **live Amazon call**, so the Owner runs it, over a window v0 has already synced. |
 | 3 | **P6.8** Etsy callback | **Owner** | Register the production HTTPS callback and the 4 webhooks in **Etsy's** console. An alert nags until done. (Shopify's half is no longer urgent — out of scope.) |
 | 4 | **P6.6** env token | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. Checked 2026-09-21 and the answer was **unusable** — the deployment was 2 minutes old and the control was empty too. |
 | 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
@@ -48,7 +48,7 @@ Full record: `build/SWITCH-ON.md`.
 | `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` | ✅ **ON** 2026-09-21 |
 | `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` | ✅ **ON** 2026-09-21 — will report `not-configured` until the `NEXUS_CONTRACT_ACCOUNT_*` sandbox accounts exist. That is deliberate: a visible gap beats an invisible one |
 | Amazon **Orders** 2026-01-01 | 🟢 **gate cleared 2026-09-21** — the money question is answered (row 1). Waiting only on the Owner's yes |
-| Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) |
+| Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) — now **measurable** without writing, via the §4c dry run |
 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
 | `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ products (rows 5–6) |
 

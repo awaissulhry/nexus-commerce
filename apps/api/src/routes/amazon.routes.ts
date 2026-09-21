@@ -1704,9 +1704,9 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // window and write FinancialTransaction rows. Body: { start?, end?, daysBack? }
   // Defaults to yesterday if no range given. Safe to re-run (idempotent).
   fastify.post<{
-    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string; probe?: boolean }
+    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string; probe?: boolean; dryRun?: boolean }
   }>('/financials/sync', async (request, reply) => {
-    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions, probeFinancialTransactionsEnvelope } = await import('../services/amazon-financial-events.service.js')
+    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions, probeFinancialTransactionsEnvelope, financialsDryRunRefusal } = await import('../services/amazon-financial-events.service.js')
     try {
       const body = request.body ?? {}
 
@@ -1736,6 +1736,25 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
       // seen Amazon's answer to it. v0 stays the default until one live call settles
       // the shape, and its deadline is 2027-08-27 — there is time to do that properly.
       const useV0 = body.useV0 !== false
+
+      /**
+       * P5.2 — `{"useV0": false, "dryRun": true}` runs the real fetch and the real
+       * decision path and WRITES NOTHING, reporting `txWouldCreate` and
+       * `txWouldDuplicateV0`.
+       *
+       * This is the cheapest of the three safe comparisons `build/P5.2.md` §4b named
+       * after it measured that the plan's own next step double-writes: v0 stores
+       * `amazonTransactionId` as the bare order id, this path stores
+       * `orderId/sellerOrderItemId/postedDate`, and nothing bridges them.
+       *
+       * 🔴 A dry run is offered on the 2024-06-19 path ONLY. v0 has no dry-run arm, so
+       * accepting the flag there would silently perform a real write — the shape where
+       * an API accepts a flag it IGNORES. It is refused by name instead.
+       */
+      const dryRun = body.dryRun === true
+      const refusal = financialsDryRunRefusal(body)
+      if (refusal) return reply.code(400).send({ success: false, error: refusal })
+
       let summary
       if (body.start && body.end) {
         const start = new Date(body.start)
@@ -1746,7 +1765,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         if (end > minAgo) end = minAgo
         summary = useV0
           ? await syncFinancialEvents(start, end)
-          : await syncFinancialTransactions(start, end, body.marketplaceId)
+          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
       } else if (typeof body.daysBack === 'number') {
         // Clamp `end` to now − 3 min (SP-API rejects PostedBefore within
         // its ~2-min data-propagation window).
@@ -1754,7 +1773,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         const start = new Date(end.getTime() - body.daysBack * 24 * 60 * 60 * 1000)
         summary = useV0
           ? await syncFinancialEvents(start, end)
-          : await syncFinancialTransactions(start, end, body.marketplaceId)
+          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
       } else {
         // Yesterday window
         const end = new Date()
@@ -1762,7 +1781,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
         const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
         summary = useV0
           ? await syncYesterdayFinancialEvents()
-          : await syncFinancialTransactions(start, end, body.marketplaceId)
+          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
       }
       return { success: true, ...summary }
     } catch (err) {
