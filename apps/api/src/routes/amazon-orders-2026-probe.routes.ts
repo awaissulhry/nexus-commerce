@@ -127,9 +127,15 @@ export default async function amazonOrders2026ProbeRoutes(app: FastifyInstance) 
       if (nextToken) {
         page2.attempted = true
         try {
+          // 2026-09-21 — this now sends what the REAL sync sends, which is the whole
+          // page-1 query plus the cursor. The first version sent the cursor with
+          // `includedData` alone, matching the sync's own shape at the time, and Amazon
+          // refused BOTH: "One and only one of createdAfter or lastUpdatedAfter must be
+          // provided." That answer is what fixed amazon.service.ts; this probe must keep
+          // measuring the shape production actually uses, or it stops being a control.
           const res = (await sp.callAPI({
             ...request,
-            query: { paginationToken: nextToken, includedData: [...ORDERS_2026_INCLUDED_DATA] },
+            query: { ...(request.query as Record<string, unknown>), paginationToken: nextToken },
           })) as SearchOrdersResponse2026
           page2 = { attempted: true, ok: true, error: null, orders: Array.isArray(res?.orders) ? res.orders.length : 0 }
         } catch (err: any) {

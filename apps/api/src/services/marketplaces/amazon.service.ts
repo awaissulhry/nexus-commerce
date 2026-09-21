@@ -959,8 +959,19 @@ export class AmazonService {
             // `version` key is accepted by the object literal and IGNORED by the
             // client, which would send 2026 parameters to v0 — a silent no-op.
             options: { version: AMAZON_ORDERS_2026_VERSION },
+            // 🔴 P5.1 / probe 2026-09-21 — page 2 keeps the WHOLE page-1 query and only
+            // ADDS the cursor. Sending `paginationToken` with `includedData` alone is
+            // what this used to do, and Amazon answered, live:
+            //
+            //   "The input you have submitted is not valid. One and only one of
+            //    createdAfter or lastUpdatedAfter must be provided."
+            //
+            // So the window is not remembered by the token — it must be repeated on
+            // every page. The old shape fetched page 1 and then failed on page 2, which
+            // no test could see because every test stubs a single page, and no
+            // production run could see because the switch has never been on.
             query: nextToken
-              ? { paginationToken: nextToken, includedData: [...ORDERS_2026_INCLUDED_DATA] }
+              ? { ...query2026, paginationToken: nextToken }
               : query2026,
           })) as SearchOrdersResponse2026
           const page = toV0Page(res)
