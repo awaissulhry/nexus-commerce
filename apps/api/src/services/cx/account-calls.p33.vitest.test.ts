@@ -12,7 +12,7 @@
  *  - unknown headroom says WHY, in the channel's terms, never a blank;
  *  - a window is never another account's.
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 
@@ -208,6 +208,49 @@ describe('P3.3 — one account’s calls, headroom and last error', () => {
   })
 
   describe('accountCallsById — the shape a route needs', () => {
+    /**
+     * 🔴 2026-09-21 — this block is the only one that reads the REAL clock, and it was a time bomb.
+     *
+     * The fixture pins `NOW` to 2026-09-20T12:00Z and inserts eBay's three calls at 90, 60 and 10
+     * minutes before it. But `accountCallsById` takes its window from `new Date()`, so the tests
+     * below were asking "the last 24 hours" of the day they happened to run on. At
+     * **2026-09-21 10:30Z** the oldest row (2026-09-20T10:30Z) fell five minutes outside that
+     * window and `total` became 2; an hour later the second would have gone too.
+     *
+     * It was found by a push being refused, not by the suite — the failure appears on a calendar,
+     * not in a diff, which is what makes this shape expensive. Banked: *a fixture PINS a
+     * dimension, and the arm that would have failed is the one never run.* The dimension pinned
+     * here was the date, and the claim — "a 24h window contains all three" — does not hold it
+     * constant.
+     *
+     * The clock is now pinned to the fixture's own NOW, so the window and the rows agree by
+     * construction. Only `Date` is faked; real timers stay real, because PGlite needs them.
+     */
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(NOW) })
+    afterEach(() => { vi.useRealTimers() })
+
+    it('🔴 the window is measured from the clock, so the fixture and the clock must agree', async () => {
+      // The positive control for the pin above. The rows sit 90, 60 and 10 minutes before the
+      // fixture's NOW, so advancing the clock by 22 h 55 m puts the window's start
+      // (24 h back) 65 minutes before NOW — between the 90-minute row and the 60-minute one.
+      // Exactly one row falls out.
+      //
+      // ⚠️ Written first as "+24 h → 2", which was wrong: a full day forward puts the window's
+      // start AT the fixture's NOW, so all three fall out and the answer is 0. The arithmetic is
+      // spelled out above rather than guessed at a second time.
+      vi.setSystemTime(new Date(NOW.getTime() + (22 * 60 + 55) * 60_000))
+      const drifted = await inLegacy(() => svc.accountCallsById('ebay-A', { hours: 24 }))
+      expect(drifted?.summary.total).toBe(2)
+
+      // And a full day forward drops all three — the state this test was actually found in.
+      vi.setSystemTime(new Date(NOW.getTime() + 24 * 3_600_000))
+      expect((await inLegacy(() => svc.accountCallsById('ebay-A', { hours: 24 })))?.summary.total).toBe(0)
+
+      vi.setSystemTime(NOW)
+      const pinned = await inLegacy(() => svc.accountCallsById('ebay-A', { hours: 24 }))
+      expect(pinned?.summary.total).toBe(3)
+    })
+
     it('finds the connection and answers for it', async () => {
       const v = await inLegacy(() => svc.accountCallsById('ebay-A', { hours: 24 }))
       expect(v?.channel).toBe('EBAY')
