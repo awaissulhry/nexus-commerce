@@ -41,6 +41,7 @@ import {
 } from './catalog.js'
 import { alertService, AlertType } from '../monitoring/alert.service.js'
 import { parseTokenResponse, tokenLifetime, TOKEN_REQUEST_TIMEOUT_MS } from './token-response.js'
+import { clearLegacyChannelCredentials } from './legacy-channel-credentials.js'
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -719,7 +720,12 @@ export async function revoke(connectionId: string, actor: Actor, reason: 'operat
       refreshLeaseOwner: null,
     },
   })
-  await recordConnectionEvent({ connectionId, channelKey: key, type: reason === 'channel' ? 'revoke' : 'disconnect', actor, detail: { reason, revokedAtChannel } })
+  // P4.5e — the update above reaches `ChannelConnection` only. Amazon Ads keeps its
+  // own `credentialsEncrypted` on `AmazonAdsConnection`, and the client falls back to
+  // it the moment the core has no usable grant — which a revoke is exactly what
+  // creates. Without this, Ads calls carried on after the operator disconnected.
+  const legacy = await clearLegacyChannelCredentials(key)
+  await recordConnectionEvent({ connectionId, channelKey: key, type: reason === 'channel' ? 'revoke' : 'disconnect', actor, detail: { reason, revokedAtChannel, legacy } })
   await recordConnectionEvent({ connectionId, channelKey: key, type: 'status_change', actor, detail: { from: row.authStatus, to: next, reason } })
   return { revokedAtChannel }
 }
