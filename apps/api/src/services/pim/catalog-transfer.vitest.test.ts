@@ -5,9 +5,9 @@ vi.mock('./mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: vi.f
 import ExcelJS from 'exceljs'
 import { transferFileRow, transferTargetKey, type TransferRow } from '@nexus/shared/catalog-transfer'
 import { readTransferFile, parseTransferRecords, writeTransferWorkbook, TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
-import { buildTransferPlan, type TransferContext, type TransferContracts, type TransferProduct } from './catalog-transfer-plan.js'
+import { buildTransferPlan, transferContracts, type TransferContext, type TransferContracts, type TransferProduct } from './catalog-transfer-plan.js'
 import { channelValuePatch, storedChannelState } from './channel-value-mutation.js'
-import type { SheetColumn } from './sheet-columns.service.js'
+import { getSheetColumns, type SheetColumn } from './sheet-columns.service.js'
 import type { CatalogueField } from './mapping/field-catalogue.service.js'
 
 const row = (patch: Partial<TransferRow> = {}): TransferRow => ({ row: 2, entity: 'Products', sku: '00123', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Jacket', ...patch })
@@ -336,5 +336,105 @@ describe('LX.F F4 — the empty locale on a two-language market says what to do'
     expect(transferContentAddress({ ...row, locale: 'fr-BE' }, ['nl', 'fr'])).toMatchObject({ tier: 'pin', language: 'fr' })
     // A language the market does not carry still names the market's languages.
     expect(() => transferContentAddress({ ...row, locale: 'de' }, ['nl', 'fr'])).toThrow('(nl, fr)')
+  })
+})
+
+/**
+ * A first copy of ANOTHER business's shared products (AE.3, production 2026-09-21).
+ *
+ * "Gale Jacket" was shared from Xavia Racing to Motovento and every record was refused. Ten of the
+ * eleven refusals were `This attribute is not declared by the selected family` — `armorType`,
+ * `item_name`, `skip_offer`, `parentage_level` and the rest. They are stored on the OWNER's product
+ * outside its family template, which the platform supports on purpose: `savedAttributeFields` gives
+ * each one a column under "Additional saved attributes" ("Saved outside the selected family
+ * template. Changing family preserves this value."). It derives them from the product's OWN bag, and
+ * on a first copy the receiving product does not exist yet — so the copy refused exactly what the
+ * platform promises to keep, and one refused attribute makes the whole record INVALID ("0 attributes").
+ *
+ * The eleventh was `supplier_declared_dg_hz_regulation takes a LIST of values — send an array, not
+ * one value`: the receiving contract declares a list and the owner has a single value stored.
+ *
+ * Both are relaxed for a shared copy ONLY. An operator-authored workbook keeps the strict refusals,
+ * so a typo'd column is still named — the same rule the market fix kept.
+ */
+describe('AE.3 — a first copy carries attributes the receiving family does not declare', () => {
+  const bags: Array<Record<string, unknown> | undefined> = []
+  // Mirrors the real `transferContracts.master`: the extra bag becomes saved-attribute columns, and
+  // its shape follows the value, exactly as `savedAttributeFields` derives it.
+  const copyContracts: TransferContracts = {
+    ...contracts,
+    master: async (_familyId, _product, extraSaved) => {
+      bags.push(extraSaved)
+      return [
+        ...nativeCols,
+        col('hazmat', { storage: 'categoryAttributes', shape: 'list' }),
+        ...Object.entries(extraSaved ?? {}).map(([key, value]) =>
+          col(key, { storage: 'categoryAttributes', shape: Array.isArray(value) ? 'list' : 'scalar' })),
+      ]
+    },
+  }
+  const SKU = 'GALE-JACKET'
+  const copyRows = (...extra: Partial<TransferRow>[]): TransferRow[] => [
+    row({ sku: SKU, field: 'family', value: 'jackets' }),
+    row({ sku: SKU, field: 'name', value: 'Gale Jacket' }),
+    ...extra.map(patch => row({ sku: SKU, ...patch })),
+  ]
+  // Nothing exists in the receiving business yet: this is the FIRST copy.
+  const empty = () => context({ products: new Map(), listings: new Map() })
+  const plan = (rows: TransferRow[], sharedCopy?: boolean) =>
+    buildTransferPlan(rows, 'upsert', empty(), copyContracts, undefined, sharedCopy ? { sharedCopy: true } : undefined)
+
+  it('refuses an undeclared attribute by name for an ordinary import', async () => {
+    const result = await plan(copyRows({ field: 'armorType', value: 'Level 2' }))
+    expect(result.issues.map(i => i.message)).toEqual(['This attribute is not declared by the selected family'])
+    expect(result.targets).toEqual([])
+  })
+
+  it('carries the same attribute on a shared copy, into the saved-attribute bag', async () => {
+    const result = await plan(copyRows(
+      { field: 'armorType', value: 'Level 2' },
+      { field: 'skip_offer', value: 'false' },
+    ), true)
+    expect(result.issues).toEqual([])
+    expect(result.targets[0].patch.categoryAttributes).toEqual({ armorType: 'Level 2', skip_offer: 'false' })
+    expect(result.targets[0].patch.name).toBe('Gale Jacket')
+  })
+
+  it('declares ONLY the undeclared keys — a native field keeps its own column and storage', async () => {
+    bags.length = 0
+    const result = await plan(copyRows(
+      { field: 'description', value: 'A jacket' },
+      { field: 'armorType', value: 'Level 2' },
+    ), true)
+    expect(result.issues).toEqual([])
+    // `description` is a native column; it must never gain a saved attribute beside it.
+    expect(bags.at(-1)).toEqual({ armorType: 'Level 2' })
+    expect(result.targets[0].patch.description).toBe('A jacket')
+    expect(result.targets[0].patch.categoryAttributes).toEqual({ armorType: 'Level 2' })
+  })
+
+  it('refuses a single value for a LIST column on an ordinary import, and wraps it on a copy', async () => {
+    const rows = copyRows({ field: 'hazmat', value: 'Not applicable' })
+    expect((await plan(rows)).issues[0].message).toContain('takes a LIST of values')
+    const copied = await plan(rows, true)
+    expect(copied.issues).toEqual([])
+    expect(copied.targets[0].patch.categoryAttributes).toEqual({ hazmat: ['Not applicable'] })
+  })
+
+  it('leaves a value that is already a list alone', async () => {
+    const copied = await plan(copyRows({ field: 'hazmat', value: ['GHS', 'UN3480'] }), true)
+    expect(copied.issues).toEqual([])
+    expect(copied.targets[0].patch.categoryAttributes).toEqual({ hazmat: ['GHS', 'UN3480'] })
+  })
+})
+
+describe('AE.3 — transferContracts declares the extra bag as saved fields', () => {
+  it('forwards it to getSheetColumns, through the real savedAttributeFields', async () => {
+    vi.mocked(getSheetColumns).mockResolvedValue({ columns: [] } as never)
+    await transferContracts('IT').master('f1', undefined, { armorType: 'Level 2', hazmat: ['GHS'] })
+    const input = vi.mocked(getSheetColumns).mock.calls.at(-1)![0]
+    expect(input.savedFields?.map(f => f.id).sort()).toEqual(['attr_armorType', 'attr_hazmat'])
+    expect(input.savedFields?.find(f => f.id === 'attr_hazmat')?.shape).toBe('list')
+    expect(input.savedFields?.find(f => f.id === 'attr_armorType')?.shape).toBe('scalar')
   })
 })

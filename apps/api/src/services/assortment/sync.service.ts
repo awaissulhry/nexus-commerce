@@ -381,7 +381,7 @@ async function applyRows(rows: TransferRow[], sku: string, market: string, label
       await inDatabaseTransaction(prisma, async () => {
         await prisma.$executeRaw`SELECT nexus_assortment_sync_write()`
         const context = await loadTransferContext(attempt, prisma)
-        const plan = await buildTransferPlan(attempt, mode, context, contracts, undefined, { declaredProductSkus: new Set([sku]) })
+        const plan = await buildTransferPlan(attempt, mode, context, contracts, undefined, { declaredProductSkus: new Set([sku]), sharedCopy: true })
         if (plan.issues.length) throw new PlanRefused(plan.issues)
         for (const target of plan.targets) {
           if (target.create || target.cells.some((cell) => cell.verdict === 'changed')) await applyTransferTarget(prisma, target, label, null)

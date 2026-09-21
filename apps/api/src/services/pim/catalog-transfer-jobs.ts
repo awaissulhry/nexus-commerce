@@ -150,7 +150,7 @@ export async function runTransferJob(id: string) {
         // Existing parent relationships can cross preview pages even when parentSku is omitted.
         const dependencyKeys = context ? [...new Set([...context.products.values()].filter(p => p.parentId).map(p => [...context.products.values()].find(parent => parent.id === p.parentId)?.sku).filter((sku): sku is string => !!sku).map(productKey))].filter(key => !declarations.some(d => d.targetId === key) && !batch.some(b => b.targetId === key)) : []
         if (dependencyKeys.length) declarations.push(...await prisma.importJobRow.findMany({ where: { jobId: id, targetId: { in: dependencyKeys } }, take: TRANSFER_BATCH }))
-        const plan = context ? await buildTransferPlan([...rows, ...supplement], payload.mode, context, contracts, payload.mapping?.policy) : { targets: [], issues: [], warnings: [], exclusions: [] }
+        const plan = context ? await buildTransferPlan([...rows, ...supplement], payload.mode, context, contracts, payload.mapping?.policy, { sharedCopy: payload.sharedCopy === true }) : { targets: [], issues: [], warnings: [], exclusions: [] }
         if (context && payload.boundary) await enrichTransferEffects(id, plan, context, contracts, payload.market)
         const preserved = await preservedTransferOverrides(id, plan.targets.filter(t => batch.some(b => b.targetId === t.key)), contracts)
         const nextCounts = { ...payload.counts }
@@ -229,7 +229,7 @@ export async function runTransferJob(id: string) {
                 }
                 const context = await loadTransferContext(target.rows, tx as typeof prisma, reference)
                 // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
-                const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false, declaredProductSkus })
+                const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false, declaredProductSkus, sharedCopy: payload.sharedCopy === true })
                 const current = check.targets[0]
                 if (current?.create && current.identity.entity === 'Products' && record.declaredParent) current.patch.isParent = true
                 if (!current || check.issues.length || current.contractHash !== target.contractHash || fingerprint([current.patch, current.contentWrites]) !== fingerprint([target.patch, target.contentWrites])) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')

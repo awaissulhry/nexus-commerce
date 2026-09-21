@@ -63,7 +63,9 @@ export interface TransferTarget {
 export interface TransferPlan { targets: TransferTarget[]; issues: TransferIssue[]; warnings: string[]; exclusions?: SourceExclusion[] }
 export interface TransferContracts {
   reference?: ReferenceResolver
-  master: (familyId: string | null, product?: TransferProduct) => Promise<SheetColumn[]>
+  /** `extraSaved` declares attribute keys the target does not hold yet (a first shared copy: the
+   *  product being created has no saved-attribute bag of its own). See `buildTransferPlan`. */
+  master: (familyId: string | null, product?: TransferProduct, extraSaved?: Record<string, unknown>) => Promise<SheetColumn[]>
   channel: (channel: string, marketplace: string, category: string) => Promise<{ fields: CatalogueField[]; masterLocalizableKeys?: string[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
 }
 
@@ -71,8 +73,8 @@ export function transferContracts(market: string, options: { allowIncompleteSche
   const masters = new Map<string, Promise<SheetColumn[]>>()
   const channels = new Map<string, ReturnType<TransferContracts['channel']>>()
   return {
-    master(familyId, product) {
-      const saved = savedAttributeFields([product?.categoryAttributes])
+    master(familyId, product, extraSaved) {
+      const saved = savedAttributeFields([product?.categoryAttributes, extraSaved])
       const key = fingerprint([familyId, saved])
       if (!masters.has(key)) masters.set(key, getSheetColumns({ market, allowUnknownMarket: options.allowUnknownMarket, familyIds: familyId ? [familyId] : [], productTypes: [], savedFields: saved, scopeKind: 'master', includeEmptyChannels: true }).then(s => s.columns))
       return masters.get(key)!
@@ -170,6 +172,24 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
    * changed since preview"). The preview needs none: its rows already hold every declared owner.
    */
   declaredProductSkus?: ReadonlySet<string>
+  /**
+   * A first copy of ANOTHER business's shared products (or the live sync that follows it). Two rules
+   * are relaxed, and ONLY for values that were already stored by the business that shares them:
+   *
+   *  1. An attribute the receiving family does not declare is DECLARED for this plan from the
+   *     incoming value, instead of refusing the record. The platform already keeps such attributes on
+   *     a product — `savedAttributeFields` gives them a column under "Additional saved attributes",
+   *     "Saved outside the selected family template" — but it derives them from the product's OWN bag,
+   *     and on a first copy that product does not exist yet. So the copy was refusing exactly what the
+   *     platform promises to preserve, and one refused attribute makes the whole record INVALID.
+   *     (Production 2026-09-21: GALE-JACKET, 10 attributes, "0 attributes" saved.)
+   *  2. A single value bound for a LIST column is wrapped into a one-item list. `coerceForShape`
+   *     refuses a scalar there on purpose, so a person typing into a sheet is told; a copy is not
+   *     typing, it is moving a value the other business has already stored.
+   *
+   * An operator-authored workbook leaves this OFF, so a typo'd column is still refused by name.
+   */
+  sharedCopy?: boolean
 }): Promise<TransferPlan> {
   const resolveReference = contracts.reference ?? createReferenceResolver()
   const issues: TransferIssue[] = [], warnings = new Set<string>(), targets: TransferTarget[] = []
@@ -244,7 +264,24 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
       if (isProduct) {
         const familyId = familyFor(first.sku)
         if (!before && !familyId) throw new Error('New products need a family, or a parent SKU with a family')
-        const columns = await contracts.master(familyId, existingProduct)
+        let columns = await contracts.master(familyId, existingProduct)
+        if (options?.sharedCopy) {
+          // Declare, from the values being copied, the attributes this business does not hold yet.
+          // ONLY keys that have no column already: a native or family-declared field keeps its own
+          // column and its own storage, and must never gain a "saved attribute" beside it. Rows with
+          // a locale are left alone — a saved attribute is not localized, so declaring one would only
+          // trade this refusal for another.
+          const declared = new Set(columns.map(c => c.key))
+          const undeclared: Record<string, unknown> = {}
+          for (const row of group) {
+            if (CLASSIFICATION_FIELDS.has(row.field) || row.field === 'productRole' || row.field === '__productRole') continue
+            if (row.locale || row.action !== 'SET') continue
+            const key = row.field === 'title' ? 'name' : row.field
+            if (declared.has(key) || row.value === null || row.value === undefined || row.value === '') continue
+            undeclared[key] = row.value
+          }
+          if (Object.keys(undeclared).length) columns = await contracts.master(familyId, existingProduct, undeclared)
+        }
         for (const c of columns) formulaKeys.set(c.key, [c.key, c.writeField].filter((k): k is string => !!k))
         target.contractHash = fingerprint(columns)
         const byKey = new Map(columns.map(c => [c.key, c]))
@@ -304,7 +341,12 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (row.locale && !CONTENT.has(col.key) && col.storage !== 'localizedContent') { error(row, 'This attribute is not localized; leave locale empty'); continue }
           if (!row.locale && col.storage === 'localizedContent' && !CONTENT.has(col.key)) { error(row, 'This attribute needs a locale, such as it or en'); continue }
           if (!unchanged && action === 'SET') {
-            const checked = coerceForShape(col, value)
+            // A copy MOVES a value the other business already stores; it is not typing one. So a lone
+            // value bound for a list column is the list of one, not an operator mistake to report.
+            // Only the shape is adjusted here, never the value.
+            const wrap = options?.sharedCopy && col.shape === 'list' && value !== null && value !== undefined
+              && !Array.isArray(value) && !(typeof value === 'string' && value.trim().startsWith('['))
+            const checked = coerceForShape(col, wrap ? [value] : value)
             if (checked.ok === false) { error(row, checked.error); continue }
             value = checked.value
           }
