@@ -404,6 +404,16 @@ async function seedEnvManagedConnections(): Promise<void> {
       return;
     }
 
+    // P6.6 — with the env token retired, do not synthesise a row that depends on it.
+    // D1 = A puts the grant in the connection core; an env row created at boot is a
+    // credential nothing can revoke, rotate or date.
+    if (process.env.NEXUS_AMAZON_ENV_TOKEN === "off") {
+      logger.info(
+        "seedEnvManagedConnections: the environment refresh token is retired (NEXUS_AMAZON_ENV_TOKEN=off) — not synthesising an Amazon row",
+      );
+      return;
+    }
+
     const existingEnv = await prisma.channelConnection.findFirst({
       where: { channelType: "AMAZON", managedBy: "env" },
       select: { id: true },

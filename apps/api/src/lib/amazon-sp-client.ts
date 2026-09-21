@@ -1,5 +1,6 @@
 import { workspaceContext, workspaceIdForQuery, requireWorkspace, LEGACY_WORKSPACE_ID, WorkspaceError } from './workspace-context.js'
 import type { ConnectionRow } from '../services/connection-resolver.service.js'
+import { logger } from '../utils/logger.js'
 
 type Account = Pick<ConnectionRow, 'id' | 'externalAccountId' | 'region' | 'managedBy' | 'connectionMetadata'>
 export async function amazonAccount(input: { accountId?: string; sellerId?: string } | string = {}): Promise<Account> {
@@ -43,7 +44,9 @@ export async function getAmazonAccessToken(accountId?: string): Promise<string> 
   const key = account?.id ?? 'legacy'
   const hit = legacyTokens.get(key)
   if (hit && hit.expiresAt > Date.now() + 300_000) return hit.token
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
+  // P6.6 — the token-minting path. Same announcement and same retirement switch as
+  // the client below; this is the one that actually exchanges it at LWA.
+  const refreshToken = useAmazonEnvToken('getAmazonAccessToken')
   if (!refreshToken) throw new Error('Reconnect the Amazon account to configure its credentials.')
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP')
@@ -64,6 +67,63 @@ export async function getAmazonRegion(accountId?: string): Promise<'eu' | 'na' |
   if (value === 'fe' || value.startsWith('ap-')) return 'fe'
   throw new WorkspaceError('amazon_region_invalid', 'Choose a supported Amazon region.', 409)
 }
+/**
+ * P6.6 — the environment refresh token, on its way out.
+ *
+ * D1 = A (private app, self-authorized in Amazon's Solution Provider Portal) is
+ * confirmed by R-2: Amazon's own limits page gives a private application **10
+ * self-authorizations** and no OAuth flow, and the 2026 "Simplified Authorization"
+ * change is for **SPN-listed** service providers approving other people's sellers —
+ * which Nexus is not. So the destination is a stored, revocable grant, and
+ * `importAmazonEnvironmentAuthorization` already moves the env token into one.
+ *
+ * ## Where it actually stands (measured 2026-09-21)
+ *
+ * - **Production is already off it.** `seedEnvManagedConnections: persisted Amazon
+ *   authorization exists — skipping env synthesis {"existingId":"cmothu9bo…"}` in the
+ *   production deploy log at 08:35 UTC — an `oauth`-managed Amazon row exists there.
+ * - **Development is not.** Its one Amazon row is `managedBy: 'env'`, and (a second
+ *   oddity) `isActive: true` with `authStatus: 'disconnected'` at the same time.
+ *
+ * ## Why this logs instead of deleting
+ *
+ * Deleting the fallback is a one-line change with the largest blast radius available:
+ * if the stored grant is ever unusable, every Amazon SP-API call stops. The production
+ * database cannot be read from this session, so "the stored grant works" is an
+ * inference from the app functioning, not a measurement.
+ *
+ * So: the env token announces itself **once per process**, which makes *"is anything
+ * still on the env path?"* answerable from production logs — the question that has to
+ * be settled before the fallback goes. `NEXUS_AMAZON_ENV_TOKEN=off` is the retirement,
+ * one variable, once the logs are quiet.
+ */
+let envTokenAnnounced = false
+export function useAmazonEnvToken(caller: string): string | undefined {
+  const token = process.env.AMAZON_REFRESH_TOKEN
+  if (!token) return undefined
+  if (process.env.NEXUS_AMAZON_ENV_TOKEN === 'off') {
+    throw new WorkspaceError(
+      'amazon_env_token_retired',
+      'This Amazon account still uses the environment refresh token, which is retired. ' +
+        'Import it as a revocable grant (Channels \u2192 Amazon \u2192 connect) before using it.',
+      409,
+    )
+  }
+  if (!envTokenAnnounced) {
+    envTokenAnnounced = true
+    // Once per process, not per call: this fires on the money path and a per-call line
+    // would bury itself. The point is a yes/no answer in the logs, not a count.
+    logger.warn('[amazon-sp] STILL USING the environment refresh token (P6.6 retires this)', {
+      caller,
+      retireWith: 'NEXUS_AMAZON_ENV_TOKEN=off',
+    })
+  }
+  return token
+}
+
+/** Narrow seam for amazon-env-token.p66.vitest.test.ts. Never used by callers. */
+export const __amazonEnvTokenTest = { reset: () => { envTokenAnnounced = false } }
+
 /** A fresh instance is bound to one verified account; token refresh stays in CX. */
 export async function getAmazonSpClient(accountId?: string, options: { auto_request_throttled?: boolean } = {}): Promise<any> {
   const account = await amazonAccount({ accountId })
@@ -75,7 +135,7 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
   // renewal is disabled. Keep that token bound to the same verified seller as CX.
   const refreshToken = account && account.managedBy !== 'env'
     ? await (await import('../services/cx/token.service.js')).readRefreshToken(account.id)
-    : process.env.AMAZON_REFRESH_TOKEN
+    : useAmazonEnvToken('getAmazonSpClient')
   if (!refreshToken) throw new WorkspaceError('amazon_refresh_token_missing', 'Reconnect the Amazon seller account to restore its refresh token.', 409)
   const { getChannelApp } = await import('../services/cx/apps.service.js')
   const app = await getChannelApp('AMAZON_SP', environment)
