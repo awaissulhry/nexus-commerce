@@ -592,6 +592,81 @@ async function processNewTransaction(
  * nextToken, and writes one FinancialTransaction per Amazon Transaction.
  * Idempotent — re-running over the same window skips existing rows.
  */
+/**
+ * P5.2 — probe the 2024-06-19 endpoint and WRITE NOTHING.
+ *
+ * The only thing standing between this endpoint and the migration is that nobody has
+ * seen Amazon's answer to it (**0 calls ever**). Finding out used to mean running the
+ * real sync, which is a production **write** — it creates `FinancialTransaction` rows.
+ *
+ * This asks the same question as a **read**: one page, report which envelope came
+ * back and how many transactions were in it, write nothing, keep no payload. The
+ * standing rules already allow a production read, so settling the envelope no longer
+ * needs a write to be approved.
+ */
+export interface FinancialEnvelopeProbe {
+  ok: boolean
+  /** 'bare' = {transactions}, 'payload' = {payload:{transactions}}, null = neither. */
+  envelope: 'bare' | 'payload' | null
+  transactionsOnFirstPage: number
+  hasNextToken: boolean
+  /** The top-level keys Amazon sent, so an unexpected shape is nameable. */
+  rootKeys: string[]
+  windowStart: string
+  windowEnd: string
+  marketplaceId: string
+  error?: string
+}
+
+export async function probeFinancialTransactionsEnvelope(
+  windowStart: Date,
+  windowEnd: Date,
+  marketplaceId?: string,
+): Promise<FinancialEnvelopeProbe> {
+  const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+  const upperBound = new Date(Math.min(windowEnd.getTime(), Date.now() - 180_000))
+  const base: FinancialEnvelopeProbe = {
+    ok: false, envelope: null, transactionsOnFirstPage: 0, hasNextToken: false, rootKeys: [],
+    windowStart: windowStart.toISOString(), windowEnd: upperBound.toISOString(), marketplaceId: mid,
+  }
+  try {
+    const authorization = await import('../lib/amazon-sp-client.js')
+    const account = await authorization.amazonAccount()
+    const qs = new URLSearchParams({
+      postedAfter: windowStart.toISOString(),
+      postedBefore: upperBound.toISOString(),
+      marketplaceId: mid,
+    }).toString()
+    // P1.2 — through the channel gateway, like the sync itself. A read.
+    const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
+      accountId: account.id, path: `/finances/2024-06-19/transactions?${qs}`, operation: 'finances.listTransactions',
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      return { ...base, error: `HTTP ${res.status}: ${body.slice(0, 300)}` }
+    }
+    const body = (await res.json()) as Record<string, unknown>
+    // Keys only. A probe that logged the body would put settlement data in a log line.
+    const rootKeys = Object.keys(body ?? {})
+    const envelope: 'bare' | 'payload' | null =
+      Array.isArray(body?.transactions) ? 'bare'
+      : Array.isArray((body?.payload as Record<string, unknown> | undefined)?.transactions) ? 'payload'
+      : null
+    const page = envelope ? readTransactionsPage(body) : { transactions: [], nextToken: undefined }
+    return {
+      ...base,
+      ok: envelope !== null,
+      envelope,
+      transactionsOnFirstPage: page.transactions.length,
+      hasNextToken: !!page.nextToken,
+      rootKeys,
+      ...(envelope === null ? { error: 'no transactions list in either envelope' } : {}),
+    }
+  } catch (err) {
+    return { ...base, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export async function syncFinancialTransactions(
   windowStart: Date,
   windowEnd: Date,

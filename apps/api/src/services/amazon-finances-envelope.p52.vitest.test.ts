@@ -90,6 +90,63 @@ describe('readTransactionsPage (P5.2)', () => {
   })
 })
 
+describe('the probe (P5.2 — a read, not a write)', () => {
+  const HERE = import.meta.dirname
+  const svc = readFileSync(join(HERE, 'amazon-financial-events.service.ts'), 'utf8')
+  const route = readFileSync(join(HERE, '..', 'routes', 'amazon.routes.ts'), 'utf8')
+
+  it('exists, and is reachable with {"probe": true}', () => {
+    expect(svc).toContain('export async function probeFinancialTransactionsEnvelope(')
+    expect(route).toContain('if (body.probe === true) {')
+    expect(route).toContain('await probeFinancialTransactionsEnvelope(start, end, body.marketplaceId)')
+  })
+
+  it('WRITES NOTHING — that is the whole point of it', () => {
+    // Settling the envelope used to mean running the real sync, which creates
+    // FinancialTransaction rows: a production write needing approval. As a read it
+    // needs none. If a write ever appears in here, that property is gone.
+    const fn = svc.slice(
+      svc.indexOf('export async function probeFinancialTransactionsEnvelope('),
+      svc.indexOf('export async function syncFinancialTransactions('),
+    )
+    expect(fn.length).toBeGreaterThan(500) // the slice found the function
+    for (const write of ['prisma.', '.create(', '.update(', '.upsert(', '.deleteMany(']) {
+      expect(fn, `the probe must not ${write}`).not.toContain(write)
+    }
+  })
+
+  it('reads ONE page — no pagination loop', () => {
+    const fn = svc.slice(
+      svc.indexOf('export async function probeFinancialTransactionsEnvelope('),
+      svc.indexOf('export async function syncFinancialTransactions('),
+    )
+    expect(fn).not.toContain('while (true)')
+    expect(fn).not.toContain('nextToken }')
+  })
+
+  it('keeps no payload — only the envelope name, a count and the top-level keys', () => {
+    // A probe that logged the body would put settlement data into a log line.
+    const fn = svc.slice(
+      svc.indexOf('export interface FinancialEnvelopeProbe'),
+      svc.indexOf('export async function syncFinancialTransactions('),
+    )
+    expect(fn).toContain('rootKeys')
+    expect(fn).not.toMatch(/body:\s*(body|data)\b/)
+    expect(fn).not.toContain('JSON.stringify(body')
+  })
+
+  it('an unreadable shape is reported, not thrown, so the answer comes back', () => {
+    // The operator ran one call to learn the shape. A throw would tell them less than
+    // the keys Amazon actually sent.
+    const fn = svc.slice(
+      svc.indexOf('export async function probeFinancialTransactionsEnvelope('),
+      svc.indexOf('export async function syncFinancialTransactions('),
+    )
+    expect(fn).toContain("error: 'no transactions list in either envelope'")
+    expect(fn).toContain('envelope,')
+  })
+})
+
 describe('wiring (P5.2)', () => {
   const HERE = import.meta.dirname
   const svc = readFileSync(join(HERE, 'amazon-financial-events.service.ts'), 'utf8')

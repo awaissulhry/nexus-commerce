@@ -1704,11 +1704,28 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // window and write FinancialTransaction rows. Body: { start?, end?, daysBack? }
   // Defaults to yesterday if no range given. Safe to re-run (idempotent).
   fastify.post<{
-    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string }
+    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string; probe?: boolean }
   }>('/financials/sync', async (request, reply) => {
-    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions } = await import('../services/amazon-financial-events.service.js')
+    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions, probeFinancialTransactionsEnvelope } = await import('../services/amazon-financial-events.service.js')
     try {
       const body = request.body ?? {}
+
+      /**
+       * P5.2 — `{"probe": true}` asks the 2024-06-19 endpoint which envelope it uses
+       * and WRITES NOTHING.
+       *
+       * The endpoint has 0 calls ever, so its response shape is the one thing blocking
+       * the migration. Finding out used to require running the real sync, which
+       * creates `FinancialTransaction` rows — a production write. This is a read, so
+       * it needs no write approval, and it keeps no payload: only the envelope name,
+       * a count, and the top-level keys.
+       */
+      if (body.probe === true) {
+        const end = new Date(Date.now() - 180_000)
+        const days = typeof body.daysBack === 'number' && body.daysBack > 0 ? Math.min(body.daysBack, 30) : 1
+        const start = body.start ? new Date(body.start) : new Date(end.getTime() - days * 86_400_000)
+        return { success: true, probe: await probeFinancialTransactionsEnvelope(start, end, body.marketplaceId) }
+      }
       // Default to /finances/v0/financialEvents — the original endpoint with mature
       // event-shape parsing (nested ShipmentItemList per order), 108 successful calls
       // and all 1,792 FinancialTransaction rows behind it.
