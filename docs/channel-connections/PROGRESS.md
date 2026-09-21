@@ -1,39 +1,52 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2
-and P4.3 are built.** P4.3 was finished in this session (slices c, d, e, f).
+Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2,
+P4.3 and P4.4 are built.** P4.3 and P4.4 were both finished in this session.
 
-## ▶ START HERE — the next package is P4.4 (price)
+## ▶ START HERE — the next package is P4.5 (advertising)
 
-**Its first row is already measured, so do not re-measure it.**
-`build/P4.3c.md` §5: `syncPayload.price` in `PATCH /api/catalog/products/:id` is
-the identical duplicate producer that P4.3c removed for stock —
-`masterPriceService.update` already cascades `PRICE_UPDATE` rows **per listing**
-inside the same transaction, and then the route queues a second, product-level
-price row beside them. Start there.
+The plan row: *"Ads: consent page per region; profile discovery in all 3 regions;
+the v3 report content type in the client; reconnect once for a true expiry date;
+disconnect removes the old Ads secrets. eBay Promoted Listings: full check first
+(not done today), then through the gateway."*
 
-The rest of P4.4 from the plan row: a currency per market from data, not a
-hard-coded GBP/EUR (Sweden SEK, Poland PLN, Turkey TRY — `outbound-sync.service
-.ts:310`); build the eBay price push (today a `NOT_IMPLEMENTED` stub in
-`pricing-outbound`); a min/max guard on every price write; a price read-back.
+**Two of its rows are already written down in §6 of the plan, with line numbers:**
 
-Then **P4.5** (advertising), **P4.6** (needs D6), the rest of **P5** (P5.3
-measured, P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7
-(each drop needs a yes) → P8. §3c has the full order.
+1. Sponsored Brands creation defaults to `creativeType: 'productCollection'`
+   (`services/advertising/ads-create.service.ts:940`), an entity Amazon
+   deprecated on 2026-07-06 in favour of Manual / Auto Collection. A full
+   shut-off in January 2027 is reported by a third party only, **not confirmed**
+   on Amazon's own pages.
+2. Amazon Ads refresh tokens issued **on or after 2026-07-30** expire 365 days
+   after consent. The stored expiry is an **estimate** (365 days from the adopt
+   job), not the real consent date — and if our grant predates 2026-07-30 it has
+   no 365-day expiry at all, so a reconnect would START one. Decide from the
+   grant date before reconnecting.
 
-🔴 **THE LESSON, and it has now held for fifteen rows: the plan row is usually
-NOT the defect.** Of the rows touched across P4.1 / P4.2 / P4.3, **six were
-counterweights** — already built, or built better than the row described. The
-real defects were in **failure paths** (`catch` blocks that gave up) and
-**drifts** (one builder learning a lesson the other never did). **Measure the row
-before you build it**, and read the `catch` of every rule you rely on.
+Then **P4.6** (needs D6) → the rest of **P5** (P5.3 measured, P5.2 / P5.4; P5.5
+not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
-🔴 **New this session, and it is the sharpest one: ask what a failure path's
-PREMISE is before hardening it.** P4.3e found a `catch` that falls back to
-enqueue-time quantities. That is the right answer for a *current* row and the
-wrong one for a *superseded* row — so the fix was not to harden the `catch` but
-to make its premise true by coalescing the superseded rows away. Not every
-fail-open wants a refusal.
+🔴 **THE LESSON, and it has now held for twenty rows: the plan row is usually NOT
+the defect.** Across P4.1–P4.4, **eight rows were counterweights** — already
+built, or built better than the row described, or describing the wrong build
+entirely (P4.4d: "build the eBay price push" would have produced a *second* eBay
+sender). The real defects were in **failure paths** and in **drifts** between two
+builders. **Measure the row before you build it.**
+
+🔴 **The two sharpest new ones, from P4.4:**
+
+- **Ask what a failure path's PREMISE is before hardening it** (P4.3e), and
+  **do not let four fixed fail-opens make refusing automatic** (P4.4c). The price
+  bounds guard fails OPEN on purpose: most products have no bound, so "could not
+  read" and "none set" are the same population, and refusing every price push on
+  a hiccup would take pricing down to protect a bound that does not exist. The
+  EU quantity guard is the opposite case and fails closed. **Scepticism has to be
+  symmetric — including about your own instinct to convict.**
+- **A comment can assert a property of the WORLD, or of our own database, that is
+  not true** — and the code stays wrong for as long as it is believed.
+  *"EU marketplaces (IT, DE, FR, ES, NL, BE, SE, PL) all use EUR"* (SE is SEK, PL
+  is PLN) and *"Could read from Marketplace.currency when that becomes a real
+  field"* (it is a required column, and four services read it).
 
 **Standing instruction from the Owner (2026-09-20):** *implement the whole plan in
 order, without stopping, unless I specifically ask you to stop.* Recommendations are
@@ -43,17 +56,14 @@ approval; commit, push and move to the next one.
 **The rules that still bind:** ask first for a production **write**, a **live channel
 call**, or a **P7 drop**. A blanket "implement the plan" does not lift those.
 
-**🔴 The flat-file no-touch rule is LIFTED (Owner, 2026-09-20):** *"we recently had a
-flat file no-touch rule, which is no longer valid… because we're rebuilding the flat
-file as well. If there's any work related to that, please do not hesitate."* The
-flat-file routes and pages are now ordinary files.
+**🔴 The flat-file no-touch rule is LIFTED (Owner, 2026-09-20):** the flat-file
+routes and pages are ordinary files.
 
-⚠️ **Blocked for the 2026-09-21 session, and it may be blocked for you too:**
-the auto-mode classifier refused **Railway `list-variables`** (*Production
-Reads*) and **`set-variables`** (*Feature Flag Writes*). So every production
-measurement in P4.3d–f says "dev only", and the Owner's three open items in §5.0
-could not be actioned from the session. If your session can read Railway, the
-cheapest first move is to check them.
+⚠️ **Session note (2026-09-21):** Railway **reads** work (logs, deployments,
+variables) and a variable **write** was permitted late in the session, but both
+were refused by the auto-mode classifier earlier. Every production measurement in
+P4.3d–f and P4.4a–e therefore says "dev only". If your session can read the
+production database, the open questions are listed in each build record's §4.
 
 Read in this order:
 
@@ -431,11 +441,47 @@ site with a known-live function as the control.
   being asked.** `requestId` is real and well-filled and answers "what did this run
   do". Check what a component is FOR before recording that it is broken.
 
+### 3d. P4.4 (price) — COMPLETE 2026-09-21, five slices
+
+- **P4.4a** — 🔴 **one fact, EIGHT implementations.** `Marketplace.currency` is a
+  required column, correct for all 20 dev rows (PL=PLN, SE=SEK, TR=TRY, US=USD),
+  and read by four services. Every outbound price write ignored it and re-derived
+  the currency from the market code — including **two functions with the
+  identical name `currencyForMarket` in two different files, neither importing
+  the other**, and `marketplaces/ebay.service.ts` using ONE env currency for
+  every market on three live price writes. They agreed on EUR/GBP, disagreed on
+  everything else, and did not even agree on the fallback (ten EUR, one USD).
+  One accessor now, which REFUSES an unconfigured market. A ratchet holds it,
+  runs **its own detector controls** before reporting a pass, and **re-derives
+  each exemption's written reason**. 19 test doubles needed a Marketplace row —
+  the honest cost of moving a fact out of code into data.
+- **P4.4b** — the catalog PATCH queued a duplicate product-level PRICE row
+  beside the per-listing cascade. Worse than the stock twin: a listing with
+  `followMasterPrice: false` is deliberately at another number, and with no
+  listing the push cannot read the stored sale window, so it **wipes a scheduled
+  sale**. 🔴 And the repricer had two more: no listing while `listing.id` sat
+  four lines above, and a payload key `newPrice` the dispatcher does not read —
+  it would have reported a live reprice and sent **no price at all**. Off behind
+  `NEXUS_REPRICER_LIVE`, which is the only reason it has cost nothing.
+- **P4.4c** — `Product.minPrice`/`maxPrice` bound **nothing**: 0 occurrences
+  across all seven price-writing paths, 16 in `repricing.service.ts` as the
+  positive control — and those 16 are a **different pair on a different model**.
+  It REFUSES rather than clamps, and **fails OPEN** (see the header).
+- **P4.4d** — the eBay "stub" was the wrong build. eBay price pushing already
+  works three ways; what was missing was a way for the pricing dispatcher to
+  reach one. It enqueues now, and P1.1's ratchet at `{"EBAY":0,…}` is the proof
+  no second sender was built.
+- **P4.4e** — 🔴 both read-backs **already fetched the price and threw it away**
+  (`CatalogItem.price` from the daily Amazon report; Shopify's `VARIANT_QUERY`
+  selects `price`), so the price read-back costs **zero extra API calls**. It
+  reports and does **not** heal. eBay is the one channel where this row would
+  cost a real call, and it is not built.
+
 ### 3c. The order from here
 
-**P4.4 (price) → P4.5 (advertising) → P4.6 (needs D6)** → the rest of P5 (P5.3
-measured, P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7
-(each drop needs a yes) → P8.
+**P4.5 (advertising) → P4.6 (needs D6)** → the rest of P5 (P5.3 measured,
+P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop
+needs a yes) → P8.
 
 ## 4. 🔴 What is NOT proven by real traffic
 
@@ -565,6 +611,41 @@ Each is one command, and each converts a "built" into a "verified":
 15. **Not this programme, found in production 2026-09-20:** the dashboard tax panel reads `OrderItem."vatRate"`, a column in neither the schema nor the database (query from `6c5c6d79a`, 2026-05-09), and its `.catch(() => 0)` shows **tax = 0** instead of saying it could not be read. Separately, the eBay readback cron fails every 30 minutes on missing `EBAY_APP_ID` / `EBAY_CERT_ID` (the same lines are on the previous deployment, so it predates this work).
 
 ## 6. Traps that cost time here — read before measuring anything
+
+- 🔴🔴 **DO NOT LET FIXED FAIL-OPENS MAKE REFUSING AUTOMATIC.** Four were fixed
+  in P4.1–P4.3, so by P4.4c "refuse on failure" felt like the rule. It is not.
+  The price-bounds guard fails **open** on purpose: most products have no bound,
+  so "could not read" and "none set" are the same population, and refusing every
+  price push on a database hiccup would take pricing down to protect a bound that
+  does not exist. Ask what the two populations actually are before choosing.
+- 🔴🔴 **A COMMENT CAN ASSERT A PROPERTY OF THE WORLD, OR OF YOUR OWN DATABASE.**
+  *"EU marketplaces (IT, DE, FR, ES, NL, BE, SE, PL) all use EUR when listing on
+  Amazon"* — SE is SEK and PL is PLN. *"Could read from Marketplace.currency when
+  that becomes a real field"* — it is a required column and four services read
+  it. Both comments justified the wrong code for as long as they were believed.
+- 🔴🔴 **A TEST THAT MOCKS THE THING IT DEPENDS ON CAN NEVER CONVICT IT.**
+  P4.4e's Shopify read-back mocks `listing-write.service.js`, so no arm of it
+  could catch a reader that stopped returning the price — a mutation proved it
+  green. *The arm that would have failed is the one never run.* Exercise the real
+  collaborator somewhere, even if only in one small block.
+- 🔴 **`String.replace` TAKES THE FIRST MATCH, AND INDENTATION MAKES ONE LINE A
+  SUBSTRING OF ANOTHER.** A 6-space `channelListingId: listing.id,` matched
+  inside an 8-space occurrence earlier in the same file, so the mutation hit the
+  wrong line and reported GREEN. Seen twice now (P4.3e, P4.4d) — anchor on a
+  neighbouring line that is unique.
+- 🔴 **A `.catch()` DOES NOT COVER A SYNCHRONOUS THROW.**
+  `prisma.product.findUnique(…)` throws outright when the client has no `product`
+  model, and `.catch()` on the promise never sees it — so P4.4c's "never blocks a
+  send by failing" promise held for only one of its two failure shapes. Use
+  `try/catch` when the promise is the point. (And a `vi.mock` factory copies a
+  function **by value**, so a test cannot take it away later — expose the model
+  through a getter.)
+- 🔴 **A PLAN ROW CAN DESCRIBE THE WRONG BUILD.** *"Build the eBay price push
+  (today a stub)"* reads as "write a ReviseInventoryStatus adapter". eBay price
+  pushing already works three ways; what was missing was the **reach**, and the
+  adapter would have been a second sender needing an exemption from the ratchet
+  that exists to prevent exactly that. Ask what already sends before you write a
+  sender.
 
 - 🔴🔴 **ASK WHAT A FAILURE PATH'S PREMISE IS BEFORE HARDENING IT.** P4.3e found
   a `catch` that falls back to enqueue-time quantities. Four fail-opens had been
