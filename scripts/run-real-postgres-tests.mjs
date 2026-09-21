@@ -22,6 +22,10 @@
  *   · `assortment/sync.vitest.test.ts` (shared stock step 6, AE.4) — live product sync: the capture
  *     trigger, the worker through the real transfer engine, overrides and "Follow again", images, SKU
  *     holds, new variations, retries, no chains, and the delay measured with the real LISTEN/NOTIFY.
+ *   · `assortment/copy-unknown-market.vitest.test.ts` (AE.3, 2026-09-21) — a first copy into a business
+ *     that sells NOWHERE YET: the column model reads Marketplace and ChannelListing, so only a real server
+ *     can show that the reference market belongs to the SHARING business and that the receiving profile,
+ *     which has no Marketplace row, must not be refused by the strict check.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -62,6 +66,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'listing end times (Sync Control, the job, the database rule)', file: 'src/services/listing-end-times.vitest.test.ts', expect: 25 },
   { name: 'shared stock orders (sales, holds, cancellations, returns, repair, stock pages)', file: 'src/services/stock-pool/stock-pool-orders.vitest.test.ts', expect: 24 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 14 },
+  { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

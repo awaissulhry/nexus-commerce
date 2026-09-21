@@ -104,7 +104,8 @@ export async function confirmCopy(input: { shareId: string; market?: unknown; fi
     const rows = await mapRows(catalog, plan)
     const owner = await prisma.workspace.findUnique({ where: { id: catalog.source.ownerWorkspaceId }, select: { name: true } })
     const staged = await stageTransferJob({
-      rows, issues: [], mode: 'upsert', market: preview.market, userId: actorUserId,
+      // The market is the OWNER's (the copy read its values there); this business may sell nowhere yet.
+      rows, issues: [], mode: 'upsert', market: preview.market, userId: actorUserId, sharedCopy: true,
       filename: `Shared by ${owner?.name ?? 'another business'} (${plan.products.length} products)`,
     })
     await prisma.assortmentCopyRun.update({ where: { id: run.id }, data: { transferJobId: staged.jobId, state: 'reviewing', version: { increment: 1 } } })

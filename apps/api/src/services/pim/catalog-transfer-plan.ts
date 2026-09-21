@@ -67,14 +67,14 @@ export interface TransferContracts {
   channel: (channel: string, marketplace: string, category: string) => Promise<{ fields: CatalogueField[]; masterLocalizableKeys?: string[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
 }
 
-export function transferContracts(market: string, options: { allowIncompleteSchema?: boolean } = {}): TransferContracts {
+export function transferContracts(market: string, options: { allowIncompleteSchema?: boolean; allowUnknownMarket?: boolean } = {}): TransferContracts {
   const masters = new Map<string, Promise<SheetColumn[]>>()
   const channels = new Map<string, ReturnType<TransferContracts['channel']>>()
   return {
     master(familyId, product) {
       const saved = savedAttributeFields([product?.categoryAttributes])
       const key = fingerprint([familyId, saved])
-      if (!masters.has(key)) masters.set(key, getSheetColumns({ market, familyIds: familyId ? [familyId] : [], productTypes: [], savedFields: saved, scopeKind: 'master', includeEmptyChannels: true }).then(s => s.columns))
+      if (!masters.has(key)) masters.set(key, getSheetColumns({ market, allowUnknownMarket: options.allowUnknownMarket, familyIds: familyId ? [familyId] : [], productTypes: [], savedFields: saved, scopeKind: 'master', includeEmptyChannels: true }).then(s => s.columns))
       return masters.get(key)!
     },
     channel(channel, marketplace, category) {

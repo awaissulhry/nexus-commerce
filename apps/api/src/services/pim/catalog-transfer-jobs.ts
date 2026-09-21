@@ -26,6 +26,9 @@ interface JobPayload {
   receipt?: { saved: number; unchanged: number; failed: number; excluded: number; unprocessed: number }
   kind: typeof TRANSFER_JOB_KIND; mode: TransferMode; market: string; inputHash: string; previewExpiresAt: string
   mapping?: SourceMapping; source?: { presetId?: string; presetVersion?: string; scheduleId?: string; url?: string; autoApply?: boolean }
+  /** A first copy of another business's shared products: its market is the OWNER's, so this business
+   *  need not have it (a new business profile has no marketplace at all). See assortment/copy-run. */
+  sharedCopy?: boolean
   counts: Counts; warnings: string[]; unmappedColumns: string[]; reviewToken?: string
   recoveryAttempts?: number
   boundary?: ProductTransferBoundary
@@ -62,7 +65,7 @@ export async function stageTransferJob(input: {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; unmappedColumns?: string[]
   warnings?: string[]
   mode: TransferMode; market: string; filename: string; userId: string | null; mapping?: SourceMapping
-  source?: JobPayload['source']; parentJobId?: string; scheduleClaimVersion?: Date; boundary?: ProductTransferBoundary
+  source?: JobPayload['source']; parentJobId?: string; scheduleClaimVersion?: Date; boundary?: ProductTransferBoundary; sharedCopy?: boolean
 }) {
   if (input.boundary) {
     if (input.mode !== 'update') throw new Error('Product-editor imports update existing records only')
@@ -91,7 +94,7 @@ export async function stageTransferJob(input: {
   for (const issue of input.issues) records.push([`issue:${records.length}`, { rows: [], issues: [issue] }])
   for (const exclusion of input.exclusions ?? []) records.push([`excluded:${records.length}`, { rows: [], exclusions: [exclusion] }])
   const expiresAt = new Date(Date.now() + 24 * 60 * 60_000)
-  const payload: JobPayload = { kind: TRANSFER_JOB_KIND, outcomeVersion: 1, mode: input.mode, market: input.market, mapping: input.mapping, source: input.source,
+  const payload: JobPayload = { kind: TRANSFER_JOB_KIND, outcomeVersion: 1, mode: input.mode, market: input.market, mapping: input.mapping, source: input.source, sharedCopy: input.sharedCopy,
     boundary: input.boundary, inputHash: fingerprint([input.rows, input.issues, input.exclusions, input.mapping, input.source, input.boundary]), previewExpiresAt: expiresAt.toISOString(), counts: emptyCounts(), warnings: input.warnings ?? [], unmappedColumns: input.unmappedColumns ?? [] }
   const job = await prisma.$transaction(async tx => {
     const history = await tx.importJob.create({ data: { jobName: input.filename, source: input.source?.url ? 'url' : 'upload', sourceUrl: input.source?.url, filename: input.filename,
@@ -133,7 +136,7 @@ export async function runTransferJob(id: string) {
       const batch = await prisma.importJobRow.findMany({ where: { jobId: id, rowIndex: { gt: processed } }, orderBy: { rowIndex: 'asc' }, take: TRANSFER_BATCH })
       if (!batch.length) throw new Error('Import staging is incomplete')
       clearSheetColumnCache(); clearFieldCatalogueCache()
-      const contracts = transferContracts(payload.market)
+      const contracts = transferContracts(payload.market, { allowUnknownMarket: payload.sharedCopy === true })
       // Choices are fresh for this preview/apply batch, shared across its records.
       contracts.reference = createReferenceResolver()
       if (job.status === 'PREVIEWING') {

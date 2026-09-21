@@ -1069,6 +1069,13 @@ export interface GetSheetColumnsInput {
   familyIds?: string[]
   savedFields?: FieldDefinition[]
   market: string
+  /**
+   * Accept a market this business does not have. Only for values that belong to ANOTHER business: a
+   * shared-product copy and the live sync read the owner's market, and the receiving business may sell
+   * nowhere yet (a new business profile has no Marketplace row at all). Every operator-facing sheet
+   * leaves this off, so a typo'd or stale `?market=` is still refused by name.
+   */
+  allowUnknownMarket?: boolean
   productTypes: string[]
   /** The variation axes present in the rows being shown. */
   variationAxes?: string[]
@@ -1155,7 +1162,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     : new Set(presentRows.map((r) => `${String(r.channel).toUpperCase()}:${String(r.marketplace).toUpperCase()}`))
   const availableMarkets = [...new Set(presentRows.map((r) => String(r.marketplace).toUpperCase()).filter((m) => m && m !== 'DEFAULT'))].sort()
   const knownMarkets = [...new Set(marketplaceRows.map((m) => String(m.code).toUpperCase()).filter((c) => c && c !== 'DEFAULT'))].sort()
-  if (!knownMarkets.includes(market)) throw new UnknownMarketError(market, knownMarkets)
+  if (!input.allowUnknownMarket && !knownMarkets.includes(market)) throw new UnknownMarketError(market, knownMarkets)
 
   const coordinates = coordinatesFor(market, marketplaceRows, { present, channels: input.channels, only: input.onlyChannels })
   const languageCoordinate = coordinates[0]

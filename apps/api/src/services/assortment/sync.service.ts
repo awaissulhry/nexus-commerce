@@ -292,7 +292,7 @@ async function exportFollower(productId: string, market: string, locales: string
     products: [{ id: product.id, sku: product.sku, parentId: product.parentId }],
     includeShared: true, listings: [], locales,
   }
-  const rows = await catalogRows([product], { market, boundary }, transferContracts(market, { allowIncompleteSchema: true }), families)
+  const rows = await catalogRows([product], { market, boundary }, transferContracts(market, { allowIncompleteSchema: true, allowUnknownMarket: true }), families)
   return rows.filter((row) => row.entity === 'Products')
 }
 
@@ -374,7 +374,7 @@ class PlanRefused extends Error {
  */
 async function applyRows(rows: TransferRow[], sku: string, market: string, label: string, mode: 'update' | 'create'): Promise<Map<string, string>> {
   const refused = new Map<string, string>()
-  const contracts = transferContracts(market, { allowIncompleteSchema: true })
+  const contracts = transferContracts(market, { allowIncompleteSchema: true, allowUnknownMarket: true })
   let attempt = rows
   for (let pass = 0; pass < 3 && attempt.length; pass++) {
     try {
