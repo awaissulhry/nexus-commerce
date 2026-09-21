@@ -36,6 +36,7 @@ import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials
 import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runAdsDecisionsReseed } from './cx3b-ads-decisions-reseed.job.js'
 import { runAdsRegionReconcile } from './p45b-ads-region-reconcile.job.js'
+import { runEtsyContentRefresh } from './etsy-content-refresh.job.js'
 import { runAdsCredentialsArchive, runAdsCredentialsRestore } from './cx3b-ads-credentials-archive.job.js'
 import { runCredentialsRotate, runCredentialsStatus, runCredentialsPreflight } from './cx-credentials-rotate.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
@@ -183,6 +184,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
   'cx3b-ads-decisions-reseed': () => runAdsDecisionsReseed(),
   'p45b-ads-region-reconcile': () => runAdsRegionReconcile(),
+  // P4.6f — Etsy's six-hour content rule. A READ: it writes listingStatus and the freshness
+  // stamp, never quantity, price or stock (P4.3a).
+  'etsy-content-refresh': () => runEtsyContentRefresh(),
   'cx3b-ads-credentials-archive': () => runAdsCredentialsArchive(),
   'cx3b-ads-credentials-restore': () => runAdsCredentialsRestore(),
   'cx-credentials-preflight': () => runCredentialsPreflight(),
