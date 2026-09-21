@@ -79,10 +79,13 @@ export async function refreshEtsyContent(): Promise<EtsyContentRefreshReport> {
     accounts: 0, listingsSeen: 0, matched: 0, statusChanged: 0, freshened: 0, unmatched: 0, errors: [],
   }
 
-  const connections = await prisma.channelConnection.findMany({
-    where: { channelType: 'ETSY', isActive: true },
-    select: { id: true },
-  })
+  // MAP.3 — through the resolver, never `prisma.channelConnection` directly. The connection-
+  // resolver ratchet caught the first version of this line and it was right to: its baseline is
+  // **0**, and `listActiveConnections` is the accessor that already means exactly this — "every
+  // active account for this channel", which its own comment calls the correct query. A sweep is
+  // not an exception to the rule; it is the one shape the rule has an accessor for.
+  const { listActiveConnections } = await import('../services/connection-resolver.service.js')
+  const connections = await listActiveConnections('ETSY')
 
   for (const connection of connections) {
     report.accounts++

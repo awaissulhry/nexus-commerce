@@ -19,9 +19,9 @@ const h = vi.hoisted(() => ({
   getThrows: null as Error | null,
 }))
 
+vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: vi.fn(async () => h.connections) }))
 vi.mock('../db.js', () => ({
   default: {
-    channelConnection: { findMany: vi.fn(async () => h.connections) },
     channelListing: {
       findMany: vi.fn(async () => h.listings),
       update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => { h.updates.push(args); return {} }),
