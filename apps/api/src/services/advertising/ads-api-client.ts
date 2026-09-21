@@ -44,6 +44,7 @@ import path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
+import { sbAdTypeWire } from '../ads-core/sb-ad-types.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -2095,7 +2096,9 @@ export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Pr
   const landingPage: Record<string, unknown> = input.landingType === 'url' && input.landingUrl
     ? { url: input.landingUrl }
     : { pageType: input.landingType === 'store' ? 'STORE' : 'PRODUCT_LIST' }
-  const body = { ads: [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, adType: input.creativeType, creative, landingPage, state: (input.state ?? 'enabled').toUpperCase() }] }
+  // P4.5f — the wire value comes from the one vocabulary (services/ads-core/sb-ad-types.ts),
+  // which refuses a type it does not name rather than sending it on.
+  const body = { ads: [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, adType: sbAdTypeWire(input.creativeType), creative, landingPage, state: (input.state ?? 'enabled').toUpperCase() }] }
   const response = await liveCall<{ ads?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sb/v4/ads', body, contentType: 'application/vnd.sbAdResource.v4+json', acceptHeader: 'application/vnd.sbAdResource.v4+json' })
   return { ok: true, mode: 'live', externalId: response?.ads?.success?.[0]?.adId ?? null, rawResponse: response }
 }

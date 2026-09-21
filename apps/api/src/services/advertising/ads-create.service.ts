@@ -15,6 +15,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { SB_AD_TYPE_KEYS, sbAdTypeWire, sbAdTypeNotice } from '../ads-core/sb-ad-types.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
@@ -937,7 +938,33 @@ export async function createSbAdLocal(input: NewSbAd): Promise<{ id: string; ext
   const brandName = input.brandName ?? tpl?.brandName
   const logoAssetId = input.logoAssetId ?? tpl?.logoAssetId
   if (!brandName) throw new Error(`an SB creative needs a brand name, and none could be read from an existing SB campaign in ${ag.campaign?.marketplace ?? '?'}`)
-  const creativeType = input.creativeType ?? 'productCollection'
+  /**
+   * P4.5f — 🔴 this used to default to `'productCollection'`, the entity Amazon
+   * **deprecated on 2026-07-06** in favour of Manual / Auto Collection. The one caller
+   * (`POST /advertising/sb-creatives/create`) passes its body straight through, so an
+   * operator who simply did not mention a creative type got the deprecated one, with
+   * nothing said.
+   *
+   * There is no default now. It is not replaced by the new entity because the wire
+   * value for Manual / Auto Collection could not be established — Amazon's API
+   * reference renders only with JavaScript, and `/sb/v4/ads` has **0 calls ever**, so
+   * there is no stored answer to derive it from either. Swapping a value Amazon still
+   * accepts for a guess, on a path that has never run, is the worse trade.
+   * `services/ads-core/sb-ad-types.ts` holds the whole vocabulary and what is known
+   * about each entry.
+   */
+  if (!input.creativeType) {
+    throw new Error(
+      'an SB creative needs an explicit creativeType. ' +
+        `"productCollection" was deprecated by Amazon on 2026-07-06 in favour of Manual / Auto Collection, ` +
+        `so it is no longer chosen for you; pass one of ${SB_AD_TYPE_KEYS.join(', ')}.`,
+    )
+  }
+  const creativeType = input.creativeType
+  // Sending it is still correct — Amazon deprecated the entity, it did not remove it —
+  // but it is never silent again.
+  const deprecation = sbAdTypeNotice(creativeType)
+  if (deprecation) logger.warn('[AX2.9] creating a DEPRECATED Sponsored Brands creative', { creativeType, notice: deprecation })
   const landingType = input.landingType ?? tpl?.landingType ?? 'productList'
   const landingUrl = input.landingUrl ?? tpl?.landingUrl
   let externalId: string | null = null, mode = 'local'
