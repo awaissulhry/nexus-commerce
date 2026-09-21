@@ -47,6 +47,26 @@ node packages/database/scripts/check-column-drift.mjs || {
   exit 1
 }
 
+# PLAN Step 0.1 / amendment A-2 — the applied-but-missing gate's OWN test.
+#
+# The gate itself (check-applied-but-missing.mjs) cannot run here: detecting a migration that is
+# on the database with no folder in the repo means querying that database, and a push hook would
+# need a production credential on every developer's machine — the variable PLAN Step 0.3 exists
+# to remove. The gate therefore runs at deploy, inside migrate-direct.mjs.
+#
+# What runs HERE is its test suite, so the gate cannot rot between deploys. The decision is a pure
+# function and every branch is covered without a database; the four DB-backed arms use a throwaway
+# schema on the LOCAL dev Postgres and skip cleanly when it is absent. Proven able to fail:
+# blanking the drift set turns 3 of the 10 arms red.
+echo "→ Running @nexus/database gate tests..."
+npm run test --workspace=@nexus/database --silent > /tmp/database-tests.log 2>&1 || {
+  echo "❌ @nexus/database tests FAILED"
+  tail -40 /tmp/database-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/database-tests.log | tail -1 || true
+echo "✓ @nexus/database gate tests passed"
+
 # 2026-09-16 — row-level security has TWO builders: the generator the test database
 # applies, and the migrations every deployed database applies. Both checks below exist
 # because each of these went wrong TWICE in one day and was caught only by counting by
