@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { quantityRowTarget, unnamedQuantitySentence, UnnamedQuantityRowError } from './outbound-rows.js'
+import { quantityRowTarget, unnamedQuantitySentence, unnamedRowKind, UnnamedQuantityRowError } from './outbound-rows.js'
 
 // ── A. the rule's VALUE ─────────────────────────────────────────────────────
 describe('P4.3c quantityRowTarget', () => {
@@ -26,26 +26,45 @@ describe('P4.3c quantityRowTarget', () => {
     // The catalog PATCH's price+stock shape: the label is FULL_SYNC, the quantity is still in the payload.
     ['FULL_SYNC carrying a quantity', { syncType: 'FULL_SYNC', productId: 'p-1', payload: { price: 10, quantity: 42 } }, 'UNNAMED'],
     // `quantity: 0` is a real quantity — the zero-inventory value is the dangerous one.
-    ['a quantity of zero', { syncType: 'PRICE_UPDATE', productId: 'p-1', payload: { quantity: 0 } }, 'UNNAMED'],
+    ['a quantity of zero', { syncType: 'ATTRIBUTE_UPDATE', productId: 'p-1', payload: { quantity: 0 } }, 'UNNAMED'],
     // An ItemID alone is not the shared lane: a single eBay listing row must not slip through on it.
     ['externalListingId without pushVia', { syncType: 'QUANTITY_UPDATE', externalListingId: '123', productId: 'p-1' }, 'UNNAMED'],
     // An empty string is not a name. `Array.isArray([])` is TRUE, so an empty
     // updates list must not turn a price row into a quantity row.
     ['empty string listing id', { syncType: 'QUANTITY_UPDATE', channelListingId: '' }, 'UNNAMED'],
     ['whitespace listing id', { syncType: 'QUANTITY_UPDATE', channelListingId: '   ' }, 'UNNAMED'],
-    ['empty updates array on a price row', { syncType: 'PRICE_UPDATE', productId: 'p-1', payload: { updates: [] } }, 'NOT_A_QUANTITY_ROW'],
+    ['empty updates array on an attribute row', { syncType: 'ATTRIBUTE_UPDATE', productId: 'p-1', payload: { updates: [] } }, 'NOT_A_NUMBER_ROW'],
     // Rows that carry no quantity are untouched, whatever they name.
-    ['bare PRICE_UPDATE', { syncType: 'PRICE_UPDATE', productId: 'p-1', payload: { price: 10 } }, 'NOT_A_QUANTITY_ROW'],
-    ['bare FULL_SYNC without a quantity', { syncType: 'FULL_SYNC', productId: 'p-1', payload: { title: 'x' } }, 'NOT_A_QUANTITY_ROW'],
-    ['bare CONTENT_UPDATE', { syncType: 'CONTENT_UPDATE', productId: 'p-1', payload: {} }, 'NOT_A_QUANTITY_ROW'],
+    // P4.4b — a PRICE row is the same defect: the master price cascade resolves a
+    // price PER LISTING (followMasterPrice, pricingRule, priceAdjustmentPercent),
+    // and a product-level row knows none of that.
+    ['bare PRICE_UPDATE', { syncType: 'PRICE_UPDATE', productId: 'p-1', payload: { price: 10 } }, 'UNNAMED'],
+    ['a price on a CONTENT_UPDATE', { syncType: 'CONTENT_UPDATE', productId: 'p-1', payload: { price: 10 } }, 'UNNAMED'],
+    ['a price of zero', { syncType: 'CONTENT_UPDATE', productId: 'p-1', payload: { price: 0 } }, 'UNNAMED'],
+    ['PRICE_UPDATE naming its listing', { syncType: 'PRICE_UPDATE', channelListingId: 'cl-1', payload: { price: 10 } }, 'LISTING'],
+    // Rows that carry no number at all are untouched, whatever they name.
+    ['bare FULL_SYNC without a number', { syncType: 'FULL_SYNC', productId: 'p-1', payload: { title: 'x' } }, 'NOT_A_NUMBER_ROW'],
+    ['bare CONTENT_UPDATE', { syncType: 'CONTENT_UPDATE', productId: 'p-1', payload: {} }, 'NOT_A_NUMBER_ROW'],
+    ['bare ATTRIBUTE_UPDATE', { syncType: 'ATTRIBUTE_UPDATE', productId: 'p-1', payload: { title: 'x' } }, 'NOT_A_NUMBER_ROW'],
   ])('%s → %s', (_name, row, expected) => {
     expect(quantityRowTarget(row)).toBe(expected)
   })
 
   it('the sentence names the channel and says what cannot be applied', () => {
-    const sentence = unnamedQuantitySentence('AMAZON')
-    expect(sentence).toContain('AMAZON')
-    expect(sentence).toContain('does not say which listing it is for')
+    expect(unnamedQuantitySentence('AMAZON')).toContain('AMAZON')
+    expect(unnamedQuantitySentence('AMAZON')).toContain('this stock change does not say which listing')
+    // P4.4b — a price row earns a price sentence: an operator told the stock
+    // buffer could not be applied to a PRICE change learns nothing.
+    expect(unnamedQuantitySentence('AMAZON', 'price')).toContain('this price change does not say which listing')
+    expect(unnamedQuantitySentence('AMAZON', 'price')).toContain('pricing rule')
+  })
+
+  it.each([
+    ['a quantity row', { syncType: 'QUANTITY_UPDATE', payload: {} }, 'quantity'],
+    ['a price row', { syncType: 'PRICE_UPDATE', payload: { price: 1 } }, 'price'],
+    ['a row carrying both', { syncType: 'FULL_SYNC', payload: { price: 1, quantity: 2 } }, 'quantity'],
+  ])('%s earns the %s sentence', (_n, row, kind) => {
+    expect(unnamedRowKind(row)).toBe(kind)
   })
 })
 
@@ -207,5 +226,8 @@ describe('P4.3c: PATCH /api/catalog/products/:id queues no quantity', () => {
     expect(code.length).toBeGreaterThan(source.length / 2)
     expect(code).not.toMatch(/syncPayload\.quantity\s*=/)
     expect(code).not.toMatch(/["']QUANTITY_UPDATE["']/)
+    // P4.4b — and no price either; the master price cascade owns it.
+    expect(code).not.toMatch(/syncPayload\.price\s*=/)
+    expect(code).not.toMatch(/["']PRICE_UPDATE["']/)
   })
 })

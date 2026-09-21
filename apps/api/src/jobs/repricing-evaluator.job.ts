@@ -197,18 +197,37 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
 
       // CE.3: when live and applied, enqueue PRICE_UPDATE to OutboundSyncQueue.
       if (repricerLive && result.changed) {
+        // 🔴 P4.4b — two defects, both invisible because this lane is off by
+        // default (NEXUS_REPRICER_LIVE=1):
+        //
+        //  1. the row named NO listing, although `listing.id` is right here —
+        //     so the price went out without the listing's own pricing rule, its
+        //     market, or its stored sale window;
+        //  2. the payload key was `newPrice`, and the dispatcher reads
+        //     `payload.price`. `SyncPayload` has an `[key: string]: any` index
+        //     signature, so TypeScript never said a word. The row would dispatch
+        //     with no price at all and report SUCCESS — a repricer that records
+        //     a live reprice and sends nothing.
+        //
+        // "It has never run" was the only reason neither had cost anything yet.
         await createOutboundRow(prisma, {
           data: {
             productId: rule.productId,
+            channelListingId: listing.id,
             targetChannel: rule.channel as never,
             targetRegion: rule.marketplace ?? listing.marketplace ?? 'IT',
             syncType: 'PRICE_UPDATE',
-            payload: { newPrice: result.price, ruleId: rule.id },
+            payload: { price: result.price, ruleId: rule.id, source: 'REPRICER' },
             syncStatus: 'PENDING',
           },
-        }).catch(() => {
-          // Non-fatal: decision was still applied to the ChannelListing.
-          // OutboundSyncQueue failure is visible via its own monitoring.
+        }).catch((error) => {
+          // Still non-fatal — the decision was applied to the ChannelListing —
+          // but no longer SILENT. A swallowed enqueue is how "the repricer is
+          // live" and "nothing reached the channel" look identical.
+          logger.error('repricing-evaluator: PRICE_UPDATE enqueue failed', {
+            ruleId: rule.id, productId: rule.productId, channelListingId: listing.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
         })
 
         // PH.1 — record the live reprice on the unified timeline. Only when

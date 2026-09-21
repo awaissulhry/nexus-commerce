@@ -8,7 +8,8 @@ const m = vi.hoisted(() => {
 })
 vi.mock('../db.js', () => ({ default: {
   outboundSyncQueue: { findUnique: m.read, findMany: m.many, update: m.update, updateMany: m.claim },
-  channelListing: { findMany: async () => [] },
+  // P4.4b — a price row names its listing now, so the double must answer for one.
+  channelListing: { findMany: async () => [], findUnique: async () => null },
   marketplace: { findFirst: async () => ({ currency: 'EUR', languages: ['it'] }) },
 } }))
 vi.mock('@nexus/database', () => ({ prisma: { outboundSyncQueue: { findUnique: m.read, update: m.update } } }))
@@ -56,7 +57,8 @@ describe('W1.9 empty STATUS_UPDATE remains not sent at every completion writer',
     expect(getBullMQWorkerStats().succeeded).toBe(0)
   })
   it.each([false, true])('positive publisher control with dryRun=%s persists the right completion', async dryRun => {
-    const price = { ...row(), syncType: 'PRICE_UPDATE', payload: { price: 19.99, marketplaceId: 'IT' } }
+    // P4.4b — the fixture names its listing, as every real price row does.
+    const price = { ...row(), channelListingId: 'cl-1', syncType: 'PRICE_UPDATE', payload: { price: 19.99, marketplaceId: 'IT' } }
     m.publish.mockResolvedValue({ success: true, mode: dryRun ? 'dry-run' : 'live', message: dryRun ? 'Dry run; no channel change' : 'Accepted' })
     m.many.mockResolvedValueOnce([price]).mockResolvedValueOnce([])
     const stats = await service.processPendingSyncs()

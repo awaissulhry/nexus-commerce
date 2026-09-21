@@ -908,13 +908,16 @@ export async function catalogRoutes(app: FastifyInstance) {
       const syncPayload: Record<string, any> = {};
       let shouldSync = false;
 
-      if (
-        basePrice !== undefined &&
-        basePrice !== product.basePrice.toNumber()
-      ) {
-        syncPayload.price = basePrice;
-        shouldSync = true;
-      }
+      // P4.4b — `basePrice` does NOT go in this payload either, for the same
+      // reason `totalStock` does not (P4.3c). `masterPriceService.update` above
+      // already cascaded the price PER LISTING, honouring each listing's
+      // `followMasterPrice`, `pricingRule` and `priceAdjustmentPercent`, and
+      // queued one row per listing naming its listing. What used to be here was
+      // a second row carrying the RAW master price with no listing named — so it
+      // knew none of those rules and would overwrite a listing's deliberately
+      // different price with the master number. Unnamed price rows are refused
+      // at birth now (services/outbound-rows.ts); this is the producer catching
+      // up with the rule.
 
       // P4.3c — `totalStock` does NOT go in this payload, and no quantity row is
       // queued here. `applyStockMovement` above already ran the ChannelListing
@@ -943,15 +946,12 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (shouldSync) {
         const queueResults = [];
         for (const channel of syncChannels) {
-          // P4.3c — derived from what the payload ACTUALLY carries, not from which
-          // request fields were present: `totalStock` no longer reaches the payload,
-          // so a stock-only edit must not still be labelled QUANTITY_UPDATE.
+          // P4.3c / P4.4b — neither the quantity nor the price reaches this payload
+          // now, so what is left is always attributes and title.
           const result = await outboundSyncService.queueProductUpdate(
             id,
             channel,
-            syncPayload.price !== undefined
-              ? (Object.keys(syncPayload).length > 1 ? "FULL_SYNC" : "PRICE_UPDATE")
-              : "ATTRIBUTE_UPDATE",
+            "ATTRIBUTE_UPDATE",
             syncPayload
           );
           queueResults.push({

@@ -120,7 +120,7 @@ export async function reserveSharedCoordinates(
 
 
 /**
- * P4.3c — a quantity push must name what it is pushing to.
+ * P4.3c / P4.4b — a push that carries a NUMBER must name what it is pushing to.
  *
  * `syncToAmazon` loads the ChannelListing ONLY from `queueItem.channelListingId`
  * (there is no product fallback there, although `pushLockListings` two hundred
@@ -144,11 +144,23 @@ export async function reserveSharedCoordinates(
  * SKU is not a ChannelListing, so the row names its ItemID instead and the
  * dispatcher routes it by `payload.pushVia === 'TRADING'`.
  */
-export type QuantityRowTarget = 'NOT_A_QUANTITY_ROW' | 'LISTING' | 'SHARED_ITEM' | 'UNNAMED'
+export type OutboundRowTarget = 'NOT_A_NUMBER_ROW' | 'LISTING' | 'SHARED_ITEM' | 'UNNAMED'
+/** @deprecated the rule covers price as well as quantity; kept for readability at old call sites. */
+export type QuantityRowTarget = OutboundRowTarget
 
 const namedString = (value: unknown): boolean => typeof value === 'string' && value.trim() !== ''
 
-export function quantityRowTarget(row: unknown): QuantityRowTarget {
+/**
+ * P4.4b — a PRICE row is the same shape of defect as a quantity row.
+ *
+ * `masterPriceService.update` cascades a price PER LISTING, honouring
+ * `followMasterPrice`, `pricingRule` and `priceAdjustmentPercent`. A row that
+ * names only a product carries the RAW master price and knows none of that, so
+ * it overwrites a listing's deliberately different price with the master
+ * number — and on Amazon it reaches `buildAmazonListingPatch` with no listing,
+ * so it cannot even read the stored sale window to avoid wiping the sale.
+ */
+export function quantityRowTarget(row: unknown): OutboundRowTarget {
   const r = (row ?? {}) as Record<string, any>
   const payload = (r.payload ?? {}) as Record<string, any>
   // Either half is enough: a QUANTITY_UPDATE whose number is re-read at dispatch
@@ -157,7 +169,8 @@ export function quantityRowTarget(row: unknown): QuantityRowTarget {
     r.syncType === 'QUANTITY_UPDATE' ||
     payload.quantity !== undefined ||
     (Array.isArray(payload.updates) && payload.updates.length > 0)
-  if (!carriesQuantity) return 'NOT_A_QUANTITY_ROW'
+  const carriesPrice = r.syncType === 'PRICE_UPDATE' || payload.price !== undefined
+  if (!carriesQuantity && !carriesPrice) return 'NOT_A_NUMBER_ROW'
   // The checked create form names its listing through `connect`; a loaded row
   // carries the relation. Read every form, never one.
   if (namedString(r.channelListingId) || namedString(r.channelListing?.connect?.id) || namedString(r.channelListing?.id)) return 'LISTING'
@@ -165,15 +178,25 @@ export function quantityRowTarget(row: unknown): QuantityRowTarget {
   return 'UNNAMED'
 }
 
-/** The sentence a refused quantity row answers with, at birth and at dispatch. */
-export function unnamedQuantitySentence(channel: string): string {
-  return `Nothing was sent to ${channel}: this stock change does not say which listing it is for, so the market, the stock buffer and the Amazon EU shared-quantity check cannot be applied to it. Change the stock on the product and the listings follow, or save it from the listing itself.`
+/** The sentence a refused row answers with, at birth and at dispatch. */
+export function unnamedQuantitySentence(channel: string, kind: 'quantity' | 'price' = 'quantity'): string {
+  return kind === 'price'
+    ? `Nothing was sent to ${channel}: this price change does not say which listing it is for, so the listing's own pricing rule, its market and its scheduled sale cannot be applied to it. Change the price on the product and the listings follow, or save it from the listing itself.`
+    : `Nothing was sent to ${channel}: this stock change does not say which listing it is for, so the market, the stock buffer and the Amazon EU shared-quantity check cannot be applied to it. Change the stock on the product and the listings follow, or save it from the listing itself.`
+}
+
+/** Which sentence an unnamed row earns: a row that carries a price and no quantity is a price row. */
+export function unnamedRowKind(row: unknown): 'quantity' | 'price' {
+  const r = (row ?? {}) as Record<string, any>
+  const payload = (r.payload ?? {}) as Record<string, any>
+  const carriesQuantity = r.syncType === 'QUANTITY_UPDATE' || payload.quantity !== undefined || (Array.isArray(payload.updates) && payload.updates.length > 0)
+  return carriesQuantity ? 'quantity' : 'price'
 }
 
 export class UnnamedQuantityRowError extends Error {
   readonly code = 'UNNAMED_QUANTITY_ROW'
-  constructor(channel: string) {
-    super(unnamedQuantitySentence(channel))
+  constructor(channel: string, kind: 'quantity' | 'price' = 'quantity') {
+    super(unnamedQuantitySentence(channel, kind))
     this.name = 'UnnamedQuantityRowError'
   }
 }
@@ -210,8 +233,9 @@ async function prepareRows(db: object, rows: QueueRowData[]): Promise<QueueRowDa
   for (const row of allowed) {
     if (quantityRowTarget(row) === 'UNNAMED') {
       const channel = String((row as Record<string, unknown>).targetChannel ?? 'the channel')
-      logger.warn('P4.3c: refused an outbound quantity row that names no listing', { channel, syncType: (row as Record<string, unknown>).syncType })
-      throw new UnnamedQuantityRowError(channel)
+      const kind = unnamedRowKind(row)
+      logger.warn('P4.3c/P4.4b: refused an outbound row that carries a number and names no listing', { channel, kind, syncType: (row as Record<string, unknown>).syncType })
+      throw new UnnamedQuantityRowError(channel, kind)
     }
   }
   const { resolveDestinations } = await import('./outbound-destination.js')

@@ -3,7 +3,7 @@ import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/ama
 import { amazonContentRefusal, isAmazonContentPatchSet } from './amazon/validate-before-send.js'
 import { noDestinationSentence, resolveDestinations, type Destination } from './outbound-destination.js';
 import { syncShopifyLinkedListing, type LinkedListingWork } from './shopify/listing-write.service.js';
-import { createOutboundRow, quantityRowTarget, unnamedQuantitySentence } from './outbound-rows.js'
+import { createOutboundRow, quantityRowTarget, unnamedQuantitySentence, unnamedRowKind } from './outbound-rows.js'
 import { ebaySend } from './gateway/ebay.js';
 import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
@@ -757,7 +757,7 @@ export class OutboundSyncService {
     // every channel resolves its listing from `channelListingId` alone and every
     // one of them loses its re-read without it.
     if (quantityRowTarget(item) === 'UNNAMED') {
-      const error = unnamedQuantitySentence(String(item.targetChannel));
+      const error = unnamedQuantitySentence(String(item.targetChannel), unnamedRowKind(item));
       return { success: false, queueId: item.id, channel: item.targetChannel, status: "FAILED",
         message: error, error, errorCode: "UNNAMED_QUANTITY_ROW", retryable: false };
     }
