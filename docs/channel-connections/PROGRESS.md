@@ -52,22 +52,38 @@ Full record: `build/SWITCH-ON.md`.
 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
 | `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ products (rows 5–6) |
 
-### 0b. Verify on the next deploy
+### 0b. ✅ ALL VERIFIED on deployment `be9f2554` (build `0adbf6e8`), 2026-09-21
 
-1. `etsy-content-refresh cron: scheduled {"schedule":"20 */4 * * *"}` at boot (P4.6f).
-2. `[channel-alerts] etsy freshness {"total":0,…}` — **now logged even when zero**, which it was
-   not on the previous deploy (see `build/P4.6e.md` §3b: an empty shop produced silence, and only
-   a positive control told that apart from a failure).
+1. ✅ `etsy-content-refresh cron: scheduled {"schedule":"20 */4 * * *"}` — at boot, 13:45:04 (P4.6f).
+2. ✅ `[channel-alerts] etsy freshness {"total":0,"stale":0,"neverSynced":0,"oldestAt":null}` —
+   **logged at zero**, 14:00. That is `build/P4.6e.md` §3b's fix holding: an empty shop used to
+   produce silence, indistinguishable from a crash.
 3. 🟢 **Already proven:** `[cx-ebay] recorded the signing key expiry
    {"expiresAt":"2029-08-28T03:12:43.000Z"}` — **once**, where the deploy before it logged the
    failure four times in two minutes.
 4. 🟢 **Already proven:** migrations `20260921a_p62_signing_key_expiry` and
    `20260921b_p46e_sync_channel_etsy` both applied.
 
+**Two observations from the same read, neither a defect:**
+
+- 🔵 **Every 15-minute sweep logs TWICE**, 1.7 s apart, with different numbers
+  (`deduped: 2` then `deduped: 3`). That is **one run per business profile**, which is correct
+  with profiles ON — but a reader counting lines will double every alert total. Note it before
+  calling a count wrong.
+- 🔵 **`[ConfigManager] ⚠ Etsy configuration incomplete (missing env vars)` at boot is NOT the
+  blocker for rows 5 and 6, and was checked rather than assumed.** It is the **legacy**
+  `ConfigManager` path, already recorded in `etsy-sync.service.ts`. P4.6's writers and the Etsy
+  connect flow read `getChannelApp('ETSY')` — a **database-backed** channel app — so missing env
+  vars do not stand between the Owner and a first live Etsy call.
+
 ### 0b-prev. From the earlier deploy, still worth watching
 
-1. `p45b-ads-region-reconcile` daily line: **`regionCorrected=0`**, and **`marketCorrected=1`** on
-   its first run only (the `IE`→`BE` repair), then 0.
+1. ⏳ `p45b-ads-region-reconcile` daily line: **`regionCorrected=0`**, and **`marketCorrected=1`**
+   on its first run only (the `IE`→`BE` repair), then 0. **NOT YET OBSERVABLE, checked
+   2026-09-21:** the cron is scheduled and confirmed at boot
+   (`{"schedule":"35 4 * * *","creates":"off"}`) but P4.5h shipped at ~11:00 UTC, *after* today's
+   04:35 run. **First run that carries the fix is 2026-09-22 04:35 UTC.** An absent line today is
+   "has not run", not "ran and found nothing".
 2. Two alerts that are **correct**: `SHOPIFY has no sign-in callback registered` and `ETSY's
    sign-in callback is a development tunnel`.
 
