@@ -39,6 +39,7 @@ import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
+import { priceRefusalFor } from "./price-bounds.service.js";
 import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
 import { resolveMembershipIntended, routedAvailable } from "./sync-control-core.js";
 import { marketCurrency } from './pim/market-currency.js';
@@ -1276,6 +1277,16 @@ export class OutboundSyncService {
       content = { product: owner as any, parent: owner.parent as any, listing,
         fields: ['title', 'description', 'bulletPoints', 'keywords'].filter(field => payload[field] !== undefined) };
     }
+    // P4.4c — the operator's own pricing floor and ceiling (Product.minPrice /
+    // maxPrice). Placed HERE, beside the quantity guards and AFTER the push lock
+    // and the pause checks, so a paused or locked listing still reports that
+    // rather than a price complaint. It REFUSES rather than clamping: a price is
+    // a number a person typed, and sending a different one quietly is worse than
+    // not sending it.
+    {
+      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'Amazon', sku });
+      if (refusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
+    }
     const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content);
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
@@ -1451,6 +1462,16 @@ export class OutboundSyncService {
       }
     }
 
+    // P4.4c — the operator's own pricing floor and ceiling (Product.minPrice /
+    // maxPrice). Placed HERE, beside the quantity guards and AFTER the push lock
+    // and the pause checks, so a paused or locked listing still reports that
+    // rather than a price complaint. It REFUSES rather than clamping: a price is
+    // a number a person typed, and sending a different one quietly is worse than
+    // not sending it.
+    {
+      const refusal = await priceRefusalFor({ price: payload.price, productId: product?.id, channel: 'eBay', sku });
+      if (refusal) return { success: false, queueId, channel: "EBAY", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
+    }
     const digest = digestPayload({
       price: payload.price,
       quantity: payload.quantity,
@@ -2189,6 +2210,14 @@ export class OutboundSyncService {
       }
       work.content = { title: payload?.title, description: payload && "description" in payload ? payload.description : undefined, metafields };
     } else if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+    // P4.4c — the operator's own pricing floor and ceiling (Product.minPrice /
+    // maxPrice). Placed HERE, beside the quantity guards and AFTER the push lock
+    // and the pause checks, so a paused or locked listing still reports that
+    // rather than a price complaint. It REFUSES rather than clamping: a price is
+    // a number a person typed, and sending a different one quietly is worse than
+    // not sending it.
+      const refusal = await priceRefusalFor({ price: payload?.price, productId: product?.id, channel: 'Shopify', sku });
+      if (refusal) return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
       work.price = payload?.price ?? null;
     } else {
       const dispatchQuantity = await this.shopifyDispatchQuantity(queueItem, sku);
