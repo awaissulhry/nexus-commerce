@@ -35,6 +35,8 @@ export const COOKIE_PREFIX = 'nexus_oauth_'
 
 export type Intent = 'connect' | 'reconnect' | 'adopt'
 
+import { publicApiBaseValue } from '../public-api-origin.js'
+
 export class OAuthFlowError extends Error {
   constructor(
     readonly code:
@@ -64,8 +66,25 @@ function b64url(buf: Buffer): string {
   return buf.toString('base64url')
 }
 
+/**
+ * 🔴 2026-09-21 — through `publicApiOrigin()`, the SAME accessor Shopify's webhook registration
+ * and schema sync use.
+ *
+ * This read `NEXUS_PUBLIC_API_URL ?? PUBLIC_API_URL ?? ''` — two sources where those two readers
+ * had three, and an **empty string** where they returned a named error. Of the three readers of
+ * one fact, the weakest was the one on the sign-in path.
+ *
+ * The production failure was a *wrong* host rather than a missing one, so the guard below caught
+ * nothing: `NEXUS_PUBLIC_API_URL` pointed at a Railway host that resolves and serves **404**, and
+ * both Shopify and Etsy refused the callback. Unifying does not fix a wrong value — only the
+ * operator can — but it removes the drift, and it makes an **unset** variable self-heal onto
+ * `RAILWAY_PUBLIC_DOMAIN`, which Railway sets to the host actually serving this deployment.
+ */
 function apiBaseUrl(): string {
-  return (process.env.NEXUS_PUBLIC_API_URL ?? process.env.PUBLIC_API_URL ?? '').replace(/\/$/, '')
+  // The RAW value, trailing slash removed — NOT an origin. The guard below must be able to see a
+  // fragment or a path in order to refuse it, and must see `http://localhost` in order to allow
+  // it under the explicit local-development flag. Normalising here deleted both.
+  return (publicApiBaseValue() ?? '').replace(/\/$/, '')
 }
 
 /** The callback URL registered with the channel — the API host, never the web page. */

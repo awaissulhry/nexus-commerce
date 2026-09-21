@@ -1,3 +1,4 @@
+import { publicApiOrigin } from '../public-api-origin.js'
 import { invalidateShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -15,11 +16,10 @@ const route = '/webhooks/shopify/attributes/:workspaceId/:accountId'
 
 /** Register only this account's schema notifications; never modify another subscription. */
 export async function ensureShopifySchemaSubscriptions(accountId: string): Promise<{ live: boolean; reason?: string }> {
-  const configured = process.env.NEXUS_PUBLIC_API_URL ?? process.env.PUBLIC_API_URL ?? process.env.RAILWAY_PUBLIC_DOMAIN
-  if (!configured) return { live: false, reason: 'A public API address is required for Shopify live notifications.' }
-  const base = new URL(configured.startsWith('http') ? configured : `https://${configured}`)
-  if (base.protocol !== 'https:' || base.username || base.password) return { live: false, reason: 'Shopify live notifications require a public HTTPS API address.' }
-  const callback = `${base.origin}/webhooks/shopify/attributes/${encodeURIComponent(workspaceIdForQuery())}/${encodeURIComponent(accountId)}`
+  // 🔴 2026-09-21 — one accessor for all three readers; see public-api-origin.ts.
+  const resolved = publicApiOrigin()
+  if ('error' in resolved) return { live: false, reason: `${resolved.error} Shopify live notifications need it.` }
+  const callback = `${resolved.origin}/webhooks/shopify/attributes/${encodeURIComponent(workspaceIdForQuery())}/${encodeURIComponent(accountId)}`
   const { graphql } = await shopifyAdmin(accountId)
   const subscriptions = await collectShopifyPages<{ topic: string; endpoint: { callbackUrl?: string } }>(async after =>
     (await graphql(`query NexusSchemaSubscriptions($after:String) { webhookSubscriptions(first:100,after:$after) { nodes { topic endpoint { ... on WebhookHttpEndpoint { callbackUrl } } } pageInfo { hasNextPage endCursor } } }`, { after })).webhookSubscriptions)

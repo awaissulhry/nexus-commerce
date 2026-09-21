@@ -201,6 +201,7 @@ import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 // P5.1 verification — ONE read-only live Orders 2026-01-01 call, at the Owner's yes.
 import amazonOrders2026ProbeRoutes from "./routes/amazon-orders-2026-probe.routes.js";
+import connectionDependentsRoutes from "./routes/connection-dependents.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import pushLatencyRoutes from "./routes/push-latency.routes.js";
 import outboundLatencyRoutes from "./routes/outbound-latency.routes.js";
@@ -873,6 +874,7 @@ app.register(ebayPhase3Routes, { prefix: '/api' });
 app.register(amazonNotificationsRoutes, { prefix: '/api' });
 app.register(ebayNotificationRoutes, { prefix: '/api' });
 app.register(amazonOrders2026ProbeRoutes, { prefix: '/api' });
+app.register(connectionDependentsRoutes, { prefix: '/api' });
 // RT.1 — unified push-health endpoint feeds the PushHealthChip on
 // /orders + /insights/live.
 app.register(pushHealthRoutes, { prefix: '/api' });

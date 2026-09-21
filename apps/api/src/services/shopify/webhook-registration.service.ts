@@ -1,3 +1,4 @@
+import { publicApiOrigin } from '../public-api-origin.js'
 /**
  * P2.4 — register Nexus's Shopify webhooks with each connected shop, and reconcile.
  *
@@ -81,13 +82,12 @@ export interface ShopifyRegistrationResult {
 
 /** The public HTTPS origin Shopify must be able to reach. */
 function publicOrigin(): { origin: string } | { error: string } {
-  const configured = process.env.NEXUS_PUBLIC_API_URL ?? process.env.PUBLIC_API_URL ?? process.env.RAILWAY_PUBLIC_DOMAIN
-  if (!configured) return { error: 'A public API address is required for Shopify webhooks.' }
-  const base = new URL(configured.startsWith('http') ? configured : `https://${configured}`)
-  if (base.protocol !== 'https:' || base.username || base.password) {
-    return { error: 'Shopify webhooks require a public HTTPS API address with no credentials in it.' }
-  }
-  return { origin: base.origin }
+  // 🔴 2026-09-21 — one accessor for all three readers. This copy threw on a malformed value
+  // where the shared one reports it, and the sign-in path read a different set of variables
+  // entirely. `publicApiOrigin()` carries the whole rule and the measurement behind it.
+  const resolved = publicApiOrigin()
+  if ('error' in resolved) return { error: `${resolved.error} Shopify webhooks cannot be registered without it.` }
+  return resolved
 }
 
 /**
