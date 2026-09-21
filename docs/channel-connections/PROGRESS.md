@@ -20,7 +20,7 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 | **P7a.1** | 🟢 **FIXED 2026-09-21** — the channel-sync worker picked an arbitrary market and invented a `_US` one. Both latent; both closed. It is now **provably inert** and is the first real deletion candidate. `build/P7a.1.md` |
 | **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
-| **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
+| **P6** | P6.1–P6.6 + P6.8's instrumentation done. ✅ **P6.7 RESOLVED 2026-09-21 — nothing to add**: returns/cancellation/inquiry run on eBay's **Post-Order API**, which takes an `IAF `-prefixed user token and requires **no OAuth scope**. Read in a browser (eBay 403s bots, not people). No reconnect needed for it |
 | **P7a** | 🟢 **MEASURED 2026-09-21 — ZERO deletion candidates.** Its one candidate (the Ads credential fallback) was chased down and the answer is **keep it**: unreachable in production, but it is the only credential path with profiles OFF, it is the documented revert lever, and P4.5e's disconnect enforcement is built on its `throw`. *Unreachable today is not unnecessary.* P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
 | **P7b** | **each drop needs the Owner's yes**, after a green week |
 | **P8** | 🔴 **DEFERRED** — the Owner, 2026-09-21: *"we'll add the remaining channels later. Currently, we'll keep our focus solely on Amazon, eBay, and Etsy."* Do not start it. Shopify and WooCommerce are also out of the active three |
@@ -29,7 +29,6 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 
 | # | Row | Owner | What closes it |
 |---|---|---|---|
-| 1 | **P6.7** eBay scopes | **Owner** | eBay's OAuth scope page answers **403** to an automated fetch, and the probe needs production credentials. Read the scope names in a **browser**, set `EBAY_CANDIDATE_SCOPES` on the deploy, read the verdicts, add only `✓ ACCEPTED` ones, then reconnect. `build/P6.7.md` §4 |
 | 2 | **P6.8** callbacks | **Owner** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. Two alerts nag until done. `build/P6.8.md` §4 |
 | 3 | **P5.2** Finances switch | **Owner** | `POST /api/amazon/financials/sync {"probe": true}` — a **read**, writes nothing — then compare counts, then flip. `build/P5.2.md` §5 |
 | 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
