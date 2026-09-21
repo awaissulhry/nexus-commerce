@@ -100,3 +100,63 @@ describe('Shopify identity and heartbeat', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * 🔴 2026-09-21 — the scope list, validated by Shopify itself.
+ *
+ * Creating the production app version in Shopify's Dev Dashboard meant pasting this exact
+ * list into their form. Shopify answered:
+ *
+ *   > Contains invalid scopes: read_payment_mandate, write_payment_mandate
+ *
+ * and accepted the other 91 in the same submission. That is the vendor validating the whole
+ * set at once — the strongest evidence this list will ever get, and it is not a thing a test
+ * could have produced on its own.
+ *
+ * Both names were removed. They matter because they travel in the `scope` parameter of
+ * `/admin/oauth/authorize`, and one unrecognised name can refuse the ENTIRE consent request.
+ * That is the 2026-09-16 eBay outage exactly: two plausible-looking scope names broke every
+ * eBay connect for nineteen days.
+ *
+ * These tests deliberately pin **no count**. A hardcoded total goes stale the first time a
+ * scope is legitimately added, and then it either gets bumped without thought or gets deleted.
+ * What is pinned is the shape of the mistake.
+ */
+describe('SHOPIFY_REQUIRED_SCOPES — what Shopify refused must not come back', () => {
+  /** Measured, not guessed: Shopify's Dev Dashboard named these two as invalid. */
+  const REFUSED_BY_SHOPIFY = ['read_payment_mandate', 'write_payment_mandate']
+
+  it('🔴 contains neither scope Shopify rejected', () => {
+    for (const scope of REFUSED_BY_SHOPIFY) {
+      expect(SHOPIFY_REQUIRED_SCOPES, `${scope} was refused by Shopify's own validator`).not.toContain(scope)
+    }
+  })
+
+  it('🟢 CONTROL — the neighbours that SURVIVED that submission are still here', () => {
+    // Without this, deleting the whole list would pass the test above. These two sat beside
+    // the refused pair on the same source line and were accepted.
+    expect(SHOPIFY_REQUIRED_SCOPES).toContain('read_payment_customizations')
+    expect(SHOPIFY_REQUIRED_SCOPES).toContain('write_payment_customizations')
+  })
+
+  it('asks for no scope twice — a duplicate is a wasted consent line', () => {
+    expect(SHOPIFY_REQUIRED_SCOPES.length).toBe(new Set(SHOPIFY_REQUIRED_SCOPES).size)
+  })
+
+  it('every entry looks like a Shopify scope', () => {
+    for (const scope of SHOPIFY_REQUIRED_SCOPES) {
+      expect(scope, `${scope} is not read_*/write_*`).toMatch(/^(read|write)_[a-z0-9_]+$/)
+    }
+  })
+
+  it('🔴 no review-gated scope is requested as REQUIRED', () => {
+    // Review-gated scopes need Shopify's approval per app. Requesting one in the required set
+    // puts an un-approvable name into the same `scope` parameter — the same failure by a
+    // different route. They are added only when SHOPIFY_APPROVED_SCOPES names them.
+    const gated = (shopifySpec.auth.reviewGatedScopes ?? []).map((g) => g.scope)
+    expect(gated.length).toBeGreaterThan(0) // the list is non-empty, so this test has a subject
+    for (const scope of gated) {
+      expect(SHOPIFY_REQUIRED_SCOPES, `${scope} is review-gated and must not be required`).not.toContain(scope)
+    }
+  })
+})

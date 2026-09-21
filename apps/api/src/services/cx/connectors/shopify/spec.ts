@@ -33,7 +33,19 @@ export const SHOPIFY_REQUIRED_SCOPES = [
   'read_delivery_customizations', 'write_delivery_customizations',
   'read_inventory_shipments_received_items', 'write_inventory_shipments_received_items',
   'read_online_store_navigation', 'write_online_store_navigation',
-  'read_payment_customizations', 'write_payment_customizations', 'read_payment_mandate', 'write_payment_mandate',
+  // 🔴 2026-09-21 — `read_payment_mandate` / `write_payment_mandate` were REMOVED here.
+  //
+  // Shopify's own Dev Dashboard refused them when this app's version was created:
+  // *"Contains invalid scopes: read_payment_mandate, write_payment_mandate"*. That is the
+  // dashboard's INVALID message, not its separate "requires Shopify permission" one, so they
+  // are not review-gated — they do not exist. The other 91 in this list were accepted in the
+  // same submission, which makes this the vendor validating the whole set at once.
+  //
+  // Why it mattered before anyone connected: these go into the `scope` parameter of
+  // `/admin/oauth/authorize`. One name a channel does not recognise can refuse the entire
+  // consent request — that is the 2026-09-16 eBay outage exactly (`invalid_scope`: two
+  // plausible names off the keyset broke every eBay connect for nineteen days).
+  'read_payment_customizations', 'write_payment_customizations',
   'read_payment_terms', 'write_payment_terms', 'read_script_tags', 'write_script_tags',
   'read_store_credit_accounts', 'read_store_credit_account_transactions', 'write_store_credit_account_transactions',
   'read_themes', 'write_themes', 'read_validations', 'write_validations',
