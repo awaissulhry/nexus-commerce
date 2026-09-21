@@ -27,6 +27,36 @@ and `clients/amazon-sp-api.client.ts`, and neither is in the package's diff.
 files` — the same two known Amazon local-account files, at the same count, as the
 handover before it.
 
+## ▶ OWNER'S THREE DECISIONS — answered 2026-09-21
+
+The Owner approved all three recommendations. What happened to each:
+
+| # | Decision | State |
+|---|---|---|
+| 1 | **Do not reconnect Amazon Ads** | ✅ No action — and P4.5h found a **second, worse reason** not to (below) |
+| 2 | **Settle the P5.2 envelope** | ✅ Turned into a **read**. `POST /api/amazon/financials/sync {"probe": true}` — see `build/P5.2.md` §5 |
+| 3 | **The stale `IE` → `BE` Ads row** | ✅ Self-heals on the next daily reconcile — **no production `UPDATE` needed** (`build/P4.5h.md`) |
+
+🔴🔴 **P4.5h — the reconnect landmine.** Checking *which column* to repair for #3 found
+that the connect callback wrote `marketplaceStringId` (`APJ6JRA9NG5V4`) into
+`AmazonAdsConnection.marketplace` — the column every reader matches with a **country
+code**. Measured: all 9 rows hold `IT`/`DE`/`FR`/…, and `Campaign.marketplace` is `IT`
+(150), `DE` (38), `FR` (22), `ES` (10).
+
+**The first reconnect would have rewritten all nine rows to Amazon's ids**, after which
+`adsProfileFor('IT')` finds nothing and the Ads write gate refuses **every market**
+with *"no active Amazon Ads profile for marketplace=IT"*. A reconnect is meant to
+repair a connection, not disable advertising. Fixed, and the daily reconcile now
+corrects a stale market from the scope's own metadata.
+
+⚠️ **A mutation SURVIVED and was worth chasing.** The "blanking a market" mutation
+passed 21/21. Re-running it with an assertion that the pattern actually replaced showed
+it had applied — so the hole was real, and it was in this slice's own guard:
+`!data.marketplace` is true for an **empty string**, so a change that blanked a market
+took the "nothing to do" branch. Now `Object.keys(data).length === 0` — **presence, not
+truthiness.** Same family as the banked `Array.isArray([])` trap. **Always verify a
+surviving mutation actually applied.**
+
 ## ▶ START HERE — the next package is P6 (P6.2 / 6.4 / 6.6 / 6.7 / 6.8)
 
 **P4.5 and ALL of P5 are COMPLETE.** P4.5: seven slices,
