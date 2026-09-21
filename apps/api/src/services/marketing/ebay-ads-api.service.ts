@@ -24,7 +24,7 @@ import prisma from '../../db.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { defaultRateLimitBackoffMs } from '../channel-batch/rate-limit.js'
 import { EbayApiError, parseEbayErrors } from '../ads-core/ebay-error.js'
-import { tryResolveConnection } from '../connection-resolver.service.js'
+import { tryResolveConnection, resolveConnection, listActiveConnections } from '../connection-resolver.service.js'
 
 export { EbayApiError } from '../ads-core/ebay-error.js'
 
@@ -77,10 +77,67 @@ export class EbayAdsQuotaError extends Error {
 /** Ops escape hatch for supervised manual backfills (documented in E2 doc). */
 const quotaBypassed = () => process.env.NEXUS_EBAY_ADS_QUOTA_MODE === 'off'
 
-// ── Token per active connection ─────────────────────────────────────────────
-export async function getActiveEbayAdsAuth(): Promise<{ connectionId: string; token: string } | null> {
-  // MAP.3 — DECLARED. 🔴 MAP.7: eBay ads ARE per account (EbayCampaign already
-  // relates to ChannelConnection), so this should take the account as an argument.
+// ── Token per named connection ──────────────────────────────────────────────
+export interface EbayAdsAuth { connectionId: string; token: string }
+
+/**
+ * P4.5a — the token of ONE NAMED eBay account.
+ *
+ * `EbayCampaign.channelConnectionId` is a required column with a relation, so every
+ * campaign already knows which account it belongs to. Before this, every ads write
+ * threw that away and asked for the PRIMARY account's token instead
+ * (`getActiveEbayAdsAuth`, 24 call sites) — the misroute P0.7 refused for listing
+ * writes and deferred here by name ("eBay Promoted Listings writes (ads, not
+ * listings; P4.5)").
+ *
+ * Resolving by id also refuses an account that is no longer active, which asking for
+ * "the primary" cannot do: the primary is by definition active, so a write aimed at a
+ * disconnected account silently became a write to a different, live one.
+ */
+export async function getEbayAdsAuthFor(connectionId: string): Promise<EbayAdsAuth> {
+  const conn = await resolveConnection({ accountId: connectionId })
+  if (conn.channelType !== 'EBAY') {
+    throw new Error(`[E2][ebay-ads] connection ${connectionId} is ${conn.channelType}, not EBAY — nothing was sent`)
+  }
+  const token = await new EbayAuthService().getValidToken(conn.id)
+  return { connectionId: conn.id, token }
+}
+
+/**
+ * Every active eBay account, most-primary first.
+ *
+ * P4.5a — the entity sync used to visit the primary alone and report
+ * `connections: 1`, so a second account's campaigns could never enter our database.
+ * That is also what kept the write misroute above LATENT: no campaign row named the
+ * second account, so "the primary" happened to be right every time. The producer and
+ * the consumer therefore land together — fixing the sweep without the write would
+ * have pointed every second-account campaign's writes at the first account.
+ */
+export async function listEbayAdsAccounts(): Promise<EbayAdsAuth[]> {
+  const rows = await listActiveConnections('EBAY')
+  const out: EbayAdsAuth[] = []
+  for (const row of rows) {
+    try {
+      out.push({ connectionId: row.id, token: await new EbayAuthService().getValidToken(row.id) })
+    } catch (e) {
+      // One account without a usable token must not hide the others. The caller
+      // reports the count it reached, so a shortfall is visible rather than assumed.
+      logger.warn(`[E2][ebay-ads] no usable token for eBay account ${row.id}: ${(e as Error).message}`)
+    }
+  }
+  return out
+}
+
+/**
+ * The PRIMARY eBay account's token.
+ *
+ * Only for a call that genuinely has no account of its own — an account-level
+ * eligibility read, or an operator's suggestion request made before any campaign
+ * exists. Anything that holds a campaign, an ad group or a keyword must use
+ * `getEbayAdsAuthFor` with that row's `channelConnectionId`; a census test holds the
+ * write service at zero uses of this function.
+ */
+export async function getActiveEbayAdsAuth(): Promise<EbayAdsAuth | null> {
   const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
   if (!conn) return null
   const token = await new EbayAuthService().getValidToken(conn.id)

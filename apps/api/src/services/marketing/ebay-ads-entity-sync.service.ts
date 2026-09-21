@@ -13,7 +13,8 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { normalizeCampaignStatus, EBAY_CAMPAIGN_STATUS_MAP } from '../ads-core/campaign-status.js'
 import {
-  getActiveEbayAdsAuth,
+  listEbayAdsAccounts,
+  type EbayAdsAuth,
   fetchCampaigns,
   fetchAds,
   fetchAdGroups,
@@ -239,22 +240,42 @@ async function syncCpcStructure(localCampaignId: string, token: string, external
   }
 }
 
-/** Full entity sync for the active eBay connection. */
+/**
+ * Full entity sync, over EVERY active eBay account.
+ *
+ * P4.5a — this used to call `getActiveEbayAdsAuth()` and report `connections: 1`.
+ * With two accounts connected that is not a partial sync, it is a sync that cannot
+ * see the second account's campaigns at all, so those campaigns could never enter
+ * our database.
+ *
+ * 🔴 That is also what kept the write misroute latent: with no second-account
+ * campaign row, "the primary" was right every time. Landing this sweep on its own
+ * would have made every second-account campaign visible to a write layer that still
+ * sent its changes to the FIRST account. Producer and consumer ship together.
+ */
 export async function syncEbayAdsEntities(): Promise<EntitySyncReport> {
   const report: EntitySyncReport = {
     connections: 0, campaigns: 0, ads: 0, adGroups: 0, keywords: 0, negatives: 0,
     staledAds: 0, skippedStaleFlip: false, errors: [],
   }
-  const auth = await getActiveEbayAdsAuth()
-  if (!auth) { report.errors.push('no active eBay connection'); return report }
-  report.connections = 1
+  const accounts = await listEbayAdsAccounts()
+  if (!accounts.length) { report.errors.push('no active eBay connection'); return report }
+  for (const auth of accounts) await syncOneAccount(auth, report)
+  logger.info('[E2][ebay-ads] entity sync complete', report as unknown as Record<string, unknown>)
+  return report
+}
+
+async function syncOneAccount(auth: EbayAdsAuth, report: EntitySyncReport): Promise<void> {
+  report.connections++
 
   let campaigns: EbayCampaignDTO[]
   try {
     campaigns = await fetchCampaigns(auth.token)
   } catch (e) {
-    report.errors.push(`campaigns: ${(e as Error).message}`)
-    return report
+    // One account's failure is recorded against that account and the sweep goes on;
+    // returning here would let account 1 hide account 2 exactly as before.
+    report.errors.push(`campaigns (${auth.connectionId}): ${(e as Error).message}`)
+    return
   }
 
   for (const c of campaigns) {
@@ -276,7 +297,4 @@ export async function syncEbayAdsEntities(): Promise<EntitySyncReport> {
       await syncCpsAds(localId, marketplace, auth.token, c.campaignId, report) // CPC manual also carries ads (listings)
     }
   }
-
-  logger.info('[E2][ebay-ads] entity sync complete', report as unknown as Record<string, unknown>)
-  return report
 }

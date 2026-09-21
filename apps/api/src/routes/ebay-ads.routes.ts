@@ -20,7 +20,7 @@ import { exportAdsCsv, parseAdsOpsCsv, diffOps, applyOps } from '../services/mar
 import { getLiveEbayItemIds } from '../services/marketing/ebay-listing-index.service.js'
 import { rebuildEbayListingEconomics } from '../services/ads-core/ebay-margin.js'
 import { BUILDER_TEMPLATES, buildListingPlan, mineKeywordSeeds, suggestBudgetLocal, suggestName } from '../services/marketing/ebay-ads-builder.service.js'
-import { getActiveEbayAdsAuth, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi, fetchAdvertisingEligibility, EbayAdsQuotaError } from '../services/marketing/ebay-ads-api.service.js'
+import { getActiveEbayAdsAuth, getEbayAdsAuthFor, suggestMaxCpcApi, suggestKeywordsApi, suggestBidsApi, suggestBudgetApi, fetchAdvertisingEligibility, EbayAdsQuotaError } from '../services/marketing/ebay-ads-api.service.js'
 import { EbayApiError } from '../services/ads-core/ebay-error.js'
 import { logger } from '../utils/logger.js'
 import { EBAY_MANAGED_STATUSES } from '../services/ads-core/campaign-status.js'
@@ -1305,8 +1305,9 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
     const c = await prisma.ebayCampaign.findUnique({ where: { id: req.params.id } })
     const g = await prisma.ebayAdGroup.findUnique({ where: { id: req.body.adGroupId } })
     if (!c || !g) return reply.code(404).send({ error: 'campaign or ad group not found' })
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) return reply.code(503).send({ error: 'no active eBay connection' })
+    // P4.5a — the suggestion is ABOUT this campaign, so it is asked of the account
+    // that owns it. The primary account does not know this campaign id.
+    const auth = await getEbayAdsAuthFor(c.channelConnectionId)
     try {
       const out = await suggestBidsApi(auth.token, c.externalCampaignId, g.externalAdGroupId, req.body.keywords.map((k) => ({ keywordText: k.text, matchType: k.matchType })))
       return { ok: true, suggestions: out }

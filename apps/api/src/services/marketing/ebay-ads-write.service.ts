@@ -29,7 +29,7 @@ import { normalizeCampaignStatus, canTransitionCampaignStatus, EBAY_CAMPAIGN_STA
 import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
 import { resolveConnection } from '../connection-resolver.service.js'
 import {
-  getActiveEbayAdsAuth,
+  getEbayAdsAuthFor, type EbayAdsAuth,
   createCampaignApi, campaignLifecycleApi, cloneCampaignApi,
   updateAdRateStrategyApi, updateCampaignBudgetApi, updateCampaignIdentificationApi,
   bulkCreateAdsByListingIdApi, bulkUpdateAdsBidApi, bulkDeleteAdsApi,
@@ -131,6 +131,20 @@ async function audit(params: {
   }).catch((e) => logger.error(`[E4][ebay-ads] audit write failed: ${(e as Error).message}`))
 }
 
+/**
+ * P4.5a — the eBay account a campaign's writes go to: its OWN, never "the primary".
+ *
+ * `EbayCampaign.channelConnectionId` is required and related, so the answer is on the
+ * row every one of these functions already loaded. The old code asked for the primary
+ * account's token instead, which is right only while every campaign happens to belong
+ * to the primary — the exact shape P0.7 refused for listing writes and deferred to
+ * P4.5 by name. Naming the account also refuses a campaign whose account has since
+ * been disconnected, instead of quietly sending its change to a live one.
+ */
+async function authForCampaign(c: { id: string; channelConnectionId: string }): Promise<EbayAdsAuth> {
+  return getEbayAdsAuthFor(c.channelConnectionId)
+}
+
 const SHORT = EBAY_MARKETPLACE_SHORT // D3 — one shared map
 const gate = (marketplace: string, valueCents = 0) =>
   checkMarketingWriteGate({ channel: 'EBAY', marketplace, payloadValueCents: valueCents })
@@ -149,8 +163,7 @@ export async function campaignLifecycle(ctx: OpContext, campaignId: string, acti
   const decision = gate(c.marketplace)
   const isSandboxCampaign = c.externalCampaignId.startsWith('sandbox-')
   if (decision.mode === 'live' && !isSandboxCampaign) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     await campaignLifecycleApi(auth.token, c.externalCampaignId, action)
   }
   const newStatus = action === 'pause' ? 'PAUSED' : action === 'resume' ? 'RUNNING' : 'ENDED'
@@ -165,8 +178,7 @@ export async function cloneCampaign(ctx: OpContext, campaignId: string, name: st
   const decision = gate(c.marketplace)
   let newExternalId = `sandbox-clone-${Date.now()}`
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     newExternalId = await cloneCampaignApi(auth.token, c.externalCampaignId, { campaignName: name, startDate: new Date().toISOString() })
   }
   const row = await prisma.ebayCampaign.create({
@@ -290,8 +302,7 @@ export async function createCampaign(ctx: OpContext, input: CreateCampaignInput)
 
   let externalCampaignId = `sandbox-${Date.now()}`
   if (decision.mode === 'live') {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await getEbayAdsAuthFor(conn.id)
     const payload: CreateCampaignPayload = {
       campaignName: input.name,
       marketplaceId: input.marketplace,
@@ -418,8 +429,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
 
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && toCreate.length && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     for (const batch of chunk(toCreate)) {
       live.push(...await bulkCreateAdsByListingIdApi(auth.token, c.externalCampaignId, batch.map((b) => (
         isCps
@@ -486,8 +496,7 @@ export async function setAdRates(ctx: OpContext, campaignId: string, items: Arra
 
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && toPush.length && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     for (const batch of chunk(toPush)) {
       live.push(...await bulkUpdateAdsBidApi(auth.token, c.externalCampaignId, batch.map((b) => ({ listingId: b.listingId, bidPercentage: b.ratePct.toFixed(1) }))))
     }
@@ -518,8 +527,7 @@ export async function removeAds(ctx: OpContext, campaignId: string, listingIds: 
   const decision = gate(c.marketplace)
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     for (const batch of chunk(listingIds)) live.push(...await bulkDeleteAdsApi(auth.token, c.externalCampaignId, batch))
   }
   const liveByKey = new Map(live.map((l) => [l.key, l]))
@@ -549,8 +557,7 @@ export async function updateRateStrategy(ctx: OpContext, campaignId: string, inp
   const decision = gate(c.marketplace)
   const prefs = input.adRateStrategy === 'DYNAMIC' ? [{ adRateAdjustmentPercent: String(input.adjustmentPct ?? 0), adRateCapPercent: String(input.capPct) }] : undefined
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     await updateAdRateStrategyApi(auth.token, c.externalCampaignId, {
       adRateStrategy: input.adRateStrategy,
       ...(input.adRateStrategy === 'FIXED' ? { bidPercentage: String(input.ratePct) } : { dynamicAdRatePreferences: prefs }),
@@ -583,8 +590,7 @@ export async function updateBudget(ctx: OpContext, campaignId: string, dailyBudg
   const decision = gate(c.marketplace, dailyBudgetCents)
   if (!decision.allowed) throw new Error(`write gate blocked: ${'reason' in decision ? decision.reason : 'unknown'}`)
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     await updateCampaignBudgetApi(auth.token, c.externalCampaignId, { budget: { daily: { amount: { currency: c.budgetCurrency ?? 'EUR', value: (dailyBudgetCents / 100).toFixed(2) } } } })
   }
   await prisma.ebayCampaign.update({
@@ -610,8 +616,7 @@ export async function updateCampaignIdentification(ctx: OpContext, campaignId: s
   const decision = gate(c.marketplace)
   if (!decision.allowed) throw new Error(`write gate blocked: ${'reason' in decision ? decision.reason : 'unknown'}`)
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     await updateCampaignIdentificationApi(auth.token, c.externalCampaignId, {
       campaignName: name ?? c.name,
       ...(input.endDate !== undefined ? { endDate: input.endDate === null ? null : new Date(input.endDate).toISOString() } : {}),
@@ -643,8 +648,7 @@ export async function createAdGroup(ctx: OpContext, campaignId: string, name: st
   const decision = gate(c.marketplace)
   let externalAdGroupId = `sandbox-ag-${Date.now()}`
   if (decision.mode === 'live' && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     externalAdGroupId = await createAdGroupApi(auth.token, c.externalCampaignId, { name, ...(defaultBidCents != null ? { defaultBid: { currency: 'EUR', value: (defaultBidCents / 100).toFixed(2) } } : {}) })
   }
   const row = await prisma.ebayAdGroup.create({ data: { campaignId: c.id, externalAdGroupId, name, status: 'ACTIVE', defaultBidCents: defaultBidCents ?? null } })
@@ -663,8 +667,7 @@ export async function addKeywords(ctx: OpContext, campaignId: string, adGroupId:
 
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && valid.length && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     for (const batch of chunk(valid)) {
       live.push(...await bulkCreateKeywordApi(auth.token, c.externalCampaignId, batch.map((k) => ({
         adGroupId: g.externalAdGroupId,
@@ -701,8 +704,7 @@ export async function updateKeywords(ctx: OpContext, campaignId: string, updates
   let live: BulkItemResult[] = []
   const pushable = updates.filter((u) => byId.has(u.keywordId) && !byId.get(u.keywordId)!.externalKeywordId.startsWith('sandbox-'))
   if (decision.mode === 'live' && pushable.length && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     for (const batch of chunk(pushable)) {
       live.push(...await bulkUpdateKeywordApi(auth.token, c.externalCampaignId, batch.map((u) => ({
         keywordId: byId.get(u.keywordId)!.externalKeywordId,
@@ -732,8 +734,7 @@ export async function addNegatives(ctx: OpContext, campaignId: string, adGroupId
   const decision = gate(c.marketplace)
   let live: BulkItemResult[] = []
   if (decision.mode === 'live' && negatives.length && !c.externalCampaignId.startsWith('sandbox-')) {
-    const auth = await getActiveEbayAdsAuth()
-    if (!auth) throw new Error('no active eBay connection')
+    const auth = await authForCampaign(c)
     live = await bulkCreateNegativeKeywordApi(auth.token, negatives.map((n) => ({
       campaignId: c.externalCampaignId, adGroupId: g.externalAdGroupId,
       negativeKeywordText: n.text.trim(), negativeKeywordMatchType: n.matchType,
