@@ -35,6 +35,7 @@ import { runAmazonSecretRotationTick } from './amazon-secret-rotation.job.js'
 import { runCredentialsBackfill, runCredentialsRestore } from './cx1-credentials-backfill.job.js'
 import { runAdsCredentialAdopt } from './cx3a-ads-credentials.job.js'
 import { runAdsDecisionsReseed } from './cx3b-ads-decisions-reseed.job.js'
+import { runAdsRegionReconcile } from './p45b-ads-region-reconcile.job.js'
 import { runAdsCredentialsArchive, runAdsCredentialsRestore } from './cx3b-ads-credentials-archive.job.js'
 import { runCredentialsRotate, runCredentialsStatus, runCredentialsPreflight } from './cx-credentials-rotate.job.js'
 import { runSyncDriftDetection } from './sync-drift-detection.job.js'
@@ -181,6 +182,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'cx1-credentials-restore': () => runCredentialsRestore(),
   'cx3a-ads-credentials': () => runAdsCredentialAdopt(),
   'cx3b-ads-decisions-reseed': () => runAdsDecisionsReseed(),
+  'p45b-ads-region-reconcile': () => runAdsRegionReconcile(),
   'cx3b-ads-credentials-archive': () => runAdsCredentialsArchive(),
   'cx3b-ads-credentials-restore': () => runAdsCredentialsRestore(),
   'cx-credentials-preflight': () => runCredentialsPreflight(),

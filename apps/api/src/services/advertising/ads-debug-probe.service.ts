@@ -19,12 +19,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { decryptSecret } from '../../lib/crypto.js'
+import { ADS_REGION_HOSTS } from '../ads-core/ads-regions.js'
 
-const REGION_ENDPOINT: Record<string, string> = {
-  EU: 'https://advertising-api-eu.amazon.com',
-  NA: 'https://advertising-api.amazon.com',
-  FE: 'https://advertising-api-fe.amazon.com',
-}
+// P4.5b — one region map for the whole codebase.
+const REGION_ENDPOINT: Record<string, string> = ADS_REGION_HOSTS
 
 // ── Independent LWA token fetch ──────────────────────────────────────
 // Re-implemented locally rather than reusing ads-api-client.getLwaToken

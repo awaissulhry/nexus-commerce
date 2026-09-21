@@ -14,13 +14,10 @@
 import { registerChannel, type ChannelSpec, type ConnectionHandle, type ScopeInput } from '../../catalog.js'
 import { amazonAdsRateReading } from '../../rate-readings.js'
 import { logger } from '../../../../utils/logger.js'
+import { ADS_REGION_HOSTS, ADS_REGIONS } from '../../../ads-core/ads-regions.js'
 
-/** Region → Ads API host. Same three values as `services/advertising/ads-api-client.ts`. */
-export const ADS_REGION_HOSTS: Record<string, string> = {
-  EU: 'https://advertising-api-eu.amazon.com',
-  NA: 'https://advertising-api.amazon.com',
-  FE: 'https://advertising-api-fe.amazon.com',
-}
+/** P4.5b — re-exported from the one accessor so this file cannot drift from the client. */
+export { ADS_REGION_HOSTS }
 
 interface AdsProfile {
   profileId: number | string
@@ -144,7 +141,7 @@ async function discoverScopes(handle: ConnectionHandle): Promise<ScopeInput[]> {
   if (!clientId) return []
   const token = await handle.token()
   const out: ScopeInput[] = []
-  for (const region of Object.keys(ADS_REGION_HOSTS)) {
+  for (const region of ADS_REGIONS) {
     const result = await profilesForRegion(region, token, clientId)
     if (!result || result.status !== 200) continue
     for (const p of result.profiles) {

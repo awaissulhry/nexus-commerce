@@ -263,6 +263,7 @@ import { startEbayItemStatusReconcileCron } from "./jobs/ebay-item-status-reconc
 import { startAmazonQtyReadbackCron } from "./jobs/amazon-qty-readback.job.js";
 import { startEbayReadbackCron } from "./jobs/ebay-readback.job.js";
 import { startShopifyQtyReadbackCron } from "./jobs/shopify-qty-readback.job.js";
+import { startAdsRegionReconcileCron } from "./jobs/p45b-ads-region-reconcile.job.js";
 import { startEbayAdsSyncCrons } from "./jobs/ebay-ads-sync.job.js";
 import { startReconcileCron } from "./jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
@@ -1415,6 +1416,7 @@ async function start() {
       // P4.3f — Shopify quantity read-back, the third channel's closed loop
       // (NEXUS_SHOPIFY_QTY_READBACK=0 to disable). Scheduled, not registry-only.
       startShopifyQtyReadbackCron();
+      startAdsRegionReconcileCron();
       // E2 eBay Ads read-side sync (prod default-ON; NEXUS_ENABLE_EBAY_ADS_SYNC gates)
       startEbayAdsSyncCrons();
       // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation

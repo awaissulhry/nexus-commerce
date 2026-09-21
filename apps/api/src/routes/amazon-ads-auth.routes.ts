@@ -26,6 +26,7 @@ import { logger } from '../utils/logger.js'
 import { normalizeMarketplaceCode } from '../utils/marketplace-code.js'
 import type { ConnectionIdentity } from '../services/cx/catalog.js'
 import type { GrantResult } from '../services/cx/token.service.js'
+import { ADS_REGION_HOSTS, ADS_REGIONS, type AdsRegion } from '../services/ads-core/ads-regions.js'
 
 // In-memory PKCE store — keyed by random state param, expires in 15 min.
 // Acceptable for a single-operator setup flow (connect→callback in one session).
@@ -49,8 +50,24 @@ const REDIRECT_URI =
 
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
 
-// Amazon Advertising API endpoint — EU covers IT/DE/FR/ES/UK.
-const ADS_API_BASE = 'https://advertising-api-eu.amazon.com'
+/**
+ * P4.5b — which regions this callback discovers in.
+ *
+ * It read `GET /v2/profiles` on the EU host alone. Measured on the development
+ * database 2026-09-21: the CX connector's three-region sweep records **14** advertising
+ * profiles (9 EU, 3 NA — US/CA/MX, 2 FE — AU/JP) while `AmazonAdsConnection`, which
+ * every ads job reads, holds the **9 EU ones**. Five real profiles are invisible to the
+ * money path.
+ *
+ * Sweeping all three is OFF behind one variable, and that is about SPEND, not doubt:
+ * a row here is picked up by every read job that filters `isActive: true`, so five new
+ * rows means five more profiles' worth of report and metrics calls against the Ads
+ * quota, for markets nothing in Nexus is set up for yet. With the variable unset this
+ * callback behaves exactly as it did. (Writes are separately gated: a new row is
+ * created `mode: 'sandbox'`, and the Ads write gate needs `production` +
+ * `writesEnabledAt`.)
+ */
+const allRegions = () => process.env.NEXUS_ADS_ALL_REGIONS === '1'
 
 interface LWATokenResponse {
   access_token: string
@@ -93,6 +110,50 @@ function marketplaceCountry(marketplaceStringId: string): string {
 // The two scopes the live consent URL asks for. Recorded on the grant as
 // `grantedScopes` so the Channels page compares like with like.
 const ADS_SCOPES = ['profile', 'advertising::campaign_management']
+
+/**
+ * Every advertising profile this token reaches, tagged with the region it answered in.
+ *
+ * 🔴 The region is load-bearing, not a label: `ads-api-client.ts` picks the API host
+ * from the row's `region`, and this callback used to write `region: 'EU'` for every
+ * profile. The first NA profile stored under that rule would have had its calls sent
+ * to the EU host — an authorization failure rather than a wrong number, which is the
+ * one mercy in it.
+ *
+ * A region that answers anything but 200 contributes nothing and does not fail the
+ * connect: an account with no Far-East profiles is the normal case, not an error. The
+ * EU region is the exception — it is where this grant lives, so its failure is the
+ * connect's failure, exactly as before.
+ */
+async function discoverProfiles(accessToken: string): Promise<Array<AdsProfile & { region: AdsRegion }>> {
+  const regions: AdsRegion[] = allRegions() ? ADS_REGIONS : ['EU']
+  const out: Array<AdsProfile & { region: AdsRegion }> = []
+  const perRegion: Record<string, number | string> = {}
+
+  for (const region of regions) {
+    // gateway-exempt: connector identity at connect: lists the profiles of a token before any account row exists
+    const res = await fetch(`${ADS_REGION_HOSTS[region]}/v2/profiles`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Amazon-Advertising-API-ClientId': CLIENT_ID,
+        'Content-Type': 'application/json',
+      },
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      if (region === 'EU') throw new Error(`GET /v2/profiles failed ${res.status}: ${text}`)
+      perRegion[region] = `HTTP ${res.status}`
+      continue
+    }
+    const body = (await res.json()) as AdsProfile[]
+    const found = Array.isArray(body) ? body : []
+    perRegion[region] = found.length
+    for (const p of found) out.push({ ...p, region })
+  }
+
+  logger.info('[amazon-ads-auth] profile discovery', { regions: regions.join(','), perRegion, total: out.length })
+  return out
+}
 
 /** What one discovered profile becomes in the core: a `ConnectionScope`. */
 interface AdsScopeInput {
@@ -307,22 +368,10 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'token_exchange_failed', detail: msg })
     }
 
-    // Discover all advertising profiles this token can access
-    let profiles: AdsProfile[]
+    // Discover the advertising profiles this token can access, per region.
+    let profiles: Array<AdsProfile & { region: AdsRegion }>
     try {
-      // gateway-exempt: connector identity at connect: lists the profiles of a token before any account row exists
-      const profilesRes = await fetch(`${ADS_API_BASE}/v2/profiles`, {
-        headers: {
-          Authorization: `Bearer ${tokens.access_token}`,
-          'Amazon-Advertising-API-ClientId': CLIENT_ID,
-          'Content-Type': 'application/json',
-        },
-      })
-      if (!profilesRes.ok) {
-        const text = await profilesRes.text()
-        throw new Error(`GET /v2/profiles failed ${profilesRes.status}: ${text}`)
-      }
-      profiles = (await profilesRes.json()) as AdsProfile[]
+      profiles = await discoverProfiles(tokens.access_token)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       logger.error('[amazon-ads-auth] profile discovery failed', { error: msg })
@@ -365,7 +414,9 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
         create: {
           profileId,
           marketplace: marketplaceStringId,
-          region: 'EU',
+          // P4.5b — the region this profile ANSWERED in, not a constant. The client
+          // picks its API host from this column.
+          region: profile.region,
           accountLabel,
           credentialsEncrypted,
           mode: 'sandbox',
@@ -376,9 +427,17 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
         },
         update: {
           marketplace: marketplaceStringId,
+          // A fact from the channel, so a reconnect corrects it. (The 9 rows on the
+          // development database are all EU, so this changes nothing today — it stops
+          // a row being stranded on the wrong host if Amazon ever moves a profile.)
+          region: profile.region,
           accountLabel,
           credentialsEncrypted,
-          isActive: true,
+          // P4.5b — `isActive` is NOT reasserted here. It is the operator's decision
+          // (they can switch a profile off), and a reconnect is a credential event,
+          // not a decision to advertise in every market again. This is the same rule
+          // the CX.3a heartbeat already learned the hard way: discovery must not
+          // overwrite what discovery cannot see.
           // A fresh consent issues a fresh refresh token, so the clock restarts and
           // any inherited estimate is now superseded by an observed timestamp.
           tokenIssuedAt,

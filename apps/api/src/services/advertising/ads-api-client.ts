@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
+import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -50,13 +51,11 @@ export function adsMode(): AdsMode {
   return process.env.NEXUS_AMAZON_ADS_MODE === 'live' ? 'live' : 'sandbox'
 }
 
-export type AdsRegion = 'EU' | 'NA' | 'FE'
-
-const REGION_ENDPOINT: Record<AdsRegion, string> = {
-  EU: 'https://advertising-api-eu.amazon.com',
-  NA: 'https://advertising-api.amazon.com',
-  FE: 'https://advertising-api-fe.amazon.com',
-}
+// P4.5b — region → host is ONE fact with one accessor (services/ads-core/ads-regions.ts).
+// It was written out five times; two of the five were EU-only, which is why NA and FE
+// advertising profiles were invisible to everything on this path.
+export type { AdsRegion }
+const REGION_ENDPOINT = ADS_REGION_HOSTS
 
 const FIXTURE_DIR =
   process.env.NEXUS_AMAZON_ADS_FIXTURE_DIR ??
