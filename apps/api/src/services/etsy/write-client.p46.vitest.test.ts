@@ -166,6 +166,33 @@ describe('P4.6b — the account and the path are proven, not trusted', () => {
   })
 })
 
+describe('P4.6d — a form-encoded body is a DIFFERENT body format on the same channel', () => {
+  it('🔴 `form` sends x-www-form-urlencoded, never JSON — updateListing refuses JSON', async () => {
+    // Etsy's inventory PUT is application/json and its updateListing PATCH one path away is
+    // application/x-www-form-urlencoded. Sending the wrong one is a 400 with no hint which.
+    // Found by a surviving mutation: nothing here checked the header.
+    live()
+    const etsy = await etsyWriter('etsy-1')
+    await etsy.send({ path: '/shops/42/listings/7', method: 'PATCH', form: { title: 'Mug', tags: ['a', 'b'] } })
+    expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': 'application/x-www-form-urlencoded' })
+    expect(h.calls[0].init.body).toBe('title=Mug&tags=a&tags=b')
+  })
+  it('POSITIVE CONTROL: the same client sends JSON when given a body instead', async () => {
+    live()
+    const etsy = await etsyWriter('etsy-1')
+    await etsy.send({ path: '/listings/7/inventory', method: 'PUT', body: { products: [] } })
+    expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': 'application/json' })
+    expect(h.calls[0].init.body).toBe('{"products":[]}')
+  })
+  it('a form body wins over a JSON body if a caller somehow sends both', async () => {
+    live()
+    const etsy = await etsyWriter('etsy-1')
+    await etsy.send({ path: '/shops/42/listings/7', method: 'PATCH', form: { title: 'Mug' }, body: { title: 'Other' } })
+    expect(h.calls[0].init.body).toBe('title=Mug')
+    expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': 'application/x-www-form-urlencoded' })
+  })
+})
+
 describe('P4.6b — an image upload is multipart', () => {
   it('FormData is passed through and the client does NOT set Content-Type (fetch owns the boundary)', async () => {
     live()

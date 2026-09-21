@@ -37,8 +37,20 @@ export interface EtsyWriteInput {
   /** A path on the Open API, e.g. `/shops/42/listings/7` or `/listings/7/inventory`. */
   path: string
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  /** A JSON body, or FormData for an image upload. */
+  /** A JSON body, or FormData for an image upload. Use `form` for Etsy's form-encoded endpoints. */
   body?: unknown
+  /**
+   * 🔴 P4.6d — a **form-encoded** body, which several Etsy write endpoints require and which is
+   * NOT interchangeable with JSON. `updateListing` is `application/x-www-form-urlencoded` while
+   * `updateListingInventory` one path away is `application/json`: one channel, two body formats,
+   * and sending the wrong one is a 400 with no hint about which.
+   *
+   * Arrays become repeated keys (`tags=a&tags=b`), which is what OpenAPI's default for a form
+   * body declares when no `encoding` is given — and Etsy's document declares none. Some field
+   * descriptions still say "comma-separated", which is v2's phrasing; see the P4.6d record, which
+   * names this as the one thing a live call should settle.
+   */
+  form?: Record<string, string | number | boolean | Array<string | number> | null | undefined>
   /**
    * `write` — a listing change (content, stock, price, images). Governed by the Etsy publish mode.
    * `action` — an order or buyer action. The caller owns its switch; the publish mode does not apply.
@@ -75,7 +87,8 @@ export async function etsyWriter(accountId: string): Promise<{
   const raw = async (input: EtsyWriteInput): Promise<GatewayResponse> => {
     assertEtsyPath(input.path)
     const token = await getAccessToken(accountId)
-    const isForm = typeof FormData !== 'undefined' && input.body instanceof FormData
+    const isMultipart = typeof FormData !== 'undefined' && input.body instanceof FormData
+    const encodedForm = input.form ? encodeEtsyForm(input.form) : null
     // Etsy has no idempotency key, so only the two methods HTTP itself calls repeatable are retried.
     const repeatable = input.method === 'PUT' || input.method === 'DELETE'
     const response = await gatewayCall({
@@ -85,8 +98,16 @@ export async function etsyWriter(accountId: string): Promise<{
       connectionId: accountId,
       url: `${API_BASE}${input.path}`,
       method: input.method,
-      headers: { 'x-api-key': account.apiKey, ...(isForm || input.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-      body: input.body === undefined ? null : isForm ? (input.body as FormData) : JSON.stringify(input.body),
+      headers: {
+        'x-api-key': account.apiKey,
+        ...(encodedForm !== null ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+          : isMultipart || input.body === undefined ? {}       // multipart: fetch owns the boundary
+          : { 'Content-Type': 'application/json' }),
+      },
+      body: encodedForm !== null ? encodedForm
+        : input.body === undefined ? null
+        : isMultipart ? (input.body as FormData)
+        : JSON.stringify(input.body),
       auth: { token },
       idempotent: repeatable,
       maxTransientRetries: repeatable ? 1 : 0,
@@ -120,6 +141,30 @@ export async function etsyWriter(accountId: string): Promise<{
   }
 
   return { account, shopId: account.shopId, send, raw }
+}
+
+/**
+ * A form body for Etsy's `x-www-form-urlencoded` endpoints.
+ *
+ * `undefined` is **left out** and `null` is **sent as an empty value**, because they are different
+ * instructions on a PATCH: "do not touch this field" and "clear this field". Collapsing them is
+ * how a partial update quietly blanks something nobody asked it to.
+ */
+export function encodeEtsyForm(fields: Record<string, string | number | boolean | Array<string | number> | null | undefined>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined) continue
+    if (value === null) { params.append(key, ''); continue }
+    if (Array.isArray(value)) {
+      // An EMPTY array is still sent, as a single empty value: "this listing now has no tags" is a
+      // real instruction, and sending nothing at all would mean "leave the tags alone".
+      if (value.length === 0) params.append(key, '')
+      else for (const item of value) params.append(key, String(item))
+      continue
+    }
+    params.append(key, String(value))
+  }
+  return params.toString()
 }
 
 /** Etsy's own words from an error body, capped. Returns null when the body says nothing useful. */
