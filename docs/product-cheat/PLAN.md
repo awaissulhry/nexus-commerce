@@ -1730,3 +1730,126 @@ The script and its tests are additive and can stay.
 🔴 **And correct the existing row.** *"Migrations do not drift · `check-schema-drift.mjs` · Exists ·
 🟢 Yes"* is **too broad**. That script reads only repo files and covers one direction. It should
 read *"A Prisma model has a CREATE TABLE in some migration"*, which is what it actually asserts.
+
+---
+
+## A-5 — Step 0.2 closed, with [15.8](#158--one-lane-at-a-time-needs-an-exit-condition)'s exit condition written into it
+
+**2026-09-22. Status: DONE as far as this lane can take it. One thing is the Owner's.**
+
+[15.13](#1513--ranked-what-to-do-and-when) ranks 15.8 as a **ruling to make now**, so it is applied
+here rather than left as a note.
+
+### Done when — measured, as a snapshot
+
+Step 0.2's test is *"the claims ledger has no two lanes holding the same file in the same window."*
+
+| Reading, 2026-09-22 ~01:45 | |
+|---|---|
+| Newest claim in `docs/pes-claims.md` before this lane | **2026-09-13** — nine days old |
+| Peer sessions visible | **9**, every one reporting **idle** (one at a shell) |
+| Two lanes on one file in this window | **No** |
+
+🔴 **This is a reading, not a guarantee.** Nine idle sessions still exist and any of them can wake.
+The condition holds *now*; it is not structurally enforced, which is exactly 15.8's point.
+
+A claim row for this lane was added at the top of `docs/pes-claims.md`, per rule 7 of the PES.0
+hub rulings, naming the session, the branch and every file held.
+
+🔴 **Nine open sessions is the Owner's to act on, not this lane's.** Sessions are managed by the
+Owner directly and no lane issues orders to another. This step therefore **reports** the number and
+stops there.
+
+### Gate — the exit condition, adopted verbatim from 15.8
+
+Step 0.2 as written is a standing rule, and as a standing rule it permanently caps throughput and
+contradicts **R2** — gates exist so that parallel work is safe. So the step now carries an end:
+
+> **Exit when the claims ledger is clean AND every gate in [Part 11](#part-11--the-gate-ledger) is
+> in the push hook and green. Then return to short-lived branches, one commit each.**
+>
+> **The half that is permanent: nothing merges without its gate.** The sequential-lane half is a
+> repair measure, and a repair measure with no end date becomes the new bottleneck.
+
+🟩 **The exit is not close.** [Part 11](#part-11--the-gate-ledger) lists **four** gates missing from
+the hook, three of them deliberately removed on 16–17 September: `editor-open`, `census`,
+`grid-chrome` and the 7:1 contrast gate. Re-checked today — `.githooks/pre-push` still has **0
+matches** for all four. Until [Step 4.2](#step-42--the-gates-come-back) restores them, the exit
+condition cannot be met, so one-lane-at-a-time stands.
+
+### Rollback — n/a, it is a process rule.
+
+---
+
+## A-6 — Step 0.3: half of it is already done and now proven; the other half is yours
+
+**2026-09-22. Status: PARTLY CLOSED. Two things need the Owner.**
+
+### The `vitest`-from-the-repo-root half is already built — and this lane exercised it
+
+Step 0.3's `Done when` has two clauses. The second — *"a `vitest` run started from the repo root
+cannot reach production"* — **was already solved by R-VT-12 on 2026-09-13**
+(`apps/api/src/lib/testing/database-target.ts`, wired into `apps/api/vitest.config.ts:36` and
+`vitest.setup.ts`). The plan does not mention it.
+
+🟩 **Not taken on trust — run today, in both directions.** *A restore must be exercised.*
+
+| Arm | Result |
+|---|---|
+| `npx vitest run --root apps/api …` **from the repo root** | 🔴 **REFUSED** before any connection: *"this run would talk to `ep-purple-river-altf6t3y-pooler…neon.tech` (database `neondb`) — that is Neon PRODUCTION"*, naming the resolving file, the CWD, the reason, and the correct command |
+| **Positive control:** the same command **from `apps/api`** | ✅ Passed, printing *host `127.0.0.1`, database `nexus_development` — pinned … regardless of CWD* |
+
+**So clause 2 is DONE and now has a witness.** Strike it from the step.
+
+### 🔴 The step's Gate contradicts a deliberate prior ruling
+
+Step 0.3's Gate is *"a refusal in `env.ts` when the resolved host does not match the expected
+environment."*
+
+🟩 R-VT-12 considered exactly that and **deliberately declined it**, in writing
+(`database-target.ts:29-31`):
+
+> *"It does **not** weaken `apps/api/src/env.ts`. That file decides the database for the running
+> API `:8091`, **which other sessions are using**; the guard is scoped to the vitest setup."*
+
+A refusal inside `env.ts` fires for **every** process that imports it — the running API, every
+cron, every worker — not only tests. **Nine peer sessions are open on this machine right now**
+(A-5). Putting the refusal in `env.ts` risks stopping the API they are using, to fix a hazard that
+is already fixed at the boundary where it actually occurred.
+
+➡️ **Proposed:** replace Step 0.3's Gate with *"the R-VT-12 guard, exercised in both directions"* —
+which is the gate that exists, works, and was measured above.
+
+### 🔴 "Remove `DATABASE_URL` from the root `.env`" is much larger than the step thinks
+
+The step calls this its **recommended form**. Measured today:
+
+| | |
+|---|---|
+| Files under `scripts/` + `packages/database/scripts/` | **578** |
+| Of those, files that load the **repo-root** `.env` | **267** |
+| Of those, files that also read `DATABASE_URL` | 🔴 **146** |
+
+Positive control: `scripts/check-migrations-state.mjs` — a script whose whole purpose is querying
+production — matches the pattern, so the count is measuring the right thing.
+
+**146 operational scripts would stop working**, including the migration diagnostics used to measure
+[A-1](#a-1--step-01s-premise-is-false-there-are-no-untracked-production-migrations). Many of them
+query production *on purpose*; that is their job.
+
+➡️ **Proposed:** do **not** remove the variable. Rotate the credential, and keep the refusal at the
+boundary where a wrong target is actually dangerous — which R-VT-12 already does. Removing a
+variable 146 scripts depend on trades one measured hazard for 146 unmeasured ones.
+
+### What still needs the Owner
+
+1. 🔴 **Rotate the Neon credential.** It needs the Neon console, so this lane cannot do it. It is
+   live, and [A-3](#a-3--step-03-is-live-and-confirmed-and-the-credential-is-still-in-git-history)
+   shows it in four commits of history, oldest 2026-04-27. `migrate-direct.mjs:25` already calls
+   the rotation "pending".
+2. **Ruling on the two proposals above** — the Gate, and whether the root `DATABASE_URL` stays.
+
+**Until the rotation happens, Step 0.3 cannot close**, and [Part 10](#part-10--the-dependency-graph)
+puts Phase 0 ahead of everything. 🟨 Phase 1 is safety work and does not depend on the credential,
+so this lane can proceed there while the rotation is arranged — but that is the Owner's call, since
+the plan's own ordering says Phase 0 first.

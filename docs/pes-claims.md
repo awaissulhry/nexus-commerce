@@ -1,5 +1,28 @@
 # PES lane claims — append your session BEFORE editing anything
 
+## 🟢 PLAN Phase 0 — `docs/product-cheat/PLAN.md` — session `nexus-commerce-bd` [23d532] — 2026-09-22 ~01:45
+
+Claim row, per rule 7 of the PES.0 hub rulings below. Lane: the approved plan at
+`docs/product-cheat/PLAN.md`, worked in its own order, Phase 0 first. Branch `pes/phase-0`.
+
+**Files held.** `packages/database/scripts/check-applied-but-missing.mjs` (new),
+`…/check-applied-but-missing.vitest.test.ts` (new), `…/migrate-direct.mjs`,
+`packages/database/vitest.config.mts` (new), `packages/database/package.json`, `package-lock.json`,
+`.githooks/pre-push`, `docs/product-cheat/**`. Nothing under `apps/**` is held.
+
+**Step 0.1 CLOSED and committed** (`861280afe`), all four fields measured. Its premise was out of
+date — production has 0 untracked and 0 applied-but-missing migrations (amendment A-1) — and the
+real work was its missing gate (A-2), which now runs at deploy inside `migrate-direct.mjs` with its
+test suite in the push hook.
+
+**Step 0.2 measurement, 2026-09-22 ~01:45.** Newest claim in this ledger before this row: **2026-09-13**,
+nine days ago. Peer sessions visible: **9**, all reported **idle** (one at a shell). So no two lanes
+hold the same file in this window, and Step 0.2's `Done when` holds **as a snapshot**. An idle
+session can wake, so this is a reading, not a guarantee.
+
+🔴 **Not an instruction to any other session.** Sessions are the Owner's to manage (#794). This row
+states what this lane holds so another lane can avoid it. It orders nobody.
+
 ## PR.2 test correction — 2026-09-13 (factual reversal, no new ruling)
 `ebay-trading-api.endlisting.vitest.test.ts`: the assertions “Item cannot be accessed” and “Invalid item” → success are reversed to outcome UNKNOWN / channelFact REFUSED by the Owner's PR.2 brief (W1.2). The targetRegion:null→IT test will likewise become a named refusal in W1.3. Explicit “already ended” / “auction already closed” positive controls remain. This records the reversal at the TOP as required by the delist specification D4.
 
