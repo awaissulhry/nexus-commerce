@@ -46,6 +46,10 @@ export interface PushPriceResult {
   currency: string | null
   error?: string
   refusal?: { code: string; sentence: string }
+  /** P4.4d — true when the price was QUEUED for the one dispatcher rather than
+   *  sent from here. Queued is not sent, and the answer says so. */
+  queued?: boolean
+  queueId?: string | null
   durationMs: number
 }
 
@@ -86,11 +90,20 @@ export async function pushPriceUpdate(
   if (channel === 'AMAZON') {
     return await pushAmazonPrice(prisma, sku, marketplace, snapshot, startedAt, args)
   }
-  if (channel === 'EBAY') {
-    return await pushEbayPrice(prisma, sku, marketplace, snapshot, startedAt)
+  // P4.4d — eBay, Shopify and WooCommerce all reach their existing sender
+  // through the one queue. Etsy is read-only through Wave 4 (D6) and has no
+  // price sender at all, so it is refused rather than queued for nobody.
+  if (channel === 'ETSY') {
+    return {
+      ok: false, sku, channel, marketplace,
+      pushedPrice: Number(snapshot.computedPrice), currency: snapshot.currency,
+      error: 'Etsy is read-only in Nexus (D6). Nothing was queued.',
+      durationMs: Date.now() - startedAt,
+    }
   }
-  // Other channels return NOT_IMPLEMENTED-shaped results so callers can
-  // surface the gap honestly to the user.
+  if (channel === 'EBAY' || channel === 'SHOPIFY' || channel === 'WOOCOMMERCE') {
+    return await queuePriceUpdate(prisma, sku, channel, marketplace, snapshot, startedAt, args)
+  }
   return {
     ok: false,
     sku,
@@ -98,7 +111,7 @@ export async function pushPriceUpdate(
     marketplace,
     pushedPrice: Number(snapshot.computedPrice),
     currency: snapshot.currency,
-    error: `${channel} outbound push not yet wired — see TECH_DEBT.`,
+    error: `${channel} is not a channel Nexus prices. Nothing was queued.`,
     durationMs: Date.now() - startedAt,
   }
 }
@@ -249,29 +262,104 @@ async function pushAmazonPrice(
   }
 }
 
-async function pushEbayPrice(
+/**
+ * P4.4d — eBay (and every other channel this dispatcher does not send itself)
+ * goes through the ONE outbound queue.
+ *
+ * 🔴 The plan row reads *"build the eBay price push (today a stub)"*, and the
+ * obvious reading — write a `ReviseInventoryStatus` adapter here — is the wrong
+ * build. **eBay price pushing already works.** `syncToEbay` puts a price on the
+ * eBay OFFER endpoint (the price and the quantity live on different endpoints,
+ * Phase 0.1), `ebay-variation-push` prices a variation group, and
+ * `ebay-shared-listing-push` prices a shared ItemID. What was missing was not an
+ * eBay sender; it was a way for THIS dispatcher to reach one.
+ *
+ * Writing a second sender here would also have to be exempted from P1.1's
+ * ratchet, which holds channel sends outside the gateway at **0** — and the
+ * reason that ratchet exists is exactly this: a second path that nobody
+ * maintains, with its own idea of the currency, the push lock and the market.
+ *
+ * Enqueuing instead inherits, for free and in one place:
+ *   - the push lock, the pause gates and the review verdict (dispatchSync);
+ *   - the market's currency from `Marketplace.currency` (P4.4a);
+ *   - the operator's pricing floor and ceiling (P4.4c);
+ *   - the destination account rule (P1.3) and the call ledger (P1.2);
+ *   - and the row NAMES its listing (P4.4b), so all of the above can apply.
+ *
+ * The answer is honest about what it did: `ok: true` with `queued: true`. It is
+ * queued, not sent, and the undo window is the queue's own.
+ */
+async function queuePriceUpdate(
   prisma: PrismaClient,
   sku: string,
+  channel: string,
   marketplaceCode: string,
   snapshot: any,
   startedAt: number,
+  coordinate: Pick<PushPriceArgs, 'channelConnectionId' | 'aliasKey'>,
 ): Promise<PushPriceResult> {
-  // eBay ReviseInventoryStatus skeleton. Real implementation reuses the
-  // ebay-publish.adapter pattern from DD.4 — needs a ChannelConnection
-  // tied to the eBay site (one connection per site since OAuth scope
-  // is site-scoped).
-  logger.warn('eBay outbound push: NOT_IMPLEMENTED', {
-    sku,
-    marketplace: marketplaceCode,
+  const fail = (error: string): PushPriceResult => ({
+    ok: false, sku, channel, marketplace: marketplaceCode,
+    pushedPrice: Number(snapshot.computedPrice), currency: snapshot.currency,
+    error, durationMs: Date.now() - startedAt,
+  })
+
+  const listings = await prisma.channelListing.findMany({
+    where: {
+      channel,
+      marketplace: marketplaceCode,
+      product: { sku },
+      ...(coordinate.channelConnectionId ? { channelConnectionId: coordinate.channelConnectionId } : {}),
+      ...(coordinate.aliasKey !== undefined && coordinate.aliasKey !== null ? { aliasKey: coordinate.aliasKey } : {}),
+    },
+    select: { id: true, productId: true, channelConnectionId: true, region: true, externalListingId: true },
+  })
+  // Never resolve a coordinate the caller did not name (MAP.3): two listings
+  // mean two accounts or two aliases, and picking one is a guess.
+  if (listings.length === 0) return fail(`No ${channel} ${marketplaceCode} listing for ${sku}. Publish or link it first.`)
+  if (listings.length > 1) {
+    return fail(`More than one ${channel} ${marketplaceCode} listing holds ${sku}. Name the account or the alias; none was chosen automatically.`)
+  }
+  const listing = listings[0]
+
+  const refusal = assertPushAllowed(listing as never)
+  if (refusal) {
+    return { ...fail(refusal.sentence), refusal: { code: refusal.code, sentence: refusal.sentence } }
+  }
+
+  const { createOutboundRow } = await import('./outbound-rows.js')
+  const row = await createOutboundRow(prisma as never, {
+    data: {
+      productId: listing.productId,
+      channelListingId: listing.id,
+      channelConnectionId: listing.channelConnectionId,
+      targetChannel: channel as never,
+      targetRegion: listing.region,
+      syncStatus: 'PENDING',
+      syncType: 'PRICE_UPDATE',
+      externalListingId: listing.externalListingId,
+      maxRetries: 3,
+      payload: {
+        source: 'PRICING_SNAPSHOT_PUSH',
+        productId: listing.productId,
+        price: Number(snapshot.computedPrice),
+        marketplace: marketplaceCode,
+      },
+    } as never,
+    select: { id: true },
+  })
+  logger.info('pricing-outbound: price queued for the one dispatcher', {
+    sku, channel, marketplace: marketplaceCode, listingId: listing.id, queueId: row?.id,
   })
   return {
-    ok: false,
+    ok: true,
     sku,
-    channel: 'EBAY',
+    channel,
     marketplace: marketplaceCode,
     pushedPrice: Number(snapshot.computedPrice),
     currency: snapshot.currency,
-    error: 'eBay ReviseInventoryStatus adapter not yet wired — see TECH_DEBT.',
+    queued: true,
+    queueId: row?.id ?? null,
     durationMs: Date.now() - startedAt,
   }
 }
