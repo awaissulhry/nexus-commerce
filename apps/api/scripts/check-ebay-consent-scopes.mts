@@ -18,6 +18,8 @@
  * When the full list is refused, each scope is asked alone so the failure names the culprits.
  *
  * Env:  EBAY_CLIENT_ID, EBAY_RUNAME — the PRODUCTION keyset (the same names the API seeds from).
+ *       EBAY_CANDIDATE_SCOPES — optional, comma separated (P6.7). Asked ALONE and reported;
+ *       never added to the consent request, so a refused candidate cannot break a connect.
  *       EBAY_AUTH_BASE — optional, defaults to https://auth.ebay.com.
  * Exit: 0 eBay accepts every scope · 1 eBay refuses the list · 2 could not measure.
  *
@@ -102,6 +104,40 @@ if (baseOnly.kind === 'unknown') couldNotMeasure(`control "base scope is accepte
 const fake = await ask([EBAY_SCOPE_BASE, `${EBAY_SCOPE_BASE}/nexus.scope-check.does-not-exist`])
 if (fake.kind !== 'refused' || fake.errorId !== 'invalid_scope') {
   couldNotMeasure(`control "a fake scope is refused" returned ${fake.kind === 'refused' ? fake.errorId : fake.kind === 'unknown' ? fake.detail : 'accepted'} — a refusal would not be visible`)
+}
+
+/**
+ * P6.7 — measure CANDIDATE scopes without asking for them.
+ *
+ * The plan row wants the keyset probed for returns, cancellation and inquiry scopes,
+ * and the accepted ones added. 🔴 Those two halves must not happen together: eBay
+ * refuses the WHOLE consent request when one scope is outside the keyset and names
+ * none of them, which is how `sell.logistics` and `commerce.catalog.readonly` stopped
+ * every eBay connect for nineteen days (2026-09-16). The scopes module says the rule
+ * in as many words: *"Add a scope only after the deploy check passes with it."*
+ *
+ * So a candidate is asked **alone, beside the base scope**, never inside the real
+ * request. It cannot affect whether anyone can connect, and its answer is what earns
+ * it a place in `EBAY_REQUIRED_SCOPES`.
+ *
+ *   EBAY_CANDIDATE_SCOPES='https://api.ebay.com/oauth/api_scope/sell.item,…'
+ *
+ * The exit code is unchanged: a candidate is information, not a gate. A refused
+ * candidate must never fail a deploy — it is a scope we do not have and do not use.
+ */
+const candidates = (process.env.EBAY_CANDIDATE_SCOPES ?? '')
+  .split(',').map((x) => x.trim()).filter(Boolean)
+if (candidates.length) {
+  console.log(`\n— P6.7 candidate scopes (asked alone; NOT part of the consent request) —`)
+  for (const scope of candidates) {
+    const one = await ask([EBAY_SCOPE_BASE, scope])
+    const verdict =
+      one.kind === 'accepted' ? '✓ ACCEPTED — safe to add to the consent list in scopes.ts'
+      : one.kind === 'refused' ? `✗ refused (${one.errorId}) — do NOT add it`
+      : `? could not measure — ${one.detail}`
+    console.log(`  ${verdict}  ${scope}`)
+  }
+  console.log('')
 }
 
 const full = await ask(EBAY_REQUIRED_SCOPES)
