@@ -59,6 +59,9 @@ enum SyncChannel {
   EBAY
   SHOPIFY
   WOOCOMMERCE
+  // P4.6e — Etsy has been a connected channel since P2.5, but was never a destination the
+  // outbound queue could name.
+  ETSY
   // UM.9/11/12/13 — external marketing-channel mutation routing targets.
   GOOGLE
   META

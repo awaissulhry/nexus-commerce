@@ -10,14 +10,16 @@ vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async 
 vi.mock('./channel-publish-audit.service.js', () => ({ writeAttemptLog: m.audit, digestPayload: () => 'stub' }))
 const { OutboundSyncService } = await import('./outbound-sync.service.js')
 const service: any = new OutboundSyncService()
-const paths = ['syncToAmazon', 'syncToEbay', 'syncSharedTradingQuantity', 'syncToShopify', 'syncToWoocommerce']
+// P4.6e — syncToEtsy joins the list. This array IS the parity ratchet: a new lane that forgets
+// the shared push lock fails here rather than quietly writing to a paused listing.
+const paths = ['syncToAmazon', 'syncToEbay', 'syncSharedTradingQuantity', 'syncToShopify', 'syncToWoocommerce', 'syncToEtsy']
 const holds = [
   [{ syncPaused: true }, 'PUSH_SYNC_PAUSED'], [{ offerClosedAt: new Date() }, 'PUSH_OFFER_CLOSED'],
   ...['HELD', 'WITHDRAWN', 'ENDED', 'DISCONTINUED', 'RELEASED'].map(presenceIntent => [{ presenceIntent }, `PUSH_INTENT_${presenceIntent}`]),
 ] as const
 const row = (syncType = 'STATUS_UPDATE') => ({ id: 'q', channelListingId: 'l', targetChannel: 'AMAZON', targetRegion: 'IT', syncType, product: { id: 'p', sku: 'SKU', productType: 'OUTERWEAR' }, payload: {} })
 beforeEach(() => {
-  vi.clearAllMocks(); vi.stubEnv('AMAZON_PUBLISH_MODE', 'dry-run'); vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'false'); vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'false'); vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'false')
+  vi.clearAllMocks(); vi.stubEnv('AMAZON_PUBLISH_MODE', 'dry-run'); vi.stubEnv('NEXUS_ENABLE_AMAZON_PUBLISH', 'false'); vi.stubEnv('NEXUS_ENABLE_EBAY_PUBLISH', 'false'); vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'false'); vi.stubEnv('NEXUS_ENABLE_ETSY_PUBLISH', 'false')
   m.seller.mockResolvedValue('seller'); m.read.mockResolvedValue({ id: 'l', marketplace: 'IT', platformAttributes: {}, syncPaused: false }); m.many.mockResolvedValue([])
 })
 afterEach(() => { expect(m.outbound).not.toHaveBeenCalled(); vi.unstubAllEnvs() })

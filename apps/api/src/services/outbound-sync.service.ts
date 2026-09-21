@@ -31,6 +31,7 @@ import {
   recordEbayOutcome,
 } from "./ebay-publish-gate.service.js";
 import { getShopifyPublishMode } from "./shopify-publish-gate.service.js";
+import { getEtsyPublishMode } from "./etsy-publish-gate.service.js";
 import {
   digestPayload,
   writeAttemptLog,
@@ -577,7 +578,7 @@ export class OutboundSyncService {
    */
   async queueProductUpdate(
     productId: string,
-    targetChannel: "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE",
+    targetChannel: "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY",
     syncType: "PRICE_UPDATE" | "QUANTITY_UPDATE" | "ATTRIBUTE_UPDATE" | "FULL_SYNC",
     payload: SyncPayload
   ): Promise<QueueResult> {
@@ -767,6 +768,7 @@ export class OutboundSyncService {
       case "EBAY": return this.syncToEbay(item);
       case "SHOPIFY": return this.syncToShopify(item);
       case "WOOCOMMERCE": return this.syncToWoocommerce(item);
+      case "ETSY": return this.syncToEtsy(item);
       default: throw new Error(`Unknown channel: ${item.targetChannel}`);
     }
   }
@@ -2220,7 +2222,7 @@ export class OutboundSyncService {
       if (refusal) return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: refusal, error: refusal, errorCode: "PRICE_OUT_OF_BOUNDS", retryable: false };
       work.price = payload?.price ?? null;
     } else {
-      const dispatchQuantity = await this.shopifyDispatchQuantity(queueItem, sku);
+      const dispatchQuantity = await this.linkedDispatchQuantity(queueItem, sku, 'SHOPIFY', 'Shopify');
       if (dispatchQuantity.refusal) {
         return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: dispatchQuantity.refusal, error: dispatchQuantity.refusal, errorCode: "NO_ROUTED_LOCATION", retryable: false };
       }
@@ -2243,7 +2245,16 @@ export class OutboundSyncService {
    * a superseded-but-undelivered row must not overwrite a fresher value) and clamp to the warehouse pool
    * so Shopify can never advertise units the pool doesn't have. (Moved unchanged from the REST path.)
    */
-  private async shopifyDispatchQuantity(queueItem: any, sku: string): Promise<{ quantity: number; refusal: string | null }> {
+  private async linkedDispatchQuantity(
+    queueItem: any,
+    sku: string,
+    // P4.6e — was `shopifyDispatchQuantity`, hardcoded to SHOPIFY. The Etsy lane needs the same
+    // three steps (re-read the committed quantity, apply the routed ceiling, clamp), and a second
+    // copy of them is the banked "two builders drift" trap: the drift would be a silent oversell
+    // on whichever channel was not updated. One builder, the channel as a parameter.
+    channel: 'SHOPIFY' | 'ETSY',
+    channelLabel: string,
+  ): Promise<{ quantity: number; refusal: string | null }> {
     const { product, payload, channelListing } = queueItem;
     let newQty: number = payload?.quantity ?? 0;
     if (process.env.NEXUS_SYNC_ORDERING_V2 !== "0") {
@@ -2264,8 +2275,8 @@ export class OutboundSyncService {
         // sum every warehouse row the product held, routed to this market or not.
         const ceiling = await this.routedCeiling({
           productId: product.id,
-          channel: 'SHOPIFY',
-          channelLabel: 'Shopify',
+          channel,
+          channelLabel,
           marketplace: String((cl as { marketplace?: string } | null)?.marketplace ?? 'GLOBAL'),
           sourceLocationCodes: ((cl as { sourceLocationCodes?: string[] } | null)?.sourceLocationCodes) ?? [],
           stockBuffer: cl?.stockBuffer ?? 0,
@@ -2278,7 +2289,7 @@ export class OutboundSyncService {
             publishOrderEvent({
               type: "sync.oversell.clamped",
               sku,
-              channel: "SHOPIFY",
+              channel,
               marketplace: "GLOBAL",
               requested: newQty,
               clampedTo: clamp.quantity,
@@ -2292,6 +2303,119 @@ export class OutboundSyncService {
     }
 
     return { quantity: newQty, refusal: null };
+  }
+
+  /**
+   * P4.6e — the Etsy lane.
+   *
+   * Same order as the Shopify lane, because the order is the safety: push lock, publish mode,
+   * destination account, wrong-account guard, then the change itself. What differs is Etsy's own
+   * shape, and all of it lives in services/etsy/:
+   *
+   * - **Stock and price are one endpoint** (`PUT /listings/{id}/inventory`), and it is a full
+   *   replace. `writeEtsyInventory` reads, changes only the offering named, sends, and reads back.
+   * - **Content is a different body format** (form-encoded, and partial), so it is a different
+   *   call rather than a field on the same one.
+   * - **The listing id is Etsy's**, and the offering inside it is found by SKU.
+   *
+   * The quantity comes from `linkedDispatchQuantity` — the same three steps as Shopify and, through
+   * `routedCeiling`, the same routed ceiling as Amazon and eBay. Etsy never gets a raw payload
+   * number: P4.3a is the reason (`syncInventoryFromEtsy` wrote Etsy's quantities straight into
+   * `ProductVariation.stock`, past the resolver and the pool), and the same rule binds the other way.
+   */
+  private async syncToEtsy(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'ETSY'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'ETSY',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
+    const { product, payload, channelListing, id: queueId, syncType } = queueItem;
+    const sku = channelListing?.sku ?? product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
+
+    // P4.6a — the Etsy publish gate. The channel gateway applies it too; this reports it as a
+    // SKIPPED row with the switch names rather than as a failure, which is what the Shopify lane
+    // does and what an operator reading the queue needs.
+    const etsyMode = getEtsyPublishMode();
+    if (etsyMode !== "live") {
+      return { success: true, queueId, channel: "ETSY", status: "SKIPPED",
+        message: `Etsy ${etsyMode} — not published (set NEXUS_ENABLE_ETSY_PUBLISH=true + ETSY_PUBLISH_MODE=live)`,
+        dryRun: true };
+    }
+
+    const destination = await this.destinationOf(queueItem);
+    if (!destination.connectionId) {
+      const error = noDestinationSentence("Etsy", destination.reason);
+      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_DESTINATION_ACCOUNT", retryable: false };
+    }
+    // As P0.7 for eBay / Amazon and P1.4 for Shopify: a row may not name one shop for a listing of
+    // another. Etsy listing ids are per shop, so the same number is a different listing elsewhere.
+    const listingAccount: string | null = channelListing?.channelConnectionId ?? null;
+    if (listingAccount && listingAccount !== destination.connectionId) {
+      const error = `This Etsy listing belongs to another Etsy account than the one this change was queued for. Nothing was sent.`;
+      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
+    }
+
+    const listingId = channelListing?.externalListingId ?? this.getExternalListingId(product ?? {}, "ETSY");
+    if (!listingId) {
+      const error = "This product has no Etsy listing id, so there is nothing on Etsy to change. Nothing was sent.";
+      return { success: false, queueId, channel: "ETSY", status: "FAILED", message: error, error, errorCode: "NO_EXTERNAL_LISTING", retryable: false };
+    }
+
+    const t0 = Date.now();
+    const failed = (message: string, errorCode?: string, retryable = true): SyncResult => {
+      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId!, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
+      return { success: false, queueId, channel: "ETSY", status: "FAILED", message, error: message, ...(errorCode ? { errorCode } : {}), retryable };
+    };
+
+    try {
+      let message: string;
+      if (syncType === "CONTENT_UPDATE") {
+        const { updateEtsyListingContent } = await import("./etsy/listing-write.service.js");
+        await updateEtsyListingContent({
+          accountId: destination.connectionId, listingId, pushLock: channelListing ? [channelListing] : undefined,
+          ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
+          content: {
+            title: payload?.title,
+            ...(payload && "description" in payload ? { description: payload.description } : {}),
+          },
+        });
+        message = `Etsy listing ${listingId} content updated.`;
+      } else {
+        const { writeEtsyInventory } = await import("./etsy/inventory-write.service.js");
+        const changes: Array<{ sku?: string | null; quantity?: number; price?: number }> = [];
+        const offeringSku = channelListing?.sku ?? product?.etsySku ?? product?.sku ?? null;
+        if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+          // P4.4c — the operator's own floor and ceiling, and it REFUSES rather than clamping,
+          // because a price is a number a person typed.
+          const refusal = await priceRefusalFor({ price: payload?.price, productId: product?.id, channel: 'Etsy', sku });
+          if (refusal) return failed(refusal, "PRICE_OUT_OF_BOUNDS", false);
+          changes.push({ sku: offeringSku, price: payload?.price });
+        } else {
+          const dispatchQuantity = await this.linkedDispatchQuantity(queueItem, sku, 'ETSY', 'Etsy');
+          if (dispatchQuantity.refusal) return failed(dispatchQuantity.refusal, "NO_ROUTED_LOCATION", false);
+          changes.push({ sku: offeringSku, quantity: dispatchQuantity.quantity });
+        }
+        const result = await writeEtsyInventory({
+          accountId: destination.connectionId, listingId, changes,
+          pushLock: channelListing ? [channelListing] : undefined,
+          ledger: { productId: product?.id ?? null, listingId: channelListing?.id ?? null, triggeredBy: "api" },
+        });
+        // A read-back that did not match is NOT a failed write — the change was accepted. It is a
+        // success with a warning the operator has already been alerted about (P4.6c), and saying
+        // "FAILED" here would invite a retry, which on a full-replace endpoint is the one thing
+        // that would make it worse.
+        message = !result.sent
+          ? (result.reason ?? "Etsy already holds these values; nothing was sent.")
+          : result.confirmed
+            ? `Etsy listing ${listingId} updated and confirmed.`
+            : `Etsy listing ${listingId} updated, but the read-back did not match. ${result.drift === null ? "Etsy could not be re-read." : `${result.drift.length} field(s) differ.`} An alert has been raised.`;
+      }
+      writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
+      return { success: true, queueId, channel: "ETSY", status: "SUCCESS", message };
+    } catch (error) {
+      return failed(error instanceof Error ? error.message : String(error));
+    }
   }
 
   /**
@@ -2458,7 +2582,7 @@ export class OutboundSyncService {
    */
   private getExternalListingId(
     product: any,
-    channel: "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE"
+    channel: "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY"
   ): string | null {
     switch (channel) {
       case "AMAZON":
@@ -2469,6 +2593,11 @@ export class OutboundSyncService {
         return product.shopifyProductId || null;
       case "WOOCOMMERCE":
         return product.woocommerceProductId || null;
+      case "ETSY":
+        // P4.6e — Product.etsyListingId (schema line 1381). Unlike the other three this is the
+        // listing, not a product: on Etsy a listing IS the sellable thing, and its inventory
+        // hangs off it.
+        return product.etsyListingId || null;
       default:
         return null;
     }

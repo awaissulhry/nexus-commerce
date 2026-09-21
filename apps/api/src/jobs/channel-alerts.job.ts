@@ -29,6 +29,7 @@ import {
   raiseChannelAlert, thresholds,
   deadLetterAlert, signatureFailureAlert, feedRejectionAlert, secretExpiryAlert,
   signingKeyExpiryAlert,
+  staleChannelDataAlert,
   callbackReadinessAlert,
 } from '../services/cx/channel-alerts.service.js'
 
@@ -125,6 +126,25 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
     }
   } catch (err: any) {
     logger.warn('[channel-alerts] secret-expiry sweep failed', { error: err?.message })
+  }
+
+  // 5 — P4.6e: Etsy's six-hour rule. A term of Etsy's API licence, not a performance target.
+  //     Measured with NO `where` on the date, for the same reason as the sweep above: a row that
+  //     has never been read has `lastSyncedAt` null, and that is the population this exists for.
+  //     Selecting on the presence of a date would have made the whole finding invisible.
+  try {
+    const { ETSY_MAX_CONTENT_AGE_MS, etsyFreshnessCensus } = await import('../services/etsy/freshness.js')
+    const rows = await prisma.channelListing.findMany({
+      where: { channel: 'ETSY' },
+      select: { lastSyncedAt: true },
+    })
+    if (rows.length > 0) {
+      const census = etsyFreshnessCensus(rows, now)
+      await raise(staleChannelDataAlert('Etsy', census, ETSY_MAX_CONTENT_AGE_MS / 3_600_000))
+      logger.info('[channel-alerts] etsy freshness', census)
+    }
+  } catch (err: any) {
+    logger.warn('[channel-alerts] etsy freshness sweep failed', { error: err?.message })
   }
 
   logger.info('[channel-alerts] sweep', { ...out, windowHours: hours })

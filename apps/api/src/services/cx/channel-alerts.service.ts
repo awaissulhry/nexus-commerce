@@ -77,6 +77,7 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-callback-not-production',
   'channel-deprecation',
   'channel-write-drift',
+  'channel-data-stale',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]
@@ -361,6 +362,38 @@ export function callbackReadinessAlert(
  * an alert through the same path as the other four rather than inventing a sixth, and
  * it is listed in build/P3.4.md as NOT firing today.
  */
+/**
+ * P4.6e — our copy of a channel's data is older than that channel's terms allow.
+ *
+ * Etsy's terms require listing content to be at most **six hours** stale. This is not a
+ * performance notice: it is a term of the API licence, and the measured answer today is that
+ * nothing has ever refreshed Etsy content in production (see `services/etsy/freshness.ts`).
+ *
+ * `warn`, not `danger` — nothing is being destroyed, and shouting `danger` at a standing condition
+ * is how a real danger stops being read. Keyed on the channel and the shape of the breach, so
+ * "everything is stale" and "some rows are stale" are different notices.
+ */
+export function staleChannelDataAlert(
+  channel: string,
+  census: { total: number; stale: number; neverSynced: number; oldestAt: string | null },
+  maxAgeHours: number,
+): ChannelAlert | null {
+  if (census.stale === 0) return null
+  const all = census.stale === census.total
+  return {
+    kind: 'channel-data-stale',
+    severity: 'warn',
+    title: `Nexus's copy of ${channel} data is older than ${channel} allows`,
+    body: `${channel}'s terms ask for listing content no more than ${maxAgeHours} hours old. ${all ? `All ${census.total}` : `${census.stale} of ${census.total}`} ${channel} listings are older than that${census.neverSynced > 0 ? `, and ${census.neverSynced} have never been read from ${channel} at all` : ''}${census.oldestAt ? `. The oldest was last read on ${census.oldestAt.slice(0, 10)}` : ''}.`,
+    entityType: 'Channel',
+    // "all of them" and "some of them" are different facts about the same channel, so a shop that
+    // gets a refresh working for most rows is not folded into the unread notice that said "all".
+    entityId: `${channel}:stale:${all ? 'all' : 'some'}${census.neverSynced > 0 ? ':never' : ''}`,
+    href: '/settings/channels',
+    meta: { channel, ...census, maxAgeHours },
+  }
+}
+
 /**
  * P4.6c — the channel holds something other than what we sent.
  *
