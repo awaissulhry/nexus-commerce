@@ -10,6 +10,7 @@ import {
   WooCommerceConfig,
   EtsyConfig,
 } from "../types/marketplace.js";
+import { SHOPIFY_API_VERSION } from "../services/shopify/api-version.js";
 
 /**
  * Load and validate marketplace configurations from environment variables
@@ -42,7 +43,13 @@ export class ConfigManager {
         isEnabled: true,
         shopName,
         accessToken,
-        apiVersion: process.env.SHOPIFY_API_VERSION || "2024-01",
+        // P5.3 — the one accessor, not a second stale default. This fell back to
+        // "2024-01", which has been out of Shopify support for over a year. Nothing
+        // reads this field (a census of `.apiVersion` finds only the channel spec and
+        // the call ledger), and `loadShopifyConfig` only runs when all three
+        // SHOPIFY_* variables are set — which P2.4 measured production does not have.
+        // Dead twice over, and exactly the kind of value someone copies.
+        apiVersion: process.env.SHOPIFY_API_VERSION || SHOPIFY_API_VERSION,
         webhookSecret,
         rateLimit: {
           requestsPerSecond: 2,

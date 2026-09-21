@@ -1,7 +1,7 @@
 /**
  * PB.8b — Refresh "what's currently live on Shopify" for a product.
  *
- * Calls Shopify REST API GET /admin/api/2024-01/products/{id}.json,
+ * Calls Shopify REST API GET /admin/api/{version}/products/{id}.json,
  * parses the `images` array + each variant's `image_id`, upserts
  * the result into ChannelLiveImage as a read-replica of channel state.
  *
@@ -20,6 +20,7 @@
  */
 
 import { shopifyTransport } from '../gateway/shopify.js'
+import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import prisma from '../../db.js'
 
 export interface RefreshShopifyLiveImagesResult {
@@ -94,7 +95,25 @@ export async function refreshShopifyLiveImages(
 
   const shopName = process.env.SHOPIFY_SHOP_NAME!
   const token = process.env.SHOPIFY_ACCESS_TOKEN!
-  const apiVersion = '2024-01'
+  /**
+   * P5.3 — the one accessor, not a hard-coded version.
+   *
+   * 🔴 This is the LAST Shopify call outside `2026-07`, and it has **never run**:
+   * `/admin/api/2024-01/` has **0 rows** in `OutboundApiCallLog` while every Shopify
+   * call there is on `2026-07` (measured 2026-09-21). It is guarded by `hasCreds()`,
+   * and P2.4 measured that production has no `SHOPIFY_*` variable at all — so the
+   * guard has always been closed.
+   *
+   * Moving the version cannot regress anything observable, and `2024-01` is not the
+   * safe option it looks like: it has been out of Shopify support for over a year, so
+   * the path was broken on both versions. The supported one at least fails clearly.
+   *
+   * ⚠️ If this ever does get credentials, it should move to the GraphQL admin client
+   * rather than have its REST version bumped again — a REST products read is not
+   * like-for-like on a modern version, and every other Shopify path already goes
+   * through `services/shopify/admin-client.ts`.
+   */
+  const apiVersion = SHOPIFY_API_VERSION
   const url = `https://${shopName}.myshopify.com/admin/api/${apiVersion}/products/${product.shopifyProductId}.json`
 
   let data: ShopifyProductResponse
