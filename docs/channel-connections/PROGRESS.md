@@ -1,14 +1,15 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21** (second session). Scope is now **Amazon, eBay and Etsy only** — the Owner
-deferred P8 and, with it, Shopify and WooCommerce leave the active set.
+Updated **2026-09-21**, end of the second session. Scope is **Amazon, eBay and Etsy only** —
+the Owner deferred P8, which takes Shopify and WooCommerce out of the active set with it.
 
-**What this session did:** verified the previous deploy as instructed and found **P6.2 had never
-worked in production** (fixed, deployed, proven); built **P4.6 Etsy writes** end to end (six
-slices, deployed, switches OFF); **measured P7a** and found nothing safe to delete; and fixed the
-**channel-sync worker** (P7a.1), which is now provably inert.
+**Every package P0–P6 is BUILT and deployed.** What is left is switches, probes, portals and one
+blocked clean-up. Nothing is half-written.
 
-⚠️ **Check the newest deployment reached SUCCESS before anything else.**
+⚠️ **Check the newest deployment reached SUCCESS before anything else.** At handover,
+`6cfcb143` (commit `090db711`) had been **BUILDING for ~40 minutes** where a normal build is
+~12. The live build was still `8d7b2a56`. If it never went green, that is the first thing to look
+at — and the probe fix it carries is what the Orders money question needs.
 
 ## 0. Cold start — read this much and you can work
 
@@ -27,33 +28,29 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 
 ### 0a. What is genuinely still OPEN, and who owns it
 
-✅ **Closed on 2026-09-21 (second session), all by measurement rather than by building:**
-**P6.7** (no eBay scopes exist to add), **P4.5f** (the SB request was wrong in four ways — fixed
-from Amazon's own OpenAPI document), **P4.6e's display half** (built as **P4.6f**), and **P7a's
-Ads-fallback candidate** (keep it). Section 8 items **5** and **6** are struck through.
-
-🔴 **The lesson shared by three of those:** a blocker that says *"the vendor's docs cannot be read
-automatically"* is a claim about the **renderer**. eBay 403s bots and serves a browser; Amazon's
-page needs JavaScript but **fetches a plain JSON spec** a `curl` can take. **Ask what the page
-fetches before recording a wall.**
-
-
 | # | Row | Owner | What closes it |
 |---|---|---|---|
-| 2 | **P6.8** callbacks | **Owner** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. Two alerts nag until done. `build/P6.8.md` §4 |
-| 3 | **P5.2** Finances switch | **Owner** | `POST /api/amazon/financials/sync {"probe": true}` — a **read**, writes nothing — then compare counts, then flip. `build/P5.2.md` §5 |
-| 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
-| 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
-| 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production 2026-09-21: **0 Etsy `ChannelListing` rows**. Etsy is connected (P2.5) and P4.6's writers are built, but they have nothing to act on. The six-hour rule is vacuously met for the same reason. Whatever creates Etsy listings is the next real step for that channel |
+| 1 | 🔴 **Orders money question** | **either** | Does `ItemPrice` carry the LINE total (2 × 15.99 = **31.98**), not the unit price? `upsertOrderItem` divides by quantity, so getting it wrong stores a fraction of the real price. The probe was fixed to report an order **that has items** (`build/P5.1.md` §5b) but its deploy had not gone live at handover. **Run `GET /backend/api/admin/amazon-orders-2026-probe` and read `mappedFirstOrderItems[].wouldStoreUnitPrice` against `ItemPrice.Amount` and `QuantityOrdered`.** |
+| 2 | 🔴 **Finances: the comparison run is WITHDRAWN** | either | The probe answered (`envelope: "payload"` ✅) but the next step in `build/P5.2.md` §5 **double-writes**: v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them. §4b names three safe alternatives; the cheapest is a **dry-run counting mode**. |
+| 3 | **P6.8** Etsy callback | **Owner** | Register the production HTTPS callback and the 4 webhooks in **Etsy's** console. An alert nags until done. (Shopify's half is no longer urgent — out of scope.) |
+| 4 | **P6.6** env token | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. Checked 2026-09-21 and the answer was **unusable** — the deployment was 2 minutes old and the control was empty too. |
+| 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
+| 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production: **0 Etsy `ChannelListing` rows**, and **0 Etsy accounts connected** on either business profile. Every Etsy writer is built and idle. The Owner said products are coming. |
+| 7 | **P7b** destructive drops | **Owner** | Needs a **green week** (day 1 = 2026-09-21) **and a separate yes per table**. 🔴 `AmazonAdsConnection` is NOT a candidate — 49 files read it; CX.3c moves ownership first. |
+| 8 | **Section 8** Owner items | **Owner** | 1, 2, 3, 4, 8, 9, 10 are live. **Items 5 and 6 are struck through** — neither reconnect is needed. 🔴 Item 3, the **Neon password in git history**, is the only one where someone else could act first. |
 
-🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
-keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
-every eBay connect was broken from 2026-08-29 to 2026-09-16.
+### 0a-2. The switches — 2 on, 4 gated
 
-🔴 **Do not reconnect Amazon Ads.** Two independent reasons: the grant predates
-2026-07-30 so it has **no expiry** and reconnecting would create one (P4.5g); and until
-P4.5h the callback wrote Amazon's marketplace **id** into a column every reader matches
-by **country code**, which would have refused every ads write (P4.5h).
+Full record: `build/SWITCH-ON.md`.
+
+| Switch | State |
+|---|---|
+| `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` | ✅ **ON** 2026-09-21 |
+| `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` | ✅ **ON** 2026-09-21 — will report `not-configured` until the `NEXUS_CONTRACT_ACCOUNT_*` sandbox accounts exist. That is deliberate: a visible gap beats an invisible one |
+| Amazon **Orders** 2026-01-01 | ⏸ the money question (row 1) |
+| Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) |
+| `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
+| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ products (rows 5–6) |
 
 ### 0b. Verify on the next deploy
 
@@ -139,24 +136,39 @@ took the "nothing to do" branch. Now `Object.keys(data).length === 0` — **pres
 truthiness.** Same family as the banked `Array.isArray([])` trap. **Always verify a
 surviving mutation actually applied.**
 
-## ▶ WHAT THIS SESSION DID (2026-09-21, second session)
+## ▶ WHAT THE SECOND SESSION OF 2026-09-21 FOUND
 
-1. **Verified the deploy, as instructed — and it had failed.** P6.2 shipped that morning and was
-   **0% working**. `build/P6.2b.md` has it in full; the short version is that eBay returns epoch
-   **seconds**, `new Date('1731536000')` is `Invalid Date`, and Prisma refused the whole update —
-   taking `signingKeyCheckedAt` with it, and with it the once-a-day throttle, so the sweep called
-   eBay on **every heartbeat**. P6.2's own tests asserted the **source text**, not the value, so
-   they passed the whole time. Fixed, deployed, proven.
-2. **Built P4.6** (Etsy writes), five slices, after the Owner overrode D6.
+Six defects, and **five of them were in code that said it was finished.** Every one was found by
+measuring rather than by building.
 
-## ▶ 🔴🔴 THE TRAFFIC INSTRUMENT IS BROKEN — read before re-deriving any delete list
+| # | Found | How |
+|---|---|---|
+| 1 | 🔴 **P6.2 had never worked in production** — eBay returns epoch **seconds**, `new Date('1731536000')` is `Invalid Date`, so the write failed and took the once-a-day throttle with it: the sweep called eBay **every heartbeat**. Its tests asserted the **source text**, not the value | doing §0b: reading one log line |
+| 2 | 🔴 **Amazon Orders page 2 was broken** — the window is not remembered by the cursor, and we sent neither `createdAfter` nor `lastUpdatedAfter`. Every test stubbed a single page, so the branch was unreachable | the live probe |
+| 3 | 🔴 **The SB create request was wrong four ways** — `/sb/v4/ads` is PUT-only, `adType` does not exist, `campaignId` is not a create field, and required `name` was missing | reading Amazon's OpenAPI JSON |
+| 4 | 🔴 **Finances: v0 and the new path cannot dedupe against each other** — different `amazonTransactionId` shapes, nothing bridging them. The plan's own next step would have **double-written money** | asking "is this safe to run?" before running it |
+| 5 | 🔴 **channel-sync picked an arbitrary market** and invented a `_US` listing — both latent, 235 products loaded | P7a's census |
+| 6 | 🔴 **The traffic instrument is broken** — Railway `http-requests` ignores `filterPath`; an impossible path returns the whole service total | a control |
 
-Railway's `http-requests` tool **ignores `filterPath` and `startDate`.** Measured 2026-09-21 with
-a control: a path that **cannot exist** returned **757**, the same as no filter (758), the same as
-`/api/health` (759). Every call reports `hoursBack: 1` whatever `startDate` says.
+### 🔴 The two rules that earned their keep
 
-**No `0` from that tool means anything, and neither does a large number.** `get-logs`'s `filter`
-**does** work and is the instrument that still functions. Full write-up: `build/P7a.md` §1.
+**1. "The vendor's docs cannot be read automatically" is a claim about the RENDERER.** eBay
+403s bots and serves a **real browser** normally. Amazon's reference needs JavaScript to draw
+itself but **fetches a plain JSON spec** `curl` can take. Both blockers dissolved; both had stopped
+earlier sessions. **Ask what the page fetches.**
+
+**2. Unreachable today is not unnecessary.** P7a had the Ads credential fallback convicted on "it
+does not run". It stays: it is the only credential path with profiles OFF, it is the documented
+revert lever, and P4.5e's disconnect enforcement is built on its `throw`.
+
+### And two mistakes this session made, kept because they generalise
+
+- **Two calls are two measurements.** One probe call's field paths were read against a *later*
+  call's item count — different orders — and briefly looked like a serious defect. Comparing both
+  numbers *in the same response* dissolved it.
+- **An unwitnessed zero is not a zero.** The new Etsy freshness sweep logged only when rows
+  existed, so an empty shop produced **silence** — indistinguishable from a crash. It took a
+  positive control to tell them apart. Fixed: the census logs always, including `total: 0`.
 
 ## ▶ START HERE — scope is AMAZON, eBAY and ETSY only
 
