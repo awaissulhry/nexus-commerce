@@ -76,6 +76,7 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-signing-key-expiry',
   'channel-callback-not-production',
   'channel-deprecation',
+  'channel-write-drift',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]
@@ -360,6 +361,40 @@ export function callbackReadinessAlert(
  * an alert through the same path as the other four rather than inventing a sixth, and
  * it is listed in build/P3.4.md as NOT firing today.
  */
+/**
+ * P4.6c — the channel holds something other than what we sent.
+ *
+ * 🔴 This exists because a write's RESPONSE is not what it wrote. Etsy's inventory PUT answers
+ * 200 and, on a shop with domestic + international pricing, switches that feature off and blanks
+ * the domestic price — a field the call never mentioned. Nothing in the answer says so, and
+ * nothing in Etsy's API exposes the feature, so the only instrument that can see it is a
+ * read-back compared against what was sent.
+ *
+ * `danger`, and keyed on the listing plus the fields that moved: a second, different drift on the
+ * same listing is a second fact, not a repeat of the first.
+ */
+export function writeDriftAlert(
+  channel: string,
+  listingId: string,
+  drift: ReadonlyArray<{ product: string; offering: number; field: string; sent: unknown; found: unknown }>,
+): ChannelAlert | null {
+  if (drift.length === 0) return null
+  const lines = drift.slice(0, 5).map((d) => `${d.product} offering ${d.offering}: ${d.field} was sent as ${String(d.sent)} and ${channel} now holds ${String(d.found)}`)
+  const more = drift.length > 5 ? ` (and ${drift.length - 5} more)` : ''
+  return {
+    kind: 'channel-write-drift',
+    severity: 'danger',
+    title: `${channel} changed something Nexus did not send`,
+    body: `The change to ${channel} listing ${listingId} was accepted, but the read-back does not match what was sent. ${lines.join('. ')}${more}. Check the listing on ${channel} before sending anything else to it.`,
+    entityType: 'ChannelListing',
+    // The fields that moved are part of the identity: a price drift and a later quantity drift on
+    // one listing are two different things to look at, not one notice repeated.
+    entityId: `${channel}:${listingId}:${[...new Set(drift.map((d) => d.field))].sort().join(',')}`,
+    href: '/settings/channels',
+    meta: { channel, listingId, drift: drift.slice(0, 20) },
+  }
+}
+
 export function deprecationAlert(channel: string, endpoint: string, sunsetAt: string | null): ChannelAlert {
   return {
     kind: 'channel-deprecation',

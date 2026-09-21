@@ -1,0 +1,111 @@
+/**
+ * P4.6c — the Etsy stock/price write, end to end.
+ *
+ * Read the listing's inventory, turn it into the shape the PUT accepts, change only the offerings
+ * asked for, send it, read it back, and compare. `inventory.ts` holds the transform and the
+ * comparison (pure, and tested as such); this file is the order those steps happen in and the two
+ * decisions that live between them.
+ */
+import { logger } from '../../utils/logger.js'
+import { raiseChannelAlert, writeDriftAlert } from '../cx/channel-alerts.service.js'
+import { etsyReader } from './read-client.js'
+import { etsyWriter } from './write-client.js'
+import {
+  applyOfferingChanges, inventoryDrift, toInventoryWrite,
+  type EtsyInventoryWrite, type EtsyReadInventory, type InventoryDrift, type OfferingChange,
+} from './inventory.js'
+import type { GatewayRequest } from '../gateway/gateway.js'
+
+export interface EtsyInventoryWriteInput {
+  accountId: string
+  /** Etsy's numeric listing id. */
+  listingId: number | string
+  changes: readonly OfferingChange[]
+  pushLock?: GatewayRequest['pushLock']
+  ledger?: GatewayRequest['ledger']
+  /**
+   * How long to wait before the read-back. Etsy is not read-your-writes, and an immediate read can
+   * return the value from BEFORE the change — which is indistinguishable from "the write did not
+   * land" (banked: *read before the write arrived*). Injectable so a test does not sleep.
+   */
+  readBackDelayMs?: number
+}
+
+export interface EtsyInventoryWriteResult {
+  /** False when the change was already true at Etsy, so nothing was sent. */
+  sent: boolean
+  body: EtsyInventoryWrite | null
+  /** Null when the read-back could not be read — which is NOT the same as "no drift". */
+  drift: InventoryDrift[] | null
+  confirmed: boolean
+  reason?: string
+}
+
+const DEFAULT_READ_BACK_DELAY_MS = 2_000
+
+export async function writeEtsyInventory(input: EtsyInventoryWriteInput): Promise<EtsyInventoryWriteResult> {
+  const listingId = String(input.listingId)
+  if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
+
+  const reader = await etsyReader(input.accountId)
+  const before = await reader.get<EtsyReadInventory>(`/listings/${listingId}/inventory`)
+  const current = toInventoryWrite(before)
+  const body = applyOfferingChanges(current, input.changes)
+
+  /**
+   * 🔴 Decision 1 — a change that changes nothing is NOT sent.
+   *
+   * Not an optimisation. Etsy's inventory PUT is a full replace, and on a shop with domestic +
+   * international pricing it switches that feature off and blanks the domestic price whatever the
+   * body says. So every PUT carries a risk of destroying a price, and a PUT that would set the
+   * quantity to the value Etsy already holds takes that risk for nothing at all.
+   *
+   * The comparison is structural, on the body we WOULD send against the body we just derived from
+   * Etsy's own answer — not on the caller's intent, which cannot see what Etsy holds.
+   */
+  if (JSON.stringify(body) === JSON.stringify(current)) {
+    return { sent: false, body: null, drift: [], confirmed: true, reason: 'Etsy already holds these values; nothing was sent.' }
+  }
+
+  const writer = await etsyWriter(input.accountId)
+  await writer.send({
+    path: `/listings/${listingId}/inventory`,
+    method: 'PUT',
+    body,
+    kind: 'write',
+    pushLock: input.pushLock,
+    ledger: input.ledger,
+    operation: 'PUT /listings/:id/inventory',
+  })
+
+  /**
+   * 🔴 Decision 2 — the read-back is part of the write, not a nicety.
+   *
+   * The quality bar (§7.1.12) asks for it, and here it is the ONLY instrument that can see the
+   * damage: the PUT answers 200 while having blanked a price it was never asked about. A write's
+   * response is not what it wrote.
+   *
+   * A read-back that cannot be read is reported as `confirmed: false` with `drift: null`. It is
+   * never reported as an empty drift list — "we could not check" and "we checked and it matched"
+   * are different facts, and only one of them is a pass.
+   */
+  const delay = input.readBackDelayMs ?? DEFAULT_READ_BACK_DELAY_MS
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
+
+  let drift: InventoryDrift[]
+  try {
+    const after = await reader.get<EtsyReadInventory>(`/listings/${listingId}/inventory`)
+    drift = inventoryDrift(body, after)
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    logger.warn('[etsy] the inventory change was sent but could not be confirmed', { listingId, accountId: input.accountId, reason })
+    return { sent: true, body, drift: null, confirmed: false, reason }
+  }
+
+  if (drift.length > 0) {
+    logger.warn('[etsy] the inventory read-back does not match what was sent', { listingId, accountId: input.accountId, drift })
+    const alert = writeDriftAlert('Etsy', listingId, drift)
+    if (alert) await raiseChannelAlert(alert)
+  }
+  return { sent: true, body, drift, confirmed: drift.length === 0 }
+}
