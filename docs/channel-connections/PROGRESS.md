@@ -19,7 +19,7 @@ deployment reached SUCCESS before anything else** — this session's push carrie
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
 | **P7a** | 🟢 **MEASURED 2026-09-21 — nothing is safe to delete.** P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
 | **P7b** | **each drop needs the Owner's yes**, after a green week |
-| P8 | after P7 |
+| **P8** | 🔴 **DEFERRED** — the Owner, 2026-09-21: *"we'll add the remaining channels later. Currently, we'll keep our focus solely on Amazon, eBay, and Etsy."* Do not start it. Shopify and WooCommerce are also out of the active three |
 
 ### 0a. What is genuinely still OPEN, and who owns it
 
@@ -150,7 +150,15 @@ a control: a path that **cannot exist** returned **757**, the same as no filter 
 **No `0` from that tool means anything, and neither does a large number.** `get-logs`'s `filter`
 **does** work and is the instrument that still functions. Full write-up: `build/P7a.md` §1.
 
-## ▶ START HERE — P7a is measured (nothing to delete); next is P7b, then P8
+## ▶ START HERE — scope is AMAZON, eBAY and ETSY only
+
+The Owner narrowed it on 2026-09-21: *"we'll add the remaining channels later. Currently, we'll
+keep our focus solely on Amazon, eBay, and Etsy."* **P8 is deferred**, and Shopify and WooCommerce
+fall out of the active set with it — Shopify publishing stays `gated`, and its open P6.8 callback
+row is no longer urgent.
+
+P7a is measured (nothing to delete) and P7b needs a green week plus a yes per drop. So the work in
+scope is: the open rows in §0a for the three channels, and
 
 **P7 has two halves, and only the first is yours to start** (FINAL-PLAN §6, P7):
 
