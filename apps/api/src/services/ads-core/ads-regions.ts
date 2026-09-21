@@ -33,12 +33,15 @@ export const ADS_REGION_HOSTS: Record<AdsRegion, string> = {
 export const ADS_REGIONS: AdsRegion[] = ['EU', 'NA', 'FE']
 
 /**
- * Amazon's LWA consent page for a region.
+ * Amazon's LWA consent page per region.
  *
- * Amazon serves consent from three hosts and the advertiser's own Amazon account
- * decides which one accepts their sign-in. `www.amazon.com/ap/oa` is the North
- * American page and was used for every region — see `build/P4.5c.md` for what that
- * does and does not break.
+ * Source: FINAL-PLAN.md §4.1 — *"Amazon Ads uses the North America consent page for
+ * every region … Research says the EU page is `eu.account.amazon.com`."* These three
+ * values come from that research; they have **not** been re-verified against Amazon's
+ * own pages in this session.
+ *
+ * The token endpoint is NOT regional — `api.amazon.com/auth/o2/token` serves all three,
+ * which is why only this map is per region.
  */
 export const ADS_CONSENT_HOSTS: Record<AdsRegion, string> = {
   NA: 'https://www.amazon.com/ap/oa',
@@ -64,4 +67,30 @@ export function adsHostFor(region: string | null | undefined): string {
   const r = asAdsRegion(region)
   if (!r) throw new Error(`[ads] "${region ?? 'null'}" is not an Amazon Ads region (EU, NA, FE) — nothing was sent`)
   return ADS_REGION_HOSTS[r]
+}
+
+/**
+ * P4.5c — the consent page to send an operator to.
+ *
+ * 🔴 **Deliberately NOT regional by default, and that is the whole decision.**
+ *
+ * The plan calls the North-America-for-everything consent page a gap, and as a
+ * capability it is. But the evidence says it is not a live breakage: the EU grant this
+ * account runs on **was obtained through `www.amazon.com/ap/oa`** and works — nine EU
+ * profiles, 469k logged calls. `services/cx/connectors/amazon-ads/spec.ts` records the
+ * same thing in its header, from a session that had already tried the regional hosts:
+ * *"the regional consent hosts this file guessed as a stub are not what the account was
+ * granted through."*
+ *
+ * So moving the default would risk a live, working sign-in to close a gap nobody has
+ * hit. Instead the capability is real and explicit: `NEXUS_ADS_CONSENT_REGIONAL=1`
+ * uses each region's own page, and `/connect?region=…` names the region. With the
+ * variable unset every consent URL is byte-identical to today's.
+ *
+ * Flip it when an advertiser whose Amazon account is EU-only or FE-only cannot sign in
+ * at the North American page — which is the symptom this gap actually produces.
+ */
+export function adsConsentUrl(region: string | null | undefined): string {
+  if (process.env.NEXUS_ADS_CONSENT_REGIONAL !== '1') return ADS_CONSENT_HOSTS.NA
+  return ADS_CONSENT_HOSTS[asAdsRegion(region) ?? 'NA']
 }

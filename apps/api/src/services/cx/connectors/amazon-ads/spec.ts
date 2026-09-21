@@ -14,7 +14,7 @@
 import { registerChannel, type ChannelSpec, type ConnectionHandle, type ScopeInput } from '../../catalog.js'
 import { amazonAdsRateReading } from '../../rate-readings.js'
 import { logger } from '../../../../utils/logger.js'
-import { ADS_REGION_HOSTS, ADS_REGIONS } from '../../../ads-core/ads-regions.js'
+import { ADS_REGION_HOSTS, ADS_REGIONS, adsConsentUrl } from '../../../ads-core/ads-regions.js'
 
 /** P4.5b — re-exported from the one accessor so this file cannot drift from the client. */
 export { ADS_REGION_HOSTS }
@@ -182,10 +182,11 @@ export const amazonAdsSpec: ChannelSpec = {
   available: true,
   auth: {
     mode: 'oauth2_pkce',
-    // The hosts the working flow uses. Amazon serves LWA for Ads from the global
-    // endpoints; the regional consent hosts this file guessed as a stub are not what
-    // the account was granted through.
-    authorizeUrl: () => 'https://www.amazon.com/ap/oa',
+    // P4.5c — one function decides the consent host, shared with the live route.
+    // Unless NEXUS_ADS_CONSENT_REGIONAL=1 it answers the North American page for
+    // every region, which is the page this account was actually granted through —
+    // the regional hosts this file once guessed as a stub are not.
+    authorizeUrl: (ctx) => adsConsentUrl(ctx.region),
     tokenUrl: () => 'https://api.amazon.com/auth/o2/token',
     authorizationParams: { response_type: 'code' },
     tokenRequestAuth: 'body',

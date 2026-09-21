@@ -26,7 +26,7 @@ import { logger } from '../utils/logger.js'
 import { normalizeMarketplaceCode } from '../utils/marketplace-code.js'
 import type { ConnectionIdentity } from '../services/cx/catalog.js'
 import type { GrantResult } from '../services/cx/token.service.js'
-import { ADS_REGION_HOSTS, ADS_REGIONS, type AdsRegion } from '../services/ads-core/ads-regions.js'
+import { ADS_REGION_HOSTS, ADS_REGIONS, adsConsentUrl, asAdsRegion, type AdsRegion } from '../services/ads-core/ads-regions.js'
 
 // In-memory PKCE store — keyed by random state param, expires in 15 min.
 // Acceptable for a single-operator setup flow (connect→callback in one session).
@@ -306,8 +306,15 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       code_challenge_method: 'S256',
     })
 
-    const consentUrl = `https://www.amazon.com/ap/oa?${params.toString()}`
-    logger.info('[amazon-ads-auth] redirecting to PKCE consent page', { state })
+    // P4.5c — the consent page, per region. `?region=EU|NA|FE` names it; unset means
+    // the grant's home region. With NEXUS_ADS_CONSENT_REGIONAL unset this is the
+    // North American page for every region, exactly as before — see the reasoning on
+    // `adsConsentUrl`. Logged either way, so a failed sign-in says which page it went
+    // to instead of leaving that to be guessed.
+    const region = asAdsRegion((_request.query as { region?: string })?.region) ?? 'EU'
+    const consentHost = adsConsentUrl(region)
+    const consentUrl = `${consentHost}?${params.toString()}`
+    logger.info('[amazon-ads-auth] redirecting to PKCE consent page', { state, region, consentHost })
     return reply.redirect(consentUrl)
   })
 
