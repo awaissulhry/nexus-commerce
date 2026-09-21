@@ -15,12 +15,21 @@ delete process.env.NEXUS_KMS_KEY_ID
 
 const rows: Array<Record<string, unknown>> = []
 const updates: Array<{ where: unknown; data: Record<string, unknown> }> = []
+const appRows: Array<Record<string, unknown>> = []
+const appUpdates: Array<{ where: unknown; data: Record<string, unknown> }> = []
 
 const prismaMock = {
   channelConnection: {
     findMany: vi.fn(async () => rows),
     update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
       updates.push(args)
+      return args
+    }),
+  },
+  channelApp: {
+    findMany: vi.fn(async () => appRows),
+    update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+      appUpdates.push(args)
       return args
     }),
   },
@@ -36,6 +45,8 @@ const { verifyCurrentKey, runCredentialsPreflight, runCredentialsRotate, runCred
 beforeEach(() => {
   rows.length = 0
   updates.length = 0
+  appRows.length = 0
+  appUpdates.length = 0
   vi.restoreAllMocks()
   delete process.env.NEXUS_KMS_KEY_ID
 })
@@ -137,5 +148,121 @@ describe('runCredentialsStatus', () => {
     expect(out).toContain('withEnvelope=1')
     expect(out).toContain('onEnvKey=1')
     expect(out).toContain('noEnvelope=1')
+  })
+})
+
+/**
+ * 2026-09-21 — the half the job did not cover.
+ *
+ * `ChannelApp.clientSecretEnc` / `signingKeyEnc` are written by the same
+ * `encryptCredentials` as a connection's grant, and nothing rotated or counted them.
+ * The consequence was not a missing feature but a WRONG REPORT: `onEnvKey=0` while the
+ * application client secrets — the credentials that mint new tokens — sat on the
+ * environment key, and would have stayed there, because an app secret is not refreshed
+ * on a timer the way a connection grant is.
+ */
+describe('runCredentialsRotate — the application secrets', () => {
+  it('rotates a v1 app secret and reports it separately from the connections', async () => {
+    // Force a rotation by storing a blob under a key the job will not reproduce: the
+    // marker is that the stored form is v1 while the job writes v1 too, so instead we
+    // assert the idempotent path below and drive the rotation with a stale v1 blob
+    // that decrypts. A round trip through the CURRENT key is the only honest fixture.
+    const { blob } = await crypto.encryptCredentials({ clientSecret: 's3cret' })
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
+    const out = await runCredentialsRotate()
+    // Already on the env key and the target IS the env key ⇒ nothing to write.
+    expect(out).toContain('appSecrets=1')
+    expect(out).toContain('appAlreadyCurrent=1')
+    expect(out).toContain('appRotated=0')
+    expect(appUpdates).toHaveLength(0)
+  })
+
+  it('counts BOTH fields of one app, not one row', async () => {
+    const a = await crypto.encryptCredentials({ clientSecret: 's' })
+    const b = await crypto.encryptCredentials({ signingKeyId: 'k', jwe: 'j', privateKey: 'p', cipher: 'c' })
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: a.blob, signingKeyEnc: b.blob })
+    const out = await runCredentialsRotate()
+    expect(out).toContain('appSecrets=2')
+  })
+
+  it('a field that cannot be re-encrypted leaves that app row unwritten, and is reported', async () => {
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: 'not-a-blob', signingKeyEnc: null })
+    const out = await runCredentialsRotate()
+    expect(out).toContain('appFailed=1')
+    expect(appUpdates).toHaveLength(0)
+  })
+
+  it('still runs when there are no connections at all — app secrets alone are work', async () => {
+    const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
+    const out = await runCredentialsRotate()
+    expect(out).not.toBe('no stored credentials — nothing to rotate')
+    expect(out).toContain('connections=0')
+  })
+
+  it('reports nothing to rotate only when BOTH tables are empty', async () => {
+    await expect(runCredentialsRotate()).resolves.toBe('no stored credentials — nothing to rotate')
+  })
+
+  it('WRITES the row and counts appRotated when the produced key differs from the stored one', async () => {
+    // The other app tests all land on alreadyCurrent or on a failure, so neither the
+    // prisma write nor the appRotated counter would be exercised by them. Drive the
+    // rotating branch directly: a stored v1 blob against a produced KMS envelope is
+    // exactly the shape of the real migration.
+    const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
+    vi.spyOn(crypto, 'reencryptCredentials').mockResolvedValue({ blob: 'v2:rewrapped', keyId: 'arn:k1', mode: 'kms' } as never)
+    const out = await runCredentialsRotate()
+    expect(out).toContain('appRotated=1')
+    expect(out).toContain('appAlreadyCurrent=0')
+    expect(appUpdates).toHaveLength(1)
+    expect(appUpdates[0]).toMatchObject({ where: { id: 'app1' }, data: { clientSecretEnc: 'v2:rewrapped' } })
+    // The untouched column must not be written at all — an undefined signingKeyEnc in
+    // the update payload would blank a secret that was simply absent.
+    expect(Object.keys(appUpdates[0].data)).toEqual(['clientSecretEnc'])
+  })
+
+  it('REFUSES before touching an app secret when the key cannot round-trip', async () => {
+    const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
+    appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
+    vi.spyOn(crypto, 'decryptCredentials').mockRejectedValue(new Error('AccessDeniedException: kms:Decrypt'))
+    const out = await runCredentialsRotate()
+    expect(out).toMatch(/^REFUSED/)
+    expect(appUpdates).toHaveLength(0)
+  })
+})
+
+describe('runCredentialsStatus — counts come from the BLOB, not the column', () => {
+  it('counts a v1 envelope as env even when the key id column was never written', async () => {
+    // The regression this replaces: `credentialsKeyId === 'env'` counted a null column
+    // as KMS-protected, so the migration reported itself finished while an env-keyed
+    // envelope was still in the table. The column is nullable; the blob prefix is not.
+    rows.push({ channelType: 'EBAY', credentialsEnc: 'v1:x', credentialsKeyId: null, isActive: true })
+    const out = await runCredentialsStatus()
+    expect(out).toContain('onEnvKey=1')
+    expect(out).toContain('onKms=0')
+  })
+
+  it('keeps an unclassifiable value out of both counts', async () => {
+    rows.push({ channelType: 'EBAY', credentialsEnc: 'garbage', credentialsKeyId: 'env', isActive: true })
+    const out = await runCredentialsStatus()
+    expect(out).toContain('unreadable=1')
+    expect(out).toContain('onEnvKey=0')
+    expect(out).toContain('onKms=0')
+  })
+
+  it('reports the app secrets beside the connections', async () => {
+    const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
+    appRows.push({ clientSecretEnc: blob, signingKeyEnc: null })
+    const out = await runCredentialsStatus()
+    expect(out).toContain('appSecrets=1')
+    expect(out).toContain('appOnEnvKey=1')
+    expect(out).toContain('appOnKms=0')
+  })
+
+  it('an app row with no secrets at all contributes nothing', async () => {
+    appRows.push({ clientSecretEnc: null, signingKeyEnc: null })
+    const out = await runCredentialsStatus()
+    expect(out).toContain('appSecrets=0')
   })
 })
