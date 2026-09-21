@@ -1,3 +1,4 @@
+import { marketCurrencyAcrossChannels, type MarketCurrencyRow } from '../pim/market-currency.js'
 /**
  * FM.5 — shared propagation helpers.
  *
@@ -12,13 +13,13 @@
 // across markets in different currencies.
 export const PRICE_FIELD_KEYS = new Set(['our_price', 'price', 'purchasable_offer.our_price'])
 
-export function currencyForMarket(mp: string): string {
-  const m = (mp ?? '').toUpperCase()
-  if (m === 'UK' || m === 'GB') return 'GBP'
-  if (m === 'US') return 'USD'
-  if (m === 'JP') return 'JPY'
-  return 'EUR'
-}
+/**
+ * P4.4a — REMOVED. This listed UK/US/JP and returned EUR for everything else,
+ * so Poland (PLN), Sweden (SEK) and Turkey (TRY) all read as EUR and a price
+ * copied into them looked same-currency. An identical function of the same name
+ * lived in `listing-automation/triggers.ts`, neither importing the other.
+ * Use `marketCurrencyAcrossChannels` with rows from `allMarketCurrencyRows()`.
+ */
 
 /**
  * For a price field, mark any target whose currency differs from the
@@ -31,12 +32,22 @@ export function guardCurrency<T extends { marketplace: string; action: string }>
   entries: T[],
   fieldKey: string,
   sourceMarketplace: string,
+  /** P4.4a — the configured market currencies, loaded once by the caller
+   *  (`allMarketCurrencyRows()`). Passed in so this stays a pure function. */
+  currencyRows: readonly MarketCurrencyRow[],
 ): Array<T & { currencyMismatch?: boolean }> {
   if (!PRICE_FIELD_KEYS.has(fieldKey)) return entries
-  const srcCurrency = currencyForMarket(sourceMarketplace)
-  return entries.map((e) =>
-    currencyForMarket(e.marketplace) !== srcCurrency
+  // A market whose currency is not configured cannot be shown as a safe copy
+  // target. Marking it a mismatch is the fail-closed answer: the operator sets
+  // the price by hand instead of copying a number in the wrong currency.
+  const currencyOf = (market: string): string | null => {
+    try { return marketCurrencyAcrossChannels(market, currencyRows) } catch { return null }
+  }
+  const srcCurrency = currencyOf(sourceMarketplace)
+  return entries.map((e) => {
+    const target = currencyOf(e.marketplace)
+    return srcCurrency === null || target === null || target !== srcCurrency
       ? { ...e, action: 'skip', currencyMismatch: true }
-      : e,
-  )
+      : e
+  })
 }

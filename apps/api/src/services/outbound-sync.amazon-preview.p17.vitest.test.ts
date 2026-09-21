@@ -19,6 +19,8 @@ vi.mock('../db.js', () => {
   const rows: Record<string, unknown> = {
     channelListing: { id: 'l', marketplace: 'IT', platformAttributes: {}, syncPaused: false, translations: [] },
     product: { id: 'p', sku: 'SKU', name: 'Jacket', translations: [], parent: null },
+    // P4.4a — the Amazon price attribute reads Marketplace.currency.
+    marketplace: { currency: 'EUR', languages: ['it'], language: 'it' },
   }
   const table = (model: string) => ({
     findUnique: model === 'channelListing' ? m.read : vi.fn(async () => rows[model] ?? null),

@@ -11,7 +11,8 @@ import { describe, it, expect, vi } from 'vitest'
 
 // outbound-sync.service imports prisma + clients at module load; mock the DB so
 // importing the pure helpers under test never spins up a real PrismaClient.
-vi.mock('../db.js', () => ({ default: { marketplace: { findFirst: async ({ where }: any) => ({ languages: [where.code === 'DE' ? 'de' : 'it'] }) } } }))
+// P4.4a — the currency is Marketplace DATA now, so the double answers per market.
+vi.mock('../db.js', () => ({ default: { marketplace: { findFirst: async ({ where }: any) => ({ currency: ({ UK: 'GBP', US: 'USD', PL: 'PLN', SE: 'SEK', TR: 'TRY' } as Record<string, string>)[String(where.code).toUpperCase()] ?? 'EUR', languages: [where.code === 'DE' ? 'de' : 'it'] }) } } }))
 
 import {
   ebayCurrencyForMarket,
@@ -28,11 +29,15 @@ import {
 import { computeAvailableToPublish } from './available-to-publish.service.js'
 
 describe('Phase 0.1 — eBay sync payload helpers', () => {
-  it('currency is EUR for EU sites, GBP for GB — never USD', () => {
-    expect(ebayCurrencyForMarket('EBAY_IT')).toBe('EUR')
-    expect(ebayCurrencyForMarket('EBAY_DE')).toBe('EUR')
-    expect(ebayCurrencyForMarket('EBAY_GB')).toBe('GBP')
-    expect(ebayCurrencyForMarket(undefined)).toBe('EUR')
+  // P4.4a — the helper reads Marketplace.currency now, so it is async. WHICH
+  // currency each market uses is the table's fact and is tested with the
+  // accessor (market-currency.p44); what is asserted here is that this helper
+  // reports what the table says, including for the prefixed `EBAY_GB` form.
+  it('currency is EUR for EU sites, GBP for GB — never USD', async () => {
+    expect(await ebayCurrencyForMarket('EBAY_IT')).toBe('EUR')
+    expect(await ebayCurrencyForMarket('EBAY_DE')).toBe('EUR')
+    expect(await ebayCurrencyForMarket('EBAY_GB')).toBe('GBP')
+    expect(await ebayCurrencyForMarket(undefined)).toBe('EUR')
   })
 
   it('qty merges under shipToLocationAvailability and preserves existing content (no wipe)', () => {

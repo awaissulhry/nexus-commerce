@@ -409,6 +409,16 @@ node scripts/check-sync-ledger-source.mjs || {
   echo "❌ sync-ledger source FAILED — see message above (rule + why: scripts/check-sync-ledger-source.mjs header)"
   exit 1
 }
+# P4.4a (2026-09-21) — which currency a market prices in is Marketplace.currency,
+# read through ONE accessor. It was re-implemented in eight places (two functions
+# with the same name in two files), all agreeing on EUR/GBP and disagreeing on the
+# rest — so a price pushed to Amazon Poland, Sweden or Turkey carried EUR, and
+# Amazon reports that as a success. The gate carries its own detector controls.
+echo "→ Checking market currency comes from one accessor (P4.4a)..."
+node apps/api/scripts/check-market-currency.mjs || {
+  echo "❌ market-currency FAILED — see message above (rule + why: apps/api/scripts/check-market-currency.mjs header)"
+  exit 1
+}
 # EV.4 — every scheduled job goes through the cluster-safe cron wrapper.
 # node-cron is per-process: a direct import means that job runs once per
 # replica, which is how 117 crons become 234.

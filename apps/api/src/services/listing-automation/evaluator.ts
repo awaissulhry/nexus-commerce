@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger.js'
 import { evaluateAllRulesForTrigger } from '../automation-rule.service.js'
 import './action-handlers.js' // side-effect: register listings actions
 import { currencyForMarket, type ListingCoord, type ListingRuleContext } from './triggers.js'
+import { allMarketCurrencyRows, type MarketCurrencyRow } from '../pim/market-currency.js'
 
 const MAX_PRODUCTS = 2000 // safety cap per tick
 
@@ -87,13 +88,16 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function buildCoords(p: ProductWithListings): ListingCoord[] {
+function buildCoords(p: ProductWithListings, currencyRows: readonly MarketCurrencyRow[]): ListingCoord[] {
   return p.channelListings.map((l) => ({
     channel: l.channel,
     marketplace: l.marketplace,
     price: toNum(l.price),
     quantity: l.quantity,
-    currency: currencyForMarket(l.marketplace),
+    // P4.4a — null when the market has no configured currency. The price trigger
+    // below filters `=== 'EUR'`, so a null drops out of it, which is the right
+    // answer: an unconfigured market must not be compared as if it were EUR.
+    currency: currencyForMarket(l.marketplace, currencyRows),
     listingStatus: l.listingStatus,
     listed: l.isPublished,
   }))
@@ -132,13 +136,15 @@ export async function runListingAutomationOnce(opts?: { forceDryRun?: boolean })
     take: MAX_PRODUCTS,
   })) as unknown as ProductWithListings[]
 
+  // P4.4a — the configured market currencies, read once for the whole run.
+  const currencyRows = await allMarketCurrencyRows()
   if (wantPrice) result.byTrigger.price_diverged = { productsScanned: 0, matched: 0 }
   if (wantInv) result.byTrigger.inventory_low = { productsScanned: 0, matched: 0 }
   if (wantHealth) result.byTrigger.listing_health_low = { productsScanned: 0, matched: 0 }
   if (wantContent) result.byTrigger.master_content_changed = { productsScanned: 0, matched: 0 }
 
   for (const p of products) {
-    const coords = buildCoords(p)
+    const coords = buildCoords(p, currencyRows)
     const base = {
       product: { id: p.id, sku: p.sku, name: p.name, basePrice: toNum(p.basePrice) },
       listings: coords,

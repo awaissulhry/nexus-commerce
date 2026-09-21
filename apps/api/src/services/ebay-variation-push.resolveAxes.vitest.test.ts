@@ -275,7 +275,7 @@ describe('resolveVariationAxes — DECLARED mode (D2/D7/D8)', () => {
     const writeInput = buildSharedListingInput(
       parentRow as unknown as Parameters<typeof buildSharedListingInput>[0],
       variantRows as unknown as Parameters<typeof buildSharedListingInput>[1],
-      'IT',
+      'IT', undefined, undefined, 'EUR',
     )
     const writeAxes = Object.keys(writeInput.variations[0].specifics).sort()
     // READ path — the axes the variation-order modal / cockpit / images picker show.

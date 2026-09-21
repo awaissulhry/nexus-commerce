@@ -1,3 +1,4 @@
+import { marketCurrencyAcrossChannels, type MarketCurrencyRow } from '../pim/market-currency.js'
 /**
  * OL.D — Listing-automation domain constants + shared types.
  *
@@ -46,7 +47,7 @@ export interface ListingCoord {
   marketplace: string
   price: number | null
   quantity: number | null
-  currency: string
+  currency: string | null
   listingStatus: string | null
   listed: boolean
 }
@@ -63,13 +64,21 @@ export interface ListingRuleContext {
   content?: { staleCount: number; masterName: string | null }
 }
 
-// Per-market currency (mirrors the cross-channel matrix + preflight).
-export function currencyForMarket(mp: string): string {
-  const m = (mp ?? '').toUpperCase()
-  if (m === 'UK' || m === 'GB') return 'GBP'
-  if (m === 'US') return 'USD'
-  if (m === 'JP') return 'JPY'
-  return 'EUR'
+/**
+ * P4.4a — the market's currency from the `Marketplace` row.
+ *
+ * What this replaced was a copy, byte for byte, of a function with the SAME NAME
+ * in `field-resolution/propagation-fill.ts` — neither importing the other, both
+ * listing UK/US/JP and returning EUR for everything else. So Poland (PLN),
+ * Sweden (SEK) and Turkey (TRY) all read as EUR, and an automation rule that
+ * only touches "same currency" listings treated them as euro markets.
+ *
+ * It stays SYNC because its callers are `.map` / `.filter` callbacks; the rows
+ * are loaded once by the caller. `null` = not configured, and a caller must
+ * treat that as "not the same currency", never as EUR.
+ */
+export function currencyForMarket(mp: string, currencyRows: readonly MarketCurrencyRow[]): string | null {
+  try { return marketCurrencyAcrossChannels(mp, currencyRows) } catch { return null }
 }
 
 // Language authority is Marketplace.languages; consumers pass their channel.

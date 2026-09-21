@@ -13,12 +13,22 @@ import { currencyForMarket, type ListingRuleContext } from './triggers.js'
 import { matchesAllConditions, type Condition } from '../automation-rule.service.js'
 
 describe('listing-automation market maps', () => {
+  // P4.4a — a market's currency is Marketplace data now, not a function of its
+  // code. The rows are what the caller loads; the last two arms are the change
+  // that matters: an unknown market is null (never EUR), and Poland is PLN.
+  const rows = [
+    { channel: 'AMAZON', code: 'IT', currency: 'EUR' },
+    { channel: 'AMAZON', code: 'UK', currency: 'GBP' },
+    { channel: 'AMAZON', code: 'US', currency: 'USD' },
+    { channel: 'AMAZON', code: 'PL', currency: 'PLN' },
+  ]
   it('currencyForMarket', () => {
-    expect(currencyForMarket('IT')).toBe('EUR')
-    expect(currencyForMarket('UK')).toBe('GBP')
-    expect(currencyForMarket('GB')).toBe('GBP')
-    expect(currencyForMarket('US')).toBe('USD')
-    expect(currencyForMarket('zz')).toBe('EUR')
+    expect(currencyForMarket('IT', rows)).toBe('EUR')
+    expect(currencyForMarket('UK', rows)).toBe('GBP')
+    expect(currencyForMarket('GB', rows)).toBe('GBP')
+    expect(currencyForMarket('US', rows)).toBe('USD')
+    expect(currencyForMarket('PL', rows)).toBe('PLN')
+    expect(currencyForMarket('zz', rows)).toBeNull()
   })
 
 })

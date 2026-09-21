@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
 import { readPushControls } from '../services/listing-push-controls.js'
@@ -1111,7 +1112,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 syncStatus: 'PENDING' as any,
                 syncType: 'PRICE_UPDATE',
                 holdUntil: null,
-                payload: { price: newPrice, currency: mp === 'UK' ? 'GBP' : 'EUR' },
+                payload: { price: newPrice, currency: await marketCurrency('EBAY', mp) }, // P4.4a
               } as any,
               select: { id: true, productId: true, syncType: true, holdUntil: true },
             });
@@ -2478,7 +2479,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         }
 
         const prefix = mp.toLowerCase() as Lowercase<Market>;
-        const currency = mp === 'UK' ? 'GBP' : 'EUR';
+        const currency = await marketCurrency('EBAY', mp); // P4.4a — the Marketplace row
         const lang = await ebayListingLanguage(mp);
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
 

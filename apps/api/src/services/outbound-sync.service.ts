@@ -41,6 +41,7 @@ import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compl
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
 import { resolveMembershipIntended, routedAvailable } from "./sync-control-core.js";
+import { marketCurrency } from './pim/market-currency.js';
 import { ledgerInputs, loadSyncLedgers } from "./stock-pool/sync-ledgers.js";
 import { loadChannelPolicies, policyFor } from "./sync-control-policy.service.js";
 import { publishOrderEvent } from "./order-events.service.js";
@@ -209,8 +210,16 @@ export function matchEbayEndedListingCode(message: string): string | null {
 // inventory_item PUT put price on the item, used the wrong qty key, and
 // hardcoded USD, so master price/stock changes silently never reached eBay.
 
-export function ebayCurrencyForMarket(marketplaceId: string | undefined): string {
-  return marketplaceId === "EBAY_GB" ? "GBP" : "EUR";
+/**
+ * P4.4a — from the `Marketplace` row, not `EBAY_GB ? GBP : EUR`.
+ *
+ * The old form was wrong for every eBay market whose currency is neither of
+ * those, and it refused nothing: an unconfigured market silently priced in EUR.
+ * `marketCurrency` refuses instead, because a wrong currency is a money defect
+ * the channel reports as success.
+ */
+export async function ebayCurrencyForMarket(marketplaceId: string | undefined): Promise<string> {
+  return marketCurrency('EBAY', marketplaceId ?? 'EBAY_IT');
 }
 
 /** eBay Inventory API requires BOTH language headers set to the marketplace
@@ -310,7 +319,6 @@ export async function buildAmazonListingPatch(
   const language = payload.language ?? languages[0];
   if (hasContent && !content) assertInformationLocale('AMAZON', language, languages);
   const language_tag = hasContent && !content ? languageTag(language, code) : undefined;
-  const currency = code === "UK" || code === "GB" ? "GBP" : "EUR";
   const isFba = String(fulfillmentMethod ?? "").toUpperCase() === "FBA";
   const attrs: Record<string, any> = {};
 
@@ -328,6 +336,10 @@ export async function buildAmazonListingPatch(
   }
   }
   if (payload.price !== undefined) {
+    // P4.4a — from the Marketplace row, not a UK/GB ternary. Resolved HERE rather
+    // than at the top of the builder so a CONTENT-only push to a market with no
+    // currency configured is not refused for a price it is not sending.
+    const currency = await marketCurrency('AMAZON', code);
     const offer: Record<string, any> = { currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId };
     // MX.1 (D-MX4) — the sale rides the SAME purchasable_offer instance as our_price, so the one `op:replace` this
     // builder emits carries both and a price push never wipes the sale (report 19 §5.9). Shape = the cached
@@ -1578,7 +1590,7 @@ export class OutboundSyncService {
     // the full-replace never wipes existing content); price → the OFFER
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
-    const currency = ebayCurrencyForMarket(marketplaceId);
+    const currency = await ebayCurrencyForMarket(marketplaceId);
     const headers = await ebayInventoryHeaders(token, marketplaceId);
 
     // Task 3: gate the new per-listing isolation behind an env flag (default ON).

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { db, resolve } = vi.hoisted(() => ({ resolve: vi.fn(), db: {
   product: { findUnique: vi.fn() }, channelListing: { findMany: vi.fn(), updateMany: vi.fn() },
   channelListingOverride: { create: vi.fn() }, $transaction: vi.fn(),
+  // P4.4a — the price guard reads Marketplace.currency.
+  marketplace: { findFirst: vi.fn(async () => ({ currency: 'EUR' })), findMany: vi.fn(async () => [{ channel: 'EBAY', code: 'IT', currency: 'EUR' }]) },
 } }))
 vi.mock('../../../db.js', () => ({ default: db }))
 vi.mock('./resolve-batch.service.js', () => ({ resolveBatch: resolve }))

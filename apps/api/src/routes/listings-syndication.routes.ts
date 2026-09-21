@@ -1,4 +1,5 @@
 import { resolveContent } from '../services/pim/content-resolver.js'
+import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { contentListing } from '../services/pim/content-read.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
@@ -1943,15 +1944,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         body.discountType === 'PERCENTAGE'
           ? Math.max(0, originalPrice * (1 - body.discountValue / 100))
           : Math.max(0, body.discountValue)
-      // Currency is marketplace-driven; keep simple for v1 (EU =
-      // EUR, GB = GBP, US = USD). Could read from Marketplace.currency
-      // when that becomes a real field.
-      const currency =
-        listing.marketplace === 'UK' || listing.marketplace === 'GB'
-          ? 'GBP'
-          : listing.marketplace === 'US'
-            ? 'USD'
-            : 'EUR'
+      // P4.4a — `Marketplace.currency` IS a real field, and always was: a
+      // required column that already holds PLN for Poland, SEK for Sweden and
+      // TRY for Turkey. The comment that used to sit here said the opposite,
+      // and the code below it priced all three in euros.
+      const currency = await marketCurrency(listing.channel, listing.marketplace)
 
       const created = await prisma.ebayMarkdown.create({
         data: {
@@ -3732,7 +3729,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         }
 
         // Enqueue outbound sync for price/qty changes (RT.2 — instant lane)
-        const currency = mp === 'UK' ? 'GBP' : 'EUR'
+        const currency = await marketCurrency('AMAZON', mp) // P4.4a — the Marketplace row
         if ('price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
           const qRow = await createOutboundRow(prisma, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },

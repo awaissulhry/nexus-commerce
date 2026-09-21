@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({ owner: 'conn-B' as string | null, sends: [] as string[] }))
 vi.mock('../db.js', () => ({
   default: {
+  marketplace: { findFirst: async (a: any) => ({ currency: ({ UK: 'GBP', GB: 'GBP', US: 'USD', PL: 'PLN', SE: 'SEK', TR: 'TRY' } as Record<string, string>)[String(a?.where?.code ?? '').toUpperCase()] ?? 'EUR', languages: [String(a?.where?.code ?? '').toUpperCase() === 'DE' ? 'de' : 'it'] }), findMany: async () => [] },
     channelListing: {
       findUnique: vi.fn(async () => ({ stockBuffer: 0, fulfillmentMethod: 'FBM', quantity: 5, marketplace: 'IT', syncPaused: false })),
       findMany: vi.fn(async ({ where }: any) => {

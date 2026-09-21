@@ -9,7 +9,9 @@
 
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../../db.js', () => ({ default: {} }))
+vi.mock('../../db.js', () => ({ default: {
+  marketplace: { findFirst: async (a: any) => ({ currency: ({ UK: 'GBP', GB: 'GBP', US: 'USD', PL: 'PLN', SE: 'SEK', TR: 'TRY' } as Record<string, string>)[String(a?.where?.code ?? '').toUpperCase()] ?? 'EUR', languages: [String(a?.where?.code ?? '').toUpperCase() === 'DE' ? 'de' : 'it'] }), findMany: async () => [] },
+} }))
 
 import { applyMasterChanges, buildCoordinateEntries } from '../pim/mapping-propagation.service.js'
 import type { ResolvedAttributes, ValueSource } from '../pim/attribute-resolver.js'
@@ -72,6 +74,9 @@ describe('buildCoordinateEntries', () => {
     locale: 'en',
     links: [] as FieldLinkGroupLike[],
     sourceCurrency: 'EUR',
+    // P4.4a — the target market's currency is DATA now, resolved by the caller
+    // from `Marketplace.currency`. The default market here is DE = EUR.
+    targetCurrency: 'EUR' as string | null,
   }
 
   it('surfaces a changed field as an update, skips unaffected fields', () => {
@@ -108,7 +113,19 @@ describe('buildCoordinateEntries', () => {
     const base = attrs({ price: { value: 100 } })
     const proposed = attrs({ price: { value: 120 } })
     // marketplace UK → GBP, source EUR → mismatch
-    const entries = buildCoordinateEntries({ ...baseArgs, marketplace: 'UK', rules, baseAttrs: base, proposedAttrs: proposed })
+    const entries = buildCoordinateEntries({ ...baseArgs, marketplace: 'UK', targetCurrency: 'GBP', rules, baseAttrs: base, proposedAttrs: proposed })
+    expect(entries[0].action).toBe('skip')
+    expect(entries[0].flags.currencyMismatch).toBe(true)
+  })
+
+  it('🔴 an UNCONFIGURED target currency is a mismatch, never a match', () => {
+    // The old code derived the currency from the market code and returned EUR
+    // for anything it did not recognise — so Poland and Sweden looked like
+    // same-currency targets and a euro price cascaded straight into them.
+    const rules: Record<string, FieldMappingRule> = { our_price: { source: 'price' } }
+    const base = attrs({ price: { value: 100 } })
+    const proposed = attrs({ price: { value: 120 } })
+    const entries = buildCoordinateEntries({ ...baseArgs, marketplace: 'PL', targetCurrency: null, rules, baseAttrs: base, proposedAttrs: proposed })
     expect(entries[0].action).toBe('skip')
     expect(entries[0].flags.currencyMismatch).toBe(true)
   })

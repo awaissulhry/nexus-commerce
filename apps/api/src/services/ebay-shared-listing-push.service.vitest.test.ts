@@ -4,7 +4,8 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./ebay-presentation-consumer.service.js', () => ({ assertLegacyPresentationPublishAllowed: vi.fn(async () => undefined) }))
 // The reviewed-content refusal has dedicated publish-review-gate regressions.
 vi.mock('./pim/publish-review-gate.js', () => ({ assertListingContentReviewed: vi.fn(async () => undefined) }))
-vi.mock('../db.js', () => ({ default: { product: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, channelListing: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, productImage: { findMany: vi.fn(async () => []) } } }))
+// P4.4a — the currency comes from the Marketplace row, so the double supplies one.
+vi.mock('../db.js', () => ({ default: { product: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, channelListing: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, productImage: { findMany: vi.fn(async () => []) }, marketplace: { findFirst: vi.fn(async ({ where }: any) => ({ currency: String(where?.code).toUpperCase() === 'UK' ? 'GBP' : 'EUR' })) } } }))
 vi.mock('./ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: vi.fn(async (_db: unknown, args: { body: string }) => ({ html: args.body, warnings: [] })) }))
 import { Prisma } from '@prisma/client'
 import { buildSharedListingInput, createSharedListing, pushSharedListings } from './ebay-shared-listing-push.service.js'
@@ -20,7 +21,7 @@ const variants = [
 ]
 
 describe('buildSharedListingInput', () => {
-  const input = buildSharedListingInput(parent, variants, 'IT')
+  const input = buildSharedListingInput(parent, variants, 'IT', undefined, undefined, 'EUR')
 
   it('derives variation axis names from aspect_* keys with >1 value', () => {
     expect(input.variationSpecificNames).toEqual(['Taglia']) // incident #19: Size collapses to the localized axis
@@ -41,12 +42,19 @@ describe('buildSharedListingInput', () => {
   })
   it('applies the capQty function to quantities', () => {
     const cap: any = vi.fn(() => 2)
-    const capped = buildSharedListingInput(parent, variants, 'IT', cap)
+    const capped = buildSharedListingInput(parent, variants, 'IT', cap, undefined, 'EUR')
     expect(capped.variations.every((v) => v.quantity === 2)).toBe(true)
     expect(cap).toHaveBeenCalledWith('p1', 'LNR-BLK-M', 5, 'IT')
   })
   it('UK market uses GBP', () => {
-    expect(buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'UK').currency).toBe('GBP')
+    // P4.4a — the builder carries the currency it is GIVEN. Which currency a
+    // market prices in is the Marketplace table's fact now, and is tested with
+    // the accessor (market-currency.p44.vitest.test.ts).
+    expect(buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'UK', undefined, undefined, 'GBP').currency).toBe('GBP')
+    expect(buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'PL', undefined, undefined, 'PLN').currency).toBe('PLN')
+    // And it refuses to invent one, where the old five-market map returned EUR.
+    expect(() => buildSharedListingInput(parent, [{ sku: 'X', uk_price: 9, uk_qty: 1, aspect_Size: 'M' }], 'PL'))
+      .toThrow(/No currency was resolved/)
   })
 
   it('C1: deduplicates dual-written aspect keys case-insensitively (first-cased-wins)', () => {
@@ -55,7 +63,7 @@ describe('buildSharedListingInput', () => {
       { sku: 'X-NERO-M', it_price: 39.9, it_qty: 2, aspect_Colore: 'Nero', aspect_colore: 'Nero', aspect_Taglia: 'M', aspect_taglia: 'M' },
       { sku: 'X-BIANCO-M', it_price: 39.9, it_qty: 2, aspect_Colore: 'Bianco', aspect_colore: 'Bianco', aspect_Taglia: 'M', aspect_taglia: 'M' },
     ]
-    const result = buildSharedListingInput(parent, dualWriteVariants, 'IT')
+    const result = buildSharedListingInput(parent, dualWriteVariants, 'IT', undefined, undefined, 'EUR')
     // Only Colore varies; there should be exactly ONE entry for it (not both "Colore" and "colore")
     const colorAxes = result.variationSpecificNames.filter(n => n.toLowerCase() === 'colore')
     expect(colorAxes).toHaveLength(1)
@@ -75,14 +83,14 @@ describe('buildSharedListingInput', () => {
 
   it('I4: a variant with NO price field → price null (not coerced to 0)', () => {
     const noPrice = [{ sku: 'NP-M', it_qty: 5, aspect_Size: 'M', _productId: 'p1' }]
-    expect(buildSharedListingInput(parent, noPrice, 'IT').variations[0].price).toBeNull()
+    expect(buildSharedListingInput(parent, noPrice, 'IT', undefined, undefined, 'EUR').variations[0].price).toBeNull()
   })
   it('I4: a blank price string → price null', () => {
     const blank = [{ sku: 'NP-M', it_price: '', it_qty: 5, aspect_Size: 'M', _productId: 'p1' }]
-    expect(buildSharedListingInput(parent, blank, 'IT').variations[0].price).toBeNull()
+    expect(buildSharedListingInput(parent, blank, 'IT', undefined, undefined, 'EUR').variations[0].price).toBeNull()
   })
   it('I4: an explicit price → parsed number', () => {
-    expect(buildSharedListingInput(parent, variants, 'IT').variations[0].price).toBe(49.9)
+    expect(buildSharedListingInput(parent, variants, 'IT', undefined, undefined, 'EUR').variations[0].price).toBe(49.9)
   })
 })
 
@@ -260,16 +268,16 @@ describe('incident #19 — synonym collapse (Size+Taglia twins)', () => {
   const parent = { sku: 'A', title: 'T', category_id: '9999', condition: 'NEW', aspect_marca: 'XAVIA', aspect_Brand: 'XAVIA-EN', aspect_condizione: 'Nuovo con etichette', aspect_stagione: 'Tutte le stagioni' }
 
   it('declares ONE localized axis per dimension (never Size+Colore+Color+Taglia)', () => {
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     expect([...input.variationSpecificNames].sort()).toEqual(['Colore', 'Taglia'])
   })
   it('variation values come from the localized column', () => {
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     expect(input.variations[0].specifics).toEqual({ Taglia: 'M', Colore: 'Nero' })
     expect(input.variations[1].specifics).toEqual({ Taglia: 'L', Colore: 'Giallo' })
   })
   it('item specifics dedupe language twins (Marca wins) and exclude condition', () => {
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     const specs = (input as { itemSpecifics?: Record<string, string> }).itemSpecifics ?? {}
     expect(specs.Marca).toBe('XAVIA')
     expect(specs.Brand).toBeUndefined()
@@ -285,7 +293,7 @@ describe('incident #25 — variation axes governance', () => {
       { sku: 'B-M', it_price: 75, it_qty: 1, aspect_taglia: 'M', aspect_colore_specifico: 'Nero opaco', _productId: 'p1' },
       { sku: 'B-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', aspect_colore_specifico: 'Giallo fluo', _productId: 'p2' },
     ]
-    const input = buildSharedListingInput({ sku: 'B', title: 'T', category_id: '9', condition: 'NEW' } as never, rows as never, 'IT')
+    const input = buildSharedListingInput({ sku: 'B', title: 'T', category_id: '9', condition: 'NEW' } as never, rows as never, 'IT', undefined, undefined, 'EUR')
     expect(input.variationSpecificNames).toEqual(['Taglia'])
     const specs = (input as { itemSpecifics?: Record<string, string> }).itemSpecifics ?? {}
     expect(specs['Colore specifico']).toBe('Nero opaco') // listing-level, first value
@@ -296,7 +304,7 @@ describe('incident #25 — variation axes governance', () => {
       { sku: 'C-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', aspect_colore: 'Giallo', aspect_materiale: 'Tessuto', _productId: 'p2' },
     ]
     const parent = { sku: 'C', title: 'T', category_id: '9', condition: 'NEW', variation_theme: 'Colore,Taglia' }
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     expect([...input.variationSpecificNames].sort()).toEqual(['Colore', 'Taglia'])
     // materiale varies but is NOT declared — it stays out of the axes
     expect(input.variationSpecificNames).not.toContain('Materiale')
@@ -312,7 +320,7 @@ describe('incident #26 — long list-like specifics become multi-value', () => {
     ]
     const parent = { sku: 'D', title: 'T', category_id: '9', condition: 'NEW',
       aspect_caratteristiche: "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile" }
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     const specs = (input as { itemSpecifics?: Record<string, string | string[]> }).itemSpecifics ?? {}
     expect(Array.isArray(specs.Caratteristiche)).toBe(true)
     expect(specs.Caratteristiche).toContain('Ventilato')
@@ -325,7 +333,7 @@ describe('incident #26 — long list-like specifics become multi-value', () => {
       { sku: 'E-L', it_price: 75, it_qty: 1, aspect_taglia: 'L', _productId: 'p2' },
     ]
     const parent = { sku: 'E', title: 'T', category_id: '9', condition: 'NEW', aspect_stagione: 'Tutte le stagioni' }
-    const input = buildSharedListingInput(parent as never, rows as never, 'IT')
+    const input = buildSharedListingInput(parent as never, rows as never, 'IT', undefined, undefined, 'EUR')
     const specs = (input as { itemSpecifics?: Record<string, string | string[]> }).itemSpecifics ?? {}
     expect(specs.Stagione).toBe('Tutte le stagioni')
   })

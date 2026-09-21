@@ -1,4 +1,5 @@
 import { marketLanguages } from '../services/pim/market-languages.js'
+import { marketCurrency, marketCurrencyRows } from '../services/pim/market-currency.js'
 /**
  * Phase 5.3: ListingWizard CRUD.
  *
@@ -2206,11 +2207,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const channels = normalizeChannels(wizard.channels)
+      // P4.4a — the configured market currencies, read once.
+      const wizardCurrencyRows = await marketCurrencyRows('AMAZON')
       const channelContexts = channels.map((c) => ({
         platform: c.platform,
         marketplace: c.marketplace,
         channelKey: `${c.platform}:${c.marketplace}`,
-        currency: currencyForMarketplace(c.marketplace),
+        currency: marketCurrency('AMAZON', c.marketplace, wizardCurrencyRows),
         defaultFees: defaultFeesForChannel(c.platform),
       }))
 
@@ -5536,16 +5539,16 @@ function computeOverallStatus(
 
 // ── pricing helpers ────────────────────────────────────────────
 
-function currencyForMarketplace(marketplace: string): string {
-  const upper = marketplace.toUpperCase()
-  if (upper === 'US' || upper === 'CA' || upper === 'MX') return 'USD'
-  if (upper === 'UK' || upper === 'GB') return 'GBP'
-  if (upper === 'JP') return 'JPY'
-  if (upper === 'AU') return 'AUD'
-  // EU marketplaces (IT, DE, FR, ES, NL, BE, SE, PL) all use EUR
-  // when listing on Amazon.
-  return 'EUR'
-}
+/**
+ * P4.4a — REMOVED. Its own comment said:
+ *
+ *     // EU marketplaces (IT, DE, FR, ES, NL, BE, SE, PL) all use EUR
+ *     // when listing on Amazon.
+ *
+ * Sweden is SEK and Poland is PLN, and `Marketplace.currency` has said so all
+ * along. A comment can assert a property of the WORLD that is not true, and the
+ * code stays wrong for as long as the comment is believed.
+ */
 
 function defaultFeesForChannel(channel: string): {
   referralPercent: number

@@ -23,7 +23,7 @@ vi.mock('../db.js', () => ({ default: {
   // P0.7 — the wrong-account guard reads listing ownership; no recorded owner = the pre-P0.7 behaviour this file models.
   sharedListingMembership: { findMany: async () => [] },
   // P1.5 — eBay listing writes take their language from the Marketplace row (the seeded IT row).
-  marketplace: { findFirst: async ({ where }: { where: { code: string } }) => where.code === 'IT' ? { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it' } : null },
+  marketplace: { findFirst: async ({ where }: { where: { code: string } }) => where.code === 'IT' ? { marketplaceId: 'EBAY_IT', languages: ['it'], language: 'it', currency: 'EUR' } : null },
   stockLevel: { findMany: async () => [] }, fbaInventoryDetail: { findMany: async () => [] },
   ebayPushJob: { findFirst: async () => null, create: async () => ({ id: 'job' }), update: s.job },
 } }))

@@ -15,6 +15,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import { marketCurrency, marketCurrencyRows, type MarketCurrencyRow } from '../pim/market-currency.js'
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { parseLocaleNumber, parseLocaleInt } from '../../lib/parse-locale-number.js'
@@ -61,8 +62,20 @@ export const LANGUAGE_TAG_MAP: Record<string, string> = {
   UK: 'en_GB',
 }
 
-export const CURRENCY_MAP: Record<string, string> = {
-  IT: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', UK: 'GBP',
+/**
+ * P4.4a — the Amazon feed's currency comes from the `Marketplace` row.
+ *
+ * `CURRENCY_MAP` listed five markets and every caller wrote `?? 'EUR'`, so the
+ * JSON feed priced Poland, Sweden and Turkey in euros. `Marketplace.currency`
+ * has held PLN, SEK and TRY for those markets the whole time.
+ *
+ * Sync, taking rows the caller loaded once, because the feed builder is pure.
+ * `null` means the market has no configured currency, and every caller must
+ * refuse rather than fall back — a wrong currency is a money defect Amazon
+ * reports as a success.
+ */
+export function feedCurrencyFor(mp: string, currencyRows: readonly MarketCurrencyRow[]): string | null {
+  try { return marketCurrency('AMAZON', mp, currencyRows) } catch { return null }
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -2139,6 +2152,8 @@ export class AmazonFlatFileService {
     // here is the only way to get a fresh row for a listing that has one.
     opts?: { skipSnapshotOverlay?: boolean },
   ): Promise<FlatFileRow[]> {
+    // P4.4a — the configured market currencies for this projection, read once.
+    const currencyRows = await marketCurrencyRows('AMAZON')
     const mp = marketplace.toUpperCase()
     let products: any[]
 
@@ -2299,7 +2314,7 @@ export class AmazonFlatFileService {
 
       // purchasable_offer sub-columns (expanded from nested price schedule)
       const poAttrs = attrs.purchasable_offer?.[0] as Record<string, any> | undefined
-      const poCurrency = String(poAttrs?.currency ?? CURRENCY_MAP[mp] ?? 'EUR')
+      const poCurrency = String(poAttrs?.currency ?? feedCurrencyFor(mp, currencyRows) ?? '')
       const poCondition = String(poAttrs?.condition_type ?? '')
       const poSaleAttrs = poAttrs?.sale_price?.[0] as Record<string, any> | undefined
       const poSalePrice = listing?.salePrice != null
@@ -2760,6 +2775,8 @@ export class AmazonFlatFileService {
     sellerId: string,
     expandedFields: Record<string, string> = {},
     feedSchema: FeedSchemaHints = {},
+    /** P4.4a — the configured market currencies, loaded once by the caller. */
+    currencyRows: readonly MarketCurrencyRow[] = [],
   ): { body: string; messageCount: number; skippedRows: Array<{ sku: string; error: string }> } {
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
@@ -2931,7 +2948,7 @@ export class AmazonFlatFileService {
         // failures ("attribute not valid for parent").
         const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
         if (!isParentRow && poPrice !== undefined && poPrice !== '') {
-          const poCurrency   = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
+          const poCurrency   = String(row['purchasable_offer__currency'] ?? feedCurrencyFor(mp, currencyRows) ?? '')
           const poCondition  = String(row['purchasable_offer__condition_type'] ?? '')
           const poSalePrice  = row['purchasable_offer__sale_price']
           const poSaleFrom   = String(row['purchasable_offer__sale_from_date'] ?? '')
@@ -3204,6 +3221,12 @@ export class AmazonFlatFileService {
     expandedFields: Record<string, string> = {},
     opts: { isPublished?: boolean } = {},
   ): Promise<{ synced: number; created: number; skipped: number; errors: Array<{ sku: string; error: string }> }> {
+    // P4.4a — LAZY on purpose. Loaded once, but only when a row actually reaches
+    // the attribute builder: an omitted attribution must be refused before ANY
+    // database read, which a push-lock test asserts. A read at the top of this
+    // method is a read before that refusal.
+    let currencyRowsCache: readonly MarketCurrencyRow[] | null = null
+    const currencyRowsFor = async () => (currencyRowsCache ??= await marketCurrencyRows('AMAZON'))
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag   = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
@@ -3466,7 +3489,7 @@ export class AmazonFlatFileService {
 
         // Collapsed attributes (same format getExistingRows reads back)
         const rowHints = hintsByProductType.get(String(row.product_type ?? '').toUpperCase())
-        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowHints?.enumCodeMap ?? {}, rowHints?.subPropTypes)
+        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag, rowHints?.enumCodeMap ?? {}, rowHints?.subPropTypes, await currencyRowsFor())
 
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
@@ -3622,6 +3645,8 @@ export class AmazonFlatFileService {
     enumCodeMap: Record<string, Record<string, string>> = {},
     /** UFX P1 (P0-2) — declared type per sub-property path (see buildJsonFeedBody). */
     subPropTypes?: Record<string, SubPropType>,
+    /** P4.4a — the configured market currencies, loaded once by the caller. */
+    currencyRows: readonly MarketCurrencyRow[] = [],
   ): Record<string, any> {
     const attrs: Record<string, any> = {}
     const wrap  = (v: string) => [{ value: v, marketplace_id: marketplaceId }]
@@ -3658,7 +3683,7 @@ export class AmazonFlatFileService {
     const poHasPrice  = poPrice !== undefined && poPrice !== ''
     const poHasSale   = poSalePrice !== undefined && poSalePrice !== ''
     if (poHasPrice || poHasSale || poCondition) {
-      const poCurrency  = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
+      const poCurrency  = String(row['purchasable_offer__currency'] ?? feedCurrencyFor(mp, currencyRows) ?? '')
       const poSaleFrom  = String(row['purchasable_offer__sale_from_date'] ?? '')
       const poSaleTo    = String(row['purchasable_offer__sale_end_date'] ?? '')
       const offer: Record<string, any> = { currency: poCurrency, marketplace_id: marketplaceId }

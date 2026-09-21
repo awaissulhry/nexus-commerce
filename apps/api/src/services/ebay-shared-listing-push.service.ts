@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { marketCurrency } from './pim/market-currency.js'
 import { readPushControls } from './listing-push-controls.js'
 import { storedPresentationValues } from './ebay-theme-axes.js'
 import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
@@ -23,10 +24,21 @@ export type CapQtyFn = (productId: string | undefined, sku: string, requested: n
 export type SharedVariation = Omit<TradingVariation, 'price'> & { price: number | null }
 export type SharedListingInput = Omit<AddFixedPriceItemInput, 'variations'> & { variations: SharedVariation[] }
 
-const CURRENCY_BY_MARKET: Record<string, string> = { IT: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', UK: 'GBP' }
 
 function str(v: unknown): string { return v == null ? '' : String(v) }
 function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+/** P4.4a — a currency must be supplied, never invented. */
+function requireCurrency(currency: string | undefined, market: string): string {
+  const value = (currency ?? '').trim().toUpperCase()
+  if (!/^[A-Z]{3}$/.test(value)) {
+    throw Object.assign(
+      new Error(`No currency was resolved for the ${market} market, so this shared listing was not built. Set the currency on the marketplace.`),
+      { statusCode: 400, code: 'market_currency_unconfigured' },
+    )
+  }
+  return value
+}
 
 export function buildSharedListingInput(
   parentRow: SharedRow,
@@ -36,6 +48,10 @@ export function buildSharedListingInput(
   /** Incident #39 — the operator's stored value order per axis synonym key
    *  (_axisValueOrder from the parent ChannelListing). Always wins. */
   valueOrderByAxis?: Record<string, string[]>,
+  /** P4.4a — the market's currency from the `Marketplace` row, resolved by the
+   *  caller. It is an argument rather than a lookup so this builder stays pure;
+   *  what it replaced was a five-market map that fell back to EUR silently. */
+  currency?: string,
 ): SharedListingInput {
   const mkt = market.toUpperCase()
   const prefix = mkt.toLowerCase()
@@ -237,7 +253,10 @@ export function buildSharedListingInput(
     location: str(src.item_location) || process.env.EBAY_ITEM_LOCATION || 'Santarcangelo di Romagna',
     postalCode: str(src.item_postal_code) || process.env.EBAY_ITEM_POSTAL_CODE || '47822',
     itemSpecifics,
-    currency: CURRENCY_BY_MARKET[mkt] ?? 'EUR',
+    // P4.4a — no silent default. What this replaced was a five-market map with
+    // `?? 'EUR'`, which is how a Polish or Swedish listing got priced in euros.
+    // The builder is pure, so it cannot read the table — it refuses instead.
+    currency: requireCurrency(currency, mkt),
     variationSpecificNames,
     // Incident #39 — deterministic axis value order for the declared set:
     // operator's stored order (per synonym key) → canonical size order →
@@ -391,7 +410,7 @@ export async function createSharedListing(
       }
     } catch { /* order fallback remains deterministic without it */ }
 
-    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty, valueOrderByAxis)
+    const input = buildSharedListingInput(parentRow, variantRows, market, ctx.capQty, valueOrderByAxis, await marketCurrency('EBAY', market))
 
     // ED.2 — dynamic description: wrap the body in this listing's assigned theme
     // (shared-SKU listings are per-parent, so each gets its own render). Inert

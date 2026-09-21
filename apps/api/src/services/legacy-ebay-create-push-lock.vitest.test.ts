@@ -2,6 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const s=vi.hoisted(()=>({controls:[] as any[],read:vi.fn(),send:vi.fn()}))
 vi.mock('./listing-push-controls.js',()=>({readPushControls:s.read}))
 vi.mock('./outbound-api-call-log.service.js',()=>({recordApiCall:(_input:unknown,run:()=>unknown)=>run()}))
+// P4.4a — the payload's currency now comes from Marketplace.currency. This file's
+// proposition is the PUSH LOCK, not pricing, and it runs against the real scoping
+// client, which refuses a read with no business profile. Stand the accessor in.
+vi.mock('./pim/market-currency.js',()=>({marketCurrency:async()=>'EUR'}))
 // P1.2 — the sends go through the channel gateway; its account check and ledger are stood in.
 vi.mock('./gateway/account.js', () => import('../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./gateway/ledger.js', () => import('../test-support/gateway-stubs.js').then((m) => m.ledgerModule))

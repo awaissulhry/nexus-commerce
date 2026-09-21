@@ -6,6 +6,7 @@ import {
   type PropagationMember,
 } from "../services/field-resolution/propagation.js";
 import { guardCurrency } from "../services/field-resolution/propagation-fill.js";
+import { allMarketCurrencyRows } from "../services/pim/market-currency.js";
 import { translateProductCopy } from "../services/ai/translate.service.js";
 import { auditLogService } from "../services/audit-log.service.js";
 
@@ -313,7 +314,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
 
         return reply.send({
-          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? ""),
+          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? "", await allMarketCurrencyRows()),
           translatable: !!translatableField(fieldKey),
           aiBudgetExceeded,
         });
@@ -396,7 +397,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
 
         return reply.send({
-          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? ""),
+          entries: guardCurrency(entries, fieldKey, body.sourceMarketplace ?? "", await allMarketCurrencyRows()),
           translatable: !!translatableField(fieldKey),
           aiBudgetExceeded,
           sourceValue: editedValue,

@@ -1,4 +1,5 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { marketCurrency } from "../pim/market-currency.js";
 import { readPushControls } from '../listing-push-controls.js'
 import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
@@ -18,7 +19,20 @@ function assertWriteAllowed(): void {
 }
 const EBAY_AUTH_URL = process.env.EBAY_AUTH_URL ?? "https://api.ebay.com/identity/v1/oauth2/token";
 const EBAY_MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID ?? "EBAY_IT";
-const EBAY_CURRENCY = process.env.EBAY_CURRENCY ?? "EUR";
+/**
+ * P4.4a — the currency of the market this legacy service is configured for.
+ *
+ * It used to be `process.env.EBAY_CURRENCY ?? "EUR"`: ONE currency for every
+ * market, on three price writes, defaulting to euros however `EBAY_MARKETPLACE_ID`
+ * was set. It now reads `Marketplace.currency` for that market and refuses when
+ * it is not configured.
+ *
+ * ⚠️ This does NOT fix the real shape here, which is that the whole service is
+ * single-market by construction — `updatePrice`, `createOffer` and
+ * `updateVariantPrice` take no market and read one env var. Threading a market
+ * through is a separate decision; this only stops the currency being a guess.
+ */
+const ebayCurrency = () => marketCurrency("EBAY", EBAY_MARKETPLACE_ID);
 const EBAY_MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY ?? "xavia-riccione-warehouse";
 
 interface EbayTokenResponse {
@@ -349,7 +363,7 @@ export class EbayService {
         pricingSummary: {
           price: {
             value: newPrice.toFixed(2),
-            currency: EBAY_CURRENCY,
+            currency: await ebayCurrency(),
           },
         },
       };
@@ -388,7 +402,7 @@ export class EbayService {
       );
 
       console.log(
-        `[EbayService] Price updated: SKU=${sku}, offerId=${offerId}, newPrice=${newPrice.toFixed(2)} ${EBAY_CURRENCY}`
+        `[EbayService] Price updated: SKU=${sku}, offerId=${offerId}, newPrice=${newPrice.toFixed(2)} ${await ebayCurrency()}`
       );
     } catch (error) {
       console.error(
@@ -552,7 +566,7 @@ export class EbayService {
       pricingSummary: {
         price: {
           value: price.toFixed(2),
-          currency: EBAY_CURRENCY,
+          currency: await ebayCurrency(),
         },
       },
       listingPolicies: {
@@ -810,7 +824,7 @@ export class EbayService {
               body: JSON.stringify({
                 pricingSummary: {
                   price: {
-                    currency: EBAY_CURRENCY,
+                    currency: await ebayCurrency(),
                     value: newPrice.toFixed(2),
                   },
                 },
@@ -834,7 +848,7 @@ export class EbayService {
         },
       );
 
-      console.log(`[EbayService] ✓ Updated price for SKU ${variantSku} to ${newPrice.toFixed(2)} ${EBAY_CURRENCY}`);
+      console.log(`[EbayService] ✓ Updated price for SKU ${variantSku} to ${newPrice.toFixed(2)} ${await ebayCurrency()}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(`[EbayService] ✗ Failed to update variant price for ${variantSku}:`, message);

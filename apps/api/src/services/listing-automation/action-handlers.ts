@@ -25,6 +25,7 @@ import { ACTION_HANDLERS, getFieldPath, type ActionResult } from '../automation-
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { currencyForMarket } from './triggers.js'
+import { allMarketCurrencyRows } from '../pim/market-currency.js'
 import { translateProductCopy } from '../ai/translate.service.js'
 
 const GRACE_MS = 5 * 60 * 1000 // 5-minute undo window before the worker pushes
@@ -91,7 +92,11 @@ ACTION_HANDLERS.sync_price_to_marketplaces = async (action, context, meta): Prom
   const onlySameCurrency = action.onlySameCurrency !== false // default true
   const refCurrency = 'EUR' // master price is EUR
   const listings = await eligibleListings(productId, action as Record<string, unknown>)
-  const targets = listings.filter((l) => !onlySameCurrency || currencyForMarket(l.marketplace) === refCurrency)
+  // P4.4a — an unconfigured market returns null, so it never matches EUR and is
+  // counted as skipped. What this replaced read PLN, SEK and TRY markets as EUR
+  // and pushed a euro price into them.
+  const currencyRows = await allMarketCurrencyRows()
+  const targets = listings.filter((l) => !onlySameCurrency || currencyForMarket(l.marketplace, currencyRows) === refCurrency)
   const skippedCurrency = listings.length - targets.length
 
   if (targets.length === 0) {

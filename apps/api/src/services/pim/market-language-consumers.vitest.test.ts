@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const fixture = vi.hoisted(() => ({ findFirst: vi.fn(), warn: vi.fn(), estimate: vi.fn(() => 0.001), generate: vi.fn(() => { throw new Error('AI calls forbidden') }), network: vi.fn(() => { throw new Error('Network forbidden in language consumer tests') }) }))
-vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: fixture.findFirst } } }))
+vi.mock('../../db.js', () => ({ default: { marketplace: { findFirst: fixture.findFirst, findMany: async () => [{ channel: 'AMAZON', code: 'BE', currency: 'EUR' }] } } }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: fixture.warn } }))
 vi.mock('../ai/providers/index.js', () => ({ getProvider: () => ({ name: 'gemini', defaultModel: 'fixture', generate: fixture.generate }), isAiKillSwitchOn: () => false }))
 vi.mock('../ai/budget.service.js', () => ({ estimateCallCostUSD: fixture.estimate }))

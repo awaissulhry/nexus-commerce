@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./ebay-presentation-consumer.service.js', () => ({ assertLegacyPresentationPublishAllowed: vi.fn(async () => undefined) }))
 // The reviewed-content refusal has dedicated publish-review-gate regressions.
 vi.mock('./pim/publish-review-gate.js', () => ({ assertListingContentReviewed: vi.fn(async () => undefined) }))
-vi.mock('../db.js', () => ({ default: { product: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, channelListing: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, productImage: { findMany: vi.fn(async () => []) } } }))
+vi.mock('../db.js', () => ({ default: { product: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, channelListing: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, productImage: { findMany: vi.fn(async () => []) }, marketplace: { findFirst: vi.fn(async () => ({ currency: 'EUR' })) } } }))
 vi.mock('./ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: vi.fn(async (_db: unknown, args: { body: string }) => ({ html: args.body, warnings: [] })) }))
 import { pushSharedListings, type CapQtyFn } from './ebay-shared-listing-push.service.js'
 

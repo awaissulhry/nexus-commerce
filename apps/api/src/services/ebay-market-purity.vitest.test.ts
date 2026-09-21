@@ -46,7 +46,7 @@ describe('market purity — the eBay payload speaks the market’s language', ()
     const input = buildSharedListingInput(
       parent('Colore,Taglia') as Parameters<typeof buildSharedListingInput>[0],
       rows as Parameters<typeof buildSharedListingInput>[1],
-      'IT',
+      'IT', undefined, undefined, 'EUR',
     )
     expect(input.variationSpecificNames.sort()).toEqual(['Colore', 'Taglia'])
   })
@@ -59,7 +59,7 @@ describe('market purity — the eBay payload speaks the market’s language', ()
     const input = buildSharedListingInput(
       parent('Farbe,Größe') as Parameters<typeof buildSharedListingInput>[0],
       rows as Parameters<typeof buildSharedListingInput>[1],
-      'DE',
+      'DE', undefined, undefined, 'EUR',
     )
     // The operator declared Farbe,Größe on a DE listing. eBay.de must receive
     // exactly that — translating it to Colore/Taglia publishes Italian aspect
@@ -78,7 +78,7 @@ describe('market purity — the eBay payload speaks the market’s language', ()
     const input = buildSharedListingInput(
       parent('Farbe,Größe') as Parameters<typeof buildSharedListingInput>[0],
       rows as Parameters<typeof buildSharedListingInput>[1],
-      'DE',
+      'DE', undefined, undefined, 'EUR',
     )
     const keys = Object.keys(input.itemSpecifics ?? {})
     expect(keys).toContain('Marke')
@@ -93,7 +93,7 @@ describe('market purity — the eBay payload speaks the market’s language', ()
     const input = buildSharedListingInput(
       parent('Colore,Taglia') as Parameters<typeof buildSharedListingInput>[0],
       rows as Parameters<typeof buildSharedListingInput>[1],
-      'IT',
+      'IT', undefined, undefined, 'EUR',
     )
     // English column data is legacy residue; the IT payload must carry the
     // localized names the operator declared.

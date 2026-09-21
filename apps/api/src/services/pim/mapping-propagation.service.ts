@@ -19,7 +19,8 @@ import prisma from '../../db.js'
 import { type ResolvedAttributes } from './attribute-resolver.js'
 import { resolveBatch, type ResolvedProduct } from './mapping/resolve-batch.service.js'
 import { resolveChannelField, linkForCoordinate, isPresent, type FieldLinkGroupLike } from './resolve-channel-field.js'
-import { PRICE_FIELD_KEYS, currencyForMarket } from '../field-resolution/propagation-fill.js'
+import { PRICE_FIELD_KEYS } from '../field-resolution/propagation-fill.js'
+import { allMarketCurrencyRows, marketCurrencyAcrossChannels } from './market-currency.js'
 import { valuesEqual } from './resolver-shadow.js'
 
 export interface PropagationFlags {
@@ -113,10 +114,17 @@ export function buildCoordinateEntries(args: {
   locale: string
   links: FieldLinkGroupLike[]
   transformCtx?: Parameters<typeof resolveChannelField>[0]['transformCtx']
-  /** Source currency for the price guard (default EUR — Xavia's master). */
-  sourceCurrency: string
+  /** Source currency for the price guard. `null` = the source market has no
+   *  configured currency, which makes every price target a mismatch. */
+  sourceCurrency: string | null
+  /** P4.4a — this market's currency from the `Marketplace` row, resolved by the
+   *  caller. `null` means it is not configured, which counts as a MISMATCH: a
+   *  price must not be cascaded into a market whose currency we do not know.
+   *  What this replaced derived it from the market code and read PLN, SEK and
+   *  TRY markets as EUR, so a euro price copied into them looked safe. */
+  targetCurrency: string | null
 }): MappingPropagationEntry[] {
-  const { channel, marketplace, rules, baseAttrs, proposedAttrs, product, locale, links, transformCtx, sourceCurrency } = args
+  const { channel, marketplace, rules, baseAttrs, proposedAttrs, product, locale, links, transformCtx, sourceCurrency, targetCurrency } = args
   const out: MappingPropagationEntry[] = []
 
   for (const [fieldKey, rule] of Object.entries(rules)) {
@@ -138,7 +146,7 @@ export function buildCoordinateEntries(args: {
     }
 
     // Currency guard — never cascade a raw price across currencies.
-    if (PRICE_FIELD_KEYS.has(fieldKey) && currencyForMarket(marketplace) !== sourceCurrency) {
+    if (PRICE_FIELD_KEYS.has(fieldKey) && (targetCurrency === null || targetCurrency !== sourceCurrency)) {
       flags.currencyMismatch = true
       action = 'skip'
     }
@@ -182,7 +190,15 @@ export async function planMappingPropagation(input: {
   const product = await prisma.product.findUnique({ where: { id: input.productId } })
   if (!product) throw new Error(`Product not found: ${input.productId}`)
   const listings = await prisma.channelListing.findMany({ where: { productId: input.productId } })
-  const sourceCurrency = currencyForMarket(input.sourceMarketplace ?? 'IT')
+  // P4.4a — the configured currencies, read once for this plan.
+  const currencyRows = await allMarketCurrencyRows()
+  const currencyOf = (market: string): string | null => {
+    try { return marketCurrencyAcrossChannels(market, currencyRows) } catch { return null }
+  }
+  // No `?? 'EUR'`: if the SOURCE market has no configured currency we do not know
+  // what we are copying FROM, and every target is then a mismatch. That is the
+  // fail-closed answer and it is what the comparison below already does with null.
+  const sourceCurrency = currencyOf(input.sourceMarketplace ?? 'IT')
   const coords = listings.filter(l => l.channel && l.marketplace
     && (!input.channels?.length || input.channels.includes(l.channel))
     && (!input.markets?.length || input.markets.includes(l.marketplace!)))
@@ -197,7 +213,7 @@ export async function planMappingPropagation(input: {
     const after = await resolveBatch({ ...coordinate, masterChangesByProduct: { [input.productId]: input.changes } })
     const current = before.products[0], proposed = after.products[0]
     if (!current || !proposed) throw new Error('Product changed during propagation preview; reload and try again.')
-    for (const entry of resolvedCoordinateEntries(current, proposed, coordinate, sourceCurrency, after.locale, Object.keys(input.changes))) {
+    for (const entry of resolvedCoordinateEntries(current, proposed, coordinate, sourceCurrency, after.locale, Object.keys(input.changes), currencyOf(coordinate.marketplace))) {
       entries.push({ ...entry, listingId: listing.id, listingVersion: listing.version, listingUpdatedAt: listing.updatedAt })
     }
   }
@@ -224,12 +240,14 @@ export async function planMappingPropagation(input: {
 /** Diff canonical cells, including schema corrections and destination override precedence. */
 export function resolvedCoordinateEntries(current: ResolvedProduct, proposed: ResolvedProduct,
   coordinate: { channel: string; marketplace: string; channelConnectionId?: string | null; aliasKey?: string },
-  sourceCurrency: string, locale: string, changedSources: string[] = []): MappingPropagationEntry[] {
+  sourceCurrency: string | null, locale: string, changedSources: string[] = [],
+  /** P4.4a — this market's configured currency; `null` is a mismatch. */
+  targetCurrency: string | null = null): MappingPropagationEntry[] {
   return Object.values(proposed.cells).flatMap(cell => {
     const before = current.cells[cell.fieldKey]
     const refresh = cell.provenance !== 'override' && cell.sourceDependencies?.some(key => changedSources.map(k => k === 'name' ? 'title' : k).includes(key))
     if (valuesEqual(before?.value, cell.value) && !cell.needsTranslation && !refresh) return []
-    const currencyMismatch = PRICE_FIELD_KEYS.has(cell.fieldKey) && currencyForMarket(coordinate.marketplace) !== sourceCurrency
+    const currencyMismatch = PRICE_FIELD_KEYS.has(cell.fieldKey) && (targetCurrency === null || targetCurrency !== sourceCurrency)
     return [{ ...coordinate, fieldKey: cell.fieldKey, current: before?.value ?? null, proposed: cell.value,
       action: currencyMismatch ? 'skip' as const : 'update' as const, language: locale, errors: cell.errors,
       flags: { transformed: cell.appliedTransforms.length > 0, needsTranslation: !!cell.needsTranslation,

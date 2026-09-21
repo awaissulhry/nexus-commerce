@@ -13,10 +13,11 @@
  */
 
 import prisma from '../../db.js'
+import { marketCurrencyRows } from '../pim/market-currency.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import {
   MARKETPLACE_ID_MAP,
-  CURRENCY_MAP,
+  feedCurrencyFor,
   type FlatFileRow,
 } from './flat-file.service.js'
 import {
@@ -104,6 +105,8 @@ export function getPullPreviewJobStatus(jobId: string): PullPreviewJob | null {
 }
 
 async function runPreviewJob(job: PullPreviewJob): Promise<void> {
+  // P4.4a — the configured market currencies for this preview, read once.
+  const currencyRows = await marketCurrencyRows('AMAZON')
   const mp = job.marketplace
   const pt = job.productType
   const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
@@ -195,7 +198,7 @@ async function runPreviewJob(job: PullPreviewJob): Promise<void> {
       const parentSku = p.parentId ? idToSku.get(p.parentId) ?? '' : ''
 
       const poAttrs = attrs.purchasable_offer?.[0] as Record<string, any> | undefined
-      const poCurrency = String(poAttrs?.currency ?? CURRENCY_MAP[mp] ?? 'EUR')
+      const poCurrency = String(poAttrs?.currency ?? feedCurrencyFor(mp, currencyRows) ?? '')
       const poCondition = String(poAttrs?.condition_type ?? '')
       const poSaleAttrs = poAttrs?.sale_price?.[0] as Record<string, any> | undefined
       const poSalePrice =

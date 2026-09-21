@@ -1,4 +1,5 @@
 import { loadStoredVariationProjection } from './pim/stored-variation-projection.js'
+import { marketCurrency } from './pim/market-currency.js'
 import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
 import { assertListingContentReviewed } from './pim/publish-review-gate.js'
 /**
@@ -1801,7 +1802,7 @@ export async function pushVariationGroup(
     return rows.map(r => ({ sku: (r.sku ?? '') as string, market: mp, status: 'ERROR' as const, message: msg }))
   }
 
-  const currency = mp === 'UK' ? 'GBP' : 'EUR'
+  const currency = await marketCurrency('EBAY', mp) // P4.4a — the Marketplace row, not a UK ternary
   const catId    = (parentRow.category_id as string | undefined) ?? ''
   // EFX P9a/P9f — shared (parent-level) offer terms, resolved once for the family.
   // EFX P9a — Best Offer is intentionally NOT built for a variation group: eBay
@@ -2217,7 +2218,7 @@ export async function pushOffersOnly(
   }
   if (!pushControls.length) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: 'PUSH_CONTROL_UNAVAILABLE: No stored eBay listing controls were found.' }))
   const region = mp === 'UK' ? 'GB' : mp
-  const currency = mp === 'UK' ? 'GBP' : 'EUR'
+  const currency = await marketCurrency('EBAY', mp) // P4.4a — the Marketplace row, not a UK ternary
   const headers = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',

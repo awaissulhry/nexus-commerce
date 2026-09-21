@@ -1,4 +1,5 @@
 import { amazonParentVariationAttributes } from './amazon-publish.adapter.js'
+import { marketCurrency, marketCurrencyRows } from '../pim/market-currency.js'
 import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
 import { flatVariationMapping } from '@nexus/shared/variation-mapping'
 import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages.js'
@@ -145,23 +146,14 @@ function contentGroupKey(platform: string, marketplace: string, rows: MarketLang
   return `${marketLanguages(platform, marketplace, rows)[0]}:${platform.toUpperCase()}`
 }
 
-const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
-  IT: 'EUR',
-  DE: 'EUR',
-  FR: 'EUR',
-  ES: 'EUR',
-  UK: 'GBP',
-  GB: 'GBP',
-  US: 'USD',
-  CA: 'CAD',
-  MX: 'MXN',
-  AU: 'AUD',
-  JP: 'JPY',
-}
-
-function pricingCurrencyFor(marketplace: string): string {
-  return MARKETPLACE_TO_CURRENCY[marketplace.toUpperCase()] ?? 'USD'
-}
+/**
+ * P4.4a — REMOVED, in favour of `Marketplace.currency`.
+ *
+ * The map listed eleven markets and fell back to **USD** — a different default
+ * from every other copy of this fact in the codebase, which fell back to EUR.
+ * Seven implementations of one rule, not even agreeing on what to do when they
+ * did not know.
+ */
 
 /**
  * E.2 — Resolve country codes ("IT", "DE", "FR") to SP-API marketplace IDs
@@ -978,6 +970,11 @@ export class SubmissionService {
     }
 
     const languageRows = await this.prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } })
+    // P4.4a — the configured market currencies, read once. Deliberately placed
+    // HERE, past every early refusal, and not at the top of the method: a
+    // destination-bound wizard must be refused before ANY database work, which a
+    // test asserts by handing this service a prisma proxy that throws.
+    const currencyRows = await marketCurrencyRows('AMAZON')
     return wizard.channels.map((cRaw) => {
       const c = {
         platform: cRaw.platform.toUpperCase(),
@@ -1064,7 +1061,7 @@ export class SubmissionService {
           condition: 'NEW',
           price:
             typeof effectivePrice === 'number'
-              ? { value: effectivePrice, currency: pricingCurrencyFor(c.marketplace) }
+              ? { value: effectivePrice, currency: marketCurrency('AMAZON', c.marketplace, currencyRows) }
               : undefined,
         }
 

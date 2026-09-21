@@ -41,6 +41,7 @@ vi.mock('../services/amazon/flat-file.service.js', () => ({
 vi.mock('../services/categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
 vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class {} }))
 vi.mock('../db.js', () => ({ default: {
+  marketplace: { findFirst: async (a: any) => ({ currency: ({ UK: 'GBP', GB: 'GBP', US: 'USD', PL: 'PLN', SE: 'SEK', TR: 'TRY' } as Record<string, string>)[String(a?.where?.code ?? '').toUpperCase()] ?? 'EUR', languages: [String(a?.where?.code ?? '').toUpperCase() === 'DE' ? 'de' : 'it'] }), findMany: async () => [] },
   channelListing: { findMany: async () => [] },
   amazonFlatFileFeedJob: { create: async () => ({ id: 'fixture-job' }) },
 } }))

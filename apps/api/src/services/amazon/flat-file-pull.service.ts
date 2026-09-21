@@ -27,7 +27,7 @@ import { productEventService } from '../product-event.service.js'
 import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from '../marketplaces/amazon.service.js'
 import { AmazonFlatFileService } from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
-import { MARKETPLACE_ID_MAP, LANGUAGE_TAG_MAP, CURRENCY_MAP } from './flat-file.service.js'
+import { MARKETPLACE_ID_MAP, LANGUAGE_TAG_MAP } from './flat-file.service.js'
 
 // ── Job types ──────────────────────────────────────────────────────────────
 

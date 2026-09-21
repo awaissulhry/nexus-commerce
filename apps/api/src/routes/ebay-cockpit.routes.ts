@@ -1,4 +1,5 @@
 import { marketLanguages } from '../services/pim/market-languages.js'
+import { marketCurrency } from '../services/pim/market-currency.js'
 /**
  * eBay Listing Cockpit API
  *
@@ -1192,7 +1193,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       },
       price: {
         value: priceVal,
-        currency: marketplace.toUpperCase() === 'UK' ? 'GBP' : 'EUR',
+        // P4.4a — the Marketplace row, not a UK ternary.
+        currency: await marketCurrency('EBAY', marketplace),
       },
       policies: {
         fulfillmentPolicyId: (platform.fulfillmentPolicyId as string | undefined) ?? undefined,

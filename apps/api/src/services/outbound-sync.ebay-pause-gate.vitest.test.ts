@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../db.js', () => ({
   default: {
+  marketplace: { findFirst: async (a: any) => ({ currency: ({ UK: 'GBP', GB: 'GBP', US: 'USD', PL: 'PLN', SE: 'SEK', TR: 'TRY' } as Record<string, string>)[String(a?.where?.code ?? '').toUpperCase()] ?? 'EUR', languages: [String(a?.where?.code ?? '').toUpperCase() === 'DE' ? 'de' : 'it'] }), findMany: async () => [] },
     channelListing: { findUnique: (...a: unknown[]) => mocks.findUnique(...a) },
     stockLevel: { findMany: (...a: unknown[]) => mocks.stockFindMany(...a), aggregate: vi.fn().mockResolvedValue(null) },
     offer: { findFirst: vi.fn().mockResolvedValue(null) },

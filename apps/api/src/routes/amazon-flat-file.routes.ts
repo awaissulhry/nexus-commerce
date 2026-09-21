@@ -1,4 +1,5 @@
 import { assertWriteAccountPerSku, isWrongAccountWriteError } from '../services/write-account-guard.js'
+import { marketCurrencyRows } from '../services/pim/market-currency.js'
 import { amazonContentRefusal } from '../services/amazon/validate-before-send.js'
 import { marketLanguages } from '../services/pim/market-languages.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
@@ -652,7 +653,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // A4C — deep-column reassembly specs (client sends manifest.deepFields,
       // mirroring expandedFields; absent from older clients → {} → inert).
       deepFields,
-    })
+    }, await marketCurrencyRows('AMAZON'))
     if (messageCount === 0) {
       return reply.code(400).send({
         error: skippedRows.length > 0

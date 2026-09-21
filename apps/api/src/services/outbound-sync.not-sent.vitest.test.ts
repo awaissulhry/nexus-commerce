@@ -9,7 +9,7 @@ const m = vi.hoisted(() => {
 vi.mock('../db.js', () => ({ default: {
   outboundSyncQueue: { findUnique: m.read, findMany: m.many, update: m.update, updateMany: m.claim },
   channelListing: { findMany: async () => [] },
-  marketplace: { findFirst: async () => ({ languages: ['it'] }) },
+  marketplace: { findFirst: async () => ({ currency: 'EUR', languages: ['it'] }) },
 } }))
 vi.mock('@nexus/database', () => ({ prisma: { outboundSyncQueue: { findUnique: m.read, update: m.update } } }))
 vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: null, addJobSafely: vi.fn(), readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
