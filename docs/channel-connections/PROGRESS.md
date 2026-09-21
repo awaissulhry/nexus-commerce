@@ -1,31 +1,91 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, ALL of P3, ALL of P4.1–P4.5, ALL of P5 and
-ALL of P6 that code can do are built and pushed.** P4.3, P4.4, P4.5 and the rest of P5 were all finished on
-2026-09-21. P4.6 is not-to-be-built until Shopify is live (D6 = B, decided).
+Updated **2026-09-21**. **P0, P1, P2, P3, P4.1–P4.5, P5 and everything in P6 that
+code can do are built, pushed and deployed.** P4.3, P4.4, P4.5, the rest of P5 and
+all of P6 were finished on 2026-09-21.
 
-**State at handover.** `origin/main` = `<this push>`. The working tree holds only
-other sessions' files (`.gitignore`, `apps/factory/tsconfig.tsbuildinfo`,
-`.githooks/*`, `.graphifyignore`, `docs/product-sheet/`, `graphify-out/`,
-`docs/2026-09-21-shared-copy-unknown-market-handoff.md`) — **do not commit
-those**; a `git add -A` swept them up once and had to be undone.
+**State at handover.** `origin/main` = **this commit** (the last of the session).
+Deployment `5e51055d` (commit `6e9cdd0fd`, one before this) was **BUILDING** when this
+was written, and **this docs commit triggers one more**. ⚠️ **Check the newest
+deployment reached SUCCESS before anything else** — `6e9cdd0fd` carries the only
+migration of the day (see §0b). Nothing of this programme is unpushed.
 
-⚠️ **Another session pushed mid-package.** `origin/main` moved to `c8b483c2c`
-carrying P4.5a–P4.5d with an assortment commit (`bd6458726`), so the
-"one push per package" cadence was overtaken by someone else's push rather than
-broken here. P4.5e–g went in the second push.
+## 0. Cold start — read this much and you can work
 
-🔴 **A `git stash push -u` I ran to check whether two test failures were
-pre-existing STASHED TWO OTHER SESSIONS' FILES** (`.gitignore`,
-`apps/factory/tsconfig.tsbuildinfo`). It was popped within the minute and
-nothing was lost. **Do not use `git stash` in this tree.** To compare against a
-base commit, use `git worktree` or reason from the diff — which is what settled
-it in the end: the two failing files import `services/marketplaces/amazon.service.ts`
-and `clients/amazon-sp-api.client.ts`, and neither is in the package's diff.
+| Package | State |
+|---|---|
+| P0 – P3 | done, deployed |
+| **P4.1 – P4.5** | done, deployed. P4.5 = seven slices + `P4.5h` |
+| **P4.6** | **not-to-be-built** — D6 = B was decided 2026-09-19 ("stay read-only until Shopify is live"), and Shopify is still gated. **Do not re-ask.** |
+| **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
+| **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
+| **P7** | next — **each drop needs the Owner's yes** |
+| P8 | after P7 |
 
-**Full suite at the end of P4.5:** `10547 passed, 6 failed, 130 skipped; 2 failed
-files` — the same two known Amazon local-account files, at the same count, as the
-handover before it.
+### 0a. What is genuinely still OPEN, and who owns it
+
+| # | Row | Owner | What closes it |
+|---|---|---|---|
+| 1 | **P6.7** eBay scopes | **Owner** | eBay's OAuth scope page answers **403** to an automated fetch, and the probe needs production credentials. Read the scope names in a **browser**, set `EBAY_CANDIDATE_SCOPES` on the deploy, read the verdicts, add only `✓ ACCEPTED` ones, then reconnect. `build/P6.7.md` §4 |
+| 2 | **P6.8** callbacks | **Owner** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. Two alerts nag until done. `build/P6.8.md` §4 |
+| 3 | **P5.2** Finances switch | **Owner** | `POST /api/amazon/financials/sync {"probe": true}` — a **read**, writes nothing — then compare counts, then flip. `build/P5.2.md` §5 |
+| 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
+| 5 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
+
+🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
+keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
+every eBay connect was broken from 2026-08-29 to 2026-09-16.
+
+🔴 **Do not reconnect Amazon Ads.** Two independent reasons: the grant predates
+2026-07-30 so it has **no expiry** and reconnecting would create one (P4.5g); and until
+P4.5h the callback wrote Amazon's marketplace **id** into a column every reader matches
+by **country code**, which would have refused every ads write (P4.5h).
+
+### 0b. Verify on the next deploy
+
+1. `Applying migration 20260921a_p62_signing_key_expiry` — the only migration today.
+2. `[cx-ebay] recorded the signing key expiry {"signingKeyId":…,"expiresAt":…}` — **the
+   first time this system has ever known that date.** If `expiresAt` is null, eBay
+   reports none; `signingKeyCheckedAt` being set is how you tell that from never asking.
+3. `p45b-ads-region-reconcile` daily line: **`regionCorrected=0`**, and
+   **`marketCorrected=1`** on its first run only (the `IE`→`BE` repair), then 0.
+4. Two NEW alerts, and they are **correct**: `SHOPIFY has no sign-in callback
+   registered` and `ETSY's sign-in callback is a development tunnel`.
+
+## 0c. Rules that bind every session here
+
+- **Ask first** for: a production **write**, a **live channel call**, a **P7 drop**.
+  Production **reads** (Railway logs, deployments) are allowed. A blanket "implement
+  the plan" does **not** lift these.
+- **CADENCE: commit per slice, push per PACKAGE.** A push runs a ~5-minute gate and
+  **deploys to production**.
+- **Other sessions share this tree.** `git status` first, stage your own files **by
+  name**, never `git add -A`.
+- 🔴 **Never `git stash` here.** One `git stash push -u` swept two other sessions'
+  files; it was popped within the minute and nothing was lost, but the near-miss is
+  the warning. Use `git worktree`, or reason from the diff.
+- Never `--no-verify`. Never lower a ratchet. Never weaken a test to make it pass.
+- Migrations: apply to the **local** database only, after printing the host.
+  🔴 `packages/database/.env` points at a **different** local database
+  (`localhost:5432`) than `apps/api/.env` (`127.0.0.1:55439`) — `prisma migrate deploy`
+  run from that package migrates the wrong one. Pass `DATABASE_URL` explicitly.
+- `docs/channel-connections/build/` is **gitignored**; commit records with `git add -f`.
+- **Railway variable reads are refused** by the auto-mode classifier
+  (`[Credential Materialization]`). Project/service/deployment/log reads work. So every
+  production *measurement* in P4.3d–P6.8 says "dev only".
+- **Amazon's and eBay's API references cannot be read automatically** — Amazon's render
+  only with JavaScript, eBay's answers **403**. Both blocked a row today (P4.5f, P6.7).
+
+**Full suite, end of P6:** `10634 passed, 6 failed, 130 skipped` — the same two known
+Amazon local-account files as every handover before it
+(`amazon-validation-preview`, `amazon-classifications`). Neither is in any diff from
+this session; they import `services/marketplaces/amazon.service.ts` and
+`clients/amazon-sp-api.client.ts`.
+
+**Other sessions' files in the tree — do not commit:** `.gitignore`,
+`apps/factory/tsconfig.tsbuildinfo`, `.githooks/*`, `.graphifyignore`,
+`docs/product-sheet/`, `graphify-out/`,
+`docs/2026-09-21-shared-copy-unknown-market-handoff.md`.
 
 ## ▶ OWNER'S THREE DECISIONS — answered 2026-09-21
 
@@ -57,7 +117,25 @@ took the "nothing to do" branch. Now `Object.keys(data).length === 0` — **pres
 truthiness.** Same family as the banked `Array.isArray([])` trap. **Always verify a
 surviving mutation actually applied.**
 
-## ▶ START HERE — the next package is P7 (each drop needs a yes), then P8
+## ▶ START HERE — the next package is P7 (clean-up), then P8
+
+**P7 has two halves, and only the first is yours to start** (FINAL-PLAN §6, P7):
+
+| half | what | approval |
+|---|---|---|
+| **P7a — deletions** | *"Remove: the ghost engines, WooCommerce, the old eBay routes, `oauth-state.ts`, the old Ads fallback."* Code only — no data is lost | 🟢 covered by "implement the plan in order". **Measure each one has no caller first** — P1.6 deleted 26 files this way |
+| **P7b — destructive DROPs** | `ChannelConnection.ebay*` columns, `AmazonAdsConnection`, `MarketplaceSync`, `Channel`, `Listing`, `EbayPushJob`, `AmazonFlatFileFeedJob`, `UserRole.channelScope` | 🔴 **each one needs its own yes, after a green week.** Ask; do not batch them |
+
+🔴 **`AmazonAdsConnection` is on the P7b drop list and is still the live money path** —
+25+ jobs, routes and services read it, and P4.5b's reconcile writes to it. CX.3c is the
+package that moves ownership to `ConnectionScope`; **until that lands, that DROP is not
+a candidate.** Say so rather than proposing it.
+
+**Start P7a by measuring**, the way every package here has paid off: for each named
+target, a derived census of its call sites with a known-live control, before deleting
+anything.
+
+---
 
 **P6 is COMPLETE** as far as code can take it: `P6.2`, `P6.4`, `P6.6` (+**R-2**) and
 `P6.8`'s instrumentation are built; `P6.7` is **PARTIAL** and its row is **OPEN**.
