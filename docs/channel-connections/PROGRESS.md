@@ -1,7 +1,7 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, ALL of P3, ALL of P4.1–P4.5, and ALL of P5
-are built and pushed.** P4.3, P4.4, P4.5 and the rest of P5 were all finished on
+Updated **2026-09-21**. **P0, P1, P2, ALL of P3, ALL of P4.1–P4.5, ALL of P5 and
+ALL of P6 that code can do are built and pushed.** P4.3, P4.4, P4.5 and the rest of P5 were all finished on
 2026-09-21. P4.6 is not-to-be-built until Shopify is live (D6 = B, decided).
 
 **State at handover.** `origin/main` = `<this push>`. The working tree holds only
@@ -57,7 +57,57 @@ took the "nothing to do" branch. Now `Object.keys(data).length === 0` — **pres
 truthiness.** Same family as the banked `Array.isArray([])` trap. **Always verify a
 surviving mutation actually applied.**
 
-## ▶ START HERE — the next package is P6 (P6.2 / 6.4 / 6.6 / 6.7 / 6.8)
+## ▶ START HERE — the next package is P7 (each drop needs a yes), then P8
+
+**P6 is COMPLETE** as far as code can take it: `P6.2`, `P6.4`, `P6.6` (+**R-2**) and
+`P6.8`'s instrumentation are built; `P6.7` is **PARTIAL** and its row is **OPEN**.
+
+### Two P6 rows are waiting on the Owner, not on code
+
+| row | what is left |
+|---|---|
+| **P6.7** | Read eBay's OAuth scope names in a **browser** (their docs answer 403 to an automated fetch), set `EBAY_CANDIDATE_SCOPES` on the deploy, read the verdicts, add only the accepted ones, then reconnect both accounts. `build/P6.7.md` §4 |
+| **P6.8** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. `build/P6.8.md` §4 |
+
+🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
+keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
+every eBay connect was broken from 2026-08-29 to 2026-09-16.
+
+### What P6 found
+
+- **P6.2** — the eBay signing key that signs **refunds and finances** had **no known
+  expiry**: eBay returns `expirationTime`, we logged it into an event and dropped it,
+  and `getEbaySigningKey` (a READ that returns it) had **zero callers** — the fifth
+  such accessor this programme has found.
+- **P6.4** — only **1 of 5** channels can be revoked through an API, and the screen said
+  *"Disconnected"* in a **success** tone for the other four while the grant kept
+  existing at the channel. `revokedAtChannel` was returned by the API and read by
+  **nobody**.
+- **P6.6 / R-2** — D1 = A confirmed, and **production is already off the env token**
+  (the deploy log says so). The fallback was **not** deleted: that is the largest blast
+  radius available, and "the stored grant works" is an inference from the app
+  functioning, not a measurement.
+- **P6.8** — ETSY's production callback is an **ngrok tunnel** and SHOPIFY has **no
+  redirect URI at all**.
+
+### 🔴 The trap that appeared TWICE in one package
+
+`channel-alerts.job.ts` selected `ChannelApp` rows `where: { secretExpiresAt: { not:
+null } }`. P6.2 widened it to an `OR` — and P6.8 then found that **Shopify and Etsy have
+both dates null**, so the rows its new alert exists for would never have been selected
+and the alert would have been **dead on arrival**.
+
+**Selecting on the presence of a value is how a row with nothing set stays invisible.**
+The filter is gone (`where: {}` — five rows) and each alert keeps its own guard.
+
+### And one mutation-discipline note
+
+A surviving mutation was chased down twice today and was **real both times**. Re-run any
+mutation that passes, with an assertion that the pattern actually replaced — a mutation
+that does not mutate proves nothing, and one of these had a genuine hole behind it (a
+truthiness check where presence was meant).
+
+
 
 **P4.5 and ALL of P5 are COMPLETE.** P4.5: seven slices,
 `build/P4.5a.md` … `build/P4.5g.md`. P5: `P5.1` (shipped 09-20), `P5.2`, `P5.3`,
