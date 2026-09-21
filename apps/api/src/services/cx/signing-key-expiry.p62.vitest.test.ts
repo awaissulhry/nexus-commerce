@@ -73,8 +73,14 @@ describe('the key lifecycle (P6.2)', () => {
   const apps = read('apps.service.ts')
 
   it('the expiry that was dropped is now stored', () => {
-    expect(client).toContain('created.expirationTime ? new Date(created.expirationTime) : null')
-    expect(apps).toContain('signingKeyExpiresAt: expiresAt ?? null')
+    // 🔴 P6.2b — this assertion USED to read:
+    //   expect(client).toContain('created.expirationTime ? new Date(created.expirationTime) : null')
+    // It passed for as long as the feature was broken, because it pinned the CHARACTERS and the
+    // claim was about the VALUE: eBay's expirationTime is epoch seconds, and `new Date('1731536000')`
+    // is Invalid Date, so nothing was ever stored. The behavioural version of this claim lives in
+    // signing-key-expiry.p62b.vitest.test.ts. What is left here is the wiring, which text can show.
+    expect(client).toContain('}, ebayEpochToDate(created.expirationTime))')
+    expect(apps).toContain('signingKeyExpiresAt: usableDate(expiresAt)')
     expect(apps).toContain('signingKeyCheckedAt: new Date()')
   })
 
@@ -97,8 +103,12 @@ describe('the key lifecycle (P6.2)', () => {
   })
 
   it('the recovery reports a failure rather than taking signing down', () => {
-    const fn = client.slice(client.indexOf('export async function recoverEbaySigningKeyExpiry('))
-    expect(fn.slice(0, 1800)).toContain('return { checked: false, signingKeyId, expiresAt: null, error }')
+    // P6.2b — bounded by the function's own end, not by a character count. The count was 1800
+    // and the fix added comments above the return, which moved it out of the window: a control
+    // that a correct change can break is measuring the wrong thing.
+    const from = client.indexOf('export async function recoverEbaySigningKeyExpiry(')
+    const fn = client.slice(from, client.indexOf('\nexport ', from + 1))
+    expect(fn).toContain('return { checked: false, signingKeyId, expiresAt: null, error }')
   })
 })
 

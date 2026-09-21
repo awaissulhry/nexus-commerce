@@ -91,6 +91,45 @@ function optionalString(v: unknown): string | undefined {
   return String(v);
 }
 
+/**
+ * P6.2b — eBay's `creationTime` / `expirationTime` as a real Date.
+ *
+ * 🔴 The trap this exists for. eBay returns these as **epoch seconds**, and `optionalString`
+ * above normalises them to a string — `1731536000` becomes `'1731536000'`. The P6.2 consumers
+ * then did `new Date(created.expirationTime)`, and **`new Date('1731536000')` is `Invalid
+ * Date`**: a bare digit string is handed to `Date.parse`, which reads date strings, not epochs.
+ * The same digits as a NUMBER parse fine, which is why nothing looked wrong. Production proved
+ * it on deployment `5e51055d` (2026-09-21): every attempt to store the date failed with
+ * *"Provided Date object is invalid"*, so the expiry stayed unknown — the exact fact P6.2 was
+ * built to learn.
+ *
+ * Seconds and milliseconds are told apart by magnitude, not by trust: epoch seconds for any
+ * realistic date are 10 digits (< 1e11) and the same instant in milliseconds is 13. A value
+ * outside 2000–2100 is refused as null rather than stored, because a key expiry in 1970 is a
+ * parse failure wearing a date's clothes.
+ *
+ * Returns null when there is nothing usable. The caller records the RAW value, so a shape eBay
+ * changes to is named in a log rather than guessed at.
+ */
+export function ebayEpochToDate(value: unknown): Date | null {
+  if (value === undefined || value === null || value === '') return null;
+  let ms: number | null = null;
+  if (typeof value === 'number' || /^-?\d+(\.\d+)?$/.test(String(value).trim())) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    ms = Math.abs(n) < 1e11 ? n * 1000 : n;
+  } else {
+    const parsed = Date.parse(String(value));
+    if (Number.isNaN(parsed)) return null;
+    ms = parsed;
+  }
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  if (year < 2000 || year > 2100) return null;
+  return date;
+}
+
 function requireString(obj: Record<string, unknown>, field: string, op: string): string {
   const v = obj[field];
   if (typeof v !== 'string' || v.length === 0) {

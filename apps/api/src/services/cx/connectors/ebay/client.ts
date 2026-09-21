@@ -12,7 +12,7 @@ import { logger } from '../../../../utils/logger.js'
 import { getChannelApp, storeSigningKey, recordSigningKeyExpiry } from '../../apps.service.js'
 import { recordConnectionEvent } from '../../events.service.js'
 import { getAccessToken } from '../../token.service.js'
-import { createEbaySigningKey, getEbaySigningKey } from './key-management.js'
+import { createEbaySigningKey, ebayEpochToDate, getEbaySigningKey } from './key-management.js'
 import { ebaySignatureAppliesTo, signEbayRequest } from './signing.js'
 import { EBAY_HOSTS } from './spec.js'
 
@@ -88,7 +88,13 @@ async function signingKeyFor(environment: 'production' | 'sandbox', appToken: ()
     jwe: created.jwe,
     privateKey: created.privateKey,
     cipher: created.signingKeyCipher,
-  }, created.expirationTime ? new Date(created.expirationTime) : null)
+  // P6.2b — epoch seconds, not a date string. `new Date('1731536000')` is Invalid Date.
+  }, ebayEpochToDate(created.expirationTime))
+  if (created.expirationTime && !ebayEpochToDate(created.expirationTime)) {
+    logger.warn('[cx-ebay] a new signing key came back with an expiry we could not read', {
+      signingKeyId: created.signingKeyId, rawExpirationTime: String(created.expirationTime),
+    })
+  }
   await recordConnectionEvent({ channelKey: 'EBAY', type: 'signing_key_created', detail: { signingKeyId: created.signingKeyId, cipher: created.signingKeyCipher, expirationTime: created.expirationTime ?? null } })
   logger.info('[cx-ebay] signing key created', { signingKeyId: created.signingKeyId })
   return { signingKeyId: created.signingKeyId, jwe: created.jwe, privateKey: created.privateKey, cipher: created.signingKeyCipher }
@@ -107,7 +113,7 @@ async function signingKeyFor(environment: 'production' | 'sandbox', appToken: ()
  */
 export async function recoverEbaySigningKeyExpiry(
   environment: 'production' | 'sandbox' = 'production',
-): Promise<{ checked: boolean; signingKeyId: string | null; expiresAt: string | null; error?: string }> {
+): Promise<{ checked: boolean; signingKeyId: string | null; expiresAt: string | null; unreadable?: boolean; error?: string }> {
   const app = await getChannelApp('EBAY', environment)
   const signingKeyId = app.signingKeyId ?? app.signingKey?.signingKeyId ?? null
   if (!signingKeyId) return { checked: false, signingKeyId: null, expiresAt: null, error: 'no signing key stored' }
@@ -116,10 +122,21 @@ export async function recoverEbaySigningKeyExpiry(
       appAccessToken: await ebayAppToken(environment),
       apiBase: EBAY_HOSTS[environment].apiz,
     })
-    const expiresAt = meta.expirationTime ? new Date(meta.expirationTime) : null
+    // P6.2b — epoch seconds. This line used to be `new Date(meta.expirationTime)`, which made an
+    // Invalid Date out of eBay's own answer; Prisma then refused the whole update, so
+    // `signingKeyCheckedAt` never landed either and the once-a-day throttle never engaged.
+    const expiresAt = ebayEpochToDate(meta.expirationTime)
+    const unreadable = Boolean(meta.expirationTime) && expiresAt === null
+    // Recorded EITHER WAY: "eBay named no expiry", "eBay named one we cannot read" and "we never
+    // asked" are three different facts, and only `signingKeyCheckedAt` separates the third.
     await recordSigningKeyExpiry('EBAY', environment, expiresAt)
-    logger.info('[cx-ebay] recorded the signing key expiry', { signingKeyId, expiresAt: expiresAt?.toISOString() ?? null })
-    return { checked: true, signingKeyId, expiresAt: expiresAt?.toISOString() ?? null }
+    if (unreadable) {
+      logger.warn('[cx-ebay] eBay named a signing key expiry we could not read', {
+        signingKeyId, rawExpirationTime: String(meta.expirationTime),
+      })
+    }
+    logger.info('[cx-ebay] recorded the signing key expiry', { signingKeyId, expiresAt: expiresAt?.toISOString() ?? null, unreadable })
+    return { checked: true, signingKeyId, expiresAt: expiresAt?.toISOString() ?? null, unreadable }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
     logger.warn('[cx-ebay] could not read the signing key expiry', { signingKeyId, error })

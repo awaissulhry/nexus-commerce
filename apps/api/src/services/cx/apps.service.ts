@@ -158,6 +158,25 @@ export async function getChannelApp(key: ChannelKey, environment: Environment = 
 }
 
 /**
+ * P6.2b — an Invalid Date never reaches Prisma.
+ *
+ * 🔴 Why this is a guard and not just a fixed caller. `recordSigningKeyExpiry` writes TWO
+ * columns: the expiry, and `signingKeyCheckedAt` — the discriminator that separates *"eBay
+ * named no expiry"* from *"we have never asked"*, and the same value
+ * `shouldAskForSigningKeyExpiry` uses as its once-a-day throttle. Prisma refuses an invalid
+ * Date for the whole `update`, so ONE unusable date cost all three: the expiry stayed unknown,
+ * the checked-at stayed null, and because the throttle is stored by the write that failed, the
+ * sweep asked eBay again on every heartbeat. Production, deployment `5e51055d`: four live Key
+ * Management calls in two minutes where the design says one a day.
+ *
+ * A bad date must degrade to "we asked, and there is no date" — never take the record with it.
+ */
+function usableDate(value: Date | null | undefined): Date | null {
+  if (!value) return null
+  return Number.isNaN(value.getTime()) ? null : value
+}
+
+/**
  * P6.2 — store the signing key WITH the date it dies.
  *
  * eBay's Key Management API returns `expirationTime` on `createSigningKey` and on
@@ -185,7 +204,7 @@ export async function storeSigningKey(
     data: {
       signingKeyEnc: blob,
       signingKeyId: signingKey.signingKeyId,
-      signingKeyExpiresAt: expiresAt ?? null,
+      signingKeyExpiresAt: usableDate(expiresAt),
       signingKeyCheckedAt: new Date(),
     },
   })
@@ -206,7 +225,7 @@ export async function recordSigningKeyExpiry(
 ): Promise<void> {
   await prisma.channelApp.update({
     where: { channelKey_environment: { channelKey: key, environment } },
-    data: { signingKeyExpiresAt: expiresAt, signingKeyCheckedAt: new Date() },
+    data: { signingKeyExpiresAt: usableDate(expiresAt), signingKeyCheckedAt: new Date() },
   })
   cache.delete(`${key}:${environment}`)
 }
