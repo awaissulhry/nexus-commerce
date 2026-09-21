@@ -1,51 +1,97 @@
 # Channel connections — progress and handover
 
 Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2,
-P4.3 and P4.4 are built, pushed and deployed.** P4.3 and P4.4 were both finished
-on 2026-09-21.
+P4.3, P4.4 and P4.5 are built, pushed and deployed.** P4.3, P4.4 and P4.5 were
+all finished on 2026-09-21.
 
-**State at handover.** `origin/main` = `18ff48dce`; deployment `f7cd8154`:
-**SUCCESS**. Nothing of this programme is unpushed. The working tree holds only
+**State at handover.** `origin/main` = `<this push>`. The working tree holds only
 other sessions' files (`.gitignore`, `apps/factory/tsconfig.tsbuildinfo`,
-`apps/api/src/services/assortment/*`, `docs/product-sheet/`, `graphify-out/`) —
-**do not commit those**; a `git add -A` swept them up once and had to be undone.
+`.githooks/*`, `.graphifyignore`, `docs/product-sheet/`, `graphify-out/`,
+`docs/2026-09-21-shared-copy-unknown-market-handoff.md`) — **do not commit
+those**; a `git add -A` swept them up once and had to be undone.
 
-**Production proof this session:** `shopify-qty-readback cron: scheduled
-{"schedule":"15 */6 * * *"}` in deployment `96f781a1` — P4.3f is live and
-running. The 57-check pre-push gate passed on the final push, including the new
-`market-currency` gate (`1620 files scanned, 0 outside the accessor`).
+⚠️ **Another session pushed mid-package.** `origin/main` moved to `c8b483c2c`
+carrying P4.5a–P4.5d with an assortment commit (`bd6458726`), so the
+"one push per package" cadence was overtaken by someone else's push rather than
+broken here. P4.5e–g went in the second push.
 
-## ▶ START HERE — the next package is P4.5 (advertising)
+🔴 **A `git stash push -u` I ran to check whether two test failures were
+pre-existing STASHED TWO OTHER SESSIONS' FILES** (`.gitignore`,
+`apps/factory/tsconfig.tsbuildinfo`). It was popped within the minute and
+nothing was lost. **Do not use `git stash` in this tree.** To compare against a
+base commit, use `git worktree` or reason from the diff — which is what settled
+it in the end: the two failing files import `services/marketplaces/amazon.service.ts`
+and `clients/amazon-sp-api.client.ts`, and neither is in the package's diff.
 
-The plan row: *"Ads: consent page per region; profile discovery in all 3 regions;
-the v3 report content type in the client; reconnect once for a true expiry date;
-disconnect removes the old Ads secrets. eBay Promoted Listings: full check first
-(not done today), then through the gateway."*
+**Full suite at the end of P4.5:** `10547 passed, 6 failed, 130 skipped; 2 failed
+files` — the same two known Amazon local-account files, at the same count, as the
+handover before it.
 
-**Two of its rows are already written down in §6 of the plan, with line numbers:**
+## ▶ START HERE — the next package is P4.6 (Etsy writes), and it NEEDS D6
 
-1. Sponsored Brands creation defaults to `creativeType: 'productCollection'`
-   (`services/advertising/ads-create.service.ts:940`), an entity Amazon
-   deprecated on 2026-07-06 in favour of Manual / Auto Collection. A full
-   shut-off in January 2027 is reported by a third party only, **not confirmed**
-   on Amazon's own pages.
-2. Amazon Ads refresh tokens issued **on or after 2026-07-30** expire 365 days
-   after consent. The stored expiry is an **estimate** (365 days from the adopt
-   job), not the real consent date — and if our grant predates 2026-07-30 it has
-   no 365-day expiry at all, so a reconnect would START one. Decide from the
-   grant date before reconnecting.
+**P4.5 is COMPLETE.** Seven slices, `build/P4.5a.md` … `build/P4.5g.md`.
+
+🔴 **Two of its rows did not end where the plan pointed, and both matter:**
+
+1. **"Reconnect once for a true expiry date" — DO NOT DO IT (P4.5g).** All nine
+   Ads rows carry `tokenIssuedAt = 2026-05-17`, and that estimate is a
+   conservative FLOOR, so the true consent is at or before it — **before Amazon's
+   2026-07-30 cut-off.** The token therefore has **no expiry**, and a reconnect
+   would CREATE one. The screen said otherwise because
+   `ChannelConnection.refreshTokenExpiresAt` is `lastRefreshAt + our own 365-day
+   constant`, and the route called that `measuredExpiry` and set
+   `isEstimate: false` from it.
+2. **"Default to Manual Collection" — NOT DONE, on purpose (P4.5f).** The wire
+   value could not be established: Amazon's `/sb/v4/ads` reference renders only
+   with JavaScript, and `/sb/v4/ads` has **0 calls ever** so there is no stored
+   answer either. The silent default to the deprecated entity is gone (an omitted
+   type is now refused), but the value was **not** replaced by a guess. To close
+   it: one captured 200 from a real `POST /sb/v4/ads`, or the enum read off
+   Amazon's rendered reference.
+
+**The biggest defect P4.5 found was not in its own rows.** P0.7 had deferred one
+line to P4.5 by name — *"eBay Promoted Listings writes (ads, not listings;
+P4.5)"* — and it was a wrong-account write: 13 write paths loaded an
+`EbayCampaign` (which carries a required `channelConnectionId`) and then asked
+for the **primary** account's token. It was latent only because a **second**
+defect hid it: the entity sync also visited one account, so no second-account
+campaign could ever enter the database. Fixing either alone would have been
+worse than fixing neither.
 
 Then **P4.6** (needs D6) → the rest of **P5** (P5.3 measured, P5.2 / P5.4; P5.5
 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
-🔴 **THE LESSON, and it has now held for twenty rows: the plan row is usually NOT
-the defect.** Across P4.1–P4.4, **eight rows were counterweights** — already
+🔴 **THE LESSON, and it has now held for twenty-seven rows: the plan row is
+usually NOT the defect.** Across P4.1–P4.5, **ten rows were counterweights** —
+P4.5 added the eBay Promoted Listings gateway row (done in P1.2) and the
+three-region discovery row (the CX connector already sweeps all three; the money
+path was the gap). And P4.5 added a **new shape: the plan row that is the wrong
+INSTRUCTION** — "reconnect once for a true expiry date" would have destroyed the
+property it was trying to measure. Earlier — already
 built, or built better than the row described, or describing the wrong build
 entirely (P4.4d: "build the eBay price push" would have produced a *second* eBay
 sender). The real defects were in **failure paths** and in **drifts** between two
 builders. **Measure the row before you build it.**
 
-🔴 **The two sharpest new ones, from P4.4:**
+🔴 **The three sharpest new ones, from P4.5:**
+
+- **A derived number can wear a measurement's badge.** `refreshTokenExpiresAt`
+  is `lastRefreshAt + spec.auth.refreshTokenLifetimeSec` — our own constant —
+  and the route called it `measuredExpiry` and set `isEstimate: false` from it,
+  over a comment saying *"the grant reported a real refresh-token lifetime"*.
+  **Ask where a value came from before believing its confidence flag.**
+- **Two defects can hide each other, and fixing either alone is worse than
+  fixing neither** (P4.5a). The ads write misroute was invisible because the
+  entity sync could not produce the data that would expose it. Landing the sweep
+  on its own would have made every second-account campaign's writes go to the
+  first account.
+- **Restraint is a deliverable.** P4.5c would not move a working consent URL to
+  close a gap nobody has hit; P4.5f would not replace a deprecated wire value
+  with an unverifiable one on a path that has never run. *Predict before you
+  write* cuts both ways: **a change whose correct value cannot be stated in
+  advance is not a fix.**
+
+🔴 **From P4.4:**
 
 - **Ask what a failure path's PREMISE is before hardening it** (P4.3e), and
   **do not let four fixed fail-opens make refusing automatic** (P4.4c). The price
@@ -71,11 +117,17 @@ call**, or a **P7 drop**. A blanket "implement the plan" does not lift those.
 **🔴 The flat-file no-touch rule is LIFTED (Owner, 2026-09-20):** the flat-file
 routes and pages are ordinary files.
 
-⚠️ **Session note (2026-09-21):** Railway **reads** work (logs, deployments,
-variables) and a variable **write** was permitted late in the session, but both
-were refused by the auto-mode classifier earlier. Every production measurement in
-P4.3d–f and P4.4a–e therefore says "dev only". If your session can read the
-production database, the open questions are listed in each build record's §4.
+⚠️ **Session note (2026-09-21):** Railway **variable** reads were refused by the
+auto-mode classifier again during P4.5 (`[Credential Materialization]`), so every
+production measurement in P4.3d–f, P4.4a–e and P4.5a–g says "dev only". Railway
+project/service listing DOES work. If your session can read the production
+database, the open questions are listed in each build record's §4.
+
+🟢 **Web research works and is part of this programme** (P0.8 was done that way).
+But **Amazon's Ads API reference renders only with JavaScript**, so `WebFetch`
+returns the page title and nothing else — P0.8 hit this on the deprecations page
+and P4.5f hit it again on `/sb/v4/ads`. A JavaScript-capable browser is what that
+needs.
 
 Read in this order:
 
@@ -114,6 +166,7 @@ newest is deployment `f7cd8154` from `18ff48dce`: SUCCESS.
 |---|---|---|
 | **P4.3 (stock)** | 2026-09-21, deploys `96f781a1` + `a99c469c` | `build/P4.3a.md` … `P4.3f.md` |
 | **P4.4 (price)** | 2026-09-21, deploys `a99c469c` + `f7cd8154` | `build/P4.4a.md` … `P4.4e.md` |
+| **P4.5 (advertising)** | 2026-09-21, two pushes (`c8b483c2c` carried a–d with another session's) | `build/P4.5a.md` … `P4.5g.md` |
 
 Eleven slices across the two, each with its own build record, mutation table and
 gate results. Section 3d and the P4.3 block in section 3 carry the one-line
@@ -501,11 +554,57 @@ site with a known-live function as the control.
   reports and does **not** heal. eBay is the one channel where this row would
   cost a real call, and it is not built.
 
+### 3e. P4.5 (advertising) — COMPLETE 2026-09-21, seven slices
+
+- **P4.5a** — 🔴 **the biggest one, and it was not a P4.5 row.** P0.7 deferred it
+  here by name: *"eBay Promoted Listings writes (ads, not listings; P4.5)."*
+  `EbayCampaign.channelConnectionId` is a **required, related column**, and **13
+  write paths** loaded the campaign and then asked for the **primary** account's
+  token (22 sites in all across writes, routes, reports and the sync). Latent only
+  because a **second** defect hid it — the entity sync also visited one account and
+  reported `connections: 1`, so no second-account campaign could enter the
+  database. **Fixing either alone is worse than fixing neither**, so both landed
+  together. Naming the account also buys a refusal "the primary" can never make: it
+  is by definition active, so a write aimed at a *disconnected* account silently
+  became a write to a live one.
+- **P4.5b** — discovery in three regions **already runs**: the CX connector sweeps
+  all three on every heartbeat and has recorded **14 profiles** (9 EU, 3 NA, 2 FE).
+  `AmazonAdsConnection`, which 25+ jobs read, holds the **9 EU ones** — US, CA, MX,
+  AU and JP are invisible to every ads job. 🔴 And `listAdsProfiles()`, the accessor
+  that reads the scopes and returns all 14, has **zero callers**. The region→host
+  fact was written out **five times**, two of them EU-only, which is the cause. One
+  accessor now, which refuses an unknown region. Creating the missing rows is off
+  behind `NEXUS_ADS_ALL_REGIONS` (spend); correcting a row's region always runs.
+- **P4.5c** — **restraint.** The NA-for-every-region consent page is a real gap and
+  **not** a live breakage: this grant was obtained through it. Made explicit
+  (`NEXUS_ADS_CONSENT_REGIONAL`, `/connect?region=`) with the default unmoved — and
+  the pre-existing `spec.vitest.test.ts:72` assertion is the control proving it.
+- **P4.5d** — a **counterweight with a real fix inside**. `fetchReport` sent no v3
+  media type while `createReportJob` did, on the same endpoint. But **1,135 of
+  1,197** real creates answered **200** without it, and zero 415s — 10 of the 400s
+  and all 9 of the 425s came from the builder *without* it, which are answers Amazon
+  can only give after parsing the body. Corrected, and a **parity gate** now holds
+  the two builders equal.
+- **P4.5e** — 🔴 a disconnect **creates** the condition its own leak needs.
+  `revoke()` nulls eight columns, all on `ChannelConnection`, and sets
+  `isActive: false` — which is exactly what makes `resolveConnection` throw,
+  `credentialsFromCore` return null, and the Ads client fall back to
+  `AmazonAdsConnection.credentialsEncrypted`. **Ads calls carried on after the
+  operator disconnected.**
+- **P4.5f** — the silent default to the deprecated `productCollection` is gone, and
+  the wire value was **NOT** replaced by a guess (§ START HERE). `shutdownDate` is
+  **null**, not January 2027: that date is third-party only, and storing it as
+  Amazon's is how a rumour becomes a deadline.
+- **P4.5g** — the reconnect row **inverts** (§ START HERE), and the screen's
+  confident expiry date came from our own constant wearing a measurement's badge.
+
+**The only P4.5 row left open** is the Sponsored Brands wire value (P4.5f §4) and
+the eBay Media-API decision (R-1, the Owner's).
+
 ### 3c. The order from here
 
-**P4.5 (advertising) → P4.6 (needs D6)** → the rest of P5 (P5.3 measured,
-P5.2 / P5.4; P5.5 not needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop
-needs a yes) → P8.
+**P4.6 (needs D6)** → the rest of P5 (P5.3 measured, P5.2 / P5.4; P5.5 not
+needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
 
 ## 4. 🔴 What is NOT proven by real traffic
 
