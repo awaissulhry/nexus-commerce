@@ -207,23 +207,61 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     } = await import('../services/cx/connectors/ebay/notifications.js')
     const query = req.query as { environment?: string }
     const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
-    const endpoint = process.env.EBAY_NOTIFICATION_ENDPOINT ?? null
+    /**
+     * 🔴 CX — through `ebayNotificationConfig()`, the SAME accessor the challenge handler
+     * below and the destination setup use.
+     *
+     * This line read `process.env.EBAY_NOTIFICATION_ENDPOINT` while every other reader
+     * reads `EBAY_NOTIFICATION_ENDPOINT_URL` — the exact two-names-for-one-fact drift
+     * that `notifications.ts` fixed in itself and documented as *"the shape of every
+     * drift defect in this programme"*. It was missed here.
+     *
+     * What it cost: `endpoint` came back **null** in production, so
+     * `destinations.find(d => d.endpoint === endpoint)` compared every real destination
+     * against `null`, matched nothing, and reported `destination: null` — whether or not
+     * a destination existed. This file's own header says a status endpoint that cannot
+     * see the thing that is broken is worse than none, because it is quoted. It was
+     * quoted: `PROGRESS.md` §4 sends the next session here.
+     */
+    const { ebayNotificationConfig } = await import('../services/cx/connectors/ebay/notifications.js')
+    const config = ebayNotificationConfig()
+    const endpoint = config.endpoint
     try {
       const [topics, destinations, subscriptions] = await Promise.all([
         getEbayTopics(environment), getEbayDestinations(environment), getEbaySubscriptions(environment),
       ])
       const offered = new Set(topics.map((t) => t.topicId))
-      const ours = destinations.find((d) => d.endpoint === endpoint) ?? null
+      const ours = endpoint ? destinations.find((d) => d.endpoint === endpoint) ?? null : null
       return reply.send({
         environment,
         endpoint,
+        /**
+         * Whether the two variables the ownership hash is built from are set at all.
+         * Without this, a null `endpoint` reads as "eBay has nothing" when it means
+         * "we did not ask for anything".
+         */
+        configured: { hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken },
         destination: ours,
+        /**
+         * 🔴 "Could not measure" is not "measured empty". `destination: null` alone
+         * cannot tell a seller with no destination from a lookup that had nothing to
+         * look for, so the raw count and the endpoints eBay holds are reported beside it.
+         */
+        destinationsAtEbay: destinations.length,
+        destinationEndpoints: destinations.map((d) => d.endpoint),
         // The number that matters: a subscription pointed anywhere but our destination
         // delivers into the void, the same failure RT.3 found on the Amazon side.
         subscriptions: subscriptions.map((s) => ({
           ...s, pointsAtOurDestination: !!ours && s.destinationId === ours.destinationId,
         })),
         catalogueSize: offered.size,
+        /**
+         * Every topic id eBay actually offers. A wish with `offeredByEbay: false` means
+         * OUR id is wrong, and the fix is to READ the right one here — never to invent a
+         * plausible one. P6.7 records what inventing eBay strings costs: two made-up
+         * scope names broke every eBay connect for nineteen days.
+         */
+        catalogue: topics.map((t) => t.topicId).sort(),
         wanted: EBAY_DESIRED_TOPICS.map((t) => ({
           ...t,
           offeredByEbay: offered.has(t.topicId),
