@@ -17,7 +17,8 @@ deployment reached SUCCESS before anything else** — this session's push carrie
 | **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
-| **P7** | next — **each drop needs the Owner's yes** |
+| **P7a** | 🟢 **MEASURED 2026-09-21 — nothing is safe to delete.** P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
+| **P7b** | **each drop needs the Owner's yes**, after a green week |
 | P8 | after P7 |
 
 ### 0a. What is genuinely still OPEN, and who owns it
@@ -30,7 +31,8 @@ deployment reached SUCCESS before anything else** — this session's push carrie
 | 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
 | 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
 | 6 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
-| 7 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
+| 7 | **P7a** the Ads fallback | either | The one genuine deletion candidate. `resolveCredentials` sits in the `else` of a `NEXUS_WORKSPACES_ENABLED === '1'` check and production was `1` on 09-19. **One read of that variable on the production deploy closes it.** `build/P7a.md` §2 |
+| 8 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
 
 🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
 keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
@@ -139,7 +141,16 @@ surviving mutation actually applied.**
    they passed the whole time. Fixed, deployed, proven.
 2. **Built P4.6** (Etsy writes), five slices, after the Owner overrode D6.
 
-## ▶ START HERE — the next package is P7 (clean-up), then P8
+## ▶ 🔴🔴 THE TRAFFIC INSTRUMENT IS BROKEN — read before re-deriving any delete list
+
+Railway's `http-requests` tool **ignores `filterPath` and `startDate`.** Measured 2026-09-21 with
+a control: a path that **cannot exist** returned **757**, the same as no filter (758), the same as
+`/api/health` (759). Every call reports `hoursBack: 1` whatever `startDate` says.
+
+**No `0` from that tool means anything, and neither does a large number.** `get-logs`'s `filter`
+**does** work and is the instrument that still functions. Full write-up: `build/P7a.md` §1.
+
+## ▶ START HERE — P7a is measured (nothing to delete); next is P7b, then P8
 
 **P7 has two halves, and only the first is yours to start** (FINAL-PLAN §6, P7):
 

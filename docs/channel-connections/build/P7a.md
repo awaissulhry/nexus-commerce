@@ -119,7 +119,9 @@ Three things follow, none of which this session should decide alone:
    RESEARCH's complaint, on a worker that writes `ChannelListing` rows. That is a **P4-shaped**
    question (does a fake `_US` coordinate still get created?), not a P7 one.
 3. 🔴 **`RESEARCH.md` A5 §1.1 should be marked stale** where it is wrong, so the next session
-   reading "the ghost engines" does not start from the same wrong map.
+   reading "the ghost engines" does not start from the same wrong map. **This session did not edit
+   it**: `RESEARCH.md` is on PROGRESS §1's do-not-touch list (another session's file). The table in
+   §3 above is the correction, and whoever owns that file can fold it in.
 
 **Nothing in P7b changes.** Every destructive DROP still needs its own yes after a green week, and
 `AmazonAdsConnection` is still the live money path with 25+ readers — the note in §0 of PROGRESS
