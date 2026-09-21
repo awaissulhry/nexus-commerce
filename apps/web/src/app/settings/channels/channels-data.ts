@@ -47,7 +47,11 @@ export interface AdsConnection {
   lastError: string | null
   tokenExpiresAt: string | null
   daysToTokenExpiry: number | null
-  tokenExpiryStatus: 'unknown' | 'expired' | 'critical' | 'warning' | 'ok'
+  // P4.5g — 'no_expiry' is a distinct answer from 'unknown': Amazon's 365-day rule
+  // applies only to grants given on or after 2026-07-30, and ours predates it.
+  tokenExpiryStatus: 'unknown' | 'expired' | 'critical' | 'warning' | 'ok' | 'no_expiry'
+  tokenExpiryProvenance?: 'channel' | 'derived' | 'none' | 'unknown'
+  tokenExpiryNote?: string
 }
 
 interface Loadable<T> {

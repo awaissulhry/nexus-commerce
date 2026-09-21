@@ -17,7 +17,23 @@ import { accountDisplayName } from '@/design-system/lib'
 
 const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY']
 
-function lifetimeLine(c: CatalogueChannel): string | null {
+/**
+ * P4.5g — the catalogue's `refreshTokenLifetimeSec` is what the channel spec DECLARES,
+ * not what this grant has. For Amazon Ads it declared 365 days and the card read
+ * "Sign-in lasts about 12 months, then you reconnect." — false for a grant given
+ * before Amazon's 2026-07-30 rule, which has no expiry at all.
+ *
+ * So when the connections themselves report an expiry provenance, that wins: the
+ * account's own answer beats the catalogue's default.
+ */
+function lifetimeLine(c: CatalogueChannel, connections: AdsConnection[] = []): string | null {
+  const noExpiry = connections.length > 0 && connections.every((i) => i.tokenExpiryStatus === 'no_expiry')
+  if (noExpiry) {
+    return (
+      connections[0].tokenExpiryNote ??
+      'This sign-in has no expiry date. Reconnecting would start a 365-day clock.'
+    )
+  }
   if (c.connectMode === 'self_authorization') return 'Amazon does not report an expiry for this private authorization.'
   if (c.rotatesRefreshToken) return 'Sign-in renews itself on every refresh.'
   if (c.refreshTokenLifetimeSec) {
@@ -127,10 +143,10 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                     )}
                   </dd>
                 </div>
-                {lifetimeLine(c) && (
+                {lifetimeLine(c, adsItems) && (
                   <div>
                     <dt>Renewal</dt>
-                    <dd>{lifetimeLine(c)}</dd>
+                    <dd>{lifetimeLine(c, adsItems)}</dd>
                   </div>
                 )}
                 {c.apiVersion && (

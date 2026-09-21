@@ -30,6 +30,7 @@ import { testConnection, adsMode, listPortfolios, createPortfolio, type AdsRegio
 // threw "Cannot access 'conditionsTextOf' before initialization" on prod.
 import { conditionsTextOf } from '../services/advertising/rule-conditions-text.js'
 import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../services/ads-core/ams-daily.js'
+import { adsRefreshExpiry } from '../services/ads-core/ads-token-expiry.js'
 import { allocate, microsToCents, toEurCents, ntbIsPublishedFor } from '../services/ads-core/metrics-math.js'
 import { detectKeywordConflicts } from '../services/advertising/keyword-conflicts.service.js'
 import { PROFIT_UNKNOWN_REASON } from '../services/advertising/profit-coverage.js'
@@ -12178,10 +12179,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const DAY = 24 * 60 * 60 * 1000
     const now = Date.now()
     const withExpiry = items.map((c) => {
-      // The measured expiry when we have one; otherwise the row's estimate, unchanged.
-      const measuredExpiry = account?.refreshTokenExpiresAt ?? null
-      const tokenExpiresAt = measuredExpiry ?? c.tokenExpiresAt
-      const isEstimate = measuredExpiry ? false : c.tokenIssuedAtIsEstimate
+      /**
+       * P4.5g — 🔴 this read `const measuredExpiry = account?.refreshTokenExpiresAt`
+       * and set `isEstimate: false` from it, over a comment saying *"The grant
+       * reported a real refresh-token lifetime"*. **Amazon reported nothing.**
+       * `storeGrant` computes that column as
+       * `grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec`, the Ads
+       * connect flow sets no `refreshExpiresInSec`, and the spec's constant is
+       * `365 * 86_400` — our own number. LWA has no `refresh_token_expires_in`; that
+       * field is eBay's.
+       *
+       * So a derived number was wearing a measurement's badge, and the screen showed a
+       * confident expiry for a token that — consent predating 2026-07-30 — has none.
+       * `adsRefreshExpiry` decides it from Amazon's published rule and says where the
+       * answer came from.
+       */
+      const expiry = adsRefreshExpiry({
+        consentAt: c.tokenIssuedAt,
+        consentIsEstimate: c.tokenIssuedAtIsEstimate,
+        storedExpiresAt: account?.refreshTokenExpiresAt ?? c.tokenExpiresAt,
+        // Nothing produces this for Amazon Ads today. It is a parameter so the day
+        // Amazon does report a lifetime, the rule below stops being consulted.
+        channelReportedLifetimeSec: null,
+      })
+      const tokenExpiresAt = expiry.expiresAt
       const daysToTokenExpiry = tokenExpiresAt ? Math.floor((tokenExpiresAt.getTime() - now) / DAY) : null
       return {
         ...c,
@@ -12190,9 +12211,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         lastError: account?.lastError ?? c.lastError,
         lastErrorAt: account?.lastErrorAt ?? c.lastErrorAt,
         tokenExpiresAt,
-        tokenIssuedAtIsEstimate: isEstimate,
+        tokenIssuedAtIsEstimate: expiry.isEstimate,
         daysToTokenExpiry,
-        tokenExpiryStatus: daysToTokenExpiry == null ? 'unknown'
+        // Where the date came from, and a sentence for the operator. Added fields, so
+        // the nine existing web call sites are untouched.
+        tokenExpiryProvenance: expiry.provenance,
+        tokenExpiryNote: expiry.note,
+        // 'no_expiry' is a distinct answer from 'unknown'. P3.6's rule: a screen that
+        // cannot tell "there is none" from "we could not tell" is not reporting health.
+        tokenExpiryStatus: expiry.provenance === 'none' ? 'no_expiry'
+          : daysToTokenExpiry == null ? 'unknown'
           : daysToTokenExpiry <= 0 ? 'expired'
           : daysToTokenExpiry <= 30 ? 'critical'
           : daysToTokenExpiry <= 60 ? 'warning' : 'ok',
