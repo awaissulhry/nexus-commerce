@@ -9,10 +9,10 @@
  */
 
 import { logger } from '../../../../utils/logger.js'
-import { getChannelApp, storeSigningKey } from '../../apps.service.js'
+import { getChannelApp, storeSigningKey, recordSigningKeyExpiry } from '../../apps.service.js'
 import { recordConnectionEvent } from '../../events.service.js'
 import { getAccessToken } from '../../token.service.js'
-import { createEbaySigningKey } from './key-management.js'
+import { createEbaySigningKey, getEbaySigningKey } from './key-management.js'
 import { ebaySignatureAppliesTo, signEbayRequest } from './signing.js'
 import { EBAY_HOSTS } from './spec.js'
 
@@ -47,20 +47,84 @@ export class EbayApiError extends Error {
   }
 }
 
-/** Obtain (creating once) the app's eBay signing key. */
+/**
+ * P6.2 — how long before expiry a signing key is replaced.
+ *
+ * A key replaced the moment it expires is a key that has already failed at least one
+ * call: eBay rejects with 215xxx, which is not retryable into a success. The buffer is
+ * generous because creating a key is additive at eBay (the old one keeps working until
+ * its own expiry), so replacing early costs nothing and replacing late costs a refund.
+ */
+const SIGNING_KEY_RENEW_BEFORE_MS = 7 * 24 * 60 * 60 * 1000
+
+/** A stored key we should stop using: dated, and that date is near or past. */
+function signingKeyIsDue(expiresAt: Date | null | undefined, now = Date.now()): boolean {
+  if (!expiresAt) return false // no date is not evidence of expiry — P6.2 records why
+  return expiresAt.getTime() - now <= SIGNING_KEY_RENEW_BEFORE_MS
+}
+
+/**
+ * Obtain the app's eBay signing key, creating one when there is none **or when the one
+ * we hold is at the end of its life**.
+ *
+ * 🔴 Before P6.2 this returned the stored key forever. eBay returns an
+ * `expirationTime` on create; it went into a log line and was dropped, so nothing knew
+ * when the key died — and when it did, every signed eBay call (refunds, finances)
+ * would start failing with 215xxx. A key with no recorded date is still used, because
+ * "we never asked" is not "it expired"; `recoverEbaySigningKeyExpiry` is what fills it.
+ */
 async function signingKeyFor(environment: 'production' | 'sandbox', appToken: () => Promise<string>) {
   const app = await getChannelApp('EBAY', environment)
-  if (app.signingKey?.privateKey && app.signingKey.jwe) return app.signingKey
+  const due = signingKeyIsDue(app.signingKeyExpiresAt)
+  if (app.signingKey?.privateKey && app.signingKey.jwe && !due) return app.signingKey
+  if (due) {
+    logger.warn('[cx-ebay] signing key is at the end of its life — creating a replacement', {
+      signingKeyId: app.signingKeyId, expiresAt: app.signingKeyExpiresAt?.toISOString() ?? null,
+    })
+  }
   const created = await createEbaySigningKey({ appAccessToken: await appToken(), apiBase: EBAY_HOSTS[environment].apiz, cipher: 'ED25519' })
   await storeSigningKey('EBAY', environment, {
     signingKeyId: created.signingKeyId,
     jwe: created.jwe,
     privateKey: created.privateKey,
     cipher: created.signingKeyCipher,
-  })
+  }, created.expirationTime ? new Date(created.expirationTime) : null)
   await recordConnectionEvent({ channelKey: 'EBAY', type: 'signing_key_created', detail: { signingKeyId: created.signingKeyId, cipher: created.signingKeyCipher, expirationTime: created.expirationTime ?? null } })
   logger.info('[cx-ebay] signing key created', { signingKeyId: created.signingKeyId })
   return { signingKeyId: created.signingKeyId, jwe: created.jwe, privateKey: created.privateKey, cipher: created.signingKeyCipher }
+}
+
+/**
+ * P6.2 — ask eBay when the key we already hold expires, and record the answer.
+ *
+ * The production signing key was created before the expiry was stored, so its date is
+ * recoverable only by asking. `getEbaySigningKey` is a **read**, has existed with a
+ * passing test and **zero callers** since it was written, and this is what finally
+ * calls it.
+ *
+ * Returns what it learned rather than throwing: a key-metadata read failing is not a
+ * reason to take eBay signing down, and the caller reports it.
+ */
+export async function recoverEbaySigningKeyExpiry(
+  environment: 'production' | 'sandbox' = 'production',
+): Promise<{ checked: boolean; signingKeyId: string | null; expiresAt: string | null; error?: string }> {
+  const app = await getChannelApp('EBAY', environment)
+  const signingKeyId = app.signingKeyId ?? app.signingKey?.signingKeyId ?? null
+  if (!signingKeyId) return { checked: false, signingKeyId: null, expiresAt: null, error: 'no signing key stored' }
+  try {
+    const meta = await getEbaySigningKey(signingKeyId, {
+      appAccessToken: await ebayAppToken(environment),
+      apiBase: EBAY_HOSTS[environment].apiz,
+    })
+    const expiresAt = meta.expirationTime ? new Date(meta.expirationTime) : null
+    await recordSigningKeyExpiry('EBAY', environment, expiresAt)
+    logger.info('[cx-ebay] recorded the signing key expiry', { signingKeyId, expiresAt: expiresAt?.toISOString() ?? null })
+    return { checked: true, signingKeyId, expiresAt: expiresAt?.toISOString() ?? null }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    logger.warn('[cx-ebay] could not read the signing key expiry', { signingKeyId, error })
+    return { checked: false, signingKeyId, expiresAt: null, error }
+  }
 }
 
 /**

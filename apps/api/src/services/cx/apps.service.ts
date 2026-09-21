@@ -28,6 +28,12 @@ export interface ChannelAppCreds {
   redirectUris: string[]
   extra: Record<string, unknown>
   signingKey: { signingKeyId: string; jwe: string; privateKey: string; cipher: string } | null
+  /** P6.2 — the signing key's own id, readable without decrypting the key. */
+  signingKeyId: string | null
+  /** P6.2 — when eBay says the signing key dies. Null = eBay named no date. */
+  signingKeyExpiresAt: Date | null
+  /** P6.2 — when we last asked. Null = never — a different fact from "no expiry". */
+  signingKeyCheckedAt: Date | null
 }
 
 const cache = new Map<string, { at: number; value: ChannelAppCreds }>()
@@ -138,25 +144,69 @@ export async function getChannelApp(key: ChannelKey, environment: Environment = 
       redirectUris: row.redirectUris,
       extra,
       signingKey,
+      signingKeyId: row.signingKeyId ?? null,
+      signingKeyExpiresAt: row.signingKeyExpiresAt ?? null,
+      signingKeyCheckedAt: row.signingKeyCheckedAt ?? null,
     }
   } else {
     const seed = envSeed(key)
     if (!seed) throw new ChannelAppConfigurationError(key, environment)
-    value = { channelKey: key, environment, ...seed, signingKey: null }
+    value = { channelKey: key, environment, ...seed, signingKey: null, signingKeyId: null, signingKeyExpiresAt: null, signingKeyCheckedAt: null }
   }
   cache.set(cacheKey, { at: Date.now(), value })
   return value
 }
 
+/**
+ * P6.2 — store the signing key WITH the date it dies.
+ *
+ * eBay's Key Management API returns `expirationTime` on `createSigningKey` and on
+ * `getSigningKey`. It was read, put into a `signing_key_created` event's detail, and
+ * then dropped: this function had no expiry parameter and `ChannelApp` had no column.
+ *
+ * 🔴 So the production signing key — which exists, measured 2026-09-21 — had **no
+ * known expiry**. When it dies, every signed eBay call (refunds, finances) fails with
+ * a 215xxx signature error that `EbayApiError.isSignatureError` already recognises and
+ * nothing anticipates.
+ *
+ * `expiresAt: null` means eBay’s answer carried no date, which is a different fact
+ * from "we never asked" — `signingKeyCheckedAt` is what separates them (P3.6: no_data
+ * is never a pass). Both are written here, so a key stored is a key dated.
+ */
 export async function storeSigningKey(
   key: ChannelKey,
   environment: Environment,
   signingKey: { signingKeyId: string; jwe: string; privateKey: string; cipher: string },
+  expiresAt?: Date | null,
 ): Promise<void> {
   const { blob } = await encryptCredentials(signingKey)
   await prisma.channelApp.update({
     where: { channelKey_environment: { channelKey: key, environment } },
-    data: { signingKeyEnc: blob, signingKeyId: signingKey.signingKeyId },
+    data: {
+      signingKeyEnc: blob,
+      signingKeyId: signingKey.signingKeyId,
+      signingKeyExpiresAt: expiresAt ?? null,
+      signingKeyCheckedAt: new Date(),
+    },
+  })
+  cache.delete(`${key}:${environment}`)
+}
+
+/**
+ * P6.2 — record what eBay says about the key we already hold, without replacing it.
+ *
+ * The existing production key was created before the expiry was stored, so its date is
+ * recoverable only by asking. `getEbaySigningKey` is a READ and has existed, tested,
+ * with zero callers since it was written — this is what finally calls it.
+ */
+export async function recordSigningKeyExpiry(
+  key: ChannelKey,
+  environment: Environment,
+  expiresAt: Date | null,
+): Promise<void> {
+  await prisma.channelApp.update({
+    where: { channelKey_environment: { channelKey: key, environment } },
+    data: { signingKeyExpiresAt: expiresAt, signingKeyCheckedAt: new Date() },
   })
   cache.delete(`${key}:${environment}`)
 }

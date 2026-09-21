@@ -32,6 +32,7 @@ import { getAccessToken, handleOf, statusAfterConnectionFailure, transition, typ
 import { sweepSessions } from '../services/cx/oauth.service.js'
 import { alertService, AlertType } from '../services/monitoring/alert.service.js'
 import { runAppSecretExpiryAlerts } from '../services/cx/app-secret-expiry.js'
+import { refreshEbaySigningKeyExpiry } from '../services/cx/signing-key-expiry.js'
 
 const INTERVAL_MIN = 15
 const EXPIRY_WARN_DAYS = [30, 7, 1]
@@ -186,6 +187,15 @@ export async function runHeartbeatSweep(): Promise<string> {
     // App-secret expiry (SP-API LWA secrets rotate every 180 days). P0.5: 90/30/7 days and on
     // expiry, each level once per recorded date — the exact-day match here fired every sweep.
     await runAppSecretExpiryAlerts().catch((err) => logger.warn('[cx-heartbeat] app-secret expiry alerts failed', { error: err instanceof Error ? err.message : String(err) }))
+    /**
+     * P6.2 — learn when the eBay SIGNING key expires.
+     *
+     * A read, once per sweep, and only when the date is missing or stale: the key's
+     * expiry does not move, so asking every 15 minutes would be 96 pointless calls a
+     * day. `signingKeyCheckedAt` is what makes "never asked" distinguishable from
+     * "eBay named no date", so a null expiry is retried and a known one is not.
+     */
+    await refreshEbaySigningKeyExpiry().catch((err) => logger.warn('[cx-heartbeat] signing-key expiry check failed', { error: err instanceof Error ? err.message : String(err) }))
     const swept = await sweepSessions()
     await prisma.channelConnection.updateMany({ where: { refreshLeaseUntil: { lt: new Date(Date.now() - 5 * 60_000) } }, data: { refreshLeaseUntil: null, refreshLeaseOwner: null } })
     return `connections=${rows.length} ok=${ok} failed=${failed} refreshed=${refreshed} sessionsSwept=${swept}`

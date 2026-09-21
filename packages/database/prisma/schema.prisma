@@ -6793,6 +6793,11 @@ model ChannelApp {
   // eBay Key Management signing key (private key + JWE), envelope-encrypted.
   signingKeyEnc   String?
   signingKeyId    String?
+  // P6.2 — when the eBay signing key expires, and when we last asked eBay.
+  // `expirationTime` came back from Key Management on every create and was dropped.
+  // `signingKeyCheckedAt` separates "no expiry" from "never looked" (P3.6).
+  signingKeyExpiresAt DateTime?
+  signingKeyCheckedAt DateTime?
   secretExpiresAt DateTime?
   rotatedAt       DateTime?
   createdAt       DateTime  @default(now())

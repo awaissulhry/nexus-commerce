@@ -61,14 +61,19 @@ import { requireWorkspace } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 
 /**
- * The five alert kinds the plan row names. Each is a `Notification.type`, so the bell
- * and any future filter can tell them apart without reading the title.
+ * The alert kinds. Each is a `Notification.type`, so the bell and any future filter can
+ * tell them apart without reading the title.
+ *
+ * Five came from P3.4's plan row; `channel-signing-key-expiry` is P6.2's, and it is a
+ * separate kind on purpose — a signing key and an app secret are two credentials with
+ * two death dates and two different remedies.
  */
 export const CHANNEL_ALERT_KINDS = [
   'channel-dead-letters',
   'channel-signature-failures',
   'channel-feed-rejections',
   'channel-secret-expiry',
+  'channel-signing-key-expiry',
   'channel-deprecation',
 ] as const
 
@@ -263,6 +268,43 @@ export function secretExpiryAlert(channelKey: string, environment: string, daysL
     entityId: `${channelKey}:${environment}`,
     href: '/settings/channels',
     meta: { channelKey, environment, daysLeft },
+  }
+}
+
+/**
+ * P6.2 — the eBay SIGNING key's expiry, which is a different credential from the app
+ * secret above and dies on its own schedule.
+ *
+ * 🔴 Why it needs its own alert rather than reusing `secretExpiryAlert`: the remedy is
+ * different. An expired app secret is replaced in eBay's developer console by a human;
+ * an expired signing key is replaced by us, automatically, on the next signed call
+ * (P6.2 made `signingKeyFor` renew inside a 7-day window). Telling an operator to go
+ * and replace something the system replaces itself is the kind of false instruction
+ * that teaches people to ignore alerts.
+ *
+ * So this fires only when the automatic renewal has NOT happened — which is the
+ * genuine news: signing is failing or the renewal window was missed.
+ */
+export function signingKeyExpiryAlert(
+  channelKey: string,
+  environment: string,
+  daysLeft: number,
+): ChannelAlert | null {
+  if (daysLeft > thresholds.secretExpiryDays()) return null
+  const expired = daysLeft < 0
+  return {
+    kind: 'channel-signing-key-expiry',
+    severity: expired ? 'danger' : 'warn',
+    title: expired
+      ? `The ${channelKey} signing key has expired and was not replaced`
+      : `The ${channelKey} signing key expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+    body: expired
+      ? `The ${environment} ${channelKey} request-signing key expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago and the automatic replacement has not run. Signed calls — refunds and finances — are being refused with a 215xxx signature error.`
+      : `The ${environment} ${channelKey} request-signing key expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. It is replaced automatically on the next signed call; this is a warning only, and becomes news if it is still here after that.`,
+    entityType: 'ChannelApp',
+    entityId: `${channelKey}:${environment}:signing-key`,
+    href: '/settings/channels',
+    meta: { channelKey, environment, daysLeft, credential: 'signing-key' },
   }
 }
 

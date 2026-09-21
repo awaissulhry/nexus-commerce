@@ -28,6 +28,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import {
   raiseChannelAlert, thresholds,
   deadLetterAlert, signatureFailureAlert, feedRejectionAlert, secretExpiryAlert,
+  signingKeyExpiryAlert,
 } from '../services/cx/channel-alerts.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -100,11 +101,19 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
   //     production. Same fact, delivered.
   try {
     const apps = await prisma.channelApp.findMany({
-      where: { secretExpiresAt: { not: null } },
-      select: { channelKey: true, environment: true, secretExpiresAt: true },
+      where: { OR: [{ secretExpiresAt: { not: null } }, { signingKeyExpiresAt: { not: null } }] },
+      select: { channelKey: true, environment: true, secretExpiresAt: true, signingKeyExpiresAt: true },
     })
     for (const app of apps) {
-      await raise(secretExpiryAlert(app.channelKey, app.environment, daysUntil(app.secretExpiresAt as Date, now)))
+      if (app.secretExpiresAt) {
+        await raise(secretExpiryAlert(app.channelKey, app.environment, daysUntil(app.secretExpiresAt, now)))
+      }
+      // P6.2 — the SIGNING key is a second credential with its own death date. Before
+      // this the query filtered on `secretExpiresAt` alone, so a row carrying only a
+      // signing-key date was not even selected.
+      if (app.signingKeyExpiresAt) {
+        await raise(signingKeyExpiryAlert(app.channelKey, app.environment, daysUntil(app.signingKeyExpiresAt, now)))
+      }
     }
   } catch (err: any) {
     logger.warn('[channel-alerts] secret-expiry sweep failed', { error: err?.message })
