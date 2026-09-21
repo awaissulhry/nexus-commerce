@@ -74,6 +74,7 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-feed-rejections',
   'channel-secret-expiry',
   'channel-signing-key-expiry',
+  'channel-callback-not-production',
   'channel-deprecation',
 ] as const
 
@@ -305,6 +306,51 @@ export function signingKeyExpiryAlert(
     entityId: `${channelKey}:${environment}:signing-key`,
     href: '/settings/channels',
     meta: { channelKey, environment, daysLeft, credential: 'signing-key' },
+  }
+}
+
+/**
+ * P6.8 — a production app whose callback cannot receive a production callback.
+ *
+ * Measured 2026-09-21 on `ChannelApp` rows marked `environment: 'production'`:
+ *
+ * | channel | registered redirect URI |
+ * |---|---|
+ * | ETSY | `https://morbidity-curtly-probe.ngrok-free.dev/api/cx/callback/etsy` — a **development tunnel** |
+ * | SHOPIFY | **none at all** |
+ *
+ * 🔴 An ngrok free tunnel changes host every restart, so that Etsy callback is dead
+ * the moment the tunnel that made it closed — a connect would send the operator to a
+ * host that no longer exists. An empty list is the same outcome by a different route.
+ *
+ * Neither state announces itself: both rows say `environment: 'production'` and the
+ * Channels page shows the channel as available. The reason this is an alert and not a
+ * gate is that it is **data**, not source — a pre-push check cannot see a database row.
+ */
+const DEV_CALLBACK_HOSTS = /(ngrok|loca\.lt|localhost|127\.0\.0\.1|trycloudflare|serveo)/i
+
+export function callbackReadinessAlert(
+  channelKey: string,
+  environment: string,
+  redirectUris: string[],
+): ChannelAlert | null {
+  if (environment !== 'production') return null
+  const dev = redirectUris.filter((u) => DEV_CALLBACK_HOSTS.test(u))
+  const problem = redirectUris.length === 0 ? 'none' : dev.length === redirectUris.length ? 'dev' : null
+  if (!problem) return null
+  return {
+    kind: 'channel-callback-not-production',
+    severity: 'warn',
+    title: problem === 'none'
+      ? `${channelKey} has no sign-in callback registered`
+      : `${channelKey}\u2019s sign-in callback is a development tunnel`,
+    body: problem === 'none'
+      ? `The production ${channelKey} app has no redirect URI, so a sign-in has nowhere to return to. Register the production HTTPS callback in the ${channelKey} developer console and here.`
+      : `The production ${channelKey} app returns sign-in to ${dev[0]}, which is a development tunnel and changes or disappears when that tunnel restarts. Anyone connecting ${channelKey} would be sent to a host that no longer exists.`,
+    entityType: 'ChannelApp',
+    entityId: `${channelKey}:${environment}:callback`,
+    href: '/settings/channels',
+    meta: { channelKey, environment, redirectUris: redirectUris.length, devCallbacks: dev.length },
   }
 }
 

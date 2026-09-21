@@ -106,11 +106,20 @@ describe('the alert (P6.2 — the signing key was not even selected)', () => {
   const job = readFileSync(join(HERE, '..', '..', 'jobs', 'channel-alerts.job.ts'), 'utf8')
   const svc = read('channel-alerts.service.ts')
 
-  it('the sweep now selects rows that carry ONLY a signing-key date', () => {
+  it('the sweep selects rows that carry ONLY a signing-key date', () => {
     // The old query was `where: { secretExpiresAt: { not: null } }`, so a row whose
     // only date was the signing key's never came back at all.
-    expect(job).toContain('OR: [{ secretExpiresAt: { not: null } }, { signingKeyExpiresAt: { not: null } }]')
+    //
+    // P6.8 went further and removed the filter entirely: its callback check is about a
+    // row with NO dates and NO redirect URI, and selecting on the presence of a date is
+    // exactly how such a row stays invisible. Five rows — read them all.
+    expect(job).toContain('where: {},')
+    // Code, not comments: the note above that line quotes the old filter on purpose.
+    const code = job.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    expect(code.filter((l) => l.includes('secretExpiresAt: { not: null }'))).toEqual([])
     expect(job).toContain('signingKeyExpiryAlert(app.channelKey, app.environment')
+    // The per-alert guard is what keeps it correct without the query filter.
+    expect(job).toContain('if (app.signingKeyExpiresAt) {')
   })
 
   it('it is its OWN alert kind, not the app secret’s', () => {

@@ -29,6 +29,7 @@ import {
   raiseChannelAlert, thresholds,
   deadLetterAlert, signatureFailureAlert, feedRejectionAlert, secretExpiryAlert,
   signingKeyExpiryAlert,
+  callbackReadinessAlert,
 } from '../services/cx/channel-alerts.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -101,8 +102,13 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
   //     production. Same fact, delivered.
   try {
     const apps = await prisma.channelApp.findMany({
-      where: { OR: [{ secretExpiresAt: { not: null } }, { signingKeyExpiresAt: { not: null } }] },
-      select: { channelKey: true, environment: true, secretExpiresAt: true, signingKeyExpiresAt: true },
+      // P6.8 — NO `where`. The filter used to be `secretExpiresAt: { not: null }`, then
+      // an OR with the signing key — and the callback-readiness check below is about a
+      // row having NO dates and NO redirect URI at all. Selecting on the presence of a
+      // date is exactly how a row with nothing set stays invisible. Five rows: read
+      // them all and let each alert decide.
+      where: {},
+      select: { channelKey: true, environment: true, secretExpiresAt: true, signingKeyExpiresAt: true, redirectUris: true },
     })
     for (const app of apps) {
       if (app.secretExpiresAt) {
@@ -114,6 +120,8 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
       if (app.signingKeyExpiresAt) {
         await raise(signingKeyExpiryAlert(app.channelKey, app.environment, daysUntil(app.signingKeyExpiresAt, now)))
       }
+      // P6.8 — a production app whose sign-in has nowhere to come back to.
+      await raise(callbackReadinessAlert(app.channelKey, app.environment, app.redirectUris))
     }
   } catch (err: any) {
     logger.warn('[channel-alerts] secret-expiry sweep failed', { error: err?.message })
