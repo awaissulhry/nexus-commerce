@@ -14,7 +14,6 @@ import { logger } from '../utils/logger.js'
 import { syncProductToAmazon } from '../services/marketplaces/amazon-sync.service.js'
 import { syncProductToEbay } from '../services/marketplaces/ebay-sync.service.js'
 import { syncProductToShopify } from '../services/marketplaces/shopify-sync.service.js'
-import { sellableQuantity } from '../services/stock-pool/sync-ledgers.js'
 
 // Worker statistics
 let processedCount = 0
@@ -80,7 +79,12 @@ export function initializeChannelSyncWorker() {
  *   channelListingId?: string (optional, for specific listing sync)
  * }
  */
-async function processChannelSyncJob(job: Job) {
+/**
+ * P7a.1 — exported so its guards can be driven directly. The worker had no test at all, which is
+ * how a branch that invents a market and one that strands a row both survived: nothing could run
+ * them. The BullMQ wiring above is unchanged.
+ */
+export async function processChannelSyncJob(job: Job) {
   const { productId, targetChannel, channelListingId } = job.data
 
   logger.info('⚙️ Processing channel sync job', {
@@ -120,36 +124,40 @@ async function processChannelSyncJob(job: Job) {
         where: { id: channelListingId },
       })
     } else {
-      // Find or create channel listing for this product
-      const channelMarket = `${targetChannel}_US` // Default to US region
-      channelListing = await prisma.channelListing.findFirst({
-        where: {
-          productId,
-          channel: targetChannel,
-        },
+      // P7a.1 — this branch used to do two things no writer in Nexus is allowed to do.
+      //
+      // 1. `findFirst({ productId, channel })` with no marketplace picked **an arbitrary one**
+      //    of a product's listings. Measured on the development database: 214 Amazon products
+      //    and 21 eBay products carry MORE THAN ONE listing on that channel (AMAZON_IT 273,
+      //    AMAZON_DE 214, AMAZON_ES 123, AMAZON_FR 115, EBAY_IT 253, EBAY_DE 21). So for 235
+      //    products this picked a market at random and then marked it SYNCING.
+      //
+      // 2. When it found none it CREATED one with `channelMarket: `${targetChannel}_US`` and
+      //    `region: 'US'` — a market this seller does not sell in. Every real row is IT, DE, ES,
+      //    FR or GLOBAL; `_US` appears **0 times** and `region = 'US'` **0 times**.
+      //
+      // Both were latent: 0 rows are stuck at SYNCING, so this branch has never run. That is
+      // the same shape as P4.3a — a wrong writer one button-press away — and the same answer:
+      // the rule goes in the engine. **Refuse rather than guess.** Nexus never picks "the
+      // first" (the Owner's P1.4 ruling) and never invents a market (P4.3c).
+      const candidates = await prisma.channelListing.findMany({
+        where: { productId, channel: targetChannel },
+        select: { id: true, channelMarket: true, marketplace: true },
+        orderBy: { id: 'asc' },
       })
 
-      if (!channelListing) {
-        logger.info('Creating new channel listing', {
-          productId,
-          channel: targetChannel,
-        })
-        channelListing = await prisma.channelListing.create({
-          data: {
-            productId,
-            channel: targetChannel,
-            channelMarket,
-            region: 'US',
-            title: product.name,
-            description: '',
-            price: product.basePrice,
-            // Shared stock — a pooled product's draft starts at the pool's number.
-            quantity: (await sellableQuantity(prisma as never, [product])).get(product.id) ?? product.totalStock,
-            listingStatus: 'DRAFT',
-            syncStatus: 'IDLE',
-          },
-        })
+      if (candidates.length === 0) {
+        throw new Error(
+          `${product.sku ?? productId} has no ${targetChannel} listing, and Nexus will not create one for a market nobody named. Add the listing for its market first. Nothing was synced.`,
+        )
       }
+      if (candidates.length > 1) {
+        const markets = candidates.map((c) => c.channelMarket ?? c.marketplace ?? '(no market)').join(', ')
+        throw new Error(
+          `${product.sku ?? productId} has ${candidates.length} ${targetChannel} listings (${markets}), so this sync must name one. Nothing was synced.`,
+        )
+      }
+      channelListing = await prisma.channelListing.findUnique({ where: { id: candidates[0].id } })
     }
 
     if (!channelListing) {
@@ -165,6 +173,8 @@ async function processChannelSyncJob(job: Job) {
     // ─────────────────────────────────────────────────────────────────────
     // STEP 3: Update sync status to SYNCING
     // ─────────────────────────────────────────────────────────────────────
+    // P7a.1 — remembered, so the noop path can put it back rather than stranding the row.
+    const statusBefore = channelListing.syncStatus
     await prisma.channelListing.update({
       where: { id: channelListing.id },
       data: {
@@ -203,10 +213,19 @@ async function processChannelSyncJob(job: Job) {
     // false success). Leave the listing's status untouched and log honestly.
     // ─────────────────────────────────────────────────────────────────────
     if (syncResult?.status === 'noop') {
+      // P7a.1 — put the status BACK. STEP 3 set it to SYNCING, and the noop path used to leave
+      // it there for ever: a sync that never finishes, on a row picked at random. "Leave the
+      // listing's status untouched" was the right instinct about IN_SYNC and the wrong one about
+      // SYNCING, because the status had already been touched two steps earlier.
+      await prisma.channelListing.update({
+        where: { id: channelListing.id },
+        data: { syncStatus: statusBefore },
+      })
       logger.warn('[channel-sync] payload built but NOT published here — real push runs via OutboundSyncQueue', {
         channelListingId: channelListing.id,
         productId,
         targetChannel,
+        syncStatusRestoredTo: statusBefore,
       })
     } else {
       await prisma.channelListing.update({
