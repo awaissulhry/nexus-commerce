@@ -21,7 +21,7 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 | **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
-| **P7a** | 🟢 **MEASURED 2026-09-21 — nothing is safe to delete.** P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
+| **P7a** | 🟢 **MEASURED 2026-09-21 — ZERO deletion candidates.** Its one candidate (the Ads credential fallback) was chased down and the answer is **keep it**: unreachable in production, but it is the only credential path with profiles OFF, it is the documented revert lever, and P4.5e's disconnect enforcement is built on its `throw`. *Unreachable today is not unnecessary.* P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
 | **P7b** | **each drop needs the Owner's yes**, after a green week |
 | **P8** | 🔴 **DEFERRED** — the Owner, 2026-09-21: *"we'll add the remaining channels later. Currently, we'll keep our focus solely on Amazon, eBay, and Etsy."* Do not start it. Shopify and WooCommerce are also out of the active three |
 
@@ -36,7 +36,6 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 | 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
 | 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production 2026-09-21: **0 Etsy `ChannelListing` rows**. Etsy is connected (P2.5) and P4.6's writers are built, but they have nothing to act on. The six-hour rule is vacuously met for the same reason. Whatever creates Etsy listings is the next real step for that channel |
 | 7 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
-| 8 | **P7a** the Ads fallback | either | The one genuine deletion candidate. `resolveCredentials` sits in the `else` of a `NEXUS_WORKSPACES_ENABLED === '1'` check and production was `1` on 09-19. **One read of that variable on the production deploy closes it.** `build/P7a.md` §2 |
 | 9 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
 
 🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the

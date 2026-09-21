@@ -62,7 +62,7 @@ re-deriving a delete list must find another instrument. `get-logs`'s `filter` **
 the worker alone leaves jobs accumulating in Redis with nothing to drain them — the banked rule
 *producer and consumer land together*, in the direction people forget.
 
-### 🟡 One genuine candidate, and it is not being taken unilaterally
+### 🔴 CLOSED 2026-09-21 — and the answer is KEEP IT, not remove it
 
 **The old Ads fallback** — `resolveCredentials` in `services/advertising/ads-api-client.ts:469`,
 which reads `AmazonAdsConnection.credentialsEncrypted`.
@@ -83,8 +83,38 @@ that its own record says to re-read**. "Unreachable under a configuration I cann
 evidence is also weak on its own: `logCredentialSource` fires **once per source per process**, so
 absence over one deployment's life is a much smaller claim than it looks.
 
-**What closes it:** one read of `NEXUS_WORKSPACES_ENABLED` on the production deploy. If it is `1`,
-the `else` branch is dead and can go with its test.
+**RESOLVED.** The discriminator was found, and it settled the question in the **opposite**
+direction to the one this section expected.
+
+**The flag is confirmed `'1'`, behaviourally, not from a note.** Railway's variable *names* are
+readable (values are not), and `NEXUS_WORKSPACES_ENABLED` is present — but the proof is
+`lib/cron/clustered.ts:142`: with the flag `=== '1'` a scheduled job runs **once for the platform
+scope and once per business profile**. Production logs show exactly that double run
+(`[channel-alerts] sweep` at 10:30:01 **and** 10:30:02, `[AX2.9] ads sync integrity` twice with
+different snapshots). Profiles are ON.
+
+So yes — the `else` branch is unreachable in production. **And it must stay anyway**, for three
+reasons found by asking what it is FOR rather than whether it runs:
+
+1. **It is the ONLY credential path when profiles are OFF** — local development, and any rollback.
+   Deleting it means an Ads system with no credentials the moment that flag is not `'1'`.
+2. **`NEXUS_CX_ADS_CREDENTIALS=0` is a documented revert lever** for the connection-core
+   migration: *"the whole revert, and it restores byte-for-byte today's behaviour"*
+   (`ads-api-client.ts`). Removing the fallback removes the revert.
+3. 🔴 **P4.5e is built on it.** `services/cx/legacy-channel-credentials.ts` exists because
+   *"after a disconnect, that fallback is exactly the state that fires… Amazon Ads calls continue
+   after the operator disconnects the account"*. Its fix clears the blob so the fallback's
+   `if (!conn?.credentialsEncrypted) throw` fires and **every ads call refuses, loudly, naming the
+   profile**. That `throw` is the disconnect enforcement. Delete the block and the enforcement
+   goes with it.
+
+**The lesson, and it is the banked one:** *scepticism must be symmetric.* This section had the
+path convicted on "it does not run", and the instinct to remove it was the same instinct P4.4c
+warns about — *do not let a run of correct deletions make refusing automatic in one direction and
+convicting automatic in the other.* **Unreachable today is not unnecessary.** The question to ask
+of a quiet branch is what it is for, not whether it fired this week.
+
+**P7a therefore has ZERO deletion candidates.** Not "none found yet" — none, measured.
 
 ## 3. 🔴 `RESEARCH.md` A5 §1.1 is stale, and it is the document P7a is written from
 
@@ -112,7 +142,8 @@ remainder is alive. The honest deliverable is this measurement, not a deletion.
 
 Three things follow, none of which this session should decide alone:
 
-1. 🟡 **The Ads fallback** — one variable read closes it (§2). The smallest real win available.
+1. ✅ **The Ads fallback — CLOSED, keep it** (§2). The variable read happened and the answer was
+   the opposite of the one expected. There is now **nothing** in P7a to delete.
 2. 🔴 **E16 `channel-sync` deserves its own look, as a defect and not as clean-up.** It is live, it
    has a live producer in a catalog route, and `channel-sync.worker.ts:124` still builds
    `` `${targetChannel}_US` `` with the comment *"Default to US region"* — the `_US` half of
