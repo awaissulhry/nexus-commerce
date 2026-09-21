@@ -422,6 +422,57 @@ interface NewTransaction {
   marketplaceDetails?: { marketplaceId?: string; marketplaceName?: string }
 }
 
+/**
+ * P5.2 — read one `/finances/2024-06-19/transactions` page, whichever envelope it
+ * arrives in, and REFUSE a page it cannot read.
+ *
+ * ## Why this exists
+ *
+ * Measured 2026-09-21 on the development database: `/finances/2024-06-19/transactions`
+ * has **0 calls ever**, while v0's `listFinancialEvents` has **112 (108 × 200)** and
+ * feeds all **1,792** `FinancialTransaction` rows. The new path is built, wired through
+ * the gateway, and has never run — so nobody has seen Amazon's answer to it, and
+ * `routes/amazon.routes.ts` says as much: *"the parser hasn't been updated for
+ * Amazon's `{payload: {...}}` wrapper yet"*.
+ *
+ * 🔴 **The old code read `data.transactions ?? []`.** If Amazon wraps the list — as v0
+ * does, and as P5.1 found `searchOrders` and `getOrder` each do differently — that
+ * yields `[]`, the loop ends, and the sync returns **success with
+ * `orderEventsFetched: 0`**. A settlement day silently recorded as "no transactions",
+ * which is indistinguishable from a genuinely quiet day.
+ *
+ * P5.1's finding, in as many words: *"Three envelopes in one migration. v0 wraps in
+ * `payload`; `searchOrders` puts the list under `orders`; `getOrder` wraps one order in
+ * `order`. The wrong one gives every field `undefined` and no error."*
+ *
+ * So: both shapes are accepted, exactly as `fetchReport` already accepts `url` and
+ * `location` for the same reason. And a body carrying **neither** is a parse failure,
+ * not an empty day — it throws, naming the keys Amazon actually sent, because
+ * *"could not measure" and "measured empty" must not look the same*.
+ */
+export function readTransactionsPage(body: unknown): { transactions: NewTransaction[]; nextToken?: string } {
+  const root = (body ?? {}) as Record<string, unknown>
+  const payload = (root.payload ?? {}) as Record<string, unknown>
+
+  for (const envelope of [root, payload]) {
+    if (Array.isArray(envelope.transactions)) {
+      return {
+        transactions: envelope.transactions as NewTransaction[],
+        // The token travels with the list it paginates: a `payload` envelope carries
+        // its own `nextToken`, and reading the root's would page the wrong thing.
+        nextToken: typeof envelope.nextToken === 'string' ? envelope.nextToken : undefined,
+      }
+    }
+  }
+
+  throw new Error(
+    '[fin-tx-2024] the response carries no transactions list in either envelope ' +
+      `(root keys: ${Object.keys(root).join(', ') || 'none'}; ` +
+      `payload keys: ${Object.keys(payload).join(', ') || 'none'}). ` +
+      'Nothing was recorded — this is a parse failure, not a day with no transactions.',
+  )
+}
+
 async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
 function sumBreakdowns(
@@ -578,10 +629,10 @@ export async function syncFinancialTransactions(
       logger.error('[fin-tx-2024] fetch failed', { status: res.status, body: body.slice(0, 300) })
       throw new Error(`finances/2024-06-19/transactions ${res.status}: ${body.slice(0, 200)}`)
     }
-    const data = (await res.json()) as { transactions?: NewTransaction[]; nextToken?: string }
-    collected.push(...(data.transactions ?? []))
+    const page = readTransactionsPage(await res.json())
+    collected.push(...page.transactions)
     pages++
-    nextToken = data.nextToken
+    nextToken = page.nextToken
     if (!nextToken || pages >= 50) break
     // light pacing — endpoint is generous but be polite
     await new Promise((r) => setTimeout(r, 200))

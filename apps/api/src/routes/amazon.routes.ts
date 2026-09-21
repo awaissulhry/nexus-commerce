@@ -1709,11 +1709,15 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions } = await import('../services/amazon-financial-events.service.js')
     try {
       const body = request.body ?? {}
-      // Default to /finances/v0/financialEvents — the original endpoint
-      // with mature event-shape parsing (nested ShipmentItemList per order).
-      // The 2024-06-19/transactions endpoint is available via useNew=true
-      // but the parser hasn't been updated for Amazon's {payload: {...}}
-      // wrapper yet; v0 path is the reliable production default.
+      // Default to /finances/v0/financialEvents — the original endpoint with mature
+      // event-shape parsing (nested ShipmentItemList per order), 108 successful calls
+      // and all 1,792 FinancialTransaction rows behind it.
+      //
+      // P5.2 — the 2024-06-19/transactions path (`useV0: false`) now reads EITHER
+      // envelope and REFUSES a body it cannot parse, so its first real run can no
+      // longer report a silent zero. What it still has is **0 calls ever**: nobody has
+      // seen Amazon's answer to it. v0 stays the default until one live call settles
+      // the shape, and its deadline is 2027-08-27 — there is time to do that properly.
       const useV0 = body.useV0 !== false
       let summary
       if (body.start && body.end) {
