@@ -32,10 +32,10 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 |---|---|---|---|
 | 1 | ✅ **Orders money question — ANSWERED 2026-09-21** | **Owner** | `ItemPrice` **is the LINE total**, measured live at **quantity 4**: `ItemPrice 72.08` ÷ 4 = **18.02** stored per unit, and the independent `OrderTotal` **87.94** = 72.08 × 1.22 (IT VAT) to the cent — where the unit-price reading predicts **351.75**. Page 2 also came back with 20 orders, so the §5b pagination fix is proven live too. `build/P5.1.md` §5c. **Nothing is left that a read can answer**; `NEXUS_ENABLE_AMAZON_ORDERS_2026=true` is a production config change and is the Owner's yes. |
 | 2 | 🟡 **Finances: the dry run is BUILT; running it is the Owner's** | **Owner** | The probe answered (`envelope: "payload"` ✅). The plan's next step **double-writes** — v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them — so §4b withdrew it and named a **dry-run counting mode** as the cheapest safe replacement. **Built 2026-09-21** (`build/P5.2.md` §4c): `POST /api/amazon/financials/sync {"useV0": false, "dryRun": true}` runs the real fetch and the real decision path, writes nothing, and reports `txWouldCreate` **and `txWouldDuplicateV0`** — the double-write as a number instead of an argument. 25 tests, 6 mutations killed, 1 null control survived. It is a **live Amazon call**, so the Owner runs it, over a window v0 has already synced. |
-| 3 | **P6.8** Etsy callback | **Owner** | Register the production HTTPS callback and the 4 webhooks in **Etsy's** console. An alert nags until done. (Shopify's half is no longer urgent — out of scope.) |
+| 3 | 🔴 **P6.8 — Etsy AND Shopify cannot connect AT ALL** | **Owner** | Measured live 2026-09-21: `GET /api/cx/connect/etsy\|shopify/readiness` → `ready: false, channel_unavailable, "is not set up on this Nexus server"`, while `amazon_sp`, `amazon_ads` and `ebay` all return `ready: true`. **There is no `ChannelApp` row and no env credential** — `getChannelApp` throws from the one branch that needs both to be missing. **Set on `@nexus/api`:** `ETSY_API_KEY` + `ETSY_SHARED_SECRET`; `SHOPIFY_APP_CLIENT_ID` + `SHOPIFY_APP_CLIENT_SECRET`. Boot's `seedChannelApps()` then creates the rows. **Only then** register `${NEXUS_PUBLIC_API_URL}/api/cx/callback/<key>` and Etsy's 4 webhooks. 🔴 `build/P6.8.md` §1's table says a row DOES exist — it names no database and is most likely the dev one; the live reading wins. |
 | 4 | **P6.6** env token — **clean so far, needs the clock** | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. 📏 **Re-measured 2026-09-21** (`build/P6.6.md` §6b) and this time it is a **real zero**: two deployments, **0** lines, with *both* controls — the `get-logs` filter proved to match a bracketed prefix (`ads-v1-sync`), and the Orders probe proved an SP-API call ran inside the window. Still only ~**32 minutes** across two processes, and the warning is once per process, so the row needs a day with a full cron cycle. Nothing to build. |
 | 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
-| 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production: **0 Etsy `ChannelListing` rows**, and **0 Etsy accounts connected** on either business profile. Every Etsy writer is built and idle. The Owner said products are coming. |
+| 6 | 🔴 **Nothing is listed on Etsy through Nexus — and now the REASON is known** | **Owner** | Measured in production: **0 Etsy `ChannelListing` rows**, **0 Etsy accounts connected** on either profile. 🔴 **2026-09-21: that is not because products are missing — Etsy cannot be connected at all** (row 3). The account count could never have been anything but zero. Every Etsy writer is built and idle behind a credential, not behind a catalogue. |
 | 7 | **P7b** destructive drops | **Owner** | Needs a **green week** (day 1 = 2026-09-21) **and a separate yes per table**. 🔴 `AmazonAdsConnection` is NOT a candidate — 49 files read it; CX.3c moves ownership first. |
 | 8 | **Section 8** Owner items | **Owner** | 1, 2, 3, 4, 8, 9, 10 are live. **Items 5 and 6 are struck through** — neither reconnect is needed. 🔴 Item 3, the **Neon password in git history**, is the only one where someone else could act first. |
 
@@ -70,11 +70,15 @@ Full record: `build/SWITCH-ON.md`.
   (`deduped: 2` then `deduped: 3`). That is **one run per business profile**, which is correct
   with profiles ON — but a reader counting lines will double every alert total. Note it before
   calling a count wrong.
-- 🔵 **`[ConfigManager] ⚠ Etsy configuration incomplete (missing env vars)` at boot is NOT the
-  blocker for rows 5 and 6, and was checked rather than assumed.** It is the **legacy**
-  `ConfigManager` path, already recorded in `etsy-sync.service.ts`. P4.6's writers and the Etsy
-  connect flow read `getChannelApp('ETSY')` — a **database-backed** channel app — so missing env
-  vars do not stand between the Owner and a first live Etsy call.
+- 🔴 **CORRECTED 2026-09-21, later the same day — the earlier note here was WRONG in effect.**
+  It said the `[ConfigManager] ⚠ Etsy configuration incomplete` boot line was not the blocker
+  because the connect flow reads `getChannelApp('ETSY')`, *"a database-backed channel app"*, and
+  concluded *"missing env vars do not stand between the Owner and a first live Etsy call."*
+  **They do.** `getChannelApp` reads the `ChannelApp` row **and falls back to `envSeed(key)`**;
+  with neither it throws `ChannelAppConfigurationError`. The right half of the claim (the
+  ConfigManager line is the legacy path) was carried into a conclusion about a **different**
+  mechanism that had not been checked. *A cause is not a verdict.* The live measurement is in
+  §0a rows 5 and 6 and `build/P6.8.md`.
 
 ### 0b-prev. From the earlier deploy, still worth watching
 
