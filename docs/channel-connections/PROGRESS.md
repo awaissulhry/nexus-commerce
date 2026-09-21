@@ -6,10 +6,10 @@ the Owner deferred P8, which takes Shopify and WooCommerce out of the active set
 **Every package P0–P6 is BUILT and deployed.** What is left is switches, probes, portals and one
 blocked clean-up. Nothing is half-written.
 
-⚠️ **Check the newest deployment reached SUCCESS before anything else.** At handover,
-`6cfcb143` (commit `090db711`) had been **BUILDING for ~40 minutes** where a normal build is
-~12. The live build was still `8d7b2a56`. If it never went green, that is the first thing to look
-at — and the probe fix it carries is what the Orders money question needs.
+✅ **The handover's deploy warning is closed.** `6cfcb143` (commit `090db711`) reached
+**SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
+read against the wrong clock. `/api/health` reports the serving build as its commit's first 8
+characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
 
@@ -30,7 +30,7 @@ at — and the probe fix it carries is what the Orders money question needs.
 
 | # | Row | Owner | What closes it |
 |---|---|---|---|
-| 1 | 🔴 **Orders money question** | **either** | Does `ItemPrice` carry the LINE total (2 × 15.99 = **31.98**), not the unit price? `upsertOrderItem` divides by quantity, so getting it wrong stores a fraction of the real price. The probe was fixed to report an order **that has items** (`build/P5.1.md` §5b) but its deploy had not gone live at handover. **Run `GET /backend/api/admin/amazon-orders-2026-probe` and read `mappedFirstOrderItems[].wouldStoreUnitPrice` against `ItemPrice.Amount` and `QuantityOrdered`.** |
+| 1 | ✅ **Orders money question — ANSWERED 2026-09-21** | **Owner** | `ItemPrice` **is the LINE total**, measured live at **quantity 4**: `ItemPrice 72.08` ÷ 4 = **18.02** stored per unit, and the independent `OrderTotal` **87.94** = 72.08 × 1.22 (IT VAT) to the cent — where the unit-price reading predicts **351.75**. Page 2 also came back with 20 orders, so the §5b pagination fix is proven live too. `build/P5.1.md` §5c. **Nothing is left that a read can answer**; `NEXUS_ENABLE_AMAZON_ORDERS_2026=true` is a production config change and is the Owner's yes. |
 | 2 | 🔴 **Finances: the comparison run is WITHDRAWN** | either | The probe answered (`envelope: "payload"` ✅) but the next step in `build/P5.2.md` §5 **double-writes**: v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them. §4b names three safe alternatives; the cheapest is a **dry-run counting mode**. |
 | 3 | **P6.8** Etsy callback | **Owner** | Register the production HTTPS callback and the 4 webhooks in **Etsy's** console. An alert nags until done. (Shopify's half is no longer urgent — out of scope.) |
 | 4 | **P6.6** env token | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. Checked 2026-09-21 and the answer was **unusable** — the deployment was 2 minutes old and the control was empty too. |
@@ -47,7 +47,7 @@ Full record: `build/SWITCH-ON.md`.
 |---|---|
 | `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` | ✅ **ON** 2026-09-21 |
 | `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` | ✅ **ON** 2026-09-21 — will report `not-configured` until the `NEXUS_CONTRACT_ACCOUNT_*` sandbox accounts exist. That is deliberate: a visible gap beats an invisible one |
-| Amazon **Orders** 2026-01-01 | ⏸ the money question (row 1) |
+| Amazon **Orders** 2026-01-01 | 🟢 **gate cleared 2026-09-21** — the money question is answered (row 1). Waiting only on the Owner's yes |
 | Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) |
 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
 | `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ products (rows 5–6) |
