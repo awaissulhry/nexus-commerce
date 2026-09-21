@@ -56,6 +56,10 @@ vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn()
 const createdFor: string[] = []
 vi.mock('./ads-api-client.js', () => ({
   adsMode: () => 'sandbox',
+  // P4.5d — the mock must model the module: `createReportJob` imports this. The
+  // VALUE is pinned by the parity test in ads-report-mime.p45d.vitest.test.ts, which
+  // reads both real source files, so a literal here cannot lie about production.
+  REPORT_V3_MIME: 'application/vnd.createasyncreportrequest.v3+json',
   liveCall: vi.fn(async (args: { profileId?: string }) => {
     createdFor.push(args.profileId ?? '(none)')
     return { reportId: `r-${args.profileId}`, status: 'PENDING' }

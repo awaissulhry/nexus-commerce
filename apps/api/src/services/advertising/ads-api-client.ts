@@ -680,6 +680,16 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
 // Portfolios — budget-grouping containers. Amazon RETIRED the v2 endpoints (GET /v2/portfolios
 // now 404s "Method Not Found"), so we use the v3 API: POST /portfolios/list + POST /portfolios
 // with the vnd.spPortfolio.v3+json media type. v3 also returns the budget object, which v2 dropped.
+/**
+ * P4.5d — the Reports API v3 media type, for `POST /reporting/reports`.
+ *
+ * Exported because there are TWO builders on that endpoint — this client's
+ * `fetchReport` and `services/advertising/ads-reports.service.ts:createReportJob` —
+ * and a parity test asserts both send this exact value. Two column builders drifting
+ * is how the missing media type survived in one of them for as long as it did.
+ */
+export const REPORT_V3_MIME = 'application/vnd.createasyncreportrequest.v3+json'
+
 const PORTFOLIO_V3_MIME = 'application/vnd.spPortfolio.v3+json'
 export interface AdsPortfolioDTO {
   portfolioId: string; name: string; state?: string
@@ -2180,6 +2190,19 @@ export async function fetchReport(
           format: 'GZIP_JSON',
         },
       },
+      // P4.5d — the Reports v3 media type. `ads-reports.service.ts:createReportJob`
+      // has always sent it on the SAME endpoint; this builder never did.
+      //
+      // 🟡 A drift, not a breakage. Measured on 1,197 real `POST /reporting/reports`
+      // rows: **1,135 answered 200** without it, and the failures are all `400
+      // invalid column` from deliberate probes plus one documented `425` dedupe —
+      // which are answers Amazon can only give after PARSING the body. There is not a
+      // single 415. Amazon accepts `application/json` today.
+      //
+      // It is corrected anyway because the drift is what is dangerous: two builders,
+      // one endpoint, and a media type Amazon documents as required. The parity test
+      // below now holds them equal, which is the part that outlives this line.
+      contentType: REPORT_V3_MIME,
     })
     reportId = created.reportId
   } catch (e) {

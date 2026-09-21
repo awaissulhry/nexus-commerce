@@ -28,6 +28,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
   liveCall,
+  REPORT_V3_MIME,
   type AdsRegion,
 } from './ads-api-client.js'
 
@@ -293,7 +294,8 @@ export async function createReportJob(spec: ReportSpec): Promise<CreateReportJob
     method: 'POST',
     path: '/reporting/reports',
     body,
-    contentType: 'application/vnd.createasyncreportrequest.v3+json',
+    // P4.5d — the shared constant, so the two builders on this endpoint cannot drift.
+    contentType: REPORT_V3_MIME,
   })
 
   if (!response.reportId) {
