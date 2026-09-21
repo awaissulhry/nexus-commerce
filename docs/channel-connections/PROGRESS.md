@@ -1,7 +1,19 @@
 # Channel connections — progress and handover
 
 Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2,
-P4.3 and P4.4 are built.** P4.3 and P4.4 were both finished in this session.
+P4.3 and P4.4 are built, pushed and deployed.** P4.3 and P4.4 were both finished
+on 2026-09-21.
+
+**State at handover.** `origin/main` = `18ff48dce`; deployment `f7cd8154`:
+**SUCCESS**. Nothing of this programme is unpushed. The working tree holds only
+other sessions' files (`.gitignore`, `apps/factory/tsconfig.tsbuildinfo`,
+`apps/api/src/services/assortment/*`, `docs/product-sheet/`, `graphify-out/`) —
+**do not commit those**; a `git add -A` swept them up once and had to be undone.
+
+**Production proof this session:** `shopify-qty-readback cron: scheduled
+{"schedule":"15 */6 * * *"}` in deployment `96f781a1` — P4.3f is live and
+running. The 57-check pre-push gate passed on the final push, including the new
+`market-currency` gate (`1620 files scanned, 0 outside the accessor`).
 
 ## ▶ START HERE — the next package is P4.5 (advertising)
 
@@ -95,7 +107,19 @@ Read in this order:
 
 ## 2. Done — on `origin/main`
 
-**P0 – P3.6 are all deployed and live.** The newest is deployment `92ec6158` from
+**P0 – P3.6, P5.1, P4.1, P4.2, P4.3 and P4.4 are all deployed and live.** The
+newest is deployment `f7cd8154` from `18ff48dce`: SUCCESS.
+
+| Package | Shipped | Records |
+|---|---|---|
+| **P4.3 (stock)** | 2026-09-21, deploys `96f781a1` + `a99c469c` | `build/P4.3a.md` … `P4.3f.md` |
+| **P4.4 (price)** | 2026-09-21, deploys `a99c469c` + `f7cd8154` | `build/P4.4a.md` … `P4.4e.md` |
+
+Eleven slices across the two, each with its own build record, mutation table and
+gate results. Section 3d and the P4.3 block in section 3 carry the one-line
+findings; the build records carry the measurements.
+
+**Earlier:** deployment `92ec6158` from
 `22eafb4bf`: SUCCESS, `Applying migration 20260920e_p36_trace_id`, both crons scheduled.
 
 | Package | What | Commits | Record |
@@ -524,20 +548,50 @@ Each is one command, and each converts a "built" into a "verified":
 
 ## 5. Open items the Owner owns
 
-### 🟢 5.0 The three live right now (2026-09-20 evening)
+### 🟢 5.0 The two still live (2026-09-21)
 
-1. **Run the P5.1 probe and paste the answer.** `GET /api/admin/amazon-orders-2026-probe?days=7`
-   — admin-gated, read-only, ONE `searchOrders` call, does NOT turn the switch on.
-   The Owner chose option B (one captured live read before the migration goes
-   live). Until it runs, P5.1 is proven against Amazon's published model and its
-   own example response, and against **no real payload**. See §14a.
-2. **Decide the image read-back sweep.** 🟢 **Recommended: ON.**
-   `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true`. See §14b for the measured cost.
-3. **Etsy and Shopify: are they connected?** The Owner believes Etsy is and is
-   unsure about Shopify. ⚠️ **The logs cannot answer this** — see §4's table. Do
-   not read `[ConfigManager] ⚠ … configuration incomplete (missing env vars)` as
-   "not connected"; that is the LEGACY env config, not the CX connection table.
-   One look at the **Channels** screen settles it.
+**One of the three closed.** ✅ `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true` was SET
+in production on 2026-09-21 — the image read-back sweep is ON. Its first runs are
+at `25 2,8,14,20` UTC; the line to look for is
+`image-readback-sweep … AMAZON: eligible N · scanned N …`, and `unconfigured`
+counted apart from `empty` is what says whether it could actually run.
+
+Still the Owner's:
+
+1. **Run the P5.1 probe and paste the answer.**
+   `GET /api/admin/amazon-orders-2026-probe?days=7` — admin-gated, read-only, ONE
+   `searchOrders` call, does NOT turn the switch on. The Owner chose option B
+   (one captured live read before the migration goes live). Until it runs, P5.1
+   is proven against Amazon's published model and its own example response, and
+   against **no real payload**. See §14a. 🔴 **An agent cannot run this** — it
+   sits behind the operator's admin session.
+2. **Etsy and Shopify: are they connected?** The Owner believes Etsy is and is
+   unsure about Shopify. ⚠️ **The logs cannot answer this, and that was retested
+   on 2026-09-21 from four angles** (`PUBLISH MODES` is the publish mode not a
+   connection; `cx-heartbeat` logs only that it started; `connectionsTried` had
+   not ticked in the new deploy; `ConfigManager` is the LEGACY env config). **One
+   look at the Channels screen settles it.** Two things will also answer it on
+   their own schedule now: the image sweep's `unconfigured` count, and
+   `shopify-qty-readback` (`15 */6 * * *`) reporting `checked=N` with N > 0.
+
+### 5.0b New, from P4.4 (2026-09-21)
+
+3. **Rule on automatic PRICE correction.** P4.4e detects price drift on Amazon
+   and Shopify and **reports only** — it heals nothing. The quantity read-back
+   beside it does heal, but a price heal is a money write made by a machine on a
+   schedule, with nothing above it but the floor and ceiling most products do not
+   set. `NEXUS_ENABLE_PRICE_READBACK_HEAL=true` turns it on, read as exactly
+   `'true'`. **Recommendation: leave it OFF** until the first runs show how much
+   drift is real. `build/P4.4e.md` §2.1.
+4. **`NEXUS_REPRICER_LIVE` is still off, and it is now safe to consider.** P4.4b
+   fixed two defects inside it that would have bitten the moment it was switched
+   on: the row named no listing, and its payload key (`newPrice`) is one the
+   dispatcher does not read — so it would have recorded a live reprice and sent
+   **no price at all**. Still the Owner's call, and still a live money write.
+5. **A price now REFUSES outside the product's floor / ceiling** (P4.4c,
+   `PRICE_OUT_OF_BOUNDS`). If operators have stale bounds on products, this will
+   start stopping sends that used to go. That is the point, but it is a
+   behaviour change worth knowing about.
 
 
 
