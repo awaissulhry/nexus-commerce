@@ -13,7 +13,7 @@ is the money path.
 |---|---|---|---|
 | 1 | `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` | ✅ **ON 2026-09-21 11:58 UTC** | none — it only reads images back |
 | 2 | `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` | ✅ **ON 2026-09-21 11:58 UTC** | none — read/dry-run only, sandbox hosts only |
-| 3 | Amazon **Finances** 2024-06-19 | ⏸ waiting on the probe | the envelope is unknown; guess wrong and a settlement day reads as a quiet day |
+| 3 | Amazon **Finances** 2024-06-19 | 🔴 **probe DONE — but do not flip yet** | envelope is `payload` ✅ and the parse handles it. **A new blocker:** v0 and the new path store **different** duplicate keys and nothing bridges them, so the comparison run §5 asked for would **double-write** the money. `build/P5.2.md` §4b |
 | 4 | Amazon **Orders** 2026-01-01 | ⏸ waiting on the probe | 🔴 the new model gives **price per unit**, v0 gave the **line total** |
 | 5 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ waiting on a log window | needs hours of real Amazon traffic to say anything |
 | 6 | `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ waiting on products | production has **0 Etsy listings** |
