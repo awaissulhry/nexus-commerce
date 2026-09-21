@@ -44,7 +44,7 @@ import path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from '../ads-core/quota-ledger.js'
 import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
-import { sbAdTypeWire } from '../ads-core/sb-ad-types.js'
+import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -2078,28 +2078,80 @@ export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetIn
 export interface CreateSbAdInput {
   externalCampaignId: string; externalAdGroupId: string
   brandName: string; headline: string; logoAssetId?: string
-  creativeType: 'productCollection' | 'storeSpotlight' | 'video'
+  creativeType: 'productCollection' | 'manualCollection' | 'storeSpotlight' | 'video'
   landingType: 'store' | 'productList' | 'url'; landingUrl?: string
   asins: string[]; state?: 'enabled' | 'paused'
+  /**
+   * Amazon REQUIRES a name on every create endpoint (`CreateProductCollectionAd.required`
+   * includes it, and so does every sibling). The old body did not send one at all. When the
+   * caller does not supply a name the headline is used — a label the operator already typed,
+   * not a wire value invented here.
+   */
+  name?: string
 }
+/**
+ * P4.5f (2026-09-21) — the create request, built from Amazon's Sponsored Brands **4.0 OpenAPI
+ * document** rather than from a guess. Pure, so every type's shape is testable without a network.
+ *
+ * 🔴 What this replaced, and why it could never have worked:
+ *
+ *   POST /sb/v4/ads  { ads: [{ campaignId, adGroupId, adType, creative, landingPage, state }] }
+ *
+ *   1. `/sb/v4/ads` accepts **PUT only** (`UpdateSponsoredBrandsAds`). There is no POST on it.
+ *   2. `adType` does not exist — **0 occurrences** in the whole 4.0 document.
+ *   3. `campaignId` is not a field of a create-ad item; an ad belongs to its ad group.
+ *   4. `name` is **required** on every create endpoint, and was not sent.
+ *
+ * Creation is **one endpoint per creative type**, and their bodies genuinely differ, so the shape
+ * comes from the type's own spec rather than one template with optional bits.
+ */
+export function sbAdCreateRequest(input: CreateSbAdInput): { path: string; body: { ads: Array<Record<string, unknown>> } } {
+  const spec = sbAdTypeSpec(input.creativeType)
+
+  if (spec.asinsRequired && input.asins.length === 0) {
+    throw new Error(`[ads] a Sponsored Brands "${spec.label}" creative requires at least one ASIN — nothing was sent`)
+  }
+
+  const landingPage: Record<string, unknown> =
+    input.landingType === 'url' && input.landingUrl
+      ? { url: input.landingUrl }
+      : { pageType: input.landingType === 'store' ? 'STORE' : 'PRODUCT_LIST' }
+
+  const creative: Record<string, unknown> = {
+    brandName: input.brandName,
+    ...(spec.headlineField ? { [spec.headlineField]: input.headline } : {}),
+    ...(input.logoAssetId ? { brandLogoAssetID: input.logoAssetId } : {}),
+    ...(input.asins.length > 0 ? { asins: input.asins } : {}),
+    // manualCollection carries its landing page INSIDE the creative; the others do not have one there.
+    ...(spec.landingPageOn === 'creative' ? { landingPage } : {}),
+  }
+
+  const ad: Record<string, unknown> = {
+    adGroupId: input.externalAdGroupId,
+    name: input.name ?? input.headline,
+    state: (input.state ?? 'enabled').toUpperCase(),
+    creative,
+    ...(spec.landingPageOn === 'ad' ? { landingPage } : {}),
+  }
+
+  return { path: sbAdCreatePath(input.creativeType), body: { ads: [ad] } }
+}
+
 export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-sbad-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createSbAd', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const creative: Record<string, unknown> = {
-    brandName: input.brandName, headline: input.headline,
-    ...(input.logoAssetId ? { brandLogoAssetID: input.logoAssetId } : {}),
-    asins: input.asins,
-  }
-  const landingPage: Record<string, unknown> = input.landingType === 'url' && input.landingUrl
-    ? { url: input.landingUrl }
-    : { pageType: input.landingType === 'store' ? 'STORE' : 'PRODUCT_LIST' }
-  // P4.5f — the wire value comes from the one vocabulary (services/ads-core/sb-ad-types.ts),
-  // which refuses a type it does not name rather than sending it on.
-  const body = { ads: [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, adType: sbAdTypeWire(input.creativeType), creative, landingPage, state: (input.state ?? 'enabled').toUpperCase() }] }
-  const response = await liveCall<{ ads?: { success?: Array<{ adId: string }> } }>({ ...ctx, method: 'POST', path: '/sb/v4/ads', body, contentType: 'application/vnd.sbAdResource.v4+json', acceptHeader: 'application/vnd.sbAdResource.v4+json' })
+  const { path: createPath, body } = sbAdCreateRequest(input)
+  const response = await liveCall<{ ads?: { success?: Array<{ adId: string }> } }>({
+    ...ctx,
+    method: 'POST',
+    path: createPath,
+    body,
+    contentType: 'application/vnd.sbAdResource.v4+json',
+    acceptHeader: 'application/vnd.sbAdResource.v4+json',
+  })
   return { ok: true, mode: 'live', externalId: response?.ads?.success?.[0]?.adId ?? null, rawResponse: response }
 }
 

@@ -15,41 +15,62 @@
  * So the default has never actually produced a deprecated ad — which is what makes this
  * cheap to fix and impossible to verify against a real Amazon answer.
  *
- * 🔴 **What this slice deliberately did NOT do: rename the wire value.**
+ * ## 🔴 2026-09-21 (later) — the wire value WAS established, and the question was wrong
  *
- * The plan row says *"default to Manual Collection"*. The wire value for Manual /
- * Auto Collection could not be established: Amazon's `POST /sb/v4/ads` reference
- * renders only with JavaScript (P0.8 hit the same wall on the deprecations page), two
- * web checks on 2026-09-21 returned only third-party write-ups, and with 0 stored calls
- * there is no Amazon answer to derive it from either.
+ * The original slice stopped because *"Amazon's `POST /sb/v4/ads` reference renders only with
+ * JavaScript"*. That was true of the **page** and not of the **document behind it**: the page
+ * fetches `d3a0d0y2hgofx6.cloudfront.net/openapi/en-us/sponsored-brands/4-0/openapi.json`, plain
+ * JSON, no browser needed. **"The docs need JavaScript" is a claim about the renderer, not about
+ * the data — ask what the page fetches.**
  *
- * Swapping a value Amazon still accepts — it deprecated the entity, it did not remove
- * it, and Amazon's own note carries **no shutdown date** — for a guessed one, on a path
- * that has never run, is the worse trade. `predict BEFORE you write` cuts both ways: a
- * change whose correct value cannot be stated in advance is not a fix.
+ * And the answer is that there is no wire value to find, because there is no such field:
  *
- * The same restraint applies to the casing. Every other enum this client sends on SB v4
- * is upper-cased, and `adType: 'productCollection'` is not. That is a smell recorded in
- * `sb-ad-types.ts`, not a finding, because nothing here can tell the difference between
- * "wrong case" and "this endpoint's convention".
+ * | the old vocabulary assumed | Amazon's 4.0 document |
+ * |---|---|
+ * | one endpoint `POST /sb/v4/ads` | **`/sb/v4/ads` is `PUT` only** (`UpdateSponsoredBrandsAds`) |
+ * | a discriminator `adType` | **0 occurrences** of `adType` in the whole document |
+ * | "Manual Collection" as an unconfirmable enum value | an **endpoint**: `POST /sb/v4/ads/manualCollection` |
+ *
+ * So the creative type chooses the **path**, each path has its **own body shape**, and the old
+ * request would have failed on four counts — wrong method for that path, a field that does not
+ * exist, a `campaignId` that is not part of a create-ad item, and a **missing required `name`**.
+ * Nobody knew, because `/sb/v4/ads` has **0 calls ever**.
+ *
+ * The restraint in the original slice was still right: it refused to guess. What changed is that
+ * the answer became available.
  */
 
 import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  SB_AD_TYPES, SB_AD_TYPE_KEYS, SB_AD_TYPES_CURRENT, sbAdTypeWire, sbAdTypeNotice,
+  SB_AD_TYPES, SB_AD_TYPE_KEYS, SB_AD_TYPES_CURRENT, SB_AD_STATES, sbAdCreatePath, sbAdTypeSpec, sbAdTypeNotice,
 } from './sb-ad-types.js'
+import { sbAdCreateRequest } from '../advertising/ads-api-client.js'
 
 const SRC = join(import.meta.dirname, '..', '..')
 const read = (p: string) => readFileSync(join(SRC, p), 'utf8')
 
 describe('SB ad-type vocabulary (P4.5f)', () => {
-  it('names the three creative types and which one Amazon deprecated', () => {
-    expect(SB_AD_TYPE_KEYS.sort()).toEqual(['productCollection', 'storeSpotlight', 'video'])
+  it('names the creative types and which one Amazon deprecated', () => {
+    expect(SB_AD_TYPE_KEYS.sort()).toEqual(['manualCollection', 'productCollection', 'storeSpotlight', 'video'])
     expect(SB_AD_TYPES.productCollection.deprecated?.on).toBe('2026-07-06')
+    expect(SB_AD_TYPES.manualCollection.deprecated).toBeNull()
     expect(SB_AD_TYPES.storeSpotlight.deprecated).toBeNull()
     expect(SB_AD_TYPES.video.deprecated).toBeNull()
+  })
+
+  it('🔴 every type maps to its OWN creation endpoint — creation is not one path', () => {
+    expect(sbAdCreatePath('productCollection')).toBe('/sb/v4/ads/productCollection')
+    expect(sbAdCreatePath('manualCollection')).toBe('/sb/v4/ads/manualCollection')
+    expect(sbAdCreatePath('storeSpotlight')).toBe('/sb/v4/ads/storeSpotlight')
+    expect(sbAdCreatePath('video')).toBe('/sb/v4/ads/video')
+    // The old code posted here. Amazon accepts only PUT on it (UpdateSponsoredBrandsAds).
+    for (const k of SB_AD_TYPE_KEYS) expect(sbAdCreatePath(k)).not.toBe('/sb/v4/ads')
+  })
+
+  it("Amazon's own enums are recorded, not re-derived", () => {
+    expect(SB_AD_STATES).toEqual(['ENABLED', 'PAUSED'])
   })
 
   it('records that Amazon announced NO shutdown date, rather than the reported one', () => {
@@ -60,15 +81,16 @@ describe('SB ad-type vocabulary (P4.5f)', () => {
     expect(SB_AD_TYPES.productCollection.deprecated?.source).toMatch(/no date given/)
   })
 
-  it('the wire value for the deprecated type is UNCHANGED', () => {
-    // Deprecated is not removed, and the replacement's wire value could not be
-    // established. Changing it here would be a guess on a path that has never run.
-    expect(sbAdTypeWire('productCollection')).toBe('productCollection')
+  it('the deprecated type is still reachable — Amazon deprecated it, it did not remove it', () => {
+    // Its endpoint is still in the 4.0 document, and an operator matching an existing
+    // campaign's format must still be able to create one.
+    expect(sbAdCreatePath('productCollection')).toBe('/sb/v4/ads/productCollection')
   })
 
   it('REFUSES a type the vocabulary does not name', () => {
-    expect(() => sbAdTypeWire('manualCollection')).toThrow(/not a Sponsored Brands creative type/)
-    expect(() => sbAdTypeWire('')).toThrow(/not a Sponsored Brands creative type/)
+    expect(() => sbAdCreatePath('autoCollection')).toThrow(/not a Sponsored Brands creative type/)
+    expect(() => sbAdCreatePath('')).toThrow(/not a Sponsored Brands creative type/)
+    expect(() => sbAdTypeSpec('nonsense')).toThrow(/not a Sponsored Brands creative type/)
   })
 
   it('the deprecation notice names the date, the replacement and its source', () => {
@@ -80,7 +102,8 @@ describe('SB ad-type vocabulary (P4.5f)', () => {
   })
 
   it('offers only the undeprecated types for a NEW creative', () => {
-    expect(SB_AD_TYPES_CURRENT).toEqual(['storeSpotlight', 'video'])
+    expect(SB_AD_TYPES_CURRENT).toEqual(['manualCollection', 'storeSpotlight', 'video'])
+    expect(SB_AD_TYPES_CURRENT).not.toContain('productCollection')
   })
 })
 
@@ -104,8 +127,8 @@ describe('createSbAdLocal (P4.5f — no silent default)', () => {
     expect(svc).toContain("logger.warn('[AX2.9] creating a DEPRECATED Sponsored Brands creative'")
   })
 
-  it('the client takes its wire value from the one vocabulary', () => {
-    expect(read('services/advertising/ads-api-client.ts')).toContain('adType: sbAdTypeWire(input.creativeType)')
+  it('the client builds its request from the one vocabulary', () => {
+    expect(read('services/advertising/ads-api-client.ts')).toContain('sbAdCreateRequest(input)')
   })
 })
 

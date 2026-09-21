@@ -15,7 +15,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { SB_AD_TYPE_KEYS, sbAdTypeWire, sbAdTypeNotice } from '../ads-core/sb-ad-types.js'
+import { SB_AD_TYPE_KEYS, sbAdTypeNotice } from '../ads-core/sb-ad-types.js'
 import {
   createCampaign, createAdGroup, createKeyword, createProductAd,
   createTarget, createNegativeProductTarget, createNegativeKeyword, createSdTarget, createSbAd, updateCampaign,
@@ -921,7 +921,9 @@ export interface NewSbAd {
    * template-aware creator beside it.
    */
   brandName?: string; headline: string; logoAssetId?: string
-  creativeType?: 'productCollection' | 'storeSpotlight' | 'video'
+  // P4.5f — manualCollection joins the list: it is Amazon's own replacement for the deprecated
+  // productCollection, and it is a real endpoint (POST /sb/v4/ads/manualCollection).
+  creativeType?: 'productCollection' | 'manualCollection' | 'storeSpotlight' | 'video'
   landingType?: 'store' | 'productList' | 'url'; landingUrl?: string
   asins: string[]; userId?: string
 }
