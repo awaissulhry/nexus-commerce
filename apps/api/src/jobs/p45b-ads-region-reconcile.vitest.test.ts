@@ -107,6 +107,37 @@ describe('connect callback (P4.5b — the region is measured, not assumed)', () 
     expect(route).toContain("if (region === 'EU') throw new Error(`GET /v2/profiles failed")
   })
 
+  it('P4.5h — stores the COUNTRY CODE, not Amazon\'s marketplace id', () => {
+    /**
+     * 🔴 The column every reader matches on holds a country code:
+     *   AmazonAdsConnection.marketplace = IT, DE, FR, ES, NL, PL, SE, UK, IE (9 rows)
+     *   Campaign.marketplace            = IT (150), DE (38), FR (22), ES (10)
+     *   ads-profile-resolver.fromRow    = where: { marketplace, isActive: true }
+     *
+     * The callback wrote `marketplaceStringId` (APJ6JRA9NG5V4). The FIRST reconnect
+     * would have rewritten all nine rows to Amazon's ids, after which
+     * adsProfileFor('IT') finds nothing and the Ads write gate refuses every market
+     * with "no active Amazon Ads profile for marketplace=IT".
+     *
+     * `country` is computed three lines above the upsert and was already used for the
+     * scope label — the right value was in hand and the wrong one was stored.
+     */
+    const upsert = route.slice(
+      route.indexOf('await prisma.amazonAdsConnection.upsert('),
+      route.indexOf('      saved.push('),
+    )
+    expect(upsert.length).toBeGreaterThan(200)
+    const code = upsert.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    expect(code.filter((l) => l.includes('marketplace: country,'))).toHaveLength(2) // create + update
+    expect(code.filter((l) => l.includes('marketplace: marketplaceStringId'))).toEqual([])
+  })
+
+  it('P4.5h — the marketplace id is still recorded, on the SCOPE where it belongs', () => {
+    // Amazon's id is a real fact and is not lost: it goes into the scope metadata as
+    // `marketplaceStringId`, beside the country code. One column, one meaning.
+    expect(route).toContain('marketplaceStringId,')
+  })
+
   it('a reconnect no longer reasserts isActive over the operator', () => {
     // CX.3a already learned this once for scope metadata: discovery must not
     // overwrite what discovery cannot see. A reconnect is a credential event.
@@ -152,7 +183,7 @@ describe('reconcileAdsRegions (P4.5b)', () => {
       { externalId: 'p-jp', region: 'FE', label: 'XAVIA · JP', metadata: { marketplace: 'JP', accountName: 'XAVIA' } },
       { externalId: 'p-nil', region: null, label: 'no region', metadata: {} },
     ]
-    connRows = [{ profileId: 'p-eu', region: 'EU' }]
+    connRows = [{ profileId: 'p-eu', region: 'EU', marketplace: 'IT' }]
   })
 
   it('with the variable OFF it creates nothing and SAYS how many it left', async () => {
@@ -189,19 +220,61 @@ describe('reconcileAdsRegions (P4.5b)', () => {
     // The region repair is pure correctness and costs no API call, so it is not
     // behind the spend variable. Today it corrects nothing, which is exactly why
     // it should ship before the first NA row exists rather than after.
-    connRows = [{ profileId: 'p-eu', region: 'NA' }]
+    connRows = [{ profileId: 'p-eu', region: 'NA', marketplace: 'IT' }]
     const r = await reconcileAdsRegions()
     expect(r.regionCorrected).toBe(1)
     expect(updated[0].data).toEqual({ region: 'EU' })
   })
 
   it('touches nothing when every row already agrees (control)', async () => {
-    scopeRows = [{ externalId: 'p-eu', region: 'EU', label: 'x', metadata: {} }]
-    connRows = [{ profileId: 'p-eu', region: 'EU' }]
+    scopeRows = [{ externalId: 'p-eu', region: 'EU', label: 'x', metadata: { marketplace: 'IT' } }]
+    connRows = [{ profileId: 'p-eu', region: 'EU', marketplace: 'IT' }]
     const r = await reconcileAdsRegions()
-    expect(r).toMatchObject({ scopes: 1, created: 0, regionCorrected: 0, unchanged: 1, createsSkippedOff: 0 })
+    expect(r).toMatchObject({ scopes: 1, created: 0, regionCorrected: 0, marketCorrected: 0, unchanged: 1, createsSkippedOff: 0 })
     expect(created).toEqual([])
     expect(updated).toEqual([])
+  })
+
+  // ── P4.5h — the stored market, self-healing ──────────────────────────────
+  it('corrects a row stored under the WRONG market, from Amazon\'s own answer', async () => {
+    // The measured case: profile 4392237479209848 is `IE` in AmazonAdsConnection and
+    // `BE` in its scope. Amazon says BE (AMEN7PMS3EDWL, Europe/Brussels), and
+    // utils/marketplace-code.ts was corrected on 2026-08-29 — the stored row never was.
+    // This is what repairs it on production without a manual UPDATE.
+    scopeRows = [{ externalId: 'p-be', region: 'EU', label: 'XAVIA · BE', metadata: { marketplace: 'BE' } }]
+    connRows = [{ profileId: 'p-be', region: 'EU', marketplace: 'IE' }]
+    const r = await reconcileAdsRegions()
+    expect(r.marketCorrected).toBe(1)
+    expect(r.regionCorrected).toBe(0)
+    expect(updated[0].data).toEqual({ marketplace: 'BE' })
+  })
+
+  it('corrects region and market in ONE update when both disagree', async () => {
+    scopeRows = [{ externalId: 'p-us', region: 'NA', label: 'US', metadata: { marketplace: 'US' } }]
+    connRows = [{ profileId: 'p-us', region: 'EU', marketplace: 'IT' }]
+    const r = await reconcileAdsRegions()
+    expect(updated).toHaveLength(1)
+    expect(updated[0].data).toEqual({ region: 'NA', marketplace: 'US' })
+    expect(r).toMatchObject({ regionCorrected: 1, marketCorrected: 1 })
+  })
+
+  it('a scope with no market in its metadata corrects nothing', async () => {
+    // Absence is not evidence. Blanking a working market because discovery did not
+    // report one would be the P4.3b mistake: "we could not check" is not "it is wrong".
+    scopeRows = [
+      { externalId: 'p-a', region: 'EU', label: 'a', metadata: {} },
+      { externalId: 'p-b', region: 'EU', label: 'b', metadata: { marketplace: '   ' } },
+      { externalId: 'p-c', region: 'EU', label: 'c', metadata: { marketplace: 42 } },
+    ]
+    connRows = [
+      { profileId: 'p-a', region: 'EU', marketplace: 'IT' },
+      { profileId: 'p-b', region: 'EU', marketplace: 'DE' },
+      { profileId: 'p-c', region: 'EU', marketplace: 'FR' },
+    ]
+    const r = await reconcileAdsRegions()
+    expect(updated).toEqual([])
+    expect(r.marketCorrected).toBe(0)
+    expect(r.unchanged).toBe(3)
   })
 
   it('is scheduled, not registry-only (P4.2d)', () => {

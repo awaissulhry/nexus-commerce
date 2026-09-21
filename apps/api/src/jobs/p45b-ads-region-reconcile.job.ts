@@ -50,7 +50,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { asAdsRegion } from '../services/ads-core/ads-regions.js'
+import { asAdsRegion, type AdsRegion } from '../services/ads-core/ads-regions.js'
 
 const JOB = 'p45b-ads-region-reconcile'
 
@@ -58,6 +58,8 @@ export interface AdsRegionReconcileReport {
   scopes: number
   created: number
   regionCorrected: number
+  /** P4.5h — rows whose stored market disagreed with what Amazon reports. */
+  marketCorrected: number
   unchanged: number
   createsSkippedOff: number
 }
@@ -66,7 +68,7 @@ const createsEnabled = () => process.env.NEXUS_ADS_ALL_REGIONS === '1'
 
 export async function reconcileAdsRegions(): Promise<AdsRegionReconcileReport> {
   const report: AdsRegionReconcileReport = {
-    scopes: 0, created: 0, regionCorrected: 0, unchanged: 0, createsSkippedOff: 0,
+    scopes: 0, created: 0, regionCorrected: 0, marketCorrected: 0, unchanged: 0, createsSkippedOff: 0,
   }
 
   const { tryResolveConnection } = await import('../services/connection-resolver.service.js')
@@ -81,7 +83,7 @@ export async function reconcileAdsRegions(): Promise<AdsRegionReconcileReport> {
   if (!scopes.length) return report
 
   const rows = new Map(
-    (await prisma.amazonAdsConnection.findMany({ select: { profileId: true, region: true } }))
+    (await prisma.amazonAdsConnection.findMany({ select: { profileId: true, region: true, marketplace: true } }))
       .map((r) => [r.profileId, r]),
   )
 
@@ -92,29 +94,54 @@ export async function reconcileAdsRegions(): Promise<AdsRegionReconcileReport> {
     const region = asAdsRegion(scope.region)
     if (!region) { report.unchanged++; continue }
 
+    const meta = (scope.metadata ?? {}) as Record<string, unknown>
+    /**
+     * P4.5h — the market Amazon itself reports for this profile.
+     *
+     * Discovery writes `metadata.marketplace` from the profile's own `countryCode`,
+     * so it is the channel's current answer rather than a column last written at
+     * connect time. An empty or non-string value is not evidence and corrects nothing.
+     */
+    const market = typeof meta.marketplace === 'string' && meta.marketplace.trim() ? meta.marketplace.trim() : null
+
     const row = rows.get(scope.externalId)
     if (row) {
-      if (row.region === region) { report.unchanged++; continue }
+      const data: { region?: AdsRegion; marketplace?: string } = {}
+      if (row.region !== region) data.region = region
+      if (market && row.marketplace !== market) data.marketplace = market
+      // Presence, not truthiness. `!data.marketplace` would also be true for an
+      // empty string — so a change that blanked a market would take the
+      // "nothing to do" branch and be invisible. (Found by a mutation that survived:
+      // the guard was quietly neutralising the very defect the test aimed at.)
+      if (Object.keys(data).length === 0) { report.unchanged++; continue }
+
       await prisma.amazonAdsConnection.update({
         where: { workspace_profileId: workspaceKey({ profileId: scope.externalId }) },
-        data: { region },
+        data,
       })
-      report.regionCorrected++
-      logger.warn('[p45b-ads-regions] corrected a profile stranded on the wrong API host', {
-        profileId: scope.externalId, was: row.region, now: region,
-      })
+      if (data.region) {
+        report.regionCorrected++
+        logger.warn('[p45b-ads-regions] corrected a profile stranded on the wrong API host', {
+          profileId: scope.externalId, was: row.region, now: region,
+        })
+      }
+      if (data.marketplace) {
+        report.marketCorrected++
+        logger.warn('[p45b-ads-regions] corrected a profile stored under the wrong market', {
+          profileId: scope.externalId, was: row.marketplace, now: market,
+        })
+      }
       continue
     }
 
     if (!createsEnabled()) { report.createsSkippedOff++; continue }
 
-    const meta = (scope.metadata ?? {}) as Record<string, unknown>
     await prisma.amazonAdsConnection.create({
       data: {
         profileId: scope.externalId,
         // The market as Amazon reports it for this profile, which is what discovery
         // recorded. Never re-derived here: one fact, one source (P4.4a).
-        marketplace: typeof meta.marketplace === 'string' ? meta.marketplace : '',
+        marketplace: market ?? '',
         region,
         accountLabel: typeof meta.accountName === 'string' ? meta.accountName : (scope.label ?? null),
         // Inactive and sandbox: recorded, visible, and doing nothing until an
@@ -138,7 +165,7 @@ export async function runAdsRegionReconcile(): Promise<string> {
     logger.info('[p45b-ads-regions] reconcile complete', r as unknown as Record<string, unknown>)
     return (
       `scopes=${r.scopes} created=${r.created} regionCorrected=${r.regionCorrected} ` +
-      `unchanged=${r.unchanged} createsSkippedOff=${r.createsSkippedOff}` +
+      `marketCorrected=${r.marketCorrected} unchanged=${r.unchanged} createsSkippedOff=${r.createsSkippedOff}` +
       (r.createsSkippedOff > 0 ? ' (set NEXUS_ADS_ALL_REGIONS=1 to record them)' : '')
     )
   })

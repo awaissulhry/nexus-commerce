@@ -420,7 +420,9 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
         where: { workspace_profileId: workspaceKey({ profileId: profileId }) },
         create: {
           profileId,
-          marketplace: marketplaceStringId,
+          // P4.5h — the COUNTRY CODE, which is what every reader of this column
+          // matches on. See the note on the update branch.
+          marketplace: country,
           // P4.5b — the region this profile ANSWERED in, not a constant. The client
           // picks its API host from this column.
           region: profile.region,
@@ -433,7 +435,27 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
           tokenIssuedAtIsEstimate: false,
         },
         update: {
-          marketplace: marketplaceStringId,
+          /**
+           * P4.5h — 🔴 this wrote `marketplaceStringId` (Amazon's `APJ6JRA9NG5V4`)
+           * into the column every reader matches with a **country code**.
+           *
+           * Measured 2026-09-21: all 9 `AmazonAdsConnection` rows hold `IT`, `DE`,
+           * `FR`, … and every caller passes the same shape — `Campaign.marketplace`
+           * is `IT` (150), `DE` (38), `FR` (22), `ES` (10), and the resolver's
+           * `fromRow` does `where: { marketplace, isActive: true }`.
+           *
+           * So the FIRST reconnect would have rewritten all nine rows to Amazon's
+           * ids, after which `adsProfileFor('IT')` finds nothing and the Ads write
+           * gate refuses every market with *"no active Amazon Ads profile for
+           * marketplace=IT"*. A reconnect is meant to repair a connection, not
+           * disable advertising.
+           *
+           * `country` is computed three lines above and was already used for the
+           * scope label and the scope's own `metadata.marketplace` — the right value
+           * was in hand and the wrong one was stored. Same shape as P4.4b, where a
+           * listing id sat four lines above the code that sent no listing.
+           */
+          marketplace: country,
           // A fact from the channel, so a reconnect corrects it. (The 9 rows on the
           // development database are all EU, so this changes nothing today — it stops
           // a row being stranded on the wrong host if Amazon ever moves a profile.)
