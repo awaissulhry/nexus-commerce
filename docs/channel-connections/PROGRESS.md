@@ -1,11 +1,14 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, P3, P4 (now including P4.6), P5 and P6 are built, pushed and
-deployed.** P4.6 and the P6.2b production fix were finished on 2026-09-21.
+Updated **2026-09-21** (second session). Scope is now **Amazon, eBay and Etsy only** — the Owner
+deferred P8 and, with it, Shopify and WooCommerce leave the active set.
 
-**State at handover.** `origin/main` = the last commit of this session. ⚠️ **Check the newest
-deployment reached SUCCESS before anything else** — this session's push carries a migration
-(§0b).
+**What this session did:** verified the previous deploy as instructed and found **P6.2 had never
+worked in production** (fixed, deployed, proven); built **P4.6 Etsy writes** end to end (six
+slices, deployed, switches OFF); **measured P7a** and found nothing safe to delete; and fixed the
+**channel-sync worker** (P7a.1), which is now provably inert.
+
+⚠️ **Check the newest deployment reached SUCCESS before anything else.**
 
 ## 0. Cold start — read this much and you can work
 
@@ -14,6 +17,7 @@ deployment reached SUCCESS before anything else** — this session's push carrie
 | P0 – P3 | done, deployed |
 | **P6.2b** | 🔴 **P6.2 was 0% working in production.** Found by doing §0b. Fixed, deployed, and **proven**: the eBay signing key dies **2029-08-28**. `build/P6.2b.md` |
 | **P4.1 – P4.5** | done, deployed. P4.5 = seven slices + `P4.5h` |
+| **P7a.1** | 🟢 **FIXED 2026-09-21** — the channel-sync worker picked an arbitrary market and invented a `_US` one. Both latent; both closed. It is now **provably inert** and is the first real deletion candidate. `build/P7a.1.md` |
 | **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
@@ -30,9 +34,10 @@ deployment reached SUCCESS before anything else** — this session's push carrie
 | 3 | **P5.2** Finances switch | **Owner** | `POST /api/amazon/financials/sync {"probe": true}` — a **read**, writes nothing — then compare counts, then flip. `build/P5.2.md` §5 |
 | 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
 | 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
-| 6 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
-| 7 | **P7a** the Ads fallback | either | The one genuine deletion candidate. `resolveCredentials` sits in the `else` of a `NEXUS_WORKSPACES_ENABLED === '1'` check and production was `1` on 09-19. **One read of that variable on the production deploy closes it.** `build/P7a.md` §2 |
-| 8 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
+| 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production 2026-09-21: **0 Etsy `ChannelListing` rows**. Etsy is connected (P2.5) and P4.6's writers are built, but they have nothing to act on. The six-hour rule is vacuously met for the same reason. Whatever creates Etsy listings is the next real step for that channel |
+| 7 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
+| 8 | **P7a** the Ads fallback | either | The one genuine deletion candidate. `resolveCredentials` sits in the `else` of a `NEXUS_WORKSPACES_ENABLED === '1'` check and production was `1` on 09-19. **One read of that variable on the production deploy closes it.** `build/P7a.md` §2 |
+| 9 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
 
 🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
 keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
@@ -45,19 +50,15 @@ by **country code**, which would have refused every ads write (P4.5h).
 
 ### 0b. Verify on the next deploy
 
-This session's push carries **one migration** and one new alert sweep.
-
-1. `Applying migration 20260921b_p46e_sync_channel_etsy` — adds `ETSY` to the `SyncChannel` enum.
-   Additive; nothing selects on it until the lane runs.
-2. `[channel-alerts] etsy freshness {"total":…,"stale":…,"neverSynced":…}` — **the first
-   measurement of Etsy's six-hour rule in production.** The prediction, written before the deploy:
-   `stale === total` and `neverSynced === total`, because nothing has ever refreshed Etsy content
-   (`build/P4.6e.md` §3). If `total` is 0 there are no Etsy `ChannelListing` rows at all, which is
-   a different and also interesting answer.
-3. A new **warn** alert on the bell: *"Nexus's copy of Etsy data is older than Etsy allows"*.
-4. 🟢 **Already proven on deployment `d0d1b809`** (09:35 UTC): `[cx-ebay] recorded the signing key
-   expiry {"expiresAt":"2029-08-28T03:12:43.000Z","unreadable":false}` — **once**, where the
-   previous deploy logged the failure four times in two minutes.
+1. `etsy-content-refresh cron: scheduled {"schedule":"20 */4 * * *"}` at boot (P4.6f).
+2. `[channel-alerts] etsy freshness {"total":0,…}` — **now logged even when zero**, which it was
+   not on the previous deploy (see `build/P4.6e.md` §3b: an empty shop produced silence, and only
+   a positive control told that apart from a failure).
+3. 🟢 **Already proven:** `[cx-ebay] recorded the signing key expiry
+   {"expiresAt":"2029-08-28T03:12:43.000Z"}` — **once**, where the deploy before it logged the
+   failure four times in two minutes.
+4. 🟢 **Already proven:** migrations `20260921a_p62_signing_key_expiry` and
+   `20260921b_p46e_sync_channel_etsy` both applied.
 
 ### 0b-prev. From the earlier deploy, still worth watching
 
