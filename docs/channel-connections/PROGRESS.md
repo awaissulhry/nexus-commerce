@@ -1,8 +1,8 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, ALL of P3, P5.1, and ALL of P4.1, P4.2,
-P4.3, P4.4 and P4.5 are built, pushed and deployed.** P4.3, P4.4 and P4.5 were
-all finished on 2026-09-21.
+Updated **2026-09-21**. **P0, P1, P2, ALL of P3, ALL of P4.1–P4.5, and ALL of P5
+are built and pushed.** P4.3, P4.4, P4.5 and the rest of P5 were all finished on
+2026-09-21. P4.6 is not-to-be-built until Shopify is live (D6 = B, decided).
 
 **State at handover.** `origin/main` = `<this push>`. The working tree holds only
 other sessions' files (`.gitignore`, `apps/factory/tsconfig.tsbuildinfo`,
@@ -27,9 +27,47 @@ and `clients/amazon-sp-api.client.ts`, and neither is in the package's diff.
 files` — the same two known Amazon local-account files, at the same count, as the
 handover before it.
 
-## ▶ START HERE — the next package is P4.6 (Etsy writes), and it NEEDS D6
+## ▶ START HERE — the next package is P6 (P6.2 / 6.4 / 6.6 / 6.7 / 6.8)
 
-**P4.5 is COMPLETE.** Seven slices, `build/P4.5a.md` … `build/P4.5g.md`.
+**P4.5 and ALL of P5 are COMPLETE.** P4.5: seven slices,
+`build/P4.5a.md` … `build/P4.5g.md`. P5: `P5.1` (shipped 09-20), `P5.2`, `P5.3`,
+`P5.4`; **P5.5 is not needed** (P0.8 — eBay Search Returns is not on the decommission
+list).
+
+🟢 **P4.6 (Etsy writes) is NOT blocked on a decision — the decision is already made.**
+FINAL-PLAN §14.3 records `D6 = B` from the Owner on 2026-09-19: *"stay read-only until
+Shopify is live"*. Shopify publishing is still `gated` in production. So P4.6 is
+correctly not-to-be-built, not waiting on an answer. Do not re-ask.
+
+**P4.5 production proof (deployment `fc2bbdf5`, SUCCESS 2026-09-21 06:20 UTC):**
+`p45b-ads-region-reconcile cron: scheduled {"schedule":"35 4 * * *","creates":"off"}`
+— scheduled, with row creation off, exactly as designed. Watch its first daily line:
+**`regionCorrected` should be 0.** Anything else means production has Ads profiles
+stranded on the wrong API host.
+
+### What P5 found
+
+- **P5.2** — half a counterweight. The `2024-06-19/transactions` path is **already
+  built and already on the gateway**; what is missing is the switch. It has **0 calls
+  ever** against v0's 112. 🔴 Its parse read `data.transactions ?? []`, so a wrapped
+  envelope would have returned **success with 0 transactions** — a settlement day
+  recorded as a quiet day, on the money path. That is P5.1's *three envelopes in one
+  migration* finding, one package later, in a second place.
+- **P5.3** — both remaining `2024-01` sites were dead, and this time **measured**:
+  `/admin/api/2024-01/` has 0 rows in the call ledger while every Shopify call is on
+  `2026-07`. The previous session had inferred it from "production has no `SHOPIFY_*`
+  variable"; the ledger says it directly. `2024-01` was not the cautious value it
+  looked like — it has been out of support for over a year, so the path was broken on
+  both versions.
+- **P5.4** — a clean counterweight: the question was *"are we handling buyer PII
+  correctly?"* and the answer is *"we are not handling it at all."* 0 emails, 0
+  customer ids, 0 street addresses across 4,464 orders, and all 4,464 names are the
+  literal fallback. 🔴 The risk runs the other way, so a census now holds the
+  no-Restricted-Data-Token decision.
+
+**P5.2's row is NOT closed**, and `build/P5.2.md` §5 says what would close it: one live
+`{"useV0": false}` call, a count comparison against v0 over a window with known
+settlements, then flip the cron and the default together. Deadline **2027-08-27**.
 
 🔴 **Two of its rows did not end where the plan pointed, and both matter:**
 
@@ -603,8 +641,8 @@ the eBay Media-API decision (R-1, the Owner's).
 
 ### 3c. The order from here
 
-**P4.6 (needs D6)** → the rest of P5 (P5.3 measured, P5.2 / P5.4; P5.5 not
-needed) → P6.2 / 6.4 / 6.6 / 6.7 / 6.8 → P7 (each drop needs a yes) → P8.
+**P6.2 / 6.4 / 6.6 / 6.7 / 6.8** → P7 (each drop needs a yes) → P8.
+P4.6 waits on Shopify going live, not on an answer (D6 = B, already decided).
 
 ## 4. 🔴 What is NOT proven by real traffic
 
