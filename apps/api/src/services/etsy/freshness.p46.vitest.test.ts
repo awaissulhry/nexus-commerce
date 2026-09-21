@@ -77,4 +77,12 @@ describe('P4.6e — the alert it feeds', () => {
     const { staleChannelDataAlert } = await import('../cx/channel-alerts.service.js')
     expect(staleChannelDataAlert('Etsy', { total: 9, stale: 0, neverSynced: 0, oldestAt: null }, 6)).toBeNull()
   })
+  it('an EMPTY shop raises nothing — but the census still has a value to log', async () => {
+    // Production, 2026-09-21: the sweep ran and printed nothing, because the first version only
+    // logged when rows existed. "No Etsy listings" and "the block threw" looked identical.
+    const { staleChannelDataAlert } = await import('../cx/channel-alerts.service.js')
+    const empty = etsyFreshnessCensus([], NOW)
+    expect(empty).toEqual({ total: 0, stale: 0, neverSynced: 0, oldestAt: null })
+    expect(staleChannelDataAlert('Etsy', empty, 6)).toBeNull()
+  })
 })

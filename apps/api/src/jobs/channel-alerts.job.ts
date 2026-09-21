@@ -138,11 +138,19 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
       where: { channel: 'ETSY' },
       select: { lastSyncedAt: true },
     })
-    if (rows.length > 0) {
-      const census = etsyFreshnessCensus(rows, now)
-      await raise(staleChannelDataAlert('Etsy', census, ETSY_MAX_CONTENT_AGE_MS / 3_600_000))
-      logger.info('[channel-alerts] etsy freshness', census)
-    }
+    const census = etsyFreshnessCensus(rows, now)
+    // 🔴 Logged ALWAYS, including `total: 0`.
+    //
+    // The first version wrapped this in `if (rows.length > 0)`, and production answered with
+    // silence — which is indistinguishable from the sweep having failed. It took a positive
+    // control (`[channel-alerts] sweep` DID run at 10:30) to tell "there are no Etsy listings"
+    // from "this block threw". That is the trap this whole package keeps finding, in this
+    // session's own code: **an unwitnessed zero neither passes nor convicts.**
+    //
+    // The ALERT still only fires when something is stale — an empty shop is not a breach — but
+    // the measurement is a fact and gets written down either way.
+    logger.info('[channel-alerts] etsy freshness', census)
+    await raise(staleChannelDataAlert('Etsy', census, ETSY_MAX_CONTENT_AGE_MS / 3_600_000))
   } catch (err: any) {
     logger.warn('[channel-alerts] etsy freshness sweep failed', { error: err?.message })
   }
