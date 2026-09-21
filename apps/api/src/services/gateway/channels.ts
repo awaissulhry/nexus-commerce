@@ -6,6 +6,7 @@
 import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
+import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
 import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, shopifyRateReading } from '../cx/rate-readings.js'
 import type { GatewayChannel } from './vocabulary.js'
@@ -29,9 +30,10 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // honours its sandbox switch here, so a sandbox Ads write never reaches the live host.
     // Same rule as ads-api-client.ts `adsMode()` (exact 'live', else sandbox).
     case 'AMAZON_ADS': return process.env.NEXUS_AMAZON_ADS_MODE === 'live' ? 'live' : 'sandbox'
-    // Etsy has no publish switch yet: the connected-account client is read-only, and the only Etsy writer
-    // is the legacy service P1.6 retires (it needs its own env credentials to send anything).
-    case 'ETSY': return 'live'
+    // P4.6a — Etsy has a real switch now. It used to return the literal 'live', which was true of the
+    // world but not of the code: the connected-account client was read-only, so nothing could use it.
+    // P4.6 puts writes on that client, so the literal becomes an ungated live write path.
+    case 'ETSY': return getEtsyPublishMode()
   }
 }
 
