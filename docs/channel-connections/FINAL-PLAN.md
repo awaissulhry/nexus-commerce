@@ -498,8 +498,18 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
 3. **Rotate the Neon database password.** It is in git history. Update Railway `DATABASE_URL` at the same time.
 4. **eBay:** set the Marketplace Account Deletion endpoint in the eBay developer portal (or opt out if we store no eBay user data). Confirm the RuName points at the API callback.
 5. **eBay:** reconnect both accounts after P6.7 adds scopes.
-6. **Amazon Ads:** reconnect once (after P4.5), to record a true expiry date.
-7. **Shopify:** the production app and the install link for the store (P6.8).
+6. ~~**Amazon Ads:** reconnect once (after P4.5), to record a true expiry date.~~ 🔴🔴 **DO NOT DO
+   THIS — WITHDRAWN 2026-09-21.** P4.5 measured it and the instruction is harmful twice over.
+   (a) All nine Ads rows carry `tokenIssuedAt = 2026-05-17`, a conservative FLOOR, so the consent
+   predates Amazon's **2026-07-30** cut-off and the refresh token has **no expiry** — a reconnect
+   would *create* one. The screen disagreed because `refreshTokenExpiresAt` is our own 365-day
+   constant that a route mislabelled `measuredExpiry` (P4.5g). (b) Worse, until P4.5h the connect
+   callback wrote Amazon's marketplace **id** (`APJ6JRA9NG5V4`) into
+   `AmazonAdsConnection.marketplace`, the column every reader matches by **country code**. The
+   first reconnect would have rewritten all nine rows, after which `adsProfileFor('IT')` finds
+   nothing and **every** Ads write is refused. Fixed in code, but the reconnect still has no
+   upside. `build/P4.5g.md`, `build/P4.5h.md`.
+7. **Shopify:** the production app and the install link for the store (P6.8). ⏸ **Not urgent** — the Owner narrowed scope to Amazon, eBay and Etsy on 2026-09-21 (§14.3), and Shopify publishing stays `gated`. The alert P6.8 raises is correct; it can wait.
 8. **Etsy:** the production HTTPS callback and the 4 webhooks in Etsy's portal (P2.5, P6.8).
 9. **Amazon:** answer D1 (private or public app).
 10. **Production settings read (R-4)** — say "go" and Claude reads them, or read them yourself: `AMAZON_SP_AUTH_MODE`, `NEXUS_AMAZON_ADS_MODE`, the three publish-mode pairs, `NEXUS_EBAY_REAL_API`, `ENABLE_QUEUE_WORKERS`, `NEXUS_KMS_KEY_ID`, `NEXUS_WORKSPACES_ENABLED`, `NEXUS_ENABLE_RETENTION_SWEEP` and its webhook policy, `EBAY_NOTIFICATION_VERIFICATION_TOKEN`.
