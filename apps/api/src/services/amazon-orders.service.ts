@@ -122,7 +122,39 @@ function mapFulfillmentMethod(channel?: string): string | null {
   return channel ?? null
 }
 
-/** Compose a usable customer name from buyer / shipping fields. */
+/**
+ * P5.4 — buyer personal data: we do not ask Amazon for it, and we do not receive it.
+ *
+ * Amazon redacts buyer PII from `getOrders` / `getOrder` unless the call carries a
+ * **Restricted Data Token**. Nexus has never minted one:
+ * `createRestrictedDataToken` appears **once** in the whole codebase, inside the
+ * gateway's list of read-shaped POST operations (`services/gateway/amazon-sdk.ts:24`),
+ * and there is no call site.
+ *
+ * Measured on the development database 2026-09-21, across **4,464** Amazon orders:
+ *
+ * | column | rows with a value |
+ * |---|---|
+ * | `customerEmail` | **0** |
+ * | `customerId` | **0** |
+ * | `customerName` | 4,464 — **all of them the literal fallback below** |
+ * | `shippingAddress` with a street (`AddressLine1`) | **0** |
+ *
+ * The stored addresses carry only City / CountryCode / PostalCode / StateOrRegion
+ * (occasionally County, CompanyName) — exactly the non-personal subset Amazon returns
+ * without an RDT, and what the shipping-cost and tax logic needs.
+ *
+ * So the plan's row — *"use a Restricted Data Token where we read buyer personal data
+ * — or stop reading it if we do not need it"* — is answered by the second branch: **we
+ * do not read it.** These two readers are kept, rather than deleted, because they are
+ * the only place that says so; deleting them would leave the question open for the
+ * next person to "fix" by adding an RDT.
+ *
+ * 🔴 **The risk here runs the other way.** If an RDT is ever added, `customerEmail`
+ * silently starts filling with real buyer addresses, into a column with no retention
+ * rule and no operator awareness. `amazon-buyer-pii.p54.vitest.test.ts` holds the
+ * no-RDT decision so that changing it is a visible diff that has to carry a reason.
+ */
 function pickCustomerName(order: AmazonOrderRaw): string {
   return (
     order.BuyerInfo?.BuyerName ??
