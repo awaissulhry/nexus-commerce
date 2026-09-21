@@ -1,22 +1,20 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**. **P0, P1, P2, P3, P4.1–P4.5, P5 and everything in P6 that
-code can do are built, pushed and deployed.** P4.3, P4.4, P4.5, the rest of P5 and
-all of P6 were finished on 2026-09-21.
+Updated **2026-09-21**. **P0, P1, P2, P3, P4 (now including P4.6), P5 and P6 are built, pushed and
+deployed.** P4.6 and the P6.2b production fix were finished on 2026-09-21.
 
-**State at handover.** `origin/main` = **this commit** (the last of the session).
-Deployment `5e51055d` (commit `6e9cdd0fd`, one before this) was **BUILDING** when this
-was written, and **this docs commit triggers one more**. ⚠️ **Check the newest
-deployment reached SUCCESS before anything else** — `6e9cdd0fd` carries the only
-migration of the day (see §0b). Nothing of this programme is unpushed.
+**State at handover.** `origin/main` = the last commit of this session. ⚠️ **Check the newest
+deployment reached SUCCESS before anything else** — this session's push carries a migration
+(§0b).
 
 ## 0. Cold start — read this much and you can work
 
 | Package | State |
 |---|---|
 | P0 – P3 | done, deployed |
+| **P6.2b** | 🔴 **P6.2 was 0% working in production.** Found by doing §0b. Fixed, deployed, and **proven**: the eBay signing key dies **2029-08-28**. `build/P6.2b.md` |
 | **P4.1 – P4.5** | done, deployed. P4.5 = seven slices + `P4.5h` |
-| **P4.6** | **not-to-be-built** — D6 = B was decided 2026-09-19 ("stay read-only until Shopify is live"), and Shopify is still gated. **Do not re-ask.** |
+| **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done; **P6.7 PARTIAL, row OPEN** |
 | **P7** | next — **each drop needs the Owner's yes** |
@@ -30,7 +28,9 @@ migration of the day (see §0b). Nothing of this programme is unpushed.
 | 2 | **P6.8** callbacks | **Owner** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. Two alerts nag until done. `build/P6.8.md` §4 |
 | 3 | **P5.2** Finances switch | **Owner** | `POST /api/amazon/financials/sync {"probe": true}` — a **read**, writes nothing — then compare counts, then flip. `build/P5.2.md` §5 |
 | 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
-| 5 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
+| 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
+| 6 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
+| 7 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
 
 🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
 keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
@@ -43,14 +43,26 @@ by **country code**, which would have refused every ads write (P4.5h).
 
 ### 0b. Verify on the next deploy
 
-1. `Applying migration 20260921a_p62_signing_key_expiry` — the only migration today.
-2. `[cx-ebay] recorded the signing key expiry {"signingKeyId":…,"expiresAt":…}` — **the
-   first time this system has ever known that date.** If `expiresAt` is null, eBay
-   reports none; `signingKeyCheckedAt` being set is how you tell that from never asking.
-3. `p45b-ads-region-reconcile` daily line: **`regionCorrected=0`**, and
-   **`marketCorrected=1`** on its first run only (the `IE`→`BE` repair), then 0.
-4. Two NEW alerts, and they are **correct**: `SHOPIFY has no sign-in callback
-   registered` and `ETSY's sign-in callback is a development tunnel`.
+This session's push carries **one migration** and one new alert sweep.
+
+1. `Applying migration 20260921b_p46e_sync_channel_etsy` — adds `ETSY` to the `SyncChannel` enum.
+   Additive; nothing selects on it until the lane runs.
+2. `[channel-alerts] etsy freshness {"total":…,"stale":…,"neverSynced":…}` — **the first
+   measurement of Etsy's six-hour rule in production.** The prediction, written before the deploy:
+   `stale === total` and `neverSynced === total`, because nothing has ever refreshed Etsy content
+   (`build/P4.6e.md` §3). If `total` is 0 there are no Etsy `ChannelListing` rows at all, which is
+   a different and also interesting answer.
+3. A new **warn** alert on the bell: *"Nexus's copy of Etsy data is older than Etsy allows"*.
+4. 🟢 **Already proven on deployment `d0d1b809`** (09:35 UTC): `[cx-ebay] recorded the signing key
+   expiry {"expiresAt":"2029-08-28T03:12:43.000Z","unreadable":false}` — **once**, where the
+   previous deploy logged the failure four times in two minutes.
+
+### 0b-prev. From the earlier deploy, still worth watching
+
+1. `p45b-ads-region-reconcile` daily line: **`regionCorrected=0`**, and **`marketCorrected=1`** on
+   its first run only (the `IE`→`BE` repair), then 0.
+2. Two alerts that are **correct**: `SHOPIFY has no sign-in callback registered` and `ETSY's
+   sign-in callback is a development tunnel`.
 
 ## 0c. Rules that bind every session here
 
@@ -116,6 +128,16 @@ it had applied — so the hole was real, and it was in this slice's own guard:
 took the "nothing to do" branch. Now `Object.keys(data).length === 0` — **presence, not
 truthiness.** Same family as the banked `Array.isArray([])` trap. **Always verify a
 surviving mutation actually applied.**
+
+## ▶ WHAT THIS SESSION DID (2026-09-21, second session)
+
+1. **Verified the deploy, as instructed — and it had failed.** P6.2 shipped that morning and was
+   **0% working**. `build/P6.2b.md` has it in full; the short version is that eBay returns epoch
+   **seconds**, `new Date('1731536000')` is `Invalid Date`, and Prisma refused the whole update —
+   taking `signingKeyCheckedAt` with it, and with it the once-a-day throttle, so the sweep called
+   eBay on **every heartbeat**. P6.2's own tests asserted the **source text**, not the value, so
+   they passed the whole time. Fixed, deployed, proven.
+2. **Built P4.6** (Etsy writes), five slices, after the Owner overrode D6.
 
 ## ▶ START HERE — the next package is P7 (clean-up), then P8
 
