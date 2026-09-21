@@ -51,6 +51,15 @@ describe('P4.3c quantityRowTarget', () => {
 
 // ── B. the row never exists ─────────────────────────────────────────────────
 const destination = vi.hoisted(() => ({ resolveDestinations: vi.fn() }))
+
+/**
+ * Production runs with business profiles ON, and with them on the BP.S3 claim
+ * check reads listings before this rule is reached. A double without it does not
+ * exercise the path production takes — which is what the profiles-ON ratchet
+ * caught. An empty result is the single-business no-op (`shared.size === 0`).
+ */
+const listingReader = () => ({ channelListing: { findMany: vi.fn(async () => []) } })
+
 describe('P4.3c: an unnamed quantity row is refused at birth', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -67,7 +76,7 @@ describe('P4.3c: an unnamed quantity row is refused at birth', () => {
   it('createOutboundRow throws and writes nothing', async () => {
     const { createOutboundRow } = await loadRows()
     const create = vi.fn()
-    const db = { outboundSyncQueue: { create, createMany: vi.fn(), findMany: vi.fn() } }
+    const db = { ...listingReader(), outboundSyncQueue: { create, createMany: vi.fn(), findMany: vi.fn() } }
     // Assert the VALUE, not the class identity: this suite re-imports the module
     // under `resetModules`, so the thrown class is a different object than the one
     // imported at the top even though the refusal is the same refusal.
@@ -87,7 +96,7 @@ describe('P4.3c: an unnamed quantity row is refused at birth', () => {
   it('createOutboundRows throws and writes nothing', async () => {
     const { createOutboundRows } = await loadRows()
     const createMany = vi.fn()
-    const db = { outboundSyncQueue: { createMany, findMany: vi.fn() } }
+    const db = { ...listingReader(), outboundSyncQueue: { createMany, findMany: vi.fn() } }
     await expect(createOutboundRows(db as never, {
       data: [
         { productId: 'p-1', channelListingId: 'cl-1', targetChannel: 'AMAZON', syncType: 'QUANTITY_UPDATE', payload: { quantity: 1 } },
@@ -101,7 +110,7 @@ describe('P4.3c: an unnamed quantity row is refused at birth', () => {
   it('positive control: the same row WITH a listing is created', async () => {
     const { createOutboundRow } = await loadRows()
     const create = vi.fn(async () => ({ id: 'q-1' }))
-    const db = { outboundSyncQueue: { create, createMany: vi.fn(), findMany: vi.fn() } }
+    const db = { ...listingReader(), outboundSyncQueue: { create, createMany: vi.fn(), findMany: vi.fn() } }
     await createOutboundRow(db as never, {
       data: { productId: 'p-1', channelListingId: 'cl-1', targetChannel: 'AMAZON', syncType: 'QUANTITY_UPDATE', syncStatus: 'PENDING', payload: { quantity: 99 } } as never,
     })
@@ -109,10 +118,27 @@ describe('P4.3c: an unnamed quantity row is refused at birth', () => {
     expect(create.mock.calls[0][0].data).toMatchObject({ channelListingId: 'cl-1', channelConnectionId: 'conn-1' })
   })
 
+  it.each([['off', undefined], ['ON, as production runs', '1']])('the refusal holds with business profiles %s', async (_name, flag) => {
+    // The claim check runs BEFORE this rule when profiles are on. The refusal has
+    // to survive it, not sit in front of it.
+    if (flag) vi.stubEnv('NEXUS_WORKSPACES_ENABLED', flag)
+    else vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '')
+    try {
+      const { createOutboundRow } = await loadRows()
+      const create = vi.fn()
+      const db = { ...listingReader(), outboundSyncQueue: { create, createMany: vi.fn(), findMany: vi.fn() } }
+      const error = await createOutboundRow(db as never, {
+        data: { productId: 'p-1', targetChannel: 'AMAZON', syncType: 'QUANTITY_UPDATE', syncStatus: 'PENDING', payload: { quantity: 99 } } as never,
+      }).then(() => null, (e: Error & { code?: string }) => e)
+      expect(error?.code).toBe('UNNAMED_QUANTITY_ROW')
+      expect(create).not.toHaveBeenCalled()
+    } finally { vi.unstubAllEnvs() }
+  })
+
   it('positive control: the shared eBay fan-out row is created', async () => {
     const { createOutboundRows } = await loadRows()
     const createMany = vi.fn(async () => ({ count: 1 }))
-    const db = { outboundSyncQueue: { createMany, findMany: vi.fn() } }
+    const db = { ...listingReader(), outboundSyncQueue: { createMany, findMany: vi.fn() } }
     await createOutboundRows(db as never, {
       data: [{
         productId: 'p-1', channelListingId: null, targetChannel: 'EBAY', targetRegion: 'IT',
