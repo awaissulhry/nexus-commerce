@@ -53,6 +53,7 @@ import {
   SYNC_TONE,
   channelLabel,
   disconnectAccount,
+  disconnectNote,
   disconnectHold,
   fetchDetail,
   identityLine,
@@ -253,12 +254,10 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         setNote({ tone: 'danger', text: `Disconnect failed · ${r.error}` })
         return
       }
-      setNote({
-        tone: 'success',
-        text: r.revokedAtChannel
-          ? 'Disconnected — the grant was revoked at the channel and removed from Nexus.'
-          : 'Disconnected — the stored grant was removed from Nexus.',
-      })
+      // P6.4 — three different truths, three different sentences. "Disconnected" in a
+      // success tone for a channel that still holds the grant is the kind of green
+      // that teaches an operator the screen is not worth reading.
+      setNote(disconnectNote(r))
       await refetch()
       router.refresh()
     } finally {
@@ -333,6 +332,14 @@ export default function ChannelDetailClient({ channelType, initial, initialError
       {note && (
         <Banner tone={note.tone} onDismiss={() => setNote(null)}>
           {note.text}
+          {note.link && (
+            <>
+              {' '}
+              <a href={note.link.href} target="_blank" rel="noreferrer noopener">
+                {note.link.label}
+              </a>
+            </>
+          )}
         </Banner>
       )}
       {error && (

@@ -382,6 +382,8 @@ export function eventTone(e: RecentEvent): { tone: Tone; label: string } {
 export interface ActionNote {
   tone: Tone
   text: string
+  /** P6.4 — an optional place to finish the job (the channel's own settings page). */
+  link?: { href: string; label: string }
 }
 
 interface HeartbeatResponse {
@@ -437,17 +439,62 @@ export async function startReconnect(
 }
 
 /** Disconnect — the one path; the API revokes at the channel and archives the grant. */
+/** P6.4 — where a human removes the grant, when the channel offers no revoke endpoint. */
+export interface RevokeHint {
+  url: string
+  label: string
+  detail: string
+}
+
+/**
+ * P6.4 — a disconnect now says what happened at the CHANNEL.
+ *
+ * Only eBay has a revoke endpoint. For the other four the grant keeps existing at the
+ * channel after a disconnect, and until now nothing said so: the API already returned
+ * `revokedAtChannel` and this function threw it away into a boolean nobody rendered.
+ */
 export async function disconnectAccount(
   connectionId: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ ok: true; revokedAtChannel: boolean } | { error: string }> {
+): Promise<{ ok: true; revokedAtChannel: boolean; revokeHint: RevokeHint | null } | { error: string }> {
   const res = await fetchImpl(`${getBackendUrl()}/api/accounts/${connectionId}/disconnect`, {
     method: 'POST',
     credentials: 'include',
   })
-  const data = (await res.json().catch(() => null)) as { error?: string; revokedAtChannel?: boolean } | null
-  if (res.ok) return { ok: true, revokedAtChannel: data?.revokedAtChannel === true }
+  const data = (await res.json().catch(() => null)) as
+    | { error?: string; revokedAtChannel?: boolean; revokeHint?: RevokeHint | null }
+    | null
+  if (res.ok) {
+    return {
+      ok: true,
+      revokedAtChannel: data?.revokedAtChannel === true,
+      revokeHint: data?.revokeHint ?? null,
+    }
+  }
   return { error: data?.error ?? `HTTP ${res.status}` }
+}
+
+/**
+ * The sentence an operator sees after a disconnect.
+ *
+ * 🔴 It must not say "disconnected" full stop for a channel that still holds the
+ * grant. Three different truths, three different sentences.
+ */
+export function disconnectNote(result: { revokedAtChannel: boolean; revokeHint: RevokeHint | null }): ActionNote {
+  if (result.revokedAtChannel) {
+    return { tone: 'success', text: 'Disconnected, and the grant was revoked at the channel.' }
+  }
+  if (result.revokeHint) {
+    return {
+      tone: 'warning',
+      text: `Disconnected here, and the grant still exists at the channel. ${result.revokeHint.detail}`,
+      link: { href: result.revokeHint.url, label: result.revokeHint.label },
+    }
+  }
+  return {
+    tone: 'warning',
+    text: 'Disconnected here. This channel offers no way to revoke the grant from our side, so remove the app in the channel\u2019s own settings.',
+  }
 }
 
 /** The save bar's write — same endpoint and body as before. */

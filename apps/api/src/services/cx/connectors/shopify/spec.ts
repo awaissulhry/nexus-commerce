@@ -167,6 +167,11 @@ export const shopifySpec: ChannelSpec = {
     ],
     accessTokenLifetimeSec: null, // custom-distribution offline token: valid until uninstall/revocation
     refreshTokenLifetimeSec: null, // custom apps: non-expiring offline token
+    revokeHint: {
+      url: 'https://admin.shopify.com/settings/apps',
+      label: 'Shopify admin → Settings → Apps and sales channels',
+      detail: 'Uninstalling the app in the Shopify admin is what removes its access token; a disconnect here only clears our copy.',
+    },
     rotatesRefreshToken: false,
   },
   identity,

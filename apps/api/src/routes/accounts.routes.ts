@@ -475,8 +475,27 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    /**
+     * P6.4 — say what actually happened at the CHANNEL, and where to finish the job.
+     *
+     * Measured 2026-09-21: of the five channels **only eBay declares a `revokeUrl`**.
+     * For the other four this endpoint clears our credentials and the grant keeps
+     * existing at the channel — the honest state, and one nothing said: this route
+     * already returned `revokedAtChannel` and **no web caller read it**.
+     *
+     * So an operator saw "disconnected" for an account the channel still considers
+     * connected, with nothing to click. `revokeHint` is that sentence and that link.
+     */
+    const spec = key ? tryGetChannelSpec(key) : null;
+    const revokeHint = !revokedAtChannel ? (spec?.auth.revokeHint ?? null) : null;
     logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id, revokedAtChannel });
-    return reply.send({ success: true, revokedAtChannel, blastRadius: await blastRadius(row.id) });
+    return reply.send({
+      success: true,
+      revokedAtChannel,
+      // null when the channel really did revoke it — there is nothing left to do.
+      revokeHint,
+      blastRadius: await blastRadius(row.id),
+    });
   });
 
   // ── BP.S1c/BP.S3 — sharing an account with another business, read-only or to publish ──

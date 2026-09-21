@@ -92,6 +92,11 @@ export const amazonSpSpec: ChannelSpec = {
     // Public SP-API OAuth grants must be renewed by the seller annually.
     refreshTokenLifetimeSec: 365 * 86_400,
     refreshTokenRequired: true,
+    revokeHint: {
+      url: 'https://sellercentral.amazon.com/apps/manage',
+      label: 'Seller Central → Apps & Services → Manage Your Apps',
+      detail: 'Amazon\u2019s Login with Amazon has no revoke endpoint for a seller grant. Remove the authorisation in Seller Central so the app can no longer act on this account.',
+    },
     rotatesRefreshToken: false,
   },
   regions: [

@@ -192,6 +192,11 @@ export const etsySpec: ChannelSpec = {
     accessTokenLifetimeSec: 3600,
     refreshTokenLifetimeSec: 90 * 86_400,
     refreshTokenRequired: true,
+    revokeHint: {
+      url: 'https://www.etsy.com/your/account/security',
+      label: 'Etsy → Account settings → Security → Apps',
+      detail: 'Etsy has no revoke endpoint. The shop owner removes the app from their Etsy account.',
+    },
     rotatesRefreshToken: true,
   },
   identity,

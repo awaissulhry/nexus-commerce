@@ -202,6 +202,11 @@ export const amazonAdsSpec: ChannelSpec = {
     ],
     accessTokenLifetimeSec: 3600,
     refreshTokenLifetimeSec: 365 * 86_400,
+    revokeHint: {
+      url: 'https://www.amazon.com/ap/adam',
+      label: 'Amazon account → Login with Amazon → Manage apps',
+      detail: 'Amazon Ads grants are removed from the Amazon account that gave consent, not through an API.',
+    },
     rotatesRefreshToken: false,
   },
   regions: [

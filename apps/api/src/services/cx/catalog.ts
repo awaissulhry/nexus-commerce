@@ -134,6 +134,19 @@ export interface AuthSpec {
   refreshTokenRequired?: boolean
   rotatesRefreshToken: boolean
   revokeUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string
+  /**
+   * P6.4 — where a HUMAN removes the grant, for the channels with no revoke endpoint.
+   *
+   * Measured 2026-09-21: of five channels, **only eBay declares a `revokeUrl`**. For
+   * the other four a disconnect clears our copy of the credentials and the grant
+   * **keeps existing at the channel** — which is the honest state, and was not said
+   * anywhere: `revokedAtChannel` is returned by the API and read by **no** web caller.
+   *
+   * So the operator was told "disconnected" for an account the channel still considers
+   * connected, with nothing to click. This is the sentence and the link that finish
+   * the job.
+   */
+  revokeHint?: { url: string; label: string; detail: string }
   introspectUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string
   /** Token-endpoint minting limits per day, where published (eBay). */
   tokenEndpointDailyLimits?: { authorization_code?: number; refresh_token?: number; client_credentials?: number }
