@@ -27,6 +27,17 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 
 ### 0a. What is genuinely still OPEN, and who owns it
 
+✅ **Closed on 2026-09-21 (second session), all by measurement rather than by building:**
+**P6.7** (no eBay scopes exist to add), **P4.5f** (the SB request was wrong in four ways — fixed
+from Amazon's own OpenAPI document), **P4.6e's display half** (built as **P4.6f**), and **P7a's
+Ads-fallback candidate** (keep it). Section 8 items **5** and **6** are struck through.
+
+🔴 **The lesson shared by three of those:** a blocker that says *"the vendor's docs cannot be read
+automatically"* is a claim about the **renderer**. eBay 403s bots and serves a browser; Amazon's
+page needs JavaScript but **fetches a plain JSON spec** a `curl` can take. **Ask what the page
+fetches before recording a wall.**
+
+
 | # | Row | Owner | What closes it |
 |---|---|---|---|
 | 2 | **P6.8** callbacks | **Owner** | Register the production HTTPS callbacks in **Shopify's** and **Etsy's** consoles. Two alerts nag until done. `build/P6.8.md` §4 |
@@ -34,8 +45,6 @@ slices, deployed, switches OFF); **measured P7a** and found nothing safe to dele
 | 4 | **P6.6** env token | **Owner** | If `[amazon-sp] STILL USING the environment refresh token` never appears in production logs, set `NEXUS_AMAZON_ENV_TOKEN=off`. `build/P6.6.md` §6 |
 | 5 | **P4.6** first live Etsy call | **Owner** | The writers are built and OFF. Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. The first live call should settle the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body) |
 | 6 | 🔴 **Nothing is listed on Etsy through Nexus** | **Owner** | Measured in production 2026-09-21: **0 Etsy `ChannelListing` rows**. Etsy is connected (P2.5) and P4.6's writers are built, but they have nothing to act on. The six-hour rule is vacuously met for the same reason. Whatever creates Etsy listings is the next real step for that channel |
-| 7 | **P4.6e** Etsy's six-hour rule, display half | either | Etsy's terms need listing content ≤ 6 h old. **It has never been met** (three independent reasons, `build/P4.6e.md` §3). Needs a connected-account read job that stamps freshness **without** writing stock or price into Nexus (P4.3a). An alert now reports the breach |
-| 9 | **P4.5f** SB wire value | either | Amazon's `/sb/v4/ads` reference needs a JavaScript browser; `/sb/v4/ads` has 0 calls ever. `build/P4.5f.md` §4 |
 
 🔴 **Do not add an eBay scope without the probe's verdict.** One scope outside the
 keyset makes eBay refuse the WHOLE consent request and name none of them — that is how
