@@ -1897,3 +1897,214 @@ the plan's own ordering says Phase 0 first.
   directions: a repo-root run refuses and names the production host; an `apps/api` run passes and
   names `127.0.0.1` / `nexus_development`.
 - **Status** — ⏸️ **OPEN, on the Owner.** Everything this lane can do is done.
+
+---
+
+# PHASE 1 — amendments
+
+## A-7 — Step 1.1's premise is false. The delist queue rows were never destroyed.
+
+**2026-09-22. Status: FOR APPROVAL. Step 1.1 needs no migration and no code change.**
+
+Step 1.1 says: *"Stop a hard delete from destroying its own delist queue rows in the same
+transaction"*, and *"🔴 **No delist ever runs, anywhere, on any channel.** Every other removal fix
+is decoration until this is true."* Its Approach is to *"drop the cascade on the queue's product
+foreign key and make it nullable."*
+
+🟩 **Both halves of that fix are already in place, and the diagnosis is wrong.**
+
+### 1. `productId` is already nullable
+
+`packages/database/prisma/schema.prisma`, `model OutboundSyncQueue`:
+
+```prisma
+productId String?
+product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+```
+
+### 2. The delist rows never carry the foreign key in the first place
+
+🟩 `apps/api/src/services/outbound-enqueue.ts:116` — inside `enqueueDelistCascade`, the only
+writer of delist queue rows:
+
+```ts
+data.push({
+  productId: null, channelListingId: null,     // ← the cascade has nothing to cascade to
+  …
+  payload: { ...coordinate, channelListingId: listing.id, … },   // the identity is kept HERE
+})
+```
+
+🟩 The calling route states the intent in as many words
+(`products-catalog.routes.ts:1765-1766`): *"Capture coordinate/SKU/guards before purge; **the held
+jobs intentionally have no Product or ChannelListing FK.**"*
+
+🟩 And the dispatcher was written for exactly this
+(`channel-delist.service.ts:15-16`): *"productId (may be null after hard-delete cascade — that's
+OK) · channelListingId (likely null after cascade — that's OK)."*
+
+**So `onDelete: Cascade` on that relation is real, but it is aimed at rows that do not exist.**
+The plan read the schema and the service comment correctly, and drew the opposite conclusion from
+the one line that decides it.
+
+### 3. One writer — checked, not assumed
+
+Three call sites create `DELETE_LISTING` work. 🟩 The other two —
+`amazon-flat-file-remove.service.ts:53-57` and `ebay-flat-file-delete.service.ts:155-165` — call
+`dispatchChannelDelist` **directly and write no queue row at all**. The eBay one says so:
+*"queueId is used only by applyDelistResultToQueue; passing a synthetic value is safe since we
+never write to OutboundSyncQueue from this path."*
+
+**One writer, one store.** Nothing here needs the flat-file editors touched, and they were read
+only.
+
+### 4. Measured, not inferred
+
+🟩 `apps/api/src/services/delist-cascade.local.vitest.test.ts` is the exact test Step 1.1 asks for
+as its Gate. **Run today against local Docker: 1 passed, 33.76 s.** Its assertions at `:87-89`:
+
+```ts
+expect(held).toHaveLength(4)
+for (const row of held) { expect(row.productId).toBeNull(); expect(row.channelListingId).toBeNull(); … }
+expect(await prisma.product.count({ where: { sku: marker } })).toBe(0)
+```
+
+**Four queue rows survive; the product is gone.** That is Step 1.1's `Done when`, first clause,
+demonstrated.
+
+🔴 **But it is skipped by default** — `it.skipIf(process.env.PR2_LOCAL_REHEARSAL !== '1')`. A first
+run without the flag reported **"1 skipped"**. *A test that does not run is not a gate*, and the
+plan cites it as one.
+
+🟩 **The invariant is separately gated by a fast test that does run** —
+`outbound-enqueue.delist.vitest.test.ts:11` asserts
+`toMatchObject({ productId: null, channelListingId: null, … })`. Run today: **7 passed**, no skips.
+
+### What Step 1.1 actually is
+
+| Clause | State |
+|---|---|
+| The queue row outlives the product | ✅ **True today**, and measured twice |
+| Make `productId` nullable | ✅ Already nullable |
+| Drop the cascade | ⚪ **Unnecessary.** The rows hold no FK |
+| *"the listing is removed from the channel"* | 🔴 **Not established.** Blocked by [1.3](#step-13--implement-reversible-unpublish) (unpublish refuses) and [3.1](#step-31--open-the-two-shut-doors) (no live credentials) |
+
+➡️ **Proposed:** strike Step 1.1's migration and its cascade change. **No migration is needed, so
+no migration branch is needed.** Replace the step with its one surviving question — *does the
+listing actually leave the channel?* — which is already carried by Steps 1.3 and 3.1.
+
+🔴 **The claim "no delist ever runs, anywhere, on any channel" may still be true**, but **not for
+the reason given**. The refusals are the live cause: `AMAZON_UNPUBLISH_NOT_IMPLEMENTED`,
+`EBAY_UNPUBLISH_NOT_IMPLEMENTED`, and Shopify refusing both. That is Step 1.3's subject, not
+Step 1.1's. *A cause is not a verdict* — the cascade was a cause that turned out not to be one.
+
+---
+
+## A-8 — 🔴🔴 The `apps/api` test suite does not run on push. Seven of Part 11's gates are hollow.
+
+**2026-09-22. Status: FOR APPROVAL. This is the largest finding so far.**
+
+[Part 11](#part-11--the-gate-ledger) records the hook status of every gate. **Seven rows say
+"Test suite"**: the delist queue row, the orphan refusal, the Amazon kill switch, per-channel
+requirements, the publish language, the Shared column set, and paste/fill validity.
+
+🟩 **"Test suite" is not a hook.** `.githooks/pre-push` runs exactly three test commands:
+
+| Line | Command | What it covers |
+|---|---|---|
+| 62 | `npm run test --workspace=@nexus/database` | 🆕 added by this lane today |
+| 479 | `npm run test --workspace=@nexus/web` | apps/web |
+| 527 | `npm run **test:security** --workspace=@nexus/api` | 🔴 `vitest run src/lib/auth src/routes/auth-routes.vitest.test.ts` — **auth only** |
+
+🔴 **The full `apps/api` suite is never run on push.** It holds **833** `.vitest.test.ts` files plus
+72 under `__tests__/`. Every gate this plan intends to place "in the test suite" would be written,
+reviewed, committed — and never run by anything.
+
+🟩 **This repo has paid for this exact failure before.** `.githooks/pre-push:452-454` records it:
+*"This workspace had 89 `*.vitest.test.ts` files, no vitest config and no `test` script, so not one
+of them had ever run: they were written, reviewed and committed **as if they were gates while
+asserting nothing**."* That was fixed for `apps/web`. The same condition is live for `apps/api`.
+
+### The usual objection does not survive measurement
+
+The assumption would be that 833 files are too slow for a push hook. **Measured today, the whole
+suite, on this machine:**
+
+| | |
+|---|---|
+| Wall clock | 🟩 **50.85 s** (`/usr/bin/time -p real 50.85`) |
+| Test files | 882 — **864 passed · 2 failed · 16 skipped** |
+| Tests | 11,140 — **11,004 passed · 6 failed · 130 skipped** |
+
+**50 seconds.** The `apps/web` suite is already in the hook on the argument that it *"finishes in
+about a second"*, and the hook also runs two full Next.js builds. 50 s is not the obstacle.
+
+### The 6 failures are pre-existing, and that is established, not assumed
+
+`src/clients/amazon-validation-preview.vitest.test.ts` (5) and
+`src/services/marketplaces/amazon-classifications.vitest.test.ts` (1). Every one asserts an Amazon
+availability shape — `expected { ok: false, available: false } to match { ok: true, available: true }`
+— which reads as environment, not logic.
+
+🟩 **Attribution by construction, not by coincidence.** `git diff main...pes/phase-0 --name-only`
+returns ten files: `.githooks/pre-push`, two docs, `package-lock.json`, and six under
+`packages/database/`. **Zero files under `apps/api/`.** This lane cannot have caused them.
+
+🔴 **2 failed files with 6 failed tests** — the counts match, so no suite failed to *load*. That
+discrimination matters: a file count higher than the test count is a load failure wearing a
+failure's clothes.
+
+### Proposed
+
+1. **Add the full `apps/api` suite to `.githooks/pre-push`**, next to the `apps/web` one, with the
+   same 50-second budget recorded in a comment so a future regression in runtime is visible.
+2. 🔴 **It cannot go in green.** Fix or quarantine the 6 Amazon failures first, each with a named
+   reason — *a gate that goes in red is a gate someone will remove.*
+3. **Correct Part 11.** Every row reading "Test suite" is **not in the hook** until step 1 lands.
+   Seven rows are affected.
+
+⬜ **Not measured:** whether the 6 failures are environmental (missing Amazon credentials locally)
+or real. That is one command away and belongs with step 2, not here.
+
+---
+
+## A-9 — Step 1.2: the "(recommended)" string is gone, and the copy is already honest
+
+**2026-09-22. Status: the step's ⬜ open item is CLOSED. The step itself still stands.**
+
+Step 1.2 carries: *"⬜ **First, find the UI string.** The audit recorded 'Unpublish (recommended)';
+I did not locate it today. Find it and fix its default in the same change."*
+[Part 14.4](#144--the-honest-holes-in-this-plan) repeats it as honest hole #1.
+
+🟩 **Found, and it no longer exists.** `Unpublish (recommended)` appears in **three** historical
+commits (`b992fa650`, `905f6a3c4`, `3161da57b`) and **no current file**. *(A fourth match,
+`861280afe`, is this lane's own commit quoting the plan — a search can match your own note about
+the thing you are searching for.)*
+
+🟩 `(recommended)` survives in `apps/` in **three** places, none of them about removal:
+`AiBulkGenerateModal.tsx:425`, `QualityChecklist.tsx:25`, `ImportClient.tsx:1371`.
+
+🟩 **And the replacement copy is unusually honest** — it already states the exact danger Step 1.2
+was written to fix (`apps/web/src/app/products/_components/hardDelete.vitest.test.ts:47-63`):
+
+> **"End the listing on each channel"** — *"Nexus asks each channel to stop selling, **then deletes
+> the local record either way**. **Amazon and eBay: the request is refused; the listing is not
+> ended.** Shopify: the request returns a visible failure; the store keeps selling it. WooCommerce
+> and Etsy: nothing is sent. There is no relist from here."*
+
+That names the orphan outcome in plain words, per channel. **R4 is already satisfied at the copy
+layer.** Whoever wrote it had measured the refusals.
+
+🟩 **The API default is safe, re-verified:** `products-catalog.routes.ts:1708` —
+`const channelAction: 'none' | 'unpublish' | 'delete' = body.channelAction ?? 'none'`.
+
+### What Step 1.2 still has to do
+
+**The copy warns; the system still permits.** An operator who reads it and proceeds anyway still
+creates an orphan, and 🟩 [A-7](#a-7--step-11s-premise-is-false-the-delist-queue-rows-were-never-destroyed)
+shows the queue row survives to record it — so the refusal Step 1.2 asks for is still the fix.
+➡️ **Strike only the ⬜ item and honest hole #1.** The step's Do, Gate and Rollback are unchanged.
+
+🔴 **And apply [15.10](#1510--step-12-should-return-outcomes-not-throw) when it is built:** the
+refusal must return **per-row outcomes**, not throw, so a bulk delete of 500 reports
+*"487 deleted · 13 refused — live on Amazon·IT"* instead of dying on row 14.
