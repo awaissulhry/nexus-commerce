@@ -124,7 +124,7 @@ async function notificationApi<T>(
   method: 'GET' | 'POST' | 'PUT',
   path: string,
   body?: unknown,
-): Promise<{ status: number; body: T | null; text: string }> {
+): Promise<{ status: number; body: T | null; text: string; location: string | null }> {
   const { ebayAppToken } = await import('./client.js')
   const { ebayTransport } = await import('../../../gateway/ebay.js')
   const token = await ebayAppToken(environment)
@@ -142,7 +142,7 @@ async function notificationApi<T>(
   const text = await res.text()
   let parsed: T | null = null
   try { parsed = text ? (JSON.parse(text) as T) : null } catch { parsed = null }
-  return { status: res.status, body: parsed, text }
+  return { status: res.status, body: parsed, text, location: res.headers.get('location') }
 }
 
 /**
@@ -167,12 +167,25 @@ export async function getEbayTopics(environment: EbayEnvironment = 'production')
   return topics
 }
 
+/** A creation response has no body: eBay identifies the new resource in Location. */
+function createdResourceId(location: string | null, environment: EbayEnvironment, resource: 'destination' | 'subscription'): string | null {
+  if (!location) return null
+  try {
+    const url = new URL(location, EBAY_API_BASE[environment])
+    if (url.origin !== EBAY_API_BASE[environment]) return null
+    return url.pathname.match(new RegExp(`^/commerce/notification/v1/${resource}/([^/]+)$`))?.[1] ?? null
+  } catch { return null }
+}
+
 export async function getEbayDestinations(environment: EbayEnvironment = 'production'): Promise<EbayDestination[]> {
-  const res = await notificationApi<{ destinations?: EbayDestination[] }>(
+  const res = await notificationApi<{ destinations?: Array<Omit<EbayDestination, 'endpoint'> & { deliveryConfig?: { endpoint?: string } }> }>(
     environment, 'GET', '/commerce/notification/v1/destination?limit=100',
   )
   if (res.status !== 200) throw new Error(`eBay getDestinations returned ${res.status}: ${res.text.slice(0, 300)}`)
-  return res.body?.destinations ?? []
+  // Select only public diagnostic fields; deliveryConfig also contains the verification token.
+  return (res.body?.destinations ?? []).map(d => ({
+    destinationId: d.destinationId, name: d.name, status: d.status, endpoint: d.deliveryConfig?.endpoint,
+  }))
 }
 
 export async function createEbayDestination(
@@ -191,7 +204,7 @@ export async function createEbayDestination(
   if (res.status !== 201 && res.status !== 200) {
     throw new Error(`eBay createDestination returned ${res.status}: ${res.text.slice(0, 300)}`)
   }
-  const id = res.body?.destinationId
+  const id = createdResourceId(res.location, environment, 'destination') ?? res.body?.destinationId
   if (!id) throw new Error(`eBay createDestination gave no destinationId: ${res.text.slice(0, 300)}`)
   return id
 }
@@ -248,17 +261,19 @@ export async function subscribeEbayTopic(
     if ((already.status ?? '').toUpperCase() === 'ENABLED') {
       return { topicId, status: 'already_exists', subscriptionId: already.subscriptionId }
     }
-    const enable = await notificationApi(environment, 'PUT', `/commerce/notification/v1/subscription/${already.subscriptionId}/enable`)
+    const enable = await notificationApi(environment, 'POST', `/commerce/notification/v1/subscription/${already.subscriptionId}/enable`)
     return enable.status === 204 || enable.status === 200
       ? { topicId, status: 'enabled', subscriptionId: already.subscriptionId }
       : { topicId, status: 'failed', subscriptionId: already.subscriptionId, detail: `enable returned ${enable.status}: ${enable.text.slice(0, 200)}` }
   }
   const res = await notificationApi<{ subscriptionId?: string }>(
     environment, 'POST', '/commerce/notification/v1/subscription',
-    { topicId, destinationId, status: 'ENABLED', payload: { format, schemaVersion, deliveryConfig: { includeResourceData: true } } },
+    { topicId, destinationId, status: 'ENABLED', payload: { format, schemaVersion, deliveryProtocol: 'HTTPS' } },
   )
   if (res.status === 201 || res.status === 200) {
-    return { topicId, status: 'created', subscriptionId: res.body?.subscriptionId }
+    const subscriptionId = createdResourceId(res.location, environment, 'subscription') ?? res.body?.subscriptionId
+    if (!subscriptionId) return { topicId, status: 'failed', detail: 'eBay created the subscription but returned no usable subscription ID.' }
+    return { topicId, status: 'created', subscriptionId }
   }
   if (res.status === 403 || res.status === 401) {
     return { topicId, status: 'refused', detail: `eBay refused this topic for this application (${res.status}): ${res.text.slice(0, 200)}` }

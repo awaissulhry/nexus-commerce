@@ -7,7 +7,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('EBAY_NOTIFICATION_ENDPOINT_URL', 'https://example.test/api/webhooks/ebay-notification')
   m.token.mockResolvedValue('fixture-app-token')
-  m.transport.mockResolvedValue(new Response(JSON.stringify({ destinationId: 'destination-fixture' }), { status: 201 }))
+  m.transport.mockResolvedValue(new Response(null, { status: 201, headers: { Location: 'https://api.ebay.com/commerce/notification/v1/destination/destination-fixture' } }))
 })
 afterEach(() => vi.unstubAllEnvs())
 const invalid = ['', 'a'.repeat(31), 'a'.repeat(81), 'a'.repeat(32) + '=', 'a'.repeat(32) + ' ', 'a'.repeat(32) + '\n', 'a'.repeat(32) + 'é', 'a'.repeat(32) + '/', 'a'.repeat(32) + '+']
