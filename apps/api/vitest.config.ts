@@ -64,6 +64,13 @@ export default defineConfig({
     // `.vitest.test.ts` suffix elsewhere.
     exclude: ['node_modules/**', 'dist/**'],
     environment: 'node',
+    // Keep console output on stdout/stderr. Vitest 4's console RPC can reject at
+    // teardown (vitest-dev/vitest#11153); this documented transport option neither
+    // hides logs nor ignores unhandled errors. A deliberate rejection canary still
+    // exits 1. Bound file workers to avoid PGlite fixture contention; real database
+    // races still run with multiple connections in the dedicated PostgreSQL gate.
+    disableConsoleIntercept: true,
+    maxWorkers: 4,
     // Per-test timeout: 10s default. DB-touching tests should bump
     // explicitly via `it.concurrent('...', { timeout: 30_000 }, ...)`.
     testTimeout: 10_000,

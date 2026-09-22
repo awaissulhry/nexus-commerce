@@ -78,7 +78,7 @@ No production mutation or live API call has been performed in this continuation.
 | Performance | Bounded traversal/work, account concurrency preserved; measure real latency/backlog against P3.6 targets | Notification reads max20 pages/collection, finances max50 pages, retry drain max200 rows. No production p95/positive-load claim yet. |
 | Accessibility | Existing DS controls; keyboard-only critical paths, responsive 390/1280 widths, light/dark; no serious/critical accessible-name/focus violations | No UI changes in C1–C5. Existing Ingress/Diagnostics production usability and unfinished studio errors still need runtime verification. |
 | Observability | Failed/rejected/unknown events remain visible; complete=true/healthy only with positive evidence; owning-profile alerts | C1 rejects remain in ledger; C3 failed cron persists FAILED; empty/partial compare explicit. Rotation owner alerts still unbuilt. |
-| Maintainability | Named slice commits, independent review, typecheck, canonical ratchets, no new suppressions/skips/weakened hooks | C1–C5 individually reviewed/tested; official fixtures corrected with failure reproductions. Full package gate pending. |
+| Maintainability | Named slice commits, independent review, typecheck, canonical ratchets, no new suppressions/skips/weakened hooks | C1–C6 reviewed; full API 11188 passed/137 skipped/zero errors. Canonical gate before C6: 106 real PostgreSQL tests; final C6 gate pending. |
 
 P7's green week and each destructive-drop approval remain mandatory. No production
 row, token, subscription, publishing mode, or deployment has been changed.

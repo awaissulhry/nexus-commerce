@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withWorkspace, LEGACY_WORKSPACE_ID } from '../../lib/workspace-context.js'
+const fixtureAccount=vi.hoisted(()=>({active:true}))
+vi.mock('../connection-resolver.service.js',async original=>({
+  ...await original<object>(),
+  listActiveConnections:async()=>fixtureAccount.active?[{id:'legacy-fixture',channelType:'AMAZON',isActive:true,isPrimary:true,authStatus:'connected',managedBy:'env',externalAccountId:'test-seller',region:'eu'}]:[],
+}))
+vi.mock('../cx/apps.service.js',()=>({getChannelApp:async()=>({clientId:process.env.AMAZON_LWA_CLIENT_ID,clientSecret:process.env.AMAZON_LWA_CLIENT_SECRET})}))
 
 vi.mock('../outbound-api-call-log.service.js', () => ({ instrumentSellingPartner: vi.fn() }))
 import { AmazonService, extractClassifications } from './amazon.service.js'
@@ -6,14 +13,23 @@ import { AmazonService, extractClassifications } from './amazon.service.js'
 const market = 'APJ6JRA9NG5V4'
 const jacket = { classificationId: '2420941031', displayName: 'Giacche', parent: { classificationId: '100', displayName: 'Abbigliamento', parent: { classificationId: '1', displayName: 'Auto e Moto' } } }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+beforeEach(()=>{fixtureAccount.active=true})
+const inFixtureProfile=<T>(work:()=>T)=>withWorkspace({workspaceId:LEGACY_WORKSPACE_ID,actorUserId:null,membershipId:null,roleKeys:[]},work)
 
 it('accepts the LWA credentials actually used by SP-API without unrelated AWS signing keys', async () => {
   for (const key of ['AMAZON_LWA_CLIENT_ID', 'AMAZON_LWA_CLIENT_SECRET', 'AMAZON_REFRESH_TOKEN']) vi.stubEnv(key, 'test-value')
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_ROLE_ARN']) vi.stubEnv(key, '')
+  vi.stubEnv('AMAZON_SELLER_ID','test-seller')
   const service = new AmazonService()
-  expect(await service.isConfigured()).toBe(true)
+  expect(await inFixtureProfile(()=>service.isConfigured())).toBe(true)
   vi.stubEnv('AMAZON_REFRESH_TOKEN', '')
-  expect(await service.isConfigured()).toBe(false)
+  expect(await inFixtureProfile(()=>service.isConfigured())).toBe(false)
+})
+it('does not treat environment credentials as a connected account when the stored grant is absent',async()=>{
+  for(const key of ['AMAZON_LWA_CLIENT_ID','AMAZON_LWA_CLIENT_SECRET','AMAZON_REFRESH_TOKEN'])vi.stubEnv(key,'test-value')
+  vi.stubEnv('AMAZON_SELLER_ID','test-seller')
+  fixtureAccount.active=false
+  expect(await inFixtureProfile(()=>new AmazonService().isConfigured())).toBe(false)
 })
 
 describe('Amazon catalog classifications', () => {

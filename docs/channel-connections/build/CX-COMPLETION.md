@@ -201,8 +201,10 @@ Gate on `192de90dd` stopped with all **124 security assertions passing** and one
 unhandled `EnvironmentTeardownError: Closing rpc while onUserConsoleLog was pending`
 attributed to `auth.vitest.test.ts`. Log: `/private/tmp/cx-completion-20260922/release-gate.log`.
 This is not a passing gate. An unchanged focused security rerun passed all 124 without
-the error (`security-repro.log`). The auth sources/tests, test config/setup, API
-dependency manifest and lockfile have no diff from `7c70556ea`.
+the error (`security-repro.log`). The tested auth core, test config/setup, API
+dependency manifest and lockfile have no diff from `7c70556ea`; the auth directory's
+one changed file is the earlier guarded-delete permission-manifest entry, which the
+attributed primitive-auth test does not import.
 
 Installed Vitest's console sender does not await `rpc.onUserConsoleLog`; worker
 cleanup rejects pending RPC calls. The same symptom is documented in the open upstream
@@ -217,3 +219,44 @@ to the Owner. It describes its exact action without loading credentials unless
 `--execute-approved` is supplied, pins the measured database, sanitizes failures and
 limits execution to 120 seconds. Both live actions were requested via the approval
 question; **no answer/approval has arrived and neither was executed**.
+
+## Slice C6 — portable Amazon fixtures and reliable test log transport
+
+The unchanged canonical rerun passed on `2c0ac3012`: both builds, **4591 web tests /
+13 skips**, **124 security tests**, **106 real PostgreSQL tests across ten suites /
+zero skips**, RBAC **2724 routes / zero unmapped**, profiles-ON **884 files / 42 known
+failing / 218 tests**, none new or worse. This was a local gate, not a push.
+
+The subsequent full API run retained six historical Amazon failures and added four
+test timeouts plus a setup timeout, with three console-RPC teardown errors. All four
+timed-out suites then passed sequentially (**53 passed / 2 existing skips**) at their
+unchanged timeouts. Four-worker full run eliminated these extra assertion/setup
+failures but retained eight console teardown errors. All failed logs are retained.
+
+Two root causes were addressed without changing production code or suppressing
+failures. Amazon's preview fixture now supplies its named-account region instead of
+consulting the machine's local grant; the legacy-configuration fixture supplies the
+stored account/app dependencies it actually requires. Every existing assertion stays;
+two new negative controls prove missing accounts still refuse. **17 focused tests pass.**
+
+Vitest's documented `disableConsoleIntercept` uses ordinary stdout/stderr instead of
+the racing console RPC. Logs remain visible; no `silent` or ignored-error option was
+added. A temporary rejected-promise canary logged `CX_CANARY_VISIBLE`, passed its one
+assertion, reported `CX_CANARY_UNHANDLED`, and **exited 1**, proving real unhandled
+errors still fail. The canary was removed after this applied/restored experiment.
+`maxWorkers:4` bounds simultaneous file fixtures; timeouts, tests, and the separate
+multi-connection PostgreSQL race runner are unchanged. Tradeoff: less per-test console
+formatting and less file parallelism. Official option:
+https://vitest.dev/config/disableconsoleintercept . Independent review approved.
+
+**Final full API result: 11188 passed, 137 skipped, zero failed, zero unhandled errors,
+exit 0**, 101.85 seconds. Evidence: `full-api-final.log` / `.json` in
+`/private/tmp/cx-completion-20260922/`. The six historical fixture failures are closed,
+not waived. Final canonical gate on this verification slice follows.
+
+Production runtime switch read remains unmeasured: the Chrome connection became
+unavailable and the narrow read-only Railway SSH attempt found no SSH keys. No key
+was created, variable value listed, or production configuration changed. Etsy mode,
+webhook signing-secret presence, Orders enablement and rotation/KMS switches therefore
+remain distinct observation/setup dependencies. Public health last read still serves
+the baseline; it is not new-package deployment evidence.
