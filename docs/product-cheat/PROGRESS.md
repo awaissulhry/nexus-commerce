@@ -1,0 +1,103 @@
+# The Product Sheet — PROGRESS
+
+**Updated 2026-09-22. Branch `pes/phase-0` — 13 commits, all pushed. Nothing merged to `main`,
+so nothing is deployed and nothing has migrated production.**
+
+Read [PLAN.md](PLAN.md) for the plan and, at its end, the amendments A-1…A-12 + Owner rulings.
+Every claim below carries the commit that measured it.
+
+---
+
+## Where it stands
+
+| Step | State | Commit |
+|---|---|---|
+| **0.1** Untracked prod migrations | ✅ **CLOSED** — premise was false (0 drift both ways); its missing gate was built | `861280afe` |
+| **0.2** One lane at a time | ✅ **CLOSED** — with 15.8's exit condition written in | `ae1757f88` |
+| **0.3** Rotate the credential | ⏸️ **OPEN — the Owner's, deliberately deferred to the end.** Do not raise it | `ae1757f88` |
+| **0.4** Migration history replay | ✅ **CLOSED** — a fresh database builds from a baseline | `1eaecb03d` |
+| **1.1** Delist FK cascade | ✅ **STRUCK** — premise false; no migration needed, nothing to build | `647c1e4d1` |
+| **1.2** Never orphan a live listing | ✅ **BUILT** | `5c2030a44` |
+| **1.3** Reversible unpublish | 🔴 **BLOCKED** on Step 3.1 (no live eBay/Amazon credentials) | — |
+| **1.4** Gate the Amazon delete | ✅ **CLOSED** — Amazon was already done; the real hole was eBay's permission | `6ff3b6b58` |
+| **1.5** Price cell read-only | ✅ **BUILT** (column half). Write half deferred to Step 2.2 — see A-12 | `cf49c88d2` |
+| **A-8** `apps/api` suite was not gated | ✅ **BUILT** — 833 test files now run on every push | `43ace2666` |
+
+**Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
+
+---
+
+## What actually changed in the product
+
+1. **A hard delete can no longer orphan a live listing.** It refuses per product, names the
+   coordinate and the listing id, and returns per-row outcomes (`487 deleted · 13 refused`). The
+   UI announces only what was really deleted.
+2. **`POST /api/ebay/flat-file/delete` required `listings.flatfile.edit`** — an *edit* permission
+   for a permanent channel removal. Now `products.delete`. Measured first: **0 roles lose the
+   action**. `ebay-flat-file.routes.ts` was NOT touched (no-touch rule).
+3. **The eBay sheet price cell is held read-only**, with its reason, until Step 2.2.
+4. **A deploy now refuses a database holding a migration with no folder in the repo.**
+5. **A fresh database can be built again** — `bootstrap-fresh-database.mjs`.
+6. **The `apps/api` suite runs on every push.** It was auth-only before.
+
+---
+
+## Open, carried forward
+
+- 🔴 **1.3** blocked on **3.1** — eBay decrypt + Amazon `invalid_grant`. Blocks 3.4, 3.5 too.
+- 🔴 **A-12** — a direct API caller can still `PATCH ebay_price` and bypass the price door. The
+  sheet cannot. Closes at **Step 2.2**, which should reuse `EBAY_PRICE_HELD_REASON`.
+- ⬜ **15.5c, never verified** — does the readiness reconcile bump `ChannelListing.version`? If it
+  does, Steps 2.2 and 2.7 fight. **Verify before 2.2 ships.**
+- ⬜ The 467-migration history still does not replay (443/467). It is history, not a build path.
+- ⬜ An orphaned eBay *variation* under a surviving parent ItemID is not covered by 1.2.
+
+---
+
+## Next
+
+**Phase 2.** Per [15.13](PLAN.md#1513--ranked-what-to-do-and-when), before Step 2.1:
+
+1. **15.3 — bound the column-set cache** (~3 lines, ranked #1, a live memory path).
+2. **15.11 — the scale fixture** at 1,000 and 10,000 products. Ranked #2, *"everything else is a
+   guess without it"*. 🟢 **Unblocked today** by `bootstrap-fresh-database.mjs`.
+3. Then **2.1 requirements** → **2.7 reconcile** (in that order), **2.4** (needs 15.4's fix — the
+   plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
+
+---
+
+## How to work here — the things that cost time this session
+
+**Commands**
+- `npm run test:hook --workspace=@nexus/api --silent` — the suite as the hook runs it (~50 s).
+  🔴 Plain `vitest run` exits 1 at random on a teardown race; `--disableConsoleIntercept` is why.
+- `node apps/api/scripts/profiles-on-ratchet.mjs` — re-runs the suite with profiles **ON**, as
+  production runs. It refuses a new failure, a worse file, **and a fixed file left in the list**
+  (`--write` shrinks the baseline). It rejected two pushes this session.
+- 🔴 Run vitest from **`apps/api`**, never the repo root — the root `.env` is Neon production. The
+  R-VT-12 guard refuses it, loudly.
+
+**Traps measured the hard way**
+- 🔴 **Prisma orders migrations by `localeCompare`, not `.sort()`.** A replay using `.sort()`
+  measures a different sequence. Pinned against an observed deploy.
+- 🔴 **`prisma migrate diff` cannot see its own `dbgenerated` defaults.** It reports 420 missing
+  `SET DEFAULT` statements against a database that has them. Query `information_schema` instead.
+- 🔴 **`readOnlyReason` ≠ a policy hold.** It means *"the channel owns this value"*, and
+  `master-default-rule.ts:8` drops the master mapping for any field carrying it. Use
+  `editHeldReason` (read only by `sheet-columns.service.ts`).
+- 🔴 **`ebay_price` is the repo's canonical fixture for a mapped channel field.** Blocking it at a
+  generic gate breaks 19 arms across 3 files covering #689/#700/#703.
+- 🔴 **Flat-file routes are a no-touch zone.** Table the exact edits, split preserving from
+  changing, ask separately.
+- 🔴 **A truncated `grep` is not a set.** `| head -10` on a 74-match search produced a confident,
+  wrong amendment (A-11).
+
+---
+
+## The rule that earned its keep
+
+Six plan claims marked "verified" were wrong, and two of my own findings were wrong. **Every one
+was caught by measuring, not by arguing** — and twice by deliberately breaking my own test and
+watching what did *not* go red.
+
+> A green that has never been shown able to fail is not evidence.
