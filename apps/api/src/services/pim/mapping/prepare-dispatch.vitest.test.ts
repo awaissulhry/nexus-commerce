@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const { db, resolve, specLoad, primary } = vi.hoisted(() => ({ db: { channelListing: { findUnique: vi.fn() } }, resolve: vi.fn(), specLoad: vi.fn(), primary: vi.fn() }))
+const { db, resolve, specLoad, primary } = vi.hoisted(() => ({ db: { channelListing: { findUnique: vi.fn() }, marketplace: { findFirst: vi.fn() } }, resolve: vi.fn(), specLoad: vi.fn(), primary: vi.fn() }))
 vi.mock('../../../db.js', () => ({ default: db }))
 vi.mock('./resolve-batch.service.js', () => ({ resolveBatch: resolve }))
 vi.mock('../channel-specs/index.js', () => ({ loadAmazonSpec: specLoad }))
@@ -14,6 +14,9 @@ beforeEach(() => {
   result = { catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color', label: 'Colour', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Colore'] } }] },
     products: [{ category: { channelCategoryId: '123' }, cells: { color: { fieldKey: 'color', value: 'Blue', errors: [] } } }] }
   resolve.mockImplementation(async () => result)
+  // One content language per market, as every active market but Amazon BE carries today.
+  db.marketplace.findFirst.mockImplementation(async ({ where }: { where: { code: string } }) =>
+    ({ languages: where.code === 'BE' ? ['nl', 'fr'] : ['it'], language: null }))
 })
 describe('mapping queue dispatch contract', () => {
   it('resolves the exact account and alias and sends only verified named aspects', async () => {
@@ -46,5 +49,13 @@ describe('mapping queue dispatch contract', () => {
     const field = spec.fields.find(f => f.path[0] !== 'system')!
     const prepared = await prepareMappingDispatch({ ...item, targetChannel: 'AMAZON', payload: { fields: { [field.key]: 'Large' } } })
     expect(prepared.payload.mappingAttributePatches).toEqual([{ op: 'replace', path: '/attributes/size', value: [{ value: 'Large', system: 'EU' }] }])
+  })
+  // A-22 (R-18): this path resolves and tags ONE language; a two-language market is refused, named.
+  it('refuses a market that carries two languages before resolving anything; one language goes ahead', async () => {
+    db.channelListing.findUnique.mockResolvedValue({ id: 'listing-b', productId: 'product', channel: 'EBAY', marketplace: 'BE', channelConnectionId: 'account-b', aliasKey: 'outlet' })
+    await expect(prepareMappingDispatch(item)).rejects.toThrow('eBay · BE carries 2 languages (nl, fr), and this path sends one. Publish its content through the listing editor, which sends every language.')
+    expect(resolve).not.toHaveBeenCalled()
+    db.channelListing.findUnique.mockResolvedValue({ id: 'listing-b', productId: 'product', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'account-b', aliasKey: 'outlet' })
+    await expect(prepareMappingDispatch(item)).resolves.toMatchObject({ payload: { mappingAspects: { Colore: ['Blue'] } } })
   })
 })

@@ -590,6 +590,10 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.3 — The language reaches the publish
 
+> ✅ **CLOSED with a stated limit (R-18)** — see [Step 2.3 — CLOSED](#step-23--closed-with-a-stated-limit-r-18).
+> 🔴 Its example below cannot happen (A-22): Amazon IT carries only Italian. The main publish paths
+> already send every language; the two one-language paths refuse a multi-language market.
+
 - **Do** — Carry the coordinate's language into both publish callers.
 - **Where** — 🟩 `sync-mapping-merge.ts:73` and `prepare-dispatch.ts:17` both call `resolveBatch`
   without a locale; 🟩 `resolve-batch.service.ts:163` accepts one and `:184-185` falls back to the
@@ -4845,6 +4849,8 @@ All of it hits **0 listings** today (Amazon BE has none, production and local).
 
 The flat-file `it_IT` tag for BE is carried as a finding for its owner either way.
 
+> ✅ **RULED R-18: option (b). BUILT** — see [Step 2.3 — CLOSED with a stated limit](#step-23--closed-with-a-stated-limit-r-18).
+
 ---
 
 ## OWNER RULING — 2026-09-22 (eleventh set)
@@ -4852,3 +4858,77 @@ The flat-file `it_IT` tag for BE is carried as a finding for its owner either wa
 | # | Question | Ruling |
 |---|---|---|
 | **R-17** | A-22 — Step 2.3: a two-language Amazon market | ✅ **(a) Send every language the market carries**, as R-LX-6 already rules. 🔴 Given on A-22 as first written; A-22's correction shows the main paths already do this — the narrowed question is back with the Owner |
+
+---
+
+## OWNER RULING — 2026-09-22 (twelfth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-18** | A-22 corrected — the two one-language publish paths on a multi-language market | ✅ **(b)** Refuse with a named reason and state the limit; build the per-language merge when a multi-language market gets its first listing |
+
+---
+
+## Step 2.3 — CLOSED with a stated limit (R-18)
+
+### What was built
+
+| Where | What |
+|---|---|
+| `market-languages.ts` — `oneLanguagePathRefusal(channel, code)` | `null` for a one-language market; otherwise the sentence *"Amazon · BE carries 2 languages (nl, fr), and this path sends one. Publish its content through the listing editor, which sends every language."* |
+| `mapping/prepare-dispatch.ts` (mapping cascade) | Refuses before resolving anything |
+| `amazon-cockpit-publish.routes.ts` (cockpit publish) | Refuses **per market**; the other markets in the same call go ahead |
+
+The listing editor's publish, the queue push and the studio publication already send every language
+(A-22's correction) and are unchanged. Single-language markets are unchanged.
+
+### Done when — ✅
+
+- The cascade refuses Amazon/eBay **BE** by name before any resolve; an IT dispatch goes ahead
+  (positive control) — `prepare-dispatch.vitest.test.ts`.
+- The cockpit, in one dry-run call for **BE + IT**, refuses BE by name and publishes IT; only IT is
+  resolved — `amazon-cockpit-publish.languages.vitest.test.ts` (the real route; every outside service
+  faked; nothing sent).
+
+### Gate — ✅ proven able to fail, 4 ways
+
+| Mutation | Red |
+|---|---|
+| the helper never refuses | 2 |
+| two languages allowed | 2 |
+| the cascade does not refuse | 1 |
+| the cockpit does not refuse | 1 |
+
+🔴 **A mutation run of mine was broken first, and said it was fine.** `zsh` does not word-split
+`$FILES`, so the backup loop copied nothing and every "restore" failed — and the final `md5 | diff`
+compared two identical errors and printed `RESTORED_OK`. Three files stayed mutated. Caught by
+reading the diff, restored line by line, and re-run with per-file backups and a hash check that
+cannot pass on an error.
+
+### Cost when — `flat`. One market-language read per publish.
+
+### Rollback — revert the commit; both paths send one language again.
+
+### ⬜ The stated limit
+
+On Amazon BE (the only multi-language market; 0 listings, production and local), mapped attributes
+and cockpit publishes are refused. Build the per-language merge (A-22 (a)) before the first BE listing.
+
+---
+
+## A-23 — The cockpit publishes an unknown market to Amazon ITALY. FOR YOUR RULING.
+
+`amazon-cockpit-publish.routes.ts:157`: `MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT`. The map
+(`services/amazon/flat-file.service.ts:49-55`) holds **IT, DE, FR, ES, UK only**. So a cockpit publish
+for **NL, PL, SE, TR or IE** (BE is now refused by R-18) is sent with **Italy's marketplace id**. The
+route is live: the product editor's Amazon cockpit tab (`PublishCard.tsx:187`,
+`ReviewConfirmModal.tsx:89`) and the grid's `PublishControl.tsx:100`. Not measured: how many such
+listings exist, or whether a publish was ever sent this way (Amazon credentials are shut — Step 3.1).
+The flat-file feed has the same maps (`LANGUAGE_TAG_MAP` falls back to `it_IT`) — a no-touch zone.
+
+| # | Option | |
+|---|---|---|
+| **a** | **The cockpit refuses a market it has no marketplace id for**, by name, instead of falling back to Italy. The flat-file service is not touched | 🟢 **Recommended.** A wrong-market publish is a Phase 1 safety defect; the refusal is small and gated |
+| b | Add the missing ids to the flat-file maps | Touches the flat-file service — a no-touch zone; needs its own approval |
+
+Nothing built.

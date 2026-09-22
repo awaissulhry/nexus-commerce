@@ -51,7 +51,8 @@ been exercised.
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | ✅ **RULED R-13** — the limit is recorded in Step 2.2's Cost when; batch later | — |
 | **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and **28 of 42** live local parents have no family (the first count, 40 of 54, included deleted products) | ✅ **RULED R-14 (a), BUILT** — move 2 closed for the editor; the grid shows *"N without family"*; new **Step 2.4b** (assign families) comes before the grid flip | see `git log` |
 | **2.4 (move 2)** The family decides Shared's columns | ✅ **BUILT under R-14 / R-16** — editor since `f212c2348`; the grid now too: 365 → **0** channel-declared columns on a real page, no stored value hidden. **Step 2.4 CLOSED** | see `git log` |
-| **A-22** Step 2.3's example cannot happen; the gap is Amazon BE (Dutch + French) | 🔴 **CORRECTED** — the main content paths already send every language; only the mapping cascade and the cockpit route are single-language (0 listings). 🟡 **Narrowed question to the Owner** — recommended (b): refuse on a multi-language market and state the limit | — |
+| **A-22** Step 2.3's example cannot happen; the gap is Amazon BE (Dutch + French) | ✅ **CORRECTED, then RULED R-18 (b), BUILT** — the main paths already send every language; the mapping cascade and the cockpit refuse a multi-language market, named. **Step 2.3 CLOSED** with that limit stated | see `git log` |
+| **A-23** The cockpit sends an unknown market (NL, PL, SE, TR, IE) to Amazon **Italy** | 🟡 **FOR YOUR RULING** — recommended (a): refuse a market with no marketplace id | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -170,10 +171,8 @@ approval **before building**. Each turn reports what changed, whether it worked,
    draft. ✅ **R-16 (a): shells are not a missing family; the grid flip is BUILT. Step 2.4 CLOSED.**
 5. 🟡 **Step 2.7 (R-15)** — ordering rule struck. D-E (the production run) stays the Owner's;
    count production roots first.
-6. 🟡 **Step 2.3 — measured, NOT built: see A-22.** Its example cannot happen (Amazon IT is
-   Italian-only and German is refused); the real gap is Amazon BE (Dutch + French), where French is
-   never sent, and nothing stores a publish language. Production (read only): only Amazon BE has two
-   languages, and it has **0 listings** — nothing is harmed today. Awaiting your ruling.
+6. ✅ **Step 2.3 — CLOSED (R-18)** with a stated limit: the two one-language paths refuse a
+   multi-language market. 🟡 **A-23** (cockpit → Italy) awaits your ruling.
 7. Then **2.5**, **2.6** (use the new sweep helper).
 
 ### Still blocked, not forgotten
@@ -240,6 +239,11 @@ ESCAPED a gate I had just called green, and each time the fix was a second arm, 
   file.
 - 🔴 **The shell has no `DATABASE_URL`, and the ROOT `.env` is production.** A probe must read
   `apps/api/.env` explicitly and refuse any host that is not `127.0.0.1` before it connects.
+- 🔴🔴 **`zsh` does not word-split `$VAR`.** `FILES="a b c"; for f in $FILES` loops ONCE over the
+  whole string: a multi-file backup loop copied nothing, every restore failed, and
+  `md5 -q $FILES | diff - saved` compared two identical errors and printed `RESTORED_OK` — three
+  files stayed mutated. Use a Python harness with per-file backups and a hash check that cannot pass
+  on an error (`scratchpad/mutate18.py` pattern).
 - 🟢 **Measure a writing job without writing:** wrap it in your own `inDatabaseTransaction`, read the
   result inside, then throw. Nested calls join the outer transaction. Control: the row count and
   newest timestamp before and after (A-21).
