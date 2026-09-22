@@ -1262,7 +1262,14 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
         }
         targets.push({ listingId: listing.id, price, sku: snap.sku })
       }
-      const written = await writeChannelPrices({ targets: targets.map(({ listingId, price }) => ({ listingId, price })), actor: 'bulk-override', source: 'BULK_OVERRIDE', reason: reasonForMode })
+      // 🔴 Step 2.2 — this run works from price SNAPSHOTS. No per-row `ChannelListing.version` was
+      // ever shown to the operator, so there is nothing to compare against and inventing one by
+      // re-reading the row would be a compare-and-set that always succeeds. It names why instead,
+      // and every outcome comes back `guarded: false`.
+      const written = await writeChannelPrices({
+        targets: targets.map(({ listingId, price }) => ({ listingId, price, unguardedReason: 'bulk-override-snapshot' as const })),
+        actor: 'bulk-override', source: 'BULK_OVERRIDE', reason: reasonForMode,
+      })
       const updated = written.applied
       const skusTouched = new Set<string>()
       for (const [i, o] of written.results.entries()) if (o.outcome === 'applied') skusTouched.add(targets[i]!.sku)

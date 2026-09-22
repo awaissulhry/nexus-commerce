@@ -33,14 +33,40 @@ const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
 /** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
 const PRICE_HOLD_MS = 30 * 1000
 
-export interface PriceWriteTarget {
+/**
+ * 🔴 PLAN Step 2.2 — the reasons a price write may run with NO version guard.
+ *
+ * A closed set, never free text. `expectedVersion` used to be optional, so a caller that had no
+ * version simply omitted it and the compare-and-set quietly did nothing — three surfaces, one
+ * column, and one version check between them.
+ *
+ * The step rejected *"defaulting `expectedVersion` to the row's current version"* because **that is
+ * a compare-and-set that always succeeds. It looks safe and is not.** Reading the row moments
+ * before writing it is the same thing wearing a number. So a caller with no operator-seen version
+ * does not get to invent one: it NAMES why it has none, the name reaches the outcome and the
+ * timeline, and adding a new one is a decision somebody makes on purpose.
+ */
+export type PriceWriteUnguardedReason =
+  /** `pricing.routes.ts` bulk override: a run over price SNAPSHOTS. No per-row version was shown to anyone. */
+  | 'bulk-override-snapshot'
+  /** `PATCH /channel-pricing`: the client does not send a version yet. Narrowed when it does. */
+  | 'legacy-channel-pricing'
+
+interface PriceWriteFields {
   listingId: string
   /** `undefined` = untouched; a number sets it here; `null` clears it back to the master price. */
   price?: number | null
   /** `undefined` = untouched; `{ value: null }` clears the sale. */
   sale?: { value: number | null; start: string | null; end: string | null }
-  expectedVersion?: number
 }
+
+/**
+ * 🔴 R5 — make the wrong thing impossible to compile. One of the two is required, never neither
+ * and never both: a version to check against, or a named reason there is none.
+ */
+export type PriceWriteTarget =
+  | (PriceWriteFields & { expectedVersion: number; unguardedReason?: never })
+  | (PriceWriteFields & { expectedVersion?: never; unguardedReason: PriceWriteUnguardedReason })
 
 export interface PriceWriteOutcome {
   listingId: string
@@ -50,6 +76,12 @@ export interface PriceWriteOutcome {
   outcome: 'applied' | 'refused' | 'noop' | 'conflict'
   reason?: string
   version: number
+  /**
+   * 🔴 Step 2.2 — was this write compare-and-set checked? `false` means the caller named a reason
+   * it had no version. An unguarded write is a real risk of a lost update, so it is REPORTED
+   * rather than being indistinguishable from a guarded one.
+   */
+  guarded: boolean
   /** The PRICE_UPDATE queue row id when one was enqueued (null on a channel with no outbound lane). */
   queueId: string | null
 }
@@ -69,14 +101,28 @@ export async function writeChannelPrices(input: {
   const result: PriceWriteResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0 }
   if (input.targets.length === 0) return result
   const ids = [...new Set(input.targets.map((t) => t.listingId))]
-  const [listings, windows, hasWindow] = await Promise.all([
-    prisma.channelListing.findMany({
-      where: { id: { in: ids } },
+  /**
+   * 🔴 PLAN 15.5 (a) — this was one `where: { id: { in: ids } }` with no limit. A 5,000-row price
+   * edit is one enormous `IN` list, and the same list goes to `readSaleWindows`. Chunked so the
+   * query stays a query whatever the edit's size; the service's own shape is unchanged, because
+   * 15.5's point is that *"the bones are right; only the limits are missing."*
+   */
+  const READ_CHUNK = 500
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += READ_CHUNK) chunks.push(ids.slice(i, i + READ_CHUNK))
+  const [listingChunks, windowChunks, hasWindow] = await Promise.all([
+    Promise.all(chunks.map((chunk) => prisma.channelListing.findMany({
+      where: { id: { in: chunk } },
       select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } } },
-    }),
-    readSaleWindows(prisma as never, ids),
+    }))),
+    Promise.all(chunks.map((chunk) => readSaleWindows(prisma as never, chunk))),
     saleWindowColumnsExist(prisma as never),
   ])
+  const listings = listingChunks.flat()
+  // 🔴 A MAP, not an object. `Object.assign` type-checks here and merges NOTHING — every sale
+  // window would vanish, silently, and only on edits large enough to chunk. Caught by a test that
+  // chunks; tsc was perfectly happy with it.
+  const windows = new Map(windowChunks.flatMap((part) => [...part]))
   const byId = new Map(listings.map((l) => [l.id, l]))
   const marketKeys = [...new Set(listings.map((l) => `${l.channel}|${l.marketplace}`))]
   const marketplaces = await prisma.marketplace.findMany({ where: { OR: marketKeys.map((k) => ({ channel: k.split('|')[0], code: k.split('|')[1] })) }, select: { channel: true, code: true, currency: true } })
@@ -85,9 +131,16 @@ export async function writeChannelPrices(input: {
 
   for (const t of input.targets) {
     const l = byId.get(t.listingId)
-    const push = (o: Omit<PriceWriteOutcome, 'listingId'>) => { result.results.push({ listingId: t.listingId, ...o }); result[o.outcome]++ }
+    // `guarded` is set HERE, from the target, so no outcome site can forget it and no unguarded
+    // write can report itself as checked.
+    const push = (o: Omit<PriceWriteOutcome, 'listingId' | 'guarded'>) => {
+      result.results.push({ listingId: t.listingId, guarded: t.expectedVersion !== undefined, ...o })
+      result[o.outcome]++
+    }
     if (!l) { push({ productId: null, channel: null, marketplace: null, outcome: 'refused', reason: 'No listing with this id', version: 0, queueId: null }); continue }
     const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
+    // 🔴 The compare-and-set. `undefined` here is only reachable when the caller NAMED an
+    // `unguardedReason` — the type refuses it otherwise — and that write is reported `guarded:false`.
     if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: l.version }); continue }
     if (t.price === undefined && t.sale === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue }
     const currency = currencyOf.get(`${l.channel}|${l.marketplace}`) ?? 'EUR'

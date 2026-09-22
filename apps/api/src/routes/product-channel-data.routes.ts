@@ -177,7 +177,14 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn.get(ch) ?? null, syncStatus: 'PENDING' },
         select: { id: true },
       })).id
-      const t: PriceWriteTarget = { listingId }
+      /**
+       * 🔴 Step 2.2 — `PATCH /channel-pricing` takes no version from its client yet, so it cannot
+       * compare against one. It says so rather than re-reading the row it is about to write, which
+       * the step rejected by name: *"a compare-and-set that always succeeds."* When the client
+       * starts sending a version, this becomes `expectedVersion: u.expectedVersion` and the
+       * unguarded branch goes away.
+       */
+      const t: PriceWriteTarget = { listingId, unguardedReason: 'legacy-channel-pricing' }
       if (u.price !== undefined) t.price = u.price
       if (u.salePrice !== undefined) t.sale = { value: u.salePrice, start: (u as { salePriceStart?: string | null }).salePriceStart ?? null, end: (u as { salePriceEnd?: string | null }).salePriceEnd ?? null }
       targets.push(t)

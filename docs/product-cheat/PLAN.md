@@ -3912,3 +3912,141 @@ column-ownership change and deserves its own step.
 ⬜ **`studio-columns.ts` does not pass `productIds`.** The studio is per product and could. Left
 alone because the studio sheet has its own cache keyed on the product already, and changing two
 read paths in one step is how a measurement stops being attributable.
+
+---
+
+## Step 2.2 — PART ONE BUILT. The price door is now compile-time mandatory.
+
+### 15.5 (c) — ANSWERED, and it was the blocker
+
+*"Check whether the reconcile bumps `ChannelListing.version`. If it does, Step 2.7 and this step
+fight."* Measured on the fixture, one family, 15 listings:
+
+| | |
+|---|---|
+| **positive control** — a deliberate bump, to prove the instrument can see one | 🟢 **visible** |
+| listings whose `version` moved after a reconcile | **0 of 15** |
+| listings whose `updatedAt` moved | **0 of 15** |
+
+🟢 **They do not fight.** The reconcile writes `ReadinessIndex` and nothing else. 15.5 (c) is
+closed, and it is closed with a control rather than by reading the code and feeling sure.
+
+### The compiler's audit — and it found a caller the step does not name
+
+Making `expectedVersion` required listed every caller that omits it, which is the step's own method:
+*"That list IS the audit — no grep, no set claim that goes stale."*
+
+| Caller | Named in the step? |
+|---|---|
+| `product-channel-data.routes.ts` (`PATCH /channel-pricing`) | yes (at `:187`; it is now `:180`) |
+| 🔴 **`pricing.routes.ts` bulk override** | **no.** A third unguarded price writer |
+| `matrix-write.service.ts` | passes a real version already, as the step says |
+
+### 🔴 The step's Rejected (c), taken seriously
+
+*"Defaulting `expectedVersion` to the row's current version — that is a compare-and-set that always
+succeeds. It looks safe and is not."*
+
+Both unguarded callers already fetch the listing. Reading its version and passing it would have
+satisfied the compiler and **built the rejected thing with extra steps**. So the type refuses that
+shape instead:
+
+```ts
+export type PriceWriteTarget =
+  | (Fields & { expectedVersion: number; unguardedReason?: never })
+  | (Fields & { expectedVersion?: never; unguardedReason: PriceWriteUnguardedReason })
+```
+
+A caller with no operator-seen version must **name** why, from a closed set — `'bulk-override-snapshot'`,
+`'legacy-channel-pricing'` — and every outcome now carries **`guarded: boolean`**, so an unguarded
+write cannot look like a checked one afterwards. Adding a third reason is a decision somebody makes
+on purpose, in a type, in a diff.
+
+### 15.5 (a) — the unbounded `IN` list
+
+`where: { id: { in: ids } }` had no limit; a 5,000-row edit was one enormous list, twice (the same
+ids went to `readSaleWindows`). Now chunked at 500.
+
+### 🔴 A silent defect I wrote, and what caught it
+
+Joining the chunks, I merged the sale-window results with `Object.assign`. **`readSaleWindows`
+returns a `Map`.** `Object.assign` on a Map type-checks and merges **nothing** — every existing
+sale window would have read as absent.
+
+The symptom is not a crash. It is a **re-submit of the same sale being treated as a change and
+written again** instead of being the no-op it is. Silent, and only on edits big enough to chunk.
+
+🟠 **And my first mutation run did not catch it** — the chunk test asserted row counts, which do not
+depend on the windows. A second arm asserts `600 noop, 0 applied` on a chunked re-submit, and the
+mutation goes red: *expected 0 to be 600*.
+
+### Gate — ✅ 6 tests, proven able to fail FOUR ways
+
+| Mutation | Result |
+|---|---|
+| `guarded` always `true` (an unguarded write hides) | 🔴 RED |
+| the compare-and-set removed | 🔴 RED |
+| chunking removed | 🔴 RED |
+| the Map merge broken again | 🔴 RED |
+
+🟠 **The profiles-ON ratchet refused the first version of this file** for running without a
+business. Production runs with profiles on; the tests now go through `withWorkspace`, and that
+exposed a second thing — with profiles on the write path reads the row back **inside** the
+transaction, which a stub with only `updateMany` never sees.
+
+### Cost when — chunked at 500 per read. The 5,000-row single-call contract is not yet exercised end to end; see below.
+
+### Rollback — make `expectedVersion` optional again and drop `unguardedReason`. The two callers' named reasons become dead and the compiler says so.
+
+### 🔴 WHAT IS NOT BUILT — the rest of Step 2.2
+
+1. **The sheet still bypasses the door.** `bulk-edit.service.ts` writes `price` through
+   `channelValueMutation`, so a price typed in the sheet still skips the enqueue. 🔴
+   [A-12](#a-12--the-write-half-was-reverted-and-the-reason-is-worth-more-than-the-code) is
+   explicit about the cost: `ebay_price` is this repo's canonical fixture for a mapped channel
+   field, and touching it broke **19 arms across 3 files** last time. A-12's proposal is to refuse
+   the bypass *at the price door* and delete the column hold in the same change. **That is a
+   fixture migration, not a line, and it is deliberately not squeezed onto the end of this one.**
+2. **[Step 1.5](#step-15--make-the-sheets-price-cell-read-only-today)'s hold is still on.** It
+   lifts when (1) lands — that is what the step promises.
+3. **The real concurrency gate.** The step demands *"a concurrency test asserting the second write
+   returns `conflict`, on `concurrent-database.ts`, never on PGlite."* The six tests here are
+   contract arms on mocks. 🔴 **The concurrency arm is NOT written**, and it is the one the step
+   names.
+4. **15.5 (b)** — see the amendment below.
+
+⬜ **Observed, not caused:** `mapping/formula-database.vitest.test.ts` failed twice in four full
+suite runs, at ~10 s, and passes alone and on re-run. PGlite is one connection; it looks like a
+timeout under parallel load. **Recorded rather than ignored** — a gate that fails one run in two is
+on its way to being disbelieved.
+
+---
+
+## A-17 — 15.5 (b) asks for a retry that defeats the guard. FOR YOUR RULING.
+
+15.5 (b): *"On `conflict`, re-read those rows once and resubmit automatically; show the user only
+what still conflicts."*
+
+🔴 **Re-reading and resubmitting is the lost update `expectedVersion` exists to prevent.** If a row
+conflicted, somebody else changed it. Re-reading takes their version and writing over it discards
+their change — quietly, in bulk, and with the audit recording it as `applied`.
+
+The problem 15.5 (b) is really pointing at is real: *"without it, one stale version turns a
+5,000-row edit into 5,000 red rows."* But 🟩 the service already returns **per-row outcomes**, so a
+conflict on one row has never failed the others. The auto-retry adds no resilience — only the
+overwrite.
+
+### What would actually solve it
+
+A conflict today cannot tell **"someone changed this price"** from **"this row's version moved for
+an unrelated reason"** — a quantity write bumps the same `version`. The caller does not say what it
+believed the price was, so the service cannot tell the two apart.
+
+| # | Option | |
+|---|---|---|
+| **a** | 🆕 Add `expectedPrice` to the target. On a version conflict, if the stored price still equals `expectedPrice`, **nobody touched the price** — retry safely. Otherwise, conflict stands | 🟢 **Recommended.** It retries exactly the case that is safe, and never the case that is not |
+| **b** | Build 15.5 (b) as written | 🔴 A lost update by design |
+| **c** | Leave it. Per-row outcomes already stop one conflict failing 4,999 good rows | Honest, and the cheapest |
+
+🔴 Nothing built for any of these. **Step 2.2's `Cost when` — a 5,000-row edit in one call — is
+not yet exercised end to end either way.**
