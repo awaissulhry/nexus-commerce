@@ -75,23 +75,22 @@ export interface EbayTopicWish {
 /**
  * The topics P2.3 names, as topic IDs.
  *
- * Two are certain because eBay's own programme documentation requires them of every
- * application, and this repository already answers both. The rest are marked
- * `unverified` on purpose: the plan names them by PURPOSE (orders, shipping, returns,
- * listing) and eBay's topic catalogue is the only place their real IDs live. The setup
- * below reconciles this list against that catalogue and reports the difference, which
- * is how the invented names get found rather than assumed away again.
+ * Topic existence and handler readiness are different. The lifecycle endpoints
+ * acknowledge arrivals but do not yet provide recoverable revocation or erasure.
+ * Do not provision those subscriptions until their domain handlers are proved.
  */
 export const EBAY_DESIRED_TOPICS: EbayTopicWish[] = [
   {
     topicId: 'MARKETPLACE_ACCOUNT_DELETION',
     purpose: "eBay's erasure notice. Answering it is a condition of holding production keys.",
     evidence: 'verified',
+    handlerMissing: true,
   },
   {
     topicId: 'AUTHORIZATION_REVOCATION',
     purpose: 'A seller withdrew our access — the account must be marked revoked and writes paused (P2.6).',
     evidence: 'documented',
+    handlerMissing: true,
   },
   // eBay release 1.6.6 (2025-12-01): developer.ebay.com/develop/api/notification/release-notes
   { topicId: 'ORDER_CONFIRMATION', purpose: 'A buyer completed checkout — pull the order.', evidence: 'documented', handlerMissing: true },
@@ -349,6 +348,11 @@ export async function setupEbayNotifications(options: {
   if (tokenError) return { ...base, error: tokenError }
   base.configured = true
 
+  const wanted = EBAY_DESIRED_TOPICS.filter((topic) => !topic.handlerMissing)
+  if (!wanted.length) {
+    return { ...base, error: 'No eBay notification topic has a ready domain handler. Provisioning is held; existing subscriptions are unchanged.' }
+  }
+
   try {
     const catalogue = await getEbayTopics(environment)
     const offered = new Map(catalogue.map((t) => [t.topicId, t]))
@@ -365,7 +369,6 @@ export async function setupEbayNotifications(options: {
     }
 
     const existing = await getEbaySubscriptions(environment)
-    const wanted = EBAY_DESIRED_TOPICS.filter((t) => !t.handlerMissing)
 
     const perTopic: SubscribeOutcome[] = []
     for (const wish of wanted) {

@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({ scheduled: null as null | (() => Promise<void>), result: {} as any, statuses: [] as string[] }))
 vi.mock('../lib/cron/clustered.js', () => ({
   default: { validate: () => true },
@@ -15,10 +15,12 @@ vi.mock('../db.js', () => ({ default: { cronRun: {
 vi.mock('../utils/trace-log.js', () => ({ logTraceEvent: vi.fn() }))
 const { startEbayNotificationReconcileCron } = await import('./ebay-notification-reconcile.job.js')
 beforeEach(() => {
+  vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
   state.statuses = []
   state.result = { configured: true, destinationId: 'd', notOffered: [], perTopic: [] }
   if (!state.scheduled) startEbayNotificationReconcileCron()
 })
+afterEach(() => vi.unstubAllEnvs())
 it.each(['failed', 'refused', 'not_offered'])('marks the scheduled run failed when a subscription is %s', async status => {
   state.result.perTopic = [{ topicId: 'AUTHORIZATION_REVOCATION', status }]
   await state.scheduled!()

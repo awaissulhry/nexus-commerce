@@ -350,3 +350,33 @@ error, not a production finding. The fresh snapshot shows Amazon traffic at
 20:28:05Z, eBay at 20:27:20Z, Ads at 20:25:06Z, and Etsy at 20:20:05Z. Etsy now has
 **37/37 successful, account-attributed calls** in the moving 24-hour window and still
 no ingress rows. Original evidence is retained and superseded for timestamps.
+
+## Slice C8 — keep unready eBay handlers behind the activation boundary
+
+Release review found that correcting the setup wire contract could make the existing
+default-on nightly job provision subscriptions for two incomplete lifecycle handlers.
+Acknowledging account deletion is not erasure, and current revocation is unreachable
+without an order ID and lacks durable recovery. Both are now honestly marked
+`handlerMissing`, alongside the already-held order/listing topics. Setup refuses
+**before any credential or channel call** when no topic is ready, including the old
+`skipTopicsWithoutHandlers:false` override. It does not create a destination or alter
+existing subscriptions. Nightly provisioning requires exact
+`NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1`; deploy and activation are separate actions.
+These guards must stay until the actual domain implementations and activation have
+been approved. No vendor subscription or production setting changed in this slice.
+
+Proof: **12 failed / 2 passed** before; **83 passed / zero skips** afterward, independently
+rerun and approved. Typecheck passed. Removing the no-ready guard caused **3 failed /
+4 passed**; restoring default-on scheduling caused **5 failed / 2 passed**; both
+mutations were restored byte-for-byte. Existing wire-contract assertions are all
+retained, with explicitly simulated ready handlers for those transport controls and
+exact restoration afterward; a separate suite proves the real unavailable defaults.
+Evidence: `ebay-activation-red.log`, `ebay-activation-green.log`,
+`ebay-readiness-mutation.log`, `ebay-activation-mutation.log`, `c8-typecheck.log`.
+
+Further eBay implementation must use durable, claimed receipts; persisted account
+ownership; replay after route removal; a new-grant fence for delayed revocation; and
+one transactional order/line/stock writer shared by polling and webhook replay.
+The current writer inserts lines before stock effects and swallows stock failures,
+so merely awaiting it would still falsely report completion. The independent review
+identified these as open work, not changes completed by this activation safeguard.

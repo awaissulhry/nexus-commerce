@@ -4,7 +4,8 @@ const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn() }))
 vi.mock('./client.js', () => ({ ebayAppToken: m.token }))
 vi.mock('../../../gateway/ebay.js', () => ({ ebayTransport: () => m.transport }))
 vi.mock('../../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }))
-const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded } = await import('./notifications.js')
+const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded, EBAY_DESIRED_TOPICS } = await import('./notifications.js')
+const actualReadiness = EBAY_DESIRED_TOPICS.map(topic => topic.handlerMissing)
 
 // DOCUMENTED fixtures, with synthetic IDs and token; never a channel call.
 // https://developer.ebay.com/api-docs/master/commerce/notification/openapi/3/commerce_notification_v1_oas3.json
@@ -32,12 +33,18 @@ const createdResponse = (resource: 'destination' | 'subscription', id: string) =
 
 beforeEach(() => {
   vi.resetAllMocks()
+  // Wire-contract controls simulate completed lifecycle handlers. The separate
+  // notification-readiness suite proves that the actual handlers stay unavailable.
+  for (const topic of EBAY_DESIRED_TOPICS) if (topicIds.includes(topic.topicId)) topic.handlerMissing = false
   vi.stubEnv('EBAY_NOTIFICATION_ENDPOINT_URL', endpoint)
   vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', verificationToken)
   m.token.mockResolvedValue('fixture-app-token')
   m.transport.mockRejectedValue(new Error('Unexpected notification transport request'))
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  EBAY_DESIRED_TOPICS.forEach((topic, index) => { topic.handlerMissing = actualReadiness[index] })
+  vi.unstubAllEnvs()
+})
 
 describe('eBay Notification API wire contract', () => {
   it.each(['ENABLED', 'DISABLED'])('refuses an incompatible existing %s subscription without writing', async status => {

@@ -11,10 +11,9 @@
  * already points at our endpoint is reused, an existing subscription is left alone, and
  * a disabled one is enabled rather than recreated. Nothing is ever deleted.
  *
- * Gated behind NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP. It is **on** by default, but it
- * cannot do anything until `EBAY_NOTIFICATION_ENDPOINT_URL` and
- * `EBAY_NOTIFICATION_VERIFICATION_TOKEN` are both set — without them it reports "not
- * configured" and makes no call at all, which is the state a deploy inherits.
+ * Provisioning requires explicit NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1, configured
+ * endpoint/token, and ready domain handlers. Deploying transport fixes must not
+ * activate live subscriptions. The setup service independently enforces readiness.
  *
  * Cadence: 03:55 UTC, after the Amazon reconcile at 03:40 so the two do not interleave
  * in the logs.
@@ -68,7 +67,7 @@ export function startEbayNotificationReconcileCron(): void {
     logger.warn('ebay-notification-reconcile cron already started — skipping')
     return
   }
-  if (process.env.NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP === '0') {
+  if (process.env.NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP !== '1') {
     logger.info('ebay-notification-reconcile cron disabled via env')
     return
   }
