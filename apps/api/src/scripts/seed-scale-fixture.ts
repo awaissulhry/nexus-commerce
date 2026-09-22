@@ -186,21 +186,34 @@ async function wipe() {
 
 // ── the seed ───────────────────────────────────────────────────────
 async function seedDefinitions() {
-  // Marketplaces. Only the coordinates the fixture uses, and ACTIVE — an inactive market is
-  // invisible to `coordinatesFor()`, so seeding one would silently shrink every sweep.
-  const LANGUAGE: Record<string, string> = { DE: 'de', IT: 'it', FR: 'fr', ES: 'es', UK: 'en', US: 'en', GLOBAL: 'en' }
+  /**
+   * Marketplaces, copied ROW FOR ROW from the seed list in
+   * `packages/database/scripts/seed-marketplaces.ts`. 🔴 Not derived: which currency a market
+   * prices in is `Marketplace.currency` and nothing else, and `check-market-currency.mjs` refused
+   * this file's first version for guessing EUR from the market code — the exact mistake that sent
+   * euro prices to Amazon Poland and Sweden. A fixture that priced the wrong currency would also
+   * be measuring the wrong catalogue.
+   *
+   * ACTIVE matters: an inactive market is invisible to `coordinatesFor()`, so seeding one would
+   * silently shrink every sweep.
+   */
+  // The specifier is a VARIABLE on purpose. A literal pulls `packages/database/scripts` into
+  // `apps/api`'s `rootDir` (TS6059) and drags its own pre-existing type error in with it. The list
+  // still has exactly one home; this reads it at runtime rather than compiling it.
+  const seedList = '../../../../packages/database/scripts/seed-marketplaces.js'
+  const { MARKETPLACES } = (await import(seedList)) as { MARKETPLACES: Array<Record<string, unknown>> }
   for (const { channel, market } of COORDINATES) {
+    const authority = MARKETPLACES.find((m) => m.channel === channel && m.code === market)
+    if (!authority) {
+      console.error(`\n❌ REFUSED: ${channel}·${market} is not in the marketplace seed list.`)
+      console.error('   The fixture copies that list; it never invents a market.\n')
+      process.exit(1)
+    }
     // `findFirst` + create, not `upsert`: the compound unique carries `workspaceId`, which the
     // scoped client supplies at execution and a caller cannot name here.
     const found = await prisma.marketplace.findFirst({ where: { channel, code: market } })
     if (found) { await prisma.marketplace.update({ where: { id: found.id }, data: { isActive: true } }); continue }
-    await prisma.marketplace.create({
-      data: {
-        channel, code: market, name: `${channel} ${market}`, region: market === 'US' ? 'NA' : 'EU',
-        currency: market === 'UK' ? 'GBP' : market === 'US' ? 'USD' : 'EUR',
-        language: LANGUAGE[market] ?? 'en', isActive: true,
-      },
-    })
+    await prisma.marketplace.create({ data: { ...(authority as object), isActive: true } as never })
   }
 
   // 🔴 One ACTIVE connection per channel. Without it `readiness-index.service.ts:78` throws
@@ -359,7 +372,7 @@ await withWorkspace({ workspaceId: WORKSPACE, actorUserId: null, membershipId: n
   console.log(`[scale] added ${added} products, ${listings} listings`)
   console.log(`[scale] TOTAL — ${totals.products} products (${totals.roots} family roots) · ${totals.listings} listings · ${totals.families} families`)
 })
+  process.exit(0)
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })
-process.exit(0)

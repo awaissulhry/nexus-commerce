@@ -3124,6 +3124,17 @@ checked nothing. The check now counts only the products **this run reconciled**,
 🔴 **So the reconcile's 495 ms/family is NOT a refutation of the plan's 4.087 s.** It is a
 different, smaller measurement, and the gap is explained by the rows above.
 
+### 🟠 Three defects in this lane's own code, and what caught each
+
+| Defect | Caught by | Why it matters |
+|---|---|---|
+| The seeder derived a currency from the market code (`market === 'UK' ? 'GBP' : 'EUR'`) | 🟢 **`check-market-currency.mjs`, on the push** | The exact mistake that sent euro prices to Amazon Poland and Sweden. The fixture now copies `MARKETPLACES` row for row from `packages/database/scripts/seed-marketplaces.ts` |
+| `process.exit(0)` placed **after** an unawaited `main()` | 🟠 a read-back: the run printed **nothing** and exited **0** | 🔴 A silent success that did no work. Nothing in the suite would have caught it; the script is not a test |
+| Importing `seed-marketplaces.ts` **ran its `main()`** | 🟠 an unhandled rejection that killed the importer **mid-write**, after one marketplace had landed | A module-scope `main()` makes an import a write. It is now guarded to run only when invoked directly |
+
+🟢 The first of those is a gate this programme already owned, refusing a change it had never seen.
+That is what a gate is for, and it is worth recording as a pass rather than only as a nuisance.
+
 ### Done when — ✅
 
 A seeded business exists at 1,000 and 10,000 products; the sweeps and the sheet read run against

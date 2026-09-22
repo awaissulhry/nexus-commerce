@@ -13,7 +13,12 @@ const prisma = new PrismaClient()
 //
 // Amazon US, Shopify, WooCommerce, Etsy are tax-exclusive — net price stored,
 // tax computed at checkout by the channel.
-const MARKETPLACES = [
+/**
+ * The seed list, and the one place a market's currency, language and region are written down.
+ * EXPORTED so a second writer (the 15.11 scale fixture) copies these rows rather than deriving a
+ * currency from a market code — the duplicate `check-market-currency.mjs` exists to refuse.
+ */
+export const MARKETPLACES = [
   // Amazon EU + UK — VAT-inclusive consumer pricing
   { channel: 'AMAZON', code: 'IT', name: 'Amazon Italy',       marketplaceId: 'APJ6JRA9NG5V4', region: 'EU', currency: 'EUR', language: 'it', domainUrl: 'amazon.it',    vatRate: '22.00', taxInclusive: true },
   { channel: 'AMAZON', code: 'DE', name: 'Amazon Germany',     marketplaceId: 'A1PA6795UKMFR9', region: 'EU', currency: 'EUR', language: 'de', domainUrl: 'amazon.de',    vatRate: '19.00', taxInclusive: true },
@@ -53,9 +58,15 @@ async function main() {
   console.log(`Seeded ${MARKETPLACES.length} marketplaces`)
 }
 
-main()
-  .catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
-  .finally(() => prisma.$disconnect())
+// 🔴 Only when RUN, never when imported. `MARKETPLACES` above is now read by the 15.11 scale
+// fixture; an unguarded `main()` made that import seed a database as a side effect, and the
+// failure arrived later as an unhandled rejection that killed the importing process mid-write.
+const runDirectly = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href
+if (runDirectly) {
+  main()
+    .catch((err) => {
+      console.error(err)
+      process.exit(1)
+    })
+    .finally(() => prisma.$disconnect())
+}
