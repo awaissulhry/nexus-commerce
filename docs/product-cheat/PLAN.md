@@ -2487,3 +2487,92 @@ data, both edits are preserving.
 🔴 **What it does NOT prove:** that no *custom* role is created later holding the flat-file edit
 without a delete permission. That is the case the change exists to catch, and it cannot be measured
 in advance.
+
+---
+
+## A-10 RESULT — the eBay delete permission is closed. Both edits landed.
+
+**2026-09-22. Owner ruled: both edits.**
+
+🟩 `permissions-manifest.ts` — an explicit carve-out **above** the `pfx('/api/ebay/flat-file')` rule,
+exactly mirroring the Amazon line that was already there:
+
+```ts
+P(F.productsDelete, (m, p) => m === 'POST' && p === '/api/ebay/flat-file/delete'),
+```
+
+**`POST /api/ebay/flat-file/delete` now resolves to `products.delete`** — asked of
+`permissionForRoute`, not read off the source. 🟢 `ebay-flat-file.routes.ts` was **not touched**;
+the no-touch rule holds.
+
+🟩 `permissions-manifest-order.vitest.test.ts` — the eBay delete pinned, **plus both `save`
+neighbours**, so a future carve-out cannot widen past the one route it meant to name. Written from
+the route's PURPOSE, as that file's header demands. **27 passed.**
+
+🔴 **Proven able to fail:** removing the carve-out turns the arm red with
+`expected 'listings.flatfile.edit' to be 'products.delete'` — the exact value the hole had.
+
+⬜ `POST /ebay/flat-file/delete` (no `/api`) still answers `channels.sync`. 🟩 The router registers
+this file with `prefix: '/api'` (`index.ts:729`), so that path cannot be requested. **Left alone
+and named rather than "fixed"** — changing a rule for a URL that cannot occur buys nothing and
+moves a line in an order-sensitive table.
+
+---
+
+## 🟠 A-11 CORRECTION — I was wrong about `readOnlyReason`, and then right for a different reason
+
+**2026-09-22. Step 1.5 is NOT built. Reverted. A ruling is needed.**
+
+### First, my error, because this plan's rule cuts both ways
+
+A-11 stated: *"`readOnlyReason` on `ChannelFieldSpec` — 🔴 **Absent.** 74 occurrences repo-wide,
+**none** under `channel-specs/`."*
+
+🔴 **That is false.** It is at `channel-specs/types.ts:66`, and `channel-specs/etsy.ts` uses it in
+**seven** places. I ran a grep, piped it through `head -10`, saw only Shopify and studio hits, and
+reported the truncated list as the whole set. **The plan was right; only its line number was off.**
+
+> *A list of members is a SET CLAIM.* I wrote one from a truncated list, having quoted that very
+> rule earlier in this session. The count printed `74` on the same line I read `10` results from.
+
+### Then the build, which the test suite refused
+
+Setting `readOnlyReason` on the eBay `price` field works at the column level — verified,
+end-to-end: the column came back `editable: false`, `formulaWritable: false`, with the reason as
+help text, and a mutation turned 3 of 6 arms red.
+
+🔴 **But the full suite failed, on an arm I had not thought about:**
+
+```
+master-default-rule.vitest.test.ts
+AssertionError: expected null to match object { source: 'basePrice' }
+```
+
+🟩 **`readOnlyReason` does not mean "held". It means "the channel owns this value."** Six consumers,
+and two of them carry that ownership meaning far outside the sheet:
+
+| Consumer | What setting it would have done to the eBay price |
+|---|---|
+| `master-default-rule.ts:8` — `if (field.readOnlyReason) return null` | 🔴 **Deleted the master→channel mapping.** `basePrice` would stop flowing to eBay at publish |
+| `source-definition-plan.ts:66` | 🔴 Relabelled its source owner **"Channel-reported data"** — false; we own this price |
+
+That is how Etsy uses it, and correctly: *"Converted price reported by Etsy"*, *"Reported by Etsy"*.
+Those fields genuinely have no master mapping. **The eBay price does.**
+
+> **Holding a cell and disowning a field are different facts.** One field cannot carry both, and the
+> suite is what said so — the column-level test I wrote was green, and would have shipped a publish
+> regression.
+
+### So Step 1.5 still needs a decision
+
+The need is unchanged and still measured: `bulk-edit.service.ts` has **zero** occurrences of
+`writeChannelPrices`, `PRICE_UPDATE` or `PriceChangeEvent`.
+
+| Option | |
+|---|---|
+| **(a)** A **new, narrow** spec field — a policy hold read **only** by `sheet-columns.service.ts`, never by the mapping rules. ~3 edits + the test I already wrote. Two reason fields, deliberately, because they are two different facts | 🟨 Recommended |
+| **(b)** Refuse `price` in `bulk-edit.service.ts` — block the **write** where the damage is, rather than dressing the column. Stronger, but the cell still looks editable and fails on save, which R4 dislikes | |
+| **(c)** Leave it writable until [Step 2.2](#step-22--one-price-door-enforced-by-the-compiler) | |
+
+🟨 **(a) + (b) together** is the complete answer: the column states the hold, and the writer refuses
+regardless of which surface calls it. **(a) alone** is the smallest honest step.

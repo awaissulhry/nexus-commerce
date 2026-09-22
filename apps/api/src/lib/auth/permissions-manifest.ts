@@ -256,6 +256,23 @@ export const ENTRIES: Entry[] = [
 
   // PR.1 Presence W0: specific rules precede every channel/product prefix.
   P(F.productsDelete, (m, p) => m === 'POST' && (p === '/api/amazon/flat-file/remove' || p === '/api/products/bulk-hard-delete')),
+  // 🔴 PLAN Step 1.4 / amendment A-10 — the eBay twin of the line above.
+  //
+  // `/api/amazon/flat-file/remove` was carved out to products.delete here; its eBay counterpart
+  // was not, so `/api/ebay/flat-file/delete` fell through to `pfx('/api/ebay/flat-file')` below
+  // and resolved to listings.flatfile.edit — an EDIT-class permission ending live eBay listings
+  // permanently. The route carries no preHandler assertion of its own, so this table was the only
+  // thing deciding. Two sibling destructive routes, two different answers.
+  //
+  // Measured on production before changing it (2026-09-22): of 6 roles, `listings.flatfile.edit`
+  // is held by ADMIN and OPS_MANAGER, and BOTH also hold `products.delete`. So ZERO roles lose the
+  // action today; this binds future custom roles, which is the point of it. OWNER is implicit-all
+  // and never reads this table.
+  //
+  // It must stay ABOVE the `/api/ebay/flat-file` prefix rule — `pfx` is `startsWith` and matching
+  // is first-wins, which is the shadowing class permissions-manifest-order.vitest.test.ts exists
+  // to catch. Both paths are pinned there.
+  P(F.productsDelete, (m, p) => m === 'POST' && p === '/api/ebay/flat-file/delete'),
   P(F.productsDelete, (m, p) => m === 'POST' && p === '/api/products/delist-cascade/cancel'),
   P(F.productsEdit, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/matrix\/channel-listing\/[^/]+$/.test(p)),
   P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/recover$/.test(p)),

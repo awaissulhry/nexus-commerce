@@ -28,6 +28,15 @@ import { ENTRIES, permissionForRoute } from './permissions-manifest.js'
 describe('permission manifest ordering', () => {
   it.each([
     ['POST', '/api/amazon/flat-file/remove', 'products.delete'],
+    // 🔴 PLAN Step 1.4 / A-10. The eBay twin of the line above, which was missing from this list
+    // AND from the manifest: it fell through to `pfx('/api/ebay/flat-file')` and resolved to
+    // `listings.flatfile.edit`, so an EDIT-class permission permanently ended live eBay listings.
+    // Written from the ROUTE'S PURPOSE, as this file's header requires — a permanent channel
+    // removal is a delete — never by asking permissionForRoute what it currently says.
+    ['POST', '/api/ebay/flat-file/delete', 'products.delete'],
+    // The neighbours, so a future carve-out cannot widen past the one route it meant to name.
+    ['POST', '/api/ebay/flat-file/save', 'listings.flatfile.edit'],
+    ['POST', '/api/amazon/flat-file/save', 'listings.flatfile.edit'],
     ['POST', '/api/products/bulk-hard-delete', 'products.delete'],
     ['POST', '/api/products/operational-impact', 'products.view'],
     ['GET', '/api/products/operational-impact', 'products.view'],
