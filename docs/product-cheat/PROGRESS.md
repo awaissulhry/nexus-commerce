@@ -55,6 +55,8 @@ been exercised.
 | **A-23** The cockpit sent an unknown market (NL, PL, SE, TR, IE) to Amazon **Italy** | ✅ **RULED R-19, BUILT** — refused per market, by name | see `git log` |
 | 🔴🔴 **A-24** Every Amazon queue push (price, content, stock, full sync) was sent to Amazon **Italy** | ✅ **RULED R-20, BUILT** — the listing decides the market; refuse, never Italy; 5 mutations red. 🔴 Production: **256** DE/ES stock rows were built for Italy and marked sent on 2026-09-08 — whether they reached Amazon is unknown until Step 3.1 | see `git log` |
 | **A-25** Step 2.5: nothing enforced "factual = code" | ✅ **RULED R-22, BUILT — Step 2.5 CLOSED**: a choice list cannot be per-language (route + router + gate, 5 mutations red). 🔴 Deploy checklist: count per-language choice lists on production first | see `git log` |
+| **A-26** Step 2.6 measured (2026-09-23): **four** stores; production has **no** colliding variants (the XS/XXS pair is local only); the sheet shows FLAT first, every publisher reads `categoryAttributes.variations` first | 🟡 **D-D FOR YOUR RULING** — recommended (a): `categoryAttributes.variations` is the one store. Nothing built | — |
+| **2.1 (b) on production** (2026-09-23) | 🟡 **Dry run done by the Owner** — Xavia Racing: **5** rows (the same 5 as local), `0 already required`, so `--revert` is exact. Waiting: Motovento dry run, then `--apply` | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -141,15 +143,17 @@ per-language). Also fixed: **A-23** the cockpit no longer sends unknown markets 
 **A-24** 🔴🔴 every Amazon queue push was built for Italy — the listing now decides the market.
 Rulings R-11 … R-22 are at the end of PLAN.md.
 
-**Open, in order:**
-1. **2.1 (b) on production — the Owner said OK.** The agent's session cannot reach production (a safety
-   check refuses even reads), so the **Owner runs** the guarded launcher, dry run first, both businesses:
-   `node docs/product-cheat/tools/prod-run.mjs derive` and
-   `… derive --workspace bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`; review the output; then the same with
-   `--apply` (`--revert` undoes it). The launcher refuses any non-Neon host, points Redis at a dead port,
+**Open, in order (updated 2026-09-23):**
+1. **2.1 (b) on production — the Owner said OK; Xavia Racing dry run DONE and reviewed** (5 rows, the
+   same 5 families as local; `0 already required`, so `--revert` undoes exactly these). Next, run by the
+   Owner: `node docs/product-cheat/tools/prod-run.mjs derive --workspace bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`
+   (Motovento, dry run), then `… derive --apply` (expect `WROTE 5 rows`, and `now: 5`). The agent's
+   session cannot reach production. The launcher refuses any non-Neon host, points Redis at a dead port,
    and turns business profiles on.
-2. **Step 2.6 — needs D-D** (which of the three stores holds a child's size and colour). Measure first:
-   which store each screen, channel builder and eBay read uses; then one recommendation to the Owner.
+2. **Step 2.6 — MEASURED (A-26), waiting for D-D.** Four stores, not three; production has no colliding
+   variants; one wrong value (`AIR-MESH-JACKET-MEN-XXL-BLACK`, VA `XS` vs `XXL` everywhere else).
+   Recommended: `categoryAttributes.variations` is the one store. The build comes back as an amendment
+   after the ruling. Count tool: `node docs/product-cheat/tools/axis-stores.mjs` (`--local` for local).
 3. **2.7 on production — R-21: after this branch deploys** (`tools/prod-run.mjs backfill`, dry run first).
 4. **Deploy checklist (before this branch is deployed):** count `CustomAttribute` rows with type
    select/multiselect AND `localizable` on production (R-22 would stop showing their per-language values);
@@ -161,7 +165,9 @@ Rulings R-11 … R-22 are at the end of PLAN.md.
    review (`PLAN-REVIEW-2026-09-22.md` §4) first — `check-contrast.mjs` measures the wrong palette.
 
 **Read-only production checks** the Owner can run (each one `BEGIN READ ONLY`, refuses non-Neon hosts):
-`tools/family-count.mjs`, `tools/market-languages.mjs`, `tools/amazon-market-history.mjs`.
+`tools/family-count.mjs`, `tools/market-languages.mjs`, `tools/amazon-market-history.mjs`,
+`tools/axis-stores.mjs` (Step 2.6 / D-D). 🔴 Creating a new production-reading tool needs the Owner's
+word first — the session's safety check refused it until the Owner authorised it (2026-09-23).
 `--local` on any of them is a dry run against `nexus_development`.
 
 **The push hook is flaky under machine load** (≈10 sessions share it): the web-font build error, AE.4
@@ -196,8 +202,10 @@ approval **before building**. Each turn reports what changed, whether it worked,
 6. ✅ **Step 2.3 — CLOSED (R-18)** with a stated limit: the two one-language paths refuse a
    multi-language market. ✅ **A-23** (cockpit → Italy) fixed under R-19.
 7. ✅ **Step 2.5 — CLOSED (R-22).** Next: **2.6** (needs D-D).
-8. 🟡 **2.1 (b) on production — OK given; waiting for the Owner's dry run** (`scratchpad/prod-run.mjs
-   derive`, both businesses). **2.7 on production — R-21: after this branch deploys.**
+8. 🟡 **2.1 (b) on production — OK given; Xavia Racing dry run done (5 rows); Motovento dry run and
+   `--apply` next** (`tools/prod-run.mjs derive`, run by the Owner). **2.7 on production — R-21: after
+   this branch deploys.**
+9. 🟡 **Step 2.6 — measured (A-26); D-D waits for the Owner.**
 
 ### Still blocked, not forgotten
 

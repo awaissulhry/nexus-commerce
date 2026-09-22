@@ -5159,3 +5159,86 @@ routes a choice list to them any more, but a direct write is not refused there. 
 such as Amazon's `material` stay per-language-capable, as ruled.
 
 ### Cost when — `flat`. **Rollback** — revert the commit.
+
+---
+
+## A-26 — Step 2.6 measured: FOUR stores, not three, and production has no colliding variants. D-D FOR YOUR RULING.
+
+**2026-09-23. Read only: a code trace, and counts — local, and production run by the Owner with
+[`tools/axis-stores.mjs`](tools/axis-stores.mjs) (`BEGIN READ ONLY`, rolled back). Nothing built.**
+
+### The stores — production, Xavia Racing (301 live children under 14 parents)
+
+| Store | What it is | Children with a size / a colour |
+|---|---|---|
+| **VAR** `Product.categoryAttributes.variations` | the child's variation bag | **208 / 224** |
+| VA `Product.variantAttributes` | the older per-variant bag | 36 / 44 — every value is also in VAR; **1** disagrees |
+| FLAT `categoryAttributes.size` / `.color` | the sheet's `attr_size` / `attr_color` cells | **1 / 0** |
+| eBay `ChannelListing.platformAttributes.itemSpecifics` | the eBay·IT listing's own aspect (Italian) | 200 / 216 |
+| Amazon `platformAttributes.attributes` | a read-back of what Amazon holds | 232 / 256 (IT) |
+| `ProductVariation` | the legacy table | **0 rows** |
+
+Motovento: 20 live children, **no value in any store**. The flat-file snapshot is a sixth copy, in a
+no-touch area; not counted.
+
+### Agreement — production
+
+| | size | colour |
+|---|---|---|
+| VAR vs Amazon·IT | 192 same · **0** differ | 208 same · **0** differ |
+| VAR vs eBay·IT | 123 same · **0** differ | 113 same · 26 differ — all VENTRA: VAR holds the colourway (`grigio-rosso-nero \| donna`), eBay the main colour (`rosso \| donna`) |
+| VA vs VAR | 35 same · **1** differs | 44 same · 0 differ |
+
+- **The one wrong value:** `AIR-MESH-JACKET-MEN-XXL-BLACK` — VA says `XS`; VAR, Amazon·DE and Amazon·IT
+  say `XXL`. It is the **only** collision on production (VA: two children `XS / Nero`). VAR and eBay
+  have none.
+- **Held only by a channel:** 37 sizes / 29 colours on eBay only; 40 / 48 on eBay and Amazon only.
+  Of 202 children under a parent with declared axes, 68 have no VAR value.
+
+🔴 **Step 2.6's premise, re-checked.**
+- *"Two children hold XS where they should hold XXS, giving 4 colliding variants"* — **false on
+  production.** The two GALE `…-XXS` children agree with eBay there. It is true only on the **local**
+  copy, where both also carry a junk key `variantAttributes: "[object Object]"` (written 2026-09-07
+  02:00; production has none).
+- *"Three stores"* — four (VAR, VA, FLAT, eBay item specifics), plus an empty legacy table and the
+  flat-file snapshot.
+- *"The sheet writes one eBay never reads"* — **true**: FLAT.
+
+### Who reads which (lines verified)
+
+| Reader | Order |
+|---|---|
+| `storedVariationValues` (`stored-variation-projection.ts:7-17`) — the eBay studio publish (`studio-publication-ebay.ts:158-162`, which refuses *"`<sku>`: `<axis>` is missing"*), Shopify (`content-workspace.service.ts:97`), the Amazon studio fallback | VAR > VA |
+| eBay flat-file row, `buildFlatRow` (`ebay-variation-push.service.ts:2633-2635`, `:2712-2735`) | listing item specifics > VAR > VA |
+| Matrix (`matrix.service.ts:191-206`), the Variants channel band, generate's exists check | VAR > VA |
+| **The master sheet cell** — the resolver (`attribute-resolver.ts:173-188`, `:246-253`) | **FLAT > VAR > VA** |
+| F6 matrix page, images workspace, Amazon wizard, eBay description theme (helper trace, not re-read) | VA first |
+
+### Who writes which
+
+| Writer | Writes |
+|---|---|
+| The sheet's `attr_size` / `attr_color` (`bulk-edit.service.ts:2046-2065`) | FLAT always; VAR + VA **only** when the family declares the axis |
+| Generate (`family-generate.service.ts:389-417`), Add child, attach | VAR + VA |
+| List wizard `PATCH /variant-attributes` (helper trace) | VA + VAR + `ProductVariation`, not FLAT |
+| eBay import (`ebay-import.service.ts:111-116`) | FLAT `color` and `apparel_size` — never `size` |
+
+**So the sheet shows FLAT first, and every publisher reads VAR first.** A sheet edit on a child whose
+family does not declare the axis lands in FLAT only: the sheet shows it, nothing publishes it. Two code
+comments call opposite stores "canonical" (`ebay-variation-push.service.ts:2628-2632` says VA;
+`family-generate.service.ts:389-391` writes both) — D-D is exactly that question.
+
+### D-D — options
+
+| # | Option | |
+|---|---|---|
+| **a** | **VAR (`categoryAttributes.variations`) is the one store for a child's size and colour.** The sheet cell reads and writes it; VA's axis keys and the one FLAT value fold into it and stop being written; the readers that read VA first move to VAR. eBay and Amazon item specifics stay each channel's own per-market label, filled from VAR at publish | 🟢 **Recommended.** It holds the data, agrees with Amazon and eBay on every size, and is what the eBay publishers read — D-D's own default |
+| b | FLAT (`categoryAttributes.size` / `.color`) is the one store | The sheet already writes it and the resolver ranks it first, but it holds **1** value: every publisher moves and 208 values migrate |
+
+After the ruling, the build comes back as its own amendment for approval. Its size: VA is named in
+~90 non-test files, so *"delete the losers"* is likely a step of its own. Two data questions come with
+it, each a write and so the Owner's: the 77 children whose size is only on a channel (fill VAR from
+the channel, or leave empty), and the one wrong VA value.
+
+- **Done when** — rewritten: one store holds a child's size and colour; the sheet shows and writes
+  it; the known wrong value is fixed; no collision in it (production today: 0 in VAR, 1 in VA).
