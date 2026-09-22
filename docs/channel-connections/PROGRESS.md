@@ -15,6 +15,21 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
 
+### Approved production release — 2026-09-22
+
+The Owner approved “Deploy it all and push to production.” C1–C8 were pushed normally
+as `65782117a` and Railway deployment `a257e041-a61c-4614-a8c9-6c2516622832` reached
+SUCCESS. At21:20Z both public health routes served65782117 and protected diagnostics
+returned401. The exact Etsy migration checksum/finish and exclusive Motovento shop
+routing passed, with all18 connections/scopes/state/presence preserved, including
+Shopify. Automatic eBay setup and Amazon rotation are observed OFF at startup.
+
+GitHub's clean compiler exhausted its default2GiB heap. The independently reviewed,
+compiler-only4GiB repair `c54406b47` passed normal hooks and was pushed. Both GitHub
+clean builds now pass; final CI/image rollout is still in progress. No type/test
+requirement was weakened. Vendor probes, channel activation, exact-ten deletion and
+P7 drops remain separately gated. The full plan is still open.
+
 ### Active continuation audit — 2026-09-22, after 17:00 UTC
 
 Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and

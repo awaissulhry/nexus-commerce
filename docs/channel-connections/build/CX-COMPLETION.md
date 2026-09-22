@@ -432,3 +432,43 @@ with diagnostics in `compiler-memory-4096.log`. Independent review approved the
 one-line build repair. Its normal push must rerun the full release hook, and both
 actual GitHub builds must finish successfully before the release is called verified.
 No production variable or additional channel feature was activated to repair this.
+
+## First production proof and CI worker-cap repair
+
+Railway deployment `a257e041-a61c-4614-a8c9-6c2516622832` reached SUCCESS for
+`65782117a`. At 21:20Z health/readiness served `65782117` with HTTP 200, and the
+protected connection report returned 401 without authentication. The migration
+finished at 21:19:15Z with the exact committed checksum. Shop `57783036` routes
+exclusively to Motovento. All 18 pre-existing connections retain ownership, type,
+activity, primary/management state, external ID, scopes, key ID, auth state and
+credential-presence booleans. Non-Etsy route sets/aliases are identical. These are
+preservation checks, not proof of credential contents or validity. Independent
+review accepted the evidence. Startup logs prove eBay setup disabled and Amazon
+automatic rotation off because no credential queue is configured.
+
+The build repair `c54406b47` passed every normal push hook and both actual GitHub
+compiler steps. Railway deployment `b05ac95e-290d-44b0-9b4b-d141a591e02c` reached
+SUCCESS; public health/readiness served `c54406b4` at 21:33Z, with the same 401
+control and successful repeat database verification. No rollback was needed.
+
+GitHub CI run `35786202553` then reported **1,893 passed / 11 failed / 4 existing
+skips** across 169 suites. Ten failures were unchanged 10s/30s timeouts; one later
+information-database assertion followed earlier timeouts. Do not assume that later
+assertion is harmless without a clean run. Local execution of the exact CI selection
+with one file worker passed **1,904 / 4 existing skips**, 32.08s, at unchanged timeouts.
+
+The fixed four-worker cap from C6 disregarded small runners. The config now derives
+a cap from half of `os.availableParallelism()`, bounded to one through four workers,
+and prints the measured CPU/worker count. This changes file scheduling only; every
+test/assertion/timeout and the dedicated multi-connection races remain unchanged.
+No new suppression was added. The local machine reports 18 CPUs and still uses four
+workers; a two-CPU runner uses one. Independent review approved this resource policy.
+A seven-test config smoke passes. The **next actual CI result is required** to confirm
+the contention diagnosis; the previous failed run is not relabeled as passing.
+
+Official references: https://vitest.dev/guide/parallelism and
+https://nodejs.org/api/os.html#osavailableparallelism . Evidence:
+`github-job-106943505752.log`, `ci-regressions-one-worker.log`,
+`worker-config-smoke.log`, `deployment-db-first-release.json`,
+`public-first-release.json`, `deployment-db-verification.json` and
+`public-release-verification.json` in the session evidence directory.
