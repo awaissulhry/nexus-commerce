@@ -152,7 +152,8 @@ describe('3. a wrong topic id must be READ, never guessed', () => {
     const { body } = await status()
     const byId = Object.fromEntries(body.wanted.map((w: any) => [w.topicId, w.offeredByEbay]))
     expect(byId.MARKETPLACE_ACCOUNT_DELETION).toBe(true)
-    expect(byId.ITEM_SOLD).toBe(false)
+    expect(byId.ORDER_CONFIRMATION).toBe(false)
+    expect(body.wanted.map((t: { topicId: string }) => t.topicId)).not.toContain('ITEM_SOLD')
   })
 })
 

@@ -27,3 +27,9 @@ The shared configuration accessor still resolves the same two variables. A separ
 Official rule: https://edp.ebay.com/api-docs/sell/notification/resources/destination/methods/createDestination . It maps malformed verification tokens to errorId 195019 and challenge failure separately to 195020. Source checked 2026-09-22.
 
 Proof: malformed-token regressions initially 9 failed / 3 passed. Boundary controls send 32 and 80 allowed characters unchanged through a stub transport; invalid values never reach token or transport. Status tests distinguish a present-invalid token from a valid token, retain the catalogue positive control, and forbid secret disclosure. Existing challenge/routing tests retained. Owner alone changes the production variable.
+
+## Slice 3b — documented order topic, replay preserved
+
+`ORDER_CONFIRMATION` replaces `ITEM_SOLD` in the desired list and primary topic routes. eBay's own release notes name it in 1.6.6 (2025-12-01): https://www.developer.ebay.com/develop/api/notification/release-notes ; the seller topic catalogue describes seller checkout: https://www.developer.ebay.com/develop/api/sell/notification_events . `ITEM_SOLD` remains a legacy replay alias only. `handlerMissing: true` remains: this change cannot enable a subscription that the nightly reconcile intentionally excludes. Runtime subscription code still checks the actual eBay catalogue.
+
+The regression failed before the change and covers both the correct topic and the old replay name. Token preflight mutations (omit character rule; omit minimum length) were each applied, killed, and restored byte for byte. **Application-specific live catalogue remains unmeasured this session**, pending live-call permission and usable signed-in browser API access. Official documentation is not presented as a production measurement.

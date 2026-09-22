@@ -93,7 +93,8 @@ export const EBAY_DESIRED_TOPICS: EbayTopicWish[] = [
     purpose: 'A seller withdrew our access — the account must be marked revoked and writes paused (P2.6).',
     evidence: 'documented',
   },
-  { topicId: 'ITEM_SOLD', purpose: 'A listing sold — pull the order.', evidence: 'documented', handlerMissing: true },
+  // eBay release 1.6.6 (2025-12-01): developer.ebay.com/develop/api/notification/release-notes
+  { topicId: 'ORDER_CONFIRMATION', purpose: 'A buyer completed checkout — pull the order.', evidence: 'documented', handlerMissing: true },
   { topicId: 'ITEM_PRICE_REVISION', purpose: 'Price changed on eBay — refresh the listing.', evidence: 'documented', handlerMissing: true },
   { topicId: 'ITEM_AVAILABILITY', purpose: 'Quantity changed on eBay — refresh stock.', evidence: 'documented', handlerMissing: true },
 ]
