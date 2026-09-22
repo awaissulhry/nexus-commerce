@@ -2317,3 +2317,148 @@ orphaned — another row still manages it — so it does not refuse. The cascade
 `channelSkipped` guards (variation child, shared ItemID) therefore stay as they are. 🔴 **An
 orphaned eBay *variation* under a surviving parent ItemID is not covered by this step** and is not
 measured. It belongs with [Step 1.3](#step-13--implement-reversible-unpublish).
+
+---
+
+## A-10 — Step 1.4 is already done on Amazon. The real hole is on eBay, behind a no-touch rule.
+
+**2026-09-22. Status: Amazon half CLOSED as already-true. One finding FOR APPROVAL.**
+
+### The kill switch is already honoured, inside the client
+
+🟩 `amazon-sp-api.client.ts:1160-1172` — the **first** thing `deleteListingsItem` does:
+
+```ts
+const mode = getAmazonPublishMode()
+if (mode === 'gated' || mode === 'dry-run' || mode === 'sandbox') { … no HTTP … }
+```
+
+It reads `getAmazonPublishMode()`, never an env variable directly, and `'sandbox'` is included with
+its reason recorded (`P0.1 — … request below targets the production host, so sandbox used to send a
+real DELETE`). That is exactly what the step asks for, in the client rather than at the callers.
+
+### And the gate the step asks for already exists and already covers delete
+
+🟩 `amazon-sp-api.publish-gate.vitest.test.ts` opens with
+*"permanent delete honours the same Amazon master gate as every write"*. **Run today: 12 arms, all
+passing**, including `positive control: enabled + live reaches the mocked DELETE transport` and
+`deleteListingsItem in sandbox mode is a dry run with no token and no HTTP`. The step says
+*"extend it"*; there is nothing to extend.
+
+### 🟠 The premise is false: no Amazon delete path runs on `products.edit`
+
+*"🔴 Anyone who can edit a product can delete a live listing."* Traced today. There are exactly
+**two** callers of `deleteListingsItem` — `recovery.service.ts:313` and
+`channel-delist.service.ts:170` — and every route that reaches either one resolves to
+**`products.delete`**, asked of `permissionForRoute` rather than read off the source:
+
+| Route | Permission |
+|---|---|
+| `POST /api/products/bulk-hard-delete` | `products.delete` |
+| `POST /api/amazon/flat-file/remove` | `products.delete` |
+| `POST /api/products/:id/recover` | `products.delete` |
+
+🟩 And `listings.delete` **does not exist** (`packages/shared/permissions.ts:63-67` has
+`listings.view/edit/publish/recover/flatfile.edit`). Creating it would refuse every delete path
+above until roles are re-granted — a live breakage, to close a hole that is not open.
+
+### 🔴 The real hole, and it is a different one
+
+🟩 `POST /api/ebay/flat-file/delete` → **`listings.flatfile.edit`**.
+
+That route ends live eBay listings (`runEbayFlatFileDelete` → `dispatchChannelDelist` →
+`endFixedPriceItem`). 🟩 It carries **no `preHandler` permission assertion** at
+`ebay-flat-file.routes.ts:3952-3954`, so the order-sensitive manifest alone decides — and it grants
+an **edit**-class permission for a permanent, irreversible channel action.
+
+🔴 **It is also prefix-dependent.** The same handler resolves differently by path:
+
+| Asked | Answer |
+|---|---|
+| `POST /api/ebay/flat-file/delete` | `listings.flatfile.edit` |
+| `POST /ebay/flat-file/delete` | `channels.sync` |
+
+🟩 This is the exact class `permissions-manifest-order.vitest.test.ts` was written for — its header
+records `/api/products-ai/bulk-generate`, *"a route that SPENDS MONEY on model calls"*, resolving to
+`products.edit` because a broader prefix matched first. **Neither eBay path is in that test's
+list.**
+
+### 🔴 Why this lane stops here
+
+`apps/api/src/routes/ebay-flat-file.routes.ts` is named in the **flat-file no-touch rule**. And
+changing the manifest entry instead still changes who can use that surface: an operator holding
+`listings.flatfile.edit` but no delete permission loses a bulk action they use today.
+
+The rule's own precedent is *"table the exact edits, split preserving from changing, and let the
+operator approve them separately."* So: **tabled, not changed.**
+
+| Edit | Kind | File |
+|---|---|---|
+| Add both eBay delete paths to `permissions-manifest-order.vitest.test.ts` | **Preserving** — a test only, changes no behaviour | `apps/api/src/lib/auth/permissions-manifest-order.vitest.test.ts` |
+| Raise `/api/ebay/flat-file/delete` from `listings.flatfile.edit` to a delete-class permission | **CHANGING** — an operator may lose an action | `permissions-manifest.ts` (not the flat-file route) |
+
+⬜ **Not measured:** which roles actually hold `listings.flatfile.edit` today, and therefore how
+many people would lose the action. That is one query and it should be answered **before** the
+second edit, not after.
+
+➡️ **Proposed:** close Step 1.4's Amazon half as already-true. Do the preserving edit now. Hold the
+changing edit for an explicit yes.
+
+---
+
+## A-11 — Step 1.5's need is real, but three of its claims are wrong, including its gate
+
+**2026-09-22. Status: FOR APPROVAL. Not built.**
+
+### The need is real — verified, not assumed
+
+🟩 `apps/api/src/services/products/bulk-edit.service.ts` contains **zero** occurrences of
+`writeChannelPrices`, `PRICE_UPDATE` or `PriceChangeEvent`. The sheet's price write really does
+bypass the one price door: no enqueue, no audit row, no `PriceChangeEvent`.
+
+🟩 And the cell really is editable today: `ebay.ts:251` defaults `editable: true` in the `listing()`
+helper, and the `price` field at `:104` does not override it.
+
+### 🟠 But the "one line" does not exist
+
+Step 1.5 states: *"🟩 The field spec already carries both `editable: boolean` and
+`readOnlyReason?: string` (`channel-specs/types.ts:99-100`, `ebay.ts:235-258`)"*, and shows a code
+block using it. **Marked 🟩 verified. It is not.**
+
+| Claim | Measured |
+|---|---|
+| `readOnlyReason` on `ChannelFieldSpec` | 🔴 **Absent.** 74 occurrences repo-wide, **none** under `channel-specs/`. It lives in the web studio drawer (`_studio/drawer/types.ts:629`) and the Shopify field types — a different type in a different app |
+| `ebay.ts:235-258` carries such a field | 🔴 That range is the `listing()` **helper function**, not a field |
+| `editable` expresses local policy | 🔴 Its own doc comment (`channel-specs/types.ts:100`) says the opposite: *"Amazon's `editable: false` — **cannot change on an EXISTING listing**. Still authorable."* It is a **channel fact**. Using it to mean "our Matrix owns this field" puts a local policy into the field that records what the channel said — the exact conflation **R3** exists to prevent |
+
+### 🔴 And the named gate cannot see this change
+
+Step 1.5's Gate is *"🟩 `scripts/check-silent-disabled.mjs` is already in the push hook — it exists
+precisely to stop a disabled control with no reason."*
+
+🟩 It does exist and it is in the hook. But its header states what it parses: *"A **JSX element**
+with BOTH a `disabled` and a `title` attribute — parsed from the TypeScript AST"*. It is a **JSX
+ratchet for web controls**. An API `ChannelFieldSpec` is invisible to it. **This step would ship
+with no gate at all.**
+
+🟩 Today's refusal is also silent in the sense R4 forbids: `cell-formula.service.ts:930` and `:966`
+throw the generic `'This field cannot be edited in this scope.'` — no channel, no reason, no
+alternative.
+
+### Proposed, in place of the step as written
+
+Small, but **four edits and a test, not one line**:
+
+1. Add `readOnlyReason?: string` to `ChannelFieldSpec` — **additive**, a local-policy field kept
+   **separate** from `editable`, so the channel fact is not overloaded.
+2. Set `editable: false` **and** `readOnlyReason` on the eBay `price` field.
+3. Make `cell-formula.service.ts` (`:930`, `:966`, `:1130`) surface `readOnlyReason` when present,
+   falling back to today's sentence. A refusal that cannot say why is the defect, not the refusal.
+4. 🆕 A real gate, since the named one cannot apply: a test asserting the eBay price cell refuses
+   **with its reason**, plus a positive control that an editable cell still writes.
+
+🟢 It stays honest about the ordering: [Step 2.2](#step-22--one-price-door-enforced-by-the-compiler)
+restores `editable: true` once the sheet uses the door, and both steps already say so.
+
+➡️ **Ruling needed:** build the corrected four-edit version, or leave the price cell writable until
+Step 2.2 lands.
