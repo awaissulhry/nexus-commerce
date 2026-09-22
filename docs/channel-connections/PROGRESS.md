@@ -15,6 +15,31 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
 
+### Active continuation audit — 2026-09-22, after 17:00 UTC
+
+Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and
+[CX-COMPLETION](build/CX-COMPLETION.md) before historical package summaries. Fresh
+read-only production inspection identifies Etsy as **ItalianHideCraft**, shop
+`57783036`, in **Motovento**, workspace `bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`,
+connection `cmubtwtad00ctmu01w4qsruxt`. Active/connected; all twelve stored scopes.
+The signed-in Etsy portal has **zero webhook endpoints**, with the four official
+events visible as a positive control. No reconnection or ownership move is needed.
+
+The Xavia eBay 13/12 difference is the `managedBy=transferred` Motovento tombstone,
+which Accounts intentionally excludes. Browser count not newly measured; fresh DB
+rows plus the exact Accounts predicate explain the count. Preserve the tombstone.
+
+Independent audits found unimplemented/unsafe criteria in Finances identity/money,
+eBay event handling and subscription contracts, Etsy payload/routing/order ingestion,
+auth-held retries, rotation alert delivery, contract coverage, eBay price readback
+and the studio error pane. **Do not activate from old “BUILT” labels.** C1 is committed
+as `63742d415`: unverified replay refused; 38 tests, two guard mutations, typecheck,
+independent approval. Further local slices underway; nothing pushed.
+
+Verification correction: the prior full API log also contains **two unhandled
+EnvironmentTeardownError rejections**, omitted from the earlier six-failure summary.
+The canonical pre-push gate was green; the full API run was not green.
+
 ### Current handover — 2026-09-22 (supersedes older setup/open-state claims below)
 
 **Latest Owner correction:** Etsy is **already connected under a different business profile**.
