@@ -29,6 +29,7 @@ Every claim below carries the commit that measured it.
 | **A-13** Bootstrap built a database with **no RLS** | ✅ **CLOSED** under R-7 — the bootstrap now applies the isolation layer; 443 policies, 1,778 grants; gated twice | `8908961e3` |
 | **2.1 (a)** Requirements become real — the code | ✅ **BUILT** under R-8 — a channel-scoped family requirement reaches `requiredBy` as a coordinate label; 4 arms, 3 mutations | `ca8782153` |
 | **2.1 (b)** Which attributes are required — the data | 🔴 **BLOCKED on [D-A](PLAN.md#part-9--the-decisions-i-need)**. Until it lands, (a) is behaviour-neutral: 486 rows, 0 required | — |
+| **A-15** 64 businesses × 64 entries ≈ 1.9 GB | 🟡 **FOR YOUR RULING** — 15.3's cap holds; the exposure is the pre-existing 64-**bucket** limit | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -128,6 +129,10 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
   250 ms injection moved the number by 3 ms, which reads as *"this is not the cost"*.
 - 🔴 **Scope a state count to what the RUN touched.** A whole-table `ReadinessIndex` count stayed
   green while the run under test checked nothing — rows from an earlier run answered for it.
+- 🔴🔴 **`getSheetColumns` needs `productTypes` or it returns 3 columns and says so.** Without one it
+  reports `schemaMissing: ["AMAZON:category not selected"]` — a field I did not read, and then
+  published a wrong reason for the small number. **With** a product type: **163 columns, 473.9 KiB**
+  (268 / 1.1 MiB for three types). Read `schemaMissing` before explaining a small column count.
 - 🔴 **A `beforeAll` that throws gives `N passed | M skipped`, not a failure count.** vitest still
   exits 1, but the assertions never ran — so that run does NOT show the assertions work. To prove
   an assertion, the thing it measures must be broken *without* an earlier guard stopping the run.

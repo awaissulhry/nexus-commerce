@@ -2925,11 +2925,29 @@ service cache behind it.
 | The cap is per workspace, not per process | a second workspace's bucket is unaffected |
 | The service's cache is still wired to a cap | `sheet-columns-bound.vitest.test.ts` reads `sheetColumnCacheStats().max` |
 
-**Size, measured, not guessed** — against the local catalogue (355 products), the largest column
-set measured is `master DE` **with a family selected**: **101 columns, 50.0 KiB of JSON**, built
-cold in 35 ms. Without a family it is 47 columns and 29.5 KiB; `channel EBAY DE` is 30 columns and
-30.0 KiB. 🔴 Still a **floor**: no Amazon spec is cached locally, so `channel AMAZON DE` drops 30
-of its columns. The retained object graph is larger again than its JSON.
+**Size, measured, not guessed** — against the local catalogue (355 products):
+
+| build | columns | JSON |
+|---|---|---|
+| `master DE`, no family | 47 | 29.5 KiB |
+| `master DE`, one family | 101 | 50.0 KiB |
+| `channel EBAY DE` | 30 | 30.0 KiB |
+| 🔴 **`channel AMAZON DE`, one product type** | **163** | **473.9 KiB** |
+| 🔴 **`channel AMAZON DE`, three product types** | **268** | **1,159.4 KiB** |
+
+The retained object graph is larger again than its JSON.
+
+> 🔴 **CORRECTED 2026-09-22, second correction to this section.** The first version of this table
+> stopped at 50.0 KiB and said *"no Amazon spec is cached locally, so `channel AMAZON DE` drops 30
+> of its columns"*. **Both halves were wrong.** 🟩 `nexus_development` holds **32 cached Amazon·DE
+> category schemas** (183 in all, across 11 coordinates). The build returned 3 columns because my
+> probe passed **no `productTypes`** — and it said so, in its own output: `schemaMissing:
+> ["AMAZON:category not selected"]`. I did not read the field the build provides for exactly this.
+> With a product type it returns **163 columns and 473.9 KiB**, which also confirms the plan's
+> *"185+ columns"* (191 before the drop pass).
+>
+> **The real per-entry size is therefore 9–23× what this section first reported.** The cap still
+> holds — see [A-15](#a-15--the-column-set-cache-is-bounded-per-business-but-64-businesses-of-it-is-2-gb) for what that means and what it does not.
 
 > 🔴 **CORRECTED 2026-09-22, and the correction matters more than the number.** The first version
 > of this paragraph said *"the local catalogue is empty (`Product` returned 0 rows)"*. **It is
@@ -3116,7 +3134,8 @@ checked nothing. The check now counts only the products **this run reconciled**,
 |---|---|---|
 | coordinates | **3** (`--coordinates`) | the sweep's cost is per destination; this is a multiplier on every sweep number |
 | family size | **5 rows per root** (`--family-size`) | decides how many sweeps "10,000 products" means |
-| cached Amazon spec | **none** | the Amazon column build yields **3 columns**, so the sweep has almost nothing to check there |
+| cached Amazon spec | **none** — 🟩 verified, `nexus_scale` holds 0 `CategorySchema` and 0 `ChannelSchema` rows | the Amazon column build yields **3 columns** instead of the **163** the same build returns on a catalogue that has one, so the sweep has almost nothing to check |
+| product type passed to the column build | **none** | 🔴 the measure script does not pass `productTypes`, so its channel builds are the 3-column shape even where a schema exists. **Its channel column-build numbers are a floor for that reason too** — see the second correction in the [15.3 RESULT](#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were) |
 | network | **loopback** | production pays a network hop this does not |
 | requirements | all four of Step 2.1's arms | a fixture with only "required everywhere" cannot show 2.1 working *or* failing |
 | fill | two thirds of required attributes | a uniformly complete catalogue cannot show completeness moving |
@@ -3481,3 +3500,46 @@ asking whether `requiredBy` contains the coordinate they are looking at.
   `catalog-transfer-export.ts:80` and `catalog-workbook-scopes.ts:13` both read
   `requiredBy.length > 0`, which is scope-agnostic. Arguably right ("something requires it"), but
   it is a behaviour change and is recorded rather than assumed.
+
+---
+
+## A-15 — The column-set cache is bounded per business. But 64 businesses of it is 2 GB. FOR YOUR RULING.
+
+**Found while checking a number I had already published. Nothing built.**
+
+### The arithmetic, now that the per-entry size is measured
+
+🟩 `workspace-cache.ts:22` bounds the number of **business buckets** at 64 — pre-existing, and it
+predates this plan. [15.3](#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were)
+bounded each bucket at **64 entries**. So the worst case is `64 × 64 = 4,096` column sets, and a
+real Amazon channel entry measures **473.9 KiB** of JSON, more in memory:
+
+| | |
+|---|---|
+| **Before 15.3** | **unbounded.** 5,000 products opened ≈ 5,000 entries ≈ **2.4 GB**, and still growing |
+| **After 15.3, realistic** | 1–3 active businesses × 64 ≈ 64–192 entries ≈ **30–90 MB** 🟢 |
+| **After 15.3, worst case** | 64 businesses × 64 ≈ 4,096 entries ≈ **1.9 GB** 🔴 |
+
+### What this does and does not change
+
+🟢 **15.3 is still right and still the fix.** Unbounded → bounded is the whole difference between
+a leak and a budget, and the 16 September incident was a leak.
+
+🟢 **The cap of 64 is still the right number.** 🟩 `products-sheet.routes.ts:28` already holds 64 of
+**these same objects, by reference**, and `studio-columns.ts:20` holds 128. A smaller cap in the
+service would rebuild entries its own consumers keep alive and free nothing.
+
+🔴 **The remaining exposure is the BUCKET count, not the entry count** — and it is not 15.3's, nor
+this plan's. It is `workspace-cache.ts:22`, shared by all twenty-odd caches built on
+`WorkspaceCache`. At 64 concurrently-active businesses the process holds 64 copies of everything.
+
+### Proposed — ➡️ needs your ruling
+
+| # | Option | |
+|---|---|---|
+| **a** | **Measure first, decide after.** `GET /admin/pim/sheet-cache-stats` already reports `entries` for the calling business. Add the **process-wide bucket count** to it (a count, never a list of businesses), watch production, and pick a number from data | 🟩 **Recommended.** Nobody knows how many businesses are ever hot at once. The number exists to be measured now |
+| **b** | Lower the bucket cap from 64 | 🔴 Guessing again, and it hits every `WorkspaceCache` user including `idempotency.service.ts` |
+| **c** | 15.3's own option (c): move the column-set cache to **Redis**, so replicas share one copy | The real fix, and much larger. 15.3 marked it *"Later"* |
+
+🔴 A bucket count is a weaker cross-business signal than the process-wide entry total I refused in
+15.3 (b) — but it is still one, so **option (a) needs your word, not mine.**
