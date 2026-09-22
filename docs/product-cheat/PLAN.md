@@ -5302,3 +5302,53 @@ family's `variationAxes` (`:1235-1256`).
 - **Cost when** — 2.6a–c `flat`; 2.6d linear in children, ~300 rows.
 - **Gate** — per slice, above; 2.6c's single-writer gate is Step 2.6's own gate.
 - **Rollback** — revert each slice's commit; 2.6d's script records what it set and `--revert` clears it.
+
+---
+
+## Step 2.6a — BUILT (A-27 / R-24). The sheet reads and writes the one store.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `attribute-resolver.ts` — `applyVariantAxes` | A variant's `size` / `color` / `style` come from `categoryAttributes.variations`, then `variantAttributes` — the order every publisher reads (`storedVariationValues`) — and are applied **after** the flat `categoryAttributes` layer. The flat key answers only when neither bag holds the axis. The raw alias keys (`Taglia`, `Body Type`) stay addressable as before |
+| `shared-variation-values.ts` — `variationAttributePatch` | A sheet edit writes the store for an axis the product already holds, even when its family declares none (`xracing`). A plain attribute (no axis anywhere) still writes the flat key only |
+| `mapping/variant-sources.vitest.test.ts` | One line reversed by R-23: a flat `size: null` no longer hides a stored `Size: 'L'` |
+
+`bulk-edit.service.ts` needed no change: its mirror already calls `variationAttributePatch` for every row of the family.
+
+### What changes on production
+
+The flat `size` / `color` keys hold **0** values there (A-27), so almost nothing an operator sees moves.
+The one child carrying an empty flat `size` key now shows its stored size on the sheet, if it holds
+one — locally it is `xriser-bla-l`, stored `L`, the value eBay is already sent (not re-measured on
+production) — and the Amazon mapping cascade (cockpit publish, the catalogue cascade) sends it too. On `xracing`-shaped families a size or colour edit on the sheet now reaches the publishers.
+
+### Done when — ✅ `axis-one-store.vitest.test.ts` (13 arms; the end-to-end ones on real PostgreSQL through `applyProductBulkEdits`, with the master sheet's own request shape)
+
+| Arm | Result |
+|---|---|
+| `xracing`-shaped edit (no declared axis, `Size` held) | the new value reaches `storedVariationValues`, the sheet shows the same, the colour is untouched |
+| declared axis (control) | unchanged: lands under the declared key |
+| plain attribute (control) | flat key only; no `variations`, no `variantAttributes` |
+| read: `size: null` over `Size: 'L'` · a disagreeing flat key · legacy bag only · AIR-MESH (store `XXL`, legacy `XS`) | the sheet shows what the publishers send |
+| read: a conflict inside the store | shown as a conflict, never hidden by the flat key |
+| read controls: flat-only value · parent inheritance | unchanged |
+
+Red before the fix: 6 arms, including the end-to-end one (`expected 'L' to be 'XL'`).
+
+### Gate — ✅ proven able to fail (Python harness, per-file backups, hash-checked restore)
+
+| Mutation | Red |
+|---|---|
+| the old precedence (store applied before the flat key) | 5 arms |
+| the legacy bag read before the store | AIR-MESH arm |
+| the explicit canonical key ignored | the existing explicit-key arm |
+| a conflict hidden (first alias wins) | 2 arms |
+| the flat key never answers | both read controls |
+| the write fallback removed (declared axes only) | the write arm + the end-to-end arm |
+| ⬜ the write fallback takes any held key | **equivalent** — the key set is then filtered by the same canonical axis (`shared-variation-values.ts`), so no wrong key can be written |
+
+Full `apps/api` hook suite: **881 files pass**. `tsc`: 0.
+
+### Cost when — `flat` (no query added). **Rollback** — revert the commit.

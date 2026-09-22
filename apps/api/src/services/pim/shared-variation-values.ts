@@ -17,7 +17,11 @@ export function variationAttributePatch(
   const unset: string[] = []
   for (const field of new Set([...Object.keys(patch), ...remove])) {
     const canonical = canonicalVariantAxis(field)
+    // R-23 — an axis the product already holds is a variation value even when its family declares none
+    // (`xracing`: `variationAxes = []`, every child stores `Size`). Declared-only, such an edit landed in
+    // the flat key alone: shown on the sheet, never published.
     const axis = axes.find(key => canonicalVariantAxis(key) === canonical)
+      ?? [...Object.keys(variations), ...Object.keys(legacy)].find(key => canonicalVariantAxis(key) === canonical)
     if (!axis) continue
     const keys = new Set([axis, ...Object.keys(variations), ...Object.keys(legacy)]
       .filter(key => canonicalVariantAxis(key) === canonical))

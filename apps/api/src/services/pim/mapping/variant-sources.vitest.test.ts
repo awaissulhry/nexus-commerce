@@ -15,7 +15,9 @@ describe('canonical variation source mappings', () => {
   it('preserves explicit canonical values and nulls over aliases and parent data', () => {
     expect(resolveAttributes({ product: child({ Color: 'Black', color: null }), parent }).color.value).toBeNull()
     expect(resolveAttributes({ product: child({ Size: 'L', size: 'S' }), parent }).size.value).toBe('S')
-    expect(resolveAttributes({ product: child({ Size: 'L' }, { size: null }), parent }).size.value).toBeNull()
+    // R-23 reversed this line: the flat `size` key is not the store (no publisher reads it), so its null no
+    // longer hides the stored value — it had shown an empty cell while eBay was sent `L` (A-27, 2.6a).
+    expect(resolveAttributes({ product: child({ Size: 'L' }, { size: null }), parent }).size.value).toBe('L')
     const resolved = resolveAttributes({ product: child({ 'Style Name': 'Touring', 'Body Type': 'Uomo' }), parent })
     expect(resolved).toMatchObject({ style: { value: 'Touring' }, 'Body Type': { value: 'Uomo' } })
     expect(resolved.body_type).toBeUndefined()
