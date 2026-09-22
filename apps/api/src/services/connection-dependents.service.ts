@@ -225,7 +225,7 @@ export async function connectionDependentsReport(
     where,
     select: {
       id: true, channelType: true, accountLabel: true, isActive: true, isPrimary: true,
-      authStatus: true, externalAccountId: true, refreshToken: true, lastSyncAt: true,
+      authStatus: true, externalAccountId: true, refreshToken: true, ebayRefreshToken: true, lastSyncAt: true,
     },
     orderBy: [{ channelType: 'asc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
   })
@@ -241,7 +241,7 @@ export async function connectionDependentsReport(
       isPrimary: connection.isPrimary,
       authStatus: connection.authStatus,
       externalAccountId: connection.externalAccountId,
-      hasRefreshToken: !!connection.refreshToken,
+      hasRefreshToken: !!(connection.refreshToken || connection.ebayRefreshToken),
       lastSyncAt: connection.lastSyncAt,
       destroyedTotal: dependents.destroyedTotal,
       unlinkedTotal: dependents.unlinkedTotal,

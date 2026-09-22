@@ -15,3 +15,7 @@ Production deletion has NOT run. Owner must confirm exact IDs after a fresh comp
 Release starts from 7c70556ea, verified as remote main. Other session's pes/phase-0 branch and dirty tree are untouched. One package push only after full gates; no deployment yet.
 
 Independent review found the canonical encrypted credential column missing from the initial guard. Added a failing regression (1 failed / 15 passed), then the encrypted-credential refusal. The reviewer found no further required RLS, permission, or race issues.
+
+## Slice 2 — legacy eBay token presence
+
+The report selects both refreshToken and ebayRefreshToken and reports their combined presence. Neither value is returned. Regression first measured 1 failed (legacy column) and 2 passed (generic and empty controls); all 3 pass after the fix. This is presence in these two columns only, not a credential-validity probe or decryption of credentialsEnc.
