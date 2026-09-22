@@ -12,7 +12,8 @@ Updated **2026-09-23** (production evidence uses UTC). Active scope: **Amazon, e
 **Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
 Package labels are not proof of every acceptance criterion. Finances cutover, full eBay event
 coverage, live validation, Owner setup, and cleanup must be reconciled against current evidence.
-The latest isolated connections package is built and tested but not yet deployed.
+The C1–C8 release is deployed. New continuation slices below remain local until their
+next reviewed deployment package is explicitly approved.
 
 ✅ **The handover's deploy warning is closed.** `6cfcb143` (commit `090db711`) reached
 **SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
@@ -20,6 +21,15 @@ read against the wrong clock. `/api/health` reports the serving build as its com
 characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
+
+### New local continuation — 2026-09-23
+
+C9 fixes concurrent receipt insertion and prevents delivery IDs being reused across
+account/event/trust identities. Eight real PostgreSQL tests, 70 existing regressions,
+typecheck, two killed/restored mutations and independent review pass. It is local,
+not deployed. See [CX-REMAINING](build/CX-REMAINING.md). Next: durable eBay claims and
+stored-payload processing, followed by transactional domain effects. Live-read probe
+approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22
 

@@ -50,6 +50,8 @@ export interface InboundRecord {
 export interface InboundWriteResult {
   id: string | null
   duplicate: boolean
+  /** The delivery ID is already bound to different account/event/trust metadata. */
+  conflict?: 'identity_mismatch'
   /**
    * The status the row ALREADY had, when this arrival was a duplicate.
    *
@@ -72,9 +74,13 @@ export function digestOf(body: Buffer | string | null | undefined): string | nul
  * rewrite the original verdict, it only increments `deliveries`, so "how often did this
  * arrive" and "what did we decide the first time" stay separately answerable.
  *
- * Never throws. An ingress endpoint that 500s because its audit trail is unavailable
- * would turn a logging problem into dropped notifications — and eBay marks an endpoint
- * down when it stops answering.
+ * A unique insert chooses the first receipt atomically. A concurrent redelivery
+ * increments only that receipt's delivery count, with its identity guarded in the
+ * same UPDATE. No read-before-insert race, overwritten payload or spent retry.
+ *
+ * A null ID is a refusal to acknowledge durable receipt; callers must retain/retry
+ * the delivery. Expected conflicts never pass through Prisma's error logger with
+ * the inbound payload as part of a failed INSERT diagnostic.
  */
 export async function recordInbound(rec: InboundRecord): Promise<InboundWriteResult> {
   const payloadDigest = digestOf(rec.rawBody ?? null)
@@ -87,23 +93,11 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
   const status: InboundStatus = rec.status ?? (rec.signatureOk === false ? 'failed' : 'pending')
 
   try {
-    const existing = await prisma.webhookEvent.findUnique({
-      where: { channel_externalId: workspaceKey({ channel: rec.channel, externalId }) },
-      select: { id: true, status: true },
-    })
-    if (existing) {
-      // P2.1 — a redelivery is an ARRIVAL, not a handling attempt. Before this it
-      // incremented `attempts`, which the retry worker now uses as its budget: a
-      // channel that redelivers eagerly would have spent the retry budget of an event
-      // nobody had tried to handle even once.
-      await prisma.webhookEvent.update({
-        where: { id: existing.id },
-        data: { deliveries: { increment: 1 } },
-      })
-      return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
-    }
-    const row = await prisma.webhookEvent.create({
+    const id = crypto.randomUUID()
+    const inserted = await prisma.webhookEvent.createMany({
+      skipDuplicates: true,
       data: {
+        id,
         channel: rec.channel,
         eventType: rec.eventType,
         externalId,
@@ -120,14 +114,33 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
         lastError: rec.lastError ?? null,
         error: rec.lastError ?? null,
       },
-      select: { id: true },
     })
-    return { id: row.id, duplicate: false }
+    if (inserted.count === 1) return { id, duplicate: false }
+
+    try {
+      const existing = await prisma.webhookEvent.update({
+        where: {
+          channel_externalId: workspaceKey({ channel: rec.channel, externalId }),
+          eventType: rec.eventType,
+          connectionId: rec.connectionId ?? null,
+          signatureOk: rec.signatureOk,
+          verifiedBy: rec.verifiedBy,
+        },
+        data: { deliveries: { increment: 1 } },
+        select: { id: true, status: true },
+      })
+      return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'P2025') throw err
+      logger.warn('[cx-ingress] delivery identity conflicts with its stored receipt', { channel: rec.channel, eventType: rec.eventType })
+      return { id: null, duplicate: true, conflict: 'identity_mismatch' }
+    }
   } catch (err) {
+    const code = (err as { code?: unknown })?.code
     logger.error('[cx-ingress] could not record an inbound event', {
       channel: rec.channel,
       eventType: rec.eventType,
-      error: err instanceof Error ? err.message : String(err),
+      code: typeof code === 'string' && /^P\d{4}$/.test(code) ? code : 'unavailable',
     })
     return { id: null, duplicate: false }
   }
