@@ -12,7 +12,15 @@ import { WorkspaceError, LEGACY_WORKSPACE_ID, withWorkspace } from './workspace-
  * the next receiver that needs one does not have to come back and edit this line.
  */
 export async function verifiedChannelWorkspace(channel: string, externalAccountId?: string) {
-  const candidates = await prisma.channelAccountRoute.findMany({ where: { channelType: channel, workspace: { status: 'active' }, ...(externalAccountId ? { OR: [{ externalAccountId }, { inboundAliases: { has: externalAccountId } }, ...(channel === 'AMAZON_ADS' ? [{ destinationIds: { has: externalAccountId } }] : [])] } : {}) }, take: 2 })
+  // Etsy sends a shop ID. Its externalAccountId is a user ID in a different
+  // namespace: equal numeric strings do not identify the same resource.
+  if (channel === 'ETSY' && !externalAccountId) throw new WorkspaceError('ingress_account_ambiguous', 'The Etsy notification names no shop.', 503)
+  const identity = externalAccountId
+    ? channel === 'ETSY'
+      ? { inboundAliases: { has: externalAccountId } }
+      : { OR: [{ externalAccountId }, { inboundAliases: { has: externalAccountId } }, ...(channel === 'AMAZON_ADS' ? [{ destinationIds: { has: externalAccountId } }] : [])] }
+    : {}
+  const candidates = await prisma.channelAccountRoute.findMany({ where: { channelType: channel, workspace: { status: 'active' }, ...identity }, take: 2 })
   if (candidates.length !== 1) throw new WorkspaceError('ingress_account_ambiguous', 'The verified notification does not identify one connected seller.', 503)
   return candidates[0]
 }

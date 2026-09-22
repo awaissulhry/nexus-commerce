@@ -8,6 +8,8 @@ const SECRET = `whsec_${Buffer.from('an-etsy-signing-key-for-tests!!').toString(
 const recorded: any[] = []
 const completed: any[] = []
 const pulled: any[] = []
+const expectedShops: Array<string | undefined> = []
+const routed: unknown[][] = []
 let nextWrite: any = { id: 'row-1', duplicate: false }
 let routingThrows = false
 let receiptExists = true
@@ -19,14 +21,16 @@ vi.mock('../services/cx/ingress/ledger.js', () => ({
 vi.mock('../lib/workspace-ingress.js', () => ({
   legacyIngress: (work: any) => work(),
   withIngressWorkspace: (_id: string, work: any) => work(),
-  verifiedChannelWorkspace: async () => {
+  verifiedChannelWorkspace: async (...args: unknown[]) => {
+    routed.push(args)
     if (routingThrows) throw new Error('ingress_account_ambiguous')
     return { workspaceId: 'ws-1', connectionId: 'conn-etsy' }
   },
 }))
 vi.mock('../services/etsy/receipts.service.js', () => ({
-  pullEtsyReceipt: async (accountId: string, receiptId: string) => {
+  pullEtsyReceipt: async (accountId: string, receiptId: string, expectedShopId?: string) => {
     pulled.push({ accountId, receiptId })
+    expectedShops.push(expectedShopId)
     return receiptExists ? { receipt_id: Number(receiptId), status: 'Paid', is_paid: true, transactions: [] } : null
   },
 }))
@@ -52,6 +56,7 @@ async function post(payload: string, over: Record<string, string> = {}) {
       'webhook-id': id,
       'webhook-timestamp': ts,
       'webhook-signature': over.signature ?? signStandardWebhook(id, Number(ts), payload, SECRET),
+      ...(over.eventHeader ? { 'x-etsy-event': over.eventHeader } : {}),
     },
     payload,
   })
@@ -61,6 +66,7 @@ async function post(payload: string, over: Record<string, string> = {}) {
 
 beforeEach(() => {
   recorded.length = 0; completed.length = 0; pulled.length = 0
+  routed.length = 0; expectedShops.length = 0
   nextWrite = { id: 'row-1', duplicate: false }
   routingThrows = false
   receiptExists = true
@@ -68,6 +74,41 @@ beforeEach(() => {
 })
 
 describe('a verified Etsy order event', () => {
+  // Reduced from Etsy's documented envelope, not the historical synthetic body().
+  it.each(['order.paid', 'order.canceled', 'order.shipped', 'order.delivered'])('handles documented %s resource URLs', async event_type => {
+    const res = await post(JSON.stringify({ event_type, shop_id: 12345, resource_url: `https://api.etsy.com/v3/application/shops/12345/receipts/${RECEIPT}` }))
+    expect(res.statusCode).toBe(200)
+    expect(recorded[0]).toMatchObject({ eventType: event_type, connectionId: 'conn-etsy', status: 'pending' })
+    expect(pulled).toEqual([{ accountId: 'conn-etsy', receiptId: String(RECEIPT) }])
+    expect(expectedShops).toEqual(['12345'])
+    expect(routed).toEqual([['ETSY', '12345']])
+  })
+
+  it('does not let an unsigned event header override the signed event type', async () => {
+    const res = await post(JSON.stringify({ event_type: 'order.paid', shop_id: 12345, resource_url: `https://api.etsy.com/v3/application/shops/12345/receipts/${RECEIPT}` }), { eventHeader: 'listing.updated' })
+    expect(res.statusCode).toBe(200)
+    expect(recorded[0].eventType).toBe('order.paid')
+    expect(pulled).toHaveLength(1)
+  })
+
+  it.each([
+    `https://evil.example/v3/application/shops/12345/receipts/${RECEIPT}`,
+    `https://api.etsy.com/v3/application/shops/67890/receipts/${RECEIPT}`,
+    `https://api.etsy.com/v3/application/shops/12345/receipts/${RECEIPT}?redirect=bad`,
+    `https://user:pass@api.etsy.com/v3/application/shops/12345/receipts/${RECEIPT}`,
+  ])('retains a failed event for an invalid receipt resource without fetching it', async resource_url => {
+    const res = await post(JSON.stringify({ event_type: 'order.paid', shop_id: 12345, resource_url, receipt_id: RECEIPT }))
+    expect(res.statusCode).toBe(500)
+    expect(completed[0]).toMatchObject({ ok: false })
+    expect(pulled).toHaveLength(0)
+  })
+
+  it('refuses a missing shop instead of routing to the only connected shop', async () => {
+    const res = await post(JSON.stringify({ event_type: 'order.paid', receipt_id: RECEIPT }))
+    expect(res.statusCode).toBe(503)
+    expect(pulled).toHaveLength(0)
+  })
+
   it('records it on ETSY\'s own delivery id, then reads the receipt back from Etsy', async () => {
     const res = await post(body())
     expect(res.statusCode).toBe(200)
@@ -142,6 +183,11 @@ describe('duplicate deliveries', () => {
 })
 
 describe('a replay gets its account from the ledger row, not from a lookup', () => {
+  it('does not let a stored payload override its persisted connection', async () => {
+    const { handleEtsyOrderEvent } = await import('./etsy-webhooks.routes.js')
+    await handleEtsyOrderEvent({ receipt_id: RECEIPT, __nexusAccountId: 'different-account' }, { connectionId: 'conn-from-ledger' })
+    expect(pulled).toEqual([{ accountId: 'conn-from-ledger', receiptId: String(RECEIPT) }])
+  })
   it('uses the connectionId the receiver recorded at arrival', async () => {
     const { handleEtsyOrderEvent } = await import('./etsy-webhooks.routes.js')
     await handleEtsyOrderEvent({ receipt_id: RECEIPT }, { connectionId: 'conn-from-ledger' })
