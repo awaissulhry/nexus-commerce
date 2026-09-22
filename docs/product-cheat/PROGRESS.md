@@ -163,8 +163,10 @@ approval **before building**. Each turn reports what changed, whether it worked,
 2. ✅ ~~**Step 2.2's concurrency gate**~~ — built; a forced race on `concurrent-database.ts`.
 3. ✅ **A-17 (R-12)** — `expectedPrice` retry built. **Step 2.2 CLOSED.**
 4. ✅ **Step 2.4 move 2 (R-14)** — closed for the editor; the grid states *"N without family"*.
-   🟡 **Next for the grid: Step 2.4b** — count production parents with no family (read-only), then
-   propose assignments for the Owner. The grid flip comes after.
+   ✅ **Step 2.4b counted on production** (read only, run by the Owner): nothing to assign — the 18
+   Xavia Racing parents without a family are all eBay listing shells; Motovento has one unlisted
+   draft. 🟡 **Next: the Owner's shell ruling** ([FAMILY-ASSIGNMENT-2026-09-22.md](FAMILY-ASSIGNMENT-2026-09-22.md)),
+   then the grid flip.
 5. 🟡 **Step 2.7 (R-15)** — ordering rule struck. D-E (the production run) stays the Owner's;
    count production roots first.
 6. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).

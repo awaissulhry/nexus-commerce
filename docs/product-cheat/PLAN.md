@@ -4684,3 +4684,10 @@ The grid's columns are **not** changed. Under R-14 the flip waits for the family
 - **Rollback** — the assignment script records what it set; `--revert` clears exactly those.
 - **Then** — Step 2.4 move 2 for the grid: pass the page's family ids from `sheet-rows.service.ts:435`
   (A-20 (b)'s build), with a family arm and a no-family arm in `shared-scope-narrowing.vitest.test.ts`.
+
+> ✅ **Production counted, 2026-09-22 (read only, run by the Owner)** — see
+> [FAMILY-ASSIGNMENT-2026-09-22.md](FAMILY-ASSIGNMENT-2026-09-22.md). 🔴 **The premise changed:**
+> every real Xavia Racing product already has a family; the 18 without one are all
+> `EBAY_LISTING_SHELL`, and Motovento has one unlisted draft with no type. **There is nothing to
+> assign.** The grid's move 2 waits only on how shells are treated — a ruling (option (a)
+> recommended: skip shells as the product list already does).
