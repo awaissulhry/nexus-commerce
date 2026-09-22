@@ -4326,3 +4326,127 @@ race".
 | **Cost when:** 15.5 (b) the bulk retry contract | 🟡 **A-17**, awaiting ruling (the Owner's stated preference: (a) `expectedPrice`) |
 
 **Step 2.2 is built except A-17.** It does not close until A-17 is ruled and, if (a), built.
+
+---
+
+## A-20 — Step 2.4 move 2: the editor already does it; only the products grid is left, and most of its rows have no family. FOR YOUR RULING.
+
+**2026-09-22. Measured read-only on the local catalogue (`nexus_development`, profiles ON, inside the
+workspace context). Nothing built.**
+
+### The premise is half out of date
+
+Move 2 says *"the family decides Shared's columns"*. 🟩 **The product editor's Shared scope already
+works that way**, since `f212c2348` (09-12):
+
+- `studio-sheet.service.ts:1004-1016` always passes `familyIds` (an empty list when the product has
+  no family).
+- With `familyIds` present, `sheet-columns.service.ts:1319` sets `familySchema`, `:1341` skips every
+  channel spec, and `buildSheetColumns` skips them again at `:619`. Only family fields and the core
+  registry make columns; a family requirement scoped to a channel shows as the *"required by
+  Amazon · IT"* label (Step 2.1 (a)).
+
+🔴 **What is left is the products grid.** `sheet-rows.service.ts:435` calls `getSheetColumns`
+**without** `familyIds`, so its Shared scope is still the union of the channel specs of the
+coordinates the page's products are on (narrowed by move 1). Three smaller callers do the same:
+`products-sheet.routes.ts:59`, `ai/enrichment/generate.service.ts:255`,
+`family-variation-axes.ts:29`.
+
+### Measured — what a family-owned grid would change
+
+| | |
+|---|---|
+| products · parents | 355 · 54 |
+| 🔴 **parents with no family** | **40 of 54** (341 of 355 products; 324 of them have a listing) |
+
+Family `cmtny43jv002jnjfbb6hnijqx` (COAT, OUTERWEAR, PANTS; 219 products; Amazon·IT, eBay·IT,
+Shopify, Etsy), market IT:
+
+| | columns |
+|---|---|
+| the grid today | **330** |
+| the same page, family-owned | **225** |
+| only in the grid | **182**: 95 Amazon-declared attributes stored in the product's own `categoryAttributes` (the real move-2 set, e.g. `externally_assigned_product_identifier`, `recommended_browse_nodes`, `chest`) · 75 list slots (`bulletPoints_1…`, a shape difference — the family shows one list column) · 8 channel identity columns (ASIN, eBay item id, buy box — the family path drops them on purpose) · 3 old registry attributes (`armorType`, `ceCertification`, `waterproofRating`) · 1 alias (`country_of_origin`) |
+| 🔴 **only in the family** | **77** — the family's own attributes the grid **never shows today** (`ppeCategory`, `notifiedBodyNumber`, `declarationOfConformityUrl`, `hazmatClass`…) and split measure fields |
+
+Two more families (17 and 18 products) show the same shape: 180 → 98 and 199 → 101 columns.
+
+So the grid breaks R3 in **both** directions: a channel adds 95 columns to Shared, and the family's
+own 77 are missing.
+
+### Why this needs a ruling, not a build
+
+Flipping the grid to family-owned columns is correct by R3, but on this catalogue it would leave
+**40 of 54 parents** with only the core registry columns on Shared, because they have no family.
+Their Amazon attributes would still be editable on the Amazon scope, but a grid that loses most of
+its columns for most rows is a visible change the plan did not measure. Production's family
+coverage is not measured here (no production access in this lane).
+
+| # | Option | |
+|---|---|---|
+| **a** | **Close move 2 for the editor (already true), and make the grid's move 2 wait for families.** Add a data step before it: count parents with no family on production, then assign families. Until then the grid keeps move 1, and it states the gap (R4): *"N products have no family — Shared shows the channels' attributes for them."* | 🟢 **Recommended.** No visible loss; the real blocker (missing families) becomes a step with a number |
+| b | Flip the grid now: pass the page's `familyIds` from `sheet-rows.service.ts`. Rows with no family show the core columns and a stated *"no family"* absence | Strict R3 today; most local rows lose their attribute columns on Shared |
+
+Either way, the 77 family attributes the grid hides today are a finding to carry: under (a) they
+appear when the grid flips; under (b) at once.
+
+**Done when (either option)** — M4 on the grid's Shared scope: zero columns declared only by a channel,
+for products that have a family; a positive control with an Amazon listing shows the marker.
+**Gate** — extend `shared-scope-narrowing.vitest.test.ts` with a family arm and a no-family arm.
+**Rollback** — drop `familyIds` from the one caller.
+
+---
+
+## A-21 — Step 2.7's premise, re-checked. Its ordering rule no longer blocks anything; Shared's 100 % is by design. FOR YOUR RULING, with D-E.
+
+**2026-09-22. Measured on the local catalogue with the CURRENT code, each reconcile run inside a
+transaction that was then rolled back.** Control: `ReadinessIndex` held **714 rows, newest
+2026-09-13T07:47:57Z** before and after all seven runs; inside each transaction the new rows were
+visible (e.g. 918, 1,088), so the write happened and was undone. Nothing was persisted.
+
+### What the step says
+
+*"Do it after 2.1, so it computes against real requirements — a reconcile against 0 required
+attributes would fill the table with meaningless 100 %s and you would have to run it twice."*
+
+### What the reconcile produces today
+
+| Family (children) | ms | Amazon avg % (req) | eBay avg % (req) | Shared avg % (req) |
+|---|---|---|---|---|
+| 5 | 2,169 | 22 (5) | — (5) | **100 (1)** |
+| 10 | 1,641 | 21 (5) | — (5) | **100 (1)** |
+| 10 | 3,279 | 21 (20) | 84 (5) | **100 (1)** |
+| no family, 0 | 1,443 | — (1) | 83 (5) | — (1) |
+| no family, 0 | 1,919 | — (1) | 83 (5) | — (1) |
+| 15 · family with the 2.1 (b) mirror | 4,229 | 20 (20) | 67 (5) | **100 (1)** |
+| 20 · family with the 2.1 (b) mirror | 3,488 | 46 (20) | 84 (5) | **100 (1)** |
+
+(`—` = no percentage: the coordinate has no cached schema or no listing, and says so in its state.)
+The rows stored on 09-13, before any of Step 2.1, already read Amazon **40–47 %** with ~30 required.
+
+### What that means
+
+1. 🔴 **The ordering rule protects nothing.** Channel coordinates have given real, non-100 % numbers
+   since before 2.1, from their own schemas (A-16's *8 of 163*). **Shared reads 100 % with 1
+   required both before and after 2.1** — including on the family where the 2.1 (b) mirror is
+   applied — because under **R-10** a channel's requirement shows on Shared as a *marker*, not as a
+   Shared requirement. So 2.1 was never going to move Shared's number. And *"run it twice"* costs
+   nothing now: the nightly sweep (15.1) refreshes every family within its horizon anyway.
+2. 🟠 **Shared's readiness is 100 % by design, and that is a separate question.** A chip that is
+   always 100 % tells the operator nothing (R4). Whether Shared should show a readiness number at
+   all — or show *"see each channel"* — is a UI ruling for Phase 4, not a blocker for 2.7.
+3. **The cost is 1.4–4.2 s per family on real cached schemas** (7 samples; 3.5–4.2 s at 15–20
+   children, matching the research's 4.087 s). The fixture's 0.2–0.5 s is a floor, as the plan
+   already warned. At 2–4 s, the 10-minute nightly budget covers **~150–300 families**. A catalogue
+   above that fills on a **rotation** over several nights; the local catalogue (42 roots) fits one
+   night (~1.5 min). The production root count is not measured here.
+
+### Proposed
+
+- **Strike the ordering rule** (*"⚠️ Order matters: 2.1 → 2.7"*). D-E is the only gate left on 2.7,
+  and it no longer needs to wait for the 2.1 (b) production mirror.
+- **Add to 2.7's Cost when:** *"~2–4 s per family on real schemas; the first fill is a rotation of
+  ⌈roots ÷ ~150⌉ nights at worst; count production roots before D-E."*
+- **Carry to Phase 4:** Shared's always-100 % readiness chip (R4).
+
+Nothing built. D-E (the production run) stays the Owner's.

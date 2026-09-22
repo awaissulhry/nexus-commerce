@@ -49,6 +49,8 @@ been exercised.
 | **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | `a55d8da5f` |
 | **Review §3a** Amazon price PATCH wipes the sale price | ✅ **RULED: eBay only.** The sheet has no Amazon price column, and a test now fails if one appears. 🔴 The wipe itself is NOT fixed for the three existing callers | — |
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | 🟡 **FOR YOUR RULING, not blocking** — recommended: record the limit; batch later | — |
+| **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and 40 of 54 local parents have no family | 🟡 **FOR YOUR RULING** — recommended (a): close move 2 for the editor; the grid waits for a family-assignment step | — |
+| **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | 🟡 **FOR YOUR RULING, with D-E** — recommended: strike the ordering rule; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -160,13 +162,10 @@ approval **before building**. Each turn reports what changed, whether it worked,
 
 1. ✅ ~~**Step 2.2, part 2 — the sheet's price bypass.**~~ Built under R-11.
 2. ✅ ~~**Step 2.2's concurrency gate**~~ — built; a forced race on `concurrent-database.ts`.
-3. **Step 2.4 move 2** — *the family decides Shared's columns*. Move 1 (the stopgap) shipped.
-   🟢 Step 2.1 (a) already built the *"also required by Amazon · DE"* marker it needs.
-4. **Step 2.7** — 🔴 **re-read its ordering rule first.** It says *"after 2.1, so it computes
-   against real requirements"*, written believing there were none. Measured: a channel coordinate
-   already has **8 of 163** required; Shared has **1 of 101**. **2.7's premise needs its own check
-   before it runs**, and at a real 4 s per family a 10-minute nightly budget covers ~150 families —
-   so a 2,000-root catalogue refreshes on a **rotation**, not nightly-in-full.
+3. 🟡 **Step 2.4 move 2** — measured, NOT built: see **A-20**. The editor's Shared scope is already
+   family-owned; only the products grid is left, and it needs families first.
+4. 🟡 **Step 2.7** — premise re-checked: see **A-21**. The ordering rule protects nothing; D-E is
+   the only gate; count production roots before it runs.
 5. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).
 
 ### Still blocked, not forgotten
