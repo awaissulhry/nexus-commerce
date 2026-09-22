@@ -676,6 +676,12 @@ Sources: the 08-29 research (R1 Amazon, R2 eBay, R3 Shopify, R4 Etsy, R8 Nango, 
 ## 2026-09-22 continuation amendments
 
 [COMPLETION-MATRIX](COMPLETION-MATRIX.md) is the current acceptance audit.
+The Owner subsequently approved deployment. Final code `439d9e3d3` is on main and
+serving; both GitHub workflows and Railway completed successfully. Production checks
+at 2026-09-22 21:58 UTC verified the migration, exclusive Motovento Etsy routing and
+connection preservation. [Release evidence](build/RELEASE-2026-09-22-EVIDENCE.json).
+This closes the reviewed safety release, not the remaining implementation/activation
+requirements in the matrix.
 [CX-COMPLETION](build/CX-COMPLETION.md) records C1–C8, official contracts, failure
 reproductions, tests, mutations and independent reviews. Old BUILT labels below
 remain historical. Material amendments: unverified replay is never executable;

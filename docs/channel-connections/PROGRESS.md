@@ -1,6 +1,12 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-22**. Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
+Final serving deployment: `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
+commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
+smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
+[Sanitized release evidence](build/RELEASE-2026-09-22-EVIDENCE.json). This supersedes
+older pending-deployment notes; the full channel plan remains open.
+
+Updated **2026-09-23** (production evidence uses UTC). Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
 (Owner report); this does not restart **P8, which remains deferred**.
 
 **Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
@@ -17,20 +23,24 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 
 ### Approved production release — 2026-09-22
 
-The Owner approved “Deploy it all and push to production.” C1–C8 were pushed normally
-as `65782117a` and Railway deployment `a257e041-a61c-4614-a8c9-6c2516622832` reached
-SUCCESS. At21:20Z both public health routes served65782117 and protected diagnostics
-returned401. The exact Etsy migration checksum/finish and exclusive Motovento shop
-routing passed, with all18 connections/scopes/state/presence preserved, including
-Shopify. Automatic eBay setup and Amazon rotation are observed OFF at startup.
+Final code commit **439d9e3d3 is pushed to main and serving**. Native Railway deployment
+`ab46bc3c-3490-4b5f-8ea8-238e6c39f6f0` reached SUCCESS before the same-commit CLI deployment replaced it. At 21:54Z, health/readiness returned
+200 for `439d9e3d` and protected diagnostics returned 401. The Etsy migration checksum
+and finished state match; shop `57783036` routes exclusively to Motovento. All 18
+pre-existing connections retain compared ownership/state/scopes/credential presence;
+Shopify stays connected and non-Etsy aliases are unchanged.
 
-GitHub's clean compiler exhausted its default2GiB heap. The independently reviewed,
-compiler-only4GiB repair `c54406b47` passed normal hooks and was pushed. Both GitHub
-clean builds now pass; final CI/image rollout is still in progress. No type/test
-requirement was weakened. Vendor probes, channel activation, exact-ten deletion and
-P7 drops remain separately gated. The full plan is still open.
+The Owner approved deployment, including the additive routing migration. Necessary
+build/verification repairs set a compiler-only 4GiB heap and adapt test workers to
+available CPUs. Each was independently reviewed and passed normal hooks. Actual
+GitHub CI is **SUCCESS: 1,904 API tests / 4 existing skips, 3,093 web tests**. Its two-CPU
+runner used one file worker. The Deploy API workflow and final smoke test are also SUCCESS. The earlier failures are retained, not waived.
 
-### Active continuation audit — 2026-09-22, after 17:00 UTC
+Startup confirms automatic eBay setup OFF and Amazon rotation OFF (no credential
+queue configured). Vendor probes, channel activation, exact-ten deletion and each P7
+drop remain separately gated. The full plan is still open in the completion matrix.
+
+### Historical pre-deployment audit — final release above supersedes it
 
 Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and
 [CX-COMPLETION](build/CX-COMPLETION.md) before historical package summaries. Fresh
