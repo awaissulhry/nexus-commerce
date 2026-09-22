@@ -2193,3 +2193,127 @@ that change was not kept — speed was never the problem being solved.
 
 Seven rows reading "Test suite" were **not** in the hook. **They are now.** The ledger should say
 *"push hook — `apps/api` `test:hook`"* for each.
+
+---
+
+## OWNER RULINGS — 2026-09-22 (second set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-4** | [A-8](#a-8----the-appsapi-test-suite-does-not-run-on-push-seven-of-part-11s-gates-are-hollow) — add the `apps/api` suite to the push hook? | ✅ **Yes, after fixing the six.** Done — see [A-8 RESULT](#a-8-result--built-and-measured-the-appsapi-suite-is-now-a-gate) |
+| **R-5** | [A-7](#a-7--step-11s-premise-is-false-the-delist-queue-rows-were-never-destroyed) — Step 1.1 wants a migration the evidence says is unnecessary | ✅ **Strike the migration.** No schema change, no migration branch, no merge that migrates production |
+
+### Step 1.1 as amended by R-5
+
+- **Do** — *(struck: the cascade change and the migration)*. The queue row already outlives the
+  product, because `enqueueDelistCascade` writes `productId: null, channelListingId: null`
+  (`outbound-enqueue.ts:116`) and `productId` is already nullable.
+- **Done when** — ✅ **Measured, first clause only.** `delist-cascade.local.vitest.test.ts`:
+  1 passed, 33.76 s; four queue rows survive with null FKs and the product count is 0.
+- **Gate** — `outbound-enqueue.delist.vitest.test.ts:11` asserts the invariant, runs by default,
+  7 passed — 🟢 **and as of [A-8](#a-8-result--built-and-measured-the-appsapi-suite-is-now-a-gate)
+  it now runs on every push.** The deeper `delist-cascade.local` rehearsal stays opt-in
+  (`PR2_LOCAL_REHEARSAL=1`) because it needs the local Docker fixture.
+- **Cost when** — `flat`.
+- **Rollback** — n/a, nothing changed.
+- 🔴 **What remains, and it is not this step's:** *"the listing is removed from the channel"* is
+  **not established on any channel**. That is [1.3](#step-13--implement-reversible-unpublish) and
+  [3.1](#step-31--open-the-two-shut-doors). The plan's claim *"no delist ever runs"* may hold, but
+  the cascade is not why — the refusals are.
+
+---
+
+## Step 1.2 — BUILT. Never orphan a live listing.
+
+**2026-09-22. All four fields pass.**
+
+### What the defect actually was
+
+The route deleted the product and asked the channel **afterwards**. Amazon and eBay refuse
+`unpublish`; Shopify refuses both actions. So the product row vanished, the adapter refused, and
+the listing kept selling with nothing left to manage it.
+
+🔴 **And it was the default path, not an edge case.** The modal preselects `unpublish` the moment a
+live listing exists — `BulkActionBar.tsx`:
+`setChannelAction(data.channelListings.length === 0 ? 'none' : 'unpublish')`. The API default is
+`'none'`, which sends nothing at all.
+
+🟩 **The system already knew.** `GET /products/hard-delete-preflight` → `readHardDeletePreflight`
+(`operational-impact.service.ts:157`) lists exactly these listings, and the modal displays them.
+**Nothing enforced it.** The knowledge and the action were in different places.
+
+### Built, with each rule read from its owner rather than restated
+
+| Where | What |
+|---|---|
+| `channel-delist.service.ts` | 🆕 `delistCapability(channel, action)` — the ONE table of "can this pair actually remove a live listing?". It existed three times, as the first line of three adapters, where nothing outside the file could read it. **The three adapters now read it too** |
+| `outbound-enqueue.ts` | 🆕 `whereDelistTargets(productIds)` — the target predicate lifted out of `enqueueDelistCascade`, which now calls it. One `where`, two callers |
+| `delist-error-codes.ts` | 🆕 `hardDeleteOrphanReason(...)` — names the coordinate, the listing id, **why** it stays live (reusing `DELIST_OPERATOR_COPY`, so one wording), and the two ways forward |
+| `products-catalog.routes.ts` | The refusal, inside the transaction, **before** anything is deleted or enqueued |
+| `BulkActionBar.tsx` + `hardDelete.ts` | 🆕 `interpretHardDeleteOutcomes` / `hardDeleteRefusalLines` |
+
+🟩 **R1 in practice:** when [Step 1.3](#step-13--implement-reversible-unpublish) lands reversible
+unpublish, **one row of `delistCapability` changes and this refusal lifts with it.** A second copy
+in the route would have gone on refusing a delete that had become safe.
+
+### Three things the change had to fix that the plan does not mention
+
+1. 🔴 **The audit trail.** The `hard-delete` `AuditLog` rows were built from `eligible`. A refused
+   product would have carried a durable record of a destructive act that never happened. Now built
+   from `deletable`.
+2. 🔴 **The bin row.** `productReadCache.deleteMany` targeted **all** `productIds`. A refused
+   product would have lost the cache row the bin UI reads — still existing, now invisible and
+   unreachable. Now targets only the deleted ids plus the ghost rows.
+3. 🔴 **The UI announced a deletion that did not happen.** `hardDeleteBulk` ignored the response
+   body and emitted `product.deleted` for **every selected id**, so other open pages would drop a
+   row that still exists, and the operator would be told "done". It now announces only what the
+   server deleted, and states the refusal. **If nothing was deleted it throws**, because `run`'s
+   success toast would otherwise say *"Permanently deleting done"*.
+
+🟩 The toast uses the provider **already in that file** (`@/components/ui/Toast`). The repo has two
+toast providers with different signatures; switching one component's provider is its own piece of
+work, not a side effect of this one.
+
+### Done when — ✅ measured
+
+*"Hard-deleting a product with a live Amazon or eBay listing is refused with a sentence naming the
+coordinate, and no orphan can be created."*
+
+`hard-delete-orphan-guard.vitest.test.ts`: **13 passed.** The sentence asserted end to end —
+`AMAZON · IT`, `B0LIVE`, and the cause — plus an arm proving **every** coordinate is named, not
+just the first.
+
+### Cost when — `flat`
+
+One extra indexed `findMany` per call, over a set already capped at **200 products**. It does not
+grow with the catalog.
+
+### Gate — ✅ and proven able to fail **in both directions**, which this step's Gate demands
+
+| Mutation | Result |
+|---|---|
+| Never refuse (the old behaviour) | 🔴 **9 of 13 red** |
+| Refuse everything | 🔴 **2 of 13 red** — the positive controls |
+| Web helper: announce every id again | 🔴 **3 of 33 red** |
+
+Restored after each; green again. **Every refusal arm is paired with a positive control that must
+still delete** — `AMAZON`/`EBAY` + `delete` proceed, a listing with no external id is not live, and
+a clean product deletes. A guard seen only refusing cannot be told from one that refuses everything.
+
+🟢 **In the hook.** Both suites run on push as of
+[A-8](#a-8-result--built-and-measured-the-appsapi-suite-is-now-a-gate):
+`apps/api` **11,025 passed**, `apps/web` **4,603 passed**, both `tsc --noEmit` **exit 0**.
+
+### Rollback
+
+Remove the Step 1.2 block in `products-catalog.routes.ts` and restore `eligible`/`productIds` in
+the audit and cache lines. `delistCapability`, `whereDelistTargets` and the web helpers are
+additive and can stay.
+
+### ⬜ Deliberately NOT included, so it is not mistaken for done
+
+A listing whose eBay ItemID is **still referenced by another surviving local product** is not
+orphaned — another row still manages it — so it does not refuse. The cascade's own
+`channelSkipped` guards (variation child, shared ItemID) therefore stay as they are. 🔴 **An
+orphaned eBay *variation* under a surviving parent ItemID is not covered by this step** and is not
+measured. It belongs with [Step 1.3](#step-13--implement-reversible-unpublish).

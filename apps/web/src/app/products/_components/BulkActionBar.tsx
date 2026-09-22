@@ -54,7 +54,7 @@ import { Radio } from '@/design-system/primitives/Radio'
 import { Modal } from '@/design-system/components/Modal'
 import { Field } from '@/design-system/components/Field'
 import { Banner } from '@/design-system/components/Banner'
-import { hardDeleteConfirmation, parseHardDeletePreflight, type PreflightWarnings } from './hardDelete'
+import { hardDeleteConfirmation, hardDeleteRefusalLines, interpretHardDeleteOutcomes, parseHardDeletePreflight, type PreflightWarnings } from './hardDelete'
 import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -348,10 +348,40 @@ export function BulkActionBar({
         },
       )
       if (!res.ok) throw new Error((await res.json()).error)
-      emitInvalidation({
-        type: 'product.deleted',
-        meta: { productIds: selectedIds, source: 'bulk-hard-delete', channelAction },
-      })
+
+      // 🔴 PLAN Step 1.2 — the call can now succeed PARTLY. The API refuses any product whose
+      // live listing this action would leave selling, and returns a per-row `outcomes` array
+      // (15.10: "487 deleted · 13 refused", never one throw on row 14).
+      //
+      // Until today this handler ignored the response body and announced `product.deleted` for
+      // every selected id. With a refusal in play that would be a claim that a deletion happened
+      // when it did not — other open pages would drop a row that still exists, and the operator
+      // would be told "done". So the event now carries only the ids the server actually deleted,
+      // and a refusal is stated rather than swallowed.
+      const { deletedIds, refused } = interpretHardDeleteOutcomes(
+        await res.json().catch(() => null),
+        selectedIds,
+      )
+
+      if (deletedIds.length > 0) {
+        emitInvalidation({
+          type: 'product.deleted',
+          meta: { productIds: deletedIds, source: 'bulk-hard-delete', channelAction },
+        })
+      }
+      // Nothing deleted at all: `run`'s own success toast would say "Permanently deleting done",
+      // which would be false. Throwing routes it to the failure toast with the reasons attached.
+      if (deletedIds.length === 0 && refused.length > 0) {
+        throw new Error(hardDeleteRefusalLines(refused))
+      }
+      if (refused.length > 0) {
+        toast({
+          tone: 'warning',
+          title: `${deletedIds.length} deleted · ${refused.length} kept`,
+          description: hardDeleteRefusalLines(refused),
+          durationMs: 20000,
+        })
+      }
     })
 
   const duplicate = async () =>

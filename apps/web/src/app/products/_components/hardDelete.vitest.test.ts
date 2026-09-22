@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import messages from '@/lib/i18n/messages/en.json'
-import { hardDeleteConfirmation, parseHardDeletePreflight, type PreflightWarnings } from './hardDelete'
+import { hardDeleteConfirmation, hardDeleteRefusalLines, interpretHardDeleteOutcomes, parseHardDeletePreflight, type HardDeleteOutcome, type PreflightWarnings } from './hardDelete'
 
 const preflight: PreflightWarnings = { channelListings: [], openOrders: [], activeBundles: [], fbaInventory: [] }
 const input = {
@@ -84,5 +84,57 @@ describe('preflight boundary and server acknowledgement', () => {
     expect(hardDeleteConfirmation({ ...input, preflight: { ...preflight, confirmPhrase: null } }).armed).toBe(false)
     expect(hardDeleteConfirmation({ ...input, preflight: { ...preflight, confirmPhrase: 'DELETE' }, typed: 'DELETE' }).armed).toBe(false)
     expect(hardDeleteConfirmation({ ...input, preflight: { ...preflight, refusal: 'Refused by the server.' } }).reason).toBe('Refused by the server.')
+  })
+})
+
+
+describe('PLAN Step 1.2 — a partly refused hard delete must be reported, not announced as done', () => {
+  const deleted = (id: string): HardDeleteOutcome => ({ productId: id, sku: `SKU-${id}`, outcome: 'deleted', reasons: [] })
+  const refused = (id: string, reason: string): HardDeleteOutcome => ({ productId: id, sku: `SKU-${id}`, outcome: 'refused', reasons: [reason] })
+
+  it('announces ONLY the ids the server actually deleted', () => {
+    const body = { outcomes: [deleted('p1'), refused('p2', 'AMAZON · IT listing B0 would stay live.'), deleted('p3')] }
+    const read = interpretHardDeleteOutcomes(body, ['p1', 'p2', 'p3'])
+    expect(read.deletedIds).toEqual(['p1', 'p3'])
+    expect(read.refused.map(r => r.productId)).toEqual(['p2'])
+    expect(read.reported).toBe(true)
+  })
+
+  it('positive control — nothing refused means every selected id is announced', () => {
+    const read = interpretHardDeleteOutcomes({ outcomes: [deleted('p1'), deleted('p2')] }, ['p1', 'p2'])
+    expect(read.deletedIds).toEqual(['p1', 'p2'])
+    expect(read.refused).toEqual([])
+  })
+
+  it('every row refused means NOTHING is announced as deleted', () => {
+    const read = interpretHardDeleteOutcomes({ outcomes: [refused('p1', 'stays live')] }, ['p1'])
+    expect(read.deletedIds).toEqual([])
+    expect(read.refused).toHaveLength(1)
+  })
+
+  it.each([null, undefined, {}, { outcomes: null }, { outcomes: 'nope' }, 'text'])(
+    'an API build that does not report outcomes (%j) keeps the old behaviour — it is "did not say", not "deleted nothing"',
+    raw => {
+      const read = interpretHardDeleteOutcomes(raw, ['p1', 'p2'])
+      expect(read.deletedIds).toEqual(['p1', 'p2'])
+      expect(read.refused).toEqual([])
+      expect(read.reported).toBe(false)
+    },
+  )
+
+  it('a malformed row is dropped rather than counted as a deletion', () => {
+    const read = interpretHardDeleteOutcomes({ outcomes: [deleted('p1'), { productId: 'p2' }, { outcome: 'deleted' }] }, ['p1', 'p2'])
+    expect(read.deletedIds).toEqual(['p1'])
+  })
+
+  it('the operator sentence names the product and carries the reason', () => {
+    const line = hardDeleteRefusalLines([refused('p2', 'AMAZON · IT listing B0LIVE would stay live.')])
+    expect(line).toContain('SKU-p2')
+    expect(line).toContain('B0LIVE')
+  })
+
+  it('a refusal with no reason still says so rather than printing an empty line', () => {
+    expect(hardDeleteRefusalLines([{ productId: 'p2', sku: null, outcome: 'refused', reasons: [] }]))
+      .toBe('p2: Refused; no reason was given.')
   })
 })

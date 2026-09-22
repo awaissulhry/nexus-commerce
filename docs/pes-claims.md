@@ -8,7 +8,7 @@ Claim row, per rule 7 of the PES.0 hub rulings below. Lane: the approved plan at
 **Files held.** `packages/database/scripts/check-applied-but-missing.mjs` (new),
 `…/check-applied-but-missing.vitest.test.ts` (new), `…/migrate-direct.mjs`,
 `packages/database/vitest.config.mts` (new), `packages/database/package.json`, `package-lock.json`,
-`.githooks/pre-push`, `docs/product-cheat/**`. Nothing under `apps/**` is held.
+`.githooks/pre-push`, `docs/product-cheat/**`. **Now also held (Step 1.2, 2026-09-22 ~06:30):** `apps/api/src/routes/products-catalog.routes.ts`, `apps/api/src/services/channel-delist.service.ts`, `apps/api/src/services/outbound-enqueue.ts`, `apps/api/src/services/delist-error-codes.ts`, `apps/api/src/routes/hard-delete-orphan-guard.vitest.test.ts` (new), `apps/api/package.json`, `apps/api/src/clients/amazon-validation-preview.vitest.test.ts`, `apps/api/src/services/marketplaces/amazon-classifications.vitest.test.ts`, `apps/web/src/app/products/_components/BulkActionBar.tsx`, `.../hardDelete.ts`, `.../hardDelete.vitest.test.ts`. No design-system file is touched, so no `apps/factory` mirror is due.
 
 **Step 0.1 CLOSED and committed** (`861280afe`), all four fields measured. Its premise was out of
 date — production has 0 untracked and 0 applied-but-missing migrations (amendment A-1) — and the

@@ -97,6 +97,39 @@ export async function dispatchChannelDelist(
   }
 }
 
+/**
+ * 🔴 PLAN Step 1.2 — the ONE table of "can this (channel, action) pair actually remove a live
+ * listing today?".
+ *
+ * It existed before, three times, as the first line of three adapters: Amazon and eBay refused
+ * `unpublish`, Shopify refused both. Nothing outside this file could read those rules, so the
+ * /products/bulk-hard-delete route deleted the local product, the adapter then refused, and the
+ * listing stayed live on the channel with no product row left to manage it. An orphan.
+ *
+ * R1 — one rule, one owner. The route asks this function BEFORE deleting; the adapters below ask
+ * it instead of restating it. When Step 1.3 implements reversible unpublish, ONE row changes here
+ * and the route's refusal lifts with it. A second copy in the route would not have lifted, and
+ * would have gone on refusing a delete that had become safe.
+ *
+ * `removes: false` means "this listing keeps selling after the action". It never means the action
+ * errored — that is decided per attempt, further down.
+ */
+export function delistCapability(
+  channel: string,
+  action: ChannelAction,
+): { removes: true } | { removes: false; errorCode: DelistErrorCode } {
+  switch (channel) {
+    case 'AMAZON':
+      return action === 'unpublish' ? { removes: false, errorCode: 'AMAZON_UNPUBLISH_NOT_IMPLEMENTED' } : { removes: true }
+    case 'EBAY':
+      return action === 'unpublish' ? { removes: false, errorCode: 'EBAY_UNPUBLISH_NOT_IMPLEMENTED' } : { removes: true }
+    case 'SHOPIFY':
+      return { removes: false, errorCode: 'SHOPIFY_DELIST_NOT_IMPLEMENTED' }
+    default:
+      return { removes: false, errorCode: 'DELIST_UNSUPPORTED_CHANNEL' }
+  }
+}
+
 function delistRefusal(errorCode: DelistErrorCode, detail?: string): ChannelDelistResult {
   return {
     success: false, outcome: 'REFUSED', channelFact: 'UNKNOWN', retryable: false,
@@ -116,7 +149,8 @@ async function delistAmazon(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  if (action === 'unpublish') return delistRefusal('AMAZON_UNPUBLISH_NOT_IMPLEMENTED')
+  const amazonCapability = delistCapability('AMAZON', action)
+  if (amazonCapability.removes === false) return delistRefusal(amazonCapability.errorCode)
   if (!job.targetRegion) return delistRefusal('AMAZON_DELIST_NO_REGION')
   const marketplaceId = resolveAmazonMarketplaceId(job.targetRegion)
   if (!marketplaceId) return delistRefusal('AMAZON_DELIST_UNKNOWN_MARKET')
@@ -152,6 +186,10 @@ async function delistShopify(
   if (!(job.channelConnectionId === undefined ? job.payload?.channelConnectionId : job.channelConnectionId)) {
     return delistRefusal('SHOPIFY_DELIST_NO_ACCOUNT')
   }
+  const shopifyCapability = delistCapability('SHOPIFY', action)
+  // The table refuses Shopify for both actions today; if that ever changes, this states the gap
+  // rather than silently reporting the old error code.
+  if (shopifyCapability.removes === false) return delistRefusal(shopifyCapability.errorCode)
   return delistRefusal('SHOPIFY_DELIST_NOT_IMPLEMENTED')
 }
 
@@ -178,7 +216,8 @@ async function delistEbay(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  if (action === 'unpublish') return delistRefusal('EBAY_UNPUBLISH_NOT_IMPLEMENTED')
+  const ebayCapability = delistCapability('EBAY', action)
+  if (ebayCapability.removes === false) return delistRefusal(ebayCapability.errorCode)
   const itemId = job.externalListingId
   if (!itemId) return delistRefusal('EBAY_DELIST_NO_ITEMID')
 

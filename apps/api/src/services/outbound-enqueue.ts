@@ -44,6 +44,25 @@ export function sellerSkuForDelist(
 
 export type DelistSkippedCoordinate = ListingCoordinate & { externalListingId: string | null; reason: string }
 
+/**
+ * 🔴 PLAN Step 1.2 — the ONE predicate for "a listing this delete has to reckon with".
+ *
+ * It was inline in `enqueueDelistCascade` below. The hard-delete route now has to ask the same
+ * question BEFORE deleting, so that it can refuse a delete that would orphan a live listing — and
+ * two hand-written copies of a `where` clause one file apart is precisely how a write's routing
+ * predicate stops matching its readers. One export, two callers, no second copy.
+ *
+ * Pair it with `sellingRisk()` on the rows it returns: this narrows in SQL, that decides per row.
+ */
+export function whereDelistTargets(productIds: string[]) {
+  return {
+    productId: { in: productIds },
+    // D6: do not widen this predicate until the Wave 4 approval.
+    listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
+    externalListingId: { not: null },
+  } satisfies Prisma.ChannelListingWhereInput
+}
+
 /** The cascade captures its targets BEFORE deletion; only its jobs have no FKs. */
 export async function enqueueDelistCascade(
   tx: Prisma.TransactionClient,
@@ -52,12 +71,7 @@ export async function enqueueDelistCascade(
   actor: string,
 ) {
   const liveListings = await tx.channelListing.findMany({
-    where: {
-      productId: { in: productIds },
-      // D6: do not widen this predicate until the Wave 4 approval.
-      listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
-      externalListingId: { not: null },
-    },
+    where: whereDelistTargets(productIds),
     select: {
       id: true, productId: true, channel: true, region: true, marketplace: true,
       channelConnectionId: true, aliasKey: true, externalListingId: true, externalParentId: true,
