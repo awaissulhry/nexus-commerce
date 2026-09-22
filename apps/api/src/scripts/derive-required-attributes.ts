@@ -9,6 +9,18 @@
  *
  *   DATABASE_URL=… npx tsx apps/api/src/scripts/derive-required-attributes.ts            # summary
  *   … --markdown docs/product-cheat/D-A-PROPOSAL.md                                      # the table
+ *   … --apply                                                                            # WRITE
+ *   … --revert                                                                           # undo
+ *
+ * 🔴 `--apply` is the MIRROR ruled in A-16 (option a). It writes `required = true` and
+ * `channels = ['<the channel that asks>']` onto `FamilyAttribute` rows. It adds NO requirement a
+ * channel did not already state — on that channel the field is required today either way. What it
+ * changes is that **Shared** can now say *"also required by Amazon · DE"*.
+ *
+ * 🔴 THE MATCH IS PER FAMILY, NOT PER ATTRIBUTE. A channel requires a field for particular PRODUCT
+ * TYPES. A family is marked only when it actually holds a product of one of those types —
+ * otherwise a family that never sells outerwear would inherit outerwear's requirements. Without
+ * that check the mirror is a blunt instrument wearing a derivation's clothes.
  *
  * 🟢 IT DOES NOT RE-DERIVE "REQUIRED". `getSheetColumns` already merges the cached channel schemas
  * onto master keys and marks each column's `requiredBy` per coordinate — the same path the sheet,
@@ -29,6 +41,8 @@ const flag = (name: string) => { const i = argv.indexOf(`--${name}`); return i >
 const WORKSPACE = flag('workspace') ?? LEGACY_WORKSPACE_ID
 const MARKDOWN = flag('markdown')
 const LIMIT = Number(flag('limit') ?? 0)
+const APPLY = argv.includes('--apply')
+const REVERT = argv.includes('--revert')
 
 type Hit = { channel: string; market: string; productType: string }
 
@@ -39,7 +53,7 @@ async function main() {
     // ── what the dictionary holds, and what the families already use ──
     const attributes = await prisma.customAttribute.findMany({ select: { id: true, code: true, label: true } })
     const byCode = new Map(attributes.map(a => [a.code, a]))
-    const familyAttributes = await prisma.familyAttribute.findMany({ select: { attributeId: true, familyId: true, required: true, channels: true } })
+    const familyAttributes = await prisma.familyAttribute.findMany({ select: { id: true, attributeId: true, familyId: true, required: true, channels: true } })
     const attachedTo = new Map<string, Set<string>>()
     for (const fa of familyAttributes) {
       if (!attachedTo.has(fa.attributeId)) attachedTo.set(fa.attributeId, new Set())
@@ -130,6 +144,67 @@ async function main() {
       for (const u of unreadable.slice(0, 5)) console.log(`      ${u}`)
       if (unreadable.length > 5) console.log(`      … and ${unreadable.length - 5} more`)
     }
+
+    // ── the mirror (A-16 option a) ────────────────────────────────
+    if (REVERT) {
+      // Undoes exactly what --apply writes and nothing else: rows carrying a channel list. The
+      // 486 rows all started `required = false, channels = []`, so this is the same state back.
+      const target = await prisma.familyAttribute.findMany({ where: { required: true, NOT: { channels: { isEmpty: true } } }, select: { id: true } })
+      if (!target.length) { console.log('\nnothing to revert — no FamilyAttribute row carries a channel list'); return }
+      const undone = await prisma.familyAttribute.updateMany({ where: { id: { in: target.map(t => t.id) } }, data: { required: false, channels: [] } })
+      console.log(`\nreverted ${undone.count} of ${target.length} rows to required = false, channels = []`)
+      return
+    }
+
+    // Which product types each family actually holds — the precision the mirror turns on.
+    const familyTypes = new Map<string, Set<string>>()
+    for (const row of await prisma.product.groupBy({ by: ['familyId', 'productType'], where: { deletedAt: null, familyId: { not: null } } })) {
+      const id = String(row.familyId)
+      if (!familyTypes.has(id)) familyTypes.set(id, new Set())
+      if (row.productType) familyTypes.get(id)!.add(String(row.productType).toUpperCase())
+    }
+
+    type Write = { id: string; family: string; code: string; channels: string[]; types: string[] }
+    const writes: Write[] = []
+    const skipped: string[] = []
+    for (const [code, hits] of required) {
+      const attribute = byCode.get(code)!
+      const rows = familyAttributes.filter(fa => fa.attributeId === attribute.id)
+      for (const fa of rows) {
+        const held = familyTypes.get(fa.familyId) ?? new Set<string>()
+        const matching = hits.filter(h => held.has(h.productType.toUpperCase()))
+        if (!matching.length) { skipped.push(`${code} on family ${fa.familyId}: the family holds none of the product types the channel asks for`); continue }
+        const channels = [...new Set(matching.map(h => h.channel))].sort()
+        const already = fa.required && [...fa.channels].sort().join(',') === channels.join(',')
+        if (already) { skipped.push(`${code} on family ${fa.familyId}: already ${channels.join(', ')}`); continue }
+        if (fa.required) { skipped.push(`🔴 ${code} on family ${fa.familyId}: already required as ${JSON.stringify(fa.channels)} — NOT overwritten`); continue }
+        writes.push({ id: fa.id, family: fa.familyId, code, channels, types: [...new Set(matching.map(h => h.productType))].sort() })
+      }
+    }
+
+    console.log('')
+    console.log(`MIRROR — ${writes.length} FamilyAttribute rows would be marked required`)
+    for (const w of writes) console.log(`   ${w.code.padEnd(38)} channels=${JSON.stringify(w.channels).padEnd(12)} family=${w.family}  types=${w.types.join(', ')}`)
+    if (skipped.length) {
+      console.log(`   ⬜ ${skipped.length} skipped`)
+      for (const sk of skipped.slice(0, 8)) console.log(`      ${sk}`)
+      if (skipped.length > 8) console.log(`      … and ${skipped.length - 8} more`)
+    }
+
+    if (APPLY) {
+      if (!writes.length) { console.log('\nnothing to write'); return }
+      let written = 0
+      for (const w of writes) {
+        await prisma.familyAttribute.update({ where: { id: w.id }, data: { required: true, channels: w.channels } })
+        written++
+      }
+      // 🔴 Assert the count. A loop of writes is a claim until it is counted back.
+      const now = await prisma.familyAttribute.count({ where: { required: true, NOT: { channels: { isEmpty: true } } } })
+      console.log(`\nWROTE ${written} rows. FamilyAttribute rows now required with a channel list: ${now}`)
+      if (written !== writes.length) { console.error('🔴 wrote fewer rows than planned'); process.exit(1) }
+      return
+    }
+    if (!REVERT) console.log('\n(dry run — pass --apply to write, --revert to undo)')
 
     if (MARKDOWN) {
       const { writeFileSync } = await import('node:fs')

@@ -3646,3 +3646,83 @@ today would be right about channels and empty about Shared.**
   (BE, NL, UK). Their requirements are unknown, not absent.
 - **Local cache only.** 183 cached schemas across 11 coordinates. Production may hold more, and the
   same script run there would return a larger set. This list is a floor.
+
+---
+
+## OWNER RULING — 2026-09-22 (seventh set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-10** | [A-16](#a-16--d-a-derived-and-the-measurement-changes-the-question-for-your-ruling) — what is Shared's bar? | ✅ **Option (a). Mirror.** Mark the derived attributes required on the channels that demand them. No new requirement anywhere; the channel's existing one becomes visible on Shared |
+
+## Step 2.1 (b) — APPLIED, on the local catalogue. Production is untouched.
+
+### 🔴 Where this ran, first, because it is a data write
+
+**`nexus_development`, the local development database.** 🔴 **No production database was opened,
+and nothing on this branch is merged or deployed.** Applying the mirror to production is a separate
+run against a separate database and needs its own word from the Owner — the same bar
+[Step 2.7](#step-27--run-the-readiness-reconcile-on-production) sets for its own write.
+
+### The rule the mirror actually used
+
+`derive-required-attributes.ts --apply`. For each derived attribute, for each family it is attached
+to: mark it required with `channels: ['<the channel that asks>']` **only when that family holds a
+product of a product type the channel asks for.**
+
+🔴 **That per-family check is not decoration — it did the work.** Of 12 candidate rows, **7 were
+skipped** because the family holds none of the relevant product types. Without it the mirror would
+have written 12 rows, 7 of them requiring outerwear's fields of families that sell no outerwear. *A
+derivation applied bluntly is still a guess.*
+
+### Measured, before and after, on family `cmtny43jv002jnjfbb6hnijqx` (COAT + OUTERWEAR)
+
+| | before | after |
+|---|---|---|
+| `FamilyAttribute` rows marked required | **0** | **5** |
+| **Shared / Master** required columns | 1 (`name`) | **1 (`name`)** — unchanged, as ruled |
+| **Amazon · DE** required, in the Shared build | **0** | 🟢 **1** — `supplier_declared_dg_hz_regulation` |
+| eBay · DE / Shopify / Etsy | 0 | **0** — they never asked |
+| the mirrored column's `requiredBy` | `[]` | `["Amazon · DE"]` |
+| …and its `defaultVisible` | `false` | 🟢 `true` |
+
+➡️ **Exactly what option (a) promised.** Shared gains the *"also required by Amazon · DE"* fact and
+gains no plain requirement of its own. eBay, Shopify and Etsy are untouched — the third arm of Step
+2.1's gate, now demonstrated on real data and not only in a unit test.
+
+🟢 **This is the first time Step 2.1 (a)'s mechanism has carried a real requirement.** Until now it
+was correct and idle.
+
+### Rollback — ✅ EXERCISED, not described
+
+`--revert` sets `required = false, channels = []` on exactly the rows carrying a channel list —
+which is the state all 486 rows started in.
+
+| | |
+|---|---|
+| revert | `reverted 5 of 5` → marked required **0**, `requiredBy` `[]`, `defaultVisible` `false` |
+| re-apply | `WROTE 5 rows` → back to **5**, `["Amazon · DE"]`, `true` |
+| re-run `--apply` again | `MIRROR — 0 rows would be marked` — **idempotent** |
+
+Each step was confirmed by **reading the state back**, never by trusting the exit code.
+
+### Gate
+
+The mechanism's gate is Step 2.1 (a)'s four arms, which run on every push. The data has no gate and
+cannot have one — it is a decision, not an invariant. What it has instead is a derivation that can
+be re-run and a revert that has been exercised.
+
+🔴 The script **refuses to overwrite** a row that is already required with a different channel
+list; it reports it and skips. Nothing this lane wrote was a change to somebody else's decision.
+
+### Cost when — `flat`. Five row updates.
+
+### ⬜ Still open
+
+- 🔴 **Production.** Same script, same ruling, a different database, and **your word**.
+- ⬜ **9 coordinates unreadable** (BE, NL, UK not active locally). Their requirements are unknown,
+  not absent, so the list is a floor. Running this on production would read more.
+- 🔴 **[Step 2.7](#step-27--run-the-readiness-reconcile-on-production)'s ordering rule should be
+  re-read.** It says *"after 2.1, so it computes against real requirements"*, written believing
+  there were none. A reconcile now computes real requirements on channel coordinates and on Shared
+  still sees only `name`. **2.7's premise deserves its own check before it runs.**
