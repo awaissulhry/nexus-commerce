@@ -1,10 +1,14 @@
 # The Product Sheet — PROGRESS
 
-**Updated 2026-09-22. Branch `pes/phase-0` — 14 commits, all pushed. Nothing merged to `main`,
-so nothing is deployed and nothing has migrated production.**
+**Updated 2026-09-22. Branch `pes/phase-0` — 39 commits ahead of `main`, all pushed. Nothing
+merged, so nothing is deployed and nothing has migrated production.**
 
-Read [PLAN.md](PLAN.md) for the plan and, at its end, the amendments A-1…A-12 + Owner rulings.
-Every claim below carries the commit that measured it.
+Read [PLAN.md](PLAN.md) for the plan and, at its end, the amendments **A-1…A-17** and the Owner
+rulings **R-1…R-10**. Every claim below carries the commit that measured it.
+
+🔴 **One data write exists, and it is LOCAL ONLY.** Step 2.1 (b) marked 5 `FamilyAttribute` rows in
+`nexus_development`. Production is untouched and needs its own word. `--revert` undoes it and has
+been exercised.
 
 ---
 
@@ -57,6 +61,18 @@ Every claim below carries the commit that measured it.
 8. **The sheet's column-set cache can no longer grow without end.** It is keyed per family and per
    saved column selection, so it used to hold one full column set per product a user opened, for
    the life of the process. Now 64 per business, oldest write evicted first.
+9. **`bootstrap-fresh-database.mjs` now produces an ISOLATED database** — 443 policies, 1,778
+   grants. It used to build a schema with **0** of either, which the app could not use and which
+   was one `GRANT` away from every business reading every other business.
+10. **A family requirement scoped to a channel survives.** *Required on Amazon* used to be
+    discarded outright; it now reaches the sheet as *"required by Amazon · DE"* on Shared and as a
+    real requirement on Amazon, and never touches eBay.
+11. **The nightly readiness sweep is bounded at 10 minutes** and resumes on the next tick. It used
+    to run for a projected 11.4 hours at 10,000 products, holding Serializable transactions.
+12. **The sheet's column build is ~25× faster and no longer grows with the catalogue** — one
+    un-narrowed aggregate was the entire cost of the page. ~150 ms → **6 ms**.
+13. **A price write cannot silently skip its version check.** A caller with no version must name
+    why, from a closed set, and every outcome says whether it was guarded.
 
 ---
 
@@ -79,32 +95,59 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 ## Open, carried forward
 
 - 🔴 **1.3** blocked on **3.1** — eBay decrypt + Amazon `invalid_grant`. Blocks 3.4, 3.5 too.
-- 🔴 **A-12** — a direct API caller can still `PATCH ebay_price` and bypass the price door. The
-  sheet cannot. Closes at **Step 2.2**, which should reuse `EBAY_PRICE_HELD_REASON`.
-- ⬜ **15.5c, never verified** — does the readiness reconcile bump `ChannelListing.version`? If it
-  does, Steps 2.2 and 2.7 fight. **Verify before 2.2 ships.**
+- 🔴 **A-12 / Step 2.2 part 2 — the sheet still bypasses the price door.** `bulk-edit.service.ts`
+  writes `price` through `channelValueMutation`, so a price typed in the sheet skips the enqueue.
+  A-12 measured the cost of touching it: `ebay_price` is this repo's canonical fixture for a mapped
+  channel field and the last attempt broke **19 arms across 3 files**. **This is the next build.**
+- 🔴 **Step 1.5's read-only hold on the eBay price cell stays on** until the above lands.
+- 🔴 **Step 2.2's concurrency gate is NOT written** — *"the second write returns `conflict`, on
+  `concurrent-database.ts`, never on PGlite."* The six tests that exist are contract arms on mocks.
+- 🟢 ~~**15.5c**~~ **ANSWERED: the reconcile does NOT bump `ChannelListing.version`** — 0 of 15,
+  with a positive control. 2.2 and 2.7 do not fight.
 - ⬜ The 467-migration history still does not replay (443/467). It is history, not a build path.
 - ⬜ An orphaned eBay *variation* under a surviving parent ItemID is not covered by 1.2.
 
 ---
 
-## Next
+## Next — start here
 
-**Phase 2.** Per [15.13](PLAN.md#1513--ranked-what-to-do-and-when), before Step 2.1:
+### 🔴 Three rulings are open. None of them blocks the next build.
 
-1. ~~**15.3 — bound the column-set cache**~~ ✅ **CLOSED.** See
-   [15.3 RESULT](PLAN.md#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were).
-2. ~~**15.11 — the scale fixture**~~ ✅ **CLOSED.** See
-   [15.11 RESULT](PLAN.md#step-1511-result--the-scale-fixture-stands-up-and-the-first-thing-it-measured-was-step-24).
-3. ~~**2.1**~~ ✅ **BUILT (a) + APPLIED (b, local).** ~~**15.1 + 15.6**~~ ✅ **BUILT.** **2.1 (b)** needs **D-A** — I derive the required list from the
-   channel schemas and bring it back for approval. Then **2.7 reconcile**, **2.4** (needs 15.4's
-   fix — the plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
+| # | What | Recommended |
+|---|---|---|
+| **A-17** | 15.5 (b) asks for a retry that is a **lost update** — on conflict, re-read and resubmit over somebody else's change | **(a)** carry `expectedPrice` and retry only when the price itself is untouched |
+| **D-E** | Run the readiness reconcile on **production**. It is a live write | read 2.7's re-check below first |
+| **Step 2.1 (b) on production** | The 5-row mirror ran on the local database only. Same script, same ruling, a different database | yours to authorise |
 
-✅ **A-13 is closed** (R-7). One bootstrap command now gives an isolated database.
+### The build queue
 
-🔴 **Before 2.7, re-read its ordering rule.** It says *"after 2.1, so it computes against real
-requirements"*, written believing there were none. Measured: a channel coordinate already has 8 of
-163 required; Shared has 1 of 101. **2.7's premise needs its own check.**
+1. 🔴 **Step 2.2, part 2 — the sheet's price bypass.** The last real work in 2.2.
+   **Read [A-12](PLAN.md#a-12--the-write-half-was-reverted-and-the-reason-is-worth-more-than-the-code)
+   before touching it.** Refuse the bypass *at the price door* and delete
+   `EBAY_PRICE_HELD_REASON`'s column hold in the same change; a generic gate broke 19 arms last
+   time. Then Step 1.5's hold lifts.
+2. **Step 2.2's concurrency gate** — on `concurrent-database.ts`, never PGlite.
+3. **Step 2.4 move 2** — *the family decides Shared's columns*. Move 1 (the stopgap) shipped.
+   🟢 Step 2.1 (a) already built the *"also required by Amazon · DE"* marker it needs.
+4. **Step 2.7** — 🔴 **re-read its ordering rule first.** It says *"after 2.1, so it computes
+   against real requirements"*, written believing there were none. Measured: a channel coordinate
+   already has **8 of 163** required; Shared has **1 of 101**. **2.7's premise needs its own check
+   before it runs**, and at a real 4 s per family a 10-minute nightly budget covers ~150 families —
+   so a 2,000-root catalogue refreshes on a **rotation**, not nightly-in-full.
+5. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).
+
+### Still blocked, not forgotten
+
+- 🔴 **1.3** on **3.1** — eBay decrypt + Amazon `invalid_grant`. Blocks 3.4 and 3.5 too.
+- ⏸️ **0.3** the credential rotation — the Owner's, deliberately deferred.
+
+## The rule that earned its keep, again
+
+Seven things went wrong this session. **Every one was caught by measuring, and four of them were
+caught by a test of mine failing on its own scaffolding rather than on the code.** Three mutations
+ESCAPED a gate I had just called green, and each time the fix was a second arm, not a second line.
+
+> A gate with two paths needs two arms. One of them is decoration until it is mutated.
 
 ---
 
@@ -118,6 +161,33 @@ requirements"*, written believing there were none. Measured: a channel coordinat
   (`--write` shrinks the baseline). It rejected two pushes this session.
 - 🔴 Run vitest from **`apps/api`**, never the repo root — the root `.env` is Neon production. The
   R-VT-12 guard refuses it, loudly.
+- `NEXUS_WORKSPACES_ENABLED=1 npx vitest run <file>` — reproduce a ratchet refusal on one file
+  instead of waiting for the whole suite.
+
+**Traps measured the hard way, 2026-09-22 (second session)**
+- 🔴🔴 **A row count with NO workspace context returns 0, and that reads exactly like "empty".**
+  The local catalogue has 355 products; a `count(*)` outside `withWorkspace(...)` said 0 and a whole
+  paragraph was written on it. Run counts inside the context, with a control.
+- 🔴🔴 **`getSheetColumns` needs `productTypes`** or it returns 3 columns — and it SAYS SO, in
+  `schemaMissing: ["AMAZON:category not selected"]`. With one: **163 columns, 474 KiB**. Read
+  `schemaMissing` before explaining a small column count.
+- 🔴🔴 **You cannot patch `prisma.<model>.<method>`** — the client is a Proxy (`db.ts` →
+  `contextualDatabase`). The assignment is silently discarded. A 250 ms injection moved the number
+  by 3 ms, which reads as *"this is not the cost"*.
+- 🔴 **`readSaleWindows` returns a MAP.** `Object.assign` to merge chunks type-checks and merges
+  nothing. The symptom was a re-submit reading as a change, only above 500 rows.
+- 🔴 **Scope a state count to what the RUN touched.** A whole-table `ReadinessIndex` count stayed
+  green while the run under test checked nothing.
+- 🔴 **A `beforeAll` that throws gives `N passed | M skipped`.** vitest still exits 1, but the
+  assertions never ran — that run does not show the assertions work.
+- 🔴 **`process.exit(0)` after an unawaited `main()`** prints nothing and exits 0, having done
+  nothing. A silent success.
+- 🔴 **Importing a script RUNS it.** `seed-marketplaces.ts` had a module-scope `main()`; the import
+  seeded a database and then killed the importer mid-write with an unhandled rejection.
+- 🔴 **Prisma's `groupBy` argument type is conditional** — a spread `where`, or annotating the
+  `await`, reports a circular reference. Two explicit calls, or map then annotate.
+- ⬜ **`mapping/formula-database.vitest.test.ts` is flaky** — failed twice in four full runs at
+  ~10 s, passes alone and on re-run. PGlite is one connection.
 
 **Traps measured the hard way**
 - 🔴 **Prisma orders migrations by `localeCompare`, not `.sort()`.** A replay using `.sort()`
