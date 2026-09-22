@@ -502,6 +502,16 @@ async function processOutboundSyncJobInner(job: Job) {
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
+    const errorCode = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined
+    const disposition = computeFailureDisposition({ retryCount: job.attemptsMade ?? 0 }, errorMsg, { errorCode })
+    if (disposition.kind === 'deferral') {
+      await prisma.outboundSyncQueue.update({
+        where: { id: queueId },
+        data: { syncStatus: 'FAILED', errorMessage: errorMsg, errorCode: disposition.errorCode, nextRetryAt: disposition.nextRetryAt },
+      })
+      logger.warn('Sync deferred before dispatch completed; no retry budget spent', { queueId, errorCode: disposition.errorCode })
+      return { status: 'DEFERRED', queueId, errorCode: disposition.errorCode }
+    }
     logger.error('❌ Job processing error', {
       jobId: job.id,
       queueId,

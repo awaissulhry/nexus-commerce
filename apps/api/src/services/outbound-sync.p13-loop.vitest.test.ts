@@ -24,6 +24,11 @@ const service = new OutboundSyncService() as any
 afterEach(() => { vi.unstubAllEnvs(); h.findManyArgs.length = 0; h.sellerFor.length = 0 })
 
 describe('P1.3 — backup loop limit', () => {
+  it('retains non-dead auth-held work even when its normal budget is exhausted, in bounded oldest-first batches', async () => {
+    await service.processPendingSyncs()
+    const retry = h.findManyArgs.find(a => a?.where?.syncStatus === 'FAILED')
+    expect(retry).toMatchObject({take:200,orderBy:{nextRetryAt:'asc'},where:{isDead:false,OR:[{retryCount:{lt:3}},{errorCode:'AUTH_REQUIRED'}]}})
+  })
   it('reads at most 200 pending rows per tick, oldest first; NEXUS_OUTBOUND_BACKUP_BATCH changes it', async () => {
     const pendingReads = () => h.findManyArgs.filter((a) => a?.where?.syncStatus === 'PENDING')
     await service.processPendingSyncs()

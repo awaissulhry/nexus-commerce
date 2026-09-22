@@ -172,3 +172,25 @@ Xavia Racing, that account, IT marketplace `APJ6JRA9NG5V4`, **2026-09-20T00:00:0
 through 2026-09-21T00:00:00Z**, `useV0:false,dryRun:true`. Live calls are not approved.
 Null historical attribution, a validated money mapping, durable provider uniqueness,
 legacy/new race tests, cutover boundary and rollback remain mandatory before writing.
+
+## Slice C5 — account sign-in holds preserve retry budget and resume correctly
+
+Token-service and gateway holds (`CONNECTION_NEEDS_REAUTH`, `ACCOUNT_NEEDS_SIGNIN`,
+`TOKEN_UNAVAILABLE`) defer without spending row/BullMQ retries, including an exhausted
+ordinary retry budget. Etsy and both Shopify lanes retain typed codes; thrown errors
+retain them in both cron drains and the BullMQ worker. Narrow canonical-message
+matching protects older callers that dropped codes; ordinary 500 and transient eBay
+401 controls keep their previous retry behavior.
+
+The FAILED retry loader now includes non-dead AUTH_REQUIRED rows independently of
+ordinary retry count, reads at most 200 oldest-due rows, and reloads channelListing.
+Independent review found that missing relation would resume a native Shopify family
+through the linked lane; the behavioral regression reproduces that error and proves
+the recovered row uses its original native mapping. No connection/token was changed.
+
+Proof: initial **7 failed / 39 passed**, thrown worker hold **1 failed / 3 passed**,
+review's Shopify native/resume gaps **3 failed / 13 passed**. Final **77 tests passed,
+zero skips** across six suites; API typecheck passed; independent review approved.
+Applied/restored mutations remove the auth-hold code and retry listing rehydration;
+both are killed by assertion failures. Production behavior still awaits deployment
+and an observed held/resumed row.

@@ -1,0 +1,33 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+const m = vi.hoisted(() => ({read:vi.fn(),update:vi.fn(),process:vi.fn(),outbound:vi.fn(() => {throw new Error('Unexpected outbound call')})}))
+vi.stubGlobal('fetch',m.outbound)
+vi.mock('@nexus/database',()=>({prisma:{outboundSyncQueue:{findUnique:m.read,update:m.update}}}))
+vi.mock('../db.js',()=>({default:{}}))
+vi.mock('../lib/workspace-jobs.js',()=>({WorkspaceWorker:class {}}))
+vi.mock('../lib/queue.js',()=>({redis:{connection:null},outboundSyncQueue:null,readCacheQueue:null,searchIndexQueue:null,addJobSafely:vi.fn()}))
+vi.mock('../services/variation-sync-processor.service.js',()=>({variationSyncProcessor:{}}))
+vi.mock('../services/outbound-sync.service.js',async original=>({...await original<object>(),default:{processSingle:m.process}}))
+vi.mock('../services/repricer.service.js',()=>({calculateTargetPrice:vi.fn()}))
+vi.mock('../services/product-event.service.js',()=>({productEventService:{emit:vi.fn()}}))
+const {processOutboundSyncJob}=await import('./bullmq-sync.worker.js')
+beforeEach(()=>{
+  vi.clearAllMocks()
+  m.read.mockResolvedValue({id:'q',channelConnectionId:'account',syncStatus:'PENDING',retryCount:3,maxRetries:3,payload:{},syncType:'QUANTITY_UPDATE'})
+})
+it.each(['ACCOUNT_NEEDS_SIGNIN','CONNECTION_NEEDS_REAUTH','TOKEN_UNAVAILABLE'])('parks returned %s without consuming BullMQ or database retries',async code=>{
+  m.process.mockResolvedValue({success:false,error:'Credential hold',errorCode:code,retryable:false})
+  const result=await processOutboundSyncJob({id:'job',attemptsMade:3,data:{queueId:'q',targetChannel:'ETSY',syncType:'QUANTITY_UPDATE'}} as any)
+  expect(result).toMatchObject({status:'DEFERRED',errorCode:'AUTH_REQUIRED'})
+  const data=m.update.mock.calls[0][0].data
+  expect(data).toMatchObject({errorCode:'AUTH_REQUIRED',nextRetryAt:expect.any(Date)})
+  expect(data).not.toHaveProperty('retryCount')
+  expect(data).not.toHaveProperty('isDead')
+  expect(m.outbound).not.toHaveBeenCalled()
+})
+it('parks a thrown token-service error without sending it to BullMQ retry',async()=>{
+  m.process.mockRejectedValue(Object.assign(new Error('Credential hold'),{code:'CONNECTION_NEEDS_REAUTH'}))
+  const result=await processOutboundSyncJob({id:'job',attemptsMade:3,data:{queueId:'q',targetChannel:'AMAZON',syncType:'PRICE_UPDATE'}} as any)
+  expect(result).toMatchObject({status:'DEFERRED',errorCode:'AUTH_REQUIRED'})
+  expect(m.update.mock.calls[0][0].data).not.toHaveProperty('retryCount')
+  expect(m.outbound).not.toHaveBeenCalled()
+})
