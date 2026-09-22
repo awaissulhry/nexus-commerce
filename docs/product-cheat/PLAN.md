@@ -3222,3 +3222,73 @@ fix**, and it is deliberately not presented as one.
 
 🔴 It touches a **closed step** (0.4) and the **database bootstrap**, so it is not mine to take.
 **No code has been written for any of these three.**
+
+---
+
+## OWNER RULING — 2026-09-22 (fourth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-7** | [A-13](#a-13----a-database-built-by-step-04s-bootstrap-has-no-row-level-security-for-your-ruling) — a bootstrapped database has 0 row-level-security policies | ✅ **Option (a). `bootstrap-fresh-database.mjs` applies the isolation layer itself, and its gate counts policies and refuses a zero** |
+
+## A-13 RESULT — BUILT. One command now gives an ISOLATED database, and it is gated twice.
+
+### What was built
+
+`bootstrap-fresh-database.mjs` gained a **step 3**, applying the same three statements in the same
+order as `apps/api/src/test-support/concurrent-database.ts:52-55`:
+
+1. `ChannelListing.variationExcluded` — the deployed-only column, absent from `schema.prisma`.
+2. The **`nexus_legacy_workspace` row, `status = 'active'`**. 🔴 The isolation policy *reads*
+   `Workspace`, so without an active row every legacy row is invisible to every reader. The
+   policies must not land before it.
+3. `workspacePolicySql()` — **one generator**, now shared by the bootstrap, the disposable test
+   database and the scale fixture's `--prepare`. Three callers, one home.
+
+**Measured on a fresh database:**
+
+```
+[bootstrap] baseline applied — 446 tables
+[bootstrap] marked 467 migrations as applied
+[bootstrap] isolation applied — 443 policies on 430 tables, 1778 grants to nexus_workspace_runtime
+```
+
+🟢 **The end-to-end proof:** the scale fixture seeded **50 products and 150 listings** into that
+database with **no `--prepare` step**. Before this, the same command died with *permission denied
+for table Product*.
+
+### Gate — two layers, and BOTH proven able to fail
+
+| Layer | Where | Mutation | Result |
+|---|---|---|---|
+| The script refuses its own bad output | `bootstrap-fresh-database.mjs`, step 3 | skip `workspacePolicySql()` | 🔴 *"REFUSED: the isolation layer did not land — 0 policies, 0 RLS tables, 0 grants"*, **exit 1** |
+| The push hook refuses a bootstrap that produced one | 🆕 4 tests in `baseline.vitest.test.ts`, already in the hook at `.githooks/pre-push:62` | skip the policies **and** disable the script's own refusal — the silent case A-13 was about | 🔴 **RED**: *expected 0 to be greater than 400*, twice |
+
+🔴 **The second mutation is the one that mattered.** With the script's refusal left on, the suite
+fails at `beforeAll` and the four assertions never run — `3 passed | 4 skipped`, with vitest
+exiting 1. That is a real failure, but it does not show the *assertions* work. Disabling both
+layers is what proved them.
+
+🟠 **And the assertions are `> 400`, not `> 0`.** A single stray policy passes a `> 0` check. The
+isolation layer covers 430 tables; a count that collapses to a handful is the failure being
+guarded.
+
+### Done when — ✅ measured
+
+One command produces a database that is schema-correct **and** isolated, the application can use it
+without further work, and both gates have been shown red.
+
+### Cost when — `flat`. One extra script step; the gate builds one more throwaway database on push.
+
+### Rollback — delete step 3 and the four tests. The baseline and the migration stamping are untouched, and `workspacePolicySql()` is idempotent, so re-running the bootstrap on a prepared database changes nothing.
+
+### ⬜ What this does NOT do
+
+- 🟩 It does **not** change `baseline.sql`. A schema dump cannot express a policy, which is why
+  option (b) was rejected.
+- ⬜ It does not audit **existing** databases. Any database bootstrapped before today still has 0
+  policies. There is no inventory of those; `nexus_scale` was the only one this lane created, and
+  it was prepared by hand.
+- ⬜ The bootstrap applies **443** policies where `nexus_development` reports **444**. One policy
+  differs and nobody has identified which. It is below the gate's `> 400` bar and is recorded here
+  rather than quietly rounded away.

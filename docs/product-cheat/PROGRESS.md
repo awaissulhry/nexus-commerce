@@ -26,7 +26,7 @@ Every claim below carries the commit that measured it.
 | **15.3 (b)** Report the cache size | ✅ **CLOSED** under R-6 — `GET /admin/pim/sheet-cache-stats`, behind `admin.view` | `8f931f913` |
 | **15.11** The scale fixture | ✅ **CLOSED** — seeded at 1,000 and 10,000; measured; it refuses numbers it cannot stand behind | `d399c1660` |
 | **15.11a / 15.12** `Cost when` on every step | ✅ **CLOSED** — all 25 steps carry one; 2 of the research's 6 numbers carried, 4 stated as uncarryable here | `d399c1660` |
-| **A-13** Bootstrap builds a database with **no RLS** | 🔴 **FOR YOUR RULING** — 0 policies vs production's 444 | — |
+| **A-13** Bootstrap built a database with **no RLS** | ✅ **CLOSED** under R-7 — the bootstrap now applies the isolation layer; 443 policies, 1,778 grants; gated twice | _this commit_ |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -55,16 +55,16 @@ Every claim below carries the commit that measured it.
 ## The scale fixture — how to use it
 
 ```
-# once, on a fresh throwaway database (created next to nexus_development)
+# once, on a fresh throwaway database (created next to nexus_development).
+# Since A-13 this ALSO applies the isolation layer — no --prepare needed.
 DATABASE_URL=…/nexus_scale node packages/database/scripts/bootstrap-fresh-database.mjs
-DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --prepare
 # then
 DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --products 10000
 DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/measure-scale-fixture.ts --readiness-families 5
 ```
 
-🔴 `--prepare` is not optional — see [A-13](PLAN.md#a-13----a-database-built-by-step-04s-bootstrap-has-no-row-level-security-for-your-ruling).
-The measure script **exits 1** rather than print a number it cannot stand behind.
+The measure script **exits 1** rather than print a number it cannot stand behind — including on a
+database with 0 policies. `--prepare` still exists for a database prepared some other way.
 
 ---
 
@@ -91,7 +91,7 @@ The measure script **exits 1** rather than print a number it cannot stand behind
 3. **2.1 requirements** → **2.7 reconcile** (in that order), **2.4** (needs 15.4's fix — the plan's
    `where` clause does not compile on a channel scope), **2.2** (needs 15.5). **← next**
 
-🔴 **A-13 wants a ruling first if you want it fixed before Phase 2** — it does not block 2.1.
+✅ **A-13 is closed** (R-7). One bootstrap command now gives an isolated database.
 
 ---
 
@@ -125,8 +125,9 @@ The measure script **exits 1** rather than print a number it cannot stand behind
   250 ms injection moved the number by 3 ms, which reads as *"this is not the cost"*.
 - 🔴 **Scope a state count to what the RUN touched.** A whole-table `ReadinessIndex` count stayed
   green while the run under test checked nothing — rows from an earlier run answered for it.
-- 🔴 **`bootstrap-fresh-database.mjs` gives you a schema, not a usable database.** No policies, no
-  grants, no `Workspace` row, no `variationExcluded`. See A-13.
+- 🔴 **A `beforeAll` that throws gives `N passed | M skipped`, not a failure count.** vitest still
+  exits 1, but the assertions never ran — so that run does NOT show the assertions work. To prove
+  an assertion, the thing it measures must be broken *without* an earlier guard stopping the run.
 - 🔴 **Three test files mock `WorkspaceCache` as a bare `Map`.** Adding a constructor argument
   therefore breaks them with `number 32 is not iterable` — a suite **LOAD** failure, which reads as
   `1 failed | 4 passed (5)` with `10 passed` tests. Count files, not tests.

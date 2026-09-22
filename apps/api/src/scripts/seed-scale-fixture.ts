@@ -11,15 +11,15 @@
  *   npx tsx apps/api/src/scripts/seed-scale-fixture.ts --products 10000
  *   npx tsx apps/api/src/scripts/seed-scale-fixture.ts --wipe
  *
- * 🔴 `--prepare` IS NOT OPTIONAL, and the reason is a finding of its own.
- * `bootstrap-fresh-database.mjs` (Step 0.4) builds the schema from `baseline.sql`, which carries
- * **0 policies and 0 GRANTs** — measured. A database built by it has no row-level security, no
- * grants for `nexus_workspace_runtime` (the role `workspace-adapter.js:11` switches to on every
- * query), no `Workspace` row and no `ChannelListing.variationExcluded`. Against such a database
- * the app fails with *permission denied for table Product*, and if the grants alone were added it
- * would run with **no business isolation at all** and every measurement would be a per-row filter
- * cheaper than production's. `--prepare` applies exactly what the disposable test database applies
- * (`test-support/concurrent-database.ts:52-55`), so the fixture measures production's shape.
+ * 🟢 `--prepare` IS NO LONGER NEEDED after a fresh `bootstrap-fresh-database.mjs`, which applies
+ * the isolation layer itself as of A-13 (ruled 2026-09-22). It stays for a database prepared some
+ * other way, and it is idempotent. It calls the SAME generator the bootstrap and the disposable
+ * test database call, so there is one home for those statements, not three.
+ *
+ * 🔴 Why any of this matters: `baseline.sql` carries **0 policies and 0 GRANTs**, so before A-13 a
+ * bootstrapped database had no row-level security and no grants for `nexus_workspace_runtime` —
+ * the role `workspace-adapter.js:11` switches to on every query. Every measurement taken on such a
+ * database would skip a per-row filter production pays. The measure script refuses one.
  *
  * 🔴 WHAT THIS FIXTURE PINS, stated so nobody has to guess later. A fixture pins every dimension it
  * does not vary, and the arm that would have failed is the one never run:

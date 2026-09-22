@@ -106,3 +106,67 @@ describe.runIf(canRun)('prisma/baseline.sql', () => {
     expect(statements.length).toBeGreaterThan(400)
   })
 })
+
+/**
+ * A-13 (ruled 2026-09-22, option a) — a database built by `bootstrap-fresh-database.mjs` must be
+ * ISOLATED, not merely schema-correct.
+ *
+ * 🔴 WHAT THIS GUARDS, measured before the fix. `baseline.sql` is a pure `schema.prisma` dump and
+ * holds 0 `CREATE POLICY`, 0 `ROW LEVEL SECURITY` and 0 `GRANT`, because a schema cannot express a
+ * policy. The bootstrap therefore produced a database with **0 policies against production's 444**
+ * and no grants for `nexus_workspace_runtime` — the role `workspace-adapter.js:11` switches to on
+ * every query. The application died with `permission denied for table Product`, which is the loud
+ * failure and the safe one. The dangerous case was fixing THAT by adding the grants alone: the app
+ * then runs perfectly with every business reading every other business's rows.
+ *
+ * 🔴 The tests above could not have caught it. They assert the SCHEMA matches `schema.prisma`.
+ * They never connect the application and never count a policy. A gate measures what the step
+ * built, never what it left out — so the omission needs its own gate.
+ */
+describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just schema', () => {
+  const BOOT = `nexus_bootstrap_check_${process.pid}`
+  const bootUrl = localUrl ? `${localUrl.slice(0, localUrl.lastIndexOf('/'))}/${BOOT}` : ''
+  let counts = { policies: 0, rls: 0, grants: 0, workspaces: 0, deployedColumn: 0 }
+
+  beforeAll(async () => {
+    expect(isLoopback, `refusing a non-loopback target: ${host}`).toBe(true)
+    await admin(`DROP DATABASE IF EXISTS "${BOOT}"`)
+    await admin(`CREATE DATABASE "${BOOT}"`)
+    execFileSync('node', [join(pkgRoot, 'scripts', 'bootstrap-fresh-database.mjs')], {
+      cwd: repoRoot, encoding: 'utf8', env: { ...process.env, DATABASE_URL: bootUrl }, maxBuffer: 16 * 1024 * 1024,
+    })
+    const c = new pg.Client({ connectionString: bootUrl })
+    await c.connect()
+    counts = (await c.query(`
+      SELECT (SELECT count(*)::int FROM pg_policies) AS policies,
+             (SELECT count(*)::int FROM pg_class cl JOIN pg_namespace n ON n.oid = cl.relnamespace
+               WHERE n.nspname = 'public' AND cl.relrowsecurity) AS rls,
+             (SELECT count(*)::int FROM information_schema.role_table_grants
+               WHERE grantee = 'nexus_workspace_runtime') AS grants,
+             (SELECT count(*)::int FROM "Workspace" WHERE status = 'active') AS workspaces,
+             (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_name = 'ChannelListing' AND column_name = 'variationExcluded') AS "deployedColumn"`)).rows[0]
+    await c.end()
+  }, 600_000)
+
+  afterAll(async () => { if (canRun) await admin(`DROP DATABASE IF EXISTS "${BOOT}"`) }, 60_000)
+
+  it('🔴 every business-owned table carries a row-level-security policy', () => {
+    // Not "> 0": a single stray policy would pass that. The isolation layer covers hundreds of
+    // tables, and a count that collapses is the failure this guards.
+    expect(counts.policies).toBeGreaterThan(400)
+    expect(counts.rls).toBeGreaterThan(400)
+  })
+
+  it('🔴 the runtime role can actually reach the tables — a policy with no GRANT is a dead database', () => {
+    expect(counts.grants).toBeGreaterThan(400)
+  })
+
+  it('🔴 an ACTIVE Workspace row exists — the policy reads it, so without one every legacy row is invisible', () => {
+    expect(counts.workspaces).toBeGreaterThan(0)
+  })
+
+  it('carries the deployed-only column the disposable test database also adds', () => {
+    expect(counts.deployedColumn).toBe(1)
+  })
+})
