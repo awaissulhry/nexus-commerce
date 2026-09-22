@@ -3726,3 +3726,96 @@ list; it reports it and skips. Nothing this lane wrote was a change to somebody 
   re-read.** It says *"after 2.1, so it computes against real requirements"*, written believing
   there were none. A reconcile now computes real requirements on channel coordinates and on Shared
   still sees only `name`. **2.7's premise deserves its own check before it runs.**
+
+---
+
+## Steps 15.1 + 15.6 — BUILT. The sweep is bounded by design, and there is one helper, not three.
+
+**Ranked #3 and #4 in [15.13](#1513--ranked-what-to-do-and-when):** *"Before Step 2.7. The step
+cannot pass otherwise"* and *"Same work as 3. Do them together."* Built together.
+
+### 15.6 — one resumable-sweep helper
+
+🆕 `apps/api/src/services/pim/resumable-sweep.ts`. Its contract is 15.6's, verbatim: a resume
+point, a wall-clock budget, and a **dry run that reports counts** with writing as the thing a
+caller has to ask for. Three sweeps (2.1, 2.6, 2.7) had the same hazards and one of them carried
+*"rehearse first"* as a footnote. **R2: the rule goes in the engine.**
+
+🟢 **The checkpoint is DERIVED, so there is no new column and no migration** — which matters,
+because a migration gets its own branch and its own merge and may never ride with code. `nextBatch`
+is re-queried and returns only outstanding work; finishing a unit removes it. **A crash mid-unit
+leaves that unit outstanding, so it is retried rather than skipped** — the case a stored cursor
+gets wrong.
+
+### 15.1 — the readiness reconcile
+
+| # | 15.1 asks for | Built |
+|---|---|---|
+| **a** | split the backfill off the cron | 🆕 `apps/api/src/scripts/readiness-backfill.ts` — dry run by default, `--apply --budget <s>`, run it again to continue |
+| **b** | a wall-clock budget, resume on the next tick | `NIGHTLY_BUDGET_MS = 10 min`. The 11-hour run cannot happen at any product count |
+| **c** | incremental — only families that need it | A family is due when its readiness is older than a **20-hour** horizon. Never 24: a horizon equal to the period races its own schedule |
+
+🟠 15.1 also said *"reuse `runWorkspaceTick`'s renewing-lease idea"*. **Not needed.** The existing
+30-minute cron lock is now three times the budget instead of a bet on the catalogue staying small.
+No second lease was invented — which was the actual instruction.
+
+### Measured on the 10,000-product fixture — 2,000 family roots
+
+| chunk | budget | families | `ReadinessIndex` rows | stopped |
+|---|---|---|---|---|
+| 1 | 60 s | 408 | 125 → 10,325 | `budget` |
+| 2 | 60 s | 275 | → 17,200 | `budget` |
+| 3 | 60 s | 258 | → 23,650 | `budget` |
+| 4 | 60 s | 284 | → 30,750 | `budget` |
+| 5 | 120 s | 706 | → 48,400 | `budget` |
+| 6 | 120 s | 64 | → **50,000** | 🟢 `complete` |
+| 7 | 120 s | **0** | 50,000 → 50,000 | 🟢 `complete` — idempotent |
+
+🔴 **The resume is proven by the ROW COUNT, not by the label.** A run that restarted would rewrite
+the same families and leave the total flat. It rose by exactly `families × 25` every chunk.
+
+**Total: 10,000 products reconciled in ≈6.2 minutes of bounded chunks**, against the plan's
+projected **11.4 hours**. 🔴 **That is not a refutation.** The fixture holds three coordinates and
+no cached Amazon spec, so a family costs ~300 ms here against the 4,087 ms the codebase recorded on
+a real one. What the number shows is the SHAPE: bounded, resumable, and it reaches `complete`.
+
+🟠 **Throughput per chunk: 408, then 275, 258, 284.** The skip walk costs something after the first
+chunk and then stops growing — measured, because "it will degrade" was a guess worth checking.
+
+### Gate — ✅ 16 tests, proven able to fail FOUR ways
+
+| Mutation | Result |
+|---|---|
+| remove the per-unit budget check | 🔴 **RED** — 1 failed |
+| flip the dry-run default to write | 🔴 **RED** — 2 failed |
+| remove the attempted-set (the retry hot loop returns) | 🔴 **RED** — 6 failed |
+| ignore the freshness probe (no checkpoint) | 🔴 **RED** — 2 failed |
+
+### 🔴 Two defects the tests found in this lane's own code
+
+1. **A failed unit was retried forever inside one run.** `nextBatch` is re-queried, so a failure
+   came straight back at the same position: `['a','b','c','b','b','b', …]` — three units,
+   twenty-seven attempts, and the run abandoned on a failure budget spent entirely on one record.
+   Retry belongs on the **next** run. Fixed with an attempted-set that also looks further ahead, so
+   a failure early in the order cannot hide the work behind it.
+2. 🟠 **The first budget mutation ESCAPED.** Deleting the per-unit check left every test green,
+   because with a small batch size the next *boundary* check fired first. There are two budget
+   checks and only one was exercised. A new arm sweeps with `batchSize: 100` over 8 units, where no
+   boundary can arrive — and it goes red.
+
+> A gate with two paths needs two arms. One of them was decoration until it was mutated.
+
+### Cost when — the nightly run is **10 minutes, full stop**, at any product count. The backfill is chunked and resumable.
+
+### Rollback — the job's previous form is one file in git history; the helper and the CLI are additive and read by nothing else yet.
+
+### ⬜ Stated, not hidden
+
+- 🔴 **At a real 4,087 ms per family, a 10-minute nightly budget covers ~150 families.** A 2,000-root
+  catalogue then refreshes on a **rotation**, not nightly-in-full. That is what "bounded by design"
+  costs, and it is the right trade — but it is a change in meaning, not just in runtime, and
+  [Step 2.7](#step-27--run-the-readiness-reconcile-on-production) should read it before it runs.
+- ⬜ **The 20-hour horizon is a constant, not a setting.** It has no test for the rotation case
+  above, because that needs a catalogue bigger than a unit test.
+- ⬜ **15.6's helper has ONE caller.** Steps 2.1 and 2.6 are meant to use it too. 2.1's data pass
+  was 5 rows and needed no sweep; 2.6 has not been built.
