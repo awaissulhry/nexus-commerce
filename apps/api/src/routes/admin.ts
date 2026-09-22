@@ -1051,6 +1051,26 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send({ ok: true })
   })
 
+  // ── 15.3 (b) — the sheet column-set cache, reported ──────────────
+  // GET /admin/pim/sheet-cache-stats — { entries, max, ttlMs }
+  //
+  // Memory is the one thing the sheet cannot gate, so it reports itself instead. `entries` is how
+  // close this business is to `max`; a number that sits at `max` means the cap is doing work and
+  // the sheet is paying rebuilds for it.
+  //
+  // 🔴 This reports the CALLING business's bucket, never the process. The process-wide total would
+  // tell one business's admin how many other businesses are cached, and this route is mapped to
+  // `adminView`, which is a business role and not a platform one.
+  //
+  // Permission: no `preHandler` here on purpose. `permissions-manifest.ts:554` maps the whole
+  // `/admin` prefix — `RW(F.adminView, F.adminRepair, pfx('/admin'))` — so a GET lands on
+  // `adminView`. 🔴 It must NOT be added to the PUBLIC exact-path list at `:57`, which is what
+  // makes `/admin/health` unauthenticated.
+  app.get('/admin/pim/sheet-cache-stats', async (_request, reply) => {
+    const { sheetColumnCacheStats } = await import('../services/pim/sheet-columns.service.js')
+    return reply.send(sheetColumnCacheStats())
+  })
+
   // ── PIM search engine (Typesense) admin ──────────────────────────────
   //
   // GET  /admin/search/status   — configured / healthy / doc-count vs

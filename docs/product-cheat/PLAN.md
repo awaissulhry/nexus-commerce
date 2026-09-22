@@ -2928,10 +2928,44 @@ opened, for the life of the process.
 
 ### ⬜ Not done, and why
 
-- **15.3 (b) — "expose the cache size on the existing metrics route".** `sheetColumnCacheStats()`
-  exists, but 🟩 **there is no existing PIM/sheet metrics route to hang it on.** `/admin/health`
-  runs a full product validation; `/api/catalog/cache-stats` reports the Amazon catalog service.
-  Adding a new route is a new public surface, and the 09-16 public-route audit found 14
-  unauthenticated monitoring routes. ➡️ **Needs a ruling: which route, and behind which permission.**
+- ~~**15.3 (b)**~~ ✅ **BUILT under R-6.** See below.
 - **15.3 (c) — Redis.** Marked *"Later"* in 15.3 itself. Untouched.
 - 🟩 `TtlCache` (`utils/ttl-cache.ts:43`) was **already** bounded and already LRU. Not changed.
+
+
+---
+
+## OWNER RULING — 2026-09-22 (third set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-6** | 15.3 (b) — there is no existing PIM/sheet metrics route. Add one, or drop it? | ✅ **Option A. Add it under `/admin/`, behind an admin permission** |
+
+### 15.3 (b) RESULT — BUILT
+
+🆕 `GET /admin/pim/sheet-cache-stats` (`admin.ts`) returns `{ entries, max, ttlMs }`.
+
+**Permission — no `preHandler`, and that is the correct wiring here.** 🟩
+`permissions-manifest.ts:554` already maps the whole prefix:
+`RW(F.adminView, F.adminRepair, pfx('/admin'))`. A GET therefore lands on **`admin.view`**.
+
+🔴 **The trap this route had to avoid.** `/admin/health` is **PUBLIC** —
+`permissions-manifest.ts:57` lists it by exact path. It is one of the unauthenticated monitoring
+routes the 09-16 audit found. Copying the neighbouring route's shape would have published this one
+too. *Being under `/admin/` is not the same as being behind admin.*
+
+🔴 **It reports the CALLING business only.** A process-wide total would tell one business's admin
+how many other businesses are cached, and `admin.view` is a business role, not a platform one.
+
+### Gate — ✅ and proven able to fail
+
+| Check | Result |
+|---|---|
+| `permissionForRoute('GET', '/admin/pim/sheet-cache-stats')` is `admin.view`, not `PUBLIC` | 🟢 in `sheet-columns-bound.vitest.test.ts` |
+| Positive control in the same run: `/admin/health` really does resolve to `PUBLIC` | 🟢 — so a "not PUBLIC" pass means the manifest was read |
+| **Mutation:** add the new path to the PUBLIC exact-path list at `:57` | 🔴 **RED** — *expected 'PUBLIC' not to be 'PUBLIC'* |
+| RBAC coverage gate | 🟢 **2,724 routes · 0 UNMAPPED · 66 PUBLIC** — one more route than before, and the PUBLIC count did not move |
+
+### Cost when — `flat`. One in-memory read, no query.
+
+### Rollback — delete the route. Nothing reads it; the gate that proves the bound reads the exported function, not the endpoint.
