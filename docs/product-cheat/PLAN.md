@@ -2753,3 +2753,76 @@ with a negative control (`ZZ_NeverExists`) absent.
   option is chosen.
 - **Rollback** — the script is read-only and drops its own database; `abm_gate*`/`nexus_replay_*`
   count after every run is 0.
+
+---
+
+## Step 0.4 RESULT — BUILT. A fresh database now stands up, and reports itself up to date.
+
+**2026-09-22. Owner ruled: baseline from `schema.prisma`.**
+
+| File | What |
+|---|---|
+| `packages/database/prisma/baseline.sql` | 🆕 **15,244 lines**, generated from `schema.prisma`. Not a migration — outside `prisma/migrations/`, so Prisma never applies it |
+| `scripts/generate-baseline.mjs` | 🆕 Regenerates it |
+| `scripts/bootstrap-fresh-database.mjs` | 🆕 Applies the baseline to an **empty local** database, then stamps all 467 migrations applied. Refuses a non-loopback host, and refuses any database that already has tables |
+| `scripts/baseline.vitest.test.ts` | 🆕 The gate. Already in the push hook via `npm run test --workspace=@nexus/database` |
+| `scripts/replay-migrations.mjs` | The diagnostic that measured the problem |
+
+### Done when — ✅ measured end to end
+
+```
+[bootstrap] baseline applied — 446 tables
+[bootstrap] marked 467 migrations as applied
+$ prisma migrate status  →  "Database schema is up to date!"
+```
+
+🟢 **And the Step 0.1 gate accepts it** — `467 rows on the database vs 467 folders in the repo`,
+exit 0. The two pieces of Phase 0 agree with each other, which is the point of building both.
+
+### 🟠 A wrong turn, recorded because it is the most useful thing here
+
+I ran `prisma migrate diff` against a database built from the baseline. It reported **420 missing**
+`ALTER COLUMN "workspaceId" SET DEFAULT NULLIF(current_setting('nexus.workspace_id', true), '')`
+statements. I read that as "the generator omits the defaults", added a **second pass** to append
+them, and wrote it up as a measured finding.
+
+🔴 **It was wrong, and the mutation test is what exposed it.** Deleting the second pass changed
+nothing: the gate still passed. So I stopped asking the tool and queried `information_schema`:
+
+> **Phase one alone already produces 420 of 431 `workspaceId` defaults**, emitted inline in
+> `CREATE TABLE`. The actual stored default is
+> `NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)` — Postgres normalises the
+> expression with `::text` casts, and **Prisma does not recognise it as its own**. It will report
+> those 420 statements forever, against a database that has them.
+
+**The second pass was 420 duplicate statements solving nothing.** It is deleted.
+
+> I used the diff as evidence that the defaults were missing, and later proved the same diff cannot
+> see them. The tool whose blindness was the question was the witness I trusted.
+> *A mutation says whether, not which* — but here it said "not this", and that was enough.
+
+### Gate — ✅ and proven able to fail on the invariant that matters
+
+The gate cannot assert "the diff is empty": that is unachievable for a `dbgenerated` default. It
+asserts what is true — **the residual diff may contain those defaults and nothing else**, plus the
+defaults really exist in `information_schema`, plus a positive control that a schema was built at
+all.
+
+| Mutation | Result |
+|---|---|
+| Add a column to `schema.prisma`, do not regenerate | 🔴 **RED**, naming it: *"unexpected drift: ALTER TABLE "Warehouse" ADD COLUMN "zzBaselineDriftProbe" TEXT"* |
+| Restore | 🟢 3 passed |
+| *(Invalid mutation: delete the second pass)* | Green — correctly, because it changed nothing |
+
+`@nexus/database` suite: **13 passed**, 2 files. Every scratch database dropped.
+
+### Cost when — `flat`. One generated file; the gate builds one throwaway database.
+
+### Rollback — delete `baseline.sql` and the three scripts. Nothing else reads them.
+
+### ⬜ What this does NOT do, stated plainly
+
+The 467-migration history **still does not replay** — 443 of 467. It is now *history*, not a build
+path, and `replay-migrations.mjs` keeps measuring it. 🔴 **`replay-migrations.mjs` is a diagnostic,
+not a gate**: it exits non-zero every run by design, so it is deliberately **not** in the push hook.
+Calling it a gate would be calling a permanent red a green.
