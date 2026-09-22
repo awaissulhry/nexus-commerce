@@ -73,6 +73,7 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-signature-failures',
   'channel-feed-rejections',
   'channel-secret-expiry',
+  'channel-secret-rotation-failed',
   'channel-signing-key-expiry',
   'channel-callback-not-production',
   'channel-deprecation',

@@ -279,3 +279,58 @@ bytes were restored. Evidence: `final-canonical-gate.log`,
 `postgres-sync-diagnostic.log`, `etsy-alias-postgres-mutation.log` under
 `/private/tmp/cx-completion-20260922/`; retained failed-run report directory
 `/var/folders/gw/t0zlfx7x5w7btv4jw1lrwtk80000gn/T/nexus-real-pg-W2IO8V`.
+
+## Slice C7 — rotation policy proof, private failures and owning-profile alerts
+
+Rotation failure now reaches the existing persisted channel-owner Notification path,
+in addition to any explicitly configured email delivery. Shared app failures enumerate
+the non-secret Amazon account index in pages of 50, explicitly enter each active
+owning workspace without an ambient actor, and deduplicate recipients/notifications.
+An unrelated Etsy-only profile and the initiating legacy actor do not receive them.
+This avoids `visitActiveWorkspaces`' ambient legacy-context early return. Failed/no
+recipient delivery is visible through fixed, non-sensitive log messages.
+
+Provider response bodies and exception messages can contain credentials. Rotation
+failure output now contains only the fixed request phase and numeric HTTP status;
+storage failure details are withheld. Two injected-secret regressions failed before
+the fix and pass afterward, covering returned errors, event details and alerts.
+
+The previous queue preflight searched substrings, accepting a Deny or an unrelated
+resource. It now reads Policy and QueueArn and requires explicit Amazon-principal
+grants for both SendMessage and GetQueueAttributes on that ARN. Split grants work.
+Malformed/incomplete/denied policies refuse before token exchange. This is a
+**conservative static subset**, not a complete IAM evaluator: any Deny, Condition or
+Not* exclusion holds automatic rotation for AWS review. Keep existing protections;
+do not remove them to pass. Actual portal registration, effective Receive/Delete
+permission and delivered/tested rotation remain separate required proof.
+Official basis: https://developer-docs.amazon/sp-api/docs/set-up-credential-rotation-notifications
+and https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html .
+
+Evidence: owner-delivery omission reproduced through an applied/restored mutation;
+privacy **2 failed / 3 passed** before; policy **7 failed / 14 passed** before.
+Final **56 tests pass / zero skips**, including the existing database-backed alert
+suite; API typecheck passed. Removing the Deny check produced **1 failed / 21 passed**,
+then source bytes were restored. Independent review approved. Logs:
+`rotation-alert-red.log`, `rotation-privacy-red.log`, `rotation-policy-red.log`,
+`rotation-final.log`, `rotation-policy-mutation.log` under the evidence directory.
+The first notifier attempt failed due to a non-async test double; that was corrected
+and is not claimed as a product-defect reproduction.
+
+No queue, token, secret or production notification was changed. Other rotation gaps
+remain auditable, including refusing a new request when an earlier credential cannot
+be stored/tested and cross-process rotation serialization. No end-to-end production
+rotation is claimed.
+
+## Production observation at 20:18:17 UTC
+
+Repeatable-read, read-only `neondb` census refreshed profile/credential-presence data
+and 24-hour operation aggregates without exposing credentials or payloads. Motovento
+has **31 Etsy calls / 31 successful / 31 account-attributed**, latest 14:20:05Z;
+its Etsy ledger remains empty. Xavia has 12,104 Amazon calls (2,256 successful),
+6,421 Ads calls (all successful), and 7,585 eBay calls (7,312 successful). Motovento
+has 368 eBay calls (all successful). These aggregates count recorded attempts, not
+business-operation success, and need failure/latency analysis before any SLO claim.
+Accountless log rows remain (Amazon 5, Xavia eBay 9, Motovento eBay 1). The latest
+cross-channel record is 18:18Z; neither data recency nor a healthy public endpoint
+proves all schedulers are running. Evidence is the timestamped profile JSON in
+`/private/tmp/cx-completion-20260922/`; no provider call was made by this observation.

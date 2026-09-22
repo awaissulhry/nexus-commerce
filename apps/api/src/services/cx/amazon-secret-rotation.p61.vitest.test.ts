@@ -41,7 +41,7 @@ vi.mock('@aws-sdk/client-sqs', () => {
       if (command instanceof DeleteMessageCommand) { h.deleted.push(command.input.ReceiptHandle); return {} }
       if (command instanceof GetQueueAttributesCommand) {
         if (!h.queueReadable) throw new Error('AccessDenied')
-        return { Attributes: { Policy: h.policy } }
+        return { Attributes: { Policy: h.policy, QueueArn: 'arn:aws:sqs:eu-west-1:123456789012:nexus-app-credentials' } }
       }
       return {}
     }
@@ -86,7 +86,9 @@ import {
 } from './amazon-secret-rotation.service.js'
 
 const DAY = 86_400_000
-const GOOD_POLICY = JSON.stringify({ Statement: [{ Effect: 'Allow', Principal: { AWS: 'arn:aws:iam::437568002678:root' }, Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes'] }] })
+const queueArn = 'arn:aws:sqs:eu-west-1:123456789012:nexus-app-credentials'
+const allow = { Effect: 'Allow', Principal: { AWS: 'arn:aws:iam::437568002678:root' }, Action: ['sqs:SendMessage', 'sqs:GetQueueAttributes'], Resource: queueArn }
+const GOOD_POLICY = JSON.stringify({ Statement: [allow] })
 const newSecretBody = (clientId = CLIENT, secret = NEW) => JSON.stringify({
   notificationVersion: '1.0', notificationType: 'APPLICATION_OAUTH_CLIENT_NEW_SECRET', payloadVersion: '2023-11-30', eventTime: '2026-09-19T10:00:00Z',
   payload: { applicationOAuthClientNewSecret: { clientId, newClientSecret: secret, newClientSecretExpiryTime: '2027-03-18T10:00:00Z', oldClientSecretExpiryTime: '2026-09-26T10:00:00Z' } },
@@ -160,9 +162,23 @@ describe('P6.1 — reading credential notifications', () => {
 })
 
 describe('P6.1 — asking Amazon for a new secret', () => {
+  it.each([
+    JSON.stringify({Statement:[{...allow,Effect:'Deny'}]}),
+    JSON.stringify({Statement:[{...allow,Action:['sqs:GetQueueAttributes']},{...allow,Principal:{AWS:'arn:aws:iam::111111111111:root'},Action:['sqs:SendMessage']}]}),
+    JSON.stringify({Statement:[{...allow,Resource:'arn:aws:sqs:eu-west-1:123456789012:another-queue'}]}),
+    JSON.stringify({Statement:[{...allow,Action:['sqs:SendMessage']}]}),
+    JSON.stringify({Statement:[allow,{...allow,Effect:'Deny'}]}),
+    JSON.stringify({Statement:[{...allow,Condition:{StringEquals:{'aws:SourceAccount':'unknown'}}}]}),
+    '437568002678 sqs:SendMessage',
+  ])('refuses an unproved queue policy before requesting any token: %s',async policy=>{
+    h.policy=policy
+    expect(await requestAmazonSecretRotation('test')).toMatchObject({requested:false})
+    expect(h.tokenRequests).toEqual([])
+    expect(h.rotateCalls).toEqual([])
+  })
   it('refuses without a queue, with a queue Amazon may not write to, or one Nexus cannot read — 0 calls to Amazon', async () => {
     h.policy = JSON.stringify({ Statement: [{ Principal: { AWS: '111111111111' }, Action: 'sqs:SendMessage' }] })
-    expect(await requestAmazonSecretRotation('test')).toMatchObject({ requested: false, error: expect.stringMatching(/does not let Amazon/) })
+    expect(await requestAmazonSecretRotation('test')).toMatchObject({ requested: false, error: expect.stringMatching(/could not establish explicit grants/) })
     h.policy = GOOD_POLICY; h.queueReadable = false
     expect(await requestAmazonSecretRotation('test')).toMatchObject({ requested: false, error: expect.stringMatching(/cannot read the credential queue/) })
     vi.stubEnv('AMAZON_APP_CREDENTIAL_QUEUE_URL', '')
@@ -174,6 +190,11 @@ describe('P6.1 — asking Amazon for a new secret', () => {
     expect(h.tokenRequests).toEqual([{ secret: OLD, scope: ROTATION_SCOPE }])
     expect(h.rotateCalls).toEqual([{ url: 'https://sellingpartnerapi-eu.amazon.com/applications/2023-11-30/clientSecret', token: `tok-for-${OLD}` }])
     expect(h.events).toEqual([expect.objectContaining({ type: 'secret_rotation_requested' })])
+  })
+  it('accepts the two required grants in separate statements for the same principal and queue',async()=>{
+    h.policy=JSON.stringify({Statement:[{...allow,Action:'sqs:SendMessage'},{...allow,Action:'sqs:GetQueueAttributes'}]})
+    expect(await requestAmazonSecretRotation('test')).toEqual({requested:true,status:204})
+    expect(h.rotateCalls).toHaveLength(1)
   })
   it('Amazon refusing the rotation: recorded, alerted, nothing stored', async () => {
     h.rotateStatus = 403
