@@ -154,8 +154,8 @@ export default async function amazonCockpitPublishRoutes(
     const submissions: SubmissionResult[] = []
 
     for (const mp of marketplaces) {
-      const marketplaceId =
-        MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
+      // A-23 (R-19): never fall back to Italy. A market this publisher has no id for is refused below.
+      const marketplaceId: string | undefined = MARKETPLACE_ID_MAP[mp]
       let result: SubmissionResult = {
         marketplace: mp,
         ok: false,
@@ -167,6 +167,7 @@ export default async function amazonCockpitPublishRoutes(
       }
 
       try {
+        if (!marketplaceId) throw new Error(`Amazon · ${mp} has no marketplace id in this publisher, so nothing was sent.`)
         let listing = await prisma.channelListing.findFirst({
           where: { productId: id, channel: 'AMAZON', marketplace: mp, channelConnectionId: account, aliasKey: body.aliasKey ?? '' },
         })

@@ -23,7 +23,7 @@ vi.mock('../services/amazon/mapping-payload.js', () => ({ applyResolvedMappingTo
 vi.mock('../services/categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
 vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class {} }))
 vi.mock('../services/amazon/flat-file.service.js', () => ({
-  MARKETPLACE_ID_MAP: { IT: 'APJ6JRA9NG5V4' },
+  MARKETPLACE_ID_MAP: { IT: 'APJ6JRA9NG5V4', BE: 'AMEN7PMS3EDWL' },
   AmazonFlatFileService: class { async getFeedSchemaHints() { return {} } buildJsonFeedBody() { return '{"messages":[]}' } },
 }))
 vi.mock('../services/amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'dry-run' }))
@@ -55,6 +55,19 @@ describe('cockpit publish on a market with more than one language', () => {
     expect(be).toMatchObject({ marketplace: 'BE', ok: false,
       error: 'Amazon · BE carries 2 languages (nl, fr), and this path sends one. Publish its content through the listing editor, which sends every language.' })
     expect(it_).toMatchObject({ marketplace: 'IT', ok: true, error: null })
+    expect(m.resolve.mock.calls.map(call => call[0].marketplace)).toEqual(['IT'])
+  })
+
+  // A-23 (R-19): the publisher's map has no NL id; it used to fall back to ITALY's.
+  it('refuses a market with no marketplace id instead of sending it to Italy; IT still goes ahead', async () => {
+    const app = Fastify()
+    await app.register(cockpitRoutes)
+    const res = await app.inject({ method: 'POST', url: '/products/p/publish-amazon', payload: { marketplaces: ['NL', 'IT'], dryRun: true } })
+    expect(res.statusCode, res.body).toBe(200)
+    const [nl, it_] = res.json().submissions
+    expect(nl).toMatchObject({ marketplace: 'NL', ok: false, error: 'Amazon · NL has no marketplace id in this publisher, so nothing was sent.' })
+    expect(it_).toMatchObject({ marketplace: 'IT', ok: true })
+    expect(m.listing.mock.calls.map(call => call[0].where.marketplace)).toEqual(['IT'])
     expect(m.resolve.mock.calls.map(call => call[0].marketplace)).toEqual(['IT'])
   })
 })

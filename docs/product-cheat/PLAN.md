@@ -4918,6 +4918,8 @@ and cockpit publishes are refused. Build the per-language merge (A-22 (a)) befor
 
 ## A-23 — The cockpit publishes an unknown market to Amazon ITALY. FOR YOUR RULING.
 
+> ✅ **RULED R-19: option (a). BUILT** — see [A-23 — BUILT](#a-23--built-r-19-the-cockpit-refuses-a-market-it-has-no-id-for).
+
 `amazon-cockpit-publish.routes.ts:157`: `MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT`. The map
 (`services/amazon/flat-file.service.ts:49-55`) holds **IT, DE, FR, ES, UK only**. So a cockpit publish
 for **NL, PL, SE, TR or IE** (BE is now refused by R-18) is sent with **Italy's marketplace id**. The
@@ -4932,3 +4934,27 @@ The flat-file feed has the same maps (`LANGUAGE_TAG_MAP` falls back to `it_IT`) 
 | b | Add the missing ids to the flat-file maps | Touches the flat-file service — a no-touch zone; needs its own approval |
 
 Nothing built.
+
+---
+
+## OWNER RULING — 2026-09-22 (thirteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-19** | A-23 — the cockpit's fallback to Italy | ✅ **(a)** Refuse a market the cockpit has no marketplace id for. The flat-file service is not touched |
+
+---
+
+## A-23 — BUILT (R-19). The cockpit refuses a market it has no id for.
+
+`amazon-cockpit-publish.routes.ts`: `MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT` is now
+`MARKETPLACE_ID_MAP[mp]`, and a missing id refuses **that market**, first, with *"Amazon · NL has no
+marketplace id in this publisher, so nothing was sent."* The other markets of the same call go ahead.
+🟠 The sentence deliberately does **not** send the operator to another publisher: the queue push's
+own map lacks TR and falls back to Italy too — see A-24.
+
+- **Done when** — one dry-run call for NL + IT: NL refused by name, never looked up or resolved; IT
+  published (positive control). `amazon-cockpit-publish.languages.vitest.test.ts`, 2 arms (BE's
+  language arm now runs with BE's real id in the fake map, so it tests the language rule alone).
+- **Gate** — 2 mutations red: the Italy fallback restored; the refusal removed. Restore hash-checked.
+- **Cost when** — `flat`. **Rollback** — revert the commit.
