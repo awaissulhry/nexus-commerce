@@ -34,7 +34,7 @@ import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { withIngressWorkspace } from '../lib/workspace-ingress.js'
-import { completeInbound, deadLetterInbound, dueInboundEvents } from '../services/cx/ingress/ledger.js'
+import { completeInbound, deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
 import { canReplayInbound, inboundHandlerFor } from '../services/cx/ingress/handlers.js'
 
 const BATCH = 50
@@ -57,6 +57,13 @@ export async function runInboundRetrySweep(now: Date = new Date()): Promise<Inbo
   stats.due = events.length
 
   for (const event of events) {
+    if (!isVerifiedInbound(event)) {
+      await withIngressWorkspace(event.workspaceId, () =>
+        deadLetterInbound(event.id, 'This delivery has no successful verification record and cannot be replayed.'),
+      )
+      stats.unreplayable++
+      continue
+    }
     // Checked before the workspace is entered and before anything is loaded: an event
     // nothing can replay must not consume an attempt, and must not look like a
     // handler that threw.

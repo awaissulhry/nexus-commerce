@@ -1065,7 +1065,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         const queued = await replayInbound({ id: request.params.id })
         if (!queued.ok) {
           const message =
-            queued.reason === 'archived'
+            queued.reason === 'unverified'
+              ? 'This delivery was not verified and cannot be replayed. Request a new verified delivery from the channel.'
+              : queued.reason === 'archived'
               ? 'This event is archived; its payload is no longer on the row.'
               : queued.reason === 'already_pending'
                 ? 'This event is already queued for the retry worker.'
@@ -1115,7 +1117,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         const queued = await replayInbound({ id: event.id })
         if (!queued.ok) {
           const message =
-            queued.reason === 'archived'
+            queued.reason === 'unverified'
+              ? 'This delivery was not verified and cannot be replayed. Request a new verified delivery from the channel.'
+              : queued.reason === 'archived'
               ? 'This event is archived; its payload is no longer on the row.'
               : queued.reason === 'already_pending'
                 ? 'This event is already queued for the retry worker.'

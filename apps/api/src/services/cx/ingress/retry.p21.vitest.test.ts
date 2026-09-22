@@ -19,7 +19,11 @@ let lastRawArgs: unknown[] = []
 const prismaMock = {
   webhookEvent: {
     findUnique: vi.fn(async (args: any) => {
-      if (args?.where?.id) return rows.get(args.where.id) ?? null
+      if (args?.where?.id) {
+        const row = rows.get(args.where.id)
+        if (!row) return null
+        return args.select ? Object.fromEntries(Object.keys(args.select).map(key => [key, row[key]])) : row
+      }
       const key = args?.where?.channel_externalId
       if (!key) return null
       for (const row of rows.values()) {
@@ -65,7 +69,7 @@ const {
 } = await import('./ledger.js')
 
 function seed(id: string, row: Row) {
-  rows.set(id, { id, channel: 'SHOPIFY', eventType: 'product/update', externalId: id, status: 'failed', attempts: 0, deliveries: 1, archivedAt: null, nextAttemptAt: null, workspaceId: 'ws-1', ...row })
+  rows.set(id, { id, channel: 'SHOPIFY', eventType: 'product/update', externalId: id, status: 'failed', attempts: 0, deliveries: 1, archivedAt: null, nextAttemptAt: null, workspaceId: 'ws-1', signatureOk: true, verifiedBy: 'shopify_hmac', ...row })
 }
 
 beforeEach(() => {
@@ -159,6 +163,32 @@ describe('dead-lettering without spending attempts', () => {
 })
 
 describe('replay', () => {
+  it.each(['EBAY', 'ETSY', 'SHOPIFY'])('cannot promote a rejected %s payload into trusted execution', async (channel) => {
+    seed('forged', { channel, signatureOk: false, status: 'failed' })
+    expect(await replayInbound({ id: 'forged' })).toMatchObject({ ok: false, reason: 'unverified' })
+    expect(updates).toHaveLength(0)
+  })
+
+  it('refuses missing verification but allows the explicitly trusted SQS transport', async () => {
+    seed('unknown', { signatureOk: null, verifiedBy: 'none' })
+    expect(await replayInbound({ id: 'unknown' })).toMatchObject({ ok: false, reason: 'unverified' })
+    seed('sqs', { channel: 'AMAZON', signatureOk: null, verifiedBy: 'sqs_iam' })
+    expect((await replayInbound({ id: 'sqs' })).ok).toBe(true)
+    seed('false-sqs', { channel: 'AMAZON', signatureOk: false, verifiedBy: 'sqs_iam' })
+    expect((await replayInbound({ id: 'false-sqs' })).reason).toBe('unverified')
+  })
+
+  it.each(['EBAY', 'ETSY', 'SHOPIFY'])('does not treat %s as an unsigned SQS transport', async channel => {
+    seed('wrong-transport', { channel, signatureOk: null, verifiedBy: 'sqs_iam' })
+    expect((await replayInbound({ id: 'wrong-transport' })).reason).toBe('unverified')
+    expect(updates).toHaveLength(0)
+  })
+
+  it('allows an Amazon Ads event whose trust came from SQS IAM', async () => {
+    seed('ads', { channel: 'AMAZON_ADS', signatureOk: null, verifiedBy: 'sqs_iam' })
+    expect((await replayInbound({ id: 'ads' })).ok).toBe(true)
+  })
+
   it('gives a dead letter a full budget back and queues it', async () => {
     seed('e1', { status: 'dlq', attempts: MAX_INBOUND_ATTEMPTS, deliveries: 4, lastError: 'boom' })
     const outcome = await replayInbound({ id: 'e1' })
@@ -213,6 +243,7 @@ describe('what the worker picks up', () => {
     expect(args.where.archivedAt).toBeNull()
     expect(args.orderBy).toEqual({ nextAttemptAt: 'asc' })
     expect(args.take).toBe(25)
+    expect(args.select).toMatchObject({ signatureOk: true, verifiedBy: true })
   })
 
   it('goes through the SCOPED model API, never raw SQL', async () => {
