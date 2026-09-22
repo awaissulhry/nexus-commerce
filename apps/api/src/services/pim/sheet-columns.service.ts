@@ -365,7 +365,9 @@ function kindFor(field: FieldDefinition): SheetColumnKind {
 }
 
 function storageFor(field: FieldDefinition): SheetStorage {
-  if (field.localizable) return 'localizedContent'
+  // A-25 (R-22): a closed choice list stores one code for every language, whatever its flag says.
+  // (A multiselect arrives here as `select` with a list shape.)
+  if (field.localizable && field.type !== 'select') return 'localizedContent'
   if (field.id.startsWith('attr_')) return 'categoryAttributes'
   if (LOCALIZED_KEYS.has(field.id)) return 'localizedContent'
   return 'column'

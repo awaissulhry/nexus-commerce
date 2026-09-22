@@ -671,6 +671,9 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.5 — Factual values are codes
 
+> ✅ **CLOSED (R-22)** — see [Step 2.5 — CLOSED](#step-25--closed-r-22-a-choice-list-cannot-be-per-language). The gate is a test
+> in the push hook, not `check-factual-attributes.mjs`; the *"override still winning"* clause is dropped (no override exists).
+
 - **Do** — Enforce *"a factual attribute is a code with a localized label, never per-language free
   text"*, scoped to schema enums.
 - **Where** — 🟩 The contract exists: `sheet-columns.service.ts:136` (`optionLabels`), threaded at
@@ -5082,6 +5085,8 @@ narrower than the review assumed; it stays open for that route.
 
 ## A-25 — Step 2.5: nothing enforces "factual = code" today, and the override it mentions does not exist. FOR YOUR RULING.
 
+> ✅ **RULED R-22: option (a). BUILT** — see [Step 2.5 — CLOSED](#step-25--closed-r-22-a-choice-list-cannot-be-per-language).
+
 **2026-09-22. Code trace; nothing built.** The ruling: *"factual attributes never per-language: a code
 with a localized label, never per-language free text"* (`docs/2026-09-11-language-axis-design.md:85-86`).
 
@@ -5101,3 +5106,56 @@ with a localized label, never per-language free text"* (`docs/2026-09-11-languag
 
 The *"override still winning"* clause is dropped from Done when either way: there is no override to
 win. Building one is a separate feature.
+
+---
+
+## OWNER RULING — 2026-09-22 (fifteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-21** | When to run Step 2.7 (D-E) on production | ✅ **After this branch is deployed**, so readiness and the app share one rule set |
+| **R-22** | A-25 — Step 2.5 | ✅ **(a)** Enforce at the source for closed choice lists |
+
+Also recorded: the Owner's **OK for 2.1 (b) on production** — run by the Owner through
+`scratchpad/prod-run.mjs derive`, dry run first (the agent's session cannot reach production).
+
+---
+
+## Step 2.5 — CLOSED (R-22). A choice list cannot be per-language.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `routes/attributes.routes.ts` | `POST /attributes` refuses `localizable: true` for `select` / `multiselect`; `PATCH` refuses it for a stored choice list. One sentence: *"A choice list stores a code, and each market shows its own label for it, so it cannot be made per-language."* |
+| `sheet-columns.service.ts` — `storageFor` | A `select` (a multiselect arrives as `select` with a list shape) never goes to per-language storage, whatever its flag says |
+| `services/pim/attribute-rules.ts` | The rule, the sentence and the stored-type lookup — in a service, because the route-prisma ratchet refused a new direct DB call in the route (it did, on the first push) |
+
+Measured first: **0** choice lists flagged per-language on the local catalogue (7 choice lists, none
+per-language), so the router change hides nothing there. 🔴 **Production is not counted** — add
+*"`CustomAttribute` where type in (select, multiselect) and localizable"* to the deploy checklist; any
+row there would have its per-language values stop showing after deploy.
+
+### Done when — ✅
+
+A per-language choice list is refused on create and update, by name, writing nothing (positive
+controls: a per-language text and a single-language choice list are created); a flagged choice list
+still stores one code; the code-defined dictionary declares none. German labels on Amazon·DE already
+come from the de_DE schema (A-25), unchanged.
+
+### Gate — ✅ `attributes-code-not-localizable.vitest.test.ts` (in the hook), proven able to fail 5 ways
+
+POST allows it · PATCH allows it · `multiselect` not covered · the service never refuses · the router
+sends it per-language · the dictionary declares one — each red (6). 🟠 `attribute-foundation.vitest.test.ts` asserted the opposite
+(a per-language `select` in per-language storage), from the 09-12 bulk checkpoint with no stated
+reason; its storage line now follows R-22, and a per-language text arm keeps its canonical-key check.
+
+Full `apps/api` suite: **880 files pass**. `tsc`: 0.
+
+### ⬜ Not done, stated
+
+The per-language writers (`content-write.ts`, `translation-write.ts`) still accept any key; nothing
+routes a choice list to them any more, but a direct write is not refused there. Open-text attributes
+such as Amazon's `material` stay per-language-capable, as ruled.
+
+### Cost when — `flat`. **Rollback** — revert the commit.

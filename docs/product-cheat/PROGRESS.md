@@ -54,7 +54,7 @@ been exercised.
 | **A-22** Step 2.3's example cannot happen; the gap is Amazon BE (Dutch + French) | ✅ **CORRECTED, then RULED R-18 (b), BUILT** — the main paths already send every language; the mapping cascade and the cockpit refuse a multi-language market, named. **Step 2.3 CLOSED** with that limit stated | see `git log` |
 | **A-23** The cockpit sent an unknown market (NL, PL, SE, TR, IE) to Amazon **Italy** | ✅ **RULED R-19, BUILT** — refused per market, by name | see `git log` |
 | 🔴🔴 **A-24** Every Amazon queue push (price, content, stock, full sync) was sent to Amazon **Italy** | ✅ **RULED R-20, BUILT** — the listing decides the market; refuse, never Italy; 5 mutations red. 🔴 Production: **256** DE/ES stock rows were built for Italy and marked sent on 2026-09-08 — whether they reached Amazon is unknown until Step 3.1 | see `git log` |
-| **A-25** Step 2.5: nothing enforces "factual = code"; the override it names does not exist | 🟡 **FOR YOUR RULING** — recommended (a): refuse per-language for closed choice lists, at the route and the router, plus a gate | — |
+| **A-25** Step 2.5: nothing enforced "factual = code" | ✅ **RULED R-22, BUILT — Step 2.5 CLOSED**: a choice list cannot be per-language (route + router + gate, 5 mutations red). 🔴 Deploy checklist: count per-language choice lists on production first | see `git log` |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -175,12 +175,9 @@ approval **before building**. Each turn reports what changed, whether it worked,
    count production roots first.
 6. ✅ **Step 2.3 — CLOSED (R-18)** with a stated limit: the two one-language paths refuse a
    multi-language market. ✅ **A-23** (cockpit → Italy) fixed under R-19.
-7. 🟡 **Step 2.5 — measured, NOT built: see A-25.** Nothing stops a choice-list attribute becoming
-   per-language; the "override" it mentions does not exist. Recommended (a): enforce at the source for
-   closed choice lists. Then **2.6** (needs D-D).
-8. 🟡 **Owner OK given for 2.1 (b) and 2.7 on production** (2026-09-22). The agent cannot reach
-   production (safety check); the Owner runs `scratchpad/prod-run.mjs` — dry run first. Recommended:
-   2.1 (b) now; 2.7 after this branch deploys, so readiness and the app share one rule set.
+7. ✅ **Step 2.5 — CLOSED (R-22).** Next: **2.6** (needs D-D).
+8. 🟡 **2.1 (b) on production — OK given; waiting for the Owner's dry run** (`scratchpad/prod-run.mjs
+   derive`, both businesses). **2.7 on production — R-21: after this branch deploys.**
 
 ### Still blocked, not forgotten
 

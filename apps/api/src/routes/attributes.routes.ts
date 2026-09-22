@@ -35,6 +35,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
+import { CODE_NOT_LOCALIZABLE, CODE_TYPES, localizableRefusalFor } from '../services/pim/attribute-rules.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 
@@ -51,6 +52,9 @@ const VALID_ATTRIBUTE_TYPES = new Set([
 ])
 
 const VALID_SCOPES = new Set(['global', 'per_variant'])
+
+// A-25 (R-22): a closed choice list cannot be made per-language — the rule and its lookup live in the service.
+export { CODE_NOT_LOCALIZABLE } from '../services/pim/attribute-rules.js'
 
 const attributesRoutes: FastifyPluginAsync = async (fastify) => {
   invalidateAttributeSchemasAfterWrites(fastify)
@@ -222,6 +226,8 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({
         error: `scope must be one of ${[...VALID_SCOPES].join(', ')}`,
       })
+    if (body.localizable && CODE_TYPES.has(body.type))
+      return reply.code(400).send({ error: CODE_NOT_LOCALIZABLE })
 
     const groupExists = await prisma.attributeGroup.findUnique({
       where: { id: body.groupId },
@@ -291,6 +297,10 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       data.validation = (body.validation as never) ?? null
     if (body.defaultValue !== undefined)
       data.defaultValue = (body.defaultValue as never) ?? null
+    if (body.localizable === true) {
+      const refusal = await localizableRefusalFor(id)
+      if (refusal) return reply.code(400).send({ error: refusal })
+    }
     if (body.localizable !== undefined) data.localizable = body.localizable
     if (body.scope !== undefined) {
       if (!VALID_SCOPES.has(body.scope))
