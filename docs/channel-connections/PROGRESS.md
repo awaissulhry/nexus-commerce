@@ -3,8 +3,10 @@
 Updated **2026-09-22**. Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
 (Owner report); this does not restart **P8, which remains deferred**.
 
-**Every package P0–P6 is BUILT and deployed.** What is left is switches, probes, portals and one
-blocked clean-up. Nothing is half-written.
+**Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
+Package labels are not proof of every acceptance criterion. Finances cutover, full eBay event
+coverage, live validation, Owner setup, and cleanup must be reconciled against current evidence.
+The latest isolated connections package is built and tested but not yet deployed.
 
 ✅ **The handover's deploy warning is closed.** `6cfcb143` (commit `090db711`) reached
 **SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
@@ -14,6 +16,12 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 ## 0. Cold start — read this much and you can work
 
 ### Current handover — 2026-09-22 (supersedes older setup/open-state claims below)
+
+**Latest Owner correction:** Etsy is **already connected under a different business profile**.
+The profile name/ID was not supplied. Discover it with authorized read-only inspection; do not
+assume Xavia Racing owns Etsy, reconnect it, or infer all-profile absence from one profile's view.
+Verify the four webhook registrations, routing, scopes, and live-mode state in its owning profile;
+connection alone does not establish those facts. [Next-session prompt](NEXT-SESSION-PROMPT.md).
 
 Read [the latest findings and Owner-only actions](2026-09-22-HANDOVER.md) and
 [CX cleanup proof](build/CX-CLEANUP.md). Guarded deletion, the legacy eBay token-report
@@ -30,8 +38,8 @@ The corrected public API origin is **https://nexusapi-production-b7bb.up.railway
 The former Railway host resolved but served 404; **api.xavia.it has no DNS**. The three
 readers share source resolution, deliberately not validation policy. Shopify setup and
 its 91 accepted scopes are recorded in the latest handover; the two rejected payment
-mandate scopes are removed. Etsy setup readiness is cleared; connecting Etsy and its
-four webhook registrations remain Owner actions.
+mandate scopes are removed. Etsy is connected per the latest Owner report; its owning profile,
+four webhook registrations, and live operation still need verification.
 
 Production eBay reads at **16:22:22Z / 16:23:18Z on 2026-09-22**: 13 rows, all 13
 schema-derived relations counted, 11 with zero cascading dependents but only **ten eligible**.
@@ -72,7 +80,7 @@ Push only the commits on this isolated package branch. Never push the other sess
 | 3 | ✅ **P6.8 — Etsy and Shopify are READY (2026-09-21)** — `{"ready":true}` for both after the Owner set the variables; the Shopify app is registered (legacy install flow, not embedded, both callback hosts allow-listed) and 🔴 **Shopify refused two of our own scopes — `read_payment_mandate`/`write_payment_mandate` do not exist** and are removed. Etsy's 4 webhooks remain. *Original finding below.* | **Owner** | Measured live 2026-09-21: `GET /api/cx/connect/etsy\|shopify/readiness` → `ready: false, channel_unavailable, "is not set up on this Nexus server"`, while `amazon_sp`, `amazon_ads` and `ebay` all return `ready: true`. **There is no `ChannelApp` row and no env credential** — `getChannelApp` throws from the one branch that needs both to be missing. **Set on `@nexus/api`:** `ETSY_API_KEY` + `ETSY_SHARED_SECRET`; `SHOPIFY_APP_CLIENT_ID` + `SHOPIFY_APP_CLIENT_SECRET`. Boot's `seedChannelApps()` then creates the rows. **Only then** register `${NEXUS_PUBLIC_API_URL}/api/cx/callback/<key>` and Etsy's 4 webhooks. 🔴 `build/P6.8.md` §1's table says a row DOES exist — it names no database and is most likely the dev one; the live reading wins. |
 | 4 | **P6.6** env token — **clean so far, needs the clock** | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. 📏 **Re-measured 2026-09-21** (`build/P6.6.md` §6b) and this time it is a **real zero**: two deployments, **0** lines, with *both* controls — the `get-logs` filter proved to match a bracketed prefix (`ads-v1-sync`), and the Orders probe proved an SP-API call ran inside the window. Still only ~**32 minutes** across two processes, and the warning is once per process, so the row needs a day with a full cron cycle. Nothing to build. |
 | 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
-| 6 | 🔴 **Nothing is listed on Etsy through Nexus — and now the REASON is known** | **Owner** | Measured in production: **0 Etsy `ChannelListing` rows**, **0 Etsy accounts connected** on either profile. **Historical blocker, now cleared:** missing app setup prevented Etsy connection earlier on 2026-09-21. The Owner can now connect it in the UI (§0 current handover). The account count could never have been anything but zero. Every Etsy writer is built and idle behind a credential, not behind a catalogue. |
+| 6 | **Etsy connected in another profile — Owner correction 2026-09-22** | **Either / Owner for gated actions** | The earlier zero-account/zero-listing measurements are historical. Discover the owning profile read-only and verify its current connection, listing counts, webhook routing, scopes and publishing mode. Do not reconnect or move ownership merely because Xavia Racing has no Etsy row. |
 | 7 | **P7b** destructive drops | **Owner** | Needs a **green week** (day 1 = 2026-09-21) **and a separate yes per table**. 🔴 `AmazonAdsConnection` is NOT a candidate — 49 files read it; CX.3c moves ownership first. |
 | 8 | **Section 8** Owner items | **Owner** | 1, 2, 3, 4, 8, 9, 10 are live. **Items 5 and 6 are struck through** — neither reconnect is needed. 🔴 Item 3, the **Neon password in git history**, is the only one where someone else could act first. |
 
@@ -87,7 +95,7 @@ Full record: `build/SWITCH-ON.md`.
 | Amazon **Orders** 2026-01-01 | 🟢 **gate cleared 2026-09-21** — the money question is answered (row 1). Waiting only on the Owner's yes |
 | Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) — now **measurable** without writing, via the §4c dry run |
 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
-| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ Owner connection and enablement (rows 5–6) |
+| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ Connection reported complete in another profile; verify current mode and obtain any required enablement approval (rows 5–6) |
 
 ### 0b. ✅ ALL VERIFIED on deployment `be9f2554` (build `0adbf6e8`), 2026-09-21
 

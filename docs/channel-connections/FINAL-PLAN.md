@@ -1,6 +1,10 @@
 # Channel connections — FINAL PLAN
 
-Written 2026-09-19. Status: **FOR YOUR REVIEW. Nothing in this plan is built yet. Nothing was committed.**
+Written 2026-09-19. This is the original plan and historical implementation record.
+For current scope, Owner corrections, release state and unresolved acceptance criteria, read
+`PROGRESS.md` §0 and `2026-09-22-HANDOVER.md`. Most core code is built; the full plan is not
+yet complete or production-verified. Etsy is already connected in another business profile
+(Owner correction, 2026-09-22). Older dated status entries below are historical.
 
 This is the one plan for how Nexus talks to its sales channels, in both directions:
 
@@ -692,7 +696,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 
 | Package | State | Build record | Notes |
 |---|---|---|---|
-| CX cleanup | BUILDING (2026-09-22) | `build/CX-CLEANUP.md` | Guarded delete, token report, notification preflight/topic and wire-contract fixes, and handover built/tested. Release gate pending; live deletion/catalogue still need permission and browser access. |
+| CX cleanup | BUILT + GATE PASSED (2026-09-22), not deployed | `build/CX-CLEANUP.md` | Guarded delete, boolean encrypted-credential presence, shared report/delete eligibility, and notification fixes are built and reviewed. Canonical gate passed on 4abb1a371. Release, exact-ten deletion and live eBay catalogue remain separately gated; current handover supersedes historical counts. |
 | Owner items (section 8) | NOT STARTED | — | Secret date first |
 | P0.1 | BUILT (2026-09-19) | `build/P0.1.md` | Not committed. Prod switches read: eBay + Amazon live. Prod proof waits for a push |
 | P0.2 | PROD-VERIFIED (2026-09-20) | `build/P0.2.md` | Pushed and deployed (`a05565cc`). Anonymous GET /api/monitoring/queue-stats → 401, with /api/health → 200 as the control |
