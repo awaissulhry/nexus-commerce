@@ -55,7 +55,8 @@ been exercised.
 | **A-23** The cockpit sent an unknown market (NL, PL, SE, TR, IE) to Amazon **Italy** | ✅ **RULED R-19, BUILT** — refused per market, by name | see `git log` |
 | 🔴🔴 **A-24** Every Amazon queue push (price, content, stock, full sync) was sent to Amazon **Italy** | ✅ **RULED R-20, BUILT** — the listing decides the market; refuse, never Italy; 5 mutations red. 🔴 Production: **256** DE/ES stock rows were built for Italy and marked sent on 2026-09-08 — whether they reached Amazon is unknown until Step 3.1 | see `git log` |
 | **A-25** Step 2.5: nothing enforced "factual = code" | ✅ **RULED R-22, BUILT — Step 2.5 CLOSED**: a choice list cannot be per-language (route + router + gate, 5 mutations red). 🔴 Deploy checklist: count per-language choice lists on production first | see `git log` |
-| **A-26** Step 2.6 measured (2026-09-23): **four** stores; production has **no** colliding variants (the XS/XXS pair is local only); the sheet shows FLAT first, every publisher reads `categoryAttributes.variations` first | 🟡 **D-D FOR YOUR RULING** — recommended (a): `categoryAttributes.variations` is the one store. Nothing built | — |
+| **A-26** Step 2.6 measured (2026-09-23): **four** stores; production has **no** colliding variants (the XS/XXS pair is local only); the sheet shows FLAT first, every publisher reads `categoryAttributes.variations` first | ✅ **RULED R-23 (a)**: `categoryAttributes.variations` is the one store. The sheet's size cell holds **0** values on production | — |
+| **A-27** Step 2.6's build, four slices: 2.6a the sheet reads/writes the one store · 2.6b four writers stop wiping it · 2.6c one writer, `variantAttributes` retired as an axis store · 2.6d data (Owner) | ✅ **APPROVED R-24** — building 2.6a → 2.6b → 2.6c, one commit each; 2.6d waits for the Owner | — |
 | **2.1 (b) on production** (2026-09-23) | 🟡 **Dry run done by the Owner** — Xavia Racing: **5** rows (the same 5 as local), `0 already required`, so `--revert` is exact. Waiting: Motovento dry run, then `--apply` | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
@@ -150,10 +151,11 @@ Rulings R-11 … R-22 are at the end of PLAN.md.
    (Motovento, dry run), then `… derive --apply` (expect `WROTE 5 rows`, and `now: 5`). The agent's
    session cannot reach production. The launcher refuses any non-Neon host, points Redis at a dead port,
    and turns business profiles on.
-2. **Step 2.6 — MEASURED (A-26), waiting for D-D.** Four stores, not three; production has no colliding
-   variants; one wrong value (`AIR-MESH-JACKET-MEN-XXL-BLACK`, VA `XS` vs `XXL` everywhere else).
-   Recommended: `categoryAttributes.variations` is the one store. The build comes back as an amendment
-   after the ruling. Count tool: `node docs/product-cheat/tools/axis-stores.mjs` (`--local` for local).
+2. **Step 2.6 — D-D RULED (R-23 (a)): `categoryAttributes.variations` is the one store. The build is
+   A-27, APPROVED (R-24) and in progress** (four slices; 2.6a first — the `xracing` family shows the live
+   defect: a sheet size edit lands where no publisher reads). Four stores, not three; production has no
+   colliding variants; one wrong value (`AIR-MESH-JACKET-MEN-XXL-BLACK`). Count tool:
+   `node docs/product-cheat/tools/axis-stores.mjs` (`--local` for local).
 3. **2.7 on production — R-21: after this branch deploys** (`tools/prod-run.mjs backfill`, dry run first).
 4. **Deploy checklist (before this branch is deployed):** count `CustomAttribute` rows with type
    select/multiselect AND `localizable` on production (R-22 would stop showing their per-language values);
@@ -205,7 +207,7 @@ approval **before building**. Each turn reports what changed, whether it worked,
 8. 🟡 **2.1 (b) on production — OK given; Xavia Racing dry run done (5 rows); Motovento dry run and
    `--apply` next** (`tools/prod-run.mjs derive`, run by the Owner). **2.7 on production — R-21: after
    this branch deploys.**
-9. 🟡 **Step 2.6 — measured (A-26); D-D waits for the Owner.**
+9. 🟡 **Step 2.6 — D-D ruled (R-23 (a)); A-27 approved (R-24); building 2.6a → 2.6b → 2.6c.**
 
 ### Still blocked, not forgotten
 

@@ -5164,6 +5164,9 @@ such as Amazon's `material` stay per-language-capable, as ruled.
 
 ## A-26 — Step 2.6 measured: FOUR stores, not three, and production has no colliding variants. D-D FOR YOUR RULING.
 
+> ✅ **RULED R-23: option (a)** — `categoryAttributes.variations` is the one store. The build is
+> [A-27](#a-27--step-26s-build-in-four-slices-for-your-approval), for approval.
+
 **2026-09-23. Read only: a code trace, and counts — local, and production run by the Owner with
 [`tools/axis-stores.mjs`](tools/axis-stores.mjs) (`BEGIN READ ONLY`, rolled back). Nothing built.**
 
@@ -5173,7 +5176,7 @@ such as Amazon's `material` stay per-language-capable, as ruled.
 |---|---|---|
 | **VAR** `Product.categoryAttributes.variations` | the child's variation bag | **208 / 224** |
 | VA `Product.variantAttributes` | the older per-variant bag | 36 / 44 — every value is also in VAR; **1** disagrees |
-| FLAT `categoryAttributes.size` / `.color` | the sheet's `attr_size` / `attr_color` cells | **1 / 0** |
+| FLAT `categoryAttributes.size` / `.color` | the sheet's `attr_size` / `attr_color` cells | **0 / 0** (one child carries a `size` key whose value is `null`) |
 | eBay `ChannelListing.platformAttributes.itemSpecifics` | the eBay·IT listing's own aspect (Italian) | 200 / 216 |
 | Amazon `platformAttributes.attributes` | a read-back of what Amazon holds | 232 / 256 (IT) |
 | `ProductVariation` | the legacy table | **0 rows** |
@@ -5232,8 +5235,8 @@ comments call opposite stores "canonical" (`ebay-variation-push.service.ts:2628-
 
 | # | Option | |
 |---|---|---|
-| **a** | **VAR (`categoryAttributes.variations`) is the one store for a child's size and colour.** The sheet cell reads and writes it; VA's axis keys and the one FLAT value fold into it and stop being written; the readers that read VA first move to VAR. eBay and Amazon item specifics stay each channel's own per-market label, filled from VAR at publish | 🟢 **Recommended.** It holds the data, agrees with Amazon and eBay on every size, and is what the eBay publishers read — D-D's own default |
-| b | FLAT (`categoryAttributes.size` / `.color`) is the one store | The sheet already writes it and the resolver ranks it first, but it holds **1** value: every publisher moves and 208 values migrate |
+| **a** | **VAR (`categoryAttributes.variations`) is the one store for a child's size and colour.** The sheet cell reads and writes it; VA's axis keys fold into it and stop being written; the readers that read VA first move to VAR. eBay and Amazon item specifics stay each channel's own per-market label, filled from VAR at publish | 🟢 **Recommended.** It holds the data, agrees with Amazon and eBay on every size, and is what the eBay publishers read — D-D's own default |
+| b | FLAT (`categoryAttributes.size` / `.color`) is the one store | The sheet already writes it and the resolver ranks it first, but it holds **0** values: every publisher moves and 208 values migrate |
 
 After the ruling, the build comes back as its own amendment for approval. Its size: VA is named in
 ~90 non-test files, so *"delete the losers"* is likely a step of its own. Two data questions come with
@@ -5242,3 +5245,60 @@ the channel, or leave empty), and the one wrong VA value.
 
 - **Done when** — rewritten: one store holds a child's size and colour; the sheet shows and writes
   it; the known wrong value is fixed; no collision in it (production today: 0 in VAR, 1 in VA).
+
+---
+
+## OWNER RULING — 2026-09-23 (sixteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-23** | A-26 / D-D — which store holds a child's size and colour | ✅ **(a)** `categoryAttributes.variations` is the one store. (The Owner: *"Go with your recommendation. Go ahead."*) The build is A-27, for approval |
+| **R-24** | A-27 — Step 2.6's build | ✅ **Option 1:** all of A-27, in order (2.6a → 2.6b → 2.6c), a report after each, stop on anything new; 2.6d waits for the Owner (*"I will go with your recommendation. Go ahead."*) |
+
+---
+
+## A-27 — Step 2.6's build, in four slices. FOR YOUR APPROVAL.
+
+> ✅ **APPROVED R-24 (option 1)** — build 2.6a, then 2.6b, then 2.6c, one commit and one report each;
+> stop and ask if anything new appears. 2.6d (data) waits for the Owner's word on each run.
+
+**2026-09-23. From A-26's trace (three helper traces; the lines named here were re-read). Nothing built.**
+
+### Two more facts, measured
+
+- **The sheet's size/colour cell holds 0 values on production** — the one `size` key counted in A-26 is
+  `null`. So re-ordering the sheet's read changes nothing an operator sees today.
+- **The live defect has a real family.** `xracing` (local: 49 children, every one with a `Size` in
+  `variations`) declares **no** axes (`variationAxes = []`, theme `Fit Type / Size Name / Color Name`).
+  The sheet mirrors a size edit into `variations` only for a declared axis
+  (`bulk-edit.service.ts:2047-2049`), so an edit there lands in the flat `size` key only: the sheet
+  then shows the new value (the resolver ranks the flat key first, `attribute-resolver.ts:246-253`)
+  and every publisher still sends the old one (`stored-variation-projection.ts:7-17`).
+
+### Four live writers wipe the store (re-read)
+
+| Writer | What it does |
+|---|---|
+| Organize publish on an existing product (`catalog-organize.routes.ts:114-124`) | replaces ALL of `categoryAttributes` with `{ variations }` — every other attribute is lost |
+| eBay Inventory import, update path (`ebay-import.service.ts:126-143`) | replaces `categoryAttributes` with `{ material, color, apparel_size }` — `variations` is lost |
+| Amazon reconciliation enrich (`listing-reconciliation.service.ts:211-214`) | replaces it with Amazon's raw attributes |
+| `PATCH /api/catalog/products/:id` (`catalog.routes.ts:873-875`) | replaces it with the client's bag |
+| Amazon clear/sync-hierarchy (`amazon.routes.ts:350-363`, `:655-672`) | strips `variations` from every Amazon product — **on purpose** (the comment says so); not a slice item |
+
+### The slices — one commit each, each with its own gate and mutations
+
+| Slice | Do | Done when |
+|---|---|---|
+| **2.6a — the sheet reads and writes the one store** | The resolver takes a child's `size` / `color` from `variations` (then `variantAttributes`) before the flat key. A sheet edit of a child's size or colour writes `variations` whenever the child already holds that axis there, or the family declares it; otherwise it stays a plain attribute (flat key) | An `xracing`-shaped edit (no declared axes, `Size` in `variations`) reaches what eBay publishes; a declared-axis arm; a plain-attribute arm (no axis anywhere → flat key only) |
+| **2.6b — writers stop wiping it** | The four writers above keep `variations` (merge, not replace). The clear-hierarchy strip stays | Each writer, given a child with `variations`, leaves it intact (one arm each) |
+| **2.6c — one writer, `variantAttributes` retired as an axis store** | Every axis writer goes through one helper that writes `variations`; the readers that read `variantAttributes` first (F6 matrix page, images workspace, Amazon wizard, eBay description theme, Amazon image feed/preview) read through `storedVariationValues`; one synonym table (today `canonicalVariantAxis` and `AXIS_SYNONYM_GROUPS` disagree). A gate fails on a new axis write outside the helper. The column stays — dropping it is a destructive migration and a separate ruling | The gate is red for a second writer; every reader above shows a `variations`-only child |
+| **2.6d — data, run by the Owner, dry run first** | Each a separate word: (1) the one wrong value (`AIR-MESH-JACKET-MEN-XXL-BLACK`, `variantAttributes` `XS`) — harmless once 2.6c stops reading it, so fix or leave; (2) the 77 children whose size is only on eBay/Amazon — fill `variations` from eBay·IT, or leave empty | Counted before and after with `tools/axis-stores.mjs` |
+
+**Not touched — the flat-file area is a no-touch zone.** Recorded for its owner, inferred from code and
+not run: the eBay flat-file save may replace the parent listing's axis settings (`_variationAxes`,
+`_axisValueOrder`, …) (`ebay-flat-file.routes.ts:1028-1057`), and its theme round-trip may clear a
+family's `variationAxes` (`:1235-1256`).
+
+- **Cost when** — 2.6a–c `flat`; 2.6d linear in children, ~300 rows.
+- **Gate** — per slice, above; 2.6c's single-writer gate is Step 2.6's own gate.
+- **Rollback** — revert each slice's commit; 2.6d's script records what it set and `--revert` clears it.
