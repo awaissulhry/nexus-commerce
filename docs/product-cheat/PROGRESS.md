@@ -49,7 +49,7 @@ been exercised.
 | **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | `a55d8da5f` |
 | **Review §3a** Amazon price PATCH wipes the sale price | ✅ **RULED: eBay only.** The sheet has no Amazon price column, and a test now fails if one appears. 🔴 The wipe itself is NOT fixed for the three existing callers | — |
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | ✅ **RULED R-13** — the limit is recorded in Step 2.2's Cost when; batch later | — |
-| **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and 40 of 54 local parents have no family | ✅ **RULED R-14 (a)** — move 2 closed for the editor; the grid waits for families and states the gap | — |
+| **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and **28 of 42** live local parents have no family (the first count, 40 of 54, included deleted products) | ✅ **RULED R-14 (a), BUILT** — move 2 closed for the editor; the grid shows *"N without family"*; new **Step 2.4b** (assign families) comes before the grid flip | see `git log` |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -162,8 +162,9 @@ approval **before building**. Each turn reports what changed, whether it worked,
 1. ✅ ~~**Step 2.2, part 2 — the sheet's price bypass.**~~ Built under R-11.
 2. ✅ ~~**Step 2.2's concurrency gate**~~ — built; a forced race on `concurrent-database.ts`.
 3. ✅ **A-17 (R-12)** — `expectedPrice` retry built. **Step 2.2 CLOSED.**
-4. 🟡 **Step 2.4 move 2 (R-14)** — closed for the editor. For the grid: the *"N products have no
-   family"* notice is next; the flip waits for a family-assignment step.
+4. ✅ **Step 2.4 move 2 (R-14)** — closed for the editor; the grid states *"N without family"*.
+   🟡 **Next for the grid: Step 2.4b** — count production parents with no family (read-only), then
+   propose assignments for the Owner. The grid flip comes after.
 5. 🟡 **Step 2.7 (R-15)** — ordering rule struck. D-E (the production run) stays the Owner's;
    count production roots first.
 6. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).

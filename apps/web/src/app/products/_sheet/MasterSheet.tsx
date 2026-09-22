@@ -15,7 +15,7 @@
  * now. Every edit autosaves on its own and paints the server's answer on that cell.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, EyeOff, Search } from 'lucide-react'
+import { AlertTriangle, EyeOff, FolderX, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
 import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
@@ -477,6 +477,18 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
                   tip={`No listing on ${data!.coordinatesNotListed.join(', ')} for the products on this page, so those columns are not shown. They return when a listing exists.`}
                 >
                   <Pill tone="neutral" size="md"><EyeOff size={11} /> {data!.coordinatesNotListed.length} not listed</Pill>
+                </InfoTip>
+              )}
+              {/*
+                A-20 (R-14) / R4 — this sheet takes its columns from the channels, not from a product
+                family, until every product has a family. Said here, with the count, so it does not
+                read as the family's choice.
+              */}
+              {(data?.productsWithoutFamily?.count ?? 0) > 0 && (
+                <InfoTip
+                  tip={`${data!.productsWithoutFamily.count} of ${data!.productsWithoutFamily.of} products on this page have no product family. Until every product has one, this sheet takes its columns from the channels the products are listed on, not from a family.`}
+                >
+                  <Pill tone="neutral" size="md"><FolderX size={11} /> {data!.productsWithoutFamily.count} without family</Pill>
                 </InfoTip>
               )}
               <Button size="sm" onClick={reload} disabled={loading}>{loading ? 'Loading…' : 'Reload'}</Button>

@@ -194,6 +194,30 @@ export interface SheetPage {
   availableMarkets: string[]
   /** Step 2.4 / R4 — coordinates this market has that the page's products are not listed on. */
   coordinatesNotListed: string[]
+  /**
+   * A-20 (R-14) / R4 — how many of this page's products have no product family. Until every product
+   * has one, this grid's Shared columns come from the channels its products are listed on, not from
+   * a family, so the gap is stated rather than left to look like the family's choice.
+   */
+  productsWithoutFamily: { count: number; of: number }
+}
+
+/**
+ * A-20 (R-14) — the page's products whose family ROOT has no product family. A variation carries no
+ * `familyId` of its own (measured: 341 of 355 local products are null, nearly all of them children),
+ * so each row is judged by its root; the map keeps one entry per root.
+ */
+export function productsWithoutFamily(
+  flat: ReadonlyArray<Record<string, unknown>>,
+  parentById: ReadonlyMap<string, unknown>,
+): { count: number; of: number } {
+  const roots = new Map<string, boolean>()
+  for (const row of flat) {
+    const rootId = (row.parentId as string | null | undefined) ?? (row.id as string)
+    const root = (rootId === row.id ? row : parentById.get(rootId)) as { familyId?: string | null } | undefined
+    roots.set(rootId, !root?.familyId)
+  }
+  return { count: [...roots.values()].filter(Boolean).length, of: roots.size }
 }
 
 export interface GetSheetRowsInput {
@@ -561,7 +585,8 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     }
   })
 
-  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed }
+  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed,
+    productsWithoutFamily: productsWithoutFamily(flat, parentById) }
 }
 
 export { coordinatesFor }

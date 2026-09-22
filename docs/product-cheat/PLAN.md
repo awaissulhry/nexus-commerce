@@ -4440,7 +4440,7 @@ coordinates the page's products are on (narrowed by move 1). Three smaller calle
 | | |
 |---|---|
 | products · parents | 355 · 54 |
-| 🔴 **parents with no family** | **40 of 54** (341 of 355 products; 324 of them have a listing) |
+| 🔴 **parents with no family** | **40 of 54** (341 of 355 products; 324 of them have a listing). 🟠 **Corrected below: those counts include deleted products. Live: 28 of 42 parents** |
 
 Family `cmtny43jv002jnjfbb6hnijqx` (COAT, OUTERWEAR, PANTS; 219 products; Amazon·IT, eBay·IT,
 Shopify, Etsy), market IT:
@@ -4618,3 +4618,69 @@ it recurs). `studio-matrix.routes` keeps its 4 known profiles-ON failures, ident
 Done when ✅ (type · events/audit/enqueue on every surface · one `applied` + one `conflict`) ·
 Cost when ✅ (5,000 rows complete; the linear limit accepted under R-13) · Gate ✅ (the type, Gate 2,
 the reset gate, this gate — each mutation-proven) · Rollback ✅ (per commit, stated). **CLOSED.**
+
+---
+
+## A-20 — BUILT (R-14). The grid says which products have no family.
+
+### 🟠 A correction first
+
+A-20 said **40 of 54** parents have no family. That count did not exclude deleted products. The
+grid shows live products only: measured through the grid itself and directly, **28 of 42** live
+parents have no family. The recommendation does not change.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `sheet-rows.service.ts` — `productsWithoutFamily()` | Counts the page's products whose **family root** has no family. A variation has no `familyId` of its own (nearly all of the 341 nulls are children), so each row is judged by its root, and each root counted once |
+| `SheetPage.productsWithoutFamily` | `{ count, of }` on every grid page |
+| `products/_sheet/MasterSheet.tsx` | Beside the *"N not listed"* pill: *"N without family"*, a neutral `Pill` in an `InfoTip` that says: *"N of M products on this page have no product family. Until every product has one, this sheet takes its columns from the channels the products are listed on, not from a family."* Existing design-system primitives only; no new styles, no design-system file changed |
+
+The grid's columns are **not** changed. Under R-14 the flip waits for the family step below.
+
+### Done when — ✅
+
+- Unit: a family page (1 of 2), exact rows judged by the loaded parent (0 of 1, 1 of 1), and a
+  positive control with every family set (0 of 2).
+- Wiring, read-only, on the local catalogue: the grid's `productsWithoutFamily` equals a direct
+  count of the same page's roots — **28 of 42**, IT and DE.
+- `apps/api` and `apps/web` `tsc`: 0. The web check was shown to be real: a planted type error was
+  caught, then removed.
+
+### Gate — ✅ proven able to fail
+
+| Mutation | Result |
+|---|---|
+| judge each row by itself, not its root | 🔴 3 of 3 red |
+| read the row's `familyId`, not the root's | 🔴 1 red |
+| drop the "each root once" skip | 🟢 green — **an equivalent mutation**: the map already keeps one entry per root. The line was dead, so it was **removed**, not kept untested |
+
+### ⬜ Not done, stated
+
+- **The real screen was not exercised.** Running the API locally would start it against
+  `apps/api/.env`, whose Redis is production's; that is not a risk to take for a pill. The notice is
+  two existing primitives beside an identical one, and the web type check covers the new field.
+- **The studio sheet needs no notice**: it is already family-owned, and states *"product family not
+  selected"* itself (`sheet-columns.service.ts`, `schemaMissing`).
+
+### Rollback — revert the commit. The field is additive; the web renders nothing when it is absent.
+
+---
+
+## Step 2.4b — Every product gets a family (NEW, R-14). Before the grid's move 2.
+
+- **Do** — Give every live parent product a product family, so the products grid can let the family
+  decide its Shared columns (Step 2.4 move 2, grid half).
+- **Why now** — R-14. Flipping the grid today would leave most rows with only the core columns
+  (A-20): locally **28 of 42** live parents have no family.
+- **Approach** — 🔴 **First, count on production** (live parents with no family), read-only. Then
+  propose the assignment per product type for the Owner's approval — a data write, never automatic.
+  **Rejected:** a family per product type created by a script without review — families carry
+  requirements (R-10), so a wrong family is a wrong requirement.
+- **Done when** — the grid's *"N without family"* notice reads 0 on every page, on production.
+- **Cost when** — `flat`; one row update per parent.
+- **Gate** — the notice itself (R4) and a count in the deploy checklist.
+- **Rollback** — the assignment script records what it set; `--revert` clears exactly those.
+- **Then** — Step 2.4 move 2 for the grid: pass the page's family ids from `sheet-rows.service.ts:435`
+  (A-20 (b)'s build), with a family arm and a no-family arm in `shared-scope-narrowing.vitest.test.ts`.
