@@ -4775,7 +4775,9 @@ Done when ✅ (M4 = 0, with the marker as positive control) · Cost when ✅ · 
 and `information-locale.ts:13-40` refuses a locale outside the market's languages for Amazon and eBay.
 
 Local `Marketplace.languages`, every active market: **one language each — except Amazon BE
-(`["nl","fr"]`)**. Production's rows are not measured here.
+(`["nl","fr"]`)**. ✅ **Production, measured 2026-09-22 (read only, run by the Owner): the same —
+19 active markets, only Amazon BE has two languages, and Amazon BE has 0 listings** (local: 0 too).
+So the gap below harms no listing today; it bites on the first Amazon BE listing.
 
 ### The real gap
 

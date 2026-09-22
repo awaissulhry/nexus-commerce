@@ -172,7 +172,8 @@ approval **before building**. Each turn reports what changed, whether it worked,
    count production roots first.
 6. 🟡 **Step 2.3 — measured, NOT built: see A-22.** Its example cannot happen (Amazon IT is
    Italian-only and German is refused); the real gap is Amazon BE (Dutch + French), where French is
-   never sent, and nothing stores a publish language. Awaiting your ruling.
+   never sent, and nothing stores a publish language. Production (read only): only Amazon BE has two
+   languages, and it has **0 listings** — nothing is harmed today. Awaiting your ruling.
 7. Then **2.5**, **2.6** (use the new sweep helper).
 
 ### Still blocked, not forgotten
