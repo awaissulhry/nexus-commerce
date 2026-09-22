@@ -24,11 +24,21 @@ vi.mock('../connection-resolver.service.js', async importOriginal => ({
 }))
 vi.mock('../cx/apps.service.js', () => ({ getChannelApp: db.app }))
 
+// 🔴 Profiles ON is how PRODUCTION runs (.githooks/pre-push ratchet). `amazonAccount()` starts with
+// `if (workspaceMode) requireWorkspace()` (amazon-sp-client.ts:8), which throws outside a business
+// context — so an arm that passes with profiles OFF fails with them ON, for a reason that has
+// nothing to do with what it asserts. These arms therefore run INSIDE a workspace, the way the real
+// callers do. `LEGACY_WORKSPACE_ID` specifically, because an `env`-managed account is refused in any
+// other workspace (amazon-sp-client.ts:21) and that refusal is correct.
+const inWorkspace = <T>(work: () => T): T =>
+  withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
+
 const connection = (over: Record<string, unknown> = {}) => ({
   id: 'acct', channelType: 'AMAZON', isActive: true, authStatus: 'connected',
   externalAccountId: 'seller', region: 'eu', managedBy: 'env', connectionMetadata: null, ...over,
 })
 
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '@nexus/database/workspace-context'
 import { AmazonService, extractClassifications } from './amazon.service.js'
 
 const market = 'APJ6JRA9NG5V4'
@@ -44,10 +54,10 @@ it('accepts the LWA credentials actually used by SP-API without unrelated AWS si
   // by never setting them, not by a comment.
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_ROLE_ARN']) vi.stubEnv(key, '')
   const service = new AmazonService()
-  expect(await service.isConfigured()).toBe(true)
+  expect(await inWorkspace(() => service.isConfigured())).toBe(true)
   // Negative control: the refresh token is what decides, so removing it must flip the answer.
   vi.stubEnv('AMAZON_REFRESH_TOKEN', '')
-  expect(await service.isConfigured()).toBe(false)
+  expect(await inWorkspace(() => service.isConfigured())).toBe(false)
 })
 
 it('the app credentials come from ChannelApp, not from the environment', async () => {
@@ -57,19 +67,19 @@ it('the app credentials come from ChannelApp, not from the environment', async (
   // P6.1 — no ChannelApp row means not configured, however complete the environment looks.
   for (const key of ['AMAZON_LWA_CLIENT_ID', 'AMAZON_LWA_CLIENT_SECRET']) vi.stubEnv(key, 'test-value')
   db.app.mockRejectedValue(new Error('no ChannelApp row'))
-  expect(await new AmazonService().isConfigured()).toBe(false)
+  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(false)
   db.app.mockResolvedValue({ clientId: 'lwa-client', clientSecret: 'lwa-secret' })
-  expect(await new AmazonService().isConfigured()).toBe(true)
+  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(true)
 })
 
 it('an oauth-managed account needs no environment refresh token at all', async () => {
   vi.stubEnv('AMAZON_REFRESH_TOKEN', '')
   db.app.mockRejectedValue(new Error('no ChannelApp row'))
   db.connections.mockResolvedValue([connection({ managedBy: 'oauth' })])
-  expect(await new AmazonService().isConfigured()).toBe(true)
+  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(true)
   // Negative control: a disconnected account is refused whatever its credentials say.
   db.connections.mockResolvedValue([connection({ managedBy: 'oauth', authStatus: 'disconnected' })])
-  expect(await new AmazonService().isConfigured()).toBe(false)
+  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(false)
 })
 
 describe('Amazon catalog classifications', () => {
