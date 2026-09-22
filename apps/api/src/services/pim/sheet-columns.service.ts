@@ -235,6 +235,15 @@ export interface SheetColumnSet {
    * offer a market with nothing in it.
    */
   availableMarkets: string[]
+  /**
+   * 🔴 Step 2.4, R4 — *"a column that vanishes is worse than one that states why."*
+   *
+   * When `productIds` narrowed the presence check, these are the coordinates this market HAS that
+   * the products in view are NOT listed on — so their columns are absent on purpose. Empty when no
+   * narrowing happened, which is not the same fact as "nothing was excluded" and is why the
+   * narrowing is reported rather than inferred from a short coordinate list.
+   */
+  coordinatesNotListed: string[]
 }
 
 export interface BuildSheetColumnsInput {
@@ -1124,6 +1133,18 @@ export interface GetSheetColumnsInput {
   /** Skip the presence check and report every active channel in the market. */
   includeEmptyChannels?: boolean
   /**
+   * 🔴 Step 2.4 / 15.4 — narrow the coordinate presence check to THESE products.
+   *
+   * 15.4 asked for this explicitly rather than reusing `familyIds`, which means something narrower
+   * and is only set on the master scope. Without it the Shared scope declares a channel's
+   * attributes because *somebody else's* product is listed there — the Owner's own words, *"a
+   * schema that changes when someone else sells something."*
+   *
+   * Omitted, the presence check keeps its old catalogue-wide behaviour, so a caller that has no
+   * product list is unchanged rather than silently narrowed to nothing.
+   */
+  productIds?: string[]
+  /**
    * AM.1 — the eBay leaf categories the family's listings use (`platformAttributes.categoryId`),
    * so the eBay coordinate's spec is THOSE categories' aspects. Without any, the marketplace-wide
    * aspect rows stand in.
@@ -1173,6 +1194,28 @@ const COLUMN_SET_TTL_MS = 5 * 60_000
 /** Same shape, same TTL, same unbounded growth — keyed by product type rather than by family. */
 const englishLabelCache = new WorkspaceCache<string, { at: number; value: Map<string, string> }>(COLUMN_SET_CACHE_MAX)
 
+/**
+ * 🔴 Step 2.4 / 15.4 — "which markets does this business carry listings in" is a CATALOGUE fact,
+ * not a per-family one, and it was being answered by the same full-table aggregate that answered
+ * the per-product question. One entry per business, so a cold column build pays for it once per
+ * TTL instead of once per family opened.
+ *
+ * It keeps its old global meaning ON PURPOSE. The market switcher must not shrink to whatever the
+ * current page happens to sell on.
+ */
+const catalogueMarketsCache = new WorkspaceCache<string, { at: number; value: string[] }>(4)
+async function catalogueMarkets(): Promise<string[]> {
+  const cached = catalogueMarketsCache.get('markets')
+  if (cached && Date.now() - cached.at < COLUMN_SET_TTL_MS) return cached.value
+  // Its own import, like every other database read in this file — a hand-written parameter type
+  // for a Prisma delegate does not survive `groupBy`'s conditional argument type.
+  const { default: prisma } = await import('../../db.js')
+  const rows = await prisma.channelListing.groupBy({ by: ['marketplace'], _count: { _all: true } })
+  const value = [...new Set(rows.map((r) => String(r.marketplace).toUpperCase()).filter((m) => m && m !== 'DEFAULT'))].sort()
+  catalogueMarketsCache.set('markets', { at: Date.now(), value })
+  return value
+}
+
 export async function getSheetColumns(input: GetSheetColumnsInput): Promise<SheetColumnSet> {
   const market = String(input.market).toUpperCase()
   const productTypes = [...new Set((input.productTypes ?? []).map((t) => String(t).toUpperCase()).filter(Boolean))]
@@ -1196,6 +1239,8 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     input.savedFields ?? [],
     input.accountId ?? null,
     input.locale ?? null,
+    // Step 2.4 — it narrows the coordinate set, so it changes the RESULT and belongs in the key.
+    [...new Set(input.productIds ?? [])].sort(),
   ])
   const cached = columnSetCache.get(cacheKey)
   // LX7 request: account is already part of cacheKey; a channel scope can reuse its own entry.
@@ -1206,23 +1251,63 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   const { loadAmazonSpec, loadAmazonEnglishLabels, loadEbaySpec } = await import('./channel-specs/index.js')
   const { etsyProductSpec } = await import('./channel-specs/store.js')
 
-  const [marketplaceRows, presentRows] = await Promise.all([
-    prisma.marketplace.findMany({
-      where: { isActive: true },
-      select: { channel: true, code: true, name: true, isActive: true, language: true, languages: true },
-    }),
-    input.includeEmptyChannels
-      ? Promise.resolve([] as Array<{ channel: string; marketplace: string }>)
-      : prisma.channelListing.groupBy({ by: ['channel', 'marketplace'], _count: { _all: true } }),
-  ])
+  /**
+   * 🔴 PLAN Step 2.4 / 15.4 — this was ONE un-narrowed aggregate over `ChannelListing`, feeding two
+   * different facts. Measured on the scale fixture: **6 ms at 3,000 listings, 154 ms at 30,000**,
+   * against a whole cold column build of 148 ms. One query WAS the page.
+   *
+   * It is now two, because they were never the same question:
+   *
+   *   · `present` — which coordinates THESE PRODUCTS are on. Narrowed by `productIds`, it is 4 ms
+   *     and does not grow with the catalogue. This is the correctness half: the Shared scope stops
+   *     declaring a channel attribute because somebody else's product is listed there.
+   *   · `availableMarkets` — which markets the CATALOGUE carries, for the market switcher. 🔴 It
+   *     must NOT be narrowed: narrowing it would shrink the operator's market dropdown to whatever
+   *     the current page happens to sell on. It keeps its old, global meaning and gets its own
+   *     cache, so a cold build pays for it once per TTL rather than once per family.
+   */
+  const marketplaceRows = await prisma.marketplace.findMany({
+    where: { isActive: true },
+    select: { channel: true, code: true, name: true, isActive: true, language: true, languages: true },
+  })
+
+  const narrowTo = input.productIds?.length ? [...new Set(input.productIds)] : undefined
+  // Two explicit calls, not one with a spread `where`: Prisma's `groupBy` argument type is
+  // conditional on the literal shape, and a spread makes it report a circular reference.
+  const presenceRaw = input.includeEmptyChannels
+    ? []
+    : narrowTo
+      ? await prisma.channelListing.groupBy({ by: ['channel', 'marketplace'], _count: { _all: true }, where: { productId: { in: narrowTo } } })
+      : await prisma.channelListing.groupBy({ by: ['channel', 'marketplace'], _count: { _all: true } })
+  // Mapped to a plain shape here, and annotated HERE: annotating the `await` itself makes Prisma
+  // try to match its conditional argument type against an array and report a circular reference.
+  const presentRows: Array<{ channel: string; marketplace: string }> =
+    presenceRaw.map((r) => ({ channel: String(r.channel), marketplace: String(r.marketplace) }))
   const present = input.includeEmptyChannels
     ? undefined
     : new Set(presentRows.map((r) => `${String(r.channel).toUpperCase()}:${String(r.marketplace).toUpperCase()}`))
-  const availableMarkets = [...new Set(presentRows.map((r) => String(r.marketplace).toUpperCase()).filter((m) => m && m !== 'DEFAULT'))].sort()
+  /**
+   * 🟠 `includeEmptyChannels` callers get `[]`, exactly as before. The old code derived this from
+   * the presence rows, which that flag skipped entirely, so those callers have always seen an
+   * empty market list. It is preserved rather than quietly improved: this step narrows the
+   * presence query, and changing what a different flag returns is not what it claims to do.
+   * (Caught by `channel-specs/store.vitest.test.ts`, whose mock has no `groupBy` implementation
+   * precisely because that path never called one.)
+   */
+  const availableMarkets = input.includeEmptyChannels ? [] : await catalogueMarkets()
   const knownMarkets = [...new Set(marketplaceRows.map((m) => String(m.code).toUpperCase()).filter((c) => c && c !== 'DEFAULT'))].sort()
   if (!input.allowUnknownMarket && !knownMarkets.includes(market)) throw new UnknownMarketError(market, knownMarkets)
 
   const coordinates = coordinatesFor(market, marketplaceRows, { present, channels: input.channels, only: input.onlyChannels })
+  /**
+   * R4 — name what the narrowing removed. Derived by asking for the SAME market's coordinates
+   * without the presence filter, so it is the difference the narrowing made and not a guess.
+   */
+  const coordinatesNotListed = narrowTo
+    ? coordinatesFor(market, marketplaceRows, { channels: input.channels, only: input.onlyChannels })
+        .filter((c) => !coordinates.some((shown) => shown.label === c.label))
+        .map((c) => c.label)
+    : []
   const languageCoordinate = coordinates[0]
   const locale = normalizeLanguage(input.locale ?? (languageCoordinate ? marketLanguages(languageCoordinate.channel, languageCoordinate.marketplace, marketplaceRows)[0] : PRIMARY_CONTENT_LOCALE))
   if (scopeKind === 'channel') for (const coordinate of coordinates) assertInformationLocale(coordinate.channel, input.locale, marketLanguages(coordinate.channel, coordinate.marketplace, marketplaceRows))
@@ -1346,7 +1431,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   for (const cov of coverage) {
     cov.columns = columns.filter((c) => c.channels?.[cov.coordinate]?.categories.includes(cov.category)).length
   }
-  const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, groups, droppedKeys, schemaMissing, schemaAge, coverage, availableMarkets }
+  const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, groups, droppedKeys, schemaMissing, schemaAge, coverage, availableMarkets, coordinatesNotListed }
   columnSetCache.set(cacheKey, { at: Date.now(), value })
   return value
 }
@@ -1355,6 +1440,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
 export function clearSheetColumnCache(): void {
   columnSetCache.clear()
   englishLabelCache.clear()
+  catalogueMarketsCache.clear()
 }
 
 /**

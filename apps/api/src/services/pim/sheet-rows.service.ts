@@ -192,6 +192,8 @@ export interface SheetPage {
   schemaAge: Array<{ productType: string; fetchedAt: string }>
   /** Markets that actually carry listings — the switcher's options. */
   availableMarkets: string[]
+  /** Step 2.4 / R4 — coordinates this market has that the page's products are not listed on. */
+  coordinatesNotListed: string[]
 }
 
 export interface GetSheetRowsInput {
@@ -426,8 +428,15 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     select: { translations: true, platformAttributes: true },
   })
   const ebayCategoryIds = [...new Set(ebayCategoryRows.map((r) => (r.platformAttributes as { categoryId?: unknown } | null)?.categoryId).filter((c): c is string => typeof c === 'string' && c.length > 0))].sort()
-  const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes, ebayCategoryIds })
-  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets } = columnSet
+  // 🔴 Step 2.4 — the page's own products decide which coordinates the Shared scope declares.
+  // Without this the sheet showed a channel's attributes because SOMEBODY ELSE's product was
+  // listed there. `flat` is this page's families and their variations, which is exactly the set
+  // the columns are being built for.
+  const columnSet: SheetColumnSet = await getSheetColumns({
+    market, productTypes, variationAxes, ebayCategoryIds,
+    productIds: flat.map((r) => r.id as string),
+  })
+  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed } = columnSet
 
   // ── 3. the listings for these products on this market's coordinates ─
   const productIds = flat.map((r) => r.id as string)
@@ -552,7 +561,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     }
   })
 
-  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets }
+  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed }
 }
 
 export { coordinatesFor }

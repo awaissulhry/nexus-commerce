@@ -3819,3 +3819,96 @@ chunk and then stops growing — measured, because "it will degrade" was a guess
   above, because that needs a catalogue bigger than a unit test.
 - ⬜ **15.6's helper has ONE caller.** Steps 2.1 and 2.6 are meant to use it too. 2.1's data pass
   was 5 rows and needed no sweep; 2.6 has not been built.
+
+---
+
+## Step 2.4 (with 15.4) — BUILT. One query was the whole page, and it was answering two questions.
+
+### What it was
+
+🟩 `sheet-columns.service.ts` ran **one un-narrowed aggregate over `ChannelListing`** and fed two
+different facts from it. The Owner's words for the result: *"a schema that changes when someone
+else sells something."*
+
+🔴 And it was the cost of the page. Measured on the scale fixture: **6 ms at 3,000 listings,
+154 ms at 30,000**, against a whole cold column build of **148 ms**.
+
+### The two questions, separated
+
+| | |
+|---|---|
+| **`present`** — which coordinates **these products** are on | narrowed by the new `productIds`. This is the correctness half |
+| **`availableMarkets`** — which markets the **catalogue** carries, for the operator's market switcher | 🔴 **must NOT be narrowed.** It keeps its global meaning and gets its own cache, 4 entries, same TTL |
+
+🔴 **That second row is the trap this step could have walked into.** Narrowing both would have
+shrunk the market dropdown to whatever the current page happens to sell on. The old code's own
+comment said `availableMarkets` was *"derived from the presence query this service already runs"* —
+a documented coupling between two facts that were never the same fact.
+
+### Built, per [15.4](#154--step-24-fix-the-line-and-measure-it)
+
+1. 🆕 `GetSheetColumnsInput.productIds` — **explicit**, as 15.4 insisted, not `familyIds`, which
+   means something narrower and is only set on the master scope. **In the cache key**, because it
+   changes the result.
+2. 🆕 `catalogueMarkets()` — its own cache. A cold column build pays the catalogue query once per
+   TTL instead of once per family opened.
+3. `sheet-rows.service.ts` passes the page's own product ids. It already had them one line later.
+4. 🆕 **R4: the absence is stated.** `SheetColumnSet.coordinatesNotListed` names the coordinates
+   this market has that the products in view are not on, and `MasterSheet.tsx` renders it as a
+   *"N not listed"* pill with the reason. 🔴 *"A column that vanishes is worse than one that states
+   why"* — shipped **with** the narrowing, as the step demands, not after it.
+
+### Measured — the before and after 15.4 asked for
+
+**Ten different pages of 25 products, 10,000-product fixture, 30,000 listings:**
+
+```
+per-page cold column build, ms: 187, 7, 6, 6, 6, 5, 6, 5, 5, 9
+```
+
+| | |
+|---|---|
+| **before** — every page | **~150–324 ms**, growing with the catalogue |
+| **after** — first page (catalogue-markets cache cold) | 187 ms |
+| **after** — every page thereafter | 🟢 **6 ms**, and flat |
+
+**≈25× on the sheet's own read path, and it no longer grows with the catalogue.**
+
+### Gate — ✅ 6 tests, proven able to fail FOUR ways
+
+The step asks for *"a test asserting the Shared column set for a product with no Amazon listing
+contains no Amazon-only attribute, with a positive control — the same product WITH an Amazon
+listing must show the marker."* Both are in `shared-scope-narrowing.vitest.test.ts`.
+
+| Mutation | Result |
+|---|---|
+| remove the narrowing (the original defect) | 🔴 **3 of 6 red** |
+| narrow `availableMarkets` too (the trap above) | 🔴 **RED** — the market switcher loses FR and IT |
+| stop stating the absence (R4) | 🔴 **RED** |
+| drop `productIds` from the cache key | 🔴 **RED** — two product sets share one column set |
+
+### 🟠 A behaviour change I made and then took back
+
+`catalogueMarkets()` was at first called unconditionally. That gave `includeEmptyChannels` callers
+a real market list where they have always seen `[]` — arguably better, and **not what this step
+claims to do**. Caught by `channel-specs/store.vitest.test.ts`, whose mock has no `groupBy`
+implementation *precisely because that path never called one*. The old behaviour is preserved and
+the quirk is named in the code.
+
+### Cost when — the `groupBy` is **recorded before and after**: ~150 ms → **6 ms**, and flat in the catalogue.
+
+### Rollback — remove `productIds` from the two callers. With it absent the presence check keeps its old catalogue-wide behaviour by design, so the union returns without touching this file.
+
+### ⬜ Not done — and it is the bigger half
+
+🔴 **Move 2 is not built.** The step's real fix is *"the family decides Shared's columns; a channel
+attribute lives on its channel, and Shared carries a read-only 'also required by Amazon · DE'
+marker."* What shipped is move 1, which the step itself calls the one-line stopgap — now with a
+`where`, a cache split, a stated absence and a measurement.
+
+🟩 **Step 2.1 (a) already built the marker's mechanism**, so move 2 has its foundation. It is a
+column-ownership change and deserves its own step.
+
+⬜ **`studio-columns.ts` does not pass `productIds`.** The studio is per product and could. Left
+alone because the studio sheet has its own cache keyed on the product already, and changing two
+read paths in one step is how a measurement stops being attributable.

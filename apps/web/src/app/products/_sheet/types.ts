@@ -138,6 +138,8 @@ export interface SheetPage {
   schemaMissing: string[]
   schemaAge: Array<{ productType: string; fetchedAt: string }>
   availableMarkets: string[]
+  /** Step 2.4 / R4 — coordinates this market has that the products on this page are not listed on. */
+  coordinatesNotListed: string[]
 }
 
 export const coordKey = (c: { channel: string; marketplace: string }) => `${c.channel}:${c.marketplace}`

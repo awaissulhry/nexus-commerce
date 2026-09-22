@@ -15,7 +15,7 @@
  * now. Every edit autosaves on its own and paints the server's answer on that cell.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Search } from 'lucide-react'
+import { AlertTriangle, EyeOff, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
 import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
@@ -464,6 +464,19 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
                   }
                 >
                   <Pill tone="warning" size="md"><AlertTriangle size={11} /> caps</Pill>
+                </InfoTip>
+              )}
+              {/*
+                Step 2.4 / R4 — a column that vanishes is worse than one that states why. The
+                sheet now builds its coordinates from THESE products' listings, so a channel this
+                page sells nothing on contributes no columns. That is deliberate, and it is said
+                here rather than left to look like a missing feature.
+              */}
+              {(data?.coordinatesNotListed.length ?? 0) > 0 && (
+                <InfoTip
+                  tip={`No listing on ${data!.coordinatesNotListed.join(', ')} for the products on this page, so those columns are not shown. They return when a listing exists.`}
+                >
+                  <Pill tone="neutral" size="md"><EyeOff size={11} /> {data!.coordinatesNotListed.length} not listed</Pill>
                 </InfoTip>
               )}
               <Button size="sm" onClick={reload} disabled={loading}>{loading ? 'Loading…' : 'Reload'}</Button>

@@ -12,7 +12,9 @@ import { getSheetColumns } from './sheet-columns.service.js'
 it('honours a fresh channel account cache and isolates account and language keys', async () => {
  const input = { market: 'BE', accountId: 'seller', locale: 'nl', onlyChannels: ['AMAZON'] }
  const value = { columns: [], schemaAge: [{ fetchedAt: '2026-08-01T00:00:00Z' }] }
- const key = JSON.stringify(['BE', [], [], [], ['AMAZON'], false, [], [], 'channel', [], [], 'seller', 'nl'])
+ // The trailing [] is `productIds` (Step 2.4). It narrows the coordinate set, so it changes the
+ // RESULT and has to be in the key — this hand-written key is the assertion that it is.
+ const key = JSON.stringify(['BE', [], [], [], ['AMAZON'], false, [], [], 'channel', [], [], 'seller', 'nl', []])
  cache.set(key, { at: Date.now(), value })
  for (let i = 0; i < 3; i++) expect(await getSheetColumns(input)).toBe(value as any)
  expect(readMarkets).not.toHaveBeenCalled()
