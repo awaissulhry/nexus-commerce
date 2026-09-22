@@ -102,7 +102,9 @@ export const EBAY_DESIRED_TOPICS: EbayTopicWish[] = [
 export interface EbayTopic {
   topicId: string
   status?: string
-  supportedPayloads?: Array<{ format?: string; schemaVersion?: string; deprecated?: boolean }>
+  scope?: string
+  authorizationScopes?: string[]
+  supportedPayloads?: Array<{ format?: string[]; deliveryProtocol?: string; schemaVersion?: string; deprecated?: boolean }>
 }
 
 export interface EbayDestination {
@@ -117,6 +119,7 @@ export interface EbaySubscription {
   topicId: string
   destinationId?: string
   status?: string
+  payload?: { format?: string; deliveryProtocol?: string; schemaVersion?: string }
 }
 
 async function notificationApi<T>(
@@ -148,23 +151,38 @@ async function notificationApi<T>(
 /**
  * eBay's own catalogue of topics. This is the authority.
  *
- * Paged: eBay returns `next` as a path. Followed to the end, because a partial
+ * Paged: eBay returns `next` as a URL. Followed to the end, because a partial
  * catalogue would make a real topic look invented — the exact mistake this call exists
  * to prevent.
  */
 export async function getEbayTopics(environment: EbayEnvironment = 'production'): Promise<EbayTopic[]> {
-  const topics: EbayTopic[] = []
-  let path: string | null = '/commerce/notification/v1/topic?limit=100'
-  let guard = 0
-  while (path && guard++ < 20) {
-    const res = await notificationApi<{ topics?: EbayTopic[]; next?: string }>(environment, 'GET', path)
-    if (res.status !== 200) {
-      throw new Error(`eBay getTopics returned ${res.status}: ${res.text.slice(0, 300)}`)
+  return notificationCollection<EbayTopic>(environment, 'topic', 'topics')
+}
+
+/** Bound traversal without ever treating an incomplete catalogue as success. */
+async function notificationCollection<T>(environment: EbayEnvironment, resource: string, key: string): Promise<T[]> {
+  const pathname = `/commerce/notification/v1/${resource}`
+  let next: unknown = `${pathname}?limit=100`
+  const visited = new Set<string>()
+  const rows: T[] = []
+  while (next) {
+    if (visited.size >= 20 || typeof next !== 'string') throw new Error('eBay notification pagination is incomplete or invalid.')
+    const url = new URL(next, EBAY_API_BASE[environment])
+    if (url.origin !== EBAY_API_BASE[environment] || url.pathname !== pathname || url.username || url.password || url.hash || visited.has(url.href)) {
+      throw new Error('eBay notification pagination returned an unsafe or repeated URL.')
     }
-    topics.push(...(res.body?.topics ?? []))
-    path = res.body?.next ?? null
+    visited.add(url.href)
+    const res = await notificationApi<Record<string, unknown>>(environment, 'GET', `${url.pathname}${url.search}`)
+    if (res.status !== 200) throw new Error(`eBay ${key} returned ${res.status}: ${res.text.slice(0, 300)}`)
+    const batch = res.body?.[key] ?? (res.body?.total === 0 ? [] : null)
+    if (!Array.isArray(batch)) throw new Error(`eBay ${key} returned an unreadable collection.`)
+    rows.push(...batch)
+    next = res.body?.next
+    if (!next && typeof res.body?.total === 'number' && rows.length < res.body.total) {
+      throw new Error('eBay notification pagination ended before the advertised total.')
+    }
   }
-  return topics
+  return rows
 }
 
 /** A creation response has no body: eBay identifies the new resource in Location. */
@@ -178,12 +196,9 @@ function createdResourceId(location: string | null, environment: EbayEnvironment
 }
 
 export async function getEbayDestinations(environment: EbayEnvironment = 'production'): Promise<EbayDestination[]> {
-  const res = await notificationApi<{ destinations?: Array<Omit<EbayDestination, 'endpoint'> & { deliveryConfig?: { endpoint?: string } }> }>(
-    environment, 'GET', '/commerce/notification/v1/destination?limit=100',
-  )
-  if (res.status !== 200) throw new Error(`eBay getDestinations returned ${res.status}: ${res.text.slice(0, 300)}`)
+  const destinations = await notificationCollection<Omit<EbayDestination, 'endpoint'> & { deliveryConfig?: { endpoint?: string } }>(environment, 'destination', 'destinations')
   // Select only public diagnostic fields; deliveryConfig also contains the verification token.
-  return (res.body?.destinations ?? []).map(d => ({
+  return destinations.map(d => ({
     destinationId: d.destinationId, name: d.name, status: d.status, endpoint: d.deliveryConfig?.endpoint,
   }))
 }
@@ -210,11 +225,7 @@ export async function createEbayDestination(
 }
 
 export async function getEbaySubscriptions(environment: EbayEnvironment = 'production'): Promise<EbaySubscription[]> {
-  const res = await notificationApi<{ subscriptions?: EbaySubscription[] }>(
-    environment, 'GET', '/commerce/notification/v1/subscription?limit=100',
-  )
-  if (res.status !== 200) throw new Error(`eBay getSubscriptions returned ${res.status}: ${res.text.slice(0, 300)}`)
-  return res.body?.subscriptions ?? []
+  return notificationCollection<EbaySubscription>(environment, 'subscription', 'subscriptions')
 }
 
 export interface SubscribeOutcome {
@@ -248,16 +259,24 @@ export async function subscribeEbayTopic(
   // The schema version comes from the TOPIC, not from a constant. P2.2 found the same
   // mistake on the Amazon side, where one hardcoded payload version stood for every
   // notification type and would have been refused outright for one of them. eBay
-  // returns each topic's supported payloads from `getTopics`; the newest non-deprecated
-  // one is what a new subscription should ask for.
-  const payloads = (topic.supportedPayloads ?? []).filter((p) => !p.deprecated && p.schemaVersion)
-  const schemaVersion = payloads[payloads.length - 1]?.schemaVersion
-  const format = payloads[payloads.length - 1]?.format ?? 'JSON'
+  // advertises compatible versions in `getTopics`. The catalogue defines no ordering
+  // or default format; choose an explicitly supported JSON/HTTPS entry.
+  const payloads = (topic.supportedPayloads ?? []).filter((p) =>
+    !p.deprecated && p.schemaVersion && p.deliveryProtocol === 'HTTPS' && Array.isArray(p.format) && p.format.includes('JSON'),
+  )
+  const schemaVersion = payloads[0]?.schemaVersion
+  const format = 'JSON'
   if (!schemaVersion) {
     return { topicId, status: 'failed', detail: 'eBay lists this topic with no usable payload version.' }
   }
+  const wish = EBAY_DESIRED_TOPICS.find(wish => wish.topicId === topicId)
+  if (!wish || wish.handlerMissing) return { topicId, status: 'refused', detail: 'Nexus has no supported handler for this topic.' }
   const already = existing.find((s) => s.topicId === topicId && s.destinationId === destinationId)
   if (already) {
+    if (already.payload?.format !== 'JSON' || already.payload?.deliveryProtocol !== 'HTTPS' ||
+        !payloads.some(payload => payload.schemaVersion === already.payload?.schemaVersion)) {
+      return { topicId, status: 'failed', subscriptionId: already.subscriptionId, detail: 'The existing subscription payload is not compatible with the advertised JSON/HTTPS schemas; repair it before enabling.' }
+    }
     if ((already.status ?? '').toUpperCase() === 'ENABLED') {
       return { topicId, status: 'already_exists', subscriptionId: already.subscriptionId }
     }
@@ -294,6 +313,12 @@ export interface EbayNotificationSetupResult {
   error?: string
 }
 
+/** Configuration presence is not successful reconciliation. */
+export function ebayNotificationSetupSucceeded(result: EbayNotificationSetupResult): boolean {
+  return result.configured && !result.error && !!result.destinationId && result.perTopic.length > 0 &&
+    result.perTopic.every(topic => ['created', 'enabled', 'already_exists'].includes(topic.status))
+}
+
 /**
  * Create the destination if it is missing, then reconcile every desired topic.
  *
@@ -302,7 +327,7 @@ export interface EbayNotificationSetupResult {
  */
 export async function setupEbayNotifications(options: {
   environment?: EbayEnvironment
-  /** Only subscribe topics Nexus can actually act on. */
+  /** @deprecated Handler readiness is mandatory, including when this is false. */
   skipTopicsWithoutHandlers?: boolean
 } = {}): Promise<EbayNotificationSetupResult> {
   const environment = options.environment ?? 'production'
@@ -322,6 +347,7 @@ export async function setupEbayNotifications(options: {
 
   const tokenError = ebayVerificationTokenError(verificationToken)
   if (tokenError) return { ...base, error: tokenError }
+  base.configured = true
 
   try {
     const catalogue = await getEbayTopics(environment)
@@ -329,6 +355,9 @@ export async function setupEbayNotifications(options: {
 
     const destinations = await getEbayDestinations(environment)
     let destination = destinations.find((d) => d.endpoint === endpoint)
+    if (destination && destination.status !== 'ENABLED') {
+      return { ...base, destinationId: destination.destinationId, error: `The matching eBay destination is ${destination.status ?? 'of unknown status'}; repair it before enabling subscriptions.` }
+    }
     if (!destination) {
       const id = await createEbayDestination(environment, 'Nexus inbound notifications', endpoint, verificationToken)
       destination = { destinationId: id, endpoint }
@@ -336,7 +365,7 @@ export async function setupEbayNotifications(options: {
     }
 
     const existing = await getEbaySubscriptions(environment)
-    const wanted = EBAY_DESIRED_TOPICS.filter((t) => !(options.skipTopicsWithoutHandlers && t.handlerMissing))
+    const wanted = EBAY_DESIRED_TOPICS.filter((t) => !t.handlerMissing)
 
     const perTopic: SubscribeOutcome[] = []
     for (const wish of wanted) {

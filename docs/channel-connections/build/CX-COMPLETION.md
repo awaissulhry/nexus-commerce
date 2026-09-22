@@ -105,3 +105,28 @@ its extra tests assert shop-ID propagation and signed-body precedence.
 
 **This does not close receipt ingestion.** The existing read-back-only handler is
 still being replaced by transactional order ingestion before operational activation.
+
+## Slice C3 — eBay catalogue/subscription transport and truthful reconciliation
+
+Official `PayloadDetail.format` is an array; `deliveryProtocol` is a string, and the
+subscription payload uses scalar values. Select advertised nondeprecated JSON/HTTPS
+support, without inventing a format/version when metadata is missing. Existing
+subscriptions must advertise a compatible payload before reuse or enablement.
+Handler readiness cannot be bypassed by the old false override or a direct subscribe.
+
+All three collections now follow bounded, same-origin/resource pagination, refuse
+loops/incomplete results, and handle absolute next URLs. Disabled/unknown matching
+destinations refuse setup instead of being declared ready. Configuration presence
+is separate from remote success: failed/refused topics or failed GETs set `ok:false`
+and the scheduled callback throws into **the real CronRun recorder**, recording FAILED.
+
+Proof: first contract reproductions **10 failed / 7 passed**; reporting **2 failed /
+18 passed**; independent review found and reproduced the cron-history bug (**4 failed /
+2 passed**) and incompatible existing subscriptions (**2 failed / 30 passed**).
+Final **73 passed, zero skips**, independently rerun and approved. API typecheck and
+diff checks pass. Two mutations removed handler readiness and pagination origin
+checks: each applied exactly once, killed, and restored. No eBay call was made.
+
+Remaining separate eBay work: awaited account-scoped processors/replay, deletion
+erasure, USER-token subscriptions and actual application catalogue/delivery proof.
+This slice does not clear any `handlerMissing` flag or authorize live subscriptions.

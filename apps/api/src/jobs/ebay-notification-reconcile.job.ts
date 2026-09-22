@@ -28,7 +28,7 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 /** One reconcile. Exported so a test can run it without a scheduler. */
 export async function runEbayNotificationReconcile() {
-  const { setupEbayNotifications } = await import('../services/cx/connectors/ebay/notifications.js')
+  const { setupEbayNotifications, ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
   const result = await setupEbayNotifications({ skipTopicsWithoutHandlers: true })
 
   if (!result.configured) {
@@ -41,6 +41,13 @@ export async function runEbayNotificationReconcile() {
   if (result.notOffered.length) {
     logger.error('[ebay-notification-reconcile] topic ids eBay does not offer', { notOffered: result.notOffered })
   }
+  if (!ebayNotificationSetupSucceeded(result)) {
+    logger.error('[ebay-notification-reconcile] reconciliation failed', {
+      destinationId: result.destinationId, error: result.error,
+      failures: result.perTopic.filter(topic => !['created', 'enabled', 'already_exists'].includes(topic.status)),
+    })
+    return result
+  }
   const changed = result.perTopic.filter((r) => r.status === 'created' || r.status === 'enabled')
   if (changed.length) {
     logger.warn('[ebay-notification-reconcile] subscriptions had drifted', {
@@ -48,7 +55,7 @@ export async function runEbayNotificationReconcile() {
       changed: changed.map((r) => `${r.topicId}=${r.status}`).join(' '),
     })
   } else {
-    logger.info('[ebay-notification-reconcile] destination and subscriptions healthy', {
+    logger.info('[ebay-notification-reconcile] supported subscriptions reconciled; topics without handlers remain excluded', {
       destinationId: result.destinationId,
       topics: result.perTopic.length,
     })
@@ -76,6 +83,10 @@ export function startEbayNotificationReconcileCron(): void {
     await recordCronRun('ebay-notification-reconcile', async () => {
       const result = await runEbayNotificationReconcile()
       if (!result.configured) return 'not configured'
+      const { ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
+      if (!ebayNotificationSetupSucceeded(result)) {
+        throw new Error(result.error ?? `eBay notification reconciliation failed: ${result.perTopic.map(topic => `${topic.topicId}:${topic.status}`).join(' ') || 'no supported subscriptions'}`)
+      }
       return `destination=${result.destinationId} topics=${result.perTopic.map((r) => `${r.topicId}:${r.status}`).join(' ')}`
     }).catch((err) => {
       logger.error('ebay-notification-reconcile cron: failure', {
