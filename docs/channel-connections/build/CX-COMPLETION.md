@@ -403,3 +403,32 @@ Approval dependencies remain deployment/recovery, vendor read probes, exact-ten
 cleanup, any live activation/write and each P7 drop. Etsy stock-timing/history-boundary
 questions remain unanswered. The full plan is not complete and independent local
 engineering work remains as listed in the completion matrix.
+
+## Approved deployment and compiler-memory repair
+
+The Owner explicitly approved deployment: “Deploy it all and push to production.”
+The normal push of `65782117a` completed at approximately21:10UTC. Every hook passed,
+including106realPG/zero skips and profiles-ON887files/41known failing/217tests, none
+new/worse. The shared `pes/phase-0` tree was untouched. Evidence:
+`approved-production-push.log`. GitHub started Deploy API run35784932694 and CI
+run35784932708; Railway native deploymenta257e041-a61c-4614-a8c9-6c2516622832 began.
+
+Both GitHub clean builds then aborted the API compiler at roughly2030–2040MiB with
+exit134, `JavaScript heap out of memory`. No TypeScript diagnostic preceded it.
+The local Node25 process defaults to4288MiB, explaining why the normal local build
+did not expose the CI heap limit. This failure is retained, not waived. Production
+still served baseline7c70556e at the initial failure observation.
+
+Repair: the final compiler command in `apps/api/package.json` now explicitly runs
+the same installed TypeScript compiler with `node --max-old-space-size=4096`.
+Only the compiler's old-space allocation changes; this is not a total RSS cap.
+Runtime, dependencies, tsconfig, compiler options, tests, timeouts and gates are
+unchanged. No lockfile change is required. The current monorepo install resolves
+this path to the same compiler as the former `tsc` symlink.
+Official Node22 option: https://nodejs.org/download/release/v22.18.0/docs/api/cli.html#--max-old-space-sizesize-in-mib .
+
+The bounded compiler completed successfully in66.48s, maximum RSS3718447104bytes,
+with diagnostics in `compiler-memory-4096.log`. Independent review approved the
+one-line build repair. Its normal push must rerun the full release hook, and both
+actual GitHub builds must finish successfully before the release is called verified.
+No production variable or additional channel feature was activated to repair this.
