@@ -51,7 +51,7 @@ been exercised.
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | ✅ **RULED R-13** — the limit is recorded in Step 2.2's Cost when; batch later | — |
 | **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and **28 of 42** live local parents have no family (the first count, 40 of 54, included deleted products) | ✅ **RULED R-14 (a), BUILT** — move 2 closed for the editor; the grid shows *"N without family"*; new **Step 2.4b** (assign families) comes before the grid flip | see `git log` |
 | **2.4 (move 2)** The family decides Shared's columns | ✅ **BUILT under R-14 / R-16** — editor since `f212c2348`; the grid now too: 365 → **0** channel-declared columns on a real page, no stored value hidden. **Step 2.4 CLOSED** | see `git log` |
-| **A-22** Step 2.3's example cannot happen; the real gap is Amazon BE (Dutch + French) | 🟡 **FOR YOUR RULING** — recommended (a): send every market language, as R-LX-6 already rules | — |
+| **A-22** Step 2.3's example cannot happen; the gap is Amazon BE (Dutch + French) | 🔴 **CORRECTED** — the main content paths already send every language; only the mapping cascade and the cockpit route are single-language (0 listings). 🟡 **Narrowed question to the Owner** — recommended (b): refuse on a multi-language market and state the limit | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**

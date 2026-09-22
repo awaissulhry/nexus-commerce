@@ -4766,6 +4766,9 @@ Done when ✅ (M4 = 0, with the marker as positive control) · Cost when ✅ · 
 
 ## A-22 — Step 2.3's example cannot happen; the real gap is a two-language market, and nothing stores a publish language. FOR YOUR RULING.
 
+> ✅ **RULED R-17: option (a)** — and then 🔴 **A-22 was found to overstate the gap; see the correction
+> at the end of this amendment. Building stopped; the narrowed question goes back to the Owner.**
+
 **2026-09-22. Read-only measurement on the local catalogue plus a code trace. Nothing built.**
 
 ### The premise, checked
@@ -4809,3 +4812,43 @@ French entry held on Amazon is wiped by every push — the same shape as the sal
 - **Gate** — per coordinate, as Step 2.3 asks: BE (two languages), DE and IT (one each).
 - **Cost when** — `flat`; a two-language market resolves twice.
 - **Rollback** — revert; the payload returns to `languages[0]`.
+
+### 🔴 Correction — the main content paths ALREADY send every language
+
+A-22 traced only the two callers Step 2.3 names. A wider trace (every path that sends Amazon content)
+shows **the three live content paths already comply with R-LX-6**: the queue push
+(`outbound-sync.service.ts:327`, `syncToAmazon` → `submitListingPayload`), the publish route
+(`marketplaces.routes.ts:39`) and the studio publication (`studio-publication-amazon.ts:147`) all use
+`buildAmazonContentEntries` (`amazon-content-payload.ts:33`), which loops over **every** market
+language through `resolvePublishContent` and tags each entry; `amazon-content-payload.vitest.test.ts:22`
+already expects **2 entries for BE**. So *"French is never sent"* is **false** for title, description
+and bullets. The single-language branches (`buildAmazonListingPatch` `:321`,
+`buildMarketplaceAmazonAttributes` `:31`) are reached only by tests.
+
+**What is really single-language, on a multi-language market:**
+
+| Path | What happens | Live? |
+|---|---|---|
+| Mapping cascade (`prepare-dispatch.ts:17-18`, `FM_CATALOG_CASCADE`) | resolves `languages[0]`; `attributesFromCells` takes the tag from the schema (`const`/single `enum`/`default`), so on BE the tag may be empty; then `op: 'replace'` per attribute | yes, primary Amazon account only |
+| Cockpit route (`amazon-cockpit-publish.routes.ts` → `applyResolvedMappingToAmazonFeed`) | same serializer, one resolve | yes |
+| `sync-mapping-merge.ts` | its only Amazon caller builds a payload and never sends it (`channel-sync.worker.ts:289`) | no |
+| 🔴 Amazon flat file (`flat-file.service.ts:57-63,2783`) | `LANGUAGE_TAG_MAP` has no BE, so **BE is tagged `it_IT`**; `MARKETPLACE_ID_MAP` has no BE either | yes — **no-touch zone**, reported, not changed |
+
+All of it hits **0 listings** today (Amazon BE has none, production and local).
+
+### The narrowed question
+
+| # | Option | |
+|---|---|---|
+| a | Build the per-language merge for the mapping cascade and the cockpit route: resolve once per market language, override each language-tagged entry's tag, merge, refuse when a language lacks a translation | Real work in a schema-driven serializer, for 0 listings |
+| **b** | **State the limit, and refuse instead of sending something wrong:** on a market with more than one language, the mapping cascade and the cockpit route refuse with *"This market carries N languages; publish its content through the listing editor, which sends every language"* — the same shape as the cascade's existing *"primary Amazon account only"* refusal. Step 2.3 closes with that limit stated; build (a) when a multi-language market gets its first listing | 🟢 **Recommended.** Honest, small, and gated; nothing live changes |
+
+The flat-file `it_IT` tag for BE is carried as a finding for its owner either way.
+
+---
+
+## OWNER RULING — 2026-09-22 (eleventh set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-17** | A-22 — Step 2.3: a two-language Amazon market | ✅ **(a) Send every language the market carries**, as R-LX-6 already rules. 🔴 Given on A-22 as first written; A-22's correction shows the main paths already do this — the narrowed question is back with the Owner |
