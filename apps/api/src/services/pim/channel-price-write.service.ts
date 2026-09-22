@@ -28,6 +28,8 @@ import { priceChangeData, type PriceChangeSourceLiteral } from '../price-history
 import { fireOutboundJobs } from '../outbound-enqueue.js'
 import { readSaleWindows, saleWindowColumnsExist, validateSaleWindow, writeSaleWindow, type SaleWindow } from './sale-window.js'
 import { decimalToNumber } from './sheet-rows.service.js'
+import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
+import { afterDatabaseCommit } from '../../lib/database-context.js'
 
 const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
 /** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
@@ -113,7 +115,7 @@ export async function writeChannelPrices(input: {
   const [listingChunks, windowChunks, hasWindow] = await Promise.all([
     Promise.all(chunks.map((chunk) => prisma.channelListing.findMany({
       where: { id: { in: chunk } },
-      select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } } },
+      select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true, overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } } },
     }))),
     Promise.all(chunks.map((chunk) => readSaleWindows(prisma as never, chunk))),
     saleWindowColumnsExist(prisma as never),
@@ -155,7 +157,13 @@ export async function writeChannelPrices(input: {
       if (problem) { push({ ...base, outcome: 'refused', reason: problem, version: l.version }); continue }
       if (nextSale.value != null && !hasWindow) { push({ ...base, outcome: 'refused', reason: 'This database has no sale-window columns yet — the sale cannot be scheduled', version: l.version }); continue }
     }
-    const priceChanges = nextPrice !== undefined && !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false)
+    // A-18: the storage contract owns the historical keys. A dirty reset is a write even
+    // when the explicit columns already follow master; the resolver still reads the JSON bag.
+    const priceKeys = [...new Set(['price', ...Object.keys(CHANNEL_FIELD_MAP)
+      .filter(field => CHANNEL_FIELD_MAP[field] === 'price' && field.startsWith(`${l.channel.toLowerCase()}_`))
+      .flatMap(channelOverrideKeys)])]
+    const dirtyPrice = priceKeys.some(key => Object.prototype.hasOwnProperty.call(l.overrideData ?? {}, key))
+    const priceChanges = nextPrice !== undefined && (dirtyPrice || !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
     const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
     if (!priceChanges && !saleChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue }
 
@@ -176,6 +184,10 @@ export async function writeChannelPrices(input: {
       if (saleChanges) data.salePrice = effectiveSale.value
       const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
       if (guarded.count !== 1) return null
+      if (priceChanges && dirtyPrice) await tx.$executeRaw`
+        UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${priceKeys}::text[]
+        WHERE id = ${l.id}
+      `
       if (saleChanges) await writeSaleWindow(tx, l.id, { start: effectiveSale.start, end: effectiveSale.end })
       if (priceChanges) {
         await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride), newValue: nextPrice == null ? null : String(nextPrice), reason, changedBy: input.actor } })
@@ -209,7 +221,8 @@ export async function writeChannelPrices(input: {
     push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId })
   }
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback (never hangs).
-  if (queued.length) await fireOutboundJobs(queued, { source: 'CHANNEL_PRICE_WRITE' })
+  if (queued.length) await afterDatabaseCommit(`channel-prices:${queued.map(row => row.id).join(',')}`,
+    () => fireOutboundJobs(queued, { source: 'CHANNEL_PRICE_WRITE' }))
   logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
   return result
 }

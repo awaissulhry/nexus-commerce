@@ -1,0 +1,102 @@
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — pinned from /Users/awais/nexus-commerce/apps/api/.env regardless of CWD (/Users/awais/nexus-commerce/apps/api).
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+[apps/api vitest config] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api
+
+[apps/api vitest] database target: host "127.0.0.1", database "nexus_development" — from an exported DATABASE_URL (kept as stated, not pinned).
+[apps/api vitest] business profiles: ON (from the shell)
+◇ injected env (11) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (28) from ../../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+{"timestamp":"2026-09-22T16:16:15.423Z","level":"info","message":"channel-price-write: applied","context":{"actor":"A-18 probe","source":"MANUAL_OVERRIDE","applied":1,"refused":0,"noop":0,"conflict":0}}
+{"followingBefore":false,"outcome":"applied","price":null,"priceOverride":null,"followMasterPrice":true,"overrideData":{"price":99,"unrelated":"keep","ebay_price":98},"resolvedPrice":{"value":99,"source":"channelOverride","inheritedFrom":"cmucvm51l0003njbnvt9445j1"},"events":1,"queue":[{"syncType":"PRICE_UPDATE","payload":{"actor":"A-18 probe","price":10,"source":"CHANNEL_PRICE_WRITE","salePrice":null,"marketplace":"DE","salePriceEnd":null,"salePriceStart":null}}]}
+ ✓ |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > control: the current sheet reset removes both legacy price keys and preserves unrelated data 93ms
+{"timestamp":"2026-09-22T16:16:15.445Z","level":"info","message":"channel-price-write: applied","context":{"actor":"A-18 probe","source":"MANUAL_OVERRIDE","applied":0,"refused":0,"noop":1,"conflict":0}}
+{"followingBefore":true,"outcome":"noop","price":null,"priceOverride":null,"followMasterPrice":true,"overrideData":{"price":99,"unrelated":"keep","ebay_price":98},"resolvedPrice":{"value":99,"source":"channelOverride","inheritedFrom":"cmucvm53h000anjbnjqp8pdei"},"events":0,"queue":[]}
+ × |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = false 68ms
+   → expected { price: 99, unrelated: 'keep', …(1) } to deeply equal { unrelated: 'keep' }
+   → expected { value: 99, …(2) } to be undefined
+ × |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = true 19ms
+   → expected { price: 99, unrelated: 'keep', …(1) } to deeply equal { unrelated: 'keep' }
+   → expected { value: 99, …(2) } to be undefined
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = false
+ FAIL  |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = true
+AssertionError: expected { price: 99, unrelated: 'keep', …(1) } to deeply equal { unrelated: 'keep' }
+
+- Expected
++ Received
+
+  {
++   "ebay_price": 98,
++   "price": 99,
+    "unrelated": "keep",
+  }
+
+ ❯ src/services/pim/price-door-reset.probe.vitest.test.ts:56:36
+     54|       select: { syncType: true, payload: true } }) }))
+     55|   expect(stored).toMatchObject({ price: null, priceOverride: null, fol…
+     56|   expect.soft(stored.overrideData).toEqual({ unrelated: 'keep' })
+       |                                    ^
+     57|   expect.soft(resolved.price).toBeUndefined()
+     58| }))
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = false
+AssertionError: expected { value: 99, …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "inheritedFrom": "cmucvm51l0003njbnvt9445j1",
+  "source": "channelOverride",
+  "value": 99,
+}
+
+ ❯ src/services/pim/price-door-reset.probe.vitest.test.ts:57:31
+     55|   expect(stored).toMatchObject({ price: null, priceOverride: null, fol…
+     56|   expect.soft(stored.overrideData).toEqual({ unrelated: 'keep' })
+     57|   expect.soft(resolved.price).toBeUndefined()
+       |                               ^
+     58| }))
+     59|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |regressions| src/services/pim/price-door-reset.probe.vitest.test.ts > price-door reset preserves that cleanup when already following = true
+AssertionError: expected { value: 99, …(2) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "inheritedFrom": "cmucvm53h000anjbnjqp8pdei",
+  "source": "channelOverride",
+  "value": 99,
+}
+
+ ❯ src/services/pim/price-door-reset.probe.vitest.test.ts:57:31
+     55|   expect(stored).toMatchObject({ price: null, priceOverride: null, fol…
+     56|   expect.soft(stored.overrideData).toEqual({ unrelated: 'keep' })
+     57|   expect.soft(resolved.price).toBeUndefined()
+       |                               ^
+     58| }))
+     59|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  18:16:13
+   Duration  1.49s (transform 178ms, setup 21ms, import 1.17s, tests 210ms, environment 0ms)
+

@@ -42,6 +42,10 @@ const aliasFindMany = vi.fn()
 const resolveBatch = vi.fn()
 const referenceThemes = vi.fn()
 const produceReadiness = vi.fn()
+const priceWrite = vi.fn()
+// This file gates routing. Real price persistence, pin/reset and enqueue are covered on
+// disposable PostgreSQL in price-door-reset.vitest.test.ts (A-12 / A-18).
+vi.mock('../services/pim/channel-price-write.service.js', () => ({ writeChannelPrices: (...args: unknown[]) => priceWrite(...args) }))
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
 // Persistence contracts run without Redis or background cache workers.
 // LX.F R-LX-13 — and that now includes the QUEUE: this file's 68 failures in this
@@ -171,6 +175,11 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
+  priceWrite.mockReset().mockImplementation(async ({ targets }) => ({
+    results: targets.map((target: { listingId: string; expectedVersion: number }) => ({
+      listingId: target.listingId, outcome: 'applied', version: target.expectedVersion + 1, guarded: true,
+    })),
+  }))
   produceReadiness.mockReset().mockResolvedValue(undefined)
   // Persistence cases have no additional Information fields; specific resolver cases override this.
   resolveBatch.mockReset().mockResolvedValue({ products: [{ productId: PRODUCT_ID, cells: {} }] })
@@ -326,6 +335,7 @@ const listingRow = (over: Record<string, unknown> = {}) => ({
   // and is `{}` on every listing of the programme fixture.
   title: 'XAVIA GALE',
   price: 100,
+  quantity: 100,
   description: null,
   overrideData: {},
   version: 19,
@@ -343,7 +353,7 @@ describe('autosave readiness follows the actual write destination', () => {
     const resolvedAccount = accountId ?? 'account-ebay'
     namedConnection.mockResolvedValue({ id: resolvedAccount, channelType: 'EBAY', isActive: true })
     channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: resolvedAccount })])
-    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', ...(accountId ? { accountId } : {}) }], expectedVersion: 19 })
     expect(result.statusCode, result.body).toBe(200)
     expect(result.json().updated).toBe(1)
@@ -389,7 +399,7 @@ describe('requested account resolution before bulk writes', () => {
       return new Map()
     })
     channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: 'account-b' })])
-    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-b' }], expectedVersion: 19 })
     expect(result.statusCode, result.body).toBe(200)
     expect(primaryConnections).toHaveBeenCalledWith([])
@@ -400,13 +410,13 @@ describe('requested account resolution before bulk writes', () => {
     [[{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-a' }, { channel: 'EBAY', marketplace: 'DE', accountId: 'account-b' }]],
     [[{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-b' }, { channel: 'EBAY', marketplace: 'DE' }]],
   ])('refuses conflicting explicit/implicit account contexts: %j', async marketplaceContexts => {
-    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120 }], marketplaceContexts })
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120 }], marketplaceContexts })
     expect(result.statusCode).toBe(400)
     expect($transaction).not.toHaveBeenCalled()
   })
 
   it('rejects a named account from another channel before any write', async () => {
-    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120 }],
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120 }],
       marketplaceContext: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' } })
     expect(result.statusCode).toBe(400)
     expect($transaction).not.toHaveBeenCalled()
@@ -414,7 +424,7 @@ describe('requested account resolution before bulk writes', () => {
 
   it('rejects a stale alias from a different account before any write', async () => {
     aliasFindMany.mockResolvedValue([{ id: 'alias-2', productId: PRODUCT_ID, channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'account-a' }])
-    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId: 'account-b', aliasKey: 'alias-2' }] })
     expect(result.statusCode).toBe(409)
     expect(result.json().code).toBe('LISTING_SCOPE_MISMATCH')
@@ -555,15 +565,15 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     } finally { context.mockRestore(); columns.mockRestore() }
   })
 
-  it('#689 a same-value MAPPED channel field (ebay_price) is now a no-op', async () => {
-    // The bag stores it as `title` (CHANNEL_FIELD_MAP), so before this fix the
-    // equality pass looked up `ebay_price`, found undefined, and called an
+  it('#689 a same-value MAPPED channel field (ebay_quantity) is now a no-op', async () => {
+    // The mapped quantity lives in a listing column, so before this fix the
+    // equality pass looked up `ebay_quantity`, found undefined, and called an
     // identical value a change.
     channelListingFindMany.mockResolvedValue([
       ebayListing(),
     ])
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 100 }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 100 }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: 5,
     })
@@ -573,12 +583,12 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     })
   })
 
-  it('#689 a REAL ebay_price change still writes', async () => {
+  it('#689 a REAL ebay_quantity change still writes', async () => {
     channelListingFindMany.mockResolvedValue([
       ebayListing(),
     ])
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120 }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120 }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: 5,
       dryRun: true,
@@ -629,7 +639,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
   it('#700 a mapped channel field is CAS\'d against the LISTING, not the product', async () => {
     channelListingFindMany.mockResolvedValue([ebayListing()])
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: 19,
     })
@@ -692,7 +702,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     channelListingFindUnique.mockResolvedValue({ version: 82 })
     $transaction.mockRejectedValue(Object.assign(new Error('no rows'), { code: 'P2025' }))
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'master' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'master' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: 3,
     })
@@ -712,7 +722,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     channelListingFindMany.mockResolvedValue([ebayListing({ version: 19 })])
     channelListingFindUnique.mockResolvedValue({ version: 20 })
     const first = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: 19,
     })
@@ -724,7 +734,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
     channelListingFindMany.mockResolvedValue([ebayListing({ version: 20 })])
     channelListingFindUnique.mockResolvedValue({ version: 21 })
     const second = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 121, target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 121, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }],
       expectedVersion: advanced,
     })
@@ -746,7 +756,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55 }),
     ])
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', aliasKey: 'alias-2' }],
       expectedVersion: 55,
     })
@@ -783,7 +793,7 @@ describe('#675 — the equality pass, bounded to expectedVersion', () => {
       ebayListing({ id: 'listing_alias2', aliasKey: 'alias-2', version: 55 }),
     ])
     const res = await patch({
-      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', aliasKey: '' }],
       expectedVersion: 19,
     })
@@ -922,15 +932,10 @@ describe('channel inheritance reset and account isolation', () => {
       expect(channelListingUpsert).not.toHaveBeenCalled()
       return
     }
-    const column = field === 'amazon_title' ? 'title' : field === 'ebay_price' ? 'price' : 'bulletPoints'
-    const update = column === 'bulletPoints' ? { bulletPointsOverride: [], followMasterBulletPoints: true }
-      : { [column]: null, [`${column}Override`]: null, [`followMaster${column[0].toUpperCase()}${column.slice(1)}`]: true }
-    expect(channelListingUpsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { productId_channel_marketplace: expect.objectContaining({ aliasKey: 'alias-2', channelConnectionId: 'account-a' }) },
-      create: expect.objectContaining({ ...update, channelConnectionId: 'account-a', aliasKey: 'alias-2', isPublished: false }),
-      update: expect.objectContaining({ ...update, version: { increment: 1 } }),
+    expect(priceWrite).toHaveBeenCalledWith(expect.objectContaining({
+      targets: [{ listingId: 'listing_1', price: null, expectedVersion: 19 }],
     }))
-    expect(executeRaw.mock.calls.some(call => call[0].join('').includes('IS NOT DISTINCT FROM'))).toBe(true)
+    expect(channelListingUpsert).not.toHaveBeenCalled()
   })
 
   it.each(['reset', 'set'])('%s on a platform path preserves unrelated settings and distinguishes absence from null', async intent => {
@@ -1005,7 +1010,7 @@ describe('channel inheritance reset and account isolation', () => {
     channelListingUpdate.mockReturnValue(guard)
     try {
       const res = await patch({ changes: [
-        { id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' },
+        { id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' },
         { id: PRODUCT_ID, field: `attr_${key}`, value: true, target: 'channel' },
       ], marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }], expectedVersion: 19 })
       expect(res.statusCode, res.body).toBe(200)
@@ -1026,19 +1031,20 @@ describe('channel inheritance reset and account isolation', () => {
 
 describe('provenance is part of the no-op decision', () => {
   it('pinning the current price breaks inheritance even when the synced number matches', async () => {
-    channelListingFindMany.mockResolvedValue([ebayListing({ followMasterPrice: true, priceOverride: null })])
+    channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: 'account-ebay', followMasterPrice: true, priceOverride: null })])
     const res = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 100, intent: 'pin', target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }], expectedVersion: 19 })
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ updated: 1 })
-    expect(channelListingUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: expect.objectContaining({
-      price: 100, priceOverride: 100, followMasterPrice: false,
-    }) }))
+    expect(priceWrite).toHaveBeenCalledWith(expect.objectContaining({
+      targets: [{ listingId: 'listing_1', price: 100, expectedVersion: 19 }],
+    }))
+    expect(channelListingUpsert).not.toHaveBeenCalled()
   })
 
   it('does not infer that every target is unchanged from the first listing', async () => {
-    channelListingFindMany.mockResolvedValue([ebayListing(), ebayListing({ id: 'listing_de', marketplace: 'DE', price: 90 })])
-    const res = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 100, target: 'channel' }],
+    channelListingFindMany.mockResolvedValue([ebayListing(), ebayListing({ id: 'listing_de', marketplace: 'DE', quantity: 90 })])
+    const res = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 100, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }, { channel: 'EBAY', marketplace: 'DE' }], expectedVersion: 19 })
     expect(res.statusCode, res.body).toBe(200)
     expect(channelListingUpsert.mock.calls.map(call => call[0].where.productId_channel_marketplace.marketplace)).toEqual(['IT', 'DE'])

@@ -4050,3 +4050,213 @@ believed the price was, so the service cannot tell the two apart.
 
 🔴 Nothing built for any of these. **Step 2.2's `Cost when` — a 5,000-row edit in one call — is
 not yet exercised end to end either way.**
+
+---
+
+## A-18 — The price door does not preserve the sheet's reset cleanup. ✅ APPROVED (R-11) — BUILT below.
+
+**2026-09-22. Found before Step 2.2 part 2; product code unchanged at `7221436aa`.**
+The Owner's stop-and-amend rule applies: routing the sheet to the existing door would drop
+behaviour its reset already has. A-12 named reset coverage, but did not identify this difference.
+
+### The two writers disagree — checked at the lines
+
+| Existing path | What it does |
+|---|---|
+| `channel-field-map.ts:78` — `channelOverrideKeys('ebay_price')` | Derives the legacy keys `price` and `ebay_price` |
+| `bulk-edit.service.ts:1783-1786`, `:1864-1870` | Uses that key list and removes those keys from `overrideData`, scoped to product, channel, market, account and alias, in the sheet transaction |
+| `channel-price-write.service.ts:173` | Clears `price` and `priceOverride`, restores `followMasterPrice`, but leaves `overrideData` untouched |
+| `channel-price-write.service.ts:158-160` | Returns `noop` when already following with no explicit price override, even if legacy price keys remain |
+| `attribute-resolver.ts:259-264` | Applies `overrideData` first; following master skips the explicit price columns but does **not** remove the bag's price |
+
+### Reproduced, with a control and two arms
+
+The probe uses **`concurrent-database.ts`**, which creates and drops a disposable local PostgreSQL
+database with the isolation layer. The price service, persistence and raw resolver are real.
+Only outbound job dispatch is mocked; the queue rows themselves are written and read back.
+Neither the local catalogue nor `nexus_scale` nor production was changed.
+
+Fixture: base price `10`; `overrideData = { price: 99, ebay_price: 98, unrelated: 'keep' }`.
+The prediction, asserted before the run: reset removes both price keys, retains `unrelated`, and
+the raw resolver no longer reports the bag's price.
+
+| Arm | Observed |
+|---|---|
+| **Control:** persist the current sheet's `channelValuePatch(..., 'INHERIT')` | Both legacy keys removed; `unrelated` retained; raw resolved `price` absent. **PASS** |
+| Price door: pinned price `25` → reset | `applied`; price columns null; following true; **both legacy keys remain**; raw resolver returns `99`; **one event and one queue row**, whose price is `10`. **FAIL** |
+| Price door: already following, price columns null → reset | `noop`; **both legacy keys remain**; raw resolver returns `99`; **zero events and queue rows**. **FAIL** |
+
+**Profiles OFF: 2 failed, 1 passed. Profiles ON: 2 failed, 1 passed.** These are assertion
+failures, not skipped tests or a load failure. The first probe omitted `Marketplace.languages`
+and failed in its scaffolding; that run is not evidence. Supplying the coordinate's language
+produced the results above.
+
+The existing `price-door.vitest.test.ts` and `ebay-price-held.vitest.test.ts` still report
+**12 passed** on the unchanged product code. They do not cover this cleanup. No full-suite green,
+concurrency proof or step closure is claimed by that focused run.
+
+Evidence: [probe source](probes/A-18-price-door-reset.vitest.test.ts.txt) and
+[profiles-ON output](probes/A-18-profiles-on.log.txt). The probe is archived as text so a known
+red diagnostic is not installed as a permanent failing push gate. To reproduce, copy it to
+`apps/api/src/services/pim/price-door-reset.probe.vitest.test.ts`, then, **from `apps/api`**, run:
+
+```sh
+NEXUS_WORKSPACES_ENABLED=1 npx vitest run src/services/pim/price-door-reset.probe.vitest.test.ts --disableConsoleIntercept --reporter=verbose
+```
+
+Remove that temporary copy afterwards; keep the archived evidence.
+
+### Proposed amendment to Step 2.2 part 2
+
+**(a), recommended:** move the sheet's existing legacy-price cleanup into the price door as part
+of the handoff, including its no-op decision. A reset with residual price keys is an **applied
+cleanup**, guarded on the listing version, with the price columns, audit/event and enqueue in
+the same transaction. Derive the key list from the existing storage contract; remove only those
+keys atomically, preserving unrelated JSON and account/alias isolation. A clean repeat remains
+`noop`. Then route both sheet price paths through the door and remove the column hold together,
+as already ordered. Keep A-17's retry work separate.
+
+**(b):** leave the door unchanged and retain the sheet hold until this reset behaviour is settled.
+Simply routing reset to it would lose the cleanup demonstrated by the control.
+
+- **Done when** — both reset arms remove the stale keys, a clean repeat is a no-op, unrelated
+  values and other listings survive, and the sheet's set/reset paths use the price door.
+- **Cost when** — the cleanup is bounded to the addressed listing and declared price keys.
+  Step 2.2's **5,000-row** call still needs its measurement; this three-row probe does not close it.
+- **Gate** — preserve both reset arms plus the clean-repeat control. Prove separate mutations
+  fail for removing cleanup and for skipping cleanup on the already-following path. Keep the
+  stale-version, account/alias and non-price controls required by A-12. The concurrency gate
+  remains a separate queued task; this probe is **not** a concurrency test.
+- **Rollback** — revert the handoff and cleanup together and restore the eBay column hold.
+  No migration or catalogue sweep is proposed.
+
+**Limits:** this proves a persisted-state and raw-resolver difference on a deliberately seeded
+listing. It does not count affected production rows or establish which visible sheet cells or
+publish builders expose it; some readers apply later mappings. No production access was needed.
+
+**Approved by the Owner: option (a), 2026-09-22. Implementation and gates pending; no step closed.**
+
+## OWNER RULING — 2026-09-22 (eighth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-11** | A-18 — preserve the sheet's legacy-price reset cleanup at the price door? | ✅ **Option (a).** Both dirty reset paths are applied, version-guarded cleanups in the price transaction; clean repeats remain no-ops. Route sheet set/reset through the door and remove the column hold together. A-17 remains separate. |
+
+---
+
+## Step 2.2 part 2 — BUILT (A-18 / R-11). The sheet now writes prices through the one door.
+
+**2026-09-22, second session on this lane.** The eBay price hold (Step 1.5) is lifted in the same
+change, as ordered.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `channel-price-write.service.ts:162-165` | Legacy price keys come from the storage contract (`channelOverrideKeys`). A listing whose `overrideData` holds one is **dirty**; a dirty reset or set is a write, even when the columns already follow master |
+| `channel-price-write.service.ts:187` | After the version compare-and-set succeeds, the door removes **only** those keys, in the same transaction. Unrelated JSON stays |
+| `channel-price-write.service.ts:224` | The job dispatch now waits for the outer commit (`afterDatabaseCommit`). A rolled-back sheet save dispatches nothing |
+| `bulk-edit.service.ts:1263-1276` | A sheet price edit (`ebay_price`, or any `attr_*` whose store is the listing `price` column) needs the **listing** `expectedVersion`. A missing version, or a family cascade, is refused |
+| `bulk-edit.service.ts:1389` | Price is taken out of the generic equality pass. The door decides equality, because a pinned number can hide a stale legacy key |
+| `bulk-edit.service.ts:1522-1557` | The door is called with the full coordinate: product, channel, market, **account and alias**. Conflict → 409 with `versionOf: 'channelListing'`; refusal → 400 |
+| `bulk-edit.service.ts:1825` | The generic channel mutation never writes `price` again |
+| `channel-specs/ebay.ts:104-108` | `EBAY_PRICE_HELD_REASON` and the column hold are deleted |
+
+**The web side needs no change** (traced, read-only): the channel sheet already sends the
+listing's version for listing cells (`_studio/sheet/channel/useChannelSheet.ts:296,312`), tracks it
+from `versionOf: 'channelListing'` (`:333-335`), sends one request per row, and never sends
+`cascade`. Editability comes from the server cell; there is no second hold in `apps/web`.
+
+### Done when — ✅ measured, on disposable PostgreSQL (`concurrent-database.ts`), profiles OFF and ON
+
+- Both reset paths (pinned → reset, already-following → reset) remove both legacy keys and keep
+  `unrelated`. The raw resolver no longer returns the bag price.
+- A clean repeat is a `noop`: no version, event, audit row or queue row spent.
+- A stale version changes nothing and writes no event or queue row.
+- The sheet's `ebay_price` and `attr_price` set, pin and reset all go through the door and report
+  the listing version. A same-value `attr_price` set is a no-op when clean, and an applied cleanup
+  when dirty.
+- Reset stays on the chosen account and alias; the other three listings are unchanged. One request
+  over two aliases writes each listing once.
+- A price + quantity paste shares one guard. A later failure rolls back price, cleanup, event and
+  queue, and dispatches no job.
+
+`price-door-reset.vitest.test.ts`: **16 tests**. Five focused files: **116 passed**, profiles ON and
+OFF. Full `apps/api` hook suite: **874 files passed, 0 failed**. Profiles-ON ratchet: **none new,
+none worse**. `tsc`: exit 0.
+
+### Gate — ✅ proven able to fail, 12 ways
+
+| Mutation | Result |
+|---|---|
+| cleanup SQL removed | 🔴 8 red |
+| dirty reset counted as `noop` | 🔴 6 red |
+| only the generic `price` key cleaned (not `ebay_price`) | 🔴 8 red |
+| job dispatched before commit | 🔴 1 red (rollback arm) |
+| sheet does not route `ebay_price` | 🔴 8 red |
+| sheet does not route `attr_price` | 🔴 4 red |
+| no version / cascade guard | 🔴 2 red |
+| account and alias ignored when matching the listing | 🔴 1 red |
+| generic mutation also writes `price` | 🔴 9 red |
+| later guard uses the pre-write version | 🔴 1 red |
+| price put back into the generic equality pass | 🔴 1 red |
+| an Amazon price column added to the sheet | 🔴 1 red (see §3a below) |
+
+🟠 **Two mutations escaped first**, and each needed a new arm, not a new line. *Account ignored*
+escaped because the database query already filters by account; only a request over two aliases
+reaches the second filter. *Equality pass* escaped because on real PostgreSQL `price` is a
+`Decimal`, and the generic compare never matched it anyway. It matters only on `attr_price`, whose
+reader converts the Decimal. 🔴 **A first attempt to "restore" a same-value no-op on `ebay_price`
+was wrong and was undone:** on the real database that path had always pinned.
+
+### Review §3a — the Amazon sale-price wipe. RULED: lift the hold for eBay only.
+
+`amazon-sp-api.client.ts:637-655` replaces the whole `purchasable_offer` and so drops a sale price.
+**The sheet cannot reach it today:** the only mapped price field is `ebay_price`
+(`channel-field-map.ts:27`), and no Amazon store declares a `price` listing column
+(`channel-specs/amazon.ts:45-73`). Etsy does declare one (`etsy.ts:44`); it now reaches the door,
+which records the event but enqueues nothing, because Etsy is not a sync target.
+
+So the hold is lifted for **eBay only**, and the limit is **gated**, not only written:
+`ebay-price-held.vitest.test.ts` fails if any Amazon price column appears, with the eBay column as
+its positive control. **The Amazon wipe itself is NOT fixed.** It stays live for the three existing
+callers (Matrix, `PATCH /channel-pricing`, bulk override). It needs its own step before any Amazon
+price column joins the sheet.
+
+### Cost when — measured on disposable PostgreSQL, profiles ON
+
+| One `writeChannelPrices` call | Time |
+|---|---|
+| 500 clean rows | **8.7 s** |
+| 5,000 clean rows | **84 s** |
+| 5,000 rows, half dirty, 1 stale | **89 s** — 4,999 applied, 1 conflict, per-row outcomes |
+
+🟢 The 5,000-row call **completes in one call with per-row outcomes**; that clause of the step is
+now met. 🔴 **But it is linear at ~17 ms per row**: one transaction per row (part 1's design). The
+A-18 cleanup adds ~6 %. The sheet sends one request per row, so the sheet is not affected; a bulk
+caller of 5,000 rows is ~1.5 min — longer than a normal request. See **A-19**.
+
+### Rollback — revert the one commit. It restores the hold, the generic price write and the old door together. No migration, no data change.
+
+### ⬜ Not done, stated
+
+- **The real screen was not exercised.** No API server of this lane was running, and a save would
+  write to the local catalogue, which is not authorised. The server's cell contract is gated
+  (`editable: true`, no hold) and the web path was traced.
+- **Step 2.2's concurrency gate** — still the next task.
+- **A-17** (`expectedPrice` retry) — still separate.
+
+---
+
+## A-19 — The price door is linear at ~17 ms a row. FOR YOUR RULING, not blocking.
+
+**Measured above.** 5,000 rows = 84–89 s, because each row runs its own transaction with its own
+event, audit row and queue row. 15.5 asked for chunked *reads*; those are built, and they are not
+the cost.
+
+| # | Option | |
+|---|---|---|
+| **a** | Leave it; record the limit in Step 2.2's Cost when. No surface sends 5,000 rows in one call today (the sheet sends one per row) | 🟢 **Recommended now** — honest and free |
+| b | Batch the writes: one transaction per chunk of N rows, per-row outcomes kept | Real work; revisit when a surface needs it |
+
+Nothing built for either.

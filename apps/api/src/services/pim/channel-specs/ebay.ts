@@ -91,13 +91,6 @@ const WEIGHT_UNITS = ['KILOGRAM', 'GRAM', 'POUND', 'OUNCE']
 const LENGTH_UNITS = ['CENTIMETER', 'METER', 'INCH', 'FEET']
 const PACKAGE_TYPES = ['LETTER', 'BULKY_GOODS', 'CARAVAN', 'CARS', 'EUROPALLET', 'EXPANDABLE_TOUGH_BAGS', 'EXTRA_LARGE_PACK', 'FURNITURE', 'INDUSTRY_VEHICLES', 'LARGE_CANADA_POSTBOX', 'LARGE_CANADA_POST_BUBBLE_MAILER', 'LARGE_ENVELOPE', 'MAILING_BOX', 'MEDIUM_CANADA_POST_BOX', 'MEDIUM_CANADA_POST_BUBBLE_MAILER', 'MOTORBIKES', 'ONE_WAY_PALLET', 'PACKAGE_THICK_ENVELOPE', 'PADDED_BAGS', 'PARCEL_OR_PADDED_ENVELOPE', 'ROLL', 'SMALL_CANADA_POST_BOX', 'SMALL_CANADA_POST_BUBBLE_MAILER', 'TOUGH_BAGS', 'UPS_LETTER', 'USPS_FLAT_RATE_ENVELOPE', 'USPS_LARGE_PACK', 'VERY_LARGE_PACK', 'WINE_PAK']
 
-/**
- * 🔴 PLAN Step 1.5 — the one sentence the held price cell shows. Exported so the write-side
- * refusal can reuse it verbatim when Step 2.2 lands, rather than restating it.
- */
-export const EBAY_PRICE_HELD_REASON =
-  'Price is edited on the Matrix, which is the one writer for this field. A price typed here would skip the channel update, the audit record and the sale window.'
-
 export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const marketplace = String(input.marketplace).toUpperCase()
   const fields: ChannelFieldSpec[] = []
@@ -108,26 +101,9 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const conditions = (input.conditions ?? []).filter((c) => c && typeof c.value === 'string' && c.value)
     .map(c => ({ ...c, value: toInventoryCondition(c.value) }))
   const listingFields: ChannelFieldSpec[] = [
-    // 🔴 PLAN Step 1.5 — held read-only until Step 2.2 routes the sheet through the one price door.
-    //
-    // A price typed here does NOT reach `writeChannelPrices`. It goes bulk-edit.service.ts →
-    // channelValueMutation → a raw column write on `ChannelListing.price`. Measured 2026-09-22:
-    // `bulk-edit.service.ts` contains ZERO occurrences of `writeChannelPrices`, `PRICE_UPDATE` or
-    // `PriceChangeEvent`. So the edit skips the enqueue — it may never reach eBay at all — plus the
-    // audit row, the PriceChangeEvent and the sale window, and it guards on `Product.version` while
-    // the Matrix guards `ChannelListing.version`: two columns guarding one field.
-    //
-    // 🔴 `editHeldReason`, NOT `readOnlyReason`. The latter means "the channel owns this value" and
-    // `master-default-rule.ts:8` drops the master mapping for any field carrying it — setting it
-    // here deleted `basePrice → price` and the suite caught it. We own this price and its mapping
-    // must stand; only this surface is held. `editable` is left TRUE on purpose: it is mapped to
-    // the column's `editableOnExisting`, meaning "the CHANNEL cannot change this on an existing
-    // listing", and eBay can. The hold is ours; the channel fact stays eBay's.
-    //
-    // Step 2.2 deletes this hold once the sheet uses the door. Both steps say so.
+    // Step 2.2: sheet price edits now use writeChannelPrices; the temporary hold is lifted.
     listing('price', 'Prezzo', 'Listing price', {
       kind: 'number', requirement: 'required',
-      editHeldReason: EBAY_PRICE_HELD_REASON,
       channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' },
     }),
     listing('quantity', 'Quantità disponibile', 'Available quantity', { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),

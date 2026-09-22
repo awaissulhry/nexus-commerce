@@ -32,6 +32,7 @@ import { productReadCacheService } from '../product-read-cache.service.js'
 import { isPrimaryChannelConnection, primaryConnectionIds, resolveConnection } from '../connection-resolver.service.js'
 import { normalizeEbayListingValue } from '../pim/ebay-listing-values.js'
 import { numericStorageError } from '../pim/numeric-storage.js'
+import { writeChannelPrices } from '../pim/channel-price-write.service.js'
 
 export interface ProductBulkInput {
   changes: Array<{
@@ -1259,6 +1260,20 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     await validateAliasWriteTargets(aliasTargets)
   }
 
+  const isPriceChange = (v: Validated) => {
+    if (CHANNEL_FIELD_MAP[v.field] === 'price') return true
+    const store = v.target === 'channel' ? storeFor(v.id, v.field.replace(/^attr_/, '')) : undefined
+    return store?.kind === 'listingColumn' && store.column === 'price'
+  }
+  // Step 2.2: the sheet has no licence to invent a listing version, including for children.
+  for (let i = validated.length - 1; i >= 0; i--) {
+    const v = validated[i]
+    if (isPriceChange(v) && (expectedVersion === undefined || v.cascade)) {
+      errors.push({ id: v.id, field: v.field, error: 'Price edits require the listing expectedVersion. Edit each listing with the version you read; a parent version cannot guard child prices.' })
+      validated.splice(i, 1)
+    }
+  }
+
   // ── #675 — a no-op write must not spend a version ──────────────────
   //
   // A cell whose incoming value EQUALS the stored one is dropped here: it
@@ -1370,6 +1385,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         return String(a ?? '') === String(b ?? '')
       }
       for (const v of validated) {
+        // Price equality includes inheritance and legacy keys; its owner decides below.
+        if (isPriceChange(v)) continue
         if (currentFormulaWrite(context.formulaWriteToken)?.operations) continue
         // Pin/reset changes provenance even when the displayed value stays the same. Comparing
         // one listing also cannot establish a no-op across several requested coordinates.
@@ -1496,6 +1513,46 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       wouldUpdate: validated.length,
       errors,
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
+    }
+  }
+
+  // Both mapped wire fields and schema-declared price columns use the same door. This is
+  // still inside the bulk editor's outer transaction: a later failure rolls the price back too.
+  const priceWrittenIds = new Set<string>()
+  const priceEdits = validated.filter(isPriceChange)
+  if (priceEdits.length) {
+    if (expectedVersion === undefined) throw new ProductBulkError(400, { error: 'Price edits require the listing expectedVersion.' })
+    const destinations = priceEdits.flatMap(change => effectiveContexts
+      .filter(ctx => !channelOf(change.field) || channelOf(change.field) === ctx.channel)
+      .map(ctx => ({ change, channel: ctx.channel, marketplace: ctx.marketplace,
+        channelConnectionId: connFor.get(ctx.channel) ?? null, aliasKey: ctx.aliasKey ?? '' })))
+    const listings = await prisma.channelListing.findMany({ where: { OR: destinations.map(d => ({
+      productId: d.change.id, channel: d.channel, marketplace: d.marketplace,
+      channelConnectionId: d.channelConnectionId, aliasKey: d.aliasKey,
+    })) }, select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
+    const targets = destinations.map(d => {
+      const listing = listings.find(l => l.productId === d.change.id && l.channel === d.channel &&
+        l.marketplace === d.marketplace && l.channelConnectionId === d.channelConnectionId && l.aliasKey === d.aliasKey)
+      if (!listing) throw new ProductBulkError(400, { error: `No ${d.channel} listing on ${d.marketplace} for this account and alias — reload before editing its price.` })
+      return { listingId: listing.id, price: d.change.reset ? null : Number(d.change.value), expectedVersion }
+    })
+    const prices = await writeChannelPrices({ targets, actor: context.userId ?? 'system', source: 'MANUAL_OVERRIDE', reason: 'Product sheet' })
+    for (const outcome of prices.results) {
+      if (outcome.outcome === 'conflict') throw new ProductBulkError(409, {
+        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
+      })
+      if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
+      if (outcome.outcome === 'applied') priceWrittenIds.add(outcome.listingId)
+    }
+    if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of priceEdits) {
+      if (destinations.every((d, i) => d.change !== change || prices.results[i].outcome === 'noop')) {
+        noOpKeys.add(`${change.id}:${change.field}`)
+        validated.splice(validated.indexOf(change), 1)
+      }
+    }
+    if (prices.results.length === 1) {
+      noOpCurrentVersion = prices.results[0].version
+      noOpVersionOf = 'channelListing'
     }
   }
 
@@ -1720,7 +1777,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Prisma promises (possibly empty) rather than a single one.
     // The listings a CHANNEL-targeted request writes to. Used to report the
     // version from the row that actually changed rather than from the product.
-    const channelListingIdsTouched: string[] = []
+    const channelListingIdsTouched: string[] = [...priceWrittenIds]
 
     // #700(i)/(ii) — the listings a MAPPED channel write touches.
     //
@@ -1765,6 +1822,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (effectiveContexts.length === 0) return []
       const stripped = declaredStore?.column ?? CHANNEL_FIELD_MAP[field]
       if (!stripped) return []
+      if (stripped === 'price') return [] // already persisted by writeChannelPrices, never a generic mutation
       const expected = channelOf(field)
       const targets = expected
         ? effectiveContexts.filter((ctx) => ctx.channel === expected)
@@ -1798,7 +1856,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               )
             : undefined
         if (hit) {
-          if (expectedVersion !== undefined) {
+          if (expectedVersion !== undefined && !priceWrittenIds.has(hit.id)) {
             listingGuards.set(hit.id,
               prisma.channelListing.update({
                 where: { id: hit.id, version: expectedVersion },
@@ -2208,7 +2266,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // Only guard a listing that EXISTS. A first write to a coordinate
           // has no version to conflict with, and inventing one would reject
           // the very edit that creates the row.
-          if (hit) {
+          if (hit && !priceWrittenIds.has(hit.id)) {
             listingGuards.set(hit.id,
               prisma.channelListing.update({
                 where: { id: hit.id, version: expectedVersion },
@@ -2252,7 +2310,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
         // Replacing a JSON bag must guard the snapshot even for callers without a token.
         listingGuards.set(row.id, prisma.channelListing.update({
-          where: { id: row.id, version: expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
+          where: { id: row.id, version: priceWrittenIds.has(row.id) ? row.version : expectedVersion ?? row.version, ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}) },
           data: { updatedAt: new Date() },
         }))
         const bag = applyPlatformMutations(row.platformAttributes, e.sets)
@@ -2349,7 +2407,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Apply this after collecting other guards so a later column write cannot weaken it.
     for (const snapshot of slotSnapshots.values()) {
       listingGuards.set(snapshot.id, prisma.channelListing.update({
-        where: { id: snapshot.id, version: expectedVersion ?? snapshot.version,
+        where: { id: snapshot.id, version: priceWrittenIds.has(snapshot.id) ? snapshot.version : expectedVersion ?? snapshot.version,
           ...(snapshot.updatedAt ? { updatedAt: snapshot.updatedAt } : {}) },
         data: { updatedAt: new Date() },
       }))
