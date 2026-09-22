@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest'
 const cache = vi.hoisted(() => new Map<string, unknown>())
 const readMarkets = vi.hoisted(() => vi.fn(() => { throw new Error('cache miss reaches builder') }))
-vi.mock('../../lib/workspace-cache.js', () => ({ WorkspaceCache: class extends Map { get(key: string) { return cache.get(key) } } }))
+// The stub takes the entry cap and ignores it: this file is about key isolation and the TTL. The
+// cap itself is gated in `sheet-columns-bound.vitest.test.ts` and `lib/workspace-cache.vitest.test.ts`.
+vi.mock('../../lib/workspace-cache.js', () => ({ WorkspaceCache: class extends Map { constructor(_maxEntriesPerWorkspace?: number) { super() } get(key: string) { return cache.get(key) } } }))
 vi.mock('../../db.js', () => ({ default: { marketplace: { findMany: readMarkets }, channelListing: { groupBy: vi.fn(async () => []) } } }))
 vi.mock('./field-registry.service.js', () => ({ getAvailableFields: vi.fn() }))
 vi.mock('./channel-specs/index.js', () => ({ loadAmazonSpec: vi.fn(), loadAmazonEnglishLabels: vi.fn(), loadEbaySpec: vi.fn() }))

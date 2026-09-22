@@ -1,6 +1,6 @@
 # The Product Sheet — PROGRESS
 
-**Updated 2026-09-22. Branch `pes/phase-0` — 13 commits, all pushed. Nothing merged to `main`,
+**Updated 2026-09-22. Branch `pes/phase-0` — 14 commits, all pushed. Nothing merged to `main`,
 so nothing is deployed and nothing has migrated production.**
 
 Read [PLAN.md](PLAN.md) for the plan and, at its end, the amendments A-1…A-12 + Owner rulings.
@@ -22,6 +22,7 @@ Every claim below carries the commit that measured it.
 | **1.4** Gate the Amazon delete | ✅ **CLOSED** — Amazon was already done; the real hole was eBay's permission | `6ff3b6b58` |
 | **1.5** Price cell read-only | ✅ **BUILT** (column half). Write half deferred to Step 2.2 — see A-12 | `cf49c88d2` |
 | **A-8** `apps/api` suite was not gated | ✅ **BUILT** — 833 test files now run on every push | `43ace2666` |
+| **15.3** Bound the column-set cache | ✅ **CLOSED** — capped at 64 per workspace; 2 of its 3 sibling caches were already bounded | `37bde4206` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -39,6 +40,9 @@ Every claim below carries the commit that measured it.
 4. **A deploy now refuses a database holding a migration with no folder in the repo.**
 5. **A fresh database can be built again** — `bootstrap-fresh-database.mjs`.
 6. **The `apps/api` suite runs on every push.** It was auth-only before.
+7. **The sheet's column-set cache can no longer grow without end.** It is keyed per family and per
+   saved column selection, so it used to hold one full column set per product a user opened, for
+   the life of the process. Now 64 per business, oldest write evicted first.
 
 ---
 
@@ -58,9 +62,10 @@ Every claim below carries the commit that measured it.
 
 **Phase 2.** Per [15.13](PLAN.md#1513--ranked-what-to-do-and-when), before Step 2.1:
 
-1. **15.3 — bound the column-set cache** (~3 lines, ranked #1, a live memory path).
+1. ~~**15.3 — bound the column-set cache**~~ ✅ **CLOSED.** See
+   [15.3 RESULT](PLAN.md#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were).
 2. **15.11 — the scale fixture** at 1,000 and 10,000 products. Ranked #2, *"everything else is a
-   guess without it"*. 🟢 **Unblocked today** by `bootstrap-fresh-database.mjs`.
+   guess without it"*. 🟢 **Unblocked today** by `bootstrap-fresh-database.mjs`. **← next**
 3. Then **2.1 requirements** → **2.7 reconcile** (in that order), **2.4** (needs 15.4's fix — the
    plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
 
@@ -91,6 +96,13 @@ Every claim below carries the commit that measured it.
   changing, ask separately.
 - 🔴 **A truncated `grep` is not a set.** `| head -10` on a 74-match search produced a confident,
   wrong amendment (A-11).
+- 🔴 **Three test files mock `WorkspaceCache` as a bare `Map`.** Adding a constructor argument
+  therefore breaks them with `number 32 is not iterable` — a suite **LOAD** failure, which reads as
+  `1 failed | 4 passed (5)` with `10 passed` tests. Count files, not tests.
+- 🔴 **The local catalogue is EMPTY** (`Product` has 0 rows). Any size measured against it is a
+  floor, never a representative number. This is exactly what 15.11's scale fixture is for.
+- 🔴 **`process.memoryUsage().heapUsed` did not see a deliberately retained 1 MiB string.** Give
+  every memory probe a known-size positive control before believing its deltas.
 
 ---
 

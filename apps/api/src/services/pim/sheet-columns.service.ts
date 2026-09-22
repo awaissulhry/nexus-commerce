@@ -1120,9 +1120,29 @@ export const SHEET_CONTENT_FIELDS: FieldDefinition[] = [
  * columns route AND every row read need one. Caching here rather than in the route means a page of
  * rows does not pay the schema walk on every keystroke of a search.
  */
-const columnSetCache = new WorkspaceCache<string, { at: number; value: SheetColumnSet }>()
+/**
+ * 🔴 The cache key below carries `familyIds` AND `savedFields`, so it is per-family and per-user:
+ * every distinct family or saved column selection opened added one whole `SheetColumnSet` that
+ * never left memory. The 5-minute TTL is checked on READ only, so a stale entry is never evicted
+ * either — it is only skipped. Open a thousand products and the process held a thousand of them.
+ *
+ * Measured on this branch against the local catalogue: 29.6 KiB of JSON for master DE at 47
+ * columns. That is a FLOOR — the local catalogue is empty, and a market with cached channel specs
+ * carries 185+ columns. The retained object graph is larger again than its JSON.
+ *
+ * The cap is per workspace and the oldest WRITE goes first, which is also the entry most likely to
+ * be past `COLUMN_SET_TTL_MS` already.
+ *
+ * 64 is not a free choice: `products-sheet.routes.ts:28` already holds 64 of these same objects
+ * per workspace, and `studio-columns.ts:20` holds 128, by REFERENCE. A smaller cap here would
+ * rebuild entries its own consumers are still holding alive, and free nothing. 64 turns "one per
+ * product opened" into the bound this codebase already accepts for this object.
+ */
+const COLUMN_SET_CACHE_MAX = 64
+const columnSetCache = new WorkspaceCache<string, { at: number; value: SheetColumnSet }>(COLUMN_SET_CACHE_MAX)
 const COLUMN_SET_TTL_MS = 5 * 60_000
-const englishLabelCache = new WorkspaceCache<string, { at: number; value: Map<string, string> }>()
+/** Same shape, same TTL, same unbounded growth — keyed by product type rather than by family. */
+const englishLabelCache = new WorkspaceCache<string, { at: number; value: Map<string, string> }>(COLUMN_SET_CACHE_MAX)
 
 export async function getSheetColumns(input: GetSheetColumnsInput): Promise<SheetColumnSet> {
   const market = String(input.market).toUpperCase()
@@ -1306,4 +1326,13 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
 export function clearSheetColumnCache(): void {
   columnSetCache.clear()
   englishLabelCache.clear()
+}
+
+/**
+ * Memory is the one thing this file cannot gate, so it reports itself instead. `entries` counts
+ * the CALLING workspace's bucket, not the process. A gate reads `max` to prove the bound is still
+ * wired at the call site; an operator reads `entries` to see how close a real workspace gets.
+ */
+export function sheetColumnCacheStats(): { entries: number; max: number; ttlMs: number } {
+  return { entries: columnSetCache.size, max: columnSetCache.maxEntriesPerWorkspace, ttlMs: COLUMN_SET_TTL_MS }
 }

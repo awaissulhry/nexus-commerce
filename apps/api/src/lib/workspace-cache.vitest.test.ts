@@ -17,6 +17,38 @@ describe('business cache boundaries', () => {
     expect(inside('business-a', () => cache.size)).toBe(0)
     expect(inside('business-b', () => cache.get('shared-sku'))).toBe('business-b')
   })
+  it('bounds one business bucket when a cap is asked for, and leaves an uncapped cache unbounded', () => {
+    const capped = new WorkspaceCache<string, number>(4)
+    inside('business-a', () => {
+      for (let i = 0; i < 5; i++) capped.set(`k${i}`, i)
+      expect(capped.size).toBe(4)
+      expect(capped.get('k0')).toBeUndefined() // the oldest write is the one that goes
+      expect([...capped.keys()]).toEqual(['k1', 'k2', 'k3', 'k4'])
+    })
+    // The cap is per business. One busy business must not evict another's entries.
+    inside('business-b', () => { capped.set('k0', 100); expect(capped.size).toBe(1) })
+    inside('business-a', () => expect(capped.size).toBe(4))
+
+    // 🔴 The default must stay unbounded: idempotency carries its own, much larger bound, and a
+    // silent cap there is a repeated write, not a slower read.
+    const uncapped = new WorkspaceCache<string, number>()
+    inside('business-a', () => {
+      for (let i = 0; i < 200; i++) uncapped.set(`k${i}`, i)
+      expect(uncapped.size).toBe(200)
+    })
+  })
+  it('refreshes a key in place instead of evicting a different entry to make room for it', () => {
+    const capped = new WorkspaceCache<string, number>(3)
+    inside('business-a', () => {
+      capped.set('a', 1); capped.set('b', 2); capped.set('c', 3)
+      capped.set('b', 9) // a REFRESH: the bucket does not grow, so nothing may be evicted for it
+      expect(capped.size).toBe(3)
+      expect(capped.get('a')).toBe(1)
+      expect([...capped.keys()]).toEqual(['a', 'c', 'b']) // and the refreshed key is now the newest
+      capped.set('d', 4) // 'a' is the oldest now, so 'a' is the one that goes
+      expect([...capped.keys()]).toEqual(['c', 'b', 'd'])
+    })
+  })
   it('evicts old business buckets without returning another business’s cached values', () => {
     const cache = new WorkspaceCache<string, number>()
     for (let i = 0; i < 65; i++) inside(`business-${i}`, () => cache.set('same-key', i))

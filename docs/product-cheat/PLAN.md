@@ -2826,3 +2826,112 @@ The 467-migration history **still does not replay** — 443 of 467. It is now *h
 path, and `replay-migrations.mjs` keeps measuring it. 🔴 **`replay-migrations.mjs` is a diagnostic,
 not a gate**: it exits non-zero every run by design, so it is deliberately **not** in the push hook.
 Calling it a gate would be calling a permanent red a green.
+
+---
+
+# PHASE 2 — pre-steps
+
+## Step 15.3 RESULT — the column-set cache is bounded. And two of its three sibling caches already were.
+
+**Ranked #1 in [15.13](#1513--ranked-what-to-do-and-when).** 🟩 The premise is verified: the inner
+`Map` of every `WorkspaceCache` was unbounded, and `sheet-columns.service.ts` keys its entry on
+`familyIds` **and** `savedFields`, so every family and every saved column selection a user opened
+added a whole `SheetColumnSet` that never left memory.
+
+🟠 **Two line references in 15.3 have drifted** (the file grew with Step 1.5). Substance unchanged:
+
+| 15.3 says | Today |
+|---|---|
+| `workspace-cache.ts:11-13` bounds the buckets at 64 | 🟩 true, now `:22` |
+| `sheet-columns.service.ts:1144` TTL checked on read only | 🟩 true, now `:1173` |
+| `sheet-columns.service.ts:1127-1141` the cache key | 🟩 true, now `:1156-1170` |
+
+### What was built
+
+1. 🆕 `WorkspaceCache` takes an optional **`maxEntriesPerWorkspace`** and enforces it in `set()`:
+   the oldest **write** is evicted first, which is also the entry most likely to be past the TTL
+   already. A refresh of an existing key is re-inserted, so it moves to the newest slot rather than
+   being evicted from its first position.
+2. 🔴 **The cap is opt-in, and the default stays unbounded.** A blanket default would silently
+   lower `idempotency.service.ts`'s own 5,000-entry bound (`idempotency.service.ts:28`), and there
+   a dropped entry is a **repeated write**, not a slower read. A cap belongs to the caller that
+   knows the cost of a miss.
+3. `columnSetCache` and `englishLabelCache` are capped at **64 per workspace**.
+4. 🆕 `sheetColumnCacheStats()` exports `{ entries, max, ttlMs }` — 15.3's recommendation (b), and
+   the instrument the call-site gate reads.
+
+### 🟠 Why 64 and not the "~3 lines, pick a number" answer
+
+The first cut was 32. It was wrong, and finding out why changed the shape of the finding:
+
+🟩 **Two of the three caches holding `SheetColumnSet` objects were already bounded.**
+`products-sheet.routes.ts:28` holds **64** per workspace and `studio-columns.ts:20` holds **128**,
+both through `TtlCache`, which does true LRU. They hold the **same objects by reference**. A cap of
+32 in the service would therefore have evicted entries its own consumers were still keeping alive —
+paying a rebuild and freeing nothing. 64 matches the bound this codebase already accepts for this
+object.
+
+➡️ **The finding is narrower than 15.3 states.** "Affects every sheet read" is right about the
+path but not about the exposure: the *route* cache was never unbounded. The unbounded one was the
+service cache behind it.
+
+### Done when — ✅ measured
+
+| Claim | Measurement |
+|---|---|
+| Inserting cap + 1 leaves exactly cap | `workspace-cache.vitest.test.ts` — 4 passed |
+| The oldest write is the one that goes | asserted on `keys()`, not only on `size` |
+| A refresh does not evict a different entry | asserted; this arm was **added after a mutation escaped** (below) |
+| An uncapped cache is still unbounded | 200 entries in, 200 out |
+| The cap is per workspace, not per process | a second workspace's bucket is unaffected |
+| The service's cache is still wired to a cap | `sheet-columns-bound.vitest.test.ts` reads `sheetColumnCacheStats().max` |
+
+**Size, measured, not guessed** — against the local catalogue, `master DE` builds a 47-column set of
+**29.6 KiB of JSON**. 🔴 That is a **floor**: the local catalogue is empty (`Product` returned 0
+rows), and a market with cached channel specs carries 185+ columns. The retained object graph is
+larger again than its JSON.
+
+🔴 **The heap instrument failed its own positive control** and its numbers are therefore not
+reported here. A deliberately retained 1 MiB string moved `heapUsed` by 2.2 KiB. JSON bytes are
+used as the size proxy instead. *An instrument that cannot see a known quantity has not measured an
+unknown one.*
+
+### Gate — ✅ and proven able to fail, four ways
+
+| Mutation | Result |
+|---|---|
+| Drop the cap argument at the call site | 🔴 **RED** — `sheet-columns-bound` fails on `Number.isFinite(max)` |
+| Disable the eviction loop | 🔴 **RED** — `expected 5 to be 4` |
+| Make the default cap finite (`8`) | 🔴 **RED** — `expected 8 to be 200`, the uncapped arm |
+| Remove the refresh re-insert | 🟢 **GREEN — the gate MISSED it.** See below |
+
+### 🔴 The mutation that escaped, and what it cost
+
+The first version of the refresh test used the sequence `a, b, c → refresh a → d`. Both the correct
+code and the mutant produce `[c, a, d]`, because when the refreshed key **is** the oldest, evicting
+it and re-adding it lands in the same place. **The fixture pinned the dimension the claim was
+about.**
+
+The rewritten arm refreshes `b` — a key that is *not* the oldest — and asserts `size`, not only
+order. The mutant then evicts `a` to make room for a key that was already present: `expected 2 to
+be 3`. 🔴 **RED.**
+
+> A green that has never been shown able to fail is not evidence — and neither is one whose fixture
+> holds constant the very thing the claim varies.
+
+### Cost when — at most 64 column sets per workspace, whatever the product count.
+
+Previously: one per distinct `(family, saved column selection, coordinate, locale, account)` a user
+opened, for the life of the process.
+
+### Rollback — delete the constructor argument at both call sites. The parameter defaults to unbounded, so the class returns to its previous behaviour exactly.
+
+### ⬜ Not done, and why
+
+- **15.3 (b) — "expose the cache size on the existing metrics route".** `sheetColumnCacheStats()`
+  exists, but 🟩 **there is no existing PIM/sheet metrics route to hang it on.** `/admin/health`
+  runs a full product validation; `/api/catalog/cache-stats` reports the Amazon catalog service.
+  Adding a new route is a new public surface, and the 09-16 public-route audit found 14
+  unauthenticated monitoring routes. ➡️ **Needs a ruling: which route, and behind which permission.**
+- **15.3 (c) — Redis.** Marked *"Later"* in 15.3 itself. Untouched.
+- 🟩 `TtlCache` (`utils/ttl-cache.ts:43`) was **already** bounded and already LRU. Not changed.
