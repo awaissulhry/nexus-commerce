@@ -43,7 +43,7 @@ been exercised.
 | **2.4 (move 1)** Shared means shared | ✅ **BUILT** — presence narrowed to the page's products, market switcher kept global, absence stated in the UI. **~150 ms → 6 ms**, flat | `f8fcd1158` |
 | **2.2 (part 1)** One price door | ✅ **BUILT** — `expectedVersion` required; an unguarded caller must NAME why; chunked at 500 | `76b8be797` |
 | **2.2 (part 2)** The sheet uses the door | ✅ **BUILT under R-11** — `ebay_price` and `attr_price` go through `writeChannelPrices`; legacy keys cleaned in the door; hold lifted; 16 tests, 12 mutations red | `a55d8da5f` |
-| **2.2 Gate (2)** Concurrency | ✅ **BUILT** — a forced race on real PostgreSQL: one `applied`, one `conflict` (door, sheet, mixed); each guard proven by a different arm | see `git log` |
+| **2.2 Gate (2)** Concurrency | ✅ **BUILT** — a forced race on real PostgreSQL: one `applied`, one `conflict` (door, sheet, mixed); each guard proven by a different arm | `1c2efb671` |
 | **15.5 (c)** Does the reconcile bump the version? | ✅ **ANSWERED — NO**, 0 of 15, with a positive control. 2.2 and 2.7 do not fight | `76b8be797` |
 | **A-17** 15.5 (b)'s auto-retry is a lost update | 🟡 **FOR YOUR RULING** — recommended: add `expectedPrice` and retry only the safe case | — |
 | **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | `a55d8da5f` |
@@ -209,6 +209,18 @@ ESCAPED a gate I had just called green, and each time the fix was a second arm, 
   `catalog-transfer-http` "1 failing"). Re-run it with `--reporter=json` to read the message.
   `catalog-transfer-http` did not reproduce in 2 full runs, under CPU load, or alone; a second push
   went green. Cause unknown — recorded, not explained.
+- 🔴 **Two more one-off hook refusals, both outside this lane, both green on the next push:**
+  the `apps/web` build (`next/font/google queries have exactly one entry` on JetBrains Mono — Google's
+  CSS was normal when checked), and `run-real-postgres-tests.mjs` → AE.4 `assortment/sync` 13/14
+  (passed alone twice; that suite never calls the price code; the runner prints no test name, and
+  its test 13 asserts a p95 latency under 5 s). The hook builds the WORKING TREE, and these runs
+  share the machine with the full suite.
+- 🔴 **Both of those then failed a SECOND time** (web build 2 of 4, AE.4 2 of 5 hook runs). AE.4
+  passed **5 of 5** isolated runs of the full runner (3 idle, 2 with every core loaded). 🔴 **The
+  runner hides the failing test's name:** on failure it prints the first 40 lines matching
+  `Error:`, and `[ioredis] Unhandled error event: AggregateError:` fills all 40
+  (`scripts/run-real-postgres-tests.mjs`, the last `console.error`). Not this lane's file — a
+  one-line filter fix for its owner. Neither is caused by this lane's code; neither is explained.
 - 🔴 **PGlite suites need a named load budget.** They start in-process on one connection; under the
   hook ~1.7–2 s alone becomes >10 s. 25 of 27 already set one; `formula-database` and
   `data-validation` now do too (`c4cb6fe71`).
