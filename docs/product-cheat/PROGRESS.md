@@ -45,12 +45,12 @@ been exercised.
 | **2.2 (part 2)** The sheet uses the door | ✅ **BUILT under R-11** — `ebay_price` and `attr_price` go through `writeChannelPrices`; legacy keys cleaned in the door; hold lifted; 16 tests, 12 mutations red | `a55d8da5f` |
 | **2.2 Gate (2)** Concurrency | ✅ **BUILT** — a forced race on real PostgreSQL: one `applied`, one `conflict` (door, sheet, mixed); each guard proven by a different arm | `1c2efb671` |
 | **15.5 (c)** Does the reconcile bump the version? | ✅ **ANSWERED — NO**, 0 of 15, with a positive control. 2.2 and 2.7 do not fight | `76b8be797` |
-| **A-17** 15.5 (b)'s auto-retry is a lost update | 🟡 **FOR YOUR RULING** — recommended: add `expectedPrice` and retry only the safe case | — |
+| **A-17** 15.5 (b)'s auto-retry is a lost update | ✅ **BUILT under R-12** — `expectedPrice`: retry only when the price is the one the caller saw; the Matrix passes it; 8 mutations red. **Step 2.2 CLOSED** | see `git log` |
 | **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | `a55d8da5f` |
 | **Review §3a** Amazon price PATCH wipes the sale price | ✅ **RULED: eBay only.** The sheet has no Amazon price column, and a test now fails if one appears. 🔴 The wipe itself is NOT fixed for the three existing callers | — |
-| **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | 🟡 **FOR YOUR RULING, not blocking** — recommended: record the limit; batch later | — |
-| **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and 40 of 54 local parents have no family | 🟡 **FOR YOUR RULING** — recommended (a): close move 2 for the editor; the grid waits for a family-assignment step | — |
-| **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | 🟡 **FOR YOUR RULING, with D-E** — recommended: strike the ordering rule; count production roots first | — |
+| **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | ✅ **RULED R-13** — the limit is recorded in Step 2.2's Cost when; batch later | — |
+| **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and 40 of 54 local parents have no family | ✅ **RULED R-14 (a)** — move 2 closed for the editor; the grid waits for families and states the gap | — |
+| **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -115,7 +115,7 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
   Live for the Matrix, `PATCH /channel-pricing` and bulk override. The sheet is gated out of it.
   Needs its own step before any Amazon price column joins the sheet.
 - 🟡 **A-19** — the door is ~17 ms a row. Not blocking: the sheet sends one request per row.
-- 🟡 **Step 2.2 is built except A-17** (the 15.5 (b) retry). It closes when A-17 is ruled.
+- ✅ **Step 2.2 is CLOSED** (A-17 built under R-12).
 - 🟢 ~~**15.5c**~~ **ANSWERED: the reconcile does NOT bump `ChannelListing.version`** — 0 of 15,
   with a positive control. 2.2 and 2.7 do not fight.
 - ⬜ The 467-migration history still does not replay (443/467). It is history, not a build path.
@@ -150,11 +150,10 @@ gate can fail, including both arms when the code has two paths. Verify `file:lin
 trusting a plan sentence. Any new defect or better approach goes into a PLAN amendment for Owner
 approval **before building**. Each turn reports what changed, whether it worked, and what is next.
 
-### Three earlier rulings remain open. Raise them only when needed.
+### Two rulings remain open. Raise them only when needed.
 
 | # | What | Recommended |
 |---|---|---|
-| **A-17** | 15.5 (b) asks for a retry that is a **lost update** — on conflict, re-read and resubmit over somebody else's change | **(a)** carry `expectedPrice` and retry only when the price itself is untouched |
 | **D-E** | Run the readiness reconcile on **production**. It is a live write | read 2.7's re-check below first |
 | **Step 2.1 (b) on production** | The 5-row mirror ran on the local database only. Same script, same ruling, a different database | yours to authorise |
 
@@ -162,11 +161,12 @@ approval **before building**. Each turn reports what changed, whether it worked,
 
 1. ✅ ~~**Step 2.2, part 2 — the sheet's price bypass.**~~ Built under R-11.
 2. ✅ ~~**Step 2.2's concurrency gate**~~ — built; a forced race on `concurrent-database.ts`.
-3. 🟡 **Step 2.4 move 2** — measured, NOT built: see **A-20**. The editor's Shared scope is already
-   family-owned; only the products grid is left, and it needs families first.
-4. 🟡 **Step 2.7** — premise re-checked: see **A-21**. The ordering rule protects nothing; D-E is
-   the only gate; count production roots before it runs.
-5. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).
+3. ✅ **A-17 (R-12)** — `expectedPrice` retry built. **Step 2.2 CLOSED.**
+4. 🟡 **Step 2.4 move 2 (R-14)** — closed for the editor. For the grid: the *"N products have no
+   family"* notice is next; the flip waits for a family-assignment step.
+5. 🟡 **Step 2.7 (R-15)** — ordering rule struck. D-E (the production run) stays the Owner's;
+   count production roots first.
+6. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).
 
 ### Still blocked, not forgotten
 

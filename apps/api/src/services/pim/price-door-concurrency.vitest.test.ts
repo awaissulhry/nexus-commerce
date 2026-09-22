@@ -60,7 +60,7 @@ const sheet = (productId: string, version: number, price: number) => async (): P
 }
 
 /** Both writers must have READ the version and be BLOCKED on the row before it is released. */
-async function race(listingId: string, attempts: Array<() => Promise<Attempt>>) {
+async function race(listingId: string, attempts: Array<() => Promise<Attempt | unknown>>, during?: string) {
   const locker = await state.db.pool.connect()
   try {
     await locker.query('BEGIN')
@@ -76,6 +76,8 @@ async function race(listingId: string, attempts: Array<() => Promise<Attempt>>) 
     }
     // The positive control: without this the "race" may have run one writer after the other.
     expect(waiting, 'both writers must be blocked on the row before it is released').toBe(attempts.length)
+    // A-17: the locker's own write lands in the gap between the writers' read and their save.
+    if (during) await locker.query(during, [listingId])
     await locker.query('COMMIT')
     return await Promise.all(running)
   } finally {
@@ -116,4 +118,66 @@ it('sheet vs sheet: one save lands, the other is a 409 and changes nothing', () 
   const results = await race(listing.id, [sheet(product.id, listing.version, 30), sheet(product.id, listing.version, 40)])
   const loser = await expectOneWinner(product, listing, results)
   expect(loser).toMatchObject({ statusCode: 409, details: { code: 'VERSION_CONFLICT', versionOf: 'channelListing' } })
+}), 60_000)
+
+// ── A-17 (R-12) — `expectedPrice`: retry only when nobody touched the price ─────────────────────
+
+const priceWrite = (listingId: string, target: Record<string, unknown>) =>
+  writeChannelPrices({ targets: [{ listingId, ...target } as never], actor: 'A-17', source: 'MANUAL_OVERRIDE' }).then(r => r.results[0])
+const bump = (id: string, data: Record<string, unknown>) =>
+  prisma.channelListing.update({ where: { id }, data: { ...data, version: { increment: 1 } } })
+
+it('A-17: a version moved by a quantity write is retried once when the price is the one the caller saw', () => scoped(async () => {
+  const { product, listing } = await seed('a17-quantity')
+  await bump(listing.id, { quantity: 5 })
+  const outcome = await priceWrite(listing.id, { price: 30, expectedVersion: listing.version, expectedPrice: 25 })
+  expect(outcome).toMatchObject({ outcome: 'applied', guarded: true, retried: true, version: listing.version + 2 })
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  expect(Number(stored.price)).toBe(30)
+  expect(stored.quantity).toBe(5)
+  expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(1)
+}), 60_000)
+
+it('A-17: following the master (expectedPrice null) is retried too', () => scoped(async () => {
+  const product = await prisma.product.create({ data: { sku: 'a17-follow', name: 'a17-follow', basePrice: 10 } })
+  const listing = await prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', channelMarket: 'EBAY_DE',
+    marketplace: 'DE', region: 'EU', price: 10, priceOverride: null, followMasterPrice: true } })
+  await bump(listing.id, { quantity: 5 })
+  expect(await priceWrite(listing.id, { price: 30, expectedVersion: listing.version, expectedPrice: null }))
+    .toMatchObject({ outcome: 'applied', retried: true, version: listing.version + 2 })
+}), 60_000)
+
+it.each([
+  ['somebody changed the price', { price: 27, priceOverride: 27 }, { expectedPrice: 25 }],
+  ['no expectedPrice was given', { quantity: 5 }, {}],
+  ['the write also changes the sale', { quantity: 5 }, { expectedPrice: 25, sale: { value: 20, start: '2026-10-01', end: '2026-10-02' } }],
+  ['a legacy price key is present', { quantity: 5, overrideData: { ebay_price: 98 } }, { expectedPrice: 25 }],
+])('A-17: the conflict stands when %s', (_name, moved, extra) => scoped(async () => {
+  const { product, listing } = await seed(`a17-${_name.replace(/\W+/g, '-')}`)
+  const after = await bump(listing.id, moved)
+  const outcome = await priceWrite(listing.id, { price: 30, expectedVersion: listing.version, ...extra })
+  expect(outcome).toMatchObject({ outcome: 'conflict', version: listing.version + 1 })
+  expect(outcome).not.toHaveProperty('retried')
+  expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })).toEqual(after)
+  expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(0)
+}), 60_000)
+
+it('A-17 race: a quantity write that lands in the gap is retried on the re-read row', () => scoped(async () => {
+  const { product, listing } = await seed('a17-race-quantity')
+  const [outcome] = await race(listing.id, [() => priceWrite(listing.id, { price: 30, expectedVersion: listing.version, expectedPrice: 25 })],
+    'UPDATE "ChannelListing" SET quantity = 5, version = version + 1 WHERE id = $1')
+  expect(outcome).toMatchObject({ outcome: 'applied', retried: true, version: listing.version + 2 })
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  expect([Number(stored.price), stored.quantity, stored.version]).toEqual([30, 5, listing.version + 2])
+  expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(1)
+}), 60_000)
+
+it('A-17 race: a price write that lands in the gap keeps the conflict and its price', () => scoped(async () => {
+  const { product, listing } = await seed('a17-race-price')
+  const [outcome] = await race(listing.id, [() => priceWrite(listing.id, { price: 30, expectedVersion: listing.version, expectedPrice: 25 })],
+    'UPDATE "ChannelListing" SET price = 27, "priceOverride" = 27, version = version + 1 WHERE id = $1')
+  expect(outcome).toMatchObject({ outcome: 'conflict', version: listing.version + 1 })
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  expect(Number(stored.price)).toBe(27)
+  expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(0)
 }), 60_000)

@@ -533,12 +533,13 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.2 — One price door, enforced by the compiler
 
-> **Part 1 ✅ BUILT — `76b8be797`** · **Part 2 ✅ BUILT — `a55d8da5f`** (R-11 / A-18; the sheet
-> uses the door, the Step 1.5 hold is lifted) · **Gate (2) ✅ BUILT — `1c2efb671`** (a forced race on
-> `concurrent-database.ts`). 🟡 **Open:** [A-17](#a-17--155-b-asks-for-a-retry-that-defeats-the-guard-for-your-ruling)
-> (the 15.5 (b) retry) and [A-19](#a-19--the-price-door-is-linear-at-17-ms-a-row-for-your-ruling-not-blocking)
-> (~17 ms a row). 🔴 Review §3a: Amazon's price PATCH wipes a sale price — the sheet is gated out of
-> it; the wipe itself is not fixed.
+> ✅ **CLOSED.** **Part 1 — `76b8be797`** · **Part 2 — `a55d8da5f`** (R-11 / A-18; the sheet uses the
+> door, the Step 1.5 hold is lifted) · **Gate (2) — `1c2efb671`** (a forced race on
+> `concurrent-database.ts`) · **15.5 (b) as [A-17](#a-17--155-b-asks-for-a-retry-that-defeats-the-guard-for-your-ruling)
+> (a), R-12** — see [A-17 — BUILT](#a-17--built-r-12-step-22-closes). Cost limit recorded under
+> [A-19](#a-19--the-price-door-is-linear-at-17-ms-a-row-for-your-ruling-not-blocking) (R-13).
+> 🔴 Review §3a: Amazon's price PATCH wipes a sale price — the sheet is gated out of it; the wipe
+> itself is not fixed and needs its own step.
 
 - **Do** — Make `expectedVersion` **required** on `PriceWriteTarget`, and make every price write
   go through `writeChannelPrices`.
@@ -571,6 +572,9 @@ requirements. Fidelity compares against requirements. Both are empty today.
   raises a `PriceChangeEvent`, an audit row and a `PRICE_UPDATE` enqueue; and two concurrent
   edits produce one `applied` and one `conflict`.
 - 🆕 **Cost when** — a **5,000-row** price edit completes in one call with per-row outcomes.
+  ✅ **Measured (part 2):** it does — 84–89 s, linear at **~17 ms a row** (one transaction per row).
+  **R-13: accepted as the limit.** No surface sends 5,000 guarded rows in one call today (the sheet
+  sends one row per request); batch the writes when one does.
   🔴 See [15.5](#155--expectedversion-keep-it-required-add-three-things): this step needs internal
   chunking, a bulk re-read-and-retry contract, and a check that it cannot collide with
   [Step 2.7](#step-27--run-the-readiness-reconcile-on-production).
@@ -612,7 +616,8 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.4 — Shared means shared
 
-> **Move 1 ✅ BUILT — `f8fcd1158`** (~150 ms → 6 ms). **Move 2 ⬜ not built** —
+> **Move 1 ✅ BUILT — `f8fcd1158`** (~150 ms → 6 ms). **Move 2 — R-14:** closed for the editor; the
+> grid waits for families and states the gap now —
 > [A-20](#a-20--step-24-move-2-the-editor-already-does-it-only-the-products-grid-is-left-and-most-of-its-rows-have-no-family-for-your-ruling):
 > the editor's Shared scope is already family-owned; only the products grid is left.
 
@@ -720,7 +725,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   a channel coordinate already had **8 of 163** required before 2.1; Shared had 1 of 101.
   ✅ **Done — [A-21](#a-21--step-27s-premise-re-checked-its-ordering-rule-no-longer-blocks-anything-shareds-100--is-by-design-for-your-ruling-with-d-e)**:
   the ordering rule below protects nothing (channel numbers were real before 2.1; Shared reads 100 %
-  both before and after, by R-10's design). Striking it is proposed, not ruled.
+  both before and after, by R-10's design). **Struck by R-15.**
 - **Approach** — Rehearse on a copy, then run per family root. **Do it after
   [Step 2.1](#step-21--requirements-become-real)**, so it computes against real requirements — a
   reconcile run against 0 required attributes would fill the table with meaningless 100%s and you
@@ -747,8 +752,8 @@ requirements. Fidelity compares against requirements. Both are empty today.
 - **Gate** — A row-count check in the deploy checklist, plus the existing readiness tests.
 - **Rollback** — Truncate the table and re-run; it is derived data.
 - 🔴 **Needs your approval** — it is a production write. [D-E](#part-9--the-decisions-i-need).
-- ⚠️ **Order matters:** 2.1 → 2.7. Not the reverse. *(A-21 measured that this protects nothing and
-  proposes striking it — unruled.)*
+- ~~⚠️ **Order matters:** 2.1 → 2.7. Not the reverse.~~ **Struck by R-15** — A-21 measured that it
+  protects nothing. D-E is the only gate left, and it stays the Owner's.
 
 ---
 
@@ -4096,6 +4101,8 @@ on its way to being disbelieved.
 
 ## A-17 — 15.5 (b) asks for a retry that defeats the guard. FOR YOUR RULING.
 
+> ✅ **RULED R-12: option (a). BUILT** — see [A-17 — BUILT](#a-17--built-r-12-step-22-closes) below.
+
 15.5 (b): *"On `conflict`, re-read those rows once and resubmit automatically; show the user only
 what still conflicts."*
 
@@ -4322,6 +4329,8 @@ caller of 5,000 rows is ~1.5 min — longer than a normal request. See **A-19**.
 
 ## A-19 — The price door is linear at ~17 ms a row. FOR YOUR RULING, not blocking.
 
+> ✅ **RULED R-13: option (a).** The limit is recorded in Step 2.2's Cost when; batching waits until a surface needs it.
+
 **Measured above.** 5,000 rows = 84–89 s, because each row runs its own transaction with its own
 event, audit row and queue row. 15.5 asked for chunked *reads*; those are built, and they are not
 the cost.
@@ -4403,6 +4412,8 @@ race".
 
 ## A-20 — Step 2.4 move 2: the editor already does it; only the products grid is left, and most of its rows have no family. FOR YOUR RULING.
 
+> ✅ **RULED R-14: option (a).** Move 2 is closed for the editor. The grid waits for a family step, and states the gap now — see [A-20 — BUILT](#a-20--built-r-14-the-grid-says-which-products-have-no-family) below.
+
 **2026-09-22. Measured read-only on the local catalogue (`nexus_development`, profiles ON, inside the
 workspace context). Nothing built.**
 
@@ -4471,6 +4482,8 @@ for products that have a family; a positive control with an Amazon listing shows
 
 ## A-21 — Step 2.7's premise, re-checked. Its ordering rule no longer blocks anything; Shared's 100 % is by design. FOR YOUR RULING, with D-E.
 
+> ✅ **RULED R-15: accepted.** The ordering rule is struck and the cost is in 2.7's Cost when. 🔴 **D-E is NOT approved** — the production run stays the Owner's; count production roots first.
+
 **2026-09-22. Measured on the local catalogue with the CURRENT code, each reconcile run inside a
 transaction that was then rolled back.** Control: `ReadinessIndex` held **714 rows, newest
 2026-09-13T07:47:57Z** before and after all seven runs; inside each transaction the new rows were
@@ -4522,3 +4535,86 @@ The rows stored on 09-13, before any of Step 2.1, already read Amazon **40–47 
 - **Carry to Phase 4:** Shared's always-100 % readiness chip (R4).
 
 Nothing built. D-E (the production run) stays the Owner's.
+
+---
+
+## OWNER RULING — 2026-09-22 (ninth set)
+
+The Owner: *"I'll actually go with your recommendations, so please go ahead."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-12** | A-17 — the 15.5 (b) retry | ✅ **(a) `expectedPrice`.** Retry only when the stored price is the one the caller saw |
+| **R-13** | A-19 — the door is ~17 ms a row | ✅ **(a) Record the limit.** Batch later, when a surface needs it |
+| **R-14** | A-20 — Step 2.4 move 2 | ✅ **(a) Close move 2 for the editor; the grid waits for families, and says so now** |
+| **R-15** | A-21 — Step 2.7's ordering rule | ✅ **Strike it; add the measured cost.** D-E itself is **not** approved |
+
+---
+
+## A-17 — BUILT (R-12). Step 2.2 closes.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `channel-price-write.service.ts` — `PriceWriteTarget` | `expectedPrice?: number \| null` on the **guarded** branch only (`null` = following the master). The unguarded branch types it `never`: measured, `tsc` refuses `{ unguardedReason, expectedPrice }` and accepts `{ expectedVersion, expectedPrice }` |
+| `priceAsSeen()` | True only when the stored own price equals `expectedPrice` (pinned: `priceOverride ?? price`; following: `null`). **False** for a sale change, for a row carrying a legacy price key (A-18), and for an inconsistent row (following with an override) |
+| the early version check | A moved version is no longer an automatic conflict **when** `priceAsSeen`; the write goes ahead on the current version |
+| the compare-and-set | Lost to a write in the gap → re-read the row and its sale window, and try **once** more, **only** if `priceAsSeen` on the re-read row. Otherwise the conflict stands, naming the current version |
+| `PriceWriteOutcome.retried` | `true` on every outcome reached past a moved version — a retried write always says so, like `guarded` |
+| `matrix-write.service.ts` (price cell) | Passes the price of its own read as `expectedPrice`. That read has just passed the operator's version check, so it is what the operator saw. A **clamped** price is not the stored override and passes nothing |
+
+🔴 **Never re-read-and-overwrite.** The door does not adopt the new version unless the price is
+provably untouched; 15.5 (b) as first written was a lost update by design.
+
+### Who can use it — stated, not implied
+
+- **The Matrix** — single cells and verbs. A verb writes row after row from one read; a quantity
+  write in between used to turn an untouched price into a conflict.
+- **Not the sheet** — it sends one row per request and never knew the previous price. A conflict
+  there is a 409 the operator resolves (Gate 2 proves it).
+- **Not the bulk override / `PATCH /channel-pricing`** — unguarded by their named reasons; the type
+  refuses `expectedPrice` on them.
+- 🟠 **No caller sends 5,000 guarded rows today.** 15.5 (b)'s scenario is future; the door is ready
+  for it.
+
+### Done when — ✅ measured on `concurrent-database.ts`, profiles ON and OFF
+
+| Arm | Result |
+|---|---|
+| version moved by a **quantity** write; price as seen | `applied`, `retried`, version +2, one event |
+| following the master, `expectedPrice: null` | `applied`, `retried` |
+| somebody **changed the price** | `conflict`; their price stands; no event |
+| no `expectedPrice` | `conflict` (unchanged behaviour) |
+| the write also changes the **sale** | `conflict` |
+| a **legacy price key** is present | `conflict` |
+| **race:** a quantity write lands in the gap (forced) | `applied`, `retried` — only the second attempt can set it, because the versions matched at the early check |
+| **race:** a price write lands in the gap (forced) | `conflict`; their price stands |
+| Matrix: pinned / following / clamped | passes `25` / `null` / nothing |
+
+### Gate — ✅ proven able to fail, 8 ways
+
+| Mutation | Red |
+|---|---|
+| the price comparison removed (always "as seen") | changed-price arm, price race |
+| the early check never retries | quantity arm, following arm |
+| the gap retry removed | quantity race |
+| the sale not excluded | sale arm |
+| legacy keys not excluded | legacy arm |
+| the gap retry not reported (`retried`) | quantity race |
+| the Matrix passes nothing | pinned, following |
+| the Matrix ignores clamping | clamped |
+
+Full `apps/api` hook suite: **875 files pass**. `tsc`: 0. Profiles-ON ratchet: 3 of 4 runs green; one
+run refused and its output was not captured (recorded, unexplained — the hook will name the file if
+it recurs). `studio-matrix.routes` keeps its 4 known profiles-ON failures, identical before this change.
+
+### Cost when — `flat` on the happy path. A conflicting row costs at most one extra read and one extra transaction.
+
+### Rollback — revert the commit. `expectedPrice` is optional; with it absent the door behaves exactly as before.
+
+### Step 2.2 — all four fields now pass
+
+Done when ✅ (type · events/audit/enqueue on every surface · one `applied` + one `conflict`) ·
+Cost when ✅ (5,000 rows complete; the linear limit accepted under R-13) · Gate ✅ (the type, Gate 2,
+the reset gate, this gate — each mutation-proven) · Rollback ✅ (per commit, stated). **CLOSED.**

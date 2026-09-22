@@ -67,8 +67,18 @@ interface PriceWriteFields {
  * and never both: a version to check against, or a named reason there is none.
  */
 export type PriceWriteTarget =
-  | (PriceWriteFields & { expectedVersion: number; unguardedReason?: never })
-  | (PriceWriteFields & { expectedVersion?: never; unguardedReason: PriceWriteUnguardedReason })
+  | (PriceWriteFields & { expectedVersion: number; expectedPrice?: number | null; unguardedReason?: never })
+  | (PriceWriteFields & { expectedVersion?: never; expectedPrice?: never; unguardedReason: PriceWriteUnguardedReason })
+
+/*
+ * 🔴 A-17 (R-12) — `expectedPrice`: the listing's own price the caller SAW (a number = pinned at it;
+ * `null` = following the master). A version conflict alone cannot tell "someone changed this price"
+ * from "a quantity write bumped the same version". When the stored price is still the one the caller
+ * saw, nobody touched the price, and the write goes ahead ONCE on the current version, reported
+ * `retried: true`. When it is not, the conflict stands. Never re-read-and-overwrite: 15.5 (b) as
+ * first written was a lost update by design. Only on a guarded target (the type refuses it on an
+ * unguarded one) and only for a price-only write — a sale change is never retried.
+ */
 
 export interface PriceWriteOutcome {
   listingId: string
@@ -84,6 +94,8 @@ export interface PriceWriteOutcome {
    * rather than being indistinguishable from a guarded one.
    */
   guarded: boolean
+  /** A-17 — the version had moved, but the price was the one the caller saw; the write went ahead once. */
+  retried?: true
   /** The PRICE_UPDATE queue row id when one was enqueued (null on a channel with no outbound lane). */
   queueId: string | null
 }
@@ -91,6 +103,30 @@ export interface PriceWriteOutcome {
 export interface PriceWriteResult { results: PriceWriteOutcome[]; applied: number; refused: number; noop: number; conflict: number }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+const LISTING_SELECT = {
+  id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true,
+  overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } },
+} satisfies Prisma.ChannelListingSelect
+
+/** A-18 — the storage contract's historical `overrideData` keys that still carry this channel's price. */
+function legacyPriceKeys(channel: string): string[] {
+  return [...new Set(['price', ...Object.keys(CHANNEL_FIELD_MAP)
+    .filter(field => CHANNEL_FIELD_MAP[field] === 'price' && field.startsWith(`${channel.toLowerCase()}_`))
+    .flatMap(channelOverrideKeys)])]
+}
+
+/** A-17 — is the stored own price exactly the one the caller saw? Anything ambiguous answers no. */
+function priceAsSeen(t: PriceWriteTarget, row: { channel: string; price: unknown; priceOverride: unknown; followMasterPrice: boolean | null; overrideData: unknown }): boolean {
+  if (t.expectedPrice === undefined || t.sale !== undefined) return false
+  const bag = row.overrideData && typeof row.overrideData === 'object' ? row.overrideData : {}
+  // A legacy key is a price the columns do not show; the caller cannot have seen it.
+  if (legacyPriceKeys(row.channel).some(key => Object.prototype.hasOwnProperty.call(bag, key))) return false
+  const override = decimalToNumber(row.priceOverride)
+  const own = row.followMasterPrice === false ? override ?? decimalToNumber(row.price) : override == null ? null : undefined
+  if (own === undefined) return false
+  return own === (t.expectedPrice === null ? null : round2(t.expectedPrice))
+}
 const money = (v: number | null, currency: string) => (v == null ? '—' : `${currency} ${v.toFixed(2)}`)
 
 export async function writeChannelPrices(input: {
@@ -115,7 +151,7 @@ export async function writeChannelPrices(input: {
   const [listingChunks, windowChunks, hasWindow] = await Promise.all([
     Promise.all(chunks.map((chunk) => prisma.channelListing.findMany({
       where: { id: { in: chunk } },
-      select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true, overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } } },
+      select: LISTING_SELECT,
     }))),
     Promise.all(chunks.map((chunk) => readSaleWindows(prisma as never, chunk))),
     saleWindowColumnsExist(prisma as never),
@@ -131,94 +167,116 @@ export async function writeChannelPrices(input: {
   const currencyOf = new Map(marketplaces.map((m) => [`${m.channel}|${m.code}`, m.currency]))
   const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
 
-  for (const t of input.targets) {
-    const l = byId.get(t.listingId)
+  targets: for (const t of input.targets) {
+    const found = byId.get(t.listingId)
+    let retried = false
     // `guarded` is set HERE, from the target, so no outcome site can forget it and no unguarded
-    // write can report itself as checked.
+    // write can report itself as checked. `retried` likewise, so a retried write always says so.
     const push = (o: Omit<PriceWriteOutcome, 'listingId' | 'guarded'>) => {
-      result.results.push({ listingId: t.listingId, guarded: t.expectedVersion !== undefined, ...o })
+      result.results.push({ listingId: t.listingId, guarded: t.expectedVersion !== undefined, ...(retried ? { retried: true as const } : {}), ...o })
       result[o.outcome]++
     }
-    if (!l) { push({ productId: null, channel: null, marketplace: null, outcome: 'refused', reason: 'No listing with this id', version: 0, queueId: null }); continue }
-    const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
+    if (!found) { push({ productId: null, channel: null, marketplace: null, outcome: 'refused', reason: 'No listing with this id', version: 0, queueId: null }); continue }
     // 🔴 The compare-and-set. `undefined` here is only reachable when the caller NAMED an
     // `unguardedReason` — the type refuses it otherwise — and that write is reported `guarded:false`.
-    if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: l.version }); continue }
-    if (t.price === undefined && t.sale === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue }
-    const currency = currencyOf.get(`${l.channel}|${l.marketplace}`) ?? 'EUR'
-    const currentPrice = decimalToNumber(l.price)
-    const currentOverride = decimalToNumber(l.priceOverride)
-    const nextPrice = t.price === undefined ? undefined : t.price == null ? null : round2(Number(t.price))
-    if (nextPrice !== undefined && nextPrice !== null && (!Number.isFinite(nextPrice) || nextPrice < 0)) { push({ ...base, outcome: 'refused', reason: 'A price is zero or more', version: l.version }); continue }
-    const currentSale: { value: number | null } & SaleWindow = { value: decimalToNumber(l.salePrice), ...(windows.get(l.id) ?? { start: null, end: null }) }
-    const nextSale = t.sale === undefined ? undefined : { value: t.sale.value == null ? null : round2(Number(t.sale.value)), start: t.sale.value == null ? null : t.sale.start, end: t.sale.value == null ? null : t.sale.end }
-    if (nextSale) {
-      const problem = validateSaleWindow(nextSale.value, nextSale)
-      if (problem) { push({ ...base, outcome: 'refused', reason: problem, version: l.version }); continue }
-      if (nextSale.value != null && !hasWindow) { push({ ...base, outcome: 'refused', reason: 'This database has no sale-window columns yet — the sale cannot be scheduled', version: l.version }); continue }
+    if (t.expectedVersion !== undefined && t.expectedVersion !== found.version) {
+      if (!priceAsSeen(t, found)) { push({ productId: found.productId, channel: found.channel, marketplace: found.marketplace, queueId: null, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: found.version }); continue }
+      retried = true
     }
-    // A-18: the storage contract owns the historical keys. A dirty reset is a write even
-    // when the explicit columns already follow master; the resolver still reads the JSON bag.
-    const priceKeys = [...new Set(['price', ...Object.keys(CHANNEL_FIELD_MAP)
-      .filter(field => CHANNEL_FIELD_MAP[field] === 'price' && field.startsWith(`${l.channel.toLowerCase()}_`))
-      .flatMap(channelOverrideKeys)])]
-    const dirtyPrice = priceKeys.some(key => Object.prototype.hasOwnProperty.call(l.overrideData ?? {}, key))
-    const priceChanges = nextPrice !== undefined && (dirtyPrice || !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
-    const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
-    if (!priceChanges && !saleChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue }
+    let current = found
+    // At most two attempts: the second exists only for a compare-and-set lost to a write that did
+    // not touch the price (A-17). Every outcome inside leaves through `continue targets`.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const l = current
+      const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
+      if (t.price === undefined && t.sale === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      const currency = currencyOf.get(`${l.channel}|${l.marketplace}`) ?? 'EUR'
+      const currentPrice = decimalToNumber(l.price)
+      const currentOverride = decimalToNumber(l.priceOverride)
+      const nextPrice = t.price === undefined ? undefined : t.price == null ? null : round2(Number(t.price))
+      if (nextPrice !== undefined && nextPrice !== null && (!Number.isFinite(nextPrice) || nextPrice < 0)) { push({ ...base, outcome: 'refused', reason: 'A price is zero or more', version: l.version }); continue targets }
+      const currentSale: { value: number | null } & SaleWindow = { value: decimalToNumber(l.salePrice), ...(windows.get(l.id) ?? { start: null, end: null }) }
+      const nextSale = t.sale === undefined ? undefined : { value: t.sale.value == null ? null : round2(Number(t.sale.value)), start: t.sale.value == null ? null : t.sale.start, end: t.sale.value == null ? null : t.sale.end }
+      if (nextSale) {
+        const problem = validateSaleWindow(nextSale.value, nextSale)
+        if (problem) { push({ ...base, outcome: 'refused', reason: problem, version: l.version }); continue targets }
+        if (nextSale.value != null && !hasWindow) { push({ ...base, outcome: 'refused', reason: 'This database has no sale-window columns yet — the sale cannot be scheduled', version: l.version }); continue targets }
+      }
+      // A-18: the storage contract owns the historical keys. A dirty reset is a write even
+      // when the explicit columns already follow master; the resolver still reads the JSON bag.
+      const priceKeys = legacyPriceKeys(l.channel)
+      const dirtyPrice = priceKeys.some(key => Object.prototype.hasOwnProperty.call(l.overrideData ?? {}, key))
+      const priceChanges = nextPrice !== undefined && (dirtyPrice || !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
+      const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
+      if (!priceChanges && !saleChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
 
-    const basePrice = decimalToNumber(l.product?.basePrice)
-    const effectivePrice = priceChanges ? (nextPrice ?? basePrice) : (currentPrice ?? (l.followMasterPrice !== false ? basePrice : currentOverride))
-    const effectiveSale = saleChanges ? nextSale! : currentSale
-    const sentences: string[] = []
-    if (priceChanges) sentences.push(nextPrice == null ? `price cleared (was ${money(currentPrice, currency)}) — follows the base price` : `price ${money(currentPrice, currency)} → ${money(nextPrice, currency)}`)
-    if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
-    const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
+      const basePrice = decimalToNumber(l.product?.basePrice)
+      const effectivePrice = priceChanges ? (nextPrice ?? basePrice) : (currentPrice ?? (l.followMasterPrice !== false ? basePrice : currentOverride))
+      const effectiveSale = saleChanges ? nextSale! : currentSale
+      const sentences: string[] = []
+      if (priceChanges) sentences.push(nextPrice == null ? `price cleared (was ${money(currentPrice, currency)}) — follows the base price` : `price ${money(currentPrice, currency)} → ${money(nextPrice, currency)}`)
+      if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
+      const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
 
-    const written = await prisma.$transaction(async (tx) => {
-      const data: Prisma.ChannelListingUpdateManyMutationInput = { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
-      if (priceChanges) {
-        if (nextPrice == null) Object.assign(data, { price: null, priceOverride: null, followMasterPrice: true, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
-        else Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
+      const written = await prisma.$transaction(async (tx) => {
+        const data: Prisma.ChannelListingUpdateManyMutationInput = { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
+        if (priceChanges) {
+          if (nextPrice == null) Object.assign(data, { price: null, priceOverride: null, followMasterPrice: true, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
+          else Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
+        }
+        if (saleChanges) data.salePrice = effectiveSale.value
+        const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
+        if (guarded.count !== 1) return null
+        if (priceChanges && dirtyPrice) await tx.$executeRaw`
+          UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${priceKeys}::text[]
+          WHERE id = ${l.id}
+        `
+        if (saleChanges) await writeSaleWindow(tx, l.id, { start: effectiveSale.start, end: effectiveSale.end })
+        if (priceChanges) {
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride), newValue: nextPrice == null ? null : String(nextPrice), reason, changedBy: input.actor } })
+          await tx.priceChangeEvent.create({ data: priceChangeData({ productId: l.productId, sku: l.product?.sku ?? '', channel: l.channel, marketplace: l.marketplace, fulfillmentMethod: l.fulfillmentMethod ?? null, oldPrice: currentPrice, newPrice: nextPrice ?? basePrice, currency, source: input.source, reason, actor: input.actor }) })
+        }
+        if (saleChanges) {
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
+        }
+        let queueId: string | null = null
+        if (VALID_SYNC_TARGETS.has(l.channel)) {
+          await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
+          const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
+          const row = await createOutboundRow(tx, {
+            data: {
+              productId: l.productId, channelListingId: l.id, targetChannel: l.channel as never, targetRegion: l.region,
+              syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,
+              payload: {
+                source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
+                price: effectivePrice ?? undefined,
+                salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
+              } as Prisma.InputJsonValue,
+            },
+            select: { id: true, productId: true, syncType: true, holdUntil: true },
+          })
+          queueId = row.id
+          queued.push(row)
+        }
+        return { version: l.version + 1, queueId }
+      })
+      if (!written) {
+        const fresh = await prisma.channelListing.findUnique({ where: { id: l.id }, select: LISTING_SELECT })
+        // A-17 — lost the compare-and-set to a write in the gap. Retry once, only if the price is still
+        // the one the caller saw; the re-read row (and its sale window) is what the second attempt uses.
+        if (attempt === 0 && fresh && priceAsSeen(t, fresh)) {
+          const window = (await readSaleWindows(prisma as never, [fresh.id])).get(fresh.id)
+          if (window) windows.set(fresh.id, window); else windows.delete(fresh.id)
+          current = fresh
+          retried = true
+          continue
+        }
+        push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: fresh?.version ?? l.version })
+        continue targets
       }
-      if (saleChanges) data.salePrice = effectiveSale.value
-      const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
-      if (guarded.count !== 1) return null
-      if (priceChanges && dirtyPrice) await tx.$executeRaw`
-        UPDATE "ChannelListing" SET "overrideData" = COALESCE("overrideData", '{}'::jsonb) - ${priceKeys}::text[]
-        WHERE id = ${l.id}
-      `
-      if (saleChanges) await writeSaleWindow(tx, l.id, { start: effectiveSale.start, end: effectiveSale.end })
-      if (priceChanges) {
-        await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride), newValue: nextPrice == null ? null : String(nextPrice), reason, changedBy: input.actor } })
-        await tx.priceChangeEvent.create({ data: priceChangeData({ productId: l.productId, sku: l.product?.sku ?? '', channel: l.channel, marketplace: l.marketplace, fulfillmentMethod: l.fulfillmentMethod ?? null, oldPrice: currentPrice, newPrice: nextPrice ?? basePrice, currency, source: input.source, reason, actor: input.actor }) })
-      }
-      if (saleChanges) {
-        await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
-      }
-      let queueId: string | null = null
-      if (VALID_SYNC_TARGETS.has(l.channel)) {
-        await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
-        const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
-        const row = await createOutboundRow(tx, {
-          data: {
-            productId: l.productId, channelListingId: l.id, targetChannel: l.channel as never, targetRegion: l.region,
-            syncStatus: 'PENDING' as never, syncType: 'PRICE_UPDATE', holdUntil, externalListingId: l.externalListingId, maxRetries: 3,
-            payload: {
-              source: 'CHANNEL_PRICE_WRITE', marketplace: l.marketplace, actor: input.actor,
-              price: effectivePrice ?? undefined,
-              salePrice: effectiveSale.value, salePriceStart: effectiveSale.start, salePriceEnd: effectiveSale.end,
-            } as Prisma.InputJsonValue,
-          },
-          select: { id: true, productId: true, syncType: true, holdUntil: true },
-        })
-        queueId = row.id
-        queued.push(row)
-      }
-      return { version: l.version + 1, queueId }
-    })
-    if (!written) { push({ ...base, outcome: 'conflict', reason: 'Changed elsewhere — reloaded', version: (await prisma.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version }); continue }
-    push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId })
+      push({ ...base, outcome: 'applied', version: written.version, queueId: written.queueId })
+      continue targets
+    }
   }
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback (never hangs).
   if (queued.length) await afterDatabaseCommit(`channel-prices:${queued.map(row => row.id).join(',')}`,
