@@ -24,6 +24,9 @@ Every claim below carries the commit that measured it.
 | **A-8** `apps/api` suite was not gated | ✅ **BUILT** — 833 test files now run on every push | `43ace2666` |
 | **15.3** Bound the column-set cache | ✅ **CLOSED** — capped at 64 per workspace; 2 of its 3 sibling caches were already bounded | `3e4f881d3` |
 | **15.3 (b)** Report the cache size | ✅ **CLOSED** under R-6 — `GET /admin/pim/sheet-cache-stats`, behind `admin.view` | `8f931f913` |
+| **15.11** The scale fixture | ✅ **CLOSED** — seeded at 1,000 and 10,000; measured; it refuses numbers it cannot stand behind | _this commit_ |
+| **15.11a / 15.12** `Cost when` on every step | ✅ **CLOSED** — all 25 steps carry one; 2 of the research's 6 numbers carried, 4 stated as uncarryable here | _this commit_ |
+| **A-13** Bootstrap builds a database with **no RLS** | 🔴 **FOR YOUR RULING** — 0 policies vs production's 444 | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -49,6 +52,22 @@ Every claim below carries the commit that measured it.
 
 ---
 
+## The scale fixture — how to use it
+
+```
+# once, on a fresh throwaway database (created next to nexus_development)
+DATABASE_URL=…/nexus_scale node packages/database/scripts/bootstrap-fresh-database.mjs
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --prepare
+# then
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --products 10000
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/measure-scale-fixture.ts --readiness-families 5
+```
+
+🔴 `--prepare` is not optional — see [A-13](PLAN.md#a-13----a-database-built-by-step-04s-bootstrap-has-no-row-level-security-for-your-ruling).
+The measure script **exits 1** rather than print a number it cannot stand behind.
+
+---
+
 ## Open, carried forward
 
 - 🔴 **1.3** blocked on **3.1** — eBay decrypt + Amazon `invalid_grant`. Blocks 3.4, 3.5 too.
@@ -67,10 +86,12 @@ Every claim below carries the commit that measured it.
 
 1. ~~**15.3 — bound the column-set cache**~~ ✅ **CLOSED.** See
    [15.3 RESULT](PLAN.md#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were).
-2. **15.11 — the scale fixture** at 1,000 and 10,000 products. Ranked #2, *"everything else is a
-   guess without it"*. 🟢 **Unblocked today** by `bootstrap-fresh-database.mjs`. **← next**
-3. Then **2.1 requirements** → **2.7 reconcile** (in that order), **2.4** (needs 15.4's fix — the
-   plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
+2. ~~**15.11 — the scale fixture**~~ ✅ **CLOSED.** See
+   [15.11 RESULT](PLAN.md#step-1511-result--the-scale-fixture-stands-up-and-the-first-thing-it-measured-was-step-24).
+3. **2.1 requirements** → **2.7 reconcile** (in that order), **2.4** (needs 15.4's fix — the plan's
+   `where` clause does not compile on a channel scope), **2.2** (needs 15.5). **← next**
+
+🔴 **A-13 wants a ruling first if you want it fixed before Phase 2** — it does not block 2.1.
 
 ---
 
@@ -99,11 +120,20 @@ Every claim below carries the commit that measured it.
   changing, ask separately.
 - 🔴 **A truncated `grep` is not a set.** `| head -10` on a 74-match search produced a confident,
   wrong amendment (A-11).
+- 🔴🔴 **You cannot patch `prisma.<model>.<method>` — the client is a Proxy** (`db.ts` →
+  `contextualDatabase`). The assignment is silently discarded and the patch is never called. A
+  250 ms injection moved the number by 3 ms, which reads as *"this is not the cost"*.
+- 🔴 **Scope a state count to what the RUN touched.** A whole-table `ReadinessIndex` count stayed
+  green while the run under test checked nothing — rows from an earlier run answered for it.
+- 🔴 **`bootstrap-fresh-database.mjs` gives you a schema, not a usable database.** No policies, no
+  grants, no `Workspace` row, no `variationExcluded`. See A-13.
 - 🔴 **Three test files mock `WorkspaceCache` as a bare `Map`.** Adding a constructor argument
   therefore breaks them with `number 32 is not iterable` — a suite **LOAD** failure, which reads as
   `1 failed | 4 passed (5)` with `10 passed` tests. Count files, not tests.
-- 🔴 **The local catalogue is EMPTY** (`Product` has 0 rows). Any size measured against it is a
-  floor, never a representative number. This is exactly what 15.11's scale fixture is for.
+- 🔴🔴 **A row count with no workspace context returns 0, and that reads exactly like "empty".**
+  The local catalogue holds **355 products**; a `count(*)` outside `withWorkspace(...)` said 0 and
+  a whole paragraph was written on it. Row-level security makes *"could not see"* look like
+  *"nothing there"*. Always run the count inside the context, and give it a positive control.
 - 🔴 **`process.memoryUsage().heapUsed` did not see a deliberately retained 1 MiB string.** Give
   every memory probe a known-size positive control before believing its deltas.
 

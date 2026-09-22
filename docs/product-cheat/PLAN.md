@@ -275,6 +275,7 @@ committed produce.** Fixing forks while the fork factory runs is not a plan.
   reading what they did, which is the same failure again.
 - **Done when** — `prisma migrate status` against production reports no drift, and every
   migration folder is in git with a named owner in its commit message.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — 🟩 `scripts/check-schema-drift.mjs` already exists and is already in the push hook
   (`.githooks/pre-push:39`). Confirm it covers applied-but-missing, not only missing-but-applied.
 - **Rollback** — None needed; this adds files and changes no schema.
@@ -290,6 +291,7 @@ committed produce.** Fixing forks while the fork factory runs is not a plan.
   lane — the tree is not the problem, the *missing commit* is; worktrees would hide the forks for
   longer.
 - **Done when** — The claims ledger has no two lanes holding the same file in the same window.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — 🟨 Process, not a script. The commit history is the evidence.
 - **Rollback** — n/a.
 
@@ -306,6 +308,7 @@ committed produce.** Fixing forks while the fork factory runs is not a plan.
   research records that one wrong CWD already broke 43 files.
 - **Done when** — The old credential is dead, and a `vitest` run started from the repo root
   cannot reach production.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A refusal in `env.ts` when the resolved host does not match the expected environment.
 - **Rollback** — Keep the old credential alive for one hour, then revoke.
 
@@ -337,6 +340,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   wait on an external API, and a channel outage would block deletes indefinitely.
 - **Done when** — Hard-deleting a product with a live listing leaves a queue row that runs, and
   the listing is removed from the channel.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A test that hard-deletes a product with a listing and asserts the queue row **still
   exists** after the transaction commits. 🟩 `delist-cascade.local.vitest.test.ts` already exists
   — extend it rather than writing a second.
@@ -362,6 +366,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   extra text.
 - **Done when** — Hard-deleting a product with a live Amazon or eBay listing is refused with a
   sentence naming the coordinate, and no orphan can be created.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A test asserting the refusal, **and** an inverse test asserting a product with no
   live listing still deletes. *(R2: the gate must be able to fail in both directions.)*
 - **Rollback** — Remove the refusal branch.
@@ -384,6 +389,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   the review history. This is the single most expensive irreversible act in the product.
 - **Done when** — An unpublish on Amazon and on eBay returns `success` and the listing stops
   selling **without losing its identifiers**, proven by a read-back (needs [Step 3.1](#step-31--open-the-two-shut-doors)).
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — 🟩 The two `*_UNPUBLISH_NOT_IMPLEMENTED` refusals are removed **only** when a test
   proves the reversible path. Invert the existing refusal tests with the fix.
 - **Rollback** — Restore the refusals. The service is designed to refuse safely.
@@ -404,6 +410,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   exists here; extend it.
 - **Done when** — A delete without `listings.delete`, or with the kill switch on, is refused
   inside the client.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — Extend `amazon-sp-api.publish-gate.vitest.test.ts` with a delete arm.
 - **Rollback** — Remove the permission check.
 
@@ -434,6 +441,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   **Rejected (b):** leaving it writable and fixing it properly first — Step 2.2 is a week away and
   this is one line.
 - **Done when** — The eBay price cell shows its value, refuses the edit, and states why.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — 🟩 `scripts/check-silent-disabled.mjs` is already in the push hook
   (`.githooks/pre-push:207`) — it exists precisely to stop a disabled control with no reason.
 - **Rollback** — Restore `editable: true`. Reverted by Step 2.2 anyway.
@@ -478,6 +486,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
 - **Done when** — An attribute marked required on Amazon shows as required when the Amazon
   coordinate is in view, and as *"required by Amazon"* on Shared — and **never** as plain
   "required" on a channel that does not want it.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A test per branch: everywhere-required, channel-required-and-in-scope,
   channel-required-and-out-of-scope, not-required. 🔴 **All four arms**, or the fixture pins the
   dimension that would have failed.
@@ -545,6 +554,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   **Rejected:** making the language dial move you to that language's market (option (c) in the
   research) — a market with two languages, like Belgium, then has no way to reach its second.
 - **Done when** — M3 shows the payload carries the language the sheet was showing.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A test that resolves a coordinate at a non-default locale and asserts the payload's
   language. 🔴 **Per coordinate** — `color.scope` is `per_variant` on IT and `global` on DE, so
   one market's pass does not generalise.
@@ -578,6 +588,14 @@ requirements. Fidelity compares against requirements. Both are empty today.
   an OAuth token's health. R3 forbids it.
 - **Done when** — M4 counts zero columns on Shared whose only declaring coordinate is a channel
   this product is not on.
+- 🆕 **MEASURED on the scale fixture, 2026-09-22** ([15.11 RESULT](#step-1511-result--the-scale-fixture-stands-up-and-the-first-thing-it-measured-was-step-24)):
+  the un-narrowed `groupBy` is **6 ms at 3,000 listings** and **154 ms at 30,000** — ×26 for ×10
+  rows. The same query **narrowed to a page stays at 4–5 ms at both sizes.** 🔴 At 10,000 products
+  the whole cold column build is **148 ms**, and this one query is **154 ms of it**: the narrowing
+  is not a stopgap, it is the entire cost. 🟠 The research's *"per-market column build 1.8–2.6 s
+  cold"* ([15.12](#1512--what-the-research-dropped-and-this-plan-should-carry)) is **10× larger
+  than anything measured here** — that number came from a market with cached channel specs, which
+  the fixture does not have. Treat 148 ms as a floor, not a refutation.
 - 🆕 **Cost when** — the `groupBy` time is **recorded before and after**. 🔴 This is the largest
   single query in the sheet read path and nobody has ever timed it. Without a before, a win and a
   regression look the same. See [15.4](#154--step-24-fix-the-line-and-measure-it) — the line as
@@ -611,6 +629,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   owner. **Schema enums first.**
 - **Done when** — A factual attribute stored as per-language free text fails a gate, and picking
   a code on Amazon·DE shows the German label with your override still winning.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — 🆕 `scripts/check-factual-attributes.mjs`, in the push hook. 🔴 Its attribute list
   must be **derived from the schema**, never hand-written — a hand-written member list is a set
   claim and goes stale in hours.
@@ -631,6 +650,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   traps, and the next lane writes one of them.
 - **Done when** — One store holds the value, the other two are gone, and the 4 colliding variants
   resolve to 2.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A gate asserting exactly one writer for the axis field. Same pattern as
   [Step 3.3](#step-33--a-parity-gate-between-the-payload-builders).
 - **Rollback** — The migration is the risk; rehearse it before applying. 🔴 Rehearse first,
@@ -657,6 +677,14 @@ requirements. Fidelity compares against requirements. Both are empty today.
   🔴 **This step as written cannot pass at scale.** Measured in the code: **4.087 s per family**
   → 68 min at 1,000 families, **11.4 hours at 10,000**, and ~7.1 M rows. See
   [15.1](#151--readiness-reconcile-make-it-resumable-and-incremental-not-faster).
+- 🆕 **MEASURED on the scale fixture, 2026-09-22** — **224 ms per family at 1,000 products, 495 ms
+  at 10,000** (3 and 5 roots sampled), writing 25 index rows per family. Projected whole-catalogue:
+  **≈16 minutes at 2,000 family roots.** 🔴 **This is a FLOOR and must not be read as a refutation
+  of the 4.087 s.** The fixture carries three coordinates and **no cached Amazon spec** — its
+  Amazon column build yields 3 columns, so the sweep has almost nothing to check there. The
+  research's *"readiness cold start ~12 s after a restart"*
+  ([15.12](#1512--what-the-research-dropped-and-this-plan-should-carry)) is carried here and is
+  **not** reproduced by the fixture, which never restarts.
 - **Gate** — A row-count check in the deploy checklist, plus the existing readiness tests.
 - **Rollback** — Truncate the table and re-run; it is derived data.
 - 🔴 **Needs your approval** — it is a production write. [D-E](#part-9--the-decisions-i-need).
@@ -678,6 +706,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
 - **Approach** — 🟩 A known adjacent trap: one scope off the eBay keyset kills the whole connect.
   Curl-probe the consent URL before assuming a code defect.
 - **Done when** — One eBay call and one Amazon call succeed against a real account.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A connection health check that fails loudly rather than reading as a cold start. 🔴
   An API cold start reads as DOWN; the check must discriminate.
 - **Rollback** — n/a.
@@ -705,6 +734,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
      passes unnoticed.
   4. **A claim must match its measurement.** A write's *response* is not what it *wrote*.
 - **Done when** — Four numbers exist, each with its prediction recorded beforehand.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — M2's diff becomes a **recurring** check, not a one-off. That is what turns it into a
   number you can drive to zero.
 
@@ -723,6 +753,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   best. **Assess the collapse first; fall back to the gate.**
 - **Done when** — A deliberate divergence in one builder fails the gate. 🔴 **Prove the gate can
   fail** — mutate one builder and watch it go red before trusting its green.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — Itself, in the push hook.
 - **Rollback** — Remove the gate.
 
@@ -738,6 +769,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   🔴 **A transport failure is an UNKNOWN outcome, not a failure.** A `000` response may still
   commit; re-read after a delay before concluding anything.
 - **Done when** — A value written from the sheet is read back from the channel and matches.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — Becomes the seed of [Step 3.5](#step-35--reconciliation-the-missing-layer).
 - **Rollback** — Restore the fixture's previous value, **by value, not by row**.
 - 🔴 **Blocked on [Step 3.1](#step-31--open-the-two-shut-doors).**
@@ -780,6 +812,7 @@ requirements. Fidelity compares against requirements. Both are empty today.
   validity to the gate, in the engine — R2 — not at each call site.
 - **Done when** — A paste of a value over a cap or off a closed list is refused, with a per-row
   reason.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — A test per refusal reason, plus a positive control that a *valid* paste still applies.
 - **Rollback** — Remove the verdict.
 
@@ -805,6 +838,7 @@ design, but it may not implement until the gate decision and Phase 2 land.**
   leaves a hand-written member list, which is a set claim that goes stale — the gate would go green
   on a palette it cannot see.
 - **Done when** — A number exists. **Expect red. That red is the baseline.**
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — Itself, once green. Into the push hook at [Step 4.2](#step-42--the-gates-come-back).
 - **Rollback** — Revert the threshold.
 
@@ -818,6 +852,7 @@ design, but it may not implement until the gate decision and Phase 2 land.**
 - **Why now** — 🔴 Every item in this track changes cell editors, and the `editor-open` gate is
   the one you ordered after the "editor does not open" P0. **Decide before implementing.**
 - 🔴 **Decision needed:** [D-F](#part-9--the-decisions-i-need).
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 
 ---
 
@@ -829,6 +864,7 @@ design, but it may not implement until the gate decision and Phase 2 land.**
   **Rejected:** converting the UI in one pass and adding gates afterwards. 🟨 A big-bang UI
   rewrite with no gates is exactly the condition that produced the last P0.
 - **Done when** — Five gates are in the hook and green.
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 
 ---
 
@@ -851,6 +887,8 @@ In this order. Cheapest-unblocking first.
 3. **Declare pixels before landing them.** Every one of these moves geometry.
 4. 🔴 **No new tabs.** There are eleven. Each is a place the truth can fork — that is how the
    price bug happened.
+
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 
 ### What AAA means, so it can be checked
 
@@ -1893,6 +1931,7 @@ the plan's own ordering says Phase 0 first.
 
 - **Done when** — the old credential is dead. *(The repo-root `vitest` clause is struck: already
   done by R-VT-12 and exercised in both directions on 2026-09-22.)*
+- 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
 - **Gate** — the R-VT-12 guard (`apps/api/src/lib/testing/database-target.ts`), exercised in both
   directions: a repo-root run refuses and names the production host; an `apps/api` run passes and
   names `127.0.0.1` / `nexus_development`.
@@ -2886,10 +2925,20 @@ service cache behind it.
 | The cap is per workspace, not per process | a second workspace's bucket is unaffected |
 | The service's cache is still wired to a cap | `sheet-columns-bound.vitest.test.ts` reads `sheetColumnCacheStats().max` |
 
-**Size, measured, not guessed** — against the local catalogue, `master DE` builds a 47-column set of
-**29.6 KiB of JSON**. 🔴 That is a **floor**: the local catalogue is empty (`Product` returned 0
-rows), and a market with cached channel specs carries 185+ columns. The retained object graph is
-larger again than its JSON.
+**Size, measured, not guessed** — against the local catalogue (355 products), the largest column
+set measured is `master DE` **with a family selected**: **101 columns, 50.0 KiB of JSON**, built
+cold in 35 ms. Without a family it is 47 columns and 29.5 KiB; `channel EBAY DE` is 30 columns and
+30.0 KiB. 🔴 Still a **floor**: no Amazon spec is cached locally, so `channel AMAZON DE` drops 30
+of its columns. The retained object graph is larger again than its JSON.
+
+> 🔴 **CORRECTED 2026-09-22, and the correction matters more than the number.** The first version
+> of this paragraph said *"the local catalogue is empty (`Product` returned 0 rows)"*. **It is
+> not — it holds 355 products.** The count ran with **no workspace context**, so row-level
+> security returned 0 rows. *"No context"* and *"empty"* are the same reading. The count had no
+> positive control, which is the one rule this plan keeps paying for. See
+> [15.11](#1511--the-structural-gap-cost-when-and-one-scale-fixture)'s result for how it surfaced:
+> the scale fixture's own guard refused the database, naming 355 products, seconds after the
+> paragraph above was written.
 
 🔴 **The heap instrument failed its own positive control** and its numbers are therefore not
 reported here. A deliberately retained 1 MiB string moved `heapUsed` by 2.2 KiB. JSON bytes are
@@ -2969,3 +3018,196 @@ how many other businesses are cached, and `admin.view` is a business role, not a
 ### Cost when — `flat`. One in-memory read, no query.
 
 ### Rollback — delete the route. Nothing reads it; the gate that proves the bound reads the exported function, not the endpoint.
+
+---
+
+## Step 15.11 RESULT — the scale fixture stands up, and the first thing it measured was Step 2.4
+
+**Ranked #2 in [15.13](#1513--ranked-what-to-do-and-when):** *"Before Phase 2. Everything else is a
+guess without it."* Built, run at **1,000 and 10,000 products**, and it produced a measured result
+for Step 2.4 on its first run.
+
+### What was built
+
+| | |
+|---|---|
+| `apps/api/src/scripts/seed-scale-fixture.ts` | seeds a business: families, attributes, products, variations, listings, marketplaces, connections |
+| `apps/api/src/scripts/measure-scale-fixture.ts` | times the column build, the sheet read and the readiness sweep — and **refuses to report** numbers it cannot stand behind |
+
+```
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --prepare
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/seed-scale-fixture.ts --products 10000
+DATABASE_URL=…/nexus_scale npx tsx apps/api/src/scripts/measure-scale-fixture.ts --readiness-families 5
+```
+
+🟢 **Step 0.4 paid for itself here.** `bootstrap-fresh-database.mjs` stood `nexus_scale` up from
+the baseline in seconds. The fixture seeds at **≈151 products/second** — 10,000 products and 30,000
+listings in about a minute, so re-seeding is a habit rather than a decision.
+
+### The numbers — 1,000 vs 10,000 products, same machine, same hour
+
+| what | 1,000 products / 3,000 listings | 10,000 / 30,000 | grows? |
+|---|---|---|---|
+| **CONTROL** · instrument, `pg_sleep(0.25)` | 256 ms | 262 ms | 🟢 flat, as it must be |
+| **CONTROL** · `ChannelListing.groupBy`, **no `where`** | **6 ms** | **154 ms** | 🔴 **×26** |
+| **CONTROL** · the same `groupBy`, narrowed to a page | 5 ms | 4 ms | 🟢 flat |
+| column build · master · COLD | 35 ms | **148 ms** | 🔴 linear in listings |
+| column build · master · warm | 0 ms | 0 ms | 🟢 the cache works |
+| column build · channel AMAZON · COLD | 6 ms | 125 ms | 🔴 |
+| column build · channel EBAY · COLD | 7 ms | 131 ms | 🔴 |
+| sheet row read · limit 25 (125 rows) | 95 ms | 212 ms | 🟠 |
+| sheet row read · limit 200 (1,000 rows) | 155 ms | 158 ms | 🟢 paged, as designed |
+| readiness reconcile · ONE family | 224 ms | 495 ms | 🔴 ×2.2 |
+
+### 🔴 The first finding: Step 2.4's `where` clause is not a stopgap, it is the whole cost
+
+At 10,000 products the **entire** cold column build is 148 ms and the un-narrowed `groupBy` alone
+is 154 ms — the same number inside the noise. Narrowed, that query is **4 ms and does not grow**.
+
+🟩 [15.4](#154--step-24-fix-the-line-and-measure-it) asked for exactly this: *"Record the query time
+before and after. This is the biggest single query in the sheet read path and nobody has timed it.
+Without a before, a win and a regression look identical."* **There is now a before.**
+
+### The controls, because a timing that cannot move is not a measurement
+
+| Control | What it proves | Result |
+|---|---|---|
+| **Instrument** — `pg_sleep(0.25)` through the same client and the same timer | the numbers are times | 🟢 **256–262 ms** for a 250 ms sleep |
+| **Layer** — the same `groupBy` with and without a `where` | the harness separates two shapes of the same query | 🟢 **154 ms vs 4 ms** |
+| **Scale** — the whole run at 1,000 and at 10,000 | the harness responds to the catalogue | 🟢 every catalogue-bound row moved; the two flat rows did not |
+
+### 🟠 A control that was built, run, and DID NOT WORK
+
+The first version injected a 250 ms sleep by assigning `prisma.channelListing.groupBy`. The run
+came back **3 ms slower** — which reads as *"this query is not the cost"*, the opposite of the
+truth.
+
+🟩 The cause, measured: the app's client is a **Proxy** (`db.ts` → `contextualDatabase`), so the
+assignment is silently discarded. `prisma.channelListing.groupBy === patched` is **`false`** and
+the patched function is **never called** — the call counter read **0**.
+
+> A control that cannot reach the layer it is aimed at returns a clean, confident, wrong negative.
+
+### Gate — the tool refuses a number it cannot stand behind, and it was proven able to refuse
+
+A measurement tool cannot be gated by a push hook; nothing pushes it. Its gate is that it exits
+non-zero rather than print a number that would be wrong **in the direction of good news**.
+
+| Refusal | Mutation | Result |
+|---|---|---|
+| 0 row-level-security policies | measure a database straight out of `bootstrap-fresh-database.mjs` | 🔴 **exit 1**, naming the cause and the fix |
+| every channel readiness row is `absent` | set the fixture's `ChannelConnection` rows to `isActive = false` | 🔴 **exit 1** — *"the sweep never checked a channel"* |
+| the reconcile wrote no channel rows at all | — | (same path) |
+| 0 products visible | — | (same path) |
+| instrument control outside 200–400 ms | — | (same path) |
+
+### 🔴 The refusal that did not fire, and why it is the most useful thing here
+
+The `absent` check first counted **the whole `ReadinessIndex` table**. With the connections
+deactivated it stayed green: rows an **earlier** run had written answered for a run that had
+checked nothing. The check now counts only the products **this run reconciled**, and then it fires.
+
+> A stale measurement and a healthy one are the same reading. Scope the count to what the run
+> actually touched.
+
+### 🔴 What the fixture PINS — every number above is a floor
+
+| Dimension | Held at | Why it matters |
+|---|---|---|
+| coordinates | **3** (`--coordinates`) | the sweep's cost is per destination; this is a multiplier on every sweep number |
+| family size | **5 rows per root** (`--family-size`) | decides how many sweeps "10,000 products" means |
+| cached Amazon spec | **none** | the Amazon column build yields **3 columns**, so the sweep has almost nothing to check there |
+| network | **loopback** | production pays a network hop this does not |
+| requirements | all four of Step 2.1's arms | a fixture with only "required everywhere" cannot show 2.1 working *or* failing |
+| fill | two thirds of required attributes | a uniformly complete catalogue cannot show completeness moving |
+
+🔴 **So the reconcile's 495 ms/family is NOT a refutation of the plan's 4.087 s.** It is a
+different, smaller measurement, and the gap is explained by the rows above.
+
+### Done when — ✅
+
+A seeded business exists at 1,000 and 10,000 products; the sweeps and the sheet read run against
+it; every `Cost when` that was a guess now has a number or a stated reason it does not.
+
+### Cost when — `flat` for the tools. Seeding is ≈151 products/second; the measurement run is under a minute.
+
+### Rollback — `--wipe`. It removes only rows carrying `importSource = 'SCALE_FIXTURE'` or a `SCALE-` code prefix, and `nexus_scale` is a throwaway database.
+
+### 15.11 (a) — done
+
+All **25** steps now carry a `Cost when`. The four whose cost grows with the catalogue (2.2, 2.4,
+2.7, 3.5) keep their numbers; every other step says `flat`.
+
+### 15.12 — partly carried, and the rest stated
+
+| Research number | Carried to | State |
+|---|---|---|
+| per-market column build **1.8–2.6 s cold** | Step 2.4 | 🟢 carried — and the fixture measures **148 ms**, 10× smaller. The research's market had cached channel specs |
+| readiness cold start **~12 s** after a restart | Step 2.7 | 🟢 carried — ⬜ **not reproduced**: the fixture never restarts |
+| mapping resolve **8 s timeout** while Redis connects | Step 2.3 / 3.5 | ⬜ **not carried** — no Redis in the fixture. Needs a step that owns it |
+| payload ceiling **26.6 MB at 500 rows** | Step 3.2 | ⬜ **not carried** — the fixture times the read, it does not weigh the payload |
+| **SSRM above 500 rows is NOT built** | Step 4.3 | ⬜ a fact, not a number; it has no `Cost when` to live in |
+| **first paint never measured** | Step 4.0 | ⬜ **not carried** — needs a browser, which this harness has not got |
+
+➡️ Four of the six need a browser, a Redis or a payload weigher. **Stated rather than quietly
+dropped**, which is what 15.12 was complaining about in the first place.
+
+---
+
+## A-13 — 🔴🔴 A database built by Step 0.4's bootstrap has NO row-level security. FOR YOUR RULING.
+
+**Found while building [15.11](#step-1511-result--the-scale-fixture-stands-up-and-the-first-thing-it-measured-was-step-24)'s fixture, by using Step 0.4 exactly as its own documentation says.**
+
+### Measured, on two databases side by side
+
+| | `nexus_development` (a real database) | `nexus_scale` (straight out of `bootstrap-fresh-database.mjs`) |
+|---|---|---|
+| row-level-security policies | **444** | **0** |
+| tables with RLS enabled | **431** | **0** |
+| `GRANT`s to `nexus_workspace_runtime` | present | **none** |
+| `Workspace` rows | 2 | **0** |
+| `ChannelListing.variationExcluded` | present | **absent** |
+
+🟩 `packages/database/prisma/baseline.sql` contains **0 occurrences of `CREATE POLICY`**, **0 of
+`ROW LEVEL SECURITY`** and **0 of `GRANT`**. It is a pure `schema.prisma` dump. The isolation layer
+lives in `packages/database/scripts/workspace-policies.mjs`, which the bootstrap never calls.
+
+### Why this is not academic
+
+🟩 `packages/database/workspace-adapter.js:11` runs `SET LOCAL ROLE nexus_workspace_runtime` on
+every query. On such a database the app dies with **`permission denied for table Product`** —
+which is the *good* case, because it is loud.
+
+🔴 **The dangerous case is someone fixing the loud one.** Add the `GRANT`s without the policies and
+the application runs perfectly, with **every business able to read every other business's rows**.
+The failure is a grant away from silent.
+
+🔴 And a measurement taken on such a database is cheaper than production's, because every query
+skips a per-row filter — it would read as good news.
+
+### Step 0.4's gate could not have caught this
+
+Its `Done when` is *"an empty database reaches 467 of 467 applied, in one run"* and its gate is the
+from-zero replay. Both are about the **schema**. Neither connects the application, and neither
+counts a policy. 🟩 The step's own *"What this does NOT do"* section does not mention isolation.
+
+> The gate measured what the step built. It could not measure what the step **left out**.
+
+### What 15.11 did in the meantime, so the fixture could exist
+
+`seed-scale-fixture.ts --prepare` applies the `Workspace` row, the `variationExcluded` column and
+`workspacePolicySql()` — byte-for-byte what `test-support/concurrent-database.ts:52-55` applies to
+a disposable test database. The measure script **refuses to run** against a database with 0
+policies, and that refusal is proven able to fire. 🔴 **This is a fixture-local workaround, not a
+fix**, and it is deliberately not presented as one.
+
+### Proposed — ➡️ needs your ruling
+
+| # | Option | |
+|---|---|---|
+| **a** | **`bootstrap-fresh-database.mjs` calls `workspacePolicySql()` itself**, and its gate counts policies and refuses a zero. One database, one command, always isolated. | 🟩 **Recommended** — it is the same generator the test database already uses, so there is nothing new to keep in step |
+| **b** | Put the policies into `baseline.sql` by regenerating it with them | 🔴 Rejected: `baseline.sql` is generated from `schema.prisma`, which cannot express a policy. It would need hand-editing every regeneration |
+| **c** | Leave it, and document that the bootstrap is schema-only | 🟠 The cheapest, and it keeps a database one `GRANT` away from a silent cross-business read |
+
+🔴 It touches a **closed step** (0.4) and the **database bootstrap**, so it is not mine to take.
+**No code has been written for any of these three.**
