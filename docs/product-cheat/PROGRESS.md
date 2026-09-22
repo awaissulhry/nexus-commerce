@@ -130,24 +130,44 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — 2026-09-22, evening
+### Where this lane stands — handoff, 2026-09-23 (read this first)
 
-- **Step 2.2 part 2 is BUILT and pushed** (`a55d8da5f`, A-18 (a) / R-11). **Gate (2), the
-  concurrency race, is BUILT** — see PLAN, "Step 2.2 Gate (2)". Step 2.2 now waits only on A-17.
-- **Step 2.2 part 2, in detail** (A-18 (a) / R-11). All four fields are in
-  [PLAN.md, "Step 2.2 part 2 — BUILT"](PLAN.md#step-22-part-2--built-a-18--r-11-the-sheet-now-writes-prices-through-the-one-door).
-  Done when ✅ · Gate ✅ (12 mutations red) · Rollback = revert one commit · Cost when ✅ for the
-  5,000-row call (it completes, per-row outcomes), with the linear cost stated as **A-19**.
-- **Not done, stated:** the real screen was not exercised (no API server of this lane; a save
-  would write the local catalogue). The web path was traced read-only and needs no change.
-- **The gate:** `apps/api/src/services/pim/price-door-reset.vitest.test.ts`, on disposable
-  PostgreSQL via `concurrent-database.ts`. Run it **from `apps/api`**:
-  `NEXUS_WORKSPACES_ENABLED=1 ../../node_modules/.bin/vitest run src/services/pim/price-door-reset.vitest.test.ts --disableConsoleIntercept`.
-  Local PostgreSQL is on port 55439.
-- **Archived A-18 probe evidence** stays in `docs/product-cheat/probes/`.
-- **Carry the earlier rulings:** the Owner's A-17 preference is **(a), `expectedPrice`** — raise
-  it when the retry work is reached. D-E and the production mirror remain unauthorised
-  production writes. Do not raise the deferred credential rotation.
+**Branch `pes/phase-0`, everything pushed. Nothing merged or deployed; no production write by this lane.**
+
+**Closed in the 09-22 session (all four fields, mutation-proven, pushed):** Step 2.2 (parts 1–2, Gate 2,
+A-17 `expectedPrice`) · Step 2.3 (R-18: one-language paths refuse a multi-language market) · Step 2.4
+(move 2: the family decides Shared's columns, editor and grid) · Step 2.5 (R-22: a choice list cannot be
+per-language). Also fixed: **A-23** the cockpit no longer sends unknown markets to Amazon Italy;
+**A-24** 🔴🔴 every Amazon queue push was built for Italy — the listing now decides the market.
+Rulings R-11 … R-22 are at the end of PLAN.md.
+
+**Open, in order:**
+1. **2.1 (b) on production — the Owner said OK.** The agent's session cannot reach production (a safety
+   check refuses even reads), so the **Owner runs** the guarded launcher, dry run first, both businesses:
+   `node docs/product-cheat/tools/prod-run.mjs derive` and
+   `… derive --workspace bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`; review the output; then the same with
+   `--apply` (`--revert` undoes it). The launcher refuses any non-Neon host, points Redis at a dead port,
+   and turns business profiles on.
+2. **Step 2.6 — needs D-D** (which of the three stores holds a child's size and colour). Measure first:
+   which store each screen, channel builder and eBay read uses; then one recommendation to the Owner.
+3. **2.7 on production — R-21: after this branch deploys** (`tools/prod-run.mjs backfill`, dry run first).
+4. **Deploy checklist (before this branch is deployed):** count `CustomAttribute` rows with type
+   select/multiselect AND `localizable` on production (R-22 would stop showing their per-language values);
+   the **256** DE/ES Amazon stock rows marked sent for Italy on 2026-09-08 — check Amazon IT stock for
+   those SKUs once Step 3.1 opens the credentials; Amazon BE (two languages) stays refused on the two
+   one-language paths until its first listing.
+5. Blocked, not forgotten: 1.3 / Phase 3 on 3.1 (credentials). 0.3 (rotation) is the Owner's — do not
+   raise it. Unruled: D-D, D-F, D-G (15.9's flip), the third readiness vocabulary. Step 4.0: read the
+   review (`PLAN-REVIEW-2026-09-22.md` §4) first — `check-contrast.mjs` measures the wrong palette.
+
+**Read-only production checks** the Owner can run (each one `BEGIN READ ONLY`, refuses non-Neon hosts):
+`tools/family-count.mjs`, `tools/market-languages.mjs`, `tools/amazon-market-history.mjs`.
+`--local` on any of them is a dry run against `nexus_development`.
+
+**The push hook is flaky under machine load** (≈10 sessions share it): the web-font build error, AE.4
+`assortment/sync`, and 10 s timeouts in otherwise ~1.5 s tests. A retry that re-runs every gate is fine;
+**never `--no-verify`**. Three PGlite suites got a named budget; more will need one (note for the
+vitest-config owner above).
 
 **Standing execution rules:** one lane, one commit per step group, never `--no-verify`, push when
 green. A step closes only when **Done when / Cost when / Gate / Rollback** all pass. Prove each
