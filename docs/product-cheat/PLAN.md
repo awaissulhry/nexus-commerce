@@ -2576,3 +2576,84 @@ The need is unchanged and still measured: `bulk-edit.service.ts` has **zero** oc
 
 🟨 **(a) + (b) together** is the complete answer: the column states the hold, and the writer refuses
 regardless of which surface calls it. **(a) alone** is the smallest honest step.
+
+---
+
+## Step 1.5 — BUILT (the column half). A-12: the write half was built, measured, and reverted.
+
+**2026-09-22. Owner ruled: hold the cell AND refuse the write. Half of that survived measurement.**
+
+### The column half — built and gated
+
+| Where | What |
+|---|---|
+| `channel-specs/types.ts` | 🆕 `editHeldReason?: string` — a **second** reason field, deliberately |
+| `sheet-columns.service.ts` (beside the `readOnlyReason` rule) | Honours it: `editable: false`, `formulaWritable: false`, reason as help text. **Read here and nowhere else** |
+| `channel-specs/ebay.ts` | 🆕 `EBAY_PRICE_HELD_REASON`, set on the `price` field |
+
+🔴 **Why a second reason field rather than reusing `readOnlyReason`** — and this cost a build to
+learn. `readOnlyReason` means *"the channel owns this value"*. Setting it on the eBay price held the
+column correctly **and silently deleted the field's master mapping**, because
+`master-default-rule.ts:8` returns `null` for anything carrying it. The suite caught it:
+`expected null to match object { source: 'basePrice' }`. It would also have relabelled the source
+owner *"Channel-reported data"* (`source-definition-plan.ts:66`), which is false — we own this
+price.
+
+> **Holding a cell and disowning a field are different facts.** One field cannot carry both.
+> That regression is now pinned by its own arm, so "tidying the two reason fields into one" fails.
+
+🟩 `editable` is left **true** on purpose: it maps to the column's `editableOnExisting`, meaning
+*"the CHANNEL cannot change this on an existing listing"*. eBay can. The hold is ours; the channel
+fact stays eBay's.
+
+### Done when — ✅ measured, end to end
+
+`ebay-price-held.vitest.test.ts`: **6 passed**, asserting the **column** (not just the spec) through
+the real `buildSheetColumns`: `editable: false`, `formulaWritable: false`, and the reason as the
+help text the sheet turns into `writeBlockedReason` (`studio-sheet.service.ts:639`).
+
+### Gate — ✅ proven able to fail, three ways
+
+| Mutation | Result |
+|---|---|
+| Hold removed | 🔴 2 of 6 red |
+| Hold switched back to `readOnlyReason` | 🔴 1 red — **the mapping-survives arm**, the exact regression |
+| *(write half, while it existed)* removed | 🔴 1 red |
+
+Full `apps/api` suite: **11,034 passed**, exit 0, `tsc` exit 0.
+
+### Cost when — `flat`. One optional string on a field spec.
+
+### Rollback — delete `editHeldReason` from the eBay price field. The type and the rule are additive.
+
+---
+
+## A-12 — the write half was reverted, and the reason is worth more than the code
+
+**Status: NOT built. Reported, not hidden.**
+
+Built as approved: `CHANNEL_WRITE_HELD` in `channel-field-map.ts`, consulted by `isChannelWritable`
+and refused in `bulk-edit.service.ts`, sharing one sentence with the column.
+
+🔴 **It broke 19 arms across 3 files.** `ebay_price` is this repo's **canonical fixture for a
+mapped channel field**, and those arms are not about price — they are about:
+
+`#689` the equality/no-op pass · `#700` CAS against the **listing** not the product · `#703` alias
+routing and its primary control · account resolution before a write · recalc scoping per coordinate
+· a real-PostgreSQL save · paste verification across column and JSON stores.
+
+🔴 **And a wholesale swap to another field would have damaged real coverage**, because some of them
+genuinely *are* about price: *"pinning the current price breaks inheritance even when the synced
+number matches"* and *"routes `ebay_price` resets through its required storage boundary"* test
+follow-flag and storage-boundary semantics that only price exercises.
+
+> Refusing the repo's standard test vehicle at a generic gate is not a narrow change. It is a
+> fixture migration across three files and 27 occurrences, undone again by Step 2.2.
+
+➡️ **Proposed:** leave the write half to [Step 2.2](#step-22--one-price-door-enforced-by-the-compiler),
+which refuses the bypass **at the price door** — where the refusal belongs — and deletes the column
+hold in the same change. `EBAY_PRICE_HELD_REASON` is exported so 2.2 can reuse the sentence verbatim.
+
+⬜ **What is therefore still open:** a direct API caller can still `PATCH` `ebay_price` and take the
+bypass. The **sheet** cannot, which is what Step 1.5 set out to stop. **The gap is stated, not
+closed** — and it closes at 2.2.

@@ -63,7 +63,26 @@ export interface ChannelFieldSpec {
   sourceOwner?: import('../mapping/source-definition-plan.js').SourceOwner
   /** Shopify keeps native and live definition identity through every mapping consumer. */
   shopifyField?: import('@nexus/shared/shopify-information').InformationField
+  /**
+   * 🔴 "The CHANNEL owns this value." Six consumers, and two of them reach far outside the sheet:
+   * `master-default-rule.ts:8` returns null for it — the field gets NO master→channel mapping —
+   * and `source-definition-plan.ts:66` labels its source "Channel-reported data". Correct for
+   * Etsy's reported prices and currencies. **Never** for a field we author and map.
+   */
   readOnlyReason?: string
+  /**
+   * 🔴 "WE own this value and its mapping stands, but this surface may not edit it right now."
+   *
+   * A deliberate second reason field, because it is a different fact from `readOnlyReason` above
+   * and one field cannot carry both. PLAN Step 1.5 proved the difference at cost: setting
+   * `readOnlyReason` on the eBay `price` field held the cell correctly AND silently deleted its
+   * `basePrice` master mapping, which the full suite caught as
+   * `expected null to match object { source: 'basePrice' }`.
+   *
+   * Read by `sheet-columns.service.ts` ONLY. It must never be consulted by a mapping rule — that
+   * is the whole reason it exists apart from `readOnlyReason`.
+   */
+  editHeldReason?: string
   defaultRule?: import('../schema-mapping.service.js').FieldMappingRule
 
   validation?: Record<string, unknown>

@@ -915,6 +915,15 @@ function mergeSpecField(
     d.formulaWritable = false
     d.helpText = f.helpText ?? f.readOnlyReason
   }
+  // 🔴 PLAN Step 1.5 — a POLICY hold, not an ownership fact. Same effect on the column as the rule
+  // directly above, and deliberately no effect anywhere else: `editHeldReason` is read here and
+  // nowhere else, so the field keeps its master mapping and its real source owner. `readOnlyReason`
+  // could not be reused for this — it makes `master-default-rule.ts:8` drop the mapping entirely.
+  if (scopeKind === 'channel' && f.editHeldReason) {
+    d.editable = false
+    d.formulaWritable = false
+    d.helpText = f.helpText ?? f.editHeldReason
+  }
   if (scopeKind === 'channel' && f.managedBy) d.managedBy = f.managedBy
   if (scopeKind === 'channel' && f.key === 'productType') d.label = 'Product type'
   if (scopeKind === 'channel' && f.group && d.isMaster) {
