@@ -50,6 +50,7 @@ been exercised.
 | **Review §3a** Amazon price PATCH wipes the sale price | ✅ **RULED: eBay only.** The sheet has no Amazon price column, and a test now fails if one appears. 🔴 The wipe itself is NOT fixed for the three existing callers | — |
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | ✅ **RULED R-13** — the limit is recorded in Step 2.2's Cost when; batch later | — |
 | **A-20** Step 2.4 move 2 — the editor already does it; the products grid is left, and **28 of 42** live local parents have no family (the first count, 40 of 54, included deleted products) | ✅ **RULED R-14 (a), BUILT** — move 2 closed for the editor; the grid shows *"N without family"*; new **Step 2.4b** (assign families) comes before the grid flip | see `git log` |
+| **2.4 (move 2)** The family decides Shared's columns | ✅ **BUILT under R-14 / R-16** — editor since `f212c2348`; the grid now too: 365 → **0** channel-declared columns on a real page, no stored value hidden. **Step 2.4 CLOSED** | see `git log` |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -165,8 +166,7 @@ approval **before building**. Each turn reports what changed, whether it worked,
 4. ✅ **Step 2.4 move 2 (R-14)** — closed for the editor; the grid states *"N without family"*.
    ✅ **Step 2.4b counted on production** (read only, run by the Owner): nothing to assign — the 18
    Xavia Racing parents without a family are all eBay listing shells; Motovento has one unlisted
-   draft. 🟡 **Next: the Owner's shell ruling** ([FAMILY-ASSIGNMENT-2026-09-22.md](FAMILY-ASSIGNMENT-2026-09-22.md)),
-   then the grid flip.
+   draft. ✅ **R-16 (a): shells are not a missing family; the grid flip is BUILT. Step 2.4 CLOSED.**
 5. 🟡 **Step 2.7 (R-15)** — ordering rule struck. D-E (the production run) stays the Owner's;
    count production roots first.
 6. Then **2.3** (two lines, locale into publish), **2.5**, **2.6** (use the new sweep helper).

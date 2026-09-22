@@ -435,6 +435,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
   }, [onMarketChange])
 
   const staleTypes = data?.schemaAge.filter((a) => Date.now() - new Date(a.fetchedAt).getTime() > 7 * 864e5) ?? []
+  const amazonSchemaMissing = data?.schemaMissing.filter((m) => !m.startsWith('MASTER:')) ?? []
 
   return (
     <GridSheet
@@ -455,11 +456,12 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
               {marketOptions.length > 1 && (
                 <SegmentedControl size="sm" options={marketOptions} value={market} onChange={switchMarket} ariaLabel="Market" />
               )}
-              {(staleTypes.length > 0 || (data?.schemaMissing.length ?? 0) > 0) && (
+              {/* `MASTER:` entries are the family schema's own note; the "without family" pill states that gap. */}
+              {(staleTypes.length > 0 || amazonSchemaMissing.length > 0) && (
                 <InfoTip
                   tip={
-                    data && data.schemaMissing.length > 0
-                      ? `No cached Amazon schema for ${data.schemaMissing.join(', ')} — those columns carry no length caps or closed lists.`
+                    amazonSchemaMissing.length > 0
+                      ? `No cached Amazon schema for ${amazonSchemaMissing.join(', ')} — those columns carry no length caps or closed lists.`
                       : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`
                   }
                 >

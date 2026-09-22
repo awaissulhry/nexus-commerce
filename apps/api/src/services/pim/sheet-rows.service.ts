@@ -213,11 +213,29 @@ export function productsWithoutFamily(
 ): { count: number; of: number } {
   const roots = new Map<string, boolean>()
   for (const row of flat) {
-    const rootId = (row.parentId as string | null | undefined) ?? (row.id as string)
-    const root = (rootId === row.id ? row : parentById.get(rootId)) as { familyId?: string | null } | undefined
-    roots.set(rootId, !root?.familyId)
+    const root = rootOf(row, parentById)
+    // R-14 ruling (a): a shell is an extra eBay listing OF a product that has its own family, and the
+    // product list already hides shells by default (`list-products.service.ts`). Not a missing family.
+    if (!root || root.productType === LISTING_SHELL) continue
+    roots.set(root.id, !root.familyId)
   }
   return { count: [...roots.values()].filter(Boolean).length, of: roots.size }
+}
+
+const LISTING_SHELL = 'EBAY_LISTING_SHELL'
+type RootFacts = { id: string; familyId?: string | null; productType?: string | null }
+function rootOf(row: Record<string, unknown>, parentById: ReadonlyMap<string, unknown>): RootFacts | undefined {
+  const rootId = (row.parentId as string | null | undefined) ?? (row.id as string)
+  return (rootId === row.id ? row : parentById.get(rootId)) as RootFacts | undefined
+}
+
+/**
+ * 🔴 Step 2.4 move 2 for the grid (A-20 (b), unblocked by R-14 (a)) — the FAMILY decides Shared's
+ * columns, as it already does in the product editor (`studio-sheet.service.ts`): the families of the
+ * page's roots. A variation has no family of its own; a shell has none and is not counted missing.
+ */
+export function gridFamilyIds(flat: ReadonlyArray<Record<string, unknown>>, parentById: ReadonlyMap<string, unknown>): string[] {
+  return [...new Set(flat.map(row => rootOf(row, parentById)?.familyId).filter((id): id is string => !!id))].sort()
 }
 
 export interface GetSheetRowsInput {
@@ -459,6 +477,11 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
   const columnSet: SheetColumnSet = await getSheetColumns({
     market, productTypes, variationAxes, ebayCategoryIds,
     productIds: flat.map((r) => r.id as string),
+    scopeKind: 'master',
+    familyIds: gridFamilyIds(flat, parentById),
+    // Every attribute these products already hold a value for stays a column (as in the editor),
+    // so the family owning the columns never hides a stored value.
+    savedFields: (await import('./family-sheet-schema.js')).savedAttributeFields(flat.map((r) => r.categoryAttributes)),
   })
   const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed } = columnSet
 

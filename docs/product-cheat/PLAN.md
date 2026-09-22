@@ -616,8 +616,8 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.4 — Shared means shared
 
-> **Move 1 ✅ BUILT — `f8fcd1158`** (~150 ms → 6 ms). **Move 2 — R-14:** closed for the editor; the
-> grid waits for families and states the gap now —
+> ✅ **CLOSED.** **Move 1 — `f8fcd1158`** (~150 ms → 6 ms). **Move 2** — the editor since `f212c2348`;
+> the products grid under **R-16** (see [Step 2.4 move 2 — BUILT for the grid](#step-24-move-2--built-for-the-grid-r-16-the-family-decides-the-grids-shared-columns)). History —
 > [A-20](#a-20--step-24-move-2-the-editor-already-does-it-only-the-products-grid-is-left-and-most-of-its-rows-have-no-family-for-your-ruling):
 > the editor's Shared scope is already family-owned; only the products grid is left.
 
@@ -4691,3 +4691,73 @@ The grid's columns are **not** changed. Under R-14 the flip waits for the family
 > `EBAY_LISTING_SHELL`, and Motovento has one unlisted draft with no type. **There is nothing to
 > assign.** The grid's move 2 waits only on how shells are treated — a ruling (option (a)
 > recommended: skip shells as the product list already does).
+
+---
+
+## OWNER RULING — 2026-09-22 (tenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-16** | Step 2.4b — what the grid does with eBay listing shells | ✅ **(a).** Treat shells as the product list does: not a missing family. The grid's move 2 goes ahead. No product data is written; the flat-file area is not touched |
+
+---
+
+## Step 2.4 move 2 — BUILT for the grid (R-16). The family decides the grid's Shared columns.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `sheet-rows.service.ts` — the column build | Passes `scopeKind: 'master'`, the page's **family ids** (`gridFamilyIds`: each row judged by its root) and **saved attributes** (`savedAttributeFields`, as the editor does). So `getSheetColumns` takes the family path and loads no channel spec |
+| `productsWithoutFamily()` | Skips `EBAY_LISTING_SHELL` roots, in the count and in *"of"* (R-16) |
+| `products/_sheet/MasterSheet.tsx` | The *"caps"* pill ignores the family schema's own `MASTER:` note — the *"without family"* pill states that gap |
+
+**Who sees it.** `GET /api/products/sheet` has two web callers today: the grid on `/design/grid-lab`
+(`MasterSheet`), and the product editor's fallback when its own route fails (one family,
+`?parentIds=`), which now matches the editor's own family columns. A comment in
+`drawer/types.ts:354` says the route serves `/products/next`; it does not (no import, no fetch).
+
+### Done when — ✅ measured on the local catalogue, read only (same page, before vs after)
+
+| | before | after |
+|---|---|---|
+| columns | 387 | 274 |
+| **columns declared by a channel** (M4) | **365** | **0** |
+| saved attributes kept as columns | 0 | 9 |
+| *"required by Amazon · IT"* marker (positive control) | present | present (`supplier_declared_dg_hz_regulation`) |
+| stored attribute keys with no column | — | **0**, apart from the three internal keys (`variations`, `ebayClusterParent`, `ebayFileExcluded`) that were never columns before either |
+| *"without family"* | — | **6 of 20** (shells not counted) |
+
+Gone: the channel-declared columns (Amazon identifiers, list slots, the old `productType` column).
+New: the family's own attributes the grid never showed (`ppeCategory`, `notifiedBodyNumber`,
+`hazmatClass`, …) — A-20's *77*.
+
+### Gate — ✅ proven able to fail, 5 ways
+
+`sheet-rows-family-schema.vitest.test.ts` runs the **real** `getSheetRows` on a fake database and
+records what it hands the column build; `sheet-rows-family-gap.vitest.test.ts` holds the counter.
+
+| Mutation | Red |
+|---|---|
+| no `familyIds` | 3 |
+| no master scope | 2 |
+| no saved attributes | 1 |
+| a row's own `familyId` instead of its root's | 1 (the single-variation arm) |
+| shells counted as missing | 3 |
+
+`apps/api` and `apps/web` `tsc`: 0.
+
+### Cost when — cheaper: the family path loads no channel spec for the grid. Step 2.4's `groupBy` measurement (move 1) still stands.
+
+### Rollback — revert the commit: the grid returns to channel-derived columns and the old count.
+
+### ⬜ Not done, stated
+
+- **The real screen was not exercised**, for the same reason as A-20 (starting the API locally would
+  use `apps/api/.env`'s production Redis). The grid is a design-lab page today.
+- **The Motovento draft** (`NEW-20260917-AEJN`, no type) shows as *"without family"* until someone
+  finishes it.
+
+### Step 2.4 — CLOSED
+
+Done when ✅ (M4 = 0, with the marker as positive control) · Cost when ✅ · Gate ✅ · Rollback ✅.

@@ -22,6 +22,12 @@ describe('productsWithoutFamily', () => {
     expect(productsWithoutFamily([child('b1', 'B')], parents)).toEqual({ count: 1, of: 1 })
   })
 
+  it('R-14 (a): a listing shell is not a missing family, and is not counted in "of" either', () => {
+    const a = parent('A', 'fam')
+    const shell = { id: 'S', parentId: null, familyId: null, productType: 'EBAY_LISTING_SHELL' }
+    expect(productsWithoutFamily([a, shell], new Map([['A', a], ['S', shell]]))).toEqual({ count: 0, of: 1 })
+  })
+
   it('positive control: every product has a family, so nothing is stated', () => {
     const a = parent('A', 'fam'), b = parent('B', 'fam-2')
     expect(productsWithoutFamily([a, child('a1', 'A'), b], new Map([['A', a], ['B', b]]))).toEqual({ count: 0, of: 2 })
