@@ -1,37 +1,7 @@
-/**
- * P5.2 — the dry-run counting mode, and the double-write it measures.
- *
- * ## Why this exists
- *
- * `build/P5.2.md` §4b withdrew the plan's own next step. The plan said *"one live
- * `{useV0:false}` call, then compare counts against v0"* — and that call is a **write**
- * over a window v0 has already synced. The two paths cannot dedupe against each other:
- *
- * | path | `amazonTransactionId` |
- * |---|---|
- * | v0 | `404-1234567-1234567` — the bare order id |
- * | 2024-06-19 | `404-1234567-1234567/ITEM-9/2026-09-20` |
- *
- * Both write `FinancialTransaction`, both dedupe on
- * `(orderId, transactionType, amazonTransactionId)`, and **nothing bridges the two
- * shapes** — §4b listed all 7 writers and matchers and searched for a migration. So the
- * comparison run would have created a second row for money v0 already recorded.
- *
- * §4b named three safe alternatives and called a dry-run counting mode the cheapest.
- * This is it.
- *
- * ## What these tests hold, and the traps they are built against
- *
- * - **The dry run must not be a second predicate.** It skips exactly one statement, the
- *   `create`. A count produced by a re-derived "equivalent" decision is a count of
- *   something else, and diverges on the first case that differs.
- * - **A zero-change round trip cannot test the write.** Every "wrote nothing" assertion
- *   here is paired with a **positive control**: the same fixture through the real arm,
- *   which must create. Otherwise "nothing was written" and "nothing happened at all"
- *   are the same observation.
- * - **A claim must match its measurement.** `txCreated` is **0** on a dry run, because
- *   zero rows were created; the count lives in `txWouldCreate`. Every existing reader of
- *   `txCreated` sums writes.
+/** P5.2 identity-only dry run. Official-contract regressions exposed wrong IDs and
+ * unsafe write expectations in the original fixtures. The new writer is held until
+ * legacy reconciliation and concurrency-safe money mapping are proved. These cases
+ * retain the read-path controls and explicitly require refusal before live writes.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -60,18 +30,18 @@ const { syncFinancialTransactions, financialsDryRunRefusal } = await import('./a
 const ORDER_ID = '404-1234567-1234567'
 const ORDER_ROW = { id: 'order-1', currencyCode: 'EUR' }
 
-/** One Amazon Transaction in the 2024-06-19 shape, with a seller order item id. */
+/** One Amazon Transaction in the 2024-06-19 shape, with the provider transaction id. */
 const TX = {
   transactionType: 'Shipment',
   postedDate: '2026-09-20T10:00:00Z',
-  sellerOrderItemId: 'ITEM-9',
+  transactionId: 'tx-provider-9',
   totalAmount: { currencyAmount: 31.98, currencyCode: 'EUR' },
-  relatedIdentifiers: [{ relatedIdentifierName: 'AMAZON_ORDER_ID', relatedIdentifierValue: ORDER_ID }],
+  relatedIdentifiers: [{ relatedIdentifierName: 'ORDER_ID', relatedIdentifierValue: ORDER_ID }],
   breakdowns: [{ breakdownType: 'Principal', breakdownAmount: { currencyAmount: 31.98, currencyCode: 'EUR' } }],
 }
 
-/** The identifier THIS path builds — the one the idempotency check looks for. */
-const NEW_SHAPE = `${ORDER_ID}/ITEM-9/2026-09-20T10:00:00Z`
+/** The provider transaction identity, never an invented order/date key. */
+const NEW_SHAPE = 'tx-provider-9'
 
 function page(transactions: unknown[]) {
   m.sellerFetch.mockResolvedValue({ ok: true, json: async () => ({ transactions }), text: async () => '' })
@@ -97,13 +67,12 @@ describe('1. the dry run writes nothing — and the control proves that is not "
     expect(s.dryRun).toBe(true)
   })
 
-  it('🟢 POSITIVE CONTROL — the same fixture through the real arm DOES create', async () => {
+  it('the same candidate is held before a real money write or channel call', async () => {
     // Without this, "txCreate was not called" is equally explained by a fixture that
     // never reaches the write at all.
-    const s = await run()
-    expect(m.txCreate).toHaveBeenCalledTimes(1)
-    expect(s.txCreated).toBe(1)
-    expect(s.dryRun).toBe(false)
+    await expect(run()).rejects.toThrow(/cutover is held/)
+    expect(m.txCreate).not.toHaveBeenCalled()
+    expect(m.sellerFetch).not.toHaveBeenCalled()
   })
 
   it('🔴 txCreated is ZERO on a dry run, because zero rows were created', async () => {
@@ -114,41 +83,41 @@ describe('1. the dry run writes nothing — and the control proves that is not "
     expect(s.txWouldCreate).toBe(1)
   })
 
-  it('on a REAL run the two counts agree, so one number can be read as the other', async () => {
-    const s = await run()
-    expect(s.txCreated).toBe(s.txWouldCreate)
+  it('does not return write counts while the real arm is held', async () => {
+    await expect(run()).rejects.toThrow(/cutover is held/)
+    expect(m.txCreate).not.toHaveBeenCalled()
   })
 })
 
 describe('2. the decision path is SHARED, not re-derived', () => {
-  it('a transaction with no AMAZON_ORDER_ID is skipped in both modes alike', async () => {
+  it('a transaction with no ORDER_ID is skipped in the dry run while the writer remains held', async () => {
     page([{ ...TX, relatedIdentifiers: [] }])
     const dry = await run({ dryRun: true })
-    const real = await run()
+    await expect(run()).rejects.toThrow(/cutover is held/)
     expect([dry.txWouldCreate, dry.txSkipped]).toEqual([0, 1])
-    expect([real.txCreated, real.txSkipped]).toEqual([0, 1])
+    expect(m.sellerFetch).toHaveBeenCalledTimes(1)
     expect(m.txCreate).not.toHaveBeenCalled()
   })
 
-  it('an unmatched order is skipped in both modes alike', async () => {
+  it('an unmatched order is skipped in the dry run while the writer remains held', async () => {
     m.orderFind.mockResolvedValue(null)
     const dry = await run({ dryRun: true })
-    const real = await run()
+    await expect(run()).rejects.toThrow(/cutover is held/)
     expect(dry.txSkipped).toBe(1)
-    expect(real.txSkipped).toBe(1)
+    expect(m.sellerFetch).toHaveBeenCalledTimes(1)
     expect(m.txCreate).not.toHaveBeenCalled()
   })
 
-  it('🔴 a row THIS path already wrote is skipped in both modes alike', async () => {
+  it('🔴 a row THIS path already wrote is skipped in the dry run while the writer remains held', async () => {
     // The idempotency check must run in the dry run too, or the count is of "rows in
     // the window" rather than "rows this run would add".
     m.txFindFirst.mockImplementation(async ({ where }: any) =>
       where.amazonTransactionId === NEW_SHAPE ? { id: 'existing' } : null)
     const dry = await run({ dryRun: true })
-    const real = await run()
+    await expect(run()).rejects.toThrow(/cutover is held/)
     expect(dry.txWouldCreate).toBe(0)
     expect(dry.txSkipped).toBe(1)
-    expect(real.txCreated).toBe(0)
+    expect(m.sellerFetch).toHaveBeenCalledTimes(1)
     expect(m.txCreate).not.toHaveBeenCalled()
   })
 
@@ -159,13 +128,13 @@ describe('2. the decision path is SHARED, not re-derived', () => {
   })
 })
 
-describe('3. 🔴 the number this mode exists for — would it duplicate a v0 row?', () => {
+describe('3. 🔴 legacy order/type overlap risk, not proof of duplicate amounts', () => {
   /** v0 stored the money under the BARE order id, which the idempotency check cannot see. */
   const v0RowExists = () =>
     m.txFindFirst.mockImplementation(async ({ where }: any) =>
       where.amazonTransactionId === ORDER_ID ? { id: 'v0-row' } : null)
 
-  it('🔴 counts a would-be duplicate when v0 already recorded this order', async () => {
+  it('🔴 counts legacy order/type overlap risk when v0 already recorded this order', async () => {
     v0RowExists()
     const s = await run({ dryRun: true })
     // The row is still "new" to this path — that is exactly the defect.
@@ -208,18 +177,18 @@ describe('4. the flag reaches the fetch, and the window is unchanged by it', () 
     expect(path).toContain('postedAfter=2026-09-20T00')
   })
 
-  it('no options at all means a REAL run — the flag must be opt-in', async () => {
-    // A dry run that happened by default would quietly stop the nightly sync writing.
-    const s = await syncFinancialTransactions(WINDOW[0], WINDOW[1], 'APJ6JRA9NG5V4')
-    expect(s.dryRun).toBe(false)
-    expect(m.txCreate).toHaveBeenCalledTimes(1)
+  it('missing dry-run options are refused while the cutover remains held', async () => {
+    // The nightly v0 sync is separate and remains operational.
+    await expect(syncFinancialTransactions(WINDOW[0], WINDOW[1], 'APJ6JRA9NG5V4')).rejects.toThrow(/cutover is held/)
+    expect(m.txCreate).not.toHaveBeenCalled()
+    expect(m.sellerFetch).not.toHaveBeenCalled()
   })
 
   it.each([undefined, null, false, 0, 'true', 1])('dryRun: %p is NOT a dry run', async (v) => {
-    // Only `true`. A truthy string arriving from a JSON body must not disarm the write,
-    // and a falsy one must not either — both are read as "the caller did not ask".
-    await syncFinancialTransactions(WINDOW[0], WINDOW[1], 'APJ6JRA9NG5V4', { dryRun: v as never })
-    expect(m.txCreate).toHaveBeenCalledTimes(1)
+    // Only `true`. Malformed or non-dry-run values must never authorize a financial write.
+    await expect(syncFinancialTransactions(WINDOW[0], WINDOW[1], 'APJ6JRA9NG5V4', { dryRun: v as never })).rejects.toThrow(/cutover is held/)
+    expect(m.txCreate).not.toHaveBeenCalled()
+    expect(m.sellerFetch).not.toHaveBeenCalled()
   })
 
   it('🟢 CONTROL for the case above — `true` really does disarm it', async () => {
@@ -241,8 +210,8 @@ describe('5. the flag is refused on the path that cannot honour it', () => {
     expect(financialsDryRunRefusal({ dryRun: true, useV0: false })).toBeNull()
   })
 
-  it('no dryRun means no refusal, on either path', async () => {
-    for (const body of [{}, { useV0: true }, { useV0: false }, { dryRun: false, useV0: true }]) {
+  it('keeps v0 operational but refuses the new writer without a dry run', async () => {
+    for (const body of [{}, { useV0: true }, { dryRun: false, useV0: true }]) {
       expect(financialsDryRunRefusal(body), JSON.stringify(body)).toBeNull()
     }
   })
@@ -252,8 +221,8 @@ describe('5. the flag is refused on the path that cannot honour it', () => {
     // the one assertion here that has to look at the wiring.
     const { readFileSync } = await import('node:fs')
     const { join } = await import('node:path')
-    const route = readFileSync(join(import.meta.dirname, '..', 'routes', 'amazon.routes.ts'), 'utf8')
+    const route = readFileSync(join(import.meta.dirname, '..', 'routes', 'amazon-financials.routes.ts'), 'utf8')
     expect(route).toContain('financialsDryRunRefusal(body)')
-    expect(route).toContain('{ dryRun }')
+    expect(route).toContain('{ dryRun, accountId: body.accountId }')
   })
 })

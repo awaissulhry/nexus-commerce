@@ -130,3 +130,45 @@ checks: each applied exactly once, killed, and restored. No eBay call was made.
 Remaining separate eBay work: awaited account-scoped processors/replay, deletion
 erasure, USER-token subscriptions and actual application catalogue/delivery proof.
 This slice does not clear any `handlerMissing` flag or authorize live subscriptions.
+
+## Slice C4 — correct and contain the Finances comparison
+
+The official Amazon model uses **ORDER_ID** and **transactionId**. The old fixtures
+repeated an invented identifier and therefore hid a false-zero comparison. Removed
+the unproved 2024 money writer: it used invented identity, misread recursive amounts,
+and lacked atomic dedupe. Requests now explicitly require `dryRun:true`; the existing
+v0 writer remains operational. This is containment and measurement, **not cutover**.
+
+The corrected comparison matches orders only within the resolved account, counts
+distinct provider identities, validates every related identifier, rejects conflicting
+duplicate identities, retains date/account/market filters on every page, accepts
+Amazon's documented null terminal token, and refuses incomplete traversal. Output
+records accountId, marketplaceId and `identity_and_order_overlap_only`. Legacy
+`txWouldCreate` means identity candidates; `txWouldDuplicateV0` means same-order/type
+overlap risk, **not proved duplicate money**. No currency or fee inference is made.
+Explicit `marketplaceId:null` with a named account supports account-wide comparison
+(required to include US MFN); omitted marketplace selection is refused for the full
+comparison. The single-page probe also preserves an explicit account-wide choice.
+
+Extracted only `/financials/sync` into `amazon-financials.routes.ts` so real Fastify
+tests can verify malformed JSON bodies/flags never fall through to v0 writes and
+accountId cannot be silently ignored. The URL and authorization boundary are unchanged.
+All earlier test cases remain. Wrong official fixtures and unsafe real-write
+expectations were corrected to the documented schema/explicit cutover hold. A static
+assertion demanding the now-false phrase “0 calls ever” was replaced by guard wiring;
+runtime tests independently verify the valid v0 default and new-path refusal.
+
+Proof: **20/20 new contract cases failed** before fixes. Review's further input defects
+reproduced **8 failed / 33 passed** after correcting Vitest table-driven array inputs.
+Now **87 tests pass / zero skips** across four suites. Four verified mutations (write
+hold, account binding, official ID, 50-page boundary) were killed and bytes restored.
+Independent review approved this safety scope. API typecheck passed before final
+comment cleanup; canonical release gate still required.
+
+Read-only production aggregate at **17:55:53 UTC**: 2026-09-20 has one financial row
+whose order is attributed to `cmothu9bo0000nz01asw6wx8j` and four with null account
+attribution; 2026-09-21 has three null-attributed rows. Proposed first comparison:
+Xavia Racing, that account, IT marketplace `APJ6JRA9NG5V4`, **2026-09-20T00:00:00Z
+through 2026-09-21T00:00:00Z**, `useV0:false,dryRun:true`. Live calls are not approved.
+Null historical attribution, a validated money mapping, durable provider uniqueness,
+legacy/new race tests, cutover boundary and rollback remain mandatory before writing.
