@@ -19,3 +19,11 @@ Independent review found the canonical encrypted credential column missing from 
 ## Slice 2 — legacy eBay token presence
 
 The report selects both refreshToken and ebayRefreshToken and reports their combined presence. Neither value is returned. Regression first measured 1 failed (legacy column) and 2 passed (generic and empty controls); all 3 pass after the fix. This is presence in these two columns only, not a credential-validity probe or decryption of credentialsEnc.
+
+## Slice 3a — notification verification-token preflight
+
+The shared configuration accessor still resolves the same two variables. A separate pure format check rejects fewer than 32 or more than 80 characters and anything outside `[A-Za-z0-9_-]`, including a trailing newline; it never trims or echoes the secret. Setup returns the clear error before obtaining an app token or making any channel request. Direct destination creation is protected too. Status exposes presence and format validity separately, while retaining its real catalogue reads. The challenge handler still hashes the exact configured string.
+
+Official rule: https://edp.ebay.com/api-docs/sell/notification/resources/destination/methods/createDestination . It maps malformed verification tokens to errorId 195019 and challenge failure separately to 195020. Source checked 2026-09-22.
+
+Proof: malformed-token regressions initially 9 failed / 3 passed. Boundary controls send 32 and 80 allowed characters unchanged through a stub transport; invalid values never reach token or transport. Status tests distinguish a present-invalid token from a valid token, retain the catalogue positive control, and forbid secret disclosure. Existing challenge/routing tests retained. Owner alone changes the production variable.

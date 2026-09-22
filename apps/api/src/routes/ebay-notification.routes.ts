@@ -223,7 +223,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
      * see the thing that is broken is worse than none, because it is quoted. It was
      * quoted: `PROGRESS.md` §4 sends the next session here.
      */
-    const { ebayNotificationConfig } = await import('../services/cx/connectors/ebay/notifications.js')
+    const { ebayNotificationConfig, ebayVerificationTokenError } = await import('../services/cx/connectors/ebay/notifications.js')
     const config = ebayNotificationConfig()
     const endpoint = config.endpoint
     try {
@@ -240,7 +240,11 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
          * Without this, a null `endpoint` reads as "eBay has nothing" when it means
          * "we did not ask for anything".
          */
-        configured: { hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken },
+        configured: {
+          hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken,
+          verificationTokenValid: !ebayVerificationTokenError(config.verificationToken),
+        },
+        configurationError: ebayVerificationTokenError(config.verificationToken),
         destination: ours,
         /**
          * 🔴 "Could not measure" is not "measured empty". `destination: null` alone

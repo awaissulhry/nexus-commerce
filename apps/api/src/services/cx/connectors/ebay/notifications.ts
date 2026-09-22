@@ -54,6 +54,14 @@ export function ebayNotificationConfig(): { endpoint: string | null; verificatio
   }
 }
 
+/** eBay's format rule; never echo or silently trim the configured secret. */
+export function ebayVerificationTokenError(token: string | null): string | null {
+  if (!token || token.length < 32 || token.length > 80 || /[^A-Za-z0-9_-]/.test(token)) {
+    return 'EBAY_NOTIFICATION_VERIFICATION_TOKEN must be 32–80 characters using only [A-Za-z0-9_-]. The Owner must replace this variable.'
+  }
+  return null
+}
+
 export interface EbayTopicWish {
   /** eBay's topic ID, as WE believe it to be. `getTopics` is what settles it. */
   topicId: string
@@ -172,6 +180,8 @@ export async function createEbayDestination(
   endpoint: string,
   verificationToken: string,
 ): Promise<string> {
+  const error = ebayVerificationTokenError(verificationToken)
+  if (error) throw new Error(error)
   const res = await notificationApi<{ destinationId?: string }>(
     environment, 'POST', '/commerce/notification/v1/destination',
     { name, status: 'ENABLED', deliveryConfig: { endpoint, verificationToken } },
@@ -293,6 +303,9 @@ export async function setupEbayNotifications(options: {
     // stack trace every night.
     return { ...base, error: 'EBAY_NOTIFICATION_ENDPOINT_URL and EBAY_NOTIFICATION_VERIFICATION_TOKEN must both be set.' }
   }
+
+  const tokenError = ebayVerificationTokenError(verificationToken)
+  if (tokenError) return { ...base, error: tokenError }
 
   try {
     const catalogue = await getEbayTopics(environment)

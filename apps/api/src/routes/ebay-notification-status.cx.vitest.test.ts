@@ -108,7 +108,7 @@ describe('1. 🔴 one accessor, not two names for one fact', () => {
 describe('2. 🔴 "could not measure" is not "measured empty"', () => {
   it('says whether the two variables are set at all', async () => {
     const { body } = await status()
-    expect(body.configured).toEqual({ hasEndpoint: true, hasVerificationToken: true })
+    expect(body.configured).toEqual({ hasEndpoint: true, hasVerificationToken: true, verificationTokenValid: false })
   })
 
   it('🔴 an unconfigured endpoint still reports what eBay actually holds', async () => {
@@ -173,4 +173,20 @@ describe('4. subscriptions are reported whole', () => {
     const { body } = await status()
     expect(body.subscriptions[0].pointsAtOurDestination).toBe(true)
   })
+})
+
+// Status still reads eBay's catalogue when the local token is malformed: the two facts differ.
+it('reports a present but invalid token without exposing it or hiding the catalogue', async () => {
+  vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', 'invalid-private-token')
+  const { body } = await status()
+  expect(body.configured).toMatchObject({ hasVerificationToken: true, verificationTokenValid: false })
+  expect(body.configurationError).toMatch(/32.*80.*A-Za-z0-9_-/)
+  expect(body.catalogueSize).toBe(2)
+  expect(JSON.stringify(body)).not.toContain('invalid-private-token')
+})
+it('positive control: reports an allowed token as valid', async () => {
+  vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', 'AZaz09_-'.repeat(4))
+  const { body } = await status()
+  expect(body.configured.verificationTokenValid).toBe(true)
+  expect(body.configurationError).toBeNull()
 })
