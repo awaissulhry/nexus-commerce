@@ -1,7 +1,10 @@
 # The Product Sheet — THE PLAN
 
 Date: 2026-09-22.
-**Status: PLAN, FOR APPROVAL. Nothing is built. No code was changed to write this.**
+**Status: APPROVED and being built, one lane at a time — see [PROGRESS.md](PROGRESS.md).**
+**Where a step body and an amendment at the end disagree, the amendment is the truth.** The bodies
+below carry a status line and the fold-ins from the 2026-09-22 review
+([PLAN-REVIEW-2026-09-22.md](PLAN-REVIEW-2026-09-22.md) §2).
 
 This is the plan that follows from [RESEARCH.md](RESEARCH.md) in this folder.
 
@@ -264,8 +267,13 @@ committed produce.** Fixing forks while the fork factory runs is not a plan.
 
 ### Step 0.1 — Settle the untracked production migrations
 
-- **Do** — Account for the 11 migrations applied to production but untracked in the repo, and
-  commit them. Name an owner for the 5 that have none.
+> ✅ **CLOSED — `861280afe`.** 🔴 **Its premise was false** ([A-1](#a-1--step-01s-premise-is-false-there-are-no-untracked-production-migrations)):
+> 467 folders, 469 rows, **0 pending, 0 applied-but-missing**, and both `lx4`/`lx5` folders tracked.
+> The step survives as its gate ([A-2](#a-2--step-01s-gate-does-not-exist-and-cannot-exist-where-the-plan-puts-it)).
+> The Do/Why below are the first draft's and are kept only as history.
+
+- **Do** — ~~Account for the 11 migrations applied to production but untracked in the repo, and
+  commit them. Name an owner for the 5 that have none.~~ *(Struck — A-1: there were none.)*
 - **Where** — `packages/database/prisma/migrations/`; the `lx4` and `lx5` folders must be
   committed before any push, or the deploy reports applied-but-missing drift.
 - **Why now** — 🔴 Five schema changes are live on production and nobody can name who applied
@@ -276,13 +284,19 @@ committed produce.** Fixing forks while the fork factory runs is not a plan.
 - **Done when** — `prisma migrate status` against production reports no drift, and every
   migration folder is in git with a named owner in its commit message.
 - 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
-- **Gate** — 🟩 `scripts/check-schema-drift.mjs` already exists and is already in the push hook
-  (`.githooks/pre-push:39`). Confirm it covers applied-but-missing, not only missing-but-applied.
+- **Gate** — ✅ `packages/database/scripts/check-applied-but-missing.mjs`, run at **deploy** inside
+  `migrate-direct.mjs`, with its test suite in the push hook ([A-2 RESULT](#a-2-result--built-and-measured)).
+  *(The first draft named `scripts/check-schema-drift.mjs` here. The real file is
+  `packages/database/scripts/check-schema-drift.mjs`; it reads repo files only and covers one
+  direction — "a Prisma model has a CREATE TABLE in some migration".)*
 - **Rollback** — None needed; this adds files and changes no schema.
 
 ---
 
 ### Step 0.2 — One lane at a time
+
+> 🟢 **IN FORCE** — exit condition written ([A-5](#a-5--step-02-closed-with-158s-exit-condition-written-into-it));
+> **the exit is not yet met** (gates are still out of the hook). One lane at a time still stands.
 
 - **Do** — Stop parallel lanes on the shared tree. Run one lane. Commit. Then the next.
 - **Why now** — See above. 🟨 This is a process change, and it is the highest-value item in the
@@ -325,6 +339,11 @@ jumps ahead of them, and they do not get bundled with other work.**
 
 ### Step 1.1 — Fix the delist FK cascade
 
+> ✅ **STRUCK — `647c1e4d1`** ([R-5](#step-11-as-amended-by-r-5)). 🔴 Premise false
+> ([A-7](#a-7--step-11s-premise-is-false-the-delist-queue-rows-were-never-destroyed)): `productId` is
+> already nullable and the delist rows carry `productId: null`, so the queue row already outlives the
+> product. **No migration.** The body below is the first draft's.
+
 - **Do** — Stop a hard delete from destroying its own delist queue rows in the same transaction.
 - **Where** — `apps/api/src/routes/products-catalog.routes.ts:1769-1795` (the cascade),
   `apps/api/src/services/channel-delist.service.ts`, and the `OutboundSyncQueue` foreign key in
@@ -349,6 +368,9 @@ jumps ahead of them, and they do not get bundled with other work.**
 ---
 
 ### Step 1.2 — Never orphan a live listing
+
+> ✅ **BUILT — `5c2030a44`** ([Step 1.2 — BUILT](#step-12--built-never-orphan-a-live-listing)). The
+> "(recommended)" string does not exist in any current file ([A-9](#a-9--step-12-the-recommended-string-is-gone-and-the-copy-is-already-honest)).
 
 - **Do** — While reversible unpublish does not exist, **refuse the local hard delete** for a
   product with a live listing, and say why.
@@ -399,12 +421,17 @@ jumps ahead of them, and they do not get bundled with other work.**
 
 ### Step 1.4 — Gate the Amazon delete
 
+> ✅ **CLOSED.** 🔴 Premise false for Amazon ([A-10](#a-10--step-14-is-already-done-on-amazon-the-real-hole-is-on-ebay-behind-a-no-touch-rule)):
+> every Amazon delete path already needs `products.delete`, and the kill switch is already checked in
+> the client. **The real hole was eBay's** `listings.flatfile.edit` on a permanent removal — closed
+> in `6ff3b6b58`. **`listings.delete` does not exist and must not be created.**
+
 - **Do** — Make `deleteListingsItem` honour the master kill switch, and stop `products.edit` from
   deleting a live listing.
 - **Where** — `apps/api/src/clients/amazon-sp-api.client.ts:1150`.
 - **Why now** — 🔴 Anyone who can edit a product can delete a live listing.
-- **Approach** — A distinct permission (`listings.delete`), plus the kill switch checked **inside**
-  the client, not at the caller.
+- **Approach** — ~~A distinct permission (`listings.delete`)~~ *(struck — A-10)*, plus the kill
+  switch checked **inside** the client, not at the caller *(already true — A-10)*.
   **Rejected:** checking at each caller — R2. A rule at the caller is a rule that the next caller
   forgets. 🟩 There is already a `amazon-sp-api.publish-gate.vitest.test.ts`, so the gate pattern
   exists here; extend it.
@@ -417,6 +444,11 @@ jumps ahead of them, and they do not get bundled with other work.**
 ---
 
 ### Step 1.5 — Make the sheet's price cell read-only, today
+
+> ✅ **BUILT (column half) — `cf49c88d2`**, then ✅ **LIFTED by Step 2.2 part 2 — `a55d8da5f`**, as
+> promised. 🔴 The first draft's code below was wrong ([A-11](#a-11--step-15s-need-is-real-but-three-of-its-claims-are-wrong-including-its-gate)):
+> `readOnlyReason` means *"the channel owns this value"*, and `master-default-rule.ts:8` drops the
+> master mapping for any field carrying it. The hold was built as `editHeldReason`.
 
 - **Do** — Turn off editing on the eBay sheet price column, **with a stated reason**, until
   [Step 2.2](#step-22--one-price-door-enforced-by-the-compiler) lands.
@@ -431,8 +463,7 @@ jumps ahead of them, and they do not get bundled with other work.**
   ```ts
   listing('price', 'Prezzo', 'Listing price', {
     kind: 'number', requirement: 'required',
-    editable: false,
-    readOnlyReason: 'Price is edited on the Matrix, which is the one writer for this field.',
+    editHeldReason: EBAY_PRICE_HELD_REASON,   // A-11: NOT readOnlyReason, NOT editable: false
     channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' },
   }),
   ```
@@ -442,8 +473,9 @@ jumps ahead of them, and they do not get bundled with other work.**
   this is one line.
 - **Done when** — The eBay price cell shows its value, refuses the edit, and states why.
 - 🆕 **Cost when** — `flat`. Its cost does not grow with the catalogue. ([15.11a](#1511--the-structural-gap-cost-when-and-one-scale-fixture))
-- **Gate** — 🟩 `scripts/check-silent-disabled.mjs` is already in the push hook
-  (`.githooks/pre-push:207`) — it exists precisely to stop a disabled control with no reason.
+- **Gate** — ✅ `channel-specs/ebay-price-held.vitest.test.ts` (A-11). *(The first draft named
+  `scripts/check-silent-disabled.mjs`; it parses JSX and cannot see a field spec.)* Since 2.2 part 2
+  the same file gates the lift, and that no Amazon price column can reach the sale-price PATCH.
 - **Rollback** — Restore `editable: true`. Reverted by Step 2.2 anyway.
 
 ---
@@ -458,6 +490,9 @@ requirements. Fidelity compares against requirements. Both are empty today.
 ---
 
 ### Step 2.1 — Requirements become real
+
+> **(a) ✅ BUILT — `ca8782153`** (R-8). **(b) ✅ APPLIED LOCALLY — `69debb8de`** (R-10); 🔴
+> **production needs the Owner's word.**
 
 - **Do** — (a) Stop discarding per-channel requirements. (b) Mark the required attributes.
 - **Where** —
@@ -476,9 +511,10 @@ requirements. Fidelity compares against requirements. Both are empty today.
   required on Amazon only.* **The code contradicts the schema comment.** The master sheet must
   carry **both** facts: required-everywhere, and required-on-these-channels.
 
-  **Chosen:** return a requirement *object* per attribute — `{ everywhere: boolean; channels:
-  string[] }` — and let the column decide how to show it. This is what makes the *"also required
-  by Amazon · DE"* marker in Part 2.3 possible, and it is the scalable shape.
+  **Chosen ([R-8](#owner-ruling--2026-09-22-fifth-set)):** reuse `requiredBy` — `'Master'` for an
+  everywhere requirement, a coordinate label (*"Amazon · DE"*) for a channel-scoped one — and fix
+  **both** homes, `family-sheet-schema.ts` and `packages/shared/master-sheet.ts:90`. *(The first
+  draft chose a `{ everywhere; channels[] }` object; A-14 measured that nothing would read it.)*
   **Rejected (a):** flipping the line to `a.required` alone — it would mark Amazon-only
   attributes required on Shopify. A different wrong answer.
   **Rejected (b):** a per-coordinate boolean computed at read time for the active scope — it
@@ -497,11 +533,20 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.2 — One price door, enforced by the compiler
 
+> **Part 1 ✅ BUILT — `76b8be797`** · **Part 2 ✅ BUILT — `a55d8da5f`** (R-11 / A-18; the sheet
+> uses the door, the Step 1.5 hold is lifted) · **Gate (2) ✅ BUILT — `1c2efb671`** (a forced race on
+> `concurrent-database.ts`). 🟡 **Open:** [A-17](#a-17--155-b-asks-for-a-retry-that-defeats-the-guard-for-your-ruling)
+> (the 15.5 (b) retry) and [A-19](#a-19--the-price-door-is-linear-at-17-ms-a-row-for-your-ruling-not-blocking)
+> (~17 ms a row). 🔴 Review §3a: Amazon's price PATCH wipes a sale price — the sheet is gated out of
+> it; the wipe itself is not fixed.
+
 - **Do** — Make `expectedVersion` **required** on `PriceWriteTarget`, and make every price write
   go through `writeChannelPrices`.
 - **Where** —
   - 🟩 `apps/api/src/services/pim/channel-price-write.service.ts:42` — `expectedVersion?: number`
-  - 🟩 `apps/api/src/routes/product-channel-data.routes.ts:187` — the caller that omits it
+  - 🟩 `apps/api/src/routes/product-channel-data.routes.ts:180` (was `:187`) — the caller that omits it
+  - 🟩 `apps/api/src/routes/pricing.routes.ts` bulk override — a **third** unguarded caller, found by
+    the compiler in part 1
   - 🟩 `apps/api/src/services/products/bulk-edit.service.ts:835` — the sheet's price path, which
     bypasses the service entirely
 - **Why now** — 🔴 Three surfaces, one column, one version check between them. And the sheet's
@@ -532,7 +577,8 @@ requirements. Fidelity compares against requirements. Both are empty today.
 - **Gate** — (1) The type itself. (2) A concurrency test asserting the second write returns
   `conflict`. 🔴 **Run it on `concurrent-database.ts`, never on PGlite** — PGlite is one
   connection and a race test passes there regardless.
-- **Rollback** — Make the field optional again. One character.
+- **Rollback** — Make the field optional again **and drop `unguardedReason`** (part 1). Revert
+  `a55d8da5f` to restore the sheet's own price write and the Step 1.5 hold (part 2).
 - 🟢 **This also un-does [Step 1.5](#step-15--make-the-sheets-price-cell-read-only-today):** once
   the sheet uses the door, restore `editable: true`.
 
@@ -566,6 +612,10 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 ### Step 2.4 — Shared means shared
 
+> **Move 1 ✅ BUILT — `f8fcd1158`** (~150 ms → 6 ms). **Move 2 ⬜ not built** —
+> [A-20](#a-20--step-24-move-2-the-editor-already-does-it-only-the-products-grid-is-left-and-most-of-its-rows-have-no-family-for-your-ruling):
+> the editor's Shared scope is already family-owned; only the products grid is left.
+
 - **Do** — Stop channel attributes appearing on the Shared scope because of unrelated listing rows.
 - **Where** — 🟩 `sheet-columns.service.ts:1150-1161`:
 
@@ -576,9 +626,9 @@ requirements. Fidelity compares against requirements. Both are empty today.
 
 - **Why now** — 🔴 Your own words: *"a schema that changes when someone else sells something."*
 - **Approach** — Two moves, in order.
-  1. **Today, one line:** add `where: { productId: { in: familyIds } }` so the coordinate set is
-     at least about *this product*. 🟢 This is the cheapest real improvement available anywhere in
-     this plan.
+  1. **Today — ✅ BUILT.** ~~add `where: { productId: { in: familyIds } }`~~ — that line does not
+     compile on a channel scope (15.4). Built with an explicit `productIds` input, a split
+     `catalogueMarkets()` cache and the `coordinatesNotListed` pill.
   2. **Then, properly (R3):** the **family** decides Shared's columns. A channel attribute lives
      on its channel, and Shared carries a read-only *"also required by Amazon · DE"* marker, which
      [Step 2.1](#step-21--requirements-become-real)'s requirement object makes possible.
@@ -666,6 +716,11 @@ requirements. Fidelity compares against requirements. Both are empty today.
   `apps/api/src/services/pim/readiness-index.service.ts`.
 - **Why now** — 🔴 Production has **0** rows. Every readiness, variation and completeness surface
   says "Not computed". The whole completeness UI in Phase 4 depends on it.
+- 🔴 **First action — check the premise.** [A-16](#a-16--d-a-derived-and-the-measurement-changes-the-question-for-your-ruling):
+  a channel coordinate already had **8 of 163** required before 2.1; Shared had 1 of 101.
+  ✅ **Done — [A-21](#a-21--step-27s-premise-re-checked-its-ordering-rule-no-longer-blocks-anything-shareds-100--is-by-design-for-your-ruling-with-d-e)**:
+  the ordering rule below protects nothing (channel numbers were real before 2.1; Shared reads 100 %
+  both before and after, by R-10's design). Striking it is proposed, not ruled.
 - **Approach** — Rehearse on a copy, then run per family root. **Do it after
   [Step 2.1](#step-21--requirements-become-real)**, so it computes against real requirements — a
   reconcile run against 0 required attributes would fill the table with meaningless 100%s and you
@@ -685,10 +740,15 @@ requirements. Fidelity compares against requirements. Both are empty today.
   research's *"readiness cold start ~12 s after a restart"*
   ([15.12](#1512--what-the-research-dropped-and-this-plan-should-carry)) is carried here and is
   **not** reproduced by the fixture, which never restarts.
+- 🆕 **Cost when — measured on real schemas ([15.1 RESULT](#steps-151--156--built-the-sweep-is-bounded-by-design-and-there-is-one-helper-not-three), A-21):**
+  **~2–4 s per family**, so the 10-minute nightly budget covers **~150–300 families**. A larger
+  catalogue fills on a **rotation** over several nights, not nightly-in-full. Count production roots
+  before D-E.
 - **Gate** — A row-count check in the deploy checklist, plus the existing readiness tests.
 - **Rollback** — Truncate the table and re-run; it is derived data.
 - 🔴 **Needs your approval** — it is a production write. [D-E](#part-9--the-decisions-i-need).
-- ⚠️ **Order matters:** 2.1 → 2.7. Not the reverse.
+- ⚠️ **Order matters:** 2.1 → 2.7. Not the reverse. *(A-21 measured that this protects nothing and
+  proposes striking it — unruled.)*
 
 ---
 
@@ -913,14 +973,14 @@ read the ones you disagree with.
 
 | # | Decision | Options | My recommendation | Default if you say nothing |
 |---|---|---|---|---|
-| **D-A** | **Which attributes are required?** (198 definitions, 0 required) | A list, per family, per channel | Start with what a channel *refuses a publish* for. That set is already knowable from the schemas | I derive the list from the channel schemas and bring it back **for approval before applying** |
+| **D-A** | ✅ **RULED R-10 (Mirror).** 486 derived locally; 5 mirrored locally; **production open**. *(First draft: "198 definitions, 0 required")* | A list, per family, per channel | Start with what a channel *refuses a publish* for. That set is already knowable from the schemas | I derive the list from the channel schemas and bring it back **for approval before applying** |
 | **D-B** | **What does the language dial mean at publish?** | (a) sheet only · (b) the language of the content sent to this market · (c) it moves you to that market | ✅ **(b).** The only option that serves a two-language market like Belgium, and it makes the fix mechanical | **(b)** |
 | **D-C** | **`Marketplace.languages` for global markets** | (a) primary only · (b) every published locale | (b) — Shopify publishes 5 locales while its row carries 1 | **(a)**, because it needs no production change; revisit if M3 shows it matters |
 | **D-D** | **Which store wins for a child's size and colour?** | Three exist | The one eBay reads, since a store nothing reads is not a source of truth | ⏸️ **I stop and ask.** A wrong pick here writes bad data to a live family |
-| **D-E** | **Approve the readiness reconcile on production?** | Yes / no | ✅ Yes, **after** [Step 2.1](#step-21--requirements-become-real) | ⏸️ **I stop and ask.** It is a production write |
+| **D-E** | **Approve the readiness reconcile on production?** | Yes / no | ✅ Yes. *(First draft: "after Step 2.1" — A-21 measured that the order protects nothing)* | ⏸️ **I stop and ask.** It is a production write. Count production roots first (A-21) |
 | **D-F** | **Do the four browser gates come back?** | Yes / no | ✅ **Yes, and decide before the UI track implements anything** | **Yes** |
-| **D-G** | **Collapse the two payload builders, or gate them?** | Collapse / gate | Collapse if affordable; gate either way | **Gate first**, then assess the collapse |
-| **D-H** | **Shared scope: the one-line fix now, or wait for the full family-first change?** | Now / wait | ✅ **Now.** One `where` clause, immediate improvement, no lock-in | **Now** |
+| **D-G** | **Collapse the two payload builders, or gate them?** | Collapse / gate | Collapse if affordable; gate either way | **Gate first**, then assess the collapse · ⬜ *[15.9](#159--d-g-should-default-to-collapse-not-to-two-builders) proposes flipping the default to collapse — unruled* |
+| **D-H** | **Shared scope: the one-line fix now, or wait for the full family-first change?** | Now / wait | ✅ **Now.** One `where` clause, immediate improvement, no lock-in | ✅ **DONE** — Step 2.4 move 1, `f8fcd1158` |
 
 **Two carried blockers, unchanged from the research:**
 
@@ -936,11 +996,14 @@ read the ones you disagree with.
 **What truly blocks what.** Everything not drawn here can run in parallel.
 
 ```
-  0.1 migrations ─┐
-  0.2 one lane   ─┼──► everything (process, not code)
-  0.3 credential ─┘
+  0.1 migrations ✅ ─┐
+  0.2 one lane 🟢   ─┼──► everything (process, not code)
+  0.3 credential ⏸️ ─┘
 
-  1.1 delist cascade ──► 1.2 never orphan ──► 1.3 reversible unpublish
+  0.4 baseline ✅ ──► 15.11 fixture ✅ ──► 15.1/15.6 sweep ✅ ──► 2.7 reconcile (D-E)
+
+  1.1 delist cascade — ✅ STRUCK (R-5); nothing feeds 1.2
+  1.2 never orphan ✅ ──► 1.3 reversible unpublish (blocked on 3.1)
                                                       │
   1.4 gate the delete        (independent)            │
   1.5 price read-only ──────────────────┐             │
@@ -963,10 +1026,11 @@ read the ones you disagree with.
   4.1 gate ruling ────► 4.2 gates back ────► 4.3 visible changes
 ```
 
-**Three things you can start today, in parallel, with no dependencies:**
-- 🟢 **Step 4.0** — the AAA baseline. One day, and the UI track needs it.
-- 🟢 **Step 1.5** — the price cell read-only. One line.
-- 🟢 **Step 2.4 move 1** — the `where` clause on the Shared scope. One line.
+**Three things you can start today, in parallel, with no dependencies:** *(first draft; status 2026-09-22)*
+- 🟢 **Step 4.0** — the AAA baseline. One day, and the UI track needs it. 🔴 Read the review's §4
+  first: `check-contrast.mjs` measures the legacy palette, not the `--nds-*` tokens the sheet uses.
+- ✅ ~~**Step 1.5** — the price cell read-only. One line.~~ Built, and lifted by 2.2.
+- ✅ ~~**Step 2.4 move 1** — the `where` clause on the Shared scope. One line.~~ Built.
 
 ---
 
@@ -977,23 +1041,26 @@ here. A rule with no row is a rule that will quietly stop being true.
 
 | Rule | Gate | New? | In the hook? |
 |---|---|---|---|
-| A delist queue row outlives its product | Extend `delist-cascade.local.vitest.test.ts` | Extend | Test suite |
-| No orphaned live listing | Refusal test + inverse test | 🆕 | Test suite |
-| The Amazon delete honours the kill switch | Extend `amazon-sp-api.publish-gate.vitest.test.ts` | Extend | Test suite |
+| A delist queue row outlives its product | Extend `delist-cascade.local.vitest.test.ts` | Extend | 🟢 push hook — `apps/api` `test:hook` (A-8) |
+| No orphaned live listing | Refusal test + inverse test | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
+| The Amazon delete honours the kill switch | Extend `amazon-sp-api.publish-gate.vitest.test.ts` | Extend | 🟢 push hook — `apps/api` `test:hook` (A-8) |
 | A disabled control states its reason | 🟩 `scripts/check-silent-disabled.mjs` | Exists | 🟢 Yes |
-| **No price write without a version** | **The type itself** (`expectedVersion: number`) + a concurrency test on `concurrent-database.ts` | 🆕 | 🟢 Compiler |
-| Per-channel requirements are not flattened | Four-arm test | 🆕 | Test suite |
-| The publish resolves in the sheet's language | Per-coordinate test | 🆕 | Test suite |
-| Shared shows no unrelated channel attribute | Test + positive control | 🆕 | Test suite |
+| **No price write without a version** | **The type itself** (`expectedVersion: number`) + a concurrency test on `concurrent-database.ts` (`price-door-concurrency.vitest.test.ts`) | 🆕 | 🟢 Compiler + push hook |
+| Per-channel requirements are not flattened | Four-arm test | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
+| The publish resolves in the sheet's language | Per-coordinate test | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
+| Shared shows no unrelated channel attribute | Test + positive control | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
 | A factual attribute is a code | 🆕 `scripts/check-factual-attributes.mjs`, list **derived from schema** | 🆕 | Add |
 | One writer for a child's axis value | 🆕 writer-count gate | 🆕 | Add |
 | The two payload builders agree | 🆕 parity gate | 🆕 | Add |
-| Paste and fill cannot write an invalid value | Per-reason tests + positive control | 🆕 | Test suite |
+| Paste and fill cannot write an invalid value | Per-reason tests + positive control | 🆕 | 🟢 push hook — `apps/api` `test:hook` (A-8) |
 | Contrast is 7:1, from a derived token list | 🟩 `scripts/check-contrast.mjs`, raised | Raise | 🔴 **Add — 0 matches today** |
 | The cell editor opens | `editor-open` | Restore | 🔴 **Removed 09-16/17** |
 | Grid chrome holds | `grid-chrome` | Restore | 🔴 **Removed** |
 | The control census holds | `census` | Restore | 🔴 **Removed** |
-| Migrations do not drift | 🟩 `scripts/check-schema-drift.mjs` | Exists | 🟢 Yes |
+| A Prisma model has a CREATE TABLE in some migration *(was "Migrations do not drift" — too broad, A-2)* | 🟩 `packages/database/scripts/check-schema-drift.mjs` — repo files only, one direction | Exists | 🟢 Yes |
+| **No migration is applied to a database without a folder in the repo** | 🆕 `packages/database/scripts/check-applied-but-missing.mjs`, at **deploy** in `migrate-direct.mjs`; its test suite in the push hook | 🆕 | 🟢 Deploy + hook |
+| **A sheet price edit uses the one door; a reset cleans legacy keys** | 🆕 `price-door-reset.vitest.test.ts` on `concurrent-database.ts` | 🆕 | 🟢 push hook — `apps/api` `test:hook` |
+| **No Amazon price column reaches the sheet** (review §3a — the PATCH wipes a sale price) | 🆕 `ebay-price-held.vitest.test.ts` | 🆕 | 🟢 push hook — `apps/api` `test:hook` |
 
 🔴 **Four gates are missing from the hook today, and three of them were deliberately removed last
 week.** That is the single clearest measure of whether this plan is being followed.
@@ -1074,17 +1141,19 @@ definition and its honest warning · the "what not to do" list · every item in
 |---|---|
 | Does any step contradict R1–R5? | No. Each names the rule it serves |
 | Does any step depend on a later step? | No. [Part 10](#part-10--the-dependency-graph) is acyclic; the only reverse edge is 2.2 un-doing 1.5, which is intended and stated in both |
-| Does any rule lack a gate? | No. [Part 11](#part-11--the-gate-ledger) has a row per rule |
+| Does any rule lack a gate? | No — **after** the A-2 deploy gate got its [Part 11](#part-11--the-gate-ledger) row (it had none until the 2026-09-22 review) |
 | Does any step lack a rollback? | Only the process steps (0.2) and the credential fix (3.1), where none applies |
 | Is "one price writer" stated consistently? | Yes — it is `writeChannelPrices` everywhere in this plan. 🔴 The research says `matrix-write.service.ts`; Correction 2 supersedes it |
 | Is the completeness column blocked consistently? | Yes — in 4.3, in Part 10, and in Part 12 |
-| Is the price cell's read-only state reconciled? | Yes — 1.5 sets it, 2.2 restores it, both say so |
+| Is the price cell's read-only state reconciled? | Yes — 1.5 set it, 2.2 lifted it (`a55d8da5f`), both say so |
 | 🆕 Does every step whose cost grows with the catalog carry a `Cost when`? | Yes — 2.2, 2.4, 2.7 and 3.5. [Part 15](#part-15--scaling-to-thousands-of-products) sets the numbers |
-| 🆕 Does Part 15 contradict any step? | It **amends** six (0.2, 1.2, 2.1/2.6, 2.2, 2.4, 2.7, 3.2, 3.5) and one decision (D-G). Each amendment is named in the step and in Part 15. 🔴 [15.4](#154--step-24-fix-the-line-and-measure-it) reports that Step 2.4's line **does not compile as written** |
+| 🆕 Does Part 15 contradict any step? | It **amends** eight (0.2, 1.2, 2.1/2.6, 2.2, 2.4, 2.7, 3.2, 3.5) and one decision (D-G). Each amendment is named in the step and in Part 15. 🔴 [15.4](#154--step-24-fix-the-line-and-measure-it) reports that Step 2.4's line **does not compile as written** |
 
 ### 14.4 — The honest holes in this plan
 
-1. ⬜ **The "Unpublish (recommended)" UI string was not located.** Find it before Step 1.2.
+1. ~~⬜ **The "Unpublish (recommended)" UI string was not located.**~~ ✅ **Closed by
+   [A-9](#a-9--step-12-the-recommended-string-is-gone-and-the-copy-is-already-honest):** the string
+   exists in no current file; the replacement copy names the orphan outcome.
 2. ⬜ **Amazon's and eBay's reversible-unpublish mechanics are 🟨 judgement**, not verified against
    their API docs. Verify before Step 1.3.
 3. 🔴 **Nothing was run.** Every claim is read from source. The four measurements exist precisely
@@ -1228,6 +1297,9 @@ like a hung one*.
 ---
 
 ### 15.3 — The column-set cache never lets go
+
+> ✅ **Built — `3e4f881d3`.** The line numbers below are the first draft's; they have moved (see
+> [15.3 RESULT](#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were)).
 
 **Affects every sheet read. Not mentioned anywhere in the original plan.**
 

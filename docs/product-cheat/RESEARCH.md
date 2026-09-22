@@ -3,6 +3,20 @@
 Date: 2026-09-22.
 **Status: research only. No code was changed. Nothing was built.**
 
+> **🔴 CORRECTIONS (2026-09-22).** Eight claims below were measured false or closed after this file
+> was compiled; read `PLAN.md` Part 1 and amendments A-1, A-7, A-9, A-10, and `PROGRESS.md`, before
+> acting on any of them: (1) *11 untracked production migrations* — 0 drift both ways (A-1);
+> (2) *the delist cascade destroys the queue rows* — rows carry no FK; unpublish is refused, not
+> destroyed (A-7); (3) *anyone with `products.edit` can delete a live Amazon listing* — false; the
+> hole was eBay's edit permission, closed (A-10); (4) *"Unpublish (recommended)" is an irreversible
+> delete* — wrong diagnosis; the orphaning delete is now refused (Correction 3, Step 1.2);
+> (5) *route price through `matrix-write.service.ts` and retire `PATCH /channel-pricing`* — no; the
+> door is `writeChannelPrices` and the route was fixed (Corrections 1–2); (6) *a repo-root test run
+> reaches production* — refused by the R-VT-12 guard (A-6); (7) *0 of 198 attributes required* —
+> 486 rows; 5 mirrored locally; a channel coordinate already had 8 of 163 (A-16); (8) *the Shared
+> `groupBy` has no `where`* — narrowed and measured (Step 2.4).
+> Review: [PLAN-REVIEW-2026-09-22.md](PLAN-REVIEW-2026-09-22.md) §5.3.
+
 This is a compiled file. It takes everything we already researched about the product sheet
 and puts the useful parts in one place, in simple language.
 

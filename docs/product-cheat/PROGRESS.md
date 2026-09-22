@@ -22,7 +22,7 @@ been exercised.
 | Step | State | Commit |
 |---|---|---|
 | **0.1** Untracked prod migrations | ✅ **CLOSED** — premise was false (0 drift both ways); its missing gate was built | `861280afe` |
-| **0.2** One lane at a time | ✅ **CLOSED** — with 15.8's exit condition written in | `ae1757f88` |
+| **0.2** One lane at a time | 🟢 **IN FORCE** — exit condition written (A-5); **exit not yet met** (gates still out of the hook). A reader of "closed" would start a second lane | `ae1757f88` |
 | **0.3** Rotate the credential | ⏸️ **OPEN — the Owner's, deliberately deferred to the end.** Do not raise it | `ae1757f88` |
 | **0.4** Migration history replay | ✅ **CLOSED** — a fresh database builds from a baseline | `1eaecb03d` |
 | **1.1** Delist FK cascade | ✅ **STRUCK** — premise false; no migration needed, nothing to build | `647c1e4d1` |
@@ -196,30 +196,40 @@ ESCAPED a gate I had just called green, and each time the fix was a second arm, 
 - `NEXUS_WORKSPACES_ENABLED=1 npx vitest run <file>` — reproduce a ratchet refusal on one file
   instead of waiting for the whole suite.
 
-**Traps measured the hard way, 2026-09-22 (second session)**
-- 🔴🔴 **A row count with NO workspace context returns 0, and that reads exactly like "empty".**
-  The local catalogue has 355 products; a `count(*)` outside `withWorkspace(...)` said 0 and a whole
-  paragraph was written on it. Run counts inside the context, with a control.
-- 🔴🔴 **`getSheetColumns` needs `productTypes`** or it returns 3 columns — and it SAYS SO, in
-  `schemaMissing: ["AMAZON:category not selected"]`. With one: **163 columns, 474 KiB**. Read
-  `schemaMissing` before explaining a small column count.
-- 🔴🔴 **You cannot patch `prisma.<model>.<method>`** — the client is a Proxy (`db.ts` →
-  `contextualDatabase`). The assignment is silently discarded. A 250 ms injection moved the number
-  by 3 ms, which reads as *"this is not the cost"*.
+**Traps measured the hard way, 2026-09-22 (third session — this lane's continuation)**
+- 🔴🔴 **On real PostgreSQL a price is a Prisma `Decimal`.** The bulk editor's generic `same()`
+  compares objects by `JSON.stringify`, so `Decimal(10)` never equals `10`. A mocked row with a plain
+  number says "no-op"; the real database says "write". A fix that "restored" a no-op from a mocked
+  test would have changed real behaviour. Check the type the real row carries.
+- 🔴 **The sheet saves inside a Serializable transaction that retries `P2034` twice**
+  (`lib/database-context.ts:59-83`). A blocked write logs *"write conflict or a deadlock"* and the
+  whole save re-runs with the caller's original version. That log line is the retry, not a failure.
+- 🔴 **The profiles-ON ratchet names a failing file but prints no error.** Twice this session it
+  refused a push for a file that passed alone (`data-validation` "fails to load";
+  `catalog-transfer-http` "1 failing"). Re-run it with `--reporter=json` to read the message.
+  `catalog-transfer-http` did not reproduce in 2 full runs, under CPU load, or alone; a second push
+  went green. Cause unknown — recorded, not explained.
+- 🔴 **PGlite suites need a named load budget.** They start in-process on one connection; under the
+  hook ~1.7–2 s alone becomes >10 s. 25 of 27 already set one; `formula-database` and
+  `data-validation` now do too (`c4cb6fe71`).
+- 🔴 **A probe script with `REDIS_URL=redis://127.0.0.1:1` never exits** — the retry loop keeps the
+  process alive, and a pipe hides all output until exit. End with `process.exit(0)` and write to a
+  file.
+- 🔴 **The shell has no `DATABASE_URL`, and the ROOT `.env` is production.** A probe must read
+  `apps/api/.env` explicitly and refuse any host that is not `127.0.0.1` before it connects.
+- 🟢 **Measure a writing job without writing:** wrap it in your own `inDatabaseTransaction`, read the
+  result inside, then throw. Nested calls join the outer transaction. Control: the row count and
+  newest timestamp before and after (A-21).
+
+**Traps measured the hard way, 2026-09-22 (second session — the entries not repeated below)**
 - 🔴 **`readSaleWindows` returns a MAP.** `Object.assign` to merge chunks type-checks and merges
   nothing. The symptom was a re-submit reading as a change, only above 500 rows.
-- 🔴 **Scope a state count to what the RUN touched.** A whole-table `ReadinessIndex` count stayed
-  green while the run under test checked nothing.
-- 🔴 **A `beforeAll` that throws gives `N passed | M skipped`.** vitest still exits 1, but the
-  assertions never ran — that run does not show the assertions work.
 - 🔴 **`process.exit(0)` after an unawaited `main()`** prints nothing and exits 0, having done
   nothing. A silent success.
 - 🔴 **Importing a script RUNS it.** `seed-marketplaces.ts` had a module-scope `main()`; the import
   seeded a database and then killed the importer mid-write with an unhandled rejection.
 - 🔴 **Prisma's `groupBy` argument type is conditional** — a spread `where`, or annotating the
   `await`, reports a circular reference. Two explicit calls, or map then annotate.
-- ⬜ **`mapping/formula-database.vitest.test.ts` is flaky** — failed twice in four full runs at
-  ~10 s, passes alone and on re-run. PGlite is one connection.
 
 **Traps measured the hard way**
 - 🔴 **Prisma orders migrations by `localeCompare`, not `.sort()`.** A replay using `.sort()`
@@ -233,8 +243,8 @@ ESCAPED a gate I had just called green, and each time the fix was a second arm, 
   generic gate breaks 19 arms across 3 files covering #689/#700/#703.
 - 🔴 **Flat-file routes are a no-touch zone.** Table the exact edits, split preserving from
   changing, ask separately.
-- ⬜ **`mapping/formula-database.vitest.test.ts` is FLAKY** — failed twice in four full runs at ~10 s,
-  passes alone and on re-run. PGlite is one connection; it looks like a timeout under parallel load.
+- ✅ ~~**`mapping/formula-database.vitest.test.ts` is FLAKY**~~ — **fixed `c4cb6fe71`** with a named
+  30 s load budget: the test that timed out takes ~1.7 s alone and >10 s under the hook.
 - 🔴 **A truncated `grep` is not a set.** `| head -10` on a 74-match search produced a confident,
   wrong amendment (A-11).
 - 🔴🔴 **You cannot patch `prisma.<model>.<method>` — the client is a Proxy** (`db.ts` →
