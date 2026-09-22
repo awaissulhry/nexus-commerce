@@ -5077,3 +5077,27 @@ never calls (`pushAmazonPrice` is reached only from `routes/pricing.routes.ts`).
 narrower than the review assumed; it stays open for that route.
 
 ### Cost when — `flat`. **Rollback** — revert the commit (the Italy default returns).
+
+---
+
+## A-25 — Step 2.5: nothing enforces "factual = code" today, and the override it mentions does not exist. FOR YOUR RULING.
+
+**2026-09-22. Code trace; nothing built.** The ruling: *"factual attributes never per-language: a code
+with a localized label, never per-language free text"* (`docs/2026-09-11-language-axis-design.md:85-86`).
+
+| The step assumes | Measured |
+|---|---|
+| *"the contract exists; only enforcement is missing"* | Half true. Stored enum values ARE codes (`categoryAttributes` / `platformAttributes`), and labels come from each market's own schema — Amazon·DE's German labels come from the de_DE schema fetch (`schema-sync.service.ts:257`, `amazon.ts:288-291`). 🔴 But **nothing stops a choice-list attribute from becoming per-language**: `POST/PATCH /attributes` accepts `localizable` for any type, including `select` (`attributes.routes.ts:243,294`); `storageFor` routes any localizable field to per-language storage (`sheet-columns.service.ts:368`); the writers accept any key (`content-write.ts:33,72`, `translation-write.ts:41`) |
+| *"…with your override still winning"* | 🔴 **No label override exists** (no FieldValueMap or label override for options; channel labels simply overwrite, `sheet-columns.service.ts:999`) |
+| a code-only rule is uncontroversial | 🟠 `content-resolver.vitest.test.ts:67` **asserts** per-language `material: 'Leder'` resolves — a factual attribute as per-language text, tested as supported. Amazon's `material`, `closure`, `color` are **open** enums (free text accepted, `channel-specs.test.ts:78-130`) |
+| a gate at `scripts/check-factual-attributes.mjs` | Not found; `IMPLEMENTATION.md:1762`: *"D5 … never gated or built"* |
+
+### Options
+
+| # | Option | |
+|---|---|---|
+| **a** | **Enforce at the source, scoped to closed choice lists (`select` / `multiselect`):** the attributes route refuses `localizable: true` for them, by name; `storageFor` never routes one to per-language storage; a gate fails on any such definition in the code-defined dictionary. Open-text attributes like `material` stay as they are (the test above keeps passing) — they are text, not a code. First action: count `select` + `localizable` attributes locally and on production (read only) | 🟢 **Recommended.** It makes the rule true where a code exists, without re-deciding free-text attributes |
+| b | The gate only, as the step says | Weaker: the route and the router still accept an enum per language |
+
+The *"override still winning"* clause is dropped from Done when either way: there is no override to
+win. Building one is a separate feature.
