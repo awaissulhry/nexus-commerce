@@ -4243,7 +4243,7 @@ caller of 5,000 rows is ~1.5 min — longer than a normal request. See **A-19**.
 - **The real screen was not exercised.** No API server of this lane was running, and a save would
   write to the local catalogue, which is not authorised. The server's cell contract is gated
   (`editable: true`, no hold) and the web path was traced.
-- **Step 2.2's concurrency gate** — still the next task.
+- ~~**Step 2.2's concurrency gate**~~ — built next; see below.
 - **A-17** (`expectedPrice` retry) — still separate.
 
 ---
@@ -4260,3 +4260,69 @@ the cost.
 | b | Batch the writes: one transaction per chunk of N rows, per-row outcomes kept | Real work; revisit when a surface needs it |
 
 Nothing built for either.
+
+---
+
+## Step 2.2 Gate (2) — BUILT. Two concurrent price edits give one `applied` and one `conflict`.
+
+`apps/api/src/services/pim/price-door-concurrency.vitest.test.ts`, on **`concurrent-database.ts`**
+(a real multi-connection PostgreSQL), never PGlite.
+
+### The race is forced, not hoped for
+
+A third connection takes `SELECT … FOR UPDATE` on the listing. Both writers read the same version
+and block on the row. The test then asks PostgreSQL (`pg_stat_activity`, `wait_event_type = 'Lock'`)
+until **both** are waiting, and only then releases the row. 🔴 That check is the positive control:
+without it, the "race" could run one writer after the other and pass on the early version check
+alone.
+
+| Arm | Winner | Loser receives |
+|---|---|---|
+| door vs door | one `applied` | `conflict`, `guarded: true`, `version: v+1`, no queue row |
+| sheet vs door | either | door: `conflict` · sheet: **409 `VERSION_CONFLICT`**, `versionOf: 'channelListing'`, `currentVersion: v+1` |
+| sheet vs sheet | one 200 | 409 `VERSION_CONFLICT` on the listing version |
+
+Every arm also asserts: the stored price is the winner's, the version moved by exactly one, and there
+is exactly **one** price event, **one** audit row and **one** queue row.
+
+### 🟠 What the race showed about the sheet path
+
+The sheet saves inside `inDatabaseTransaction` (`lib/database-context.ts:59-83`), which is
+**Serializable** and retries a `P2034` write conflict up to twice. So the blocked sheet write fails
+with a serialization error (Prisma logs *"Transaction failed due to a write conflict or a
+deadlock"*), and the helper **re-runs the whole save with the caller's original
+`expectedVersion`**. The re-run reads the new version and the door refuses it: 409. The logged
+errors are that retry, not a failure. This is **not** A-17's lost update: the retry re-checks the
+caller's version, it does not adopt the new one.
+
+### Gate — ✅ proven able to fail, and each guard by a DIFFERENT arm
+
+| Mutation | door vs door | sheet vs door | sheet vs sheet |
+|---|---|---|---|
+| the database compare-and-set (`version` in `updateMany`) removed | 🔴 | 🟢 | 🟢 |
+| the early check against the caller's version removed | 🟢 | 🔴 | 🔴 |
+| both removed | 🔴 | 🔴 | 🔴 |
+
+> A gate with two paths needs two arms. The door path is protected by the compare-and-set; the
+> sheet path by the early check, because its retry re-reads the row. Either arm alone would have
+> left one guard unproven.
+
+Stable: 3/3 profiles OFF, 5/5 profiles ON in a row, and inside the full hook suite (875 files pass).
+The harness waits up to 15 s for both writers to block, so a busy machine reads as slow, not as "no
+race".
+
+### Cost when — `flat`. One disposable database per file, ~2 s.
+
+### Rollback — delete the test file. It changes no product code.
+
+### Step 2.2 — where it stands now
+
+| Done when clause | |
+|---|---|
+| `writeChannelPrices` cannot be called without a version | ✅ part 1 |
+| every price write raises a `PriceChangeEvent`, an audit row and a `PRICE_UPDATE` enqueue | ✅ part 1 + part 2 (the sheet) |
+| two concurrent edits produce one `applied` and one `conflict` | ✅ this gate |
+| **Cost when:** 5,000 rows in one call, per-row outcomes | ✅ completes (84–89 s); linear cost is **A-19** |
+| **Cost when:** 15.5 (b) the bulk retry contract | 🟡 **A-17**, awaiting ruling (the Owner's stated preference: (a) `expectedPrice`) |
+
+**Step 2.2 is built except A-17.** It does not close until A-17 is ruled and, if (a), built.

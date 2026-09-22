@@ -42,10 +42,11 @@ been exercised.
 | **15.1 + 15.6** Bounded, resumable sweep | ✅ **CLOSED** — 10-min nightly budget, derived checkpoint, one helper; 10,000 products reconciled in 6.2 min of chunks | `04ee5bb24` |
 | **2.4 (move 1)** Shared means shared | ✅ **BUILT** — presence narrowed to the page's products, market switcher kept global, absence stated in the UI. **~150 ms → 6 ms**, flat | `f8fcd1158` |
 | **2.2 (part 1)** One price door | ✅ **BUILT** — `expectedVersion` required; an unguarded caller must NAME why; chunked at 500 | `76b8be797` |
-| **2.2 (part 2)** The sheet uses the door | ✅ **BUILT under R-11** — `ebay_price` and `attr_price` go through `writeChannelPrices`; legacy keys cleaned in the door; hold lifted; 16 tests, 12 mutations red. 🔴 Concurrency gate NOT done | see `git log` |
+| **2.2 (part 2)** The sheet uses the door | ✅ **BUILT under R-11** — `ebay_price` and `attr_price` go through `writeChannelPrices`; legacy keys cleaned in the door; hold lifted; 16 tests, 12 mutations red | `a55d8da5f` |
+| **2.2 Gate (2)** Concurrency | ✅ **BUILT** — a forced race on real PostgreSQL: one `applied`, one `conflict` (door, sheet, mixed); each guard proven by a different arm | see `git log` |
 | **15.5 (c)** Does the reconcile bump the version? | ✅ **ANSWERED — NO**, 0 of 15, with a positive control. 2.2 and 2.7 do not fight | `76b8be797` |
 | **A-17** 15.5 (b)'s auto-retry is a lost update | 🟡 **FOR YOUR RULING** — recommended: add `expectedPrice` and retry only the safe case | — |
-| **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | see `git log` |
+| **A-18** Price reset loses legacy-key cleanup at the price door | ✅ **BUILT under R-11** — with Step 2.2 part 2 | `a55d8da5f` |
 | **Review §3a** Amazon price PATCH wipes the sale price | ✅ **RULED: eBay only.** The sheet has no Amazon price column, and a test now fails if one appears. 🔴 The wipe itself is NOT fixed for the three existing callers | — |
 | **A-19** The price door is linear, ~17 ms a row (5,000 rows ≈ 1.5 min) | 🟡 **FOR YOUR RULING, not blocking** — recommended: record the limit; batch later | — |
 
@@ -112,8 +113,7 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
   Live for the Matrix, `PATCH /channel-pricing` and bulk override. The sheet is gated out of it.
   Needs its own step before any Amazon price column joins the sheet.
 - 🟡 **A-19** — the door is ~17 ms a row. Not blocking: the sheet sends one request per row.
-- 🔴 **Step 2.2's concurrency gate is NOT written** — *"the second write returns `conflict`, on
-  `concurrent-database.ts`, never on PGlite."* The six tests that exist are contract arms on mocks.
+- 🟡 **Step 2.2 is built except A-17** (the 15.5 (b) retry). It closes when A-17 is ruled.
 - 🟢 ~~**15.5c**~~ **ANSWERED: the reconcile does NOT bump `ChannelListing.version`** — 0 of 15,
   with a positive control. 2.2 and 2.7 do not fight.
 - ⬜ The 467-migration history still does not replay (443/467). It is history, not a build path.
@@ -125,7 +125,9 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ### Where this lane stands — 2026-09-22, evening
 
-- **Step 2.2 part 2 is BUILT and committed** (A-18 (a) / R-11). All four fields are in
+- **Step 2.2 part 2 is BUILT and pushed** (`a55d8da5f`, A-18 (a) / R-11). **Gate (2), the
+  concurrency race, is BUILT** — see PLAN, "Step 2.2 Gate (2)". Step 2.2 now waits only on A-17.
+- **Step 2.2 part 2, in detail** (A-18 (a) / R-11). All four fields are in
   [PLAN.md, "Step 2.2 part 2 — BUILT"](PLAN.md#step-22-part-2--built-a-18--r-11-the-sheet-now-writes-prices-through-the-one-door).
   Done when ✅ · Gate ✅ (12 mutations red) · Rollback = revert one commit · Cost when ✅ for the
   5,000-row call (it completes, per-row outcomes), with the linear cost stated as **A-19**.
@@ -157,7 +159,7 @@ approval **before building**. Each turn reports what changed, whether it worked,
 ### The build queue
 
 1. ✅ ~~**Step 2.2, part 2 — the sheet's price bypass.**~~ Built under R-11.
-2. **Step 2.2's concurrency gate** — on `concurrent-database.ts`, never PGlite.
+2. ✅ ~~**Step 2.2's concurrency gate**~~ — built; a forced race on `concurrent-database.ts`.
 3. **Step 2.4 move 2** — *the family decides Shared's columns*. Move 1 (the stopgap) shipped.
    🟢 Step 2.1 (a) already built the *"also required by Amazon · DE"* marker it needs.
 4. **Step 2.7** — 🔴 **re-read its ordering rule first.** It says *"after 2.1, so it computes
