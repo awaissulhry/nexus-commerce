@@ -1,4 +1,24 @@
 import { afterEach, expect, it, vi } from 'vitest'
+
+// 🔴 2026-09-22 (PLAN amendment A-8). These five arms asserted the VALIDATION_PREVIEW parsing and
+// then silently stopped testing it. `validateListing` resolves its host through
+// `getAmazonRegion()` → `amazonAccount()` (amazon-sp-client.ts:62-69), which READS THE DATABASE.
+// On a machine whose local `ChannelConnection` row for AMAZON carries `authStatus: 'disconnected'`
+// — the state of this repo's dev database — that call throws, the outer catch returns
+// `{ ok: false, available: false }`, and every assertion about the request or the parsed response
+// fails without ever reaching the transport.
+//
+// Worse, the four `does not accept an unrecognized result` arms kept PASSING, because
+// `{ ok: false, available: false }` is exactly what the thrown-and-caught path returns. They were
+// green while asserting nothing — a false pass and a false failure from one defect.
+//
+// The region is pinned here so these arms test what they name: the request shape and the response
+// parsing. Nothing else about the client is mocked, and the transport spy still proves the call.
+vi.mock('../lib/amazon-sp-client.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/amazon-sp-client.js')>()),
+  getAmazonRegion: vi.fn(async () => 'eu' as const),
+}))
+
 import { AmazonSpApiClient } from './amazon-sp-api.client.js'
 afterEach(() => vi.restoreAllMocks())
 const request = { sellerId: 'seller', sku: 'SKU / 1', marketplaceId: 'APJ6JRA9NG5V4', productType: 'COAT', patches: [{ op: 'replace', path: '/attributes/brand', value: [{ value: 'Brand' }] }] }

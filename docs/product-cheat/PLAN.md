@@ -2108,3 +2108,88 @@ shows the queue row survives to record it — so the refusal Step 1.2 asks for i
 🔴 **And apply [15.10](#1510--step-12-should-return-outcomes-not-throw) when it is built:** the
 refusal must return **per-row outcomes**, not throw, so a bulk delete of 500 reports
 *"487 deleted · 13 refused — live on Amazon·IT"* instead of dying on row 14.
+
+---
+
+## A-8 RESULT — built and measured. The `apps/api` suite is now a gate.
+
+**2026-09-22. Owner ruled: fix the six, then add it. Done.**
+
+### The six failures had ONE cause, and it was not six bugs
+
+Both files reach `amazonAccount()` (`amazon-sp-client.ts:6-22`), which **reads the database**, and
+this repo's dev database holds an `AMAZON` `ChannelConnection` with `authStatus: 'disconnected'`.
+Line 19 refuses that, the callers catch, and everything downstream returns "not available".
+
+| File | Why it failed |
+|---|---|
+| `amazon-validation-preview.vitest.test.ts` (5) | `validateListing` resolves its host via `getAmazonRegion()` → `amazonAccount()` (`amazon-sp-api.client.ts:1079`). The test mocked `getAccessToken` and the transport, but not this. The call threw and the outer catch returned `{ ok: false, available: false }` **before the transport was ever reached** |
+| `amazon-classifications.vitest.test.ts` (1) | The arm stubs `AMAZON_LWA_CLIENT_ID` / `_SECRET` and asserts `isConfigured()`. 🔴 **P6.1 moved those credentials out of the environment into the `ChannelApp` table** (`amazon-sp-client.ts:29-37`). The env stubs had stopped deciding anything |
+
+🔴 **Four of the five preview arms were PASSING — for the wrong reason.** They assert
+`{ ok: false, available: false }`, which is exactly what the thrown-and-caught path returns. **One
+defect produced four false passes and five false failures at once.** That is A-8's argument in a
+single file: a suite nothing runs does not merely go stale, it goes *quietly* stale.
+
+### Both fixed at the right layer, and both mutation-proven
+
+**Preview:** `getAmazonRegion` is pinned. Nothing else is mocked, so the transport spy still proves
+the request. **9 passed.** 🔴 Mutation — disabling the "unrecognized result" check in the client —
+turned **3 of the 4 formerly-false-passing arms red**. They now assert something.
+
+**Credentials:** 🔴 the two **data-access collaborators** are pinned (`listActiveConnections`,
+`getChannelApp`) and `amazonCredsConfigured` itself is **not**. Re-deriving an equivalent rule
+inside the test would assert the test's own copy of the logic — *a write's routing predicate binds
+its readers*, and this codebase has already paid for that once. Two arms added: the credentials
+come from `ChannelApp` rather than the environment, and an oauth account needs no env token, each
+with a negative control. **8 passed.** 🔴 Mutation of the real function → **2 arms red**.
+
+### 🟠 A wrong turn of my own, recorded because this plan's rule cuts both ways
+
+With the six fixed, the suite was **11,012 passed, 0 failed — and still exited 1**, from
+`EnvironmentTeardownError: Closing rpc while "onUserConsoleLog" was pending`.
+
+I tried `--pool=threads`, saw **5 clean runs**, and wrote into `vitest.config.ts` that threads was
+the fix. 🔴 **That was wrong.** Against a ~50 % base rate, five clean runs is a 1-in-32
+coincidence, and the very next runs through the real command failed. **The pool change was
+reverted**, and the claim with it.
+
+*A run that finds nothing must be shown capable of finding something* — and five quiet runs are not
+that. The whole measurement table:
+
+| Command | Exit 1 | Time |
+|---|---|---|
+| `vitest run` | **2 of 4** | ~51 s |
+| `vitest run --silent` | **2 of 3** | ~51 s |
+| `vitest run --pool=threads` | **2 of 8** | ~41 s |
+| `vitest run --disableConsoleIntercept` | 🟢 **0 of 8** | ~50 s |
+
+🟩 **The last one is chosen because it has a mechanism, not because it correlated.**
+`onUserConsoleLog` *is* the console-forwarding RPC the error names; the flag stops intercepting
+console output instead of shipping it to the reporter. `--silent` only hides the display, which is
+why it changed nothing. Threads is genuinely ~20 % faster but does **not** fix the exit code, so
+that change was not kept — speed was never the problem being solved.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `apps/api/package.json` | 🆕 `"test:hook": "vitest run --disableConsoleIntercept --silent"`. The interactive `test` script is untouched, so local runs keep per-file log attribution |
+| `.githooks/pre-push` (after the `apps/web` suite) | 🆕 runs `test:hook`, with the table above in the comment |
+| Two test files | Fixed at the right layer, each mutation-proven |
+
+### Gate — measured, and shown able to fail
+
+- 🟢 **8 of 8 clean**, the last four through the hook's exact command: **11,012 passed**, ~50 s.
+- 🔴 **Proven able to fail.** A mutation in **product** code (`amazonCredsConfigured` → `return true`)
+  made the hook command exit **1** with *"2 failed | 864 passed"*. Restored; green again.
+- 🟢 `tsc --noEmit -p tsconfig.json` on `apps/api`: **exit 0**.
+
+### Cost when — `flat`
+
+~50 s per push, and it does not grow with the catalog. The hook already runs two full Next.js builds.
+
+### Part 11 correction
+
+Seven rows reading "Test suite" were **not** in the hook. **They are now.** The ledger should say
+*"push hook — `apps/api` `test:hook`"* for each.
