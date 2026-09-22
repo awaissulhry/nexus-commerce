@@ -380,3 +380,26 @@ one transactional order/line/stock writer shared by polling and webhook replay.
 The current writer inserts lines before stock effects and swallows stock failures,
 so merely awaiting it would still falsely report completion. The independent review
 identified these as open work, not changes completed by this activation safeguard.
+
+
+## Final C1–C8 release verification
+
+Code HEAD `571371bfc`. Full API **11215 passed /137 existing skips /zero failures or
+unhandled errors**, exit0,89.20s (`full-api-c8.log`/`.json`). Canonical gate **passed**:
+both builds; web4591/13existing skips; security124; real PostgreSQL106 across ten
+suites,zero skips; RBAC2724/zero unmapped; profiles-ON887files/41known failing/217tests,
+none new/worse (`c8-canonical-gate.log`). The profiles ratchet is not an all-green
+profiles-mode suite. Earlier failed runs remain evidence. No test, timeout or hook
+was weakened. Only documentation follows this tested code commit.
+
+Production read-only20:38:30Z found zero nondead FAILED/AUTH_REQUIRED outbound rows
+in both profiles. Remote main remains7c70556ea. Health20:49:11Z serves7c70556e with
+existing Ads-integrity findings; it does not validate this package. Railway API
+20:51:37Z confirms baseline deployment19ccdbb5-379e-4e17-b270-edca4b07e13f SUCCESS,
+canRollback:true,canRedeploy:true. No mutation ran. The release action, automatic
+behavior, migration, verification and bounded recovery are in RELEASE-C1-C8.md.
+
+Approval dependencies remain deployment/recovery, vendor read probes, exact-ten
+cleanup, any live activation/write and each P7 drop. Etsy stock-timing/history-boundary
+questions remain unanswered. The full plan is not complete and independent local
+engineering work remains as listed in the completion matrix.

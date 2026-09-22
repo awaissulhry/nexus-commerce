@@ -676,7 +676,7 @@ Sources: the 08-29 research (R1 Amazon, R2 eBay, R3 Shopify, R4 Etsy, R8 Nango, 
 ## 2026-09-22 continuation amendments
 
 [COMPLETION-MATRIX](COMPLETION-MATRIX.md) is the current acceptance audit.
-[CX-COMPLETION](build/CX-COMPLETION.md) records C1–C5, official contracts, failure
+[CX-COMPLETION](build/CX-COMPLETION.md) records C1–C8, official contracts, failure
 reproductions, tests, mutations and independent reviews. Old BUILT labels below
 remain historical. Material amendments: unverified replay is never executable;
 Etsy routes by verified shop identity and uses official webhook fields/topics; eBay
@@ -685,6 +685,10 @@ Finances 2024 writes are held until monetary reconciliation/identity races are p
 while the corrected dry run measures identity/order-overlap risk only; sign-in holds
 retain retry budgets and original Shopify dispatch mapping. These changes strengthen
 existing criteria, do not approve deployment or live calls, and do not complete P5.2.
+C7 adds private owner notifications and conservative static rotation-policy checks;
+C8 marks incomplete lifecycle handlers unavailable, refuses provisioning before any
+call when no handler is ready, and requires explicit scheduled setup enablement.
+Actual queue/rotation proof and durable eBay domain processing remain mandatory.
 
 ## 14. Handover: how an implementation session works
 
@@ -692,7 +696,7 @@ existing criteria, do not approve deployment or live calls, and do not complete 
 
 1. **Read this whole file first.** Then read the rows of the package you work on.
 2. **Re-check the evidence.** Every CODE fact here was measured on 2026-09-19. Other sessions change the code every day. Before you change anything, check that each path:line you rely on is still true.
-3. **One package at a time.** Before you change any file, write a short exact-change list (files, what changes, how you will prove it) and **wait for the Owner's "go"**.
+3. **Current continuation authorization:** local investigation, implementation, tests, independent review and named slice commits are approved. Deployment, production writes, live channel calls and each P7 drop retain explicit approval boundaries. Earlier per-edit approval instructions are superseded by the 2026-09-22 mandate.
 4. **Do only the package.** Anything next to it needs its own yes.
 5. **Other sessions share this tree.** Run `git status` first. Never revert or reformat a file you did not change. The shared-stock work lives in `.claude/worktrees/shared-stock` — do not touch it. The Presence programme owns listing verbs (pause, end, relist): see section 10.
 6. **Safe testing:**
@@ -700,7 +704,7 @@ existing criteria, do not approve deployment or live calls, and do not complete 
    - `grep` in this shell skips ignored files. Use `/usr/bin/grep` for any "exists / does not exist" claim.
    - No live channel write and no production database write without the Owner's explicit yes. Prove writes with dry runs first.
 7. **UI work** uses the Nexus design system (`apps/web/src/design-system`, see `AGENTS.md`).
-8. **Commits:** do not commit or push unless the Owner says so. Never use `--no-verify`.
+8. **Commits:** named slice commits are authorized by the continuation. Push once per reviewed, approved deployment package from the isolated tree; never use `--no-verify` or stage with `add -A`.
 9. **Finish every package with:** tests green, a production proof (or a clear "could not measure" with the reason), a build record at `docs/channel-connections/build/<ID>.md`, and its row updated in 14.2.
 
 ### 14.2 Progress

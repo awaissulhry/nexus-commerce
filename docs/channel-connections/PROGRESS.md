@@ -32,15 +32,25 @@ rows plus the exact Accounts predicate explain the count. Preserve the tombstone
 Independent audits found unimplemented/unsafe criteria in Finances identity/money,
 eBay event handling and subscription contracts, Etsy payload/routing/order ingestion,
 auth-held retries, rotation alert delivery, contract coverage, eBay price readback
-and the studio error pane. **Do not activate from old “BUILT” labels.** C1 is committed
-as `63742d415`: unverified replay refused; 38 tests, two guard mutations, typecheck,
-independent approval. C2–C5 are also committed through `2cb733d2c`; see CX-COMPLETION for proof. C6 fixes the historical Amazon test fixtures and console-RPC teardown transport; the full API now passes **11188 / 137 skipped / zero errors**. Canonical rerun before C6 passed **106 real PostgreSQL tests**. Final C6 gate pending; nothing pushed.
+and the studio error pane. **Do not activate from old “BUILT” labels.**
+C1–C8 are committed through `571371bfc`: replay trust, Etsy contract/shop routing,
+eBay transport and activation holds, Finances read-only containment, auth-held retry
+recovery, reliable test transport, and private owner rotation alerts. All slices were
+independently reviewed. C6 full API: **11188 passed / 137 skipped / zero errors**.
+C7 canonical passed builds, 4591 web, 124 security and 106 real PostgreSQL tests; its
+profiles-ON gate required removal of the now-fixed Amazon classifications exception.
+That exception is removed. Final C8 full API **11215 passed /137 skipped /zero errors**;
+canonical gate **passed on 571371bfc**, including profiles-ON887files/41known failing/
+217tests, none new/worse. No push. [Concrete release approval](RELEASE-C1-C8.md).
+Etsy's latest 20:28Z read shows 37 successful/account-attributed calls in 24 hours,
+zero webhook ingress, and no need to reconnect. Earlier probe timestamp serialization
+subtracted two hours; CX-COMPLETION records the correction and retains raw evidence.
 
 Verification correction: the prior full API log also contains **two unhandled
 EnvironmentTeardownError rejections**, omitted from the earlier six-failure summary.
 The canonical pre-push gate was green; the full API run was not green.
 
-### Current handover — 2026-09-22 (supersedes older setup/open-state claims below)
+### Prior package snapshot — historical; the active continuation above supersedes it
 
 **Latest Owner correction:** Etsy is **already connected under a different business profile**.
 The profile name/ID was not supplied. Discover it with authorized read-only inspection; do not
