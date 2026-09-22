@@ -4,6 +4,10 @@ import Fastify from 'fastify'
 import type {} from '../../lib/auth/guards.js'
 import type {} from '@fastify/multipart'
 import type {} from '@fastify/cookie'
+// PGlite runs in-process on one connection, so the full hook suite starves it of CPU: measured
+// 2026-09-22, 'gives a nonlocalizable field one formula…' took ~1.3 s alone and exceeded 10 s under
+// `test:hook`. A load budget, not a correctness bound (as formula-database and data-validation).
+vi.setConfig({ testTimeout: 30_000 })
 import type {} from '@fastify/rate-limit'
 const fixture = vi.hoisted(() => ({ database: null as any, mode: '' }))
 vi.mock('@nexus/database', async () => { const { formulaDatabase } = await import('../../test-support/formula-database.js'); fixture.database = await formulaDatabase(); return { default: fixture.database.client } })
