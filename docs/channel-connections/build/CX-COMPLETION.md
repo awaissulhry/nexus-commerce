@@ -260,3 +260,22 @@ was created, variable value listed, or production configuration changed. Etsy mo
 webhook signing-secret presence, Orders enablement and rotation/KMS switches therefore
 remain distinct observation/setup dependencies. Public health last read still serves
 the baseline; it is not new-package deployment evidence.
+
+## Release-gate diagnostic evidence retention
+
+The canonical gate on `a05f3792f` passed both builds, security **124**, and RBAC,
+then failed the real PostgreSQL run: **105 passed / 1 failed**, in the existing
+assortment sync suite (**13/14**). The runner printed the first 40 matching error
+lines, burying the actual failing assertion, and removed its JSON report. The
+unchanged suite passed **14/14** in isolation. The original cause is **unestablished**;
+neither that rerun nor the earlier green gate makes this failed gate green.
+
+The runner now preserves its JSON report and full stdout/stderr on failure and prints
+each failed assertion's name and messages. Container cleanup and every exit/count/
+no-skip criterion are unchanged. Independent review approved. An applied/restored
+Etsy shop-alias migration mutation produced **3 passed / 2 failed / exit 1** with
+named failures and retained JSON/log evidence, proving the diagnostic path. Source
+bytes were restored. Evidence: `final-canonical-gate.log`,
+`postgres-sync-diagnostic.log`, `etsy-alias-postgres-mutation.log` under
+`/private/tmp/cx-completion-20260922/`; retained failed-run report directory
+`/var/folders/gw/t0zlfx7x5w7btv4jw1lrwtk80000gn/T/nexus-real-pg-W2IO8V`.
