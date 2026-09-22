@@ -692,6 +692,7 @@ Update this table when a package changes state. States: NOT STARTED · PROPOSED 
 
 | Package | State | Build record | Notes |
 |---|---|---|---|
+| CX cleanup | BUILDING (2026-09-22) | `build/CX-CLEANUP.md` | Guarded delete built and tested; production deletion needs fresh list confirmation. Token report, notifications preflight, and handover follow. |
 | Owner items (section 8) | NOT STARTED | — | Secret date first |
 | P0.1 | BUILT (2026-09-19) | `build/P0.1.md` | Not committed. Prod switches read: eBay + Amazon live. Prod proof waits for a push |
 | P0.2 | PROD-VERIFIED (2026-09-20) | `build/P0.2.md` | Pushed and deployed (`a05565cc`). Anonymous GET /api/monitoring/queue-stats → 401, with /api/health → 200 as the control |

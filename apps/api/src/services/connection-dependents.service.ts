@@ -32,6 +32,7 @@
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { workspaceIdForQuery } from '../lib/workspace-context.js'
 
 /** How the database treats a dependent row when its connection is deleted. */
 export type DependentAction = 'Cascade' | 'SetNull' | 'Restrict' | 'NoAction' | 'Unknown'
@@ -117,11 +118,11 @@ export interface ConnectionDependents {
  * not be read is not a table with nothing in it — the distinction this whole programme keeps
  * paying for.
  */
-export async function connectionDependents(connectionId: string): Promise<ConnectionDependents> {
+export async function connectionDependents(connectionId: string, client: Prisma.TransactionClient = prisma): Promise<ConnectionDependents> {
   const relations = dependentRelations()
   const counts: DependentCount[] = []
   for (const relation of relations) {
-    const delegate = (prisma as unknown as Record<string, { count?: (args: unknown) => Promise<number> }>)[
+    const delegate = (client as unknown as Record<string, { count?: (args: unknown) => Promise<number> }>)[
       accessorFor(relation.model)
     ]
     if (!delegate?.count) {
@@ -152,6 +153,39 @@ export async function connectionDependents(connectionId: string): Promise<Connec
  */
 export function isSafeToDelete(report: ConnectionDependents): boolean {
   return report.destroyedTotal === 0 && !report.incomplete
+}
+
+/** Only a locked, freshly measured dead row can be removed. No channel call is made. */
+export async function deleteDeadConnection(connectionId: string) {
+  const workspaceId = workspaceIdForQuery()
+  return prisma.$transaction(async tx => {
+    // FOR UPDATE blocks both reconnects and the KEY SHARE lock a new FK reference needs.
+    // ReadCommitted ensures the following counts see writers that committed while we waited.
+    // Explicit profile predicate supplements RLS: raw SQL has no ORM selector scoping.
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "ChannelConnection"
+      WHERE id = ${connectionId} AND "workspaceId" = ${workspaceId} FOR UPDATE`
+    if (!locked.length) throw Object.assign(new Error('Connection not found in this business profile.'), {
+      code: 'connection_not_found', statusCode: 404,
+    })
+    const connection = await tx.channelConnection.findUnique({
+      where: { id: connectionId },
+      select: { isActive: true, isPrimary: true, authStatus: true, credentialsEnc: true, accessToken: true, refreshToken: true, ebayAccessToken: true, ebayRefreshToken: true },
+    })
+    if (!connection || connection.isActive || connection.isPrimary ||
+        ['connected', 'degraded'].includes(connection.authStatus.toLowerCase()) ||
+        connection.credentialsEnc || connection.accessToken || connection.refreshToken || connection.ebayAccessToken || connection.ebayRefreshToken) {
+      throw Object.assign(new Error('This connection is active, primary, or still holds credentials. Disconnect it before considering deletion.'), {
+        code: 'connection_in_use', statusCode: 409,
+      })
+    }
+    const dependents = await connectionDependents(connectionId, tx)
+    if (!isSafeToDelete(dependents)) throw Object.assign(new Error('Deletion refused: dependent rows would be destroyed, or a count could not be completed.'), {
+      code: 'connection_not_safe', statusCode: 409, dependents,
+    })
+    await tx.channelConnection.delete({ where: { id: connectionId } })
+    return { deleted: true, connectionId, dependents }
+  }, { isolationLevel: 'ReadCommitted', maxWait: 5_000, timeout: 30_000 })
 }
 
 export interface ConnectionDependentsReportRow {

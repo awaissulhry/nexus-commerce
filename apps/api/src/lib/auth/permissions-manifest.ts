@@ -526,6 +526,7 @@ export const ENTRIES: Entry[] = [
   RW(F.adminView, F.jobsManage, pfx('/api/cockpit-telemetry')),
 
   // ── Admin / ops (destructive) ───────────────────────────────────
+  P(F.adminPurge, (m, p) => m === 'DELETE' && p === '/api/admin/connection-dependents/:id'),
   P(F.adminPurge, has('/purge')),
   P(F.adminRestore, has('/restore')),
   P(F.adminRestore, has('/bulk-restore')),
