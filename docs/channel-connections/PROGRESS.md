@@ -34,7 +34,7 @@ eBay event handling and subscription contracts, Etsy payload/routing/order inges
 auth-held retries, rotation alert delivery, contract coverage, eBay price readback
 and the studio error pane. **Do not activate from old “BUILT” labels.** C1 is committed
 as `63742d415`: unverified replay refused; 38 tests, two guard mutations, typecheck,
-independent approval. Further local slices underway; nothing pushed.
+independent approval. C2–C5 are also committed through `2cb733d2c`; see CX-COMPLETION for proof. Full release gate pending; nothing pushed.
 
 Verification correction: the prior full API log also contains **two unhandled
 EnvironmentTeardownError rejections**, omitted from the earlier six-failure summary.

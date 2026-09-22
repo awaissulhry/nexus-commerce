@@ -673,6 +673,19 @@ Sources: the 08-29 research (R1 Amazon, R2 eBay, R3 Shopify, R4 Etsy, R8 Nango, 
 
 ---
 
+## 2026-09-22 continuation amendments
+
+[COMPLETION-MATRIX](COMPLETION-MATRIX.md) is the current acceptance audit.
+[CX-COMPLETION](build/CX-COMPLETION.md) records C1–C5, official contracts, failure
+reproductions, tests, mutations and independent reviews. Old BUILT labels below
+remain historical. Material amendments: unverified replay is never executable;
+Etsy routes by verified shop identity and uses official webhook fields/topics; eBay
+reconciliation must validate full catalogue/subscription contracts and persist failures;
+Finances 2024 writes are held until monetary reconciliation/identity races are proved,
+while the corrected dry run measures identity/order-overlap risk only; sign-in holds
+retain retry budgets and original Shopify dispatch mapping. These changes strengthen
+existing criteria, do not approve deployment or live calls, and do not complete P5.2.
+
 ## 14. Handover: how an implementation session works
 
 ### 14.1 Rules for every implementation session

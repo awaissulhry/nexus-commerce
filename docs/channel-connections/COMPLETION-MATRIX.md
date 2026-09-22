@@ -21,9 +21,9 @@ No production mutation or live API call has been performed in this continuation.
 | P0.6 | Per-profile Amazon subscriptions/ledger; build/P0.6.md | Baseline | Current subscriptions/arrival evidence incomplete | Read current cron/ledger by profile | Live subscriptions separately |
 | P0.7 | Account refusal replaced in queue by destination; build/P0.7.md | Baseline | Second-account end-to-end proof incomplete | Retain isolation guards; inspect live destination attribution | Live proof |
 | P0.8 | Official deadlines; build/P0.8.md | Baseline | Documentation proof, not live feature | Current vendor checks used for amended flows | None for docs |
-| P1.1 | gateway/gateway.ts; zero gateway ratchet | Baseline | Auth hold defect found | Preserve held auth outcomes through retry policy | Deployment |
+| P1.1 | gateway/gateway.ts; zero gateway ratchet | Baseline | C5 fixes auth holds; 77 tests and mutations | C5 implemented/reviewed; observe a held/resumed production row | Deployment |
 | P1.2 | Gateway ratchet freshly passes all five channels at zero | Baseline | Not per-operation production proof | Keep ratchet and documented exemptions unchanged | None for local gate |
-| P1.3 | outbound-rows.ts; zero external creators; destination column | Baseline | Per-account production attribution not freshly proved | Race/ownership tests and auth holds in both drain paths | Deployment/live proof |
+| P1.3 | outbound-rows.ts; zero external creators; destination column | Baseline | Per-account production attribution not freshly proved | C5 holds implemented in both drains; full gate/production observation pending | Deployment/live proof |
 | P1.4 | Connected Shopify GraphQL; build/P1.4.md | Baseline | Connected Shopify preserved; stock round-trip not established | Preserve existing store; no activation as part of this scope | Owner test store/live call |
 | P1.5 | Shared eBay marketplace headers; build/P1.5.md | Baseline | Fixture coverage; no new live proof | Retain per-market header regressions | Deployment if changed |
 | P1.6 | Approved groups removed; build/P1.6-delete-list.md | Baseline | Remaining live dependencies retained | Do not equate zero traffic with unneeded fallback | New deletions separately |
@@ -31,9 +31,9 @@ No production mutation or live API call has been performed in this continuation.
 | P1.8 | contract/channel-contracts.ts has only four checks | Baseline | Switch historically on; accounts absent; coverage partial | Add supported contract coverage/partial state; configure test accounts | Test accounts + channel calls |
 | P2.1 | ingress/ledger.ts + inbound-retry.job.ts; C1 38 tests/2 killed mutations | C1 local | Baseline replay accepts unverified records | Deploy verified replay guard; complete eBay durable processing | Deployment |
 | P2.2 | Amazon per-type subscriptions and parsing; build/P2.2.md | Baseline | New types gated; every type arrival not proven | Actual subscription inventory and per-type real arrivals | Live calls/subscriptions |
-| P2.3 | eBay notifications.ts/routes/handlers independently audited | Baseline + local prior fixes | Zero destinations/subscriptions at prior read; no genuine events | Correct format array, handlers, account/token scope, retries and status | Live catalogue then subscription approval |
+| P2.3 | eBay notifications.ts/routes/handlers independently audited | Baseline + local prior fixes | Zero destinations/subscriptions at prior read; no genuine events | C3 transport/status fixed (73 tests); processors/account-token scope and delivery still open | Live catalogue then subscription approval |
 | P2.4 | Shopify reconciliation/lifecycle; build/P2.4.md | Baseline | Store connected; no fresh uninstall/privacy proof | Preserve connection and regression coverage | Any test uninstall/write |
-| P2.5 | Etsy receiver/receipts; C2 contract and routing repairs underway | C2 local | Motovento connected; portal zero endpoints; zero local listings/events | Finish transactional ingest/poll; deploy alias; register 4 actual events | Registration/live call; stock opening boundary |
+| P2.5 | Etsy receiver/receipts; C2 contract/routing: 35 focused + 5 real PostgreSQL tests | C2 local | Motovento connected; portal zero endpoints; zero local listings/events | Finish transactional ingest/poll; deploy alias; register 4 actual events | Registration/live call; stock opening boundary |
 | P2.6 | account-lifecycle.service.ts; revocation code exists | Baseline | eBay real revocation handler currently unreachable | Awaited scoped lifecycle dispatch; real signal proof | Live event |
 | P2.7 | AMS dedupe and subscription check; build/P2.7.md | Baseline | Every live profile hourly arrival not freshly proved | Per-profile dataset/read controls | Live read if needed |
 | P2.8 | Ingress DS tab + retry/replay; build/P2.8.md | Baseline + C1 local | Tab deployed, unverified replay flaw corrected locally | Browser keyboard/responsive verification after changes | Deployment |
@@ -50,7 +50,7 @@ No production mutation or live API call has been performed in this continuation.
 | P4.5 | Regional Ads discovery/disconnect/expiry; build/P4.5a-h.md | Baseline partial | No reconnect needed; Manual Collection wire value unresolved | Verify daily region repair and accepted SB contract | No reconnect; live probe only approved |
 | P4.6 | Etsy writers/freshness; build/P4.6a-f.md | Baseline partial | Mode unknown; Motovento zero stored listings | Correct full freshness accounting and demonstrate supported writes | First write/mode approval |
 | P5.1 | Orders 2026 adapter + quantity-4 live money proof; build/P5.1.md | Baseline | Enablement still gated | Set switch only approved; production quantities/totals/pagination verify | Production config approval |
-| P5.2 | amazon-financial-events.service.ts independently audited | Baseline unsafe new writer | v0 default; prior dry run has false-zero risks | Official IDs/money/account/paging; safe overlap reconciliation; race proof | Approved corrected dry run, then cutover |
+| P5.2 | amazon-financial-events.service.ts independently audited | C4 local safety amendment | v0 default; C4 corrects dry run and holds unsafe new writes (87 tests) | Approved overlap read, money mapping, null account attribution, safe reconciliation and race proof | Approved corrected dry run, then cutover |
 | P5.3 | One Shopify version accessor; build/P5.3.md | Baseline | 2026-07 historical traffic; preserve connected store | Quarterly version maintenance remains operational | None current scope |
 | P5.4 | No buyer-PII/RDT path; build/P5.4.md | Baseline | Historical 4,464 order census; privacy ratchet | Keep data-minimization choice; no RDT invented | None |
 | P5.5 | Search Returns not on official decommission list | Not required | Supported read retained | No speculative replacement | None |
@@ -66,3 +66,19 @@ No production mutation or live API call has been performed in this continuation.
 | P7b | Schema dependency inventory | Not started | Green week not elapsed/proven | Each table requires dependency retirement + green week + individual approval | One yes per drop |
 | P8 | New channels | Deferred | Explicitly out of scope | Preserve connected Shopify; no new channel work | New scope decision |
 | CX cleanup | 4abb1a371 guarded deletion; prior 59 tests/101 PostgreSQL gate | Local only | Exact ten proposed rows untouched | Deploy reviewed package; fresh exact-ID check before any deletion | Deployment and exact-ten separate |
+
+## Measurable quality obligations (no blanket AAA pass claimed)
+
+| Dimension | Acceptance threshold | Current proof / unresolved evidence |
+|---|---|---|
+| Correctness | Exact money/currency/quantity semantics; zero duplicate financial effects; no quiet partial reads | C4 correct identifiers, rejects partial pagination, performs zero money writes. Monetary reconciliation/cutover still open. |
+| Account isolation | Every write and inbound action names exactly one owner; foreign/missing/ambiguous identity causes zero effects | C2 five real PostgreSQL routing tests including alias collisions; finance account binding mutation killed. eBay processors and Etsy ingest remain. |
+| Security | Invalid/missing verification executes zero handlers; credentials never in diagnostics; no auth bypass | C1 38 tests/two killed mutations; existing boolean-only credential report retained. KMS/Neon rotation still Owner dependencies. |
+| Resilience | Failed work remains recoverable; sign-in/rate holds spend zero row retries; no premature SUCCESS | C3 real CronRun recorder tests; C5 77 tests and native Shopify resume proof. eBay durable replay remains. |
+| Performance | Bounded traversal/work, account concurrency preserved; measure real latency/backlog against P3.6 targets | Notification reads max20 pages/collection, finances max50 pages, retry drain max200 rows. No production p95/positive-load claim yet. |
+| Accessibility | Existing DS controls; keyboard-only critical paths, responsive 390/1280 widths, light/dark; no serious/critical accessible-name/focus violations | No UI changes in C1–C5. Existing Ingress/Diagnostics production usability and unfinished studio errors still need runtime verification. |
+| Observability | Failed/rejected/unknown events remain visible; complete=true/healthy only with positive evidence; owning-profile alerts | C1 rejects remain in ledger; C3 failed cron persists FAILED; empty/partial compare explicit. Rotation owner alerts still unbuilt. |
+| Maintainability | Named slice commits, independent review, typecheck, canonical ratchets, no new suppressions/skips/weakened hooks | C1–C5 individually reviewed/tested; official fixtures corrected with failure reproductions. Full package gate pending. |
+
+P7's green week and each destructive-drop approval remain mandatory. No production
+row, token, subscription, publishing mode, or deployment has been changed.
