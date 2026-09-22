@@ -225,8 +225,11 @@ ESCAPED a gate I had just called green, and each time the fix was a second arm, 
   (`scripts/run-real-postgres-tests.mjs`, the last `console.error`). Not this lane's file — a
   one-line filter fix for its owner. Neither is caused by this lane's code; neither is explained.
 - 🔴 **PGlite suites need a named load budget.** They start in-process on one connection; under the
-  hook ~1.7–2 s alone becomes >10 s. 25 of 27 already set one; `formula-database` and
-  `data-validation` now do too (`c4cb6fe71`).
+  hook ~1.3–2 s alone becomes >10 s. `formula-database` and `data-validation` got one (`c4cb6fe71`),
+  then `information-database` refused a push the same way (`721788ab8`). 🟠 **Most of the other 24
+  PGlite suites budget only their SETUP** (60–180 s) and leave each test at vitest's 10 s default,
+  so this will recur one file at a time. For the owner of `apps/api`'s vitest config: one per-test
+  budget for the PGlite files would end it. Not changed here — shared config, not this lane's.
 - 🔴 **A probe script with `REDIS_URL=redis://127.0.0.1:1` never exits** — the retry loop keeps the
   process alive, and a pipe hides all output until exit. End with `process.exit(0)` and write to a
   file.
