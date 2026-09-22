@@ -19,8 +19,11 @@ Read [the latest findings and Owner-only actions](2026-09-22-HANDOVER.md) and
 [CX cleanup proof](build/CX-CLEANUP.md). Guarded deletion, the legacy eBay token-report
 fix, verification-token preflight and documented order topic are built in separate commits;
 the report now includes encrypted-credential presence and shares dead-row eligibility with
-deletion. Final package checks and deployment are still pending. **No production row has
-been deleted.** Fresh read-only evidence reduces the proposal to **ten**, whose exact IDs
+deletion. **Final canonical pre-push gate passed** on `4abb1a371`, including both real
+PostgreSQL delete tests and the profiles-ON ratchet. Full API suite: **11066 passed,
+six baseline Amazon failures, 132 skipped**; independent review approved. Deployment is
+pending production approval; Railway and `/api/health` still confirm baseline `7c70556ea`.
+**No production row has been deleted.** Fresh read-only evidence reduces the proposal to **ten**, whose exact IDs
 are in [CX-DELETE-LIST](build/CX-DELETE-LIST.md); Owner confirmation is still required.
 
 The corrected public API origin is **https://nexusapi-production-b7bb.up.railway.app**.
