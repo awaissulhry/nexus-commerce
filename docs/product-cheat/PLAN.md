@@ -5352,3 +5352,51 @@ Red before the fix: 6 arms, including the end-to-end one (`expected 'L' to be 'X
 Full `apps/api` hook suite: **881 files pass**. `tsc`: 0.
 
 ### Cost when — `flat` (no query added). **Rollback** — revert the commit.
+
+---
+
+## Step 2.6b — BUILT (A-27 / R-24). Four writers stop wiping the store.
+
+### What was built
+
+| Where | What |
+|---|---|
+| new `services/pim/category-attributes-write.ts` | Two atomic statements: `mergeCategoryAttributes` (set these keys, keep the rest) and `replaceCategoryAttributesKeepingVariations` (replace the bag, but keep the stored `variations` unless the caller sends that key) |
+| Organize publish (`catalog-organize.routes.ts`) | Sets the child's `variations` by merge. It used to replace the whole bag with `{ variations }` — every other attribute was deleted |
+| eBay Inventory import, update path (`ebay-import.service.ts`) | eBay's aspects are merged into the bag, in one transaction with the column update |
+| Amazon reconciliation enrich (`listing-reconciliation.service.ts`) | Amazon's raw attributes are merged into the bag, in one transaction with the column update. `enrichProductFromAmazon` is now exported, for the test |
+| `PATCH /api/catalog/products/:id` (`catalog.routes.ts`) | The client's bag still replaces the stored one, but the stored `variations` is kept unless the client sends it. (Its only editor, `MatrixEditor.tsx`, calls a hard-coded `http://localhost:3001` — it cannot reach production; the route itself is live) |
+
+The Amazon clear/sync-hierarchy strip is unchanged, on purpose (A-27).
+
+### Done when — ✅ `category-attributes-keep-store.vitest.test.ts` (5 arms, real PostgreSQL, each writer through its own entry point)
+
+Each writer, given a product with `variations` and other attributes, writes its own keys and keeps the
+rest. The two routes are registered at production's prefix (`/api/catalog`). Control: a PATCH that sends
+`variations` itself writes them. Red before the fix: all four writers.
+
+### Gate — ✅ 7 mutations, 7 red (Python harness, per-file backups, hash-checked restore)
+
+Each writer put back to a replace (4, one arm each) · the merge helper replacing (3 arms) · the replace
+helper never keeping the store (1) · the replace helper keeping the store over the client's own (the control).
+
+Full `apps/api` hook suite: **882 files pass**. `tsc`: 0. 🔴 The profiles-ON ratchet refused the first push:
+the two route arms sent a request with no business (`workspace_required`). Fixed in the test the way
+production does it — a preHandler that runs the handler inside `withWorkspace(…, done)`
+(`lib/workspace-hook.ts`); 18/18 with profiles off and on, mutations re-run, 7 red.
+
+### Cost when — `flat` (one statement per write). **Rollback** — revert the commit.
+
+---
+
+## A-28 — Two more data-loss paths found while building 2.6b. FOR YOUR RULING. Not built.
+
+| # | Found | Where |
+|---|---|---|
+| 1 | **Organize undo does not restore the store.** It restores the parent link and `variantAttributes` only; `categoryAttributes.variations` keeps the values the publish wrote. Since R-23 that is the store publishers read, so an undone organize still publishes the new sizes. The session keeps no before-copy of `variations` to restore from | `catalog-organize.routes.ts`, `revertChange` |
+| 2 | **The eBay Inventory import overwrites an existing product's type and bullets.** On the update path it sets `productType: 'APPAREL'` and `bulletPoints: []` for every item, whatever the product was | `ebay-import.service.ts:126-134` |
+
+| # | Option | |
+|---|---|---|
+| **a** | (1) record the before-copy of `variations` with the organize change and restore it on undo (an additive column, or inside the existing JSON); (2) on the update path, stop setting `productType` and `bulletPoints` — set them only when creating | 🟢 **Recommended.** Both are small and each gets one test arm |
+| b | Record both, build later | Both paths stay live |

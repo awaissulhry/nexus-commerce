@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import prisma from '../db.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+import { mergeCategoryAttributes } from '../services/pim/category-attributes-write.js'
 
 /**
  * /api/catalog/organize — session-based publish + undo.
@@ -116,16 +117,12 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
               parentId: toParentId,
               isParent: false,
-              ...(Object.keys(cleanedAttrs).length > 0
-                ? {
-                    variantAttributes: cleanedAttrs as any,
-                    categoryAttributes: {
-                      variations: cleanedAttrs,
-                    } as any,
-                  }
-                : {}),
+              ...(Object.keys(cleanedAttrs).length > 0 ? { variantAttributes: cleanedAttrs as any } : {}),
             },
           })
+          // Step 2.6b (R-23) — set the child's axis values in the store; every other attribute stays.
+          // This used to replace the whole bag with `{ variations }`, deleting every other attribute.
+          if (Object.keys(cleanedAttrs).length > 0) await mergeCategoryAttributes(tx, productId, { variations: cleanedAttrs })
 
           // 2. Ensure parent flag is set.
           if (!parent.isParent) {

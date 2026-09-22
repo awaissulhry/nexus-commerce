@@ -12,6 +12,7 @@ import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
 import { masterPriceService } from "../services/master-price.service.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
+import { replaceCategoryAttributesKeepingVariations } from "../services/pim/category-attributes-write.js";
 
 // ── Request/Response Types ───────────────────────────────────────────────
 
@@ -870,7 +871,11 @@ export async function catalogRoutes(app: FastifyInstance) {
       }
       const directData: Record<string, any> = {}
       let directDirty = false
-      if (categoryAttributes !== undefined) {
+      // Step 2.6b (R-23) — the client's bag replaces the stored one, except `variations` (the one store
+      // for a variant's size and colour) when the client did not send that key. A non-object is written as before.
+      const bagReplace = categoryAttributes && typeof categoryAttributes === 'object' && !Array.isArray(categoryAttributes)
+        ? categoryAttributes as Record<string, unknown> : undefined
+      if (categoryAttributes !== undefined && !bagReplace) {
         directData.categoryAttributes = categoryAttributes
         directDirty = true
       }
@@ -900,6 +905,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         if (directDirty) {
           await tx.product.update({ where: { id }, data: directData })
         }
+        if (bagReplace) await replaceCategoryAttributesKeepingVariations(tx, id, bagReplace)
         // Return the post-tx state for the response.
         return tx.product.findUnique({ where: { id } })
       })
