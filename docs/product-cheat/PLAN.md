@@ -4963,6 +4963,8 @@ own map lacks TR and falls back to Italy too — see A-24.
 
 ## A-24 — 🔴🔴 Every Amazon queue push is sent to Amazon ITALY's marketplace. FOR YOUR RULING.
 
+> ✅ **RULED R-20: option (a). BUILT** — see [A-24 — BUILT](#a-24--built-r-20-the-listing-decides-the-amazon-market).
+
 **2026-09-22. Found while building A-23. Code trace; nothing built.**
 
 ### The defect, at the lines
@@ -5006,3 +5008,72 @@ claimed by the PR.2 lane on 2026-09-13 (`docs/pes-claims.md`); no newer claim wa
   built and submitted with DE's id; a row with no listing market is refused; TR is refused; an IT row is
   unchanged (control).
 - **Rollback** — revert; the push returns to the payload-or-IT rule.
+
+---
+
+## OWNER RULING — 2026-09-22 (fourteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-20** | A-24 — Amazon queue pushes default to Italy | ✅ **(a)** The row's own listing decides the market; refuse, never Italy. (The Owner: *"go ahead"*, also over the PR.2 lane's 09-13 claim on the file) |
+
+---
+
+## A-24 — BUILT (R-20). The listing decides the Amazon market.
+
+### Production, measured first (read only, run by the Owner)
+
+| Amazon listing-push rows (ads excluded) | |
+|---|---|
+| marked `SUCCESS` for **DE** without `marketplaceId` | **128** `QUANTITY_UPDATE`, all on **2026-09-08** |
+| marked `SUCCESS` for **ES** without `marketplaceId` | **128** `QUANTITY_UPDATE`, same run |
+| DE / ES / IT rows on 2026-09-22 | 35 each, `SKIPPED` (not sent) |
+| IT rows marked sent | 245 stock, 2 price |
+
+So **256 German and Spanish stock updates were built for Italy and marked sent.** 🔴 **Whether they
+reached Amazon is not known:** the queue row stores no dry-run marker (only `errorMessage` /
+`errorCode`), and production's publish mode on 09-08 is not visible here. If they were live, the
+Italian listings of those SKUs received German and Spanish stock numbers. An Amazon-side check needs
+the credentials (Step 3.1).
+
+### What was built
+
+| Where | What |
+|---|---|
+| `outbound-sync.service.ts` — `amazonMarketplaceIdOrNull()` | The id for a known code, or `null` — **never a default market**. `resolveAmazonMarketplaceId` (other callers) is unchanged |
+| `syncToAmazon` | The market is the **listing's** (`channelListing.marketplace`, loaded once); a `payload.marketplaceId` is used only when there is no listing, and one that **disagrees** with the listing is refused. No market, or a market with no id (**TR**), is refused: `FAILED`, `AMAZON_MARKET_UNRESOLVED`, not retryable, with the sentence. The env fallback is gone |
+
+### Done when — ✅ (`outbound-sync.amazon-market.vitest.test.ts`, on P1.7's harness: live mode, every outside call faked)
+
+| Arm | Result |
+|---|---|
+| price row on a DE listing, no `marketplaceId` | submitted with **DE's id**; no Italian id anywhere in the payload |
+| the same with a sale | DE |
+| IT listing (control) | IT |
+| mapping cascade (`marketplaceId` agrees) | ES, unchanged |
+| TR · a disagreeing `marketplaceId` · no listing and no id | refused by name; nothing validated or submitted |
+
+The market is decided once, before any row-type branch, so price rows prove it for every type (a stock
+row also needs a routed location; that guard already names the listing's market).
+
+### Gate — ✅ proven able to fail, 5 ways
+
+| Mutation | Red |
+|---|---|
+| **the old Italy default put back** | 4 |
+| the listing ignored | 5 |
+| an unknown market falls back to Italy | 1 |
+| a disagreeing `marketplaceId` allowed | 1 |
+| no refusal at all | 3 |
+
+Full `apps/api` hook suite: **879 files pass**. `tsc`: 0.
+
+### Side note for review §3a
+
+This queue push already **re-sends the listing's stored sale** with a price-only row (`D-MX4`,
+`outbound-sync.service.ts` after the listing load), so its `purchasable_offer` replace keeps the sale.
+The wipe the review found is `patchListingPrice` (`amazon-sp-api.client.ts:637-655`), which the worker
+never calls (`pushAmazonPrice` is reached only from `routes/pricing.routes.ts`). §3a's reach is
+narrower than the review assumed; it stays open for that route.
+
+### Cost when — `flat`. **Rollback** — revert the commit (the Italy default returns).

@@ -291,6 +291,13 @@ const AMAZON_MARKETPLACE_IDS: Record<string, string> = {
   IE: "A28R8C7NBKEWEA", UK: "A1F83G8C2ARO7P", GB: "A1F83G8C2ARO7P", US: "ATVPDKIKX0DER",
 };
 
+/** A-24 (R-20) — the id for a known market code (or a full id), or null. Never a default market. */
+export function amazonMarketplaceIdOrNull(mp: string | null | undefined): string | null {
+  if (!mp) return null;
+  if (/^A[A-Z0-9]{9,}$/.test(mp)) return mp;
+  return AMAZON_MARKETPLACE_IDS[mp.toUpperCase()] ?? null;
+}
+
 export function resolveAmazonMarketplaceId(mp: string | undefined): string {
   if (!mp) return AMAZON_MARKETPLACE_IDS.IT;
   if (/^A[A-Z0-9]{9,}$/.test(mp)) return mp; // already a full Amazon marketplace id
@@ -1063,8 +1070,6 @@ export class OutboundSyncService {
 
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
-    const marketplaceId =
-      payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
     // P1.3 — the seller of the account this row was created for (never the default seller).
     const destination = await this.destinationOf(queueItem);
     if (!destination.connectionId) {
@@ -1088,6 +1093,21 @@ export class OutboundSyncService {
         })
         .catch(() => null);
     }
+    // 🔴 A-24 (R-20) — the row's own LISTING decides the market. This was
+    // `payload.marketplaceId ?? AMAZON_DEFAULT_MARKETPLACE ?? "IT"`: no producer but the mapping cascade
+    // sets `marketplaceId`, and the variable is defined nowhere, so every other row — price, content,
+    // stock — was built and submitted for ITALY. Never a default market: refuse, and say why.
+    const listingMarket: string | null = cl?.marketplace ?? null;
+    const requestedMarket: string | null = payload?.marketplaceId ?? null;
+    const marketplaceId: string = listingMarket ?? requestedMarket ?? "";
+    const marketRefusal = !marketplaceId
+      ? "This row names no Amazon market and has no listing to take one from, so nothing was sent."
+      : !amazonMarketplaceIdOrNull(marketplaceId)
+        ? `Amazon · ${marketplaceId} has no marketplace id in the push, so nothing was sent.`
+        : listingMarket && requestedMarket && amazonMarketplaceIdOrNull(requestedMarket) !== amazonMarketplaceIdOrNull(listingMarket)
+          ? `This row asks for ${requestedMarket}, but its listing is on ${listingMarket}, so nothing was sent.`
+          : null;
+    if (marketRefusal) return { success: false, queueId, channel: "AMAZON", status: "FAILED", message: marketRefusal, error: marketRefusal, errorCode: "AMAZON_MARKET_UNRESOLVED", retryable: false };
     // MX.1 (D-MX4) — a PRICE push that carries no sale (a legacy producer) takes the listing's STORED sale + window, so
     // `buildAmazonListingPatch`'s `op:replace` on purchasable_offer re-emits it instead of wiping it (report 19 §5.9).
     if (payload.price !== undefined && payload.salePrice === undefined && cl && queueItem.channelListingId && cl.salePrice != null) {
