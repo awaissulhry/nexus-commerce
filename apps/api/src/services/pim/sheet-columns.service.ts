@@ -1362,6 +1362,13 @@ export function clearSheetColumnCache(): void {
  * the CALLING workspace's bucket, not the process. A gate reads `max` to prove the bound is still
  * wired at the call site; an operator reads `entries` to see how close a real workspace gets.
  */
-export function sheetColumnCacheStats(): { entries: number; max: number; ttlMs: number } {
-  return { entries: columnSetCache.size, max: columnSetCache.maxEntriesPerWorkspace, ttlMs: COLUMN_SET_TTL_MS }
+export function sheetColumnCacheStats(): { entries: number; max: number; ttlMs: number; businesses: { held: number; max: number } } {
+  return {
+    entries: columnSetCache.size,
+    max: columnSetCache.maxEntriesPerWorkspace,
+    ttlMs: COLUMN_SET_TTL_MS,
+    // A-15 — the process-wide number, because `entries × businesses` is what the memory bill is
+    // and nobody knows how many businesses are ever hot at once. A COUNT, never the ids.
+    businesses: columnSetCache.businesses,
+  }
 }

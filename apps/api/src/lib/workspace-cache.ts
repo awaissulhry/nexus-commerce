@@ -1,5 +1,11 @@
 import { workspaceContext } from './workspace-context.js'
 
+/**
+ * How many business buckets ANY `WorkspaceCache` keeps. Named because A-15 needed to report it and
+ * a second literal `64` beside the first is a set claim that goes stale the day one of them moves.
+ */
+const MAX_BUSINESS_BUCKETS = 64
+
 /** Bounded per-profile buckets. A cached resource ID never bypasses profile ownership. */
 export class WorkspaceCache<K, V> implements Map<K, V> {
   readonly [Symbol.toStringTag] = 'WorkspaceCache'
@@ -19,10 +25,21 @@ export class WorkspaceCache<K, V> implements Map<K, V> {
     let bucket = this.buckets.get(key)
     if (bucket) this.buckets.delete(key)
     else bucket = new Map<K, V>()
-    if (this.buckets.size >= 64) this.buckets.delete(this.buckets.keys().next().value!)
+    if (this.buckets.size >= MAX_BUSINESS_BUCKETS) this.buckets.delete(this.buckets.keys().next().value!)
     this.buckets.set(key, bucket)
     return bucket
   }
+  /**
+   * A-15 — how many business buckets this cache is holding, and the cap they are held to.
+   *
+   * 🔴 It reads `this.buckets` DIRECTLY and never goes through `bucket()`, which moves the calling
+   * business to the newest slot and creates a bucket when there is none. A diagnostic that changes
+   * the thing it measures is not a diagnostic.
+   *
+   * A COUNT, never the keys. A business id is another business's identity, and this number is read
+   * through an operator route that any business's admin can call.
+   */
+  get businesses(): { held: number; max: number } { return { held: this.buckets.size, max: MAX_BUSINESS_BUCKETS } }
   get size() { return this.bucket().size }
   get(key: K) { return this.bucket().get(key) }
   has(key: K) { return this.bucket().has(key) }

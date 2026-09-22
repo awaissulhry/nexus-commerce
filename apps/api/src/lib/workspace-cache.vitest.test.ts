@@ -49,6 +49,17 @@ describe('business cache boundaries', () => {
       expect([...capped.keys()]).toEqual(['c', 'b', 'd'])
     })
   })
+  it('A-15 — reports its business count without CREATING or reordering a bucket', () => {
+    const cache = new WorkspaceCache<string, number>(4)
+    // An empty cache asked for its count must still be empty. `bucket()` would have made one.
+    expect(cache.businesses).toEqual({ held: 0, max: 64 })
+    inside('business-a', () => cache.set('k', 1))
+    inside('business-b', () => cache.set('k', 2))
+    expect(cache.businesses.held).toBe(2)
+    // 🔴 The arm that matters: asking FROM a business that has no bucket must not give it one.
+    inside('business-c', () => expect(cache.businesses.held).toBe(2))
+    expect(inside('business-a', () => cache.get('k'))).toBe(1)
+  })
   it('evicts old business buckets without returning another business’s cached values', () => {
     const cache = new WorkspaceCache<string, number>()
     for (let i = 0; i < 65; i++) inside(`business-${i}`, () => cache.set('same-key', i))

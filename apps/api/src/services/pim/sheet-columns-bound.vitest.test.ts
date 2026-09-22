@@ -19,6 +19,21 @@ it('bounds the sheet column-set cache per business', () => {
 })
 
 /**
+ * A-15 — the memory bill is `entries × businesses`, and the second number was invisible. This
+ * reports it so a cap can be chosen from production rather than guessed.
+ */
+it('reports how many businesses the cache is holding', () => {
+  const stats = sheetColumnCacheStats()
+  expect(stats.businesses.max).toBe(64)
+  expect(stats.businesses.held).toBeGreaterThanOrEqual(0)
+  expect(stats.businesses.held).toBeLessThanOrEqual(stats.businesses.max)
+  // 🔴 That the READ does not create or reorder a bucket is asserted where it can actually fail —
+  // `lib/workspace-cache.vitest.test.ts`. A "read it twice, same number" check here would pass
+  // even if the first read created a bucket, because the second read would find the one the first
+  // one made. The fixture would pin the dimension the claim is about.
+})
+
+/**
  * 15.3 (b) — the route that reports the cache is behind a permission, not on the PUBLIC list that
  * `/admin/health` sits on. The RBAC coverage gate proves a route is MAPPED; it does not prove
  * WHICH permission, and PUBLIC counts as mapped.

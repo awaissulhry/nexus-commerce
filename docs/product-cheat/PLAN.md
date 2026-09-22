@@ -3543,3 +3543,44 @@ this plan's. It is `workspace-cache.ts:22`, shared by all twenty-odd caches buil
 
 🔴 A bucket count is a weaker cross-business signal than the process-wide entry total I refused in
 15.3 (b) — but it is still one, so **option (a) needs your word, not mine.**
+
+---
+
+## OWNER RULING — 2026-09-22 (sixth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-9** | [A-15](#a-15--the-column-set-cache-is-bounded-per-business-but-64-businesses-of-it-is-2-gb) — the bucket count | ✅ **Option (a). Report it, watch production, pick a number from data** |
+
+## A-15 RESULT — BUILT. The second half of the memory bill is now visible.
+
+`GET /admin/pim/sheet-cache-stats` gains `businesses: { held, max }`. The bill is
+`entries × businesses` and only the first half was reported; one real entry measures **473.9 KiB**.
+
+🆕 `WorkspaceCache.businesses` reads `this.buckets` **directly**. 🔴 It must never go through
+`bucket()`, which moves the calling business to the newest slot **and creates a bucket when there
+is none** — a diagnostic that invents the thing it measures. The `64` also became
+`MAX_BUSINESS_BUCKETS`, because a second literal beside the first is a set claim that goes stale.
+
+🔴 A COUNT, never the ids: this route is `admin.view`, a business role, not a platform one.
+
+### Gate — ✅ and proven able to fail, on the arm that matters
+
+| Mutation | Result |
+|---|---|
+| make `businesses` call `this.bucket()` first | 🔴 **RED** — *expected `{ held: 1, max: 64 }` to deeply equal `{ held: 0, max: 64 }`* |
+
+🟠 **The first version of this gate could not have caught that.** It read the stats twice and
+asserted the number had not moved — but if the first read creates a bucket, the second read finds
+the one the first made, and both say `1`. The test now asserts an **empty** cache reports `0`, and
+that asking **from a business that has no bucket** does not give it one. The weak check is gone,
+with a note saying why, because the same mistake has now been made twice in this programme.
+
+### Cost when — `flat`. One `Map.size` read.
+
+### Rollback — drop the `businesses` field. Nothing depends on it; it exists to be watched.
+
+### ⬜ Not done — the cap itself is unchanged
+
+64 buckets × 64 entries stands. That was the point of (a): **measure before deciding.** Option (c),
+moving the cache to Redis so replicas share one copy, remains the real fix and remains out of scope.
