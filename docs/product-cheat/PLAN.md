@@ -4761,3 +4761,49 @@ records what it hands the column build; `sheet-rows-family-gap.vitest.test.ts` h
 ### Step 2.4 — CLOSED
 
 Done when ✅ (M4 = 0, with the marker as positive control) · Cost when ✅ · Gate ✅ · Rollback ✅.
+
+---
+
+## A-22 — Step 2.3's example cannot happen; the real gap is a two-language market, and nothing stores a publish language. FOR YOUR RULING.
+
+**2026-09-22. Read-only measurement on the local catalogue plus a code trace. Nothing built.**
+
+### The premise, checked
+
+*"On Amazon·IT with German selected, the sheet shows German and the push sends Italian."*
+🔴 **That cannot happen today.** Amazon IT carries one language (`Marketplace.languages = ["it"]`),
+and `information-locale.ts:13-40` refuses a locale outside the market's languages for Amazon and eBay.
+
+Local `Marketplace.languages`, every active market: **one language each — except Amazon BE
+(`["nl","fr"]`)**. Production's rows are not measured here.
+
+### The real gap
+
+| Fact | Where |
+|---|---|
+| Nothing stores the language a listing publishes in — no column on `ChannelListing` or `ProductListingAlias`, nothing in the queued payload | schema; `apply-mapping.service.ts:260-268` |
+| The sheet's language is a URL / request parameter only | `_studio/contracts.tsx:10`; `product-studio.routes.ts:441,478` |
+| Both publish callers resolve with no locale → `languages[0]` | `sync-mapping-merge.ts:75-76`, `prepare-dispatch.ts:17-18` → `resolve-batch.service.ts:184-185` |
+| The Amazon builders already take a language and tag it correctly | `outbound-sync.service.ts:320-337`; proven for BE+`fr` → `fr_BE` by `market-language-payloads.vitest.test.ts:31-34` |
+| An existing ruling already says what Amazon should get | `docs/lx-prompts-2026-09-13.md:179`, **R-LX-6**: *"one entry per distinct (attribute, marketplace_id, language_tag)"* |
+
+So on **Amazon BE**, French content can be edited in the sheet and **is never sent**. The "two
+lines" of the plan have nothing to pass: the push runs later, in a worker, with no request.
+
+🟠 **A risk that cannot be checked here.** The builders send `item_name`, `product_description` and
+`bullet_point` with Dutch entries only. If Amazon treats that as replacing the whole attribute, a
+French entry held on Amazon is wiped by every push — the same shape as the sale-price wipe (review
+§3a). Verifying it needs live Amazon credentials (Step 3.1).
+
+### Options
+
+| # | Option | |
+|---|---|---|
+| **a** | **Send every language the market carries, as R-LX-6 already rules.** For a multi-language Amazon market, resolve once per language and emit every tagged entry in the one payload; single-language markets unchanged. Today that is Amazon BE only (locally). First action: count multi-language markets on production (read-only) | 🟢 **Recommended.** It implements an existing ruling, matches D-B's default, and a push that carries both languages cannot wipe one of them |
+| b | Keep one language per market, and say so: on a channel scope, a non-primary language is shown read-only with the reason *"Amazon · BE publishes in Dutch; French is not sent"* | Honest and cheap, but French on Belgium stays unsendable |
+
+- **Done when (a)** — an Amazon BE push carries both `nl_BE` and `fr_BE` entries for each content
+  attribute; a single-language market's payload is byte-identical to today's (control).
+- **Gate** — per coordinate, as Step 2.3 asks: BE (two languages), DE and IT (one each).
+- **Cost when** — `flat`; a two-language market resolves twice.
+- **Rollback** — revert; the payload returns to `languages[0]`.
