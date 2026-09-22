@@ -18,8 +18,10 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 Read [the latest findings and Owner-only actions](2026-09-22-HANDOVER.md) and
 [CX cleanup proof](build/CX-CLEANUP.md). Guarded deletion, the legacy eBay token-report
 fix, verification-token preflight and documented order topic are built in separate commits;
-package checks and deployment are still pending. **No production row has been deleted.**
-The exact 11 IDs still need a fresh complete report and Owner confirmation.
+the report now includes encrypted-credential presence and shares dead-row eligibility with
+deletion. Final package checks and deployment are still pending. **No production row has
+been deleted.** Fresh read-only evidence reduces the proposal to **ten**, whose exact IDs
+are in [CX-DELETE-LIST](build/CX-DELETE-LIST.md); Owner confirmation is still required.
 
 The corrected public API origin is **https://nexusapi-production-b7bb.up.railway.app**.
 The former Railway host resolved but served 404; **api.xavia.it has no DNS**. The three
@@ -28,8 +30,13 @@ its 91 accepted scopes are recorded in the latest handover; the two rejected pay
 mandate scopes are removed. Etsy setup readiness is cleared; connecting Etsy and its
 four webhook registrations remain Owner actions.
 
-Production eBay findings from the Owner: 13 rows / 12 shown in Accounts; 11 with zero
-cascading dependents; two protected rows described in the linked record. Notifications:
+Production eBay reads at **16:22:22Z / 16:23:18Z on 2026-09-22**: 13 rows, all 13
+schema-derived relations counted, 11 with zero cascading dependents but only **ten eligible**.
+`cmt0ksbbs01r4mo01c9diw1qp` has encrypted credentials and one surviving ConnectionEvent;
+retain it alongside live primary `cmr4aaqb00025nz016k18rup9` (destroys 15) and
+`cmt142bli01vcp4010fjo2k13` (destroys one ConnectionScope, unlinks 2079 ConnectionEvent).
+Both plaintext refresh columns are empty even on the credentialed live primary. The Owner's
+13 database rows / 12 Accounts rows discrepancy remains open. Notifications:
 0 destinations / 0 subscriptions, positively controlled by 27 topics; 03:55 failure is
 195019 (verification-token format). A healthy challenge hash does not validate that format.
 Fresh live application catalogue is pending permission and browser API access.

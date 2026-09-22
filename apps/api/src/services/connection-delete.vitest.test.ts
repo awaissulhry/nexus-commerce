@@ -50,8 +50,8 @@ describe('guarded dead-connection deletion', () => {
     await expect(run()).rejects.toMatchObject({ code: 'connection_in_use' })
     expect(m.deleted).toBe(false)
   })
-  it('refuses CONNECTED auth status', async () => {
-    m.row.authStatus = 'CONNECTED'
+  it.each(['connected', 'CONNECTED', 'degraded', 'DEGRADED'])('refuses %s auth status', async status => {
+    m.row.authStatus = status
     await expect(run()).rejects.toMatchObject({ code: 'connection_in_use' })
     expect(m.deleted).toBe(false)
   })

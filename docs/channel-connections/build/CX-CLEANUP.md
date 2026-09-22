@@ -10,7 +10,7 @@ Proof: 40 focused tests pass (including existing report tests); 15 service tests
 
 Commands: `npm test -- src/services/connection-delete.vitest.test.ts src/services/connection-dependents.vitest.test.ts src/routes/connection-delete.vitest.test.ts` from apps/api; `node scripts/run-real-postgres-tests.mjs --suites '[{"name":"connection delete","file":"src/services/connection-delete-concurrency.vitest.test.ts","expect":2}]'` from root.
 
-Production deletion has NOT run. Owner must confirm exact IDs after a fresh complete report. Prior production measurement supplied by Owner: 13 eBay rows; 11 with destroyedTotal 0; live primary cmr4aaqb… destroys 15 (13 EbayCampaign); cmt142bli… destroys 1 ConnectionScope and unlinks 2079 ConnectionEvent. Those two are protected. Fresh browser report currently unmeasured: Chrome blocks API navigation with ERR_BLOCKED_BY_CLIENT, and the browser's page evaluator does not provide fetch. The signed-in app DOM positively confirms Xavia Racing.
+Production deletion has NOT run. Owner must confirm exact IDs after a fresh complete report. The earlier Owner measurement counted 11 rows with destroyedTotal 0. **The later credential-presence reads reduce eligibility to ten; see the latest slice below and [exact deletion list](CX-DELETE-LIST.md).** Browser API navigation remained blocked by ERR_BLOCKED_BY_CLIENT, but direct read-only database probes supplied the counts. The signed-in app DOM positively confirms Xavia Racing.
 
 Release starts from 7c70556ea, verified as remote main. Other session's pes/phase-0 branch and dirty tree are untouched. One package push only after full gates; no deployment yet.
 
@@ -34,7 +34,7 @@ Proof: malformed-token regressions initially 9 failed / 3 passed. Boundary contr
 
 The regression failed before the change and covers both the correct topic and the old replay name. Token preflight mutations (omit character rule; omit minimum length) were each applied, killed, and restored byte for byte. **Application-specific live catalogue remains unmeasured this session**, pending live-call permission and usable signed-in browser API access. Official documentation is not presented as a production measurement.
 
-## Package verification — in progress
+## Earlier package verification — before the encrypted-report slice
 
 API typecheck: passed after building isolated shared/events dependencies. Gateway ratchet: zero EBAY, AMAZON_SP, AMAZON_ADS, SHOPIFY and ETSY violations; zero queue writers outside the owner. Push-lock audit: **one pre-existing violation**, `pim/studio-publication-amazon.ts:164 sendAmazonPublication`. A separate untouched checkout of 7c70556ea reports the identical failure; file SHA-256 matches exactly. No ratchet was changed.
 
@@ -49,3 +49,15 @@ Independent transport-level reproductions used eBay's official OpenAPI shapes; a
 The real-PostgreSQL race test was also mutation-checked: replace FOR UPDATE with FOR NO KEY UPDATE (one verified source replacement), observe one race test fail, restore original bytes. This proves the test distinguishes the necessary FK-blocking lock from a weaker lock.
 
 Production before release: public `/api/health` HTTP 200, status healthy, serving build **7c70556e**, at 2026-09-22T16:11:19Z. Remote main still **7c70556ea**. These are read-only controls; not proof of this package being deployed.
+
+## Slice 4 — encrypted credential presence and shared eligibility
+
+Production reads at **2026-09-22T16:22:22.434Z** and **16:23:18.994Z** positively confirmed database `neondb`, `transaction_read_only=on`, and workspace `nexus_legacy_workspace`. All 13 schema-derived relations counted completely. The live primary and disconnected `cmt0ksbbs01r4mo01c9diw1qp` have canonical encrypted credentials while both plaintext refresh columns are empty. Only **ten of thirteen** rows qualify. The exact ten, three retained rows, counts, and approval boundary are in [CX-DELETE-LIST](CX-DELETE-LIST.md). These are two observations, not an atomic snapshot. The underlying evidence remains at `/private/tmp/cx-production-dependents.json` and `/private/tmp/cx-production-credential-presence.json`.
+
+Added `hasEncryptedCredentials` as a boolean; the response never includes ciphertext or plaintext credentials and nothing decrypts them. Both report and delete now use one predicate and one credential/state field selection. Active/primary, connected/degraded (case-insensitive), and any encrypted/generic/eBay credential presence are ineligible. `isSafeToDelete()` is unchanged: complete dependent counts and zero destroyed rows remain required. The report is advisory; delete still locks, re-reads state, and counts in the same transaction. SetNull history remains permitted and disclosed.
+
+The original unfinished tests reproduced **5 failed / 3 passed**. Expanded tests measured **12 failed / 23 passed** before implementation, including plaintext access/refresh credentials and degraded state; afterward **59 focused tests passed** across report, delete, dependents, and route. Failed counts and new cascading dependents refuse deletion, while a truly empty row and surviving SetNull history are positive controls.
+
+Three further mutations each applied exactly once and were killed by assertion failures: omit encrypted credentials from eligibility; omit row eligibility from the report; omit dependent safety from the report. Original bytes were restored after each mutation. Independent review approved with no required findings, independently passed all 59 focused tests, API typecheck, and diff whitespace checks.
+
+The first full run after this slice had **11062 passed, 7 failed, 135 skipped**, including one formula batch failure and a failed data-validation suite setup (3 tests skipped); the JSON-only reporter omitted useful failure causes. Both untouched suites then passed in isolation (**18 tests**). A complete diagnostic rerun, without code or timeout changes, finished **11066 passed, 6 failed, 132 skipped**: only the six Amazon failures already reproduced on baseline. Logs: `/private/tmp/cx-api-eligibility-final.log` and `.json`. The transient failures' cause was not established; they are recorded, not silently discarded. The separate baseline push-lock audit violation remains unchanged. The canonical gate still needs its post-slice run.

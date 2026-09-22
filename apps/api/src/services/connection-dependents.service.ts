@@ -3,22 +3,14 @@
  *
  * ## Why this exists
  *
- * The Owner asked for 11 dead eBay rows to be deleted. Measured first, on the live screen:
- * one connection is real (`xaviaracing`, token, synced today) and eleven have **no refresh token
- * at all** — failed sign-in attempts that left a row behind, spread over months.
+ * The initial cleanup proposal counted eleven eBay rows with no cascading dependents.
+ * Fresh credential-presence reads reduced that to ten: one disconnected row still holds
+ * encrypted credentials despite empty plaintext refresh columns. Absence of plaintext tokens
+ * does not establish that a row is dead, and disconnecting does not remove its dependents.
  *
- * Two facts made a blind delete wrong:
- *
- *   1. **Nothing in the API has ever deleted a `ChannelConnection`.** `grep channelConnection
- *      .delete` returns nothing; every path revokes or deactivates instead.
- *   2. **A delete cascades.** `VariantChannelListing` and `EbayCampaign` are `onDelete: Cascade`,
- *      so real listing rows and real ad campaigns go with the connection. One of the eleven
- *      carries the SAME eBay user id as the live account and synced on 2026-08-19, so "it is
- *      disconnected" says nothing about what is attached to it.
- *
- * This module answers the only question that makes the delete safe: **for this row, how many
- * rows in each dependent table point at it, and which of those would be destroyed rather than
- * merely unlinked.** It writes nothing.
+ * The report checks row eligibility and counts every dependent relation. The delete repeats
+ * both checks under a row lock before removing one explicitly named connection. Surviving
+ * SetNull history is reported separately from rows that would be destroyed by a cascade.
  *
  * ## 🔴 The relation list is DERIVED, never written down
  *
@@ -101,7 +93,7 @@ export interface DependentCount extends DependentRelation {
 
 export interface ConnectionDependents {
   connectionId: string
-  /** Rows that would be DESTROYED. Zero here is what makes a delete safe. */
+  /** Rows that would be DESTROYED. Must be zero, with complete counts, for deletion. */
   destroyedTotal: number
   /** Rows that would survive with their link cleared. */
   unlinkedTotal: number
@@ -146,13 +138,26 @@ export async function connectionDependents(connectionId: string, client: Prisma.
 }
 
 /**
- * 🔴 The one rule a delete must obey.
+ * The dependent-count rule; dead-row eligibility is checked separately.
  *
  * Safe means: nothing would be destroyed, AND every count was actually taken. `incomplete` makes
  * this false even when `destroyedTotal` is 0, because an unread table is an unknown, not a zero.
  */
 export function isSafeToDelete(report: ConnectionDependents): boolean {
   return report.destroyedTotal === 0 && !report.incomplete
+}
+
+const deadConnectionSelect = {
+  isActive: true, isPrimary: true, authStatus: true, credentialsEnc: true,
+  accessToken: true, refreshToken: true, ebayAccessToken: true, ebayRefreshToken: true,
+} satisfies Prisma.ChannelConnectionSelect
+
+/** Shared by the advisory report and the locked delete; credentials are never decrypted. */
+function isDeadConnection(connection: Prisma.ChannelConnectionGetPayload<{ select: typeof deadConnectionSelect }>): boolean {
+  return !(connection.isActive || connection.isPrimary ||
+    ['connected', 'degraded'].includes(connection.authStatus.toLowerCase()) ||
+    connection.credentialsEnc || connection.accessToken || connection.refreshToken ||
+    connection.ebayAccessToken || connection.ebayRefreshToken)
 }
 
 /** Only a locked, freshly measured dead row can be removed. No channel call is made. */
@@ -170,11 +175,9 @@ export async function deleteDeadConnection(connectionId: string) {
     })
     const connection = await tx.channelConnection.findUnique({
       where: { id: connectionId },
-      select: { isActive: true, isPrimary: true, authStatus: true, credentialsEnc: true, accessToken: true, refreshToken: true, ebayAccessToken: true, ebayRefreshToken: true },
+      select: deadConnectionSelect,
     })
-    if (!connection || connection.isActive || connection.isPrimary ||
-        ['connected', 'degraded'].includes(connection.authStatus.toLowerCase()) ||
-        connection.credentialsEnc || connection.accessToken || connection.refreshToken || connection.ebayAccessToken || connection.ebayRefreshToken) {
+    if (!connection || !isDeadConnection(connection)) {
       throw Object.assign(new Error('This connection is active, primary, or still holds credentials. Disconnect it before considering deletion.'), {
         code: 'connection_in_use', statusCode: 409,
       })
@@ -198,6 +201,8 @@ export interface ConnectionDependentsReportRow {
   externalAccountId: string | null
   /** Presence only — the token itself never leaves this service. */
   hasRefreshToken: boolean
+  /** Encrypted storage presence only — neither decrypted nor returned. */
+  hasEncryptedCredentials: boolean
   lastSyncAt: Date | null
   destroyedTotal: number
   unlinkedTotal: number
@@ -224,8 +229,8 @@ export async function connectionDependentsReport(
   const connections = await prisma.channelConnection.findMany({
     where,
     select: {
-      id: true, channelType: true, accountLabel: true, isActive: true, isPrimary: true,
-      authStatus: true, externalAccountId: true, refreshToken: true, ebayRefreshToken: true, lastSyncAt: true,
+      ...deadConnectionSelect,
+      id: true, channelType: true, accountLabel: true, externalAccountId: true, lastSyncAt: true,
     },
     orderBy: [{ channelType: 'asc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
   })
@@ -242,11 +247,12 @@ export async function connectionDependentsReport(
       authStatus: connection.authStatus,
       externalAccountId: connection.externalAccountId,
       hasRefreshToken: !!(connection.refreshToken || connection.ebayRefreshToken),
+      hasEncryptedCredentials: !!connection.credentialsEnc,
       lastSyncAt: connection.lastSyncAt,
       destroyedTotal: dependents.destroyedTotal,
       unlinkedTotal: dependents.unlinkedTotal,
       incomplete: dependents.incomplete,
-      safeToDelete: isSafeToDelete(dependents),
+      safeToDelete: isDeadConnection(connection) && isSafeToDelete(dependents),
       detail: dependents.counts.filter((c) => c.count > 0 || c.error),
     })
   }
