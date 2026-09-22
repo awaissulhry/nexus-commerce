@@ -1853,3 +1853,47 @@ variable 146 scripts depend on trades one measured hazard for 146 unmeasured one
 puts Phase 0 ahead of everything. 🟨 Phase 1 is safety work and does not depend on the credential,
 so this lane can proceed there while the rotation is arranged — but that is the Owner's call, since
 the plan's own ordering says Phase 0 first.
+
+---
+
+## OWNER RULINGS — 2026-09-22
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-1** | Wait for the credential rotation, or start Phase 1? | ✅ **Start Phase 1 now.** Step 0.3 stays open on the rotation. Phase 1 does not depend on it |
+| **R-2** | [A-6](#a-6--step-03-half-of-it-is-already-done-and-now-proven-the-other-half-is-yours)'s two corrections to Step 0.3 | ✅ **Both accepted.** Step 0.3's Gate becomes *"the R-VT-12 guard, exercised in both directions"*. The root `.env` **keeps** `DATABASE_URL`; the 146 scripts that read it are not broken. The rotation still happens |
+| **R-3** | [A-4](#a-4----the-migration-history-cannot-rebuild-a-database-from-zero-this-blocks-part-1511) — repair the history, or dump from production? | ✅ **Repair the history.** Option (a). The repo stays the one source of truth for the schema (**R1**) |
+
+### R-3 becomes a step, scheduled where it is needed
+
+🔴 **New Step 0.4 — repair the migration history so it replays from zero.**
+
+- **Do** — Replay all 467 migrations against an empty database, recording **every** failure, not
+  only the first, and repair the history until a from-zero replay succeeds.
+- **Why now** — [15.11](#1511--the-structural-gap-cost-when-and-one-scale-fixture)'s scale fixture
+  is ranked **#2** in [15.13](#1513--ranked-what-to-do-and-when) — *"Before Phase 2. Everything
+  else is a guess without it."* It cannot be built until a database can be stood up from the
+  history. Also unblocks a real shadow database, a clean CI database and a rebuild.
+- **Approach** — `migrate deploy` stops at the first failure, so it cannot count the others. The
+  replay must apply each migration **individually** and continue past a failure to produce the full
+  list. **Rejected:** fixing the first break and re-running — that is 449 more round trips and no
+  idea of the size before starting.
+- **Done when** — an empty database reaches 467 of 467 applied, in one run.
+- **Cost when** — `flat`. It is a one-off, and it runs against a throwaway local database.
+- **Gate** — 🆕 the from-zero replay itself, as a script. Prove it can fail by removing one
+  `CREATE TABLE` and watching it go red.
+- **Rollback** — repairs are additive migration edits; the current history already does not replay,
+  so there is no worse state to return to.
+- ⚠️ **Order:** after Phase 1, before Phase 2. 🔴 **It is a migration change, so per the Owner's
+  standing rule it gets its OWN branch and its OWN merge — it never rides with code.**
+- ⬜ **Size unknown.** Only the first break has been observed. The count is the first thing the
+  replay produces.
+
+### Step 0.3 as amended by R-2
+
+- **Done when** — the old credential is dead. *(The repo-root `vitest` clause is struck: already
+  done by R-VT-12 and exercised in both directions on 2026-09-22.)*
+- **Gate** — the R-VT-12 guard (`apps/api/src/lib/testing/database-target.ts`), exercised in both
+  directions: a repo-root run refuses and names the production host; an `apps/api` run passes and
+  names `127.0.0.1` / `nexus_development`.
+- **Status** — ⏸️ **OPEN, on the Owner.** Everything this lane can do is done.
