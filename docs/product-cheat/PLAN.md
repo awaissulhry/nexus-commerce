@@ -3395,3 +3395,89 @@ that positive control already working.
 🔴 **Step 2.1 part (b) — the data pass — stays blocked on [D-A](#part-9--the-decisions-i-need)**,
 whose default is *"I derive the list from the channel schemas and bring it back for approval before
 applying."* This amendment is only about part (a), the code.
+
+---
+
+## OWNER RULING — 2026-09-22 (fifth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-8** | [A-14](#a-14--step-21s-need-is-real-and-now-measured-its-chosen-approach-would-be-read-by-nothing) — the new `{ everywhere, channels }` object, or reuse `requiredBy`? | ✅ **Option (a). Reuse `requiredBy`. Fix both homes. Four unit arms plus the fixture** |
+
+## Step 2.1 (a) — BUILT. A family requirement scoped to a channel now survives.
+
+### What the defect was, measured on both sides
+
+| seeded on the scale fixture | `requiredBy` **before** | `requiredBy` **after** |
+|---|---|---|
+| `material` · required, channels `[]` | `["Master"]` | `["Master"]` |
+| `browse_node` · required, `["AMAZON"]` | **`[]`** 🔴 | `["Amazon · DE"]` 🟢 |
+| `search_terms` · required, `["AMAZON"]` | **`[]`** 🔴 | `["Amazon · DE"]` 🟢 |
+| `ebay_category` · required, `["EBAY"]` | **`[]`** 🔴 | `["eBay · DE"]` 🟢 |
+| `season` · not required | `[]` | `[]` |
+
+### Built, in two homes because the fact was collapsed in two
+
+1. 🆕 `FieldDefinition.requiredChannels?: string[]` (`field-registry.service.ts`) — the transport.
+   `required` keeps its exact old meaning, **required everywhere**, so
+   `familyRules[...].required` — read by `packages/shared/master-sheet.ts:90` for the Master
+   coordinate — is untouched.
+2. `family-sheet-schema.ts` — the collapse is gone. `everywhere` and `channels` travel separately.
+3. `sheet-columns.service.ts` — `familyRequiredBy()` turns channel codes into **coordinate
+   labels**. It is the only place that knows both the family's channels and the coordinates in
+   view, which is why the conversion belongs there and nowhere else.
+
+🟢 **No reader changed.** `columnRequiredHere`, `sheet-rows.service.ts:335`,
+`studio-sheet.service.ts:1773`, `variation-theme-facts.ts:149` and both exports already decide by
+asking whether `requiredBy` contains the coordinate they are looking at.
+
+### Done when — ✅ measured, on the fixture and in units
+
+| The step asks | Measured |
+|---|---|
+| required on Amazon → **required when the Amazon coordinate is in view** | `columnRequiredHere(browse_node, 'Amazon · DE') === true` |
+| → **"required by Amazon" on Shared**, not a plain requirement | `requiredBy = ["Amazon · DE"]` and `columnRequiredHere(…, 'Master') === false` — the label list is what the marker renders |
+| → **never plain "required" on a channel that does not want it** | `columnRequiredHere(browse_node, 'eBay · DE') === false` |
+| a channel **not in view at all** | `ebay_category.requiredBy === []` with only Amazon in view — no invented coordinate |
+
+### Gate — ✅ all four arms, proven able to fail three ways
+
+`family-channel-requirements.vitest.test.ts`, 4 tests, in the suite that runs on every push.
+
+| Mutation | Result |
+|---|---|
+| Discard the channels again (`const channels = []`) — the original defect | 🔴 **3 of 4 red** — *expected `['Master']` to deeply equal `['Amazon · DE']`* |
+| The **obvious wrong fix**: `everywhere = a.required` alone | 🔴 **3 of 4 red** — *expected `['Master', 'Amazon · DE']` to deeply equal `['Amazon · DE']`*. This is the step's own **Rejected (a)**: it marks an Amazon-only attribute required on Shopify |
+| Kill the coordinate-label loop in `familyRequiredBy` | 🔴 **3 of 4 red** — *expected `[]` to deeply equal `['Amazon · DE']`* |
+| *(control)* the fourth arm — an attribute with **no** `channels` key — stays 🟢 through all three | correct: it must not change meaning |
+
+### Cost when — `flat`. One loop over the coordinates already in hand, per master field.
+
+### Rollback — restore the one line in `family-sheet-schema.ts`. `requiredChannels` is optional and `familyRequiredBy` degrades to the old `['Master']`-or-empty.
+
+### ⬜ What this does NOT do, stated plainly
+
+- 🔴 **Part (b), the data pass, is NOT done.** It is blocked on
+  [D-A](#part-9--the-decisions-i-need). 🟩 Measured: the local catalogue has **486
+  `FamilyAttribute` rows, 0 with `required = true`, 0 with a non-empty `channels` array.** So this
+  change is **behaviour-neutral on every real catalogue today**. It is the mechanism; D-A is the
+  data. The scale fixture is currently the only catalogue where it does anything.
+- ⬜ **Family attributes are not columns in a CHANNEL scope at all** — `familySchema` is
+  `scopeKind === 'master' && familyIds !== undefined` (`sheet-columns.service.ts`). Verified: a
+  channel-scope build returns **no** family columns. The step's *"when the Amazon coordinate is in
+  view"* is satisfied in the master/Shared scope, where every coordinate is in view. Whether
+  family attributes should also appear in a channel scope is a different question and not this
+  step's.
+- ⬜ **Multi-family precision for a channel requirement.** With two families in view and only one
+  requiring an attribute on Amazon, the column carries the Amazon label for both. `'Master'` is
+  precise here because `master-sheet.ts:90` re-checks `familyRules[familyId]`; the channel path has
+  no equivalent. Not worse than before — before, it was not reported at all — and out of the
+  step's four arms. **Recorded, not fixed.**
+- ⬜ 🟠 **A spec/family conflict is possible and untested.** `master-sheet.ts:91-92` returns early
+  from the channel's own category facts. A column that is BOTH a family attribute and carries
+  Amazon spec facts marked *not required* for that category would have the family's requirement
+  suppressed. No such column exists on the fixture, so this is **stated, not measured**.
+- ⬜ **Two exports now report an Amazon-only attribute as `required`** —
+  `catalog-transfer-export.ts:80` and `catalog-workbook-scopes.ts:13` both read
+  `requiredBy.length > 0`, which is scope-agnostic. Arguably right ("something requires it"), but
+  it is a behaviour change and is recorded rather than assumed.

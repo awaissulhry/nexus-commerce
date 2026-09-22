@@ -527,6 +527,35 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
   const channelGroups: SheetGroup[] = []
   const seenGroup = new Set<string>()
 
+  /**
+   * 🔴 PLAN Step 2.1 (A-14, approved) — WHO requires a family attribute.
+   *
+   * `requiredBy` is already the requirement vocabulary of this column model: `'Master'` for a
+   * family rule, and a COORDINATE LABEL (`"Amazon · DE"`) for a channel's own schema — see the
+   * push at the bottom of `applySpecField`. `packages/shared/master-sheet.ts:88-95`,
+   * `sheet-rows.service.ts:335`, `studio-sheet.service.ts:1773` and `variation-theme-facts.ts:149`
+   * all decide required-ness by asking whether this list contains the coordinate they are looking
+   * at. So a family requirement scoped to a channel belongs in the SAME list, not in a second
+   * shape none of them reads.
+   *
+   * This is the only place that knows both the family's channel codes and the coordinates in
+   * view, so it is where the codes become labels. In a channel scope `coordinates` holds one
+   * entry, which is what makes the out-of-scope arm fall out for free: eBay never sees an
+   * Amazon-only requirement because its label was never added.
+   *
+   * 🔴 `'Master'` is added ONLY for a requirement that holds everywhere. An Amazon-only
+   * requirement must not read as a plain requirement on Shared — the step's `Done when` asks for a
+   * *"required by Amazon"* marker there, which the label list is exactly what renders.
+   */
+  const familyRequiredBy = (field: FieldDefinition): string[] => {
+    if (!input.familySchema) return []
+    const out = field.required ? ['Master'] : []
+    for (const coordinate of coordinates) {
+      if (field.requiredChannels?.includes(coordinate.channel) && !out.includes(coordinate.label)) out.push(coordinate.label)
+    }
+    return out
+  }
+
   // ── 1. the master's own fields ────────────────────────────────────
   for (const field of fields) {
     // The static `amazon_*` / `ebay_*` registry lists are superseded by the channel specs: three of
@@ -554,7 +583,7 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       validation: field.validation,
       allStrict: field.type === 'select' && !!field.options?.length,
       hasOptions: !!(field.options && field.options.length > 0),
-      requiredBy: input.familySchema && field.required ? ['Master'] : [],
+      requiredBy: familyRequiredBy(field),
       requiredForProductTypes: [],
       applicableProductTypes: [...(field.productTypes ?? [])],
       anyType: !field.productTypes?.length,

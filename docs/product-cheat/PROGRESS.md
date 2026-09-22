@@ -27,7 +27,8 @@ Every claim below carries the commit that measured it.
 | **15.11** The scale fixture | ✅ **CLOSED** — seeded at 1,000 and 10,000; measured; it refuses numbers it cannot stand behind | `d399c1660` |
 | **15.11a / 15.12** `Cost when` on every step | ✅ **CLOSED** — all 25 steps carry one; 2 of the research's 6 numbers carried, 4 stated as uncarryable here | `d399c1660` |
 | **A-13** Bootstrap built a database with **no RLS** | ✅ **CLOSED** under R-7 — the bootstrap now applies the isolation layer; 443 policies, 1,778 grants; gated twice | `8908961e3` |
-| **2.1** Requirements become real | 🔴 **STOPPED for your ruling — [A-14](PLAN.md#a-14--step-21s-need-is-real-and-now-measured-its-chosen-approach-would-be-read-by-nothing)**. Need measured and real; the chosen approach would be read by nothing | — |
+| **2.1 (a)** Requirements become real — the code | ✅ **BUILT** under R-8 — a channel-scoped family requirement reaches `requiredBy` as a coordinate label; 4 arms, 3 mutations | _this commit_ |
+| **2.1 (b)** Which attributes are required — the data | 🔴 **BLOCKED on [D-A](PLAN.md#part-9--the-decisions-i-need)**. Until it lands, (a) is behaviour-neutral: 486 rows, 0 required | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -89,8 +90,9 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
    [15.3 RESULT](PLAN.md#step-153-result--the-column-set-cache-is-bounded-and-two-of-its-three-sibling-caches-already-were).
 2. ~~**15.11 — the scale fixture**~~ ✅ **CLOSED.** See
    [15.11 RESULT](PLAN.md#step-1511-result--the-scale-fixture-stands-up-and-the-first-thing-it-measured-was-step-24).
-3. **2.1 requirements** 🔴 **waiting on A-14** → **2.7 reconcile** (in that order), **2.4** (needs
-   15.4's fix — the plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
+3. ~~**2.1 (a)**~~ ✅ **BUILT.** **2.1 (b)** needs **D-A** — I derive the required list from the
+   channel schemas and bring it back for approval. Then **2.7 reconcile**, **2.4** (needs 15.4's
+   fix — the plan's `where` clause does not compile on a channel scope), **2.2** (needs 15.5).
 
 ✅ **A-13 is closed** (R-7). One bootstrap command now gives an isolated database.
 
