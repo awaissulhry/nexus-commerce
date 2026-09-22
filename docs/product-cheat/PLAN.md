@@ -2462,3 +2462,28 @@ restores `editable: true` once the sheet uses the door, and both steps already s
 
 ➡️ **Ruling needed:** build the corrected four-edit version, or leave the price cell writable until
 Step 2.2 lands.
+
+### A-10 addendum — the "changing" edit turns out to change nothing today
+
+**Measured on production, read-only, 2026-09-22.** Host confirmed as
+`ep-purple-river-altf6t3y…neon.tech` before the query.
+
+| Permission | Roles holding it |
+|---|---|
+| `listings.flatfile.edit` | **2** — `ADMIN`, `OPS_MANAGER` |
+| `products.delete` | **2** — `ADMIN`, `OPS_MANAGER` |
+
+> 🟢 **Roles that would lose the eBay bulk delete (hold `listings.flatfile.edit`, lack
+> `products.delete`): ZERO.** Of 6 roles total.
+
+`OWNER` is implicit-all and is never affected (`schema.prisma`, `Role.permissions`: *"OWNER is
+implicit-all: enforcement never reads this list for OWNER"*).
+
+➡️ So raising that route's permission is **behaviour-preserving for every role that exists today**.
+It binds only future custom roles — which is the entire point. The no-touch rule's requirement to
+*"split preserving from changing"* is satisfied by measurement rather than by argument: on today's
+data, both edits are preserving.
+
+🔴 **What it does NOT prove:** that no *custom* role is created later holding the flat-file edit
+without a delete permission. That is the case the change exists to catch, and it cannot be measured
+in advance.
