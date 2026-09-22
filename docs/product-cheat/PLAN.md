@@ -3292,3 +3292,106 @@ without further work, and both gates have been shown red.
 - ⬜ The bootstrap applies **443** policies where `nexus_development` reports **444**. One policy
   differs and nobody has identified which. It is below the gate's `> 400` bar and is recorded here
   rather than quietly rounded away.
+
+---
+
+# PHASE 2 — amendments
+
+## A-14 — Step 2.1's need is real and now MEASURED. Its chosen approach would be read by nothing.
+
+**FOR YOUR RULING. Nothing built.**
+
+### The need is real — and here it is, measured rather than argued
+
+🟩 `family-sheet-schema.ts:38` is exactly as the step says:
+
+```ts
+const required = a.required && (a.channels?.length ?? 0) === 0
+```
+
+🟩 `schema.prisma:736-739` (the step says `:706-714` — **drifted**, substance unchanged) documents:
+*"Channel codes where this attribute is required (when required=true). Empty array = required on
+every channel."* The code therefore keeps only the everywhere case and **silently discards every
+channel-scoped requirement.**
+
+🔴 **Measured on the scale fixture**, which is the only catalogue that carries channel-scoped
+requirements at all:
+
+| seeded | `requiredBy` on master · DE |
+|---|---|
+| `material` · required, channels `[]` | `["Master"]` 🟢 |
+| `browse_node` · required, channels `["AMAZON"]` | **`[]`** 🔴 |
+| `search_terms` · required, channels `["AMAZON"]` | **`[]`** 🔴 |
+| `ebay_category` · required, channels `["EBAY"]` | **`[]`** 🔴 |
+| `season` · **not** required | `[]` |
+
+**Five attributes marked required are indistinguishable from the ones marked optional.** That is
+the defect, in a column model, on a real build.
+
+### 🔴 But the step's chosen approach adds a SECOND requirement vocabulary
+
+The step proposes *"return a requirement **object** per attribute — `{ everywhere: boolean;
+channels: string[] }` — and let the column decide how to show it."*
+
+🟩 **The column already has that vocabulary, and it is per coordinate.** `SheetColumn.requiredBy:
+string[]` holds *who requires this*, and it already mixes both kinds:
+
+| | |
+|---|---|
+| `sheet-columns.service.ts:557` | `requiredBy: input.familySchema && field.required ? ['Master'] : []` |
+| `sheet-columns.service.ts:935` | `if (f.requirement === 'required') d.requiredBy.push(coordinate.label)` — e.g. `"Amazon · DE"` |
+
+🟩 And **every** requirement reader keys off it:
+
+| Reader | Line |
+|---|---|
+| `packages/shared/master-sheet.ts:88-95` `columnRequiredHere(column, coordinateLabel, …)` | `column.requiredBy.includes(coordinateLabel)` |
+| `sheet-rows.service.ts:335` | `c.requiredBy.some(label => requiredHere(c, label, …))` |
+| `studio-sheet.service.ts:1773` | `columnRequiredHere(c, coordinate.label, …)` |
+| `variation-theme-facts.ts:149` | `column.requiredBy.indexOf(coordinateLabel) >= 0` |
+| `catalog-transfer-export.ts:80`, `catalog-workbook-scopes.ts:13` | `col.requiredBy.length > 0` |
+
+➡️ **A new `{ everywhere, channels }` object would be understood by none of them.** The sheet would
+carry a correct requirement that readiness, the studio, the variation facts and both exports still
+ignore. That is a duplicate — the exact shape **R1** forbids and the exact shape this whole plan
+exists to remove.
+
+### Proposed instead — no new vocabulary, and the readers need no change
+
+1. **`family-sheet-schema.ts`** — stop collapsing. Carry each attribute's `channels: string[]`
+   through. 🟩 It is already there: `EffectiveFamilyAttribute.channels`
+   (`family-hierarchy.service.ts:60`) arrives intact and line 38 is the only thing that drops it.
+2. **`sheet-columns.service.ts:557`** — seed `requiredBy` with `'Master'` for an
+   everywhere-requirement, and with the **coordinate labels of the matching channels in view** for
+   a channel-scoped one. An attribute required on `AMAZON`, with Amazon · DE and Amazon · IT in
+   view, becomes `requiredBy: ["Amazon · DE", "Amazon · IT"]`.
+3. 🔴 **There is a SECOND collapsed copy the step does not mention.** `master-sheet.ts:90` reads
+   `column.familyRules[familyId].required`, written from the same boolean at
+   `family-sheet-schema.ts:41`. Fixing line 38 alone leaves the Master coordinate still deciding
+   from the collapsed value. **Both homes, or the fix is half done.**
+
+The step's `Done when` then falls out of the existing code with nothing further:
+Amazon coordinate in view → `columnRequiredHere` true; eBay coordinate → false; Shared → the
+label list is already what Part 2.3's *"also required by Amazon · DE"* marker wants to render.
+
+### 🟠 And a fact that changes what the GATE can be
+
+🟩 Measured on the local catalogue: **486 `FamilyAttribute` rows, 0 with `required = true`, and 0
+with a non-empty `channels` array.** So today line 38 discards **nothing**, and this fix changes
+**no observable behaviour on any real catalogue** until D-A's data pass lands.
+
+➡️ The gate therefore **cannot** be "the sheet changes". It must be the four arms as unit tests,
+plus the scale fixture, which is the only catalogue carrying channel-scoped requirements — built
+last night precisely so this dimension is not pinned. 🟢 The table at the top of this amendment is
+that positive control already working.
+
+### What I would do, on your word
+
+| | |
+|---|---|
+| **(a)** ✅ **Recommended** — build Step 2.1 as amended above: two homes, `requiredBy`, four unit arms, and the fixture as the end-to-end control | |
+| **(b)** Build it as the step is written, with the new object, and change all six readers to understand it | 🔴 Six files, and two vocabularies during the change |
+
+🔴 **Step 2.1 part (b) — the data pass — stays blocked on [D-A](#part-9--the-decisions-i-need)**,
+whose default is *"I derive the list from the channel schemas and bring it back for approval before
+applying."* This amendment is only about part (a), the code.
