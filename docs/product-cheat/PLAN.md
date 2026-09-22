@@ -2657,3 +2657,99 @@ hold in the same change. `EBAY_PRICE_HELD_REASON` is exported so 2.2 can reuse t
 ⬜ **What is therefore still open:** a direct API caller can still `PATCH` `ebay_price` and take the
 bypass. The **sheet** cannot, which is what Step 1.5 set out to stop. **The gap is stated, not
 closed** — and it closes at 2.2.
+
+---
+
+## Step 0.4 — MEASURED. And the obvious repair turns out to be illegal.
+
+**2026-09-22. The replay exists and has run. The repair needs a ruling.**
+
+### The number, and the wrong number I got first
+
+`packages/database/scripts/replay-migrations.mjs` applies each migration individually against a
+throwaway local database and **continues past a failure**, which `prisma migrate deploy` cannot do.
+
+> **443 of 467 apply. 24 fail.**
+> `42P01` relation missing ×16 · `42703` column missing ×5 · `42883` function missing ×2 ·
+> `42704` index missing ×1
+
+🟠 **The first run of this script was wrong, and the way it was wrong is the lesson.** It used
+`.sort()` — code-unit order — which is **not** the order Prisma applies migrations in:
+
+| | `.sort()` | `localeCompare` |
+|---|---|---|
+| `20260502_phase_d3_cascade_categoryattrs_gtin` | position **21** | position **18** |
+
+🟩 A real `prisma migrate deploy` against an empty database printed **18** `Applying migration`
+lines and died on that migration — position **18**. So Prisma orders the way `localeCompare` does.
+**Pinned against an observed deploy, not assumed from documentation.**
+
+Under the wrong order the migration that *creates* `BulkOperation` happened to run before the one
+that *alters* it, so the real first failure was invisible. Correcting the order **swapped two
+failures in and two out** — and left the total at 24 by coincidence. *The headline number was right
+by accident; the list was wrong.*
+
+### What the 24 actually are
+
+🟩 **None of them is a missing migration.** Every object they want is created *somewhere* in the
+history — **0 "never created"**. This is an **ordering** problem, plus a cascade:
+
+- **13** are clean ordering: the object is created by a **later** migration.
+  `20260508_cr10_warehouse_account` (#90) wants `CarrierAccount`, created at **#92**.
+  `20260510_lw_aet_1_prompt_acceptance` (#146) wants `PromptTemplate`, created at **#147**.
+- **11** are downstream or unclear. Several are plainly **cascades** of the first 13:
+  `#456` and `#460` want `CatalogLink`, which `#454` would have created — and `#454` failed.
+  ⬜ Those 11 were classified by regex and are approximate; the 13 are not.
+
+### 🔴 The obvious repair is illegal, and this plan's own gate proves it
+
+Renaming the folders so they sort into dependency order is the first thing anyone would try.
+**It cannot be done.**
+
+`migration_name` is the key in production's `_prisma_migrations`. Renaming a folder makes
+production's row **applied-but-missing** and the new folder **pending** — so
+`prisma migrate deploy` would re-run already-applied SQL against production.
+
+🟢 **And the gate built in [Step 0.1](#a-2-result--built-and-measured) refuses exactly that**, at
+deploy, before anything is applied. That is the gate doing its job against a change this programme
+itself proposed. It is also why [A-1](#a-1--step-01s-premise-is-false-there-are-no-untracked-production-migrations)
+measured the two directions as zero: they must **stay** zero.
+
+So "repair the history" can only mean **editing the 24 SQL files** so each tolerates running before
+its dependency — guards, `IF EXISTS`, re-ordered statements. That changes what 24 already-applied
+migrations say they did, for a database that will never replay them again.
+
+### 🟢 A third option, which was not on the table when R-3 was ruled
+
+**Generate a baseline from the repo's own `schema.prisma`** — not from production:
+
+```
+npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script
+```
+
+🟩 **Run today: 15,233 lines.** Applied to an empty database: **OK — 446 tables**, including every
+object the broken history cannot reach (`Product`, `CatalogLink`, `BulkOperation`, `PromptTemplate`)
+with a negative control (`ZZ_NeverExists`) absent.
+
+| | |
+|---|---|
+| Source of truth | 🟢 `schema.prisma`, **in the repo** — this is not the production dump R-3 rejected |
+| Production | 🟢 Untouched. Existing databases keep the history; only a **fresh** database uses the baseline |
+| Renames | 🟢 None. `_prisma_migrations` stays byte-identical, and the Step 0.1 gate stays green |
+| Unblocks [15.11](#1511--the-structural-gap-cost-when-and-one-scale-fixture)'s scale fixture | 🟢 **Today** |
+| Honest cost | 🔴 The 467-file history stays un-replayable. It becomes history, not a build path |
+
+### ➡️ Ruling needed
+
+- **(a)** 🟨 **Baseline from `schema.prisma`.** The repo stays the source of truth, nothing is
+  renamed, the scale fixture is unblocked today. *Recommended.*
+- **(b)** Edit the 24 SQL files to tolerate early execution. Honours R-3 literally, but rewrites
+  what 24 applied migrations claim to have done, and each edit is a fresh chance to diverge from
+  what production actually has.
+
+- **Cost when** — `flat`. The replay runs against one throwaway local database, in minutes.
+- **Gate** — the replay script itself. 🔴 **Not yet proven able to fail** — it must be shown to
+  catch a deliberately broken migration before its green is worth anything. That is owed whichever
+  option is chosen.
+- **Rollback** — the script is read-only and drops its own database; `abm_gate*`/`nexus_replay_*`
+  count after every run is 0.

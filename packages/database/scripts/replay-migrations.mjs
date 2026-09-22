@@ -35,7 +35,8 @@ const KEEP = process.argv.includes('--keep')
 
 function adminUrlFromLocalEnv() {
   // apps/api/.env is the local Docker database this repo's own test guard pins to.
-  const text = readFileSync(join(here, '..', '..', 'apps', 'api', '.env'), 'utf8')
+  // scripts -> database -> packages -> repo root
+  const text = readFileSync(join(here, '..', '..', '..', 'apps', 'api', '.env'), 'utf8')
   const found = text.match(/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m)
   if (!found) throw new Error('apps/api/.env has no DATABASE_URL')
   return found[1]
@@ -50,11 +51,27 @@ function assertLocal(url) {
   return parsed
 }
 
+/**
+ * 🔴 ORDER IS THE MEASUREMENT. `.sort()` is code-unit order and it is NOT the order Prisma applies
+ * migrations in. The two disagree exactly where it matters here:
+ *
+ *   20260502_phase_d3_cascade_categoryattrs_gtin
+ *     position 21 under `.sort()`          (code-unit: '3' < '5' < '_')
+ *     position 18 under `localeCompare`    (collation folds the underscore)
+ *
+ * A real `prisma migrate deploy` against an empty database printed 18 "Applying migration" lines
+ * and died on that migration — i.e. at position 18. So Prisma orders the way `localeCompare` does,
+ * and a replay using `.sort()` measures a DIFFERENT sequence: the first run of this script reported
+ * 24 failures and did not include that one, because under code-unit order the migration that
+ * CREATES `BulkOperation` happened to run before the migration that ALTERs it.
+ *
+ * Pinned empirically against an observed deploy, not assumed from documentation.
+ */
 const folders = readdirSync(migrationsDir)
   .filter((entry) => {
     try { return statSync(join(migrationsDir, entry)).isDirectory() } catch { return false }
   })
-  .sort()
+  .sort((a, b) => a.localeCompare(b))
 
 const base = adminUrlFromLocalEnv()
 const parsed = assertLocal(base)
