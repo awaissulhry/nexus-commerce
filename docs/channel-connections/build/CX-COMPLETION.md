@@ -321,6 +321,12 @@ remain auditable, including refusing a new request when an earlier credential ca
 be stored/tested and cross-process rotation serialization. No end-to-end production
 rotation is claimed.
 
+The C7 canonical gate passed both builds, **4591 web / 124 security / 106 real
+PostgreSQL** tests and RBAC **2724 / zero unmapped**. Its last step correctly refused
+the stale profiles-ON exception: `amazon-classifications` now passes and must leave
+the known-failure baseline. Removed that one exception, strengthening future checks;
+no baseline was regenerated or failure newly accepted. The gate must be rerun.
+
 ## Production observation at 20:18:17 UTC
 
 Repeatable-read, read-only `neondb` census refreshed profile/credential-presence data
@@ -334,3 +340,13 @@ Accountless log rows remain (Amazon 5, Xavia eBay 9, Motovento eBay 1). The late
 cross-channel record is 18:18Z; neither data recency nor a healthy public endpoint
 proves all schedulers are running. Evidence is the timestamped profile JSON in
 `/private/tmp/cx-completion-20260922/`; no provider call was made by this observation.
+
+**Timestamp correction, 20:28:06 UTC:** node-postgres treated Prisma's UTC
+timestamp-without-time-zone values as workstation local time, subtracting two hours
+in the preceding read-only snapshots. Explicit UTC parsing now agrees with database
+`now()` (20:28:05Z, database zone GMT). Counts/identities were unaffected, but earlier
+serialized timestamp values need +2h; the apparent two-hour scheduler gap was a probe
+error, not a production finding. The fresh snapshot shows Amazon traffic at
+20:28:05Z, eBay at 20:27:20Z, Ads at 20:25:06Z, and Etsy at 20:20:05Z. Etsy now has
+**37/37 successful, account-attributed calls** in the moving 24-hour window and still
+no ingress rows. Original evidence is retained and superseded for timestamps.

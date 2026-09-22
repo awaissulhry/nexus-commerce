@@ -25,7 +25,6 @@
     "src/services/listing-events-bridge.vitest.test.ts": 5,
     "src/services/listing-wizard/amazon-publish-binding.vitest.test.ts": 1,
     "src/services/listing-wizard/amazon-variation-preflight.vitest.test.ts": 1,
-    "src/services/marketplaces/amazon-classifications.vitest.test.ts": 1,
     "src/services/pim/autosave-readiness.vitest.test.ts": "suite",
     "src/services/pim/classification-transaction.vitest.test.ts": 3,
     "src/services/pim/content-history.vitest.test.ts": "suite",
