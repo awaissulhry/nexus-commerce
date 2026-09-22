@@ -4958,3 +4958,51 @@ own map lacks TR and falls back to Italy too — see A-24.
   language arm now runs with BE's real id in the fake map, so it tests the language rule alone).
 - **Gate** — 2 mutations red: the Italy fallback restored; the refusal removed. Restore hash-checked.
 - **Cost when** — `flat`. **Rollback** — revert the commit.
+
+---
+
+## A-24 — 🔴🔴 Every Amazon queue push is sent to Amazon ITALY's marketplace. FOR YOUR RULING.
+
+**2026-09-22. Found while building A-23. Code trace; nothing built.**
+
+### The defect, at the lines
+
+| Fact | Where |
+|---|---|
+| The Amazon push takes its market from `payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT"` | `outbound-sync.service.ts:1066-1067` (`syncToAmazon`) |
+| That value builds the patch **and** is the submit's `marketplaceId` | `:1292`, `:1344-1352` |
+| The listing's own market (`channelListing.marketplace`) is loaded — but used only for policy, guards and logs | `:1087`, `:1100`, `:1159`, `:1233`, `:1266` |
+| `AMAZON_DEFAULT_MARKETPLACE` is defined **nowhere** (no `.env`, `.env.example`, `railway.toml`) — so the value is `"IT"` | repo-wide search |
+| No producer sets `marketplaceId`: `PRICE_UPDATE` (the price door, `channel-price-write.service.ts:246-254`), `CONTENT_UPDATE` (`master-content.service.ts:147-149`), `FULL_SYNC` (`content-auto-publish.service.ts:81-89`), `QUANTITY_UPDATE` (`stock-movement.service.ts:870-874`, `amazon-market-offer.service.ts:326`) | — |
+| Only the mapping cascade sets it (`prepare-dispatch.ts:35`) | — |
+| The queue map itself lacks **TR**, which also falls back to Italy | `outbound-sync.service.ts:288-298` |
+| The worker never routes a price row to `pushAmazonPrice` (which reads the right id); every row goes through `syncToAmazon` | `bullmq-sync.worker.ts:359-370` |
+
+So a price, content, stock or full-sync change on an Amazon **DE / FR / ES / UK / NL…** listing is built
+and submitted for **Italy**, against the same SKU. No test catches it: the only `syncToAmazon` test is
+all-Italy (`outbound-sync.amazon-preview.p17.vitest.test.ts:63-65`), so the default and the listing's
+market cannot be told apart.
+
+### Did it fire? Not known here
+
+Whether a wrong-market write reached Amazon depends on production's `AMAZON_PUBLISH_MODE` and on the
+credential (Step 3.1 records Amazon `invalid_grant`). A read-only history check is ready: it counts
+Amazon listing-push rows marked sent, per market, without a `marketplaceId` (advertising rows
+excluded — they use the Ads API). Local dry run: **480** `QUANTITY_UPDATE` rows for DE and ES marked
+`SUCCESS` on 2026-09-08 — on a development machine whose publish mode is not known, so not evidence of
+a real send.
+
+### Options
+
+| # | Option | |
+|---|---|---|
+| **a** | **The push takes the market from the row's own listing** (`channelListing.marketplace` — the exact coordinate the row was created for); a `payload.marketplaceId` that disagrees is refused; **no market or no id → refused, never Italy** (this also covers TR). Remove the env fallback | 🟢 **Recommended.** One function, the real fix, gated by a per-market test with an IT control |
+| b | Refuse every Amazon queue row without `marketplaceId` until (a) is built | Immediate and tiny, but stops all non-cascade Amazon pushes |
+
+🔴 **Must be settled before Step 3.1 opens the Amazon connection.** 🟠 `outbound-sync.service.ts` was
+claimed by the PR.2 lane on 2026-09-13 (`docs/pes-claims.md`); no newer claim was found.
+
+- **Done when (a)** — a `PRICE_UPDATE` / `QUANTITY_UPDATE` / `CONTENT_UPDATE` row on a DE listing is
+  built and submitted with DE's id; a row with no listing market is refused; TR is refused; an IT row is
+  unchanged (control).
+- **Rollback** — revert; the push returns to the payload-or-IT rule.

@@ -53,6 +53,7 @@ been exercised.
 | **2.4 (move 2)** The family decides Shared's columns | ✅ **BUILT under R-14 / R-16** — editor since `f212c2348`; the grid now too: 365 → **0** channel-declared columns on a real page, no stored value hidden. **Step 2.4 CLOSED** | see `git log` |
 | **A-22** Step 2.3's example cannot happen; the gap is Amazon BE (Dutch + French) | ✅ **CORRECTED, then RULED R-18 (b), BUILT** — the main paths already send every language; the mapping cascade and the cockpit refuse a multi-language market, named. **Step 2.3 CLOSED** with that limit stated | see `git log` |
 | **A-23** The cockpit sent an unknown market (NL, PL, SE, TR, IE) to Amazon **Italy** | ✅ **RULED R-19, BUILT** — refused per market, by name | see `git log` |
+| 🔴🔴 **A-24** Every Amazon queue push (price, content, stock, full sync) is sent to Amazon **Italy** — the push reads a `marketplaceId` no producer sets, and the fallback is `"IT"` | 🟡 **FOR YOUR RULING — before Step 3.1** — recommended (a): take the market from the row's own listing; refuse, never Italy | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
