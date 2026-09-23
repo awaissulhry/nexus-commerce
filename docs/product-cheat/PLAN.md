@@ -6526,3 +6526,55 @@ Database gates (table drift, column drift, model ownership, policy parity): all 
 the table only); the package's tests pass (17/17).
 
 ### Cost when — `flat` per read-back row (one read + one write per compared listing, inside jobs that already run). The filter adds one indexed query. Rollback — revert the commit; the migration is additive (drop the table to undo).
+
+### Step 1.3 / A-37 — the read (2026-09-23 ~16:20 UTC) and the PREDICTIONS written before the live runs (R-37)
+
+**Read (`tools/unpublish-probe.mts --read`, record `records/step-1.3-read-…json`):** eBay's out-of-stock control is **ON**, for
+the account and for item `256564203510` — so quantity 0 hides the item and keeps its ItemID (off, it would END the item,
+and this test would not run). eBay's variation `Quantity` is the lifetime total: remaining = Quantity − sold (the code's own
+rule, `ebay-trading-api.service.ts:540`); BLACK-MEN-S already has 0 remaining, so the test uses **BLACK-MEN-M (13 − 3 = 10)**.
+🔴 Amazon's first candidate (GALE BLACK-MEN-S) holds an **FBA offer beside the merchant one** (`AMAZON_EU` + `DEFAULT`) —
+merchant quantity 0 would not stop it selling, and FBA is never touched; the probe now requires a MERCHANT-ONLY SKU on
+Amazon's own read: **`xracingbxn48`** (ASIN `B0BTCBPVTS`, `DEFAULT` quantity 2, `BUYABLE`).
+
+**Predictions:**
+- **eBay** — `ReviseInventoryStatus` BLACK-MEN-M → 0: `Success`; read back: 0 remaining, the item still `Active`, the same
+  ItemID. Restore → 10 remaining, read back.
+- **Amazon** — `fulfillment_availability` `DEFAULT` → 0 through the Step 3.4 send path: `ACCEPTED`; read back: quantity 0, the
+  same ASIN and SKU, the offer still present (`BUYABLE` may lag). Restore → 2, read back.
+Each listing is unbuyable for about a minute; each run always attempts its restore, even when a read-back fails.
+
+### Step 1.3 / A-37 — RESULTS of the live proof (2026-09-23 ~16:22–16:25 UTC, R-37)
+
+| Channel | Result (records `records/step-1.3-*-test-…json`) |
+|---|---|
+| **eBay** item `256564203510`, variation `GALE-JACKET-BLACK-MEN-M` | `ReviseInventoryStatus` → 0: `Success`; read back **0 remaining, item `Active`** (read by the same ItemID). Restore → `Success`, **10 remaining**. Re-read a minute later: 13 − 3 = **10**, `Active` ✅ |
+| **Amazon** `xracingbxn48` (ASIN `B0BTCBPVTS`, merchant-only) | `fulfillment_availability DEFAULT` → 0: `ACCEPTED`, 0 issues; read back **quantity 0 in 15 s, same ASIN, offer present** (`BUYABLE` had not updated — Amazon's summary lags, as predicted). Restore → 2: `ACCEPTED`, read back 2. Re-read a minute later: **2, `BUYABLE`** ✅ |
+
+Every prediction held. 🔴 **Stated plainly — found AFTER the Amazon run:** the SCT.6 service header records that an Amazon EU
+merchant quantity is **one shared number per SKU across the EU markets** (*"proved 2026-07-26 twice"*). So the quantity-0 test
+most likely made `xracingbxn48` unbuyable in EVERY EU market it sells in, not only Italy, for about 90 seconds. Restored and
+re-read. No order was lost that the records show; nothing else was touched.
+
+## A-38 — Step 1.3's Amazon half ALREADY EXISTS (SCT.6 close/reopen); quantity 0 is the wrong Amazon mechanism. FOR YOUR APPROVAL.
+
+**Found reading `services/amazon-market-offer.service.ts` (SCT.6):** per-market Amazon **offer CLOSE / REOPEN** — close deletes
+that marketplace's `purchasable_offer` attribute instance (*"Amazon's documented mechanism … the listing goes Inactive (no
+offer) in that ONE marketplace. SKU record, content, ASIN, REVIEWS, sibling markets and the shared EU quantity are
+untouched"*); reopen replays the offer captured at close time and rejoins the stock pool. FBA is refused fail-closed; pending
+quantity pushes are cancelled; `offerClosedAt` then makes every push refuse (`assertPushAllowed`) and the stock resolver
+answer `CLOSED`. This corrects A-37's sentence that Amazon does not state the mechanism — the codebase records it.
+
+| Channel | Unpublish | Republish |
+|---|---|---|
+| Amazon | **SCT.6 close** (per market; FBA refused by name) | SCT.6 reopen |
+| eBay | `ReviseInventoryStatus` 0 on the listing's SKUs — **proven above**; refused by name when the item's out-of-stock control is off (then 0 would END the item); the listing marked closed so no stock sync pushes the quantity back | quantity back through the normal stock push |
+
+### Recommendation — one
+**Build Step 1.3 on these:** `delistCapability` for `unpublish` becomes the SCT.6 close on Amazon and the proven quantity-0 on
+eBay; FBA and an item without out-of-stock control stay refused by name; the two `*_UNPUBLISH_NOT_IMPLEMENTED` refusal tests
+are inverted with a test per path (the plan's gate). Before the Amazon half is switched on, ONE live SCT.6 close/reopen on one
+merchant-only listing, read back (it has never been measured by this lane). Files named in the claim row first.
+
+- **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without losing
+  its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
