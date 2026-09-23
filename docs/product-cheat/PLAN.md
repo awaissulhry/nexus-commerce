@@ -7245,3 +7245,9 @@ usage table, `--json`, and a ratchet `--max-failures N --max-aa-failures M` for 
   ratchet ignoring growth, …; the real `tokens.css` never edited). Proposed hook line (Step 4.2):
   `node --test scripts/check-nds-contrast.test.mjs >/dev/null && node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 10`.
 - **Done when** ✅ a number exists (the plan: *"Expect red. That red is the baseline."*). **Cost when** `flat`. **Rollback** — remove the script.
+
+| # | Question | Ruling (2026-09-23 23:29 UTC, thirty-third set) |
+|---|---|---|
+| **R-47** | A-42 Q1 — number cells: a typed letter opens an EMPTY box and a save wipes the value | ✅ **Fix it in step 1**: the number body refuses the letter and keeps the value; a gate arm proves it |
+| **R-48** | A-42 Q2 — the editor hint lines (6 wordings today) | ✅ **One line everywhere**, owned by the shell, the same on every kind and scope; per-editor hints removed as each editor moves in |
+| **R-49** | Step 4.0 usage table — `--nds-text-3` and the pills | ✅ **Strict 7:1** (body tier) for every text token incl. `text-3` and pill text; they darken in the AAA sweep (Step 4.3 #5). The script's `USAGE` keeps them at the body tier (no "to rule" left) |

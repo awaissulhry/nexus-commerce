@@ -96,11 +96,11 @@ test('the controls stop the run: a broken positive control or a resolvable "abse
   assert.equal(run(['--tokens', variant('--nds-text-link: #1a60c4;', '--nds-text-link: #1a60c4;\n  --nds-zz-control-never-declared: #ffffff;')]).code, 2)
 })
 
-test('a pair whose tier is "to rule" is counted at the body tier (strict), and prints its ui verdict beside it', () => {
+test('R-49: --nds-text-3 is body text — counted strict at 7:1, with no ui verdict beside it', () => {
   const { out } = run([])
   const row = out.rows.find((r) => r.mode === 'dark' && r.fg === '--nds-text-3' && r.bg === '--nds-surface')
-  assert.equal(row.tier, 'to-rule')
-  assert.ok(row.ratio >= 4.5 && row.ratio < 7) // passes the ui bar, fails the body bar
+  assert.equal(row.tier, 'body')
+  assert.ok(row.ratio >= 4.5 && row.ratio < 7) // would pass a ui bar; fails the body bar it is ruled to
   assert.equal(row.belowAAA, true)
-  assert.deepEqual(row.ifUi, { belowAAA: false, belowAA: false })
+  assert.equal(row.ifUi, undefined)
 })

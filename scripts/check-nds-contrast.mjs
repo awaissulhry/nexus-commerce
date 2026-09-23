@@ -20,7 +20,8 @@
  *
  * ── Two tiers, from a usage table the Owner rules ────────────────────────────────────────────────────────────────────
  *   body  (the default) AAA 7:1 · AA 4.5:1        ui  (large or UI-label text only) AAA 4.5:1 · AA 3:1
- * USAGE below is a DRAFT. `to-rule` pairs are COUNTED at the body tier (strict) and also print their ui verdict.
+ * USAGE below is RULED (R-49, 2026-09-23): every text token, `--nds-text-3` and pill text included, is body text (strict 7:1).
+ * A `to-rule` entry, if one is ever added, is counted at the body tier and also prints its ui verdict.
  *
  * ── Controls ─────────────────────────────────────────────────────────────────────────────────────────────────────────
  * Positive: `--nds-text` on `--nds-surface` (light) must measure 15–16 (Study 02: ~15.5). Negative: an absent token must
@@ -55,11 +56,11 @@ const intOpt = (name) => {
 const MAX_AAA = intOpt('--max-failures')
 const MAX_AA = intOpt('--max-aa-failures')
 
-// ── the usage table — a DRAFT for the Owner (Step 4.0 / Study 02) ───────────────────────────────────────────────────
+// ── the usage table — ruled by the Owner (R-49): strict 7:1 for all text ───────────────────────────────────────────
 const TIERS = { body: { aaa: 7, aa: 4.5 }, ui: { aaa: 4.5, aa: 3 } }
 /** Keyed by the FOREGROUND token. Anything not listed is body text. */
 const USAGE = {
-  '--nds-text-3': { tier: 'to-rule', note: 'Study 02: labels, metadata, placeholders — never body. If the Owner rules it is only ever large/UI text, it takes the ui tier' },
+  '--nds-text-3': { tier: 'body', note: 'R-49: labels and metadata are still text — strict 7:1; it darkens in the AAA sweep (Step 4.3 #5)' },
 }
 
 // ── WCAG maths ──────────────────────────────────────────────────────────────────────────────────────────────────────
