@@ -33,7 +33,7 @@ quarantine integrity separate from adoptability (79 focused,32 realPG,6 mutation
 C11f4 adds private database CAS/mandatory audit (26maintenance+32adoption realPG);
 full gate passes11569API,4640web,bothbuilds,291realPG/zero skips,127security;
 profiles ratchet unchanged. These are local only. Global quarantine inventory/
-operator entry point and actual maintenance proof,
+cold verify/rewrap entry point and actual maintenance proof,
 transactional order/erasure work and channel operational dependencies remain open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
@@ -130,3 +130,10 @@ Release prerequisite added2026-09-23: prepare and test a protocol-aware rollback
 artifact containing all applied migration folders. Published0a alone fails its own
 applied-but-missing startup gate after20260923a..f. Relevant production PG17.11/role
 attributes were verified read-only18:14Z; actual migration and rollout remain unapproved.
+
+C11f4 committed16a6e7e48. C11f5 adds reviewed global metadata inventory/CLI locally:
+63regressions,65targeted realPG,9mutations,API build/typecheck and11594fullAPI pass;
+failed concurrent-generation run and successful sequential repeat retained.
+A complete metadata snapshot still says recoverynot_checked/retirementReadyfalse.
+The unmodifiedc65 recovery candidate restores known safety defects; nearere67 plus
+final migration history remains a candidate pending an exact build/rehearsal.

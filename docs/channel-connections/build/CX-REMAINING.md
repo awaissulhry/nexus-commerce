@@ -1226,5 +1226,70 @@ runs checkAppliedButMissing. After20260923a..f apply, an ordinary rollback to th
 old image refuses startup because it lacks those migration folders. Additive columns
 alone do not make rollback operational. Prepare/review/test a protocol-aware rollback
 artifact containing the complete applied migration history before asking deployment
-approval. Candidate c65db206b plus current history is under review, not yet approved
-or built. After any activation, retain the protocol-aware requirement as well.
+approval. Unmodified c65db206b was rejected as the prepared candidate because it restores
+known crypto-cache/profile-read defects and older manual maintenance. Prefer nearer
+e67d8c85e application code plus exact final history; this is still only a candidate,
+not a built/rehearsed artifact, and it retains the new ingress foundations. After any activation, retain the protocol-aware requirement as well.
+
+
+## C11f5 — restricted global metadata inventory (local; reviewed and tested)
+
+C11f4 is committed16a6e7e48. New20260923g adds a bounded metadata-only global
+inventory function under the same dedicated maintenance authority. Runtime/PUBLIC
+cannot execute it. The separate CLI requires CX_QUARANTINE_MAINTENANCE_DATABASE_URL,
+never the normal app pool, dotenv loading or DATABASE_URL fallback. No operator
+login is granted access, no production invocation occurred, and no KMS call is made.
+
+The service verifies actual READ ONLY/REPEATABLE READ mode, traverses stable keyset
+pages across resolved/unresolved/rejected records and uses lookahead to distinguish
+an exactly-full snapshot from truncation. It returns aggregate counts only, omitting
+raw bodies, provider/subject/row IDs and arbitrary stored key strings. The explicit
+validated target ARN is echoed. Key classification is stored metadata; envelope
+classification is its apparent prefix, never authentication or recovery proof.
+Incomplete row/time scans return snapshotCompletefalse and CLI exit2; errors return
+no successful census. Recovery staysnot_checked and retirementReadyfalse even for
+complete zero or all-target-metadata snapshots. Concurrent arrivals belong to the
+next snapshot. asOf is the database transaction start time, not a perpetual census.
+
+Performance bounds: page1–100(default50), total1–100000(default10000), scan budget60s
+checked between queries, statement timeout10s and CLIquerytimeout15s. This is not a
+hard60-second deadline; a running query can finish afterward. Separate first/range
+SQL queries retain indexed keyset access. Review improved LIKE-prefix checks to
+three-character substring so TOAST bodies need not be fully fetched just to classify
+format. No production latency or large-inventory benchmark claim is made.
+
+Sources: [repeatable-read snapshots](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-REPEATABLE-READ),
+[PostgreSQL17 substring implementation](https://raw.githubusercontent.com/postgres/postgres/REL_17_STABLE/src/backend/utils/adt/varlena.c).
+Operator instructions and still-open key-recovery/rewrap work:
+[QUARANTINE-MAINTENANCE](../QUARANTINE-MAINTENANCE.md).
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11-f5-inventory-red.log records missing module; time-bound-red.log is a behavioral
+  red for unbounded snapshot lifetime. Initial typecheck rejected Object.hasOwn under
+  the existing TS library target; use hasOwnProperty.call, do not change compiler rules.
+- c11-f5-regressions.log:63 focused inventory/CLI/crypto regressions pass; final
+  typecheck passes. Twenty-five of these cases exercise inventory/CLI contracts.
+- c11-f5-postgres-final.log:33maintenance/inventory plus32admission pass, zero skips,
+  production-equivalent role. Includes actual CLI full/partial execution, global
+  authority denial, snapshot/concurrent insert, metadata-only shape and page bounds.
+- c11-f5-mutations-final.log:9 applied/restored mutations killed: actualread-only,
+  actualsnapshot,lookahead,timebudget,dedicatedconnection,authorityswitch,runtimedenial,
+  first-pagehistory and later-pagehistory. Initial first-page-history mutation survived
+  random resolved-row placement; deterministic resolved fixtures at both ends now kill
+  both branches independently. Preserve the original survived result in
+  c11-f5-history-placement-incomplete-fixture.log and c11-f5-mutations-first.log.
+- Independent final source review approves. Final restored realPG passes65/zero skips
+  (c11-f5-postgres-restored.log); API build passes(c11-f5-api-build.log). The first full
+  API run overlapped that build's Prisma generation: information-database could not
+  load a partially rewritten native engine (observed file lengths0x30000/0x46000).
+  Retain c11-f5-full-api.log as FAILED, not a code/test exemption. After generation
+  completed, the entire API suite passed sequentially:11594tests/329existing-or-realPG
+  skips (c11-f5-full-api-sequential.log). No assertion or requirement changed.
+  Never run Prisma generation or API build concurrently with tests using that client.
+  Canonical realPG now expects298 across22files.
+
+Still open: operator cold-verify/rewrap entry point, complete cold traversal and
+concurrent-writer/key-retirement procedure; actual provisioning/recovery/activation
+and live channel proof. Metadata visibility alone does not close those requirements.
+A reviewed/rehearsed migration-complete protocol-aware fallback remains a release
+prerequisite; no new deployment approval has been requested yet.

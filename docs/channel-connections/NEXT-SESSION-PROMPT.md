@@ -6,7 +6,56 @@ Continue the remaining Nexus channel-connections work. Scope: Amazon, eBay and E
    - Preserve the two original untracked cx-production-*.mts scripts; do not blindly stage or execute them.
    - Stage files by name, commit per slice and push once per reviewed, approved package. Inspect actual history and remote main before integrating.
 
-2. Fresh upstream observation: at2026-09-23 12:52Z, published main is0a563d6d5700a9aded3a53cf64c9fcf543facb04 and public /api/health returned200/healthy/build0a563d6d. This is the already-published PES/main merge; integrate that immutable published baseline in the isolated branch before any future release and retest, never the shared worktree's unpublished history. No Railway/DB/flags/vendor state was freshly verified in this small read. C11d5 is now locally reviewed/tested (233 realPG/19files/zero skips,176 focused regressions,9 killed mutations), with stored-receipt receiver/worker/manual execution wired but processing defaultOFF. Published main is now integrated locally with reviewed bootstrap/schema/runtime parity repairs; see I1 in CX-REMAINING and inspect merge status. C11d6 implements in-place archive-never-delete protection and race-safe legacy replay locally; inspect current tests/review/commit. Privacy GET can create its90-day policy, so never use it for read-only production inspection. C11d7 now implements always-unscheduled admission/adoption, bounded atomic activation and replay scheduling readiness (9 rollout realPG,5 killed mutations,independent source approval); committed asf8f87e8af. First full hook failed8 old account fixtures against the deployed uniqueness constraint; distinct synthetic identities fix them (79 focused tests pass), reviewedc65db206b and full gate now pass (11504API,4603web,256realPG/zero skips,127security,both builds,profiles ratchet unchanged). U1 shared retention controls have final browser/typecheck/build/review approval; inspect commit. U1 is committed fad6d5f60. U2 now fixes Ingress202/queued feedback and keyboard focus (28 tests,2 mutations,browser proof,independent review and final build); inspect commit. Require old workers/in-flight sweeps retired before activation. After activation, rollback only to a protocol-aware build. C11e1 owner-only quarantine metadata/adoption APIs now pass review (32 realPG plus9 rollout,44 route tests,6 mutations); inspect commit. C11e1 is committed c2eb15a99. C11e2 recovery UI and parent profile-read fencing are implemented/reviewed locally (54 tests,6 mutations,actual-parent browser proof); full c11-e2-prepush.log passes (11518API,4640web,264realPG/zero skips,both builds,127security,2727RBAC/0unmapped,profiles ratchet unchanged); inspect commit. Next maintenance audit found per-item KMS fallback can downgrade envelopes, shared-account SELECT can expose foreign credentials to rotation, inactive/quarantine inventories are missing and REFUSED strings become CronRun SUCCESS. C11f1 containment now implements owned scope, per-result target validation, inactive inventory and truthful FAILED status (11528API,74 focused tests,12realPG,6mutations,reviewed); inspect commit. C11f1 committed9bb761f16. C11f2 implements reviewed pinned/cold/lossless crypto and fixes DEK cache buffer races (89 focused,44realPG,7mutations); full API11543/296skips,89profiles-ON and typecheck pass; inspect commit. C11f2 committed396469275. C11f3 reviewed private quarantine crypto preserves opaque verified bodies and checks binding/digest/key metadata without weakening adoption (79 focused,32realPG,6mutations); inspect final tests/commit. C11f3 committede67d8c85e. C11f4 private database CAS/atomic audit passes review/fullgate (11569API,4640web,bothbuilds,127security,291realPG/zero skips,7mutations,profiles927files41known/217testsunchanged); inspectcommit. Release audit: old0a cannot restart after new migrations because applied-but-missing gate refuses. Prepare/test protocol-aware rollback artifact withcompleteappliedmigrationhistory beforedeploymentapproval (candidatec65+historyonlyunderreview). Public18:08Zstill0ahealthy; read-only18:14ZconfirmsPG17.11andownerroleattributes, newroles/migrationsabsent. Next: private global quarantine inventory and explicit operator entry point; validate sealed binding for unsupported notices too. No caller-settable immutability bypass. Global visibility remains open. Main/health rechecked16:27Z remain0a563d6d, with existing five quantity mismatches and critical Ads integrity; no fresh private/business verification. Inspect actual status/history for its commit. Nothing from C9 onward has been pushed/deployed/activated.
+2. Current continuation state (verify actual git status/history before editing):
+   - Latest committed foundation through C11f4 is16a6e7e48. C11f5 is reviewed/tested;
+     inspect its commit. Nothing from C9 onward has been pushed/deployed/activated.
+   - C9–C11d7 implement receipt identity/leases, grant versions/current-refresh checks,
+     transactional revocation/warnings, private encrypted admission, seller fences,
+     stored-ID execution, archive-never-delete and safe mixed-version holds. Admission
+     and adoption remain unscheduled. Retire old APIs/workers and in-flight sweeps
+     before activation; afterwards only protocol-aware recovery builds are allowed.
+   - U1/U2 correct shared retention controls and queued/completed replay feedback/focus.
+     C11e1/e2 add owner-only quarantine recovery APIs/UI and parent profile-read fencing.
+     Actual-component/parent browser evidence and independent reviews are retained.
+   - C11f1 owns credential maintenance scope and reports refusal/partial failure.
+     C11f2(396469275) pins/cold-verifies lossless encryption and fixes DEK-buffer races.
+     C11f3(e67d8c85e) validates quarantine binding/digest/key metadata independently of
+     adoptability; verified unsupported/malformed bodies remain recoverable.
+   - C11f4(16a6e7e48) adds restricted global maintenance authority, two-column CAS and
+     mandatory append-only audit. Full normal hook passes11569API/322skips,4640web/13,
+     bothbuilds,127security,2727routes/0unmapped,291realPG/22files/zero skips. Profiles-ON
+     measures927files:41known failing/217tests,none new/worse. Canonical realPG now
+     defaults to production-equivalent NOSUPERUSER ownership; keep that stronger gate.
+   - C11f5 adds restricted global metadata inventory/CLI with a dedicated connection,
+     read-only repeatable-read snapshots and honest bounded completeness.63regressions,
+     65targeted realPG,9mutations,API build/typecheck and11594fullAPI/329skips pass.
+     First fullAPI failed because the agent overlapped Prisma generation and tests;
+     sequential repeat passed. Never overlap generation/build with tests sharing that
+     client. Canonical runner now expects298realPG/22files; full canonical F5 repeat
+     has not yet been run. Metadata census never certifies recovery/key retirement.
+   - Published main was integrated locally through reviewed I1/I2; only published
+     0a563d6d5700a9aded3a53cf64c9fcf543facb04, never the shared tree's unpublished history.
+     Fresh public18:08Z observation remains0a563d6d/healthy200. Private read-only18:14Z
+     confirms PG17.11, owner NOSUPERUSER/BYPASSRLS/CREATEDB/CREATEROLE, no PUBLIC schema
+     CREATE, maintenance roles absent and no20260923 migrations applied. It does not
+     reverify flags, credentials, businesses or vendor state. Existing five quantity
+     mismatches/critical Ads integrity remain dated16:27Z observations.
+   - Release prerequisite: old0a refuses startup after new migrations because of its
+     applied-but-missing gate. Build/review/rehearse an exact protocol-aware recovery
+     artifact with complete applied history. Unmodifiedc65 restores known safety
+     defects; nearere67 application plus final database tree is the preferred candidate,
+     not yet an artifact or proof. Carry F4's restricted-owner runner/26-case maintenance
+     test and admission fixture policy reinstall for normal-hook coverage; F5's33-case
+     test imports its new inventory service/CLI and must not be copied alone. Use a
+     separate Git root (a plain nested fixture's hook would test the parent tree).
+   - Next: finish the operator cold-verify/rewrap entry point and safe traversal,
+     then build/rehearse the migration-complete recovery artifact before deployment
+     approval. Prepare exact action/package; no operator grant, KMS use, rewrap,
+     key retirement, live channel probe or activation is implied by deployment.
+   - Read build/CX-REMAINING.md for failures, amendments, exact evidence and completed
+     slice details, and QUARANTINE-MAINTENANCE.md for operator boundaries. Keep future
+     deployment/activation proofs separate. Privacy GET can CREATE its90-day policy,
+     so it is not an authorized read-only production inspection endpoint.
 
    Prior approved439d9e3d release is DEPLOYED AND VERIFIED historical evidence, not pending approval:
    - Main/code release: 439d9e3d34ed79a09d76981da08de5d2ca0190e2.

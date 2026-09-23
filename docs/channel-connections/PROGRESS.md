@@ -84,6 +84,14 @@ protocol-aware rollback artifact carrying all new migration folders: old0a refus
 startup after these migrations (applied-but-missing gate), even with processing held.
 Public18:08Z remains0a563d6d/healthy; read-only18:14Z confirms production PG17.11 and
 required owner role attributes, with new migrations/maintenance roles absent.
+C11f4 is committed16a6e7e48. C11f5 adds the restricted global metadata inventory/CLI
+(63regressions,65realPG,9mutations,reviewed); API build/typecheck and fullAPI11594/329
+pass. First fullAPI overlapped Prisma generation and failed on a partially written
+engine; retained asfailed and rerun sequentially. Never overlap builds/generation
+with tests sharing that generated client.
+Cold verify/rewrap entry point and rehearsed rollback artifact remain next. Unmodified
+c65 fallback would restore known safety defects; nearere67+finalhistory is a candidate
+only. See QUARANTINE-MAINTENANCE.md for honest inventory/retirement boundaries.
 
 
 ### Approved production release — 2026-09-22

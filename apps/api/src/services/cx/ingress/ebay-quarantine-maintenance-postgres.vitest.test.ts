@@ -1,18 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { Pool, type PoolClient } from 'pg'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support/concurrent-database.js'
 import { encryptCredentials, __cryptoTest, __test } from '../../../lib/crypto.js'
 import { FakeKms, FAKE_KMS_KEY_ID } from '../../../test-support/fake-kms.js'
 import { reencryptEbayQuarantine } from './ebay-quarantine-crypto.js'
+import { readQuarantineInventory } from './ebay-quarantine-inventory.js'
 
 let database: Awaited<ReturnType<typeof concurrentDatabase>>, operators: Pool
+let operatorUrl: string
 const operator = `q_operator_${randomBytes(6).toString('hex')}`
 const writer = 'nexus_ebay_quarantine_writer', maintenance = 'nexus_ebay_quarantine_maintenance'
 const functionSql = 'SELECT public.nexus_rewrap_ebay_quarantine($1,$2,$3,$4,$5,$6,$7::uuid) AS changed'
-async function seed() {
-  const id = randomUUID(), rawBody = Buffer.from('synthetic verified future-topic body')
+async function seed(id = randomUUID()) {
+  const rawBody = Buffer.from('synthetic verified future-topic body')
   const digest = createHash('sha256').update(rawBody).digest('hex')
   const binding = { environment: 'production', signatureOk: true, externalId: id, topic: 'FUTURE_TOPIC', subjectHash: null, payloadDigest: digest }
   const old = await encryptCredentials({ version: 1, binding, rawBody: rawBody.toString('base64'), header: 'synthetic-signature' })
@@ -48,6 +51,7 @@ describe.skipIf(!concurrentDatabaseUrl())('private eBay quarantine maintenance a
     await database.pool.query(`CREATE ROLE ${operator} LOGIN NOINHERIT PASSWORD 'disposable-test-only'`)
     await database.pool.query(`GRANT ${maintenance} TO ${operator} WITH INHERIT FALSE, SET TRUE`)
     const target = concurrentDatabaseUrl()!; target.pathname = `/${database.name}`; target.username = operator; target.password = 'disposable-test-only'
+    operatorUrl = target.toString()
     operators = new Pool({ connectionString: target.toString(), max: 4 })
   }, 180_000)
   afterAll(async () => {
@@ -209,4 +213,59 @@ describe.skipIf(!concurrentDatabaseUrl())('private eBay quarantine maintenance a
     finally { for (const result of results) if (result.status === 'fulfilled') await result.value.close() }
     const fixture = await seed(); expect(await rewrap(fixture.args)).toBe(true)
   }, 180_000)
+  it('shows the complete global metadata census without exposing ciphertext or provider identity', async () => {
+    // Exercise the actual additive inventory migration after historical F4 replay.
+    await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260923g_cx_quarantine_inventory/migration.sql', import.meta.url), 'utf8'))
+    // Resolved history must occur in both the initial and later keyset pages.
+    // Random placement could let a one-branch history-filter regression survive.
+    for (const id of ['00000000-0000-0000-0000-000000000001','ffffffff-ffff-ffff-ffff-ffffffffffff']) {
+      const fixture = await seed(id), receiptId = randomUUID()
+      await database.pool.query(`INSERT INTO "WebhookEvent" (id,"workspaceId",channel,"externalId","eventType",payload,"signatureOk","verifiedBy","updatedAt")
+        VALUES ($1,'nexus_legacy_workspace','EBAY',$2,'FUTURE_TOPIC','{}',true,'ebay_ecdsa',now())`, [receiptId, `ebay:production:${fixture.id}`])
+      await database.pool.query(`UPDATE "EbayNoticeQuarantine" SET "resolvedWorkspaceId"='nexus_legacy_workspace',"resolvedReceiptId"=$2,"resolvedAt"=clock_timestamp() WHERE id=$1`, [fixture.id, receiptId])
+    }
+    const rejected = randomUUID()
+    await database.pool.query(`INSERT INTO "EbayNoticeQuarantine" (id,environment,"signatureOk","externalId",topic,"payloadDigest",reason) VALUES ($1,'production',false,$1,'unclassified',$2,'invalid_signature')`, [rejected, 'a'.repeat(64)])
+    const count = Number((await database.pool.query('SELECT count(*) FROM "EbayNoticeQuarantine"')).rows[0].count)
+    const result = await asOperator(c => readQuarantineInventory(c, { pageSize: 3, maxRows: 1000, targetKeyArn: FAKE_KMS_KEY_ID }))
+    expect(result).toMatchObject({ examined: count, snapshotComplete: true, recovery: 'not_checked', retirementReady: false })
+    expect(result.resolved).toBeGreaterThan(0)
+    expect(result.rejectedMetadata).toBeGreaterThan(0)
+    const page = await asOperator(c => c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,100)'))
+    expect(Object.keys(page.rows[0]).sort()).toEqual(['id','signatureOk','payloadPresent','payloadKeyId','apparentVersion','resolved','ownerKnown','receivedAt'].sort())
+  })
+  it('denies global inventory to the ordinary runtime even with system actor settings', async () => {
+    const c = await database.pool.connect()
+    try {
+      await c.query('SET ROLE nexus_workspace_runtime'); await c.query("SELECT set_config('nexus.actor_id','',false)")
+      await expect(c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,10)')).rejects.toMatchObject({ code: '42501' })
+    } finally { await c.query('RESET ROLE'); c.release() }
+  })
+  it('keeps a snapshot stable while a new notice commits, then shows it in the next snapshot', async () => {
+    await asOperator(async c => {
+      await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
+      const before = (await c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,100)')).rows
+      const inserted = await seed()
+      const after = (await c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,100)')).rows
+      expect(after).toEqual(before)
+      expect(after.some(value => value.id === inserted.id)).toBe(false)
+      await c.query('COMMIT')
+      const next = (await c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,100)')).rows
+      expect(next.some(value => value.id === inserted.id)).toBe(true)
+    })
+  })
+  it.each([0,101,null])('refuses unbounded/invalid inventory page size %s', async limit => {
+    await asOperator(async c => { await expect(c.query('SELECT * FROM public.nexus_ebay_quarantine_inventory(NULL,$1)', [limit])).rejects.toMatchObject({ code: '22023' }) })
+  })
+  it('runs the actual operator CLI and exits nonzero for an incomplete census', async () => {
+    const env = { ...process.env, CX_QUARANTINE_MAINTENANCE_DATABASE_URL: operatorUrl, DATABASE_URL: 'postgresql://nobody@127.0.0.1:1/do_not_fallback' }
+    const run = (maxRows: string) => execFileSync(process.execPath, ['--import', 'tsx', 'src/scripts/cx-quarantine-inventory.ts', '--max-rows', maxRows, '--page-size', '3'], { env, encoding: 'utf8', timeout: 20_000 })
+    expect(JSON.parse(run('1000'))).toMatchObject({ scope: 'all_quarantine', snapshotComplete: true, recovery: 'not_checked', retirementReady: false })
+    try { run('1'); throw new Error('Expected partial inventory exit') }
+    catch (error) {
+      const result = error as { status: number; stdout: string }
+      expect(result.status).toBe(2)
+      expect(JSON.parse(result.stdout)).toMatchObject({ examined: 1, snapshotComplete: false, incompleteReason: 'row_limit' })
+    }
+  }, 45_000)
 })
