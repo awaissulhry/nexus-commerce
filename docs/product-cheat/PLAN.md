@@ -6056,3 +6056,41 @@ Owner's run.
 
 - **Cost when** — `flat` (one comparison per content entry at publish). **Gate** — an arm with an Italian own title on DE is
   named; a German own title is not (control). **Rollback** — revert.
+
+---
+
+## A-33 — Step 3.3 assessed: the two Amazon payload builders have ALREADY drifted. Collapse recommended. FOR YOUR APPROVAL.
+
+**2026-09-23. Read: both builders, their callers and git history (lines re-read). Nothing built.**
+
+| | Studio / cockpit builder | Mapping-cascade builder |
+|---|---|---|
+| Where | `services/amazon/mapping-payload.ts:9` `applyResolvedMappingToAmazonFeed` | `services/pim/mapping/prepare-dispatch.ts:11` `prepareMappingDispatch` (Amazon branch `:36-49`) |
+| Live caller | studio publication (`studio-publication-amazon.ts:143`), cockpit publish | the outbound queue, every `FM_CATALOG_CASCADE` row (`outbound-sync.service.ts:742`, patches merged at `:378`) |
+| Serialiser | `attributesFromCells(spec, values)` | the same |
+| Mixed ownership (a root with listing-owned leaves) | refused | refused (other wording) |
+| 🔴 **Clearing an attribute** | `{ op: 'delete', path, value: attributeDeleteValue(spec, root) }` — the schema's selector values (`mapping-payload.ts:50`) | `{ op: 'delete', path }` — **by name alone** (`prepare-dispatch.ts:46-48`) |
+| When it clears | only a root whose value was an override and is now empty, never on a full update | any reviewed root that now resolves to nothing |
+
+🔴 **The drift is in git.** `e0791ea9d` (2026-09-14, the GALE import) changed the studio builder from deleting by name to
+*"clear attributes using schema selector values instead of deleting by name alone"* (its audit README) and added
+`attributeDeleteValue`. The cascade builder was not touched. A mapping-cascade clear of an Amazon attribute still goes out
+by name alone — the shape that fix exists to replace. Not measured against Amazon (Step 3.1 is shut); the audit is the
+evidence that Amazon needs the selectors.
+
+🟠 **To check in the build, not claimed:** whether a content field (`item_name` …) can be selected in the cascade — the studio
+builder takes content from the content resolver with its review gate (`buildAmazonContentAttributes`), the cascade from the
+mapping cell.
+
+### Recommendation — one: collapse, then keep the gate
+
+**One function builds the mapped-attribute patch for both** (the studio builder's rules: the selector delete, the ownership
+refusal), called by `applyResolvedMappingToAmazonFeed` and by the cascade's Amazon branch. Plus Step 3.3's gate: one fixture,
+both callers, their patches diffed — red today on the delete shape (the proof it can fail), green after.
+
+- **Done when** — a cascade clear carries the schema selectors; the gate diffs the two callers on one fixture and is 0; a
+  deliberate divergence in either turns it red.
+- **Cost when** — `flat`. **Gate** — the parity test + mutations (Python harness, per-file backups, hash check).
+- **Rollback** — revert the commit.
+- Files it would hold (named in the claim row first): `services/amazon/mapping-payload.ts`,
+  `services/pim/mapping/prepare-dispatch.ts`, their tests, a new parity test.
