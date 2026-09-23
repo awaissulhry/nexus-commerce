@@ -183,7 +183,7 @@ export async function runCredentialsRotate(): Promise<string> {
 
     for (const row of rows) {
       try {
-        const result = await reencryptCredentials(row.credentialsEnc!)
+        const result = await reencryptCredentials(row.credentialsEnc!, preflight.mode === 'kms' ? preflight.keyId : undefined)
         assertMaintenanceTarget(row.credentialsEnc!, result, preflight)
         keyIds.add(result.keyId)
         // Already under the target key ⇒ nothing gained by writing.
@@ -236,7 +236,7 @@ export async function runCredentialsRotate(): Promise<string> {
         if (!blob) continue
         appSecrets++
         try {
-          const result = await reencryptCredentials(blob)
+          const result = await reencryptCredentials(blob, preflight.mode === 'kms' ? preflight.keyId : undefined)
           assertMaintenanceTarget(blob, result, preflight)
           keyIds.add(result.keyId)
           if (isOnTargetKey(blob, result)) {

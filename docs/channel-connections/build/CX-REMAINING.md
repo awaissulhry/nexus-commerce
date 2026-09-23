@@ -1055,3 +1055,50 @@ key-retirement approval. The current job's ordinary connection audit remains its
 existing best-effort event path; do not claim new atomic maintenance-audit coverage.
 Same-resource KMS material rotation is transparent; v1 env-key replacement is not
 supported by this maintenance interface. No production credential was touched.
+
+
+## C11f2 — pinned, cold, lossless maintenance crypto (local)
+
+C11f1 is committed9bb761f16. A resolved KMS resource ARN now selects strict
+reencryption: decrypt the source with KMS cache bypass, send GenerateDataKey to that
+exact resource, refuse fallback or a different returned key, cold-decrypt the result,
+and compare its exact serialized plaintext before returning a replacement. The job
+passes its resolved preflight ARN for both connection and application fields.
+No-target behavior remains compatible; env-key replacement is still not supported.
+Bypass applies specifically to KMS DEK caching, not to an asserted env-key identity.
+
+An initial parse/stringify approach could alter valid JSON values such as negative
+zero. A regression reproduced refusal/data normalization; strict reencryption now
+preserves the original serialized plaintext instead. Quarantine still needs its
+separate binding/digest validation before its privileged CAS; this primitive alone
+does not certify a notice's ownership or adoptability.
+
+Tests also reproduced two existing DEK-buffer races: simultaneous uncached opens of
+one envelope, and cache clearing after an in-flight cached read. Cache insertion/
+retrieval now use distinct key-buffer copies, and each decoder wipes only its own
+buffer. Normal cache behavior remains intact; no live occurrence rate is claimed.
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11-f2-crypto-red.log:11 initial controls fail, including both buffer races.
+  c11-f2-lossless-red.log records the additional serialized-content issue.
+- c11-f2-regressions-complete.log:89 focused cases pass, including actual job request
+  targets and target decrypt failure after successful preflight. Profile-ON repeat
+  also passes89 (c11-f2-profiles-on.log). Full API passes11543 tests/296existing
+  skips (c11-f2-full-api.log); final typecheck passes(c11-f2-typecheck-final.log).
+- c11-f2-postgres.log:12 writer-race plus32 quarantine/admission cases pass under
+  production-equivalent owner permissions, zero skips. Typecheck passes.
+- Seven applied/restored mutations killed: outgoing target, cold source, replacement
+  verification, returned target, cache reader copy, cache stored copy and job target.
+  The first cold-source mutation survived an incomplete fixture that denied ALL
+  decrypts, so replacement verification still caught it. The corrected fixture
+  denies only the old wrapped key and allows the new target; the source-cache guard
+  then fails independently. Original result retained in
+  c11-f2-cold-source-incomplete-fixture.log; no failed proof was relabelled green.
+- Independent source review approves; suggested job-level target controls were added.
+  No AWS/KMS/provider call or production mutation was used for these proofs.
+
+Global quarantine inventory/rewrap, dedicated maintenance authority, atomic audit,
+complete fresh traversal and actual cold recovery/key-retirement approval remain.
+Neither these primitive tests nor current workspace status establishes global key
+migration completeness. Other channel handlers/financial/stock/publishing acceptance
+and their earlier approval/policy dependencies remain unchanged.

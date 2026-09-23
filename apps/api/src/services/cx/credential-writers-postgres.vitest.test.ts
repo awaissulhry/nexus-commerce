@@ -30,8 +30,8 @@ function barrier() {
 function pauseReencryption() {
   vi.stubEnv('NEXUS_KMS_KEY_ID', FAKE_KMS_KEY_ID)
   const gate = barrier(), original = crypto.reencryptCredentials
-  vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async blob => {
-    const result = await original(blob)
+  vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async (blob, target) => {
+    const result = await original(blob, target)
     gate.enter(); await gate.released
     // Real AES envelope operations through the injected local KMS fixture.
     // This exercises target validation and the DB writer, not live IAM/KMS.
@@ -211,8 +211,8 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     expect((await inOwner(() => database.client.channelConnection.findMany({ where: { credentialsEnc: { not: null } } }))).map(row => row.id).sort()).toEqual([ownedId, foreignId].sort())
     const reencrypt = vi.spyOn(crypto, 'reencryptCredentials')
     expect(await inOwner(() => runCredentialsRotate())).toContain('connections=1')
-    expect(reencrypt).toHaveBeenCalledWith(owned.credentialsEnc)
-    expect(reencrypt).not.toHaveBeenCalledWith(cipher.blob)
+    expect(reencrypt).toHaveBeenCalledWith(owned.credentialsEnc, undefined)
+    expect(reencrypt).not.toHaveBeenCalledWith(cipher.blob, undefined)
     expect(await inOwner(() => runCredentialsStatus())).toContain('retainedConnections=1')
     expect((await database.pool.query('SELECT "credentialsEnc" FROM "ChannelConnection" WHERE id=$1', [foreignId])).rows[0].credentialsEnc).toBe(cipher.blob)
   })

@@ -273,13 +273,36 @@ describe('runCredentialsStatus — counts come from the BLOB, not the column', (
 
 
 describe('maintenance target and inventory safety', () => {
+  it('retains the original when target decrypt access fails after successful preflight', async () => {
+    const original = await crypto.encryptCredentials({ synthetic: 'retained' })
+    rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
+    process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
+    const send = fake.send.bind(fake)
+    let decrypts = 0
+    vi.spyOn(fake, 'send').mockImplementation(async command => {
+      if (command.constructor.name === 'DecryptCommand' && ++decrypts > 1) throw new Error('Synthetic permission change after preflight')
+      return send(command)
+    })
+    await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
+    expect(updates).toEqual([])
+  })
+
+  it.each(['connection', 'app'])('uses the resolved preflight ARN for the %s replacement request', async kind => {
+    const original = await crypto.encryptCredentials({ synthetic: 'retained' })
+    if (kind === 'connection') rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
+    else appRows.push({ id: 'owned-app', channelKey: 'EBAY', clientSecretEnc: original.blob, signingKeyEnc: null })
+    process.env.NEXUS_KMS_KEY_ID = 'alias/operator-choice'
+    await runCredentialsRotate()
+    expect(fake.generateCalls.map(call => call.KeyId)).toEqual(['alias/operator-choice', FAKE_KMS_KEY_ID])
+  })
+
   it.each(['connection', 'app'])('refuses a mid-run KMS fallback for a %s after successful preflight', async kind => {
     process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
     const original = await crypto.encryptCredentials({ synthetic: 'retained' })
     if (kind === 'connection') rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
     else appRows.push({ id: 'owned-app', channelKey: 'EBAY', clientSecretEnc: original.blob, signingKeyEnc: null })
     const reencrypt = crypto.reencryptCredentials
-    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async blob => { fake.failGenerate = true; return reencrypt(blob) })
+    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async (blob, target) => { fake.failGenerate = true; return reencrypt(blob, target) })
     await expect(runCredentialsRotate()).rejects.toThrow(/failed=1|appFailed=1/)
     expect(updates).toEqual([]); expect(appUpdates).toEqual([])
   })
@@ -289,7 +312,7 @@ describe('maintenance target and inventory safety', () => {
     rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: old.blob })
     process.env.NEXUS_KMS_KEY_ID = 'alias/current'
     const reencrypt = crypto.reencryptCredentials
-    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async blob => { fake.keyId = 'unexpected-target'; return reencrypt(blob) })
+    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async (blob, target) => { fake.keyId = 'unexpected-target'; return reencrypt(blob, target) })
     await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
     expect(updates).toEqual([])
   })
