@@ -160,6 +160,21 @@ describe('eBay current refresh-grant evidence', () => {
     await expect(inspect()).rejects.toMatchObject({ reason: 'rate_limited' })
   })
 
+  it.each([
+    ['7200', 'Wed, 23 Sep 2026 00:00:00 GMT'],
+    ['Wed, 23 Sep 2026 02:00:00 GMT', 'Wed, 23 Sep 2026 00:00:00 GMT'],
+    ['Wednesday, 23-Sep-26 02:00:00 GMT', 'Wednesday, 23-Sep-26 00:00:00 GMT'],
+    ['Wed Sep 23 02:00:00 2026', 'Wed Sep 23 00:00:00 2026'],
+  ])('preserves the provider retry delay %s independently of local clock skew', async (retry, date) => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429, headers: { 'Retry-After': retry, Date: date } }))
+    await expect(inspect()).rejects.toMatchObject({ reason: 'rate_limited', retryAfterMs: 7_200_000 })
+  })
+
+  it.each(['-1', '1.5', 'NaN', 'Infinity', '9'.repeat(100), 'not a date', '2026-09-23T02:00:00Z'])('ignores an invalid or unrepresentable retry delay %s', async retry => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429, headers: { 'Retry-After': retry } }))
+    await expect(inspect()).rejects.toMatchObject({ reason: 'rate_limited', retryAfterMs: undefined })
+  })
+
   it('never includes transport errors or response bodies in the thrown diagnostic', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error('sensitive synthetic-current-refresh'))
     await expect(inspect()).rejects.toMatchObject({ reason: 'transport', message: 'The current eBay refresh grant could not be verified.' })

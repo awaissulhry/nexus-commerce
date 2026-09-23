@@ -39,10 +39,10 @@ import {
   listKnownCrons,
 } from '../jobs/cron-registry.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { inboundHandlerFor, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
+import { inboundHandlerFor, inboundReceiptHandlerFor, canReplayInbound, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
 import { completeInbound, deadLetterInbound, replayInbound } from '../services/cx/ingress/ledger.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
-import { listActiveConnections } from '../services/connection-resolver.service.js'
+import { ebayInboundProcessingReady } from '../services/cx/ingress/ebay-processing.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -1062,6 +1062,12 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     '/sync-logs/webhooks/:id/retry',
     async (request, reply) => {
       try {
+        const event = await prisma.webhookEvent.findUnique({ where: { id: request.params.id },
+          select: { id: true, channel: true, eventType: true, signatureOk: true, verifiedBy: true } })
+        if (event?.channel === 'EBAY' && event.signatureOk === true && event.verifiedBy === 'ebay_ecdsa') {
+          if (!ebayInboundProcessingReady()) return reply.code(409).send({ error: 'eBay notification processing is not ready on this server.' })
+          if (!canReplayInbound(event.channel, event.eventType)) return reply.code(409).send({ error: 'This eBay event has no supported replay action yet.' })
+        }
         const queued = await replayInbound({ id: request.params.id })
         if (!queued.ok) {
           const message =
@@ -1112,6 +1118,11 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(404).send({ error: 'Webhook event not found' })
         }
 
+        if (event.channel === 'EBAY' && event.signatureOk === true && event.verifiedBy === 'ebay_ecdsa') {
+          if (!ebayInboundProcessingReady()) return reply.code(409).send({ error: 'eBay notification processing is not ready on this server.' })
+          if (!canReplayInbound(event.channel, event.eventType)) return reply.code(409).send({ error: 'This eBay event has no supported replay action yet.' })
+        }
+
         // Decision D8 — archived events are not replayable: the payload has moved and
         // the row only holds a pointer to it. Say that, rather than replaying `{}`.
         const queued = await replayInbound({ id: event.id })
@@ -1127,24 +1138,26 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(queued.reason === 'not_found' ? 404 : 409).send({ error: message })
         }
 
+        if (event.channel === 'EBAY') {
+          try {
+            const handler = await inboundReceiptHandlerFor(event.channel, event.eventType)
+            if (!handler) return reply.code(409).send({ success: false, queued: true, error: 'This eBay event has no supported replay action yet.' })
+            const outcome = await handler(event.id)
+            if (outcome.kind === 'done') return reply.send({ success: true, queued: false })
+            if (outcome.kind === 'dead_letter') return reply.code(409).send({ success: false, queued: false, error: 'This eBay notice still needs review in Ingress.' })
+            if (outcome.kind === 'held') return reply.code(409).send({ success: false, queued: true, error: 'eBay processing is held by server configuration.' })
+            return reply.code(202).send({ success: true, queued: true })
+          } catch {
+            fastify.log.error('[sync-logs] stored eBay processing could not persist its outcome')
+            return reply.code(503).send({ success: false, queued: true, error: 'Stored eBay processing is temporarily unavailable.' })
+          }
+        }
+
         const replay = async (): Promise<void> => {
           // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
           if (event.channel === 'AMAZON') {
             const since = new Date(Date.now() - 5 * 60 * 1000)
             await amazonOrdersService.syncNewOrders(since, { limit: 50 })
-            return
-          }
-          // RT.4 — eBay platform-notification replay: re-runs syncEbayOrders for every
-          // active eBay connection. The service is idempotent on
-          // (channel, channelOrderId), so re-syncing covers the receipt action even if
-          // the cron already picked it up. MAP.3 — a replay carries no account, so
-          // every account is swept and the idempotent order service dedupes.
-          if (event.channel === 'EBAY') {
-            const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
-            const connections = await listActiveConnections('EBAY')
-            for (const conn of connections) {
-              await ebayOrdersService.syncEbayOrders(conn.id)
-            }
             return
           }
           // Everything else goes through the one replay registry, which the retry
@@ -1199,7 +1212,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!row) {
           return reply.code(404).send({ error: 'Webhook event not found' })
         }
-        return reply.send(row)
+        const { leaseToken: _privateLeaseToken, ...publicRow } = row
+        return reply.send(publicRow)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         fastify.log.error({ err }, '[sync-logs/webhooks/:id] failed')

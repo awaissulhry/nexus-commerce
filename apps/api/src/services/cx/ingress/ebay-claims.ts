@@ -133,8 +133,8 @@ export async function renewEbayInboundClaim(claim: EbayInboundClaim): Promise<bo
 }
 
 export type EbayInboundFailure =
-  | { kind: 'retry' | 'dead_letter'; reason: string }
-  | { kind: 'defer'; code: 'AUTH_REQUIRED' | 'RATE_LIMITED'; reason: string }
+  | { kind: 'retry' | 'dead_letter'; reason: string; retryAfterMs?: number }
+  | { kind: 'defer'; code: 'AUTH_REQUIRED' | 'RATE_LIMITED'; reason: string; retryAfterMs?: number }
 
 /** A failure cannot release another worker's claim, or consume its retry budget. */
 export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayInboundFailure, onDeadLetter?: EbayDeadLetterEffect): Promise<boolean> {
@@ -144,11 +144,15 @@ export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayIn
     if (owned.count !== 1) return false
     const now = await databaseTime(tx)
     const dead = outcome.kind === 'dead_letter' || (outcome.kind === 'retry' && claim.attempt >= MAX_INBOUND_ATTEMPTS)
+    const requestedHold = outcome.retryAfterMs
+    const defaultDelay = outcome.kind === 'defer' ? 300_000 : inboundBackoffMs(claim.attempt)
+    const holdMs = Number.isSafeInteger(requestedHold) && requestedHold! >= 0 && Number.isFinite(new Date(now.getTime() + requestedHold!).getTime())
+      ? Math.max(defaultDelay, requestedHold!) : defaultDelay
     const reason = outcome.reason.slice(0, 500)
     const result = await tx.webhookEvent.updateMany({ where: claimWhere(claim), data: {
       status: dead ? 'dlq' : 'failed', isProcessed: false, processedAt: null,
       leaseToken: null, leaseUntil: null,
-      nextAttemptAt: dead ? null : new Date(now.getTime() + (outcome.kind === 'defer' ? 300_000 : inboundBackoffMs(claim.attempt))),
+      nextAttemptAt: dead ? null : new Date(now.getTime() + holdMs),
       ...(outcome.kind === 'defer' ? { attempts: claim.attempt - 1 } : {}), lastError: reason, error: reason,
     } })
     if (result.count === 1 && dead && onDeadLetter) await persistDeadLetterEffect(tx, claim.id, onDeadLetter)

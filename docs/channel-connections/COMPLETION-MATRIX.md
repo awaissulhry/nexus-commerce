@@ -1,6 +1,6 @@
 # Channel connections — completion matrix
 
-Final serving deployment: `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
+Last fully verified release (2026-09-22): `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
 commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
 smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
 [Sanitized release evidence](build/RELEASE-2026-09-22-EVIDENCE.json). This supersedes
@@ -41,8 +41,12 @@ connection deletion, new channel activation and P7 drops have not been executed.
 
 C11d3 private eBay admission is local only; original-profile and quarantine race
 proofs are in [CX-REMAINING](build/CX-REMAINING.md). C11d4 adds the locally reviewed
-cross-record seller fence (10 realPG/190 regressions); execution wiring, operational
-recovery/key maintenance and activation remain open.
+cross-record seller fence (10 realPG/190 regressions); C11d5 wires execution locally (233 realPG/176 regressions); operational
+recovery/key maintenance/archive and activation remain open.
+
+Observed at2026-09-23 12:52Z: published main and public health are0a563d6d, healthy200.
+This supersedes the old serving-build observation only; the dated439 business/flag
+proof remains dated. New continuation slices are still unpushed/undeployed.
 
 | Requirement | Implementation / test evidence | Deployed | Enabled / production proof | Remaining acceptance | Dependency |
 |---|---|---|---|---|---|
@@ -62,14 +66,14 @@ recovery/key maintenance and activation remain open.
 | P1.6 | Approved groups removed; build/P1.6-delete-list.md | Baseline | Remaining live dependencies retained | Do not equate zero traffic with unneeded fallback | New deletions separately |
 | P1.7 | Preview and ended-listing guards; build/P1.7.md | Baseline | Historical fixtures; partial flat-file cap amendment | Keep approved 200-row preview policy and guard mutations | Live proof |
 | P1.8 | contract/channel-contracts.ts has only four checks | Baseline | Switch historically on; accounts absent; coverage partial | Add supported contract coverage/partial state; configure test accounts | Test accounts + channel calls |
-| P2.1 | ingress/ledger.ts + inbound-retry.job.ts; C1 38 tests/2 killed mutations | C1 deployed 439d9e3d3 | Verified replay guard deployed; no synthetic unverified event injected | Complete durable eBay receipt claims, processing and replay | Implementation + approved live proof |
+| P2.1 | C9–C11d5 local durable admission/claims/processing/replay;233 realPG/176 regressions/9 wiring mutations | C1 in published baseline; new protocol local only | New processing defaults OFF; no live signal proof | Quarantine recovery/key maintenance/archive; live delivery and recovery proof | Implementation + approved deployment/activation |
 | P2.2 | Amazon per-type subscriptions and parsing; build/P2.2.md | Baseline | New types gated; every type arrival not proven | Actual subscription inventory and per-type real arrivals | Live calls/subscriptions |
-| P2.3 | eBay notifications.ts/routes/handlers independently audited | C3/C8 deployed 439d9e3d3 | Startup log proves automatic setup disabled; no new subscription provisioned | C3 transport/status fixed; C8 readiness/explicit activation hold (83 tests); durable processors/account-token scope and delivery still open | Implementation + approved catalogue/activation |
+| P2.3 | eBay notifications.ts/routes/handlers independently audited | C3/C8 deployed 439d9e3d3 | Startup log proves automatic setup disabled; no new subscription provisioned | C3 transport/status fixed; C8 readiness/explicit activation hold (83 tests); revocation processor now locally wired; operational quarantine, account-token topic coverage and real delivery remain open | Implementation + approved catalogue/activation |
 | P2.4 | Shopify reconciliation/lifecycle; build/P2.4.md | Baseline | Store connected; no fresh uninstall/privacy proof | Preserve connection and regression coverage | Any test uninstall/write |
 | P2.5 | Etsy receiver/receipts; C2 contract/routing: 35 focused + 5 real PostgreSQL tests | C2 deployed 439d9e3d3 | Migration checksum/finished state and exclusive shop57783036→Motovento route verified;12 scopes preserved | Finish transactional ingest/poll; register4 actual events and prove freshness | Stock policy/history boundary + registration/live call |
-| P2.6 | C11a–c local: grant versions/current refresh evidence/atomic revocation with owner notices;16 realPG domain cases | Legacy baseline only | Current deployed eBay revocation path remains unreachable | Wire reviewed domain through durable receiver/worker/replay; bounded unresolved DLQ; real signal proof | Implementation + approved deployment/live event |
+| P2.6 | C11a–d5 local: current-grant and seller fences; atomic revocation/owner warnings; receiver/worker/manual wiring;25 domain/10 seller/17 processor realPG | Legacy baseline only | Production still has the old path; new processing remains undeployed/OFF | Operational quarantine readiness and real signal/reconnect proof | Implementation + approved deployment/activation/live event |
 | P2.7 | AMS dedupe and subscription check; build/P2.7.md | Baseline | Every live profile hourly arrival not freshly proved | Per-profile dataset/read controls | Live read if needed |
-| P2.8 | Ingress DS tab + retry/replay; build/P2.8.md | C1 deployed 439d9e3d3 | Replay fix deployed; no UI change in this release | Browser keyboard/responsive verification after changes | Browser observation |
+| P2.8 | Ingress DS tab; C11d5 local stored-ID replay/readiness preflight and private lease omission | C1 in published baseline; new routes local | No new UI/browser proof | Quarantine operator surface and browser keyboard/responsive verification | Implementation + browser observation |
 | P3.1 | Gateway error vocabulary; build/P3.1.md real/shape fixtures | Baseline | No new outgoing call measured | Preserve channel codes/messages and fixture distinctions | None local |
 | P3.2 | ListingIssue recorders and suppression job; build/P3.2.md | Baseline | Suppression pull defaults off; one-minute live rejection proof missing | Verify switch, listing attribution and rejected-change timing | Production enablement/live call |
 | P3.3 | cx/account-calls.service.ts; studio syncQueue.ts says ListingIssue dormant | Baseline partial | Diagnostics exists; studio rejection pane not built | Finish shared listing-error presentation with studio boundary respected | Deployment |

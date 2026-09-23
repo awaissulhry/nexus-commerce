@@ -6,10 +6,24 @@ type InspectionFailure = 'canonical_service_required' | 'account_unavailable' | 
 
 export class EbayGrantInspectionError extends Error {
   readonly code = 'EBAY_GRANT_INSPECTION_UNAVAILABLE'
-  constructor(readonly reason: InspectionFailure) {
+  constructor(readonly reason: InspectionFailure, readonly retryAfterMs?: number) {
     super('The current eBay refresh grant could not be verified.')
     this.name = 'EbayGrantInspectionError'
   }
+}
+
+/** RFC9110 §10.2.3: seconds or HTTP-date. Prefer the provider's Date for clock skew. */
+function retryAfterMs(headers: Headers): number | undefined {
+  const value = headers.get('retry-after')?.trim()
+  if (!value || value.length > 128) return undefined
+  const httpDate = (text: string | null) => {
+    if (!text || !/^[A-Za-z]{3,9}[, ]/.test(text)) return NaN
+    // HTTP's obsolete asctime form has no zone; it still denotes UTC.
+    return Date.parse(/GMT$/.test(text) ? text : `${text} GMT`)
+  }
+  const providerTime = httpDate(headers.get('date'))
+  const delay = /^\d+$/.test(value) ? Number(value) * 1000 : httpDate(value) - (Number.isFinite(providerTime) ? providerTime : Date.now())
+  return Number.isSafeInteger(delay) && Number.isFinite(new Date(Date.now() + Math.max(0, delay)).getTime()) ? Math.max(0, delay) : undefined
 }
 
 /**
@@ -32,7 +46,8 @@ export async function introspectEbayRefreshToken(input: {
   } catch { throw new EbayGrantInspectionError('transport') }
   if (response.status !== 200) {
     await response.body?.cancel().catch(() => {})
-    throw new EbayGrantInspectionError(response.status === 429 ? 'rate_limited' : 'remote_error')
+    throw new EbayGrantInspectionError(response.status === 429 ? 'rate_limited' : 'remote_error',
+      response.status === 429 || response.status === 503 ? retryAfterMs(response.headers) : undefined)
   }
   const reader = response.body?.getReader()
   if (!reader) throw new EbayGrantInspectionError('invalid_response')

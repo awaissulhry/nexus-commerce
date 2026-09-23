@@ -1,6 +1,6 @@
 # Channel connections — progress and handover
 
-Final serving deployment: `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
+Last fully verified release (2026-09-22): `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
 commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
 smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
 [Sanitized release evidence](build/RELEASE-2026-09-22-EVIDENCE.json). This supersedes
@@ -24,27 +24,22 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 
 ### New local continuation — 2026-09-23
 
-C9 fixes concurrent receipt insertion and prevents delivery IDs being reused across
-account/event/trust identities. Eight real PostgreSQL tests, 70 existing regressions,
-typecheck, two killed/restored mutations and independent review pass. It is local,
-not deployed. C10 adds durable eBay claims and atomic database effects/completion: 15
-real PostgreSQL tests, three killed/restored critical mutations, typecheck and independent
-review pass. It is not yet wired into receivers. See [CX-REMAINING](build/CX-REMAINING.md).
-C11a adds atomic grant versions and prevents stale key-rotation/backfill/rollback
-writes from replacing newer credentials: 18 real PostgreSQL cases, 118 regressions,
-five killed/restored mutations, typecheck and independent review pass locally.
-C11b adds reviewed owner-only current-refresh-grant inspection (42 focused tests,
-10 real PostgreSQL grant cases); it has no production caller.
-C11c adds reviewed atomic revocation/audit/owner notifications and receipt completion
-(16 real PostgreSQL cases, 121 existing regressions, five killed guard mutations).
-C11d1 closes initial clock skew and manual-reset races (7 real PostgreSQL replay
-cases,15 claim cases,33 regressions and4 killed mutations; reviewed locally).
-C11d2 adds reviewed atomic unresolved-event warnings (domain suite25 real PostgreSQL
-cases,121 regressions,4 killed mutations), including crash exhaustion and replay dedupe.
-C11d3 adds locally tested private admission/quarantine and original delivery ownership; review,86 regressions,6 killed mutations and the206-case realPG gate pass (zero skips); see CX-REMAINING. It is unshipped. C11d4 implements the shared seller fence locally; independent review,10 new realPG cases,190 regressions,5 killed mutations and the216-case realPG gate pass; see CX-REMAINING (including retained cleanup failures). Receiver/worker/manual execution remains next.
-Next: receiver/worker/manual replay execution wiring, then transactional order and
-erasure handlers. All new slices remain local. Live-read probe
-approval and the Etsy stock policy question are pending; independent local work continues.
+C9–C11d4 are committed locally through62d745662: atomic receipt identity, durable
+claims, grant generations/maintenance fences, current-refresh inspection, atomic
+revocation/owner warnings, private admission and a seller fence across reconnects.
+C11d5 now wires stored-ID processing into the receiver, worker and manual routes.
+Its final local proof:233 realPG/19files/zero skips,176 focused regressions,9 killed
+mutations, typecheck, ratchet and independent review. See
+[CX-REMAINING](build/CX-REMAINING.md), including retained failures and amendments.
+All new slices remain unpushed/undeployed. Processing defaults OFF. Quarantine
+recovery/key maintenance/archive and transactional order/erasure work remain open,
+along with Etsy/Finances/contract/UI/operational acceptance in the completion matrix.
+Live-read probe approval and Etsy stock/history policy answers are pending.
+
+A fresh read at12:52Z found published main and public health build **0a563d6d**
+(healthy200), the PES/main merge. Before any future release, integrate that published
+main in the isolated tree and retest. Do not import unpublished shared-tree history.
+This narrow read does not replace the dated439d9e3d business/flag/deployment proof.
 
 ### Approved production release — 2026-09-22
 

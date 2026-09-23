@@ -516,3 +516,79 @@ exited, but that does not prove which backend caused the permission error. This 
 harness limitation remains recorded instead of inventing a root cause or claiming it
 fixed. Future failures should now expose the missing evidence without logging queries
 or credentials. `c11d4-canonical-postgres.log` remains a failed run.
+
+
+## C11d5 — stored receipt execution and route/worker integration
+
+**Implemented, tested and independently reviewed locally. Not deployed or enabled.**
+The receiver now acknowledges only durable admission and returns no internal routing
+IDs. Verified unresolved topics enter recoverable quarantine; acknowledgement does
+not claim erasure or order ingestion. Failed storage/encryption/conflicting ownership
+returns503; known signature mismatch returns412; unavailable verification keys/app
+credentials return503 for provider redelivery. Failed verification stores metadata
+only. Prolonged verification outage can outlast provider redelivery; there is no claim
+of lossless recovery from a signature that was never established. Live ACK/retry
+contract proof, regular pull coverage and operational quarantine visibility remain.
+
+Worker/manual replay call the one stored-ID processor. Exact
+`NEXUS_ENABLE_EBAY_INBOUND_PROCESSING=1` is required and defaults OFF; deployment alone
+must not cause introspection/lifecycle writes. Both claim-crash and terminal-attempt
+paths use strict owner warnings. Terminal accounts avoid provider reads; supported
+current-grant inspection happens outside locks. Current-active/change uncertainty
+uses the bounded budget.429 holds restore attempts;503 failures consume an attempt;
+both honor valid Retry-After, using DB time for persisted scheduling and provider Date
+for HTTP-date clock skew (RFC9110 §10.2.3). Invalid/unrepresentable delays fall back to
+normal backoff. No provider body/exception text is persisted as the public error.
+
+The worker selects at most4 verified, unarchived, due/claimable eBay receipts using the
+DB clock. These run concurrently with other channels so a slow eBay read cannot delay
+existing Shopify handling. Generic finishers cannot complete verified eBay receipts.
+Manual replay no longer sweeps every account; it calls the stored receipt processor.
+The authenticated detail response omits leaseToken. A separate receipt-handler registry
+advertises AUTHORIZATION_REVOCATION only; old eBay wildcard exemption is removed from
+the ledger ratchet. Topic setup remains held until operational readiness is complete.
+
+Evidence so far, under `/private/tmp/cx-completion-20260922/`:
+- Receiver red→green: `c11d5-receiver-red.log`, `c11d5-receiver-green.log`.
+- Longer provider hold red→green: `c11d5-rate-hold-red.log`,
+  `c11d5-processing-green.log`;53 inspection unit cases include numeric/three HTTP-date
+  forms and invalid delays. Initial processing test had an incorrect expected URL;
+  corrected to the existing official `/identity/v1/oauth2/token/introspect` endpoint.
+- Legacy completion bypass reproduced in `c11d5-legacy-fence-red.log`, then14 realPG
+  cases green. Expanded selection suite15/0skips passes with production-equivalent
+  rights (`c11d5-processing-reviewed.log`); later503 case is not yet in that run.
+- Slow eBay initially delayed Shopify; `c11d5-shopify-latency-red.log` reproduces it,
+  and concurrent group wiring fixes it. `c11d5-wiring-reviewed.log`:132 unit cases pass.
+- Core-only review approved, with requested canonical-service OFF and wrong env/ID
+  controls added. Full integration review, final mutations/typecheck/canonical gate
+  and commit remain pending. No production or vendor call was made.
+
+Final C11d5 proof: **233 real PostgreSQL tests/19files/zero skips pass** under
+production-equivalent owner permissions (`c11d5-canonical-postgres.log`).176 focused
+regressions/11files pass (`c11d5-regressions-final.log`), including the unchanged
+Shopify/Etsy parser paths. Typecheck and inbound-ledger ratchet pass. Nine critical
+mutations were applied/restored and killed: processing enablement, crash warning,
+terminal warning, identity preflight, provider hold, legacy completion, historical
+unverified selection, raw admission and private lease serialization.
+
+Full integration review approved after three concrete fixes: both manual routes now
+check canonical readiness before any reset; historical unverified/unleased eBay rows
+retain the bounded generic DLQ path (actual PostgreSQL worker proof); malformed JSON
+reaches receiver-specific raw admission instead of failing in the shared JSON parser.
+Non-JSON bodies may be rejected as body_unparseable by the real verifier; they are not
+asserted to be verified merely because the route can retain bytes. Admin/Shopify JSON
+semantics are preserved. A later503 case confirms the provider hold with attempts
+still consumed. No test assertion, timeout or approval gate was relaxed.
+
+### Observed upstream baseline — 2026-09-23 12:52 UTC
+
+`git ls-remote origin refs/heads/main` now returns
+`0a563d6d5700a9aded3a53cf64c9fcf543facb04`; public /api/health returned200, healthy,
+build0a563d6d. This is the already-published PES/main merge, not an unpushed shared
+worktree branch. Prior439d9e3d business/deployment evidence remains dated; this small
+read does not reverify flags, ownership, scopes, Railway status or vendor behavior.
+Sanitized artifact: `/private/tmp/cx-completion-20260922/observed-main-20260923.json`.
+Before preparing any future release, integrate only this already-published main into
+the isolated branch and run applicable gates against it. Never publish unpublished
+PES history or touch its working changes. Quarantine recovery/key maintenance/archive,
+transactional order/erasure handlers and all other matrix dependencies remain open.

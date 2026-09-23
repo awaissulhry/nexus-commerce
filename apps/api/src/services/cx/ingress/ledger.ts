@@ -21,6 +21,11 @@ import { logger } from '../../../utils/logger.js'
 
 export type InboundStatus = 'pending' | 'done' | 'failed' | 'dlq'
 
+const unclaimedUnverifiedEbay: Prisma.WebhookEventWhereInput = {
+  channel: 'EBAY', leaseToken: null,
+  OR: [{ signatureOk: false }, { signatureOk: null }, { verifiedBy: { not: 'ebay_ecdsa' } }, { verifiedBy: null }],
+}
+
 /** What established trust for this event, or that nothing did. */
 export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
 
@@ -215,17 +220,18 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
   try {
     if (ok) {
       await prisma.webhookEvent.update({
-        where: { id },
+        where: { id, channel: { not: 'EBAY' } },
         data: { status: 'done', isProcessed: true, processedAt: new Date(), nextAttemptAt: null, lastError: null },
       })
       return
     }
-    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true } })
+    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true, channel: true } })
+    if (row?.channel === 'EBAY') return
     const attempts = (row?.attempts ?? 0) + 1
     const exhausted = attempts >= MAX_INBOUND_ATTEMPTS
     const reason = (error ?? 'unknown').slice(0, 500)
     await prisma.webhookEvent.update({
-      where: { id },
+      where: { id, channel: { not: 'EBAY' } },
       data: {
         status: exhausted ? 'dlq' : 'failed',
         attempts,
@@ -249,8 +255,8 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
 export async function deadLetterInbound(id: string, reason: string): Promise<void> {
   try {
     await prisma.webhookEvent.update({
-      where: { id },
-      data: { status: 'dlq', nextAttemptAt: null, lastError: reason.slice(0, 500), error: reason.slice(0, 500) },
+      where: { id, OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] },
+      data: { status: 'dlq', isProcessed: false, processedAt: null, nextAttemptAt: null, lastError: reason.slice(0, 500), error: reason.slice(0, 500) },
     })
   } catch (err) {
     logger.warn('[cx-ingress] could not dead-letter an inbound event', { id, error: err instanceof Error ? err.message : String(err) })
@@ -303,12 +309,13 @@ export interface DueInboundEvent {
  * Reaching every business is the cron wrapper's job, not this function's: a non-platform
  * schedule visits each active profile in turn and runs its handler inside that profile.
  */
-export async function dueInboundEvents(limit = 50, now: Date = new Date()): Promise<DueInboundEvent[]> {
+export async function dueInboundEvents(limit = 50, now: Date = new Date(), options?: { excludeVerifiedEbay: boolean }): Promise<DueInboundEvent[]> {
   const rows = await prisma.webhookEvent.findMany({
     where: {
       status: { in: ['failed', 'pending'] },
       archivedAt: null,
       nextAttemptAt: { not: null, lte: now },
+      ...(options?.excludeVerifiedEbay ? { OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] } : {}),
     },
     select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true, connectionId: true, signatureOk: true, verifiedBy: true },
     orderBy: { nextAttemptAt: 'asc' },

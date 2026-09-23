@@ -63,6 +63,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
   { name: 'private eBay admission (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 24 },
+  { name: 'stored eBay execution (claims, holds, warnings, selection and worker integration)', file: 'src/services/cx/ingress/ebay-processing-postgres.vitest.test.ts', expect: 17 },
   { name: 'atomic grant versions (reconnect, rollback, inspection and concurrent replacement)', file: 'src/services/cx/grant-version-postgres.vitest.test.ts', expect: 10 },
   { name: 'eBay seller grant fence (cross-record reconnects and fresh committed reads)', file: 'src/services/cx/ebay-identity-postgres.vitest.test.ts', expect: 10 },
   { name: 'credential maintenance races (rotation, backfill and rollback)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 11 },

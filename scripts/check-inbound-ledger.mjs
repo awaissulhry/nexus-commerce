@@ -37,10 +37,6 @@ const UNREPLAYABLE = {
   // need that loop split out first; until then the retry worker dead-letters these on
   // the first sweep with that as the reason, which is visible rather than silent.
   AMAZON: '*',
-  // eBay's receiver decides what to do from the live notification envelope and syncs
-  // orders as a side effect. The replay endpoint re-syncs every eBay connection
-  // instead, which is why it is handled there and not by the registry.
-  EBAY: '*',
 }
 
 function walk(dir, out = []) {
