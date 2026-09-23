@@ -457,6 +457,15 @@ node scripts/check-global-exposure.mjs || {
   exit 1
 }
 
+# PLAN Step 4.0 / 4.2 (R-45, R-49, 2026-09-23) — contrast at 7:1 on the palette the studio actually paints: every colour
+# derived from design-system/styles/tokens.css at run time (both themes). A RATCHET: today's 49 pairs below 7:1 and 10
+# below 4.5:1 are the baseline; a push fails only if either count grows. Lower both numbers as the AAA sweep lands.
+echo "→ Checking 7:1 contrast on the design-system tokens (ratchet)..."
+{ node --test scripts/check-nds-contrast.test.mjs >/dev/null && node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 10; } || {
+  echo "❌ contrast ratchet FAILED — a token pair got worse or a new pair fails (run: node scripts/check-nds-contrast.mjs)"
+  exit 1
+}
+
 echo "→ Checking DS-GAPS append-only (GDS §8.6)..."
 node scripts/check-ds-gaps-append-only.mjs --check || {
   echo "❌ DS-GAPS append-only FAILED — see message above"
