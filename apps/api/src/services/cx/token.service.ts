@@ -28,7 +28,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob, onCredentialsKmsFallback } from '../../lib/crypto.js'
 import { workspaceIdForQuery, WorkspaceError } from '../../lib/workspace-context.js'
-import { recordConnectionEvent, SYSTEM_ACTOR, type Actor } from './events.service.js'
+import { recordConnectionEvent, recordConnectionEventInTx, SYSTEM_ACTOR, type Actor } from './events.service.js'
 import { getChannelApp } from './apps.service.js'
 import {
   channelKeyOf,
@@ -43,6 +43,8 @@ import { alertService, AlertType } from '../monitoring/alert.service.js'
 import { parseTokenResponse, tokenLifetime, TOKEN_REQUEST_TIMEOUT_MS } from './token-response.js'
 import { clearLegacyChannelCredentials } from './legacy-channel-credentials.js'
 import { EbayGrantInspectionError, introspectEbayRefreshToken } from './ebay-grant-introspection.js'
+import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { ebaySellerIdentity, lockEbaySeller, assertNoOtherActiveEbayAccount, EbayIdentityChanged } from './ebay-identity.js'
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -189,9 +191,9 @@ async function readCredentials(row: ConnRow): Promise<Credentials | null> {
 }
 
 /** Write credentials as an envelope and null every plaintext column in the same UPDATE. */
-async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, expected?: ConnRow, persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>) {
+async function encryptedCredentialData(creds: Credentials, extraData: Record<string, unknown> = {}) {
   const { blob, keyId } = await encryptCredentials(creds as unknown as Record<string, unknown>)
-  const data = {
+  return {
     credentialsEnc: blob,
     credentialsKeyId: keyId,
     accessTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
@@ -205,6 +207,10 @@ async function writeCredentials(connectionId: string, creds: Credentials, extraD
     ebayRefreshToken: null,
     ...extraData,
   }
+}
+
+async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, expected?: ConnRow, persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>) {
+  const data = await encryptedCredentialData(creds, extraData)
   if (expected) {
     const saved = await prisma.channelConnection.updateMany({ where: refreshSnapshot(expected), data })
     if (saved.count !== 1) throw new RefreshContended(connectionId)
@@ -680,33 +686,23 @@ async function announceTransition(row: Pick<ConnRow, 'id' | 'channelType' | 'aut
 
 // ── grants and revocation ────────────────────────────────────────────────────
 
-/** Persist a fresh grant (connect / re-consent / adopt) onto a connection row. */
-export async function storeGrant(
-  connectionId: string,
-  grant: GrantResult,
-  actor: Actor,
-  event: 'grant' | 'reconsent' | 'adopt',
-  persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>,
-): Promise<void> {
-  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
-  if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
-  const { key, spec } = specFor(row)
-  if (key === 'AMAZON_SP' && row.region && grant.region && row.region !== grant.region) {
-    throw new Error('Reconnect Amazon in the existing account region.')
-  }
+function credentialsForGrant(key: ChannelKey, spec: ReturnType<typeof getChannelSpec>, grant: GrantResult): Credentials {
   const now = Date.now()
   const refreshLife = key === 'AMAZON_SP' && grant.tokenResponseMetadata?.authorizationMode === 'self'
     ? null
     : grant.refreshExpiresInSec ?? spec.auth.refreshTokenLifetimeSec ?? null
-  const creds: Credentials = {
+  return {
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken ?? null,
     accessTokenExpiresAt: grant.expiresInSec === null ? null : new Date(now + grant.expiresInSec * 1000).toISOString(),
     refreshTokenExpiresAt: refreshLife ? new Date(now + refreshLife * 1000).toISOString() : null,
     extra: grant.tokenResponseMetadata,
   }
+}
+
+function freshGrantData(row: ConnRow, spec: ReturnType<typeof getChannelSpec>, grant: GrantResult) {
   const identity = grant.identity
-  await writeCredentials(connectionId, creds, {
+  return {
     // Same row write as credential replacement: concurrent reconsents cannot
     // share a generation. This is local ordering, not provider issuance time.
     grantVersion: { increment: 1 },
@@ -715,7 +711,7 @@ export async function storeGrant(
     authStatus: 'connected',
     grantedScopes: grant.grantedScopes,
     region: grant.region ?? row.region ?? spec.defaultRegion ?? null,
-    identity: identity ? (identity as unknown as Record<string, unknown>) : undefined,
+    identity: identity ? (identity as unknown as Prisma.InputJsonObject) : undefined,
     // MAP identity columns + the legacy display columns pre-CX.2 readers use.
     ...(identity?.userId ? { externalAccountId: identity.userId } : {}),
     ...(identity?.username ? { displayName: identity.username, ebaySignInName: identity.username } : {}),
@@ -728,7 +724,72 @@ export async function storeGrant(
     lastRefreshAt: new Date(),
     refreshLeaseUntil: null,
     refreshLeaseOwner: null,
-  }, undefined, persistRelated)
+  }
+}
+
+type PersistEbayGrant = (connectionId: string, actor: Actor, event: 'grant' | 'reconsent' | 'adopt',
+  persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>) => Promise<void>
+
+/** Prepare private credentials before locks, then place and save one seller grant atomically. */
+export async function withEbayGrantTransaction<T>(input: { grant: GrantResult; environment: 'production' | 'sandbox' }, work: (persist: PersistEbayGrant) => Promise<T>): Promise<T> {
+  return runEbayGrantTransaction(input, work)
+}
+
+async function runEbayGrantTransaction<T>(input: { grant: GrantResult; environment: 'production' | 'sandbox' }, work: (persist: PersistEbayGrant) => Promise<T>, existingUserId?: string): Promise<T> {
+  if (activeDatabaseTransaction()) throw new Error('eBay grant placement requires its own ordered transaction.')
+  const workspaceId = workspaceIdForQuery()
+  const grant = structuredClone(input.grant)
+  const identity = ebaySellerIdentity({ externalAccountId: grant.identity?.userId ?? existingUserId ?? null, connectionMetadata: { environment: input.environment } })
+  const spec = getChannelSpec('EBAY')
+  const encrypted = await encryptedCredentialData(credentialsForGrant('EBAY', spec, grant))
+  return inDatabaseTransaction(prisma, async () => {
+    const tx = activeDatabaseTransaction()!
+    await lockEbaySeller(tx, identity)
+    let usable = true
+    try {
+      return await work(async (connectionId, actor, event, persistRelated) => {
+        if (!usable || activeDatabaseTransaction() !== tx || workspaceIdForQuery() !== workspaceId) throw new EbayIdentityChanged()
+        await tx.$queryRaw`SELECT id FROM "ChannelConnection" WHERE id=${connectionId} AND "workspaceId"=${workspaceId} AND "channelType"='EBAY' FOR UPDATE`
+        const row = await tx.channelConnection.findUnique({ where: { id: connectionId } })
+        if (!row || row.workspaceId !== workspaceId || row.channelType !== 'EBAY' || row.managedBy === 'transferred'
+          || (row.externalAccountId && row.externalAccountId !== identity.userId)
+          || (!grant.identity?.userId && row.externalAccountId !== identity.userId)
+          || ((row.connectionMetadata as { environment?: unknown } | null)?.environment ?? 'production') !== identity.environment) throw new EbayIdentityChanged()
+        await assertNoOtherActiveEbayAccount(tx, identity, workspaceId, connectionId)
+        await tx.channelConnection.update({ where: { id: connectionId }, data: { ...encrypted, ...freshGrantData(row, spec, grant) } })
+        if (persistRelated) await persistRelated(tx)
+        await recordConnectionEventInTx(tx, { connectionId, channelKey: 'EBAY', type: event, actor,
+          detail: { scopes: grant.grantedScopes.length, identity: grant.identity?.username ?? identity.userId, region: grant.region ?? null } })
+        if (row.authStatus !== 'connected') await recordConnectionEventInTx(tx, { connectionId, channelKey: 'EBAY', type: 'status_change', actor,
+          detail: { from: row.authStatus, to: 'connected', reason: event } })
+        await afterDatabaseCommit(`ebay-grant:${connectionId}`, async () => { lastFailureAt.delete(connectionId) })
+      })
+    } finally { usable = false }
+  }, { isolationLevel: 'ReadCommitted' })
+}
+
+/** Persist a fresh grant (connect / re-consent / adopt) onto a connection row. */
+export async function storeGrant(
+  connectionId: string,
+  grant: GrantResult,
+  actor: Actor,
+  event: 'grant' | 'reconsent' | 'adopt',
+  persistRelated?: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<void> {
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
+  if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
+  const { key, spec } = specFor(row)
+  if (key === 'EBAY') {
+    const identity = ebaySellerIdentity({ ...row, externalAccountId: grant.identity?.userId ?? row.externalAccountId })
+    return runEbayGrantTransaction({ grant, environment: identity.environment },
+      persist => persist(connectionId, actor, event, persistRelated), identity.userId)
+  }
+  if (key === 'AMAZON_SP' && row.region && grant.region && row.region !== grant.region) {
+    throw new Error('Reconnect Amazon in the existing account region.')
+  }
+  const creds = credentialsForGrant(key, spec, grant)
+  const identity = grant.identity
+  await writeCredentials(connectionId, creds, freshGrantData(row, spec, grant), undefined, persistRelated)
   lastFailureAt.delete(connectionId)
   await recordConnectionEvent({
     connectionId,

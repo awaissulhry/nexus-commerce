@@ -24,13 +24,15 @@ const inOwner = <T>(work: () => Promise<T>) => inProfile(OWNER, work)
 const proof = (connectionId: string, grantVersion = 1, workspaceId = OWNER) => ({ kind: 'inspection' as const, connectionId, workspaceId, grantVersion, active: false })
 async function seed(workspaceId = OWNER, state = 'connected') {
   const id = randomUUID()
-  await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","authStatus","isActive","grantVersion","refreshLeaseOwner","refreshLeaseUntil","updatedAt") VALUES ($1,$2,\'EBAY\',$1,$3,true,1,\'refresh-in-flight\',now()+interval \'1 minute\',now())', [id, workspaceId, state])
+  await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","managedBy","externalAccountId","authStatus","isActive","grantVersion","refreshLeaseOwner","refreshLeaseUntil","updatedAt") VALUES ($1,$2,\'EBAY\',\'oauth\',$1,$3,true,1,\'refresh-in-flight\',now()+interval \'1 minute\',now())', [id, workspaceId, state])
   return id
 }
 async function queued(connectionId: string, workspaceId = OWNER, attempts = 0) {
   return inProfile(workspaceId, async () => {
-    const event = await recordInbound({ channel: 'EBAY', eventType: 'AUTHORIZATION_REVOCATION', externalId: randomUUID(), connectionId,
-      signatureOk: true, verifiedBy: 'ebay_ecdsa', queueForRetry: true, payload: { notification: { data: { userId: connectionId } } } })
+    const notificationId = randomUUID()
+    const event = await recordInbound({ channel: 'EBAY', eventType: 'AUTHORIZATION_REVOCATION', externalId: `ebay:production:${notificationId}`, connectionId,
+      signatureOk: true, verifiedBy: 'ebay_ecdsa', queueForRetry: true, payload: { metadata: { topic: 'AUTHORIZATION_REVOCATION', schemaVersion: '1.0' },
+        notification: { notificationId, data: { userId: connectionId, revocationDate: '2026-09-23T01:02:03Z' } } } })
     if (attempts) await database.pool.query('UPDATE "WebhookEvent" SET attempts=$1 WHERE id=$2', [attempts, event.id])
     return (await claimEbayInbound(event.id!))!
   })

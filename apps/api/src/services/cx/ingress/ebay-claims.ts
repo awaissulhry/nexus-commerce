@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
+import { activeDatabaseTransaction } from '../../../lib/database-context.js'
+import { lockOwnedEbayAccount } from '../ebay-identity.js'
 import { inboundBackoffMs, MAX_INBOUND_ATTEMPTS, type ReplayOutcome, type ReplayRequest } from './ledger.js'
 
 export const EBAY_INBOUND_LEASE_MS = 180_000
@@ -10,6 +12,7 @@ export interface EbayInboundReceipt {
   id: string
   workspaceId: string
   eventType: string
+  externalId: string
   connectionId: string | null
   payload: unknown
   providerTimestamp: Date | null
@@ -22,7 +25,7 @@ export interface EbayInboundClaim extends Readonly<EbayInboundReceipt> {
 }
 
 type Tx = Prisma.TransactionClient
-const transactionOptions = { maxWait: 5_000, timeout: 30_000 }
+const transactionOptions = { maxWait: 5_000, timeout: 30_000, isolationLevel: 'ReadCommitted' as const }
 async function databaseTime(tx: Tx): Promise<Date> {
   const [row] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
   return row.now
@@ -33,7 +36,7 @@ const claimWhere = (claim: EbayInboundClaim): Prisma.WebhookEventWhereInput => (
   signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
   status: 'pending', leaseToken: claim.leaseToken, attempts: claim.attempt,
 })
-const receiptSelect = { id: true, workspaceId: true, eventType: true, connectionId: true,
+const receiptSelect = { id: true, workspaceId: true, eventType: true, externalId: true, connectionId: true,
   payload: true, providerTimestamp: true, createdAt: true } as const
 
 export type EbayDeadLetterEffect = (tx: Tx, receipt: Readonly<EbayInboundReceipt>) => Promise<void>
@@ -165,19 +168,16 @@ export class EbayInboundClaimLost extends Error {
  */
 export async function commitEbayInbound<T>(claim: EbayInboundClaim, effect: (tx: Tx, receipt: Readonly<EbayInboundReceipt>) => Promise<T>): Promise<{ committed: boolean; value?: T }> {
   if (workspaceIdForQuery() !== claim.workspaceId) return { committed: false }
+  if (activeDatabaseTransaction()) throw new Error('eBay receipt completion requires its own ordered transaction.')
   return prisma.$transaction(async tx => {
     const owned = await tx.webhookEvent.updateMany({ where: claimWhere(claim), data: { leaseToken: claim.leaseToken } })
     if (owned.count !== 1) return { committed: false }
     await extendLockedClaim(tx, claim)
     const receipt = await tx.webhookEvent.findUniqueOrThrow({ where: { id: claim.id }, select: receiptSelect })
     if (receipt.connectionId) {
-      // A plain read would permit a reconnect or credential change between the
-      // check and the domain write. Keep this DB-only phase stable through commit.
-      const accounts = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM "ChannelConnection"
-        WHERE id=${receipt.connectionId} AND "workspaceId"=${receipt.workspaceId}
-          AND "channelType"='EBAY' FOR UPDATE`
-      if (!accounts.length) throw new Error('The stored eBay receipt account is not owned by this business profile.')
+      // Account generations alone cannot fence a new grant on a sibling row.
+      // Acquire the seller identity first and recheck after any reconnect wait.
+      await lockOwnedEbayAccount(tx, receipt.workspaceId, receipt.connectionId)
     }
     // The mutable claim object is only a fencing handle. Domain code receives the
     // authoritative account and payload reloaded after the receipt is locked.

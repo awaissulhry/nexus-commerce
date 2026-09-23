@@ -33,6 +33,8 @@ import { transition, revokeGrantInTx, tokenServiceEnabled, type EbayRefreshGrant
 import { recordConnectionEventInTx } from './events.service.js'
 import { raiseChannelAlertInTx } from './channel-alerts.service.js'
 import type { EbayInboundReceipt } from './ingress/ebay-claims.js'
+import { parseEbayRevocationNotice } from './ingress/ebay-revocation-notice.js'
+import { lockOwnedEbayAccount, ebaySellerIdentity, EbayIdentityChanged } from './ebay-identity.js'
 
 /** Where a revocation came from. Recorded so an operator can tell them apart. */
 export type RevokeSource =
@@ -120,14 +122,13 @@ export async function reconcileEbayRevocationInTx(tx: Prisma.TransactionClient, 
     || (evidence.kind !== 'inspection' && evidence.kind !== 'terminal')) {
     throw new Error('Revocation evidence is incomplete.')
   }
-  // Reentrant under commitEbayInbound, and also safe if called by another explicit
-  // transaction. Receipt → account is the only permitted lock order for dispatch.
-  const locked = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "ChannelConnection" WHERE id=${receipt.connectionId}
-      AND "workspaceId"=${workspaceId} AND "channelType"='EBAY' FOR UPDATE`
-  if (!locked.length) throw new Error('The eBay revocation account is unavailable in this business profile.')
-  const row = await tx.channelConnection.findUniqueOrThrow({ where: { id: receipt.connectionId },
-    select: { id: true, workspaceId: true, grantVersion: true, authStatus: true, displayName: true } })
+  // Reentrant under completion's receipt→seller→account locks. A version on
+  // this row cannot by itself identify the current grant on a sibling row.
+  const row = await lockOwnedEbayAccount(tx, workspaceId, receipt.connectionId)
+  const identity = ebaySellerIdentity(row)
+  const notice = parseEbayRevocationNotice(receipt.payload)
+  if (row.managedBy !== 'oauth' || notice.userId !== identity.userId
+    || receipt.externalId !== `ebay:${identity.environment}:${notice.notificationId}`) throw new EbayIdentityChanged()
   if (row.grantVersion !== evidence.grantVersion) throw new EbayRevocationUnresolved('grant_changed')
   const terminal = row.authStatus === 'revoked' || row.authStatus === 'disconnected'
   if (!terminal) {

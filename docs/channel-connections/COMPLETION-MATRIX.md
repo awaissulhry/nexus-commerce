@@ -40,8 +40,9 @@ alias migration is the approved data change. Separately prepared vendor probes,
 connection deletion, new channel activation and P7 drops have not been executed.
 
 C11d3 private eBay admission is local only; original-profile and quarantine race
-proofs are in [CX-REMAINING](build/CX-REMAINING.md). Cross-record reconnect fencing,
-execution wiring, operational recovery/key maintenance and activation remain open.
+proofs are in [CX-REMAINING](build/CX-REMAINING.md). C11d4 adds the locally reviewed
+cross-record seller fence (10 realPG/190 regressions); execution wiring, operational
+recovery/key maintenance and activation remain open.
 
 | Requirement | Implementation / test evidence | Deployed | Enabled / production proof | Remaining acceptance | Dependency |
 |---|---|---|---|---|---|

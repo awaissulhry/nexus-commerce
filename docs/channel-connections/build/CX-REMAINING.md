@@ -441,3 +441,78 @@ The unexplained cleanup backend is a test-harness reproducibility limitation, no
 production assertion. Gate diagnostics now also require each file's passed status
 and surface failed-suite/hook details before unrelated logs; no timeout, assertion,
 role, or hook was weakened. No broader rerun is warranted after the successful gate.
+
+
+## C11d4 — seller identity fencing across connection rows
+
+**Implemented, tested and independently reviewed locally. Not deployed or enabled.**
+
+Audit found that grantVersion protects only one row. OAuth can reconnect an inactive
+same-seller row or create a new connection while a previously bound receipt still
+references the old terminal row. The protected live/inactive Xavia rows actually share
+one external seller ID in dated read-only census evidence. Partial active uniqueness
+includes marketplace and does not establish a permanent canonical connection.
+
+Both eBay grant placement/persistence and receipt completion now share a transaction-
+scoped advisory lock keyed by environment and immutable seller ID, independent of
+workspace/connection. It covers a row that has not yet been inserted. Lock order is
+receipt → seller → account. Fresh ReadCommitted reads after the lock wait check exact
+ownership/identity and active siblings. A newer active sibling leaves the old receipt
+unresolved; no silent retarget occurs. A reconnect after revocation commits is valid.
+The existing per-row grantVersion still fences new grants on the same row.
+
+The token module snapshots inputs and prepares ciphertext/fixed expiries before the
+transaction. OAuth performs placement, creation, grant write and metadata together;
+standalone eBay storeGrant participates in the same protocol. A private persistence
+closure is valid only in its captured workspace/transaction attempt and is invalidated
+on success/failure. Nested preparation is refused before encryption. Other channels
+retain their original persistence path and Serializable default; the generic context
+rejects incompatible explicit nested isolation instead of silently ignoring it.
+Required eBay grant audits/related writes commit atomically. No network belongs inside
+the database callback. Existing null-identity reconsent preserves stored identity JSON.
+
+The revocation domain re-parses its stored verified contract and checks subject plus
+environment/delivery namespace against the locked account. It cannot use a caller-
+mutated claim as domain evidence. Independent review caught two additional defects:
+Identity API's connector fabricated userId from username, and the first implementation
+of null-identity reconsent would replace existing metadata with just userId. Both are
+fixed with regression cases. eBay now refuses missing/malformed userId even with business
+profiles OFF; username-only HTTP200 does not create/update a grant. This deliberately
+strengthens the old profiles-OFF fallback, rather than lowering the test bar. Other
+channels' missing-identity rules are unchanged. Mutable/immutable username ambiguity is
+documented by eBay (https://developer.ebay.com/api-docs/static/data-handling-update.html);
+revocation userId is explicitly immutable in its notification contract.
+
+Three initial realPG tests reproduced the race (all failed). Expanded10-case identity
+suite passes: both race orders, newly inserted sibling, cross-marketplace second-grant
+refusal, encryption outside locks, immutable input, escaped closure refusal, nested
+preparation refusal, stored subject/environment mismatch and metadata preservation.
+Existing grant10/domain25/claim15 cases also pass under production-equivalent owner
+permissions. A claim regression caught changed refusal wording; original scoped error
+was preserved, with no assertion relaxation.190 focused regression tests pass including
+OAuth, token, lifecycle, ledger and transaction-context controls. Typecheck passes.
+Evidence: `c11d4-identity-red.log`, `c11d4-identity-expanded.log`,
+`c11d4-username-identity-red.log`, `c11d4-postgres-reviewed.log` (retained one wording
+failure), `c11d4-claims-reviewed.log`, `c11d4-regressions-reviewed.log`,
+`c11d4-typecheck-reviewed.log`, all under `/private/tmp/cx-completion-20260922/`.
+Final mutation/canonical outcome follows after restoration. Operational receiver,
+worker/manual execution, quarantine recovery/maintenance and separate live activation
+remain next; this does not claim channel end-to-end completion.
+
+Final C11d4 proof: **216 real PostgreSQL assertions/18files/zero skips pass** with
+production-equivalent owner rights (`c11d4-canonical-diagnostic.log`); typecheck passes
+(`c11d4-typecheck-final.log`). Five applied/restored critical mutations were killed:
+seller lock, active-sibling refusal, stored subject/environment validation, nested
+preparation guard and input snapshot. Source review approved after both requested
+fixes. `c11d4-*-mutation.log` retain the concrete failures. No vendor call occurred.
+
+The first216-case full run also hit the retained cleanup permission failure, this time
+in grant-version afterAll, despite all assertions passing. The diagnostic rerun passed;
+the offending backend did not recur. The fixture now logs only code/detail and remaining
+PID/user/backend-type/application/state on cleanup failure, preserves the original
+error and closes its admin pool in finally. No permission, timeout or assertion was
+relaxed. Independent inspection found pg-pool can resolve end() before its backend has
+exited, but that does not prove which backend caused the permission error. This local
+harness limitation remains recorded instead of inventing a root cause or claiming it
+fixed. Future failures should now expose the missing evidence without logging queries
+or credentials. `c11d4-canonical-postgres.log` remains a failed run.

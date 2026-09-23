@@ -456,6 +456,25 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
 
 ---
 
+### 2026-09-23 implementation amendments (acceptance remains open)
+
+- Application-wide eBay notices with unresolved ownership use an encrypted,
+  system-only quarantine. They must not place another business's payload in the
+  ordinary legacy profile. Signature failures retain bounded metadata/digest only;
+  verified unresolved bodies remain recoverable. Explicit owner adoption is atomic
+  and preserves first ownership/proof. Operational visibility, key maintenance and
+  archive support remain required before activation; the archive-never-delete rule
+  is unchanged.
+- Revocation must fence both same-row reconsent and a newer grant on a different
+  connection for the same immutable eBay seller. Per-row grantVersion plus a shared
+  seller lock/fresh committed reads provide that fence. A current active sibling
+  keeps the old receipt unresolved; it is never silently retargeted. Username-only
+  identity cannot authorize a grant, even when profile mode is off.
+- These amendments are local implementation, not deployment or live proof. Sources,
+  tradeoffs, failures, race tests and review evidence are in
+  [CX-REMAINING](build/CX-REMAINING.md), C11d3/C11d4. Channel activation and destructive
+  cleanup retain their approval/observation requirements.
+
 ## 7. The quality bar ("AAA") — every call must pass this
 
 ### 7.1 Every outgoing call
