@@ -628,14 +628,34 @@ export function statusAfterConnectionFailure(current: AuthStatus, errorClass: Er
   return current
 }
 
+function canTransitionAuthStatus(prev: AuthStatus, next: AuthStatus): boolean {
+  if (prev === next) return false
+  // Terminal states are left only by a new grant (storeGrant) or a disconnect.
+  return !((prev === 'revoked' || prev === 'disconnected') && next !== 'disconnected' && next !== 'revoked')
+}
+
 export async function transition(row: Pick<ConnRow, 'id' | 'channelType' | 'authStatus' | 'displayName'> & { consecutiveFailures?: number }, next: AuthStatus, reason: string, actor: Actor = SYSTEM_ACTOR): Promise<void> {
   const prev = row.authStatus as AuthStatus
-  if (prev === next) return
-  // Terminal states are left only by a new grant (storeGrant) or a disconnect.
-  if ((prev === 'revoked' || prev === 'disconnected') && next !== 'disconnected' && next !== 'revoked') return
+  if (!canTransitionAuthStatus(prev, next)) return
   const saved = await prisma.channelConnection.updateMany({ where: { id: row.id, authStatus: prev }, data: { authStatus: next } })
   if (saved.count !== 1) return
   await announceTransition(row, next, reason, actor)
+}
+
+/** Caller holds the account row lock and persists audit/notifications in this same transaction. */
+export async function revokeGrantInTx(tx: Prisma.TransactionClient,
+  row: Pick<ConnRow, 'id' | 'workspaceId' | 'authStatus' | 'grantVersion'>, reason: string,
+): Promise<{ next: AuthStatus; changed: boolean }> {
+  const prev = row.authStatus as AuthStatus
+  const next = prev === 'disconnected' ? 'disconnected' : 'revoked'
+  if (prev !== next && !canTransitionAuthStatus(prev, next)) throw new Error('This authentication transition is not allowed.')
+  const saved = await tx.channelConnection.updateMany({
+    where: { id: row.id, workspaceId: row.workspaceId, authStatus: prev, grantVersion: row.grantVersion },
+    data: { authStatus: next, isActive: false, refreshLeaseOwner: null, refreshLeaseUntil: null,
+      lastError: reason.slice(0, 500), lastErrorAt: new Date() },
+  })
+  if (saved.count !== 1) throw new Error('The account changed before revocation could be committed.')
+  return { next, changed: prev !== next }
 }
 
 async function announceTransition(row: Pick<ConnRow, 'id' | 'channelType' | 'authStatus' | 'displayName'>, next: AuthStatus, reason: string, actor: Actor): Promise<void> {

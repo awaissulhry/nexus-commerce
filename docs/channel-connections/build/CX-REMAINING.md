@@ -230,3 +230,55 @@ cleanup before requiring introspection. Revocation, strict audit, durable per-ow
 notifications and receipt completion must commit together. Dedupe notices by profile,
 connection, grantVersion, kind and recipient (not unread state alone). Zero active
 owners is an explicit durable audit disposition, not proof notification was delivered.
+
+## C11c — atomic eBay revocation domain transaction
+
+**Implemented, tested and independently reviewed locally; not deployed or wired to ingress.**
+
+The transaction-only domain handler receives the authoritative stored receipt plus
+current-grant evidence. It verifies the account/profile, locks the owned account,
+compares the grant version, and refuses active or stale evidence as unresolved. Already
+revoked/disconnected accounts are reconciled without requiring introspection; inactive
+state and cleared refresh leases are enforced, preserving disconnected semantics.
+Account status changes remain in the token service and share its transition policy.
+
+Strict transaction-aware audit and notification helpers now underlie the existing
+best-effort wrappers. Revocation, audit records, active-owner inbox rows and receipt
+completion commit together through C10. A deterministic per-profile/account/grant/kind/
+recipient notification identity prevents duplicate notices across delivery IDs and
+read-state changes while allowing a later grant to raise a new notice. A profile with
+no active owners still gets its necessary security transition and a durable
+`no_active_owners` audit disposition; this does not claim anybody was notified.
+
+Sixteen real PostgreSQL controls pass with zero skips: complete atomic effects,
+terminal cleanup, both reconnect orderings, late refresh fencing, account/proof
+refusal, active evidence remains pending, injected account/notification/audit failures,
+failed final receipt fence, occurrence dedupe and zero-owner handling. The callback
+runs under an instrumented context that rejects every global-client access; network
+is stubbed and no remote call occurs inside the transaction. Actual row-lock contention
+is observed via PostgreSQL blocking state. Existing alert/lifecycle/token regressions:
+121 passed. API typecheck and inbound-ledger state-machine/replay ratchet pass.
+
+The first TDD run lacked the new helper (11 failed/one negative control passed); this
+is feature-development evidence, not a production-defect reproduction. A syntax error
+and a later missing synthetic app-credential fixture were corrected separately; the
+latter produced a timeout and unhandled assertion rejection, so that run is **not**
+counted as passing. The final run has no skipped/failed tests. Critical guard mutations
+were applied/restored after its clean baseline: removing the grant version fence,
+active-evidence refusal or notification occurrence version each caused one failure;
+removing stand-down/lease cleanup caused five. Independent review approved the bounded
+implementation and suggested an ambient non-owner control. That test was added, all16
+cases passed, and removing the explicit owner-only recipient selection killed that
+new control. The guard was restored.
+Evidence under `/private/tmp/cx-completion-20260922/`: `c11c-revocation-red.log`,
+`c11c-revocation-green.log`, `c11c-revocation-races.log` (failed fixture run),
+`c11c-revocation-races-final.log`, `c11c-revocation-reviewed.log`,
+`c11c-regressions.log`, `c11c-typecheck-reviewed.log`, and
+`c11c-*-mutation.log`. Canonical PostgreSQL registration now requires166 tests; the last
+full runner remains147, with subsequent grant/revocation additions run separately.
+
+Still open in C11d: signed envelope validation and stable/inactive-account routing;
+receiver/worker/manual replay integration; initial DB-clock scheduling; bounded
+unresolved-notice retries and final owner warning; private lease fields in diagnostics.
+The old inline eBay receiver and legacy lifecycle wrapper remain until that integration
+replaces their execution path. No eBay topic has been declared ready or activated.

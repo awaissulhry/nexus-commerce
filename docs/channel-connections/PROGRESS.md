@@ -35,7 +35,9 @@ writes from replacing newer credentials: 18 real PostgreSQL cases, 118 regressio
 five killed/restored mutations, typecheck and independent review pass locally.
 C11b adds reviewed owner-only current-refresh-grant inspection (42 focused tests,
 10 real PostgreSQL grant cases); it has no production caller.
-Next: atomic revocation/audit/owner notifications, stored-payload dispatch and transactional domain handlers. Live-read probe
+C11c adds reviewed atomic revocation/audit/owner notifications and receipt completion
+(16 real PostgreSQL cases, 121 existing regressions, five killed guard mutations).
+Next: receiver/worker/manual replay wiring, then transactional order and erasure handlers. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22

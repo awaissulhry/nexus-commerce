@@ -22,7 +22,9 @@ cases and three killed guard mutations. Both are local, not deployed. Receiver i
 and domain idempotency remain open. C11a also has reviewed grant-version/credential
 maintenance fencing: 18 real PostgreSQL cases, 118 regressions and five killed
 mutations. C11b adds reviewed owner-only refresh-grant evidence (42 focused tests,
-10 real PostgreSQL grant cases). These remain local and do not activate revocation handling.
+10 real PostgreSQL grant cases). C11c adds the reviewed atomic revocation domain
+transaction (16 real PostgreSQL cases,121 regressions,5 killed mutations). These
+remain local; receiver/retry/replay integration is still open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
 SUCCESS, exact health/readiness build, protected diagnostic GET401, migration
@@ -56,7 +58,7 @@ connection deletion, new channel activation and P7 drops have not been executed.
 | P2.3 | eBay notifications.ts/routes/handlers independently audited | C3/C8 deployed 439d9e3d3 | Startup log proves automatic setup disabled; no new subscription provisioned | C3 transport/status fixed; C8 readiness/explicit activation hold (83 tests); durable processors/account-token scope and delivery still open | Implementation + approved catalogue/activation |
 | P2.4 | Shopify reconciliation/lifecycle; build/P2.4.md | Baseline | Store connected; no fresh uninstall/privacy proof | Preserve connection and regression coverage | Any test uninstall/write |
 | P2.5 | Etsy receiver/receipts; C2 contract/routing: 35 focused + 5 real PostgreSQL tests | C2 deployed 439d9e3d3 | Migration checksum/finished state and exclusive shop57783036→Motovento route verified;12 scopes preserved | Finish transactional ingest/poll; register4 actual events and prove freshness | Stock policy/history boundary + registration/live call |
-| P2.6 | account-lifecycle.service.ts; revocation code exists | Baseline | eBay real revocation handler currently unreachable | Awaited scoped lifecycle dispatch; real signal proof | Live event |
+| P2.6 | C11a–c local: grant versions/current refresh evidence/atomic revocation with owner notices;16 realPG domain cases | Legacy baseline only | Current deployed eBay revocation path remains unreachable | Wire reviewed domain through durable receiver/worker/replay; bounded unresolved DLQ; real signal proof | Implementation + approved deployment/live event |
 | P2.7 | AMS dedupe and subscription check; build/P2.7.md | Baseline | Every live profile hourly arrival not freshly proved | Per-profile dataset/read controls | Live read if needed |
 | P2.8 | Ingress DS tab + retry/replay; build/P2.8.md | C1 deployed 439d9e3d3 | Replay fix deployed; no UI change in this release | Browser keyboard/responsive verification after changes | Browser observation |
 | P3.1 | Gateway error vocabulary; build/P3.1.md real/shape fixtures | Baseline | No new outgoing call measured | Preserve channel codes/messages and fixture distinctions | None local |

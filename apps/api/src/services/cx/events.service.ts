@@ -13,6 +13,7 @@
  */
 
 import prisma from '../../db.js'
+import type { Prisma } from '@prisma/client'
 import { logger, redact } from '../../utils/logger.js'
 
 export type ConnectionEventType =
@@ -50,27 +51,34 @@ export interface Actor {
 export const SYSTEM_ACTOR: Actor = { kind: 'system' }
 export const CRON_ACTOR: Actor = { kind: 'cron' }
 
-export async function recordConnectionEvent(input: {
+interface ConnectionEventInput {
   connectionId?: string | null
   channelKey: string
   type: ConnectionEventType
   actor?: Actor
   detail?: Record<string, unknown>
-}): Promise<void> {
+}
+
+/** Strict persistence for a domain transaction: failure must roll back its effects. */
+export async function recordConnectionEventInTx(tx: Pick<Prisma.TransactionClient, 'connectionEvent'>, input: ConnectionEventInput): Promise<void> {
   const detail = {
     ...(input.detail ? (redact(input.detail) as Record<string, unknown>) : {}),
     actorKind: input.actor?.kind ?? 'system',
   }
+  await tx.connectionEvent.create({
+    data: {
+      connectionId: input.connectionId ?? null,
+      channelKey: input.channelKey,
+      type: input.type,
+      actorUserId: input.actor?.userId ?? null,
+      detail,
+    },
+  })
+}
+
+export async function recordConnectionEvent(input: ConnectionEventInput): Promise<void> {
   try {
-    await prisma.connectionEvent.create({
-      data: {
-        connectionId: input.connectionId ?? null,
-        channelKey: input.channelKey,
-        type: input.type,
-        actorUserId: input.actor?.userId ?? null,
-        detail,
-      },
-    })
+    await recordConnectionEventInTx(prisma, input)
   } catch (err) {
     // The ledger must never take the operation down with it.
     logger.error('[cx-events] failed to write ConnectionEvent', {
