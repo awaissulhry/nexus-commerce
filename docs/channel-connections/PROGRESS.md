@@ -60,7 +60,12 @@ feedback and keyboard focus locally:28 tests,2 killed mutations, actual-browser 
 proof, independent review and final build pass. Quarantine recovery/key
 maintenance remain. C11e1 now adds reviewed owner-only metadata/adoption APIs locally:
 32 admission/recovery realPG plus9 rollout cases,44 route regressions and6 killed
-mutations. The UI and key maintenance are next; no production action was taken.
+mutations (committed c2eb15a99). C11e2 adds the recovery UI and fixes parent profile
+races locally:54 regressions,6 killed mutations, actual-ChannelsClient browser proof
+and independent review. Full package gates pass (11518API,4640web,264realPG/zero
+skips,both builds,127security,2727RBAC/0unmapped; ratchet unchanged). Key maintenance and remaining
+channel handlers/operational proof remain. At16:27Z main/health still0a563d6d; five
+quantity mismatches and existing critical Ads integrity remain. No production write.
 
 
 ### Approved production release — 2026-09-22

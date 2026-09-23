@@ -893,3 +893,111 @@ Evidence under /private/tmp/cx-completion-20260922/:
 - Independent source review approves after the resolved-adoption fix. UI recovery,
   global operational quarantine visibility/key maintenance remain open. Full package
   hooks will run again before an approved push; no deployment or production write.
+
+
+## C11e2 — owner recovery UI and profile-safe parent reads (local)
+
+C11e1 is committed as c2eb15a99. The new Ingress recovery card uses existing DS
+Card/Field/Listbox/Modal/Button components. It includes inactive OAuth eBay identities
+with immutable seller IDs, without reconnecting them. The confirmation identifies the
+exact account, business and notice, and explains possible authorization effects when
+processing is enabled. Assignment feedback does not claim handler completion. Reads
+and writes pin the chosen workspace header/account URL; scoped mode refuses a missing
+profile. Metadata pages are validated, bounded and uncached. A failed or malformed
+assignment response stays unconfirmed, including a503 after the mock server committed.
+
+The card resets by profile/account, cancels stale reads, ignores late callbacks and
+bounds reads/writes at15s/45s. Aborting a submitted POST is not claimed to undo an
+assignment. Cancel before submission makes zero POSTs. Pagination retains earlier
+pages and uses page-specific empty wording after assigning the last later-page item.
+The API remains the authorization boundary; client ownership display grants no rights.
+
+Independent review caught two parent-level defects that a direct-card fixture could
+not prove away: useAccounts retained/accepted stale profile responses, and Ingress
+itself kept old rows/action notices when only its recovery child was keyed. The
+existing shared useJson hook now has path/profile-keyed snapshots, immediate mismatch
+hiding, cancellation, a request-generation fence and15s bound. Accounts and Ads reads
+pin their profile; global catalogue reads remain global. Stable module-level selectors
+remove the old missing-dependency suppression. Missing account/Ads collections become
+errors rather than a fabricated empty result. Whole Ingress is keyed by profile, and
+its reads/actions also carry explicit profile headers. No new channel is introduced.
+
+This retains the existing effect-based loader with cleanup instead of adding another
+cache/provider migration. React's official guidance describes stale-response cleanup
+and complete reactive dependencies: https://react.dev/reference/react/useEffect .
+The change is a bounded correction to the existing loader, not a whole data-layer
+migration. Known unsupported eBay topics/global unknown ownership remain outside this
+account-matching list; no blanket quarantine completion is claimed.
+
+Proof under /private/tmp/cx-completion-20260922:
+- c11-e2-parent-scope-red.log: seven parent-loader regressions fail before the fix.
+  c11-e2-regressions-reviewed.log:54 tests pass, including15 client contracts,7 scoped
+  hook cases, existing display/notice/readiness regressions. Transport-ignores-abort
+  controls prove the response fence independently of browser cancellation.
+- Initial typecheck found an inferred optional-undefined header record; explicit
+  Record<string,string> corrected it. No assertion, timeout or suppression was weakened.
+- quarantine-preview/ holds actual component, then actual useAccounts+Ingress, then
+  actual ChannelsClient browser fixtures. Only navigation/profile-provider and HTTP
+  data are synthetic; all traffic is localhost with a same-origin CSP. No auth session,
+  provider call or production write is part of these tests.
+- parent-response-order.json proves Alpha request→Beta request/response→late Alpha;
+  parent-race-final.txt contains only Beta accounts/events. The first earlier browser
+  sample switched after Alpha completed and is not race proof; raw HTTP timestamps
+  are retained. actual-parent-response-order.json and actual-parent-race-final.txt
+  repeat the ordered race through the actual ChannelsClient and retain only Beta
+  accounts/events after the late Alpha reply.
+- parent-notice-reset.json: Alpha queued result exists, then disappears with its
+  events after switching to Beta. The actual-parent key mutation recreates the stale
+  notice (parent-key-mutation.json); restored build clears it (parent-key-restored.txt).
+- inactive-account.txt, paging.txt, owner-denied.txt, uncertain-assignment.txt and
+  later-page-assignment.json prove inactive selection, page traversal, access refusal
+  distinct from empty, uncertain outcome and remaining earlier-page work.
+- Five applied/restored unit mutations killed: profile header, required profile,
+  assignment acknowledgement, response generation and snapshot key; the sixth is the
+  actual-parent browser mutation above.
+- Full-parent narrow testing exposed the existing tab bar overflowing at320/390.
+  Existing Tabs overflow="scroll" fixes it; no shared DS edits/factory mirror needed.
+  layouts-final.json:320/390/768/1280×light/dark have no page overflow, named fitting
+  dialogs, inert background and working keyboard trap. Cancel restores opener focus;
+  assignment focuses its named result region. Final screenshots saved; positive-frame
+  console is clean. Viewport restored and test tab/server closed.
+- Independent updated source review approves. Full current-package hook passes:
+  23 database tests,4640web/13skips,11518API/295skips,both builds,127security,
+  2727routes/0unmapped,264realPG/21files/zero skips. Profiles-ON measures923files,
+  41known failing/217tests,none new or worse. Evidence: c11-e2-prepush.log and copied
+  full-suite/build/ratchet logs. Default API skips include the separately executed
+  concurrency cases. No push followed the manually invoked hook.
+
+### Fresh published-main observation — 2026-09-23 16:27 UTC
+
+Published main remains0a563d6d5700a9aded3a53cf64c9fcf543facb04; public health serves
+0a563d6d/healthy. Existing five quantity mismatches and CRITICAL Ads integrity remain;
+public Ads drift shows452 non-healing fields of645 open. This does not verify Railway,
+flags, business ownership/scopes, credentials or vendor behavior. Shared pes/phase-0
+worktree status is unchanged and untouched. Sanitized observed-main-20260923-1627.json
+records this narrow read. Nothing from C9 onward has been pushed/deployed/activated.
+
+
+### Next source finding — credential/quarantine maintenance
+
+Independent audit found that rotate/status omit quarantine payloadEnc; status omits
+inactive credentials; rotation reads connections through shared-account SELECT without
+an explicit owning-workspace predicate. Preflight checks KMS fallback only once: a
+later reencryptCredentials result can silently use env and downgrade a v2 envelope or
+count oldv1 as alreadyCurrent. Returned FAILED/REFUSED text is still recorded CronRun
+SUCCESS. OnKms currently means envelope version, not target key or recoverability.
+Quarantine immutability correctly prevents simply adding an UPDATE loop.
+
+Next implement strict per-item pinned-target maintenance, owned-connection scope,
+truthful failure state/inventory, then a separately authorized global quarantine CAS
+with atomic audit and immutable source proof. Do not elevate the tenant cron to read
+all quarantine. Validate sealed binding/digest for verified unsupported/unrouteable
+notices too; adoption's stricter subject parser is not sufficient for maintenance.
+A fresh complete inventory and cold decrypt verification are required before any key
+retirement; v1 has no keyring/identity, so do not claim env-key replacement support.
+Current official references: AWS KMS rotate-keys documentation distinguishes rotating
+material in one key resource from migrating to a different key; PostgreSQL17 CREATE
+FUNCTION documents restricted EXECUTE/trusted search_path for privileged functions.
+https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html
+https://www.postgresql.org/docs/17/sql-createfunction.html
+No KMS, provider or production mutation was performed by this audit.

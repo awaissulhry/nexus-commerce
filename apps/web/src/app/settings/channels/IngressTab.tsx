@@ -23,6 +23,9 @@ import { Button, FilterChip, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { InboundGrid, inboundStatusOf, type InboundRow, type InboundStatus } from './ChannelEventsGrid'
 import { inboundActionNotice, type InboundActionNotice } from './inbound-action-notice'
+import { EbayQuarantinePanel } from './EbayQuarantinePanel'
+import type { AccountRow } from './channels-data'
+import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
 
 const STATUSES: Array<{ id: InboundStatus; label: string; hint: string }> = [
   { id: 'dlq', label: 'Dead letters', hint: 'Out of attempts. Nothing will try these again.' },
@@ -43,7 +46,9 @@ interface Totals {
   byStatus?: Array<{ status: string; count: number }>
 }
 
-export function IngressTab() {
+export function IngressTab({ accounts = [], accountsLoading = false, accountsError = null, workspaceId, workspaceName }: {
+  accounts?: AccountRow[]; accountsLoading?: boolean; accountsError?: string | null; workspaceId?: string | null; workspaceName?: string
+} = {}) {
   const api = getBackendUrl()
   const [channel, setChannel] = useState<string>('')
   const [statuses, setStatuses] = useState<Set<InboundStatus>>(new Set())
@@ -60,6 +65,7 @@ export function IngressTab() {
   useEffect(() => { if (notice) noticeRef.current?.focus() }, [notice])
 
   useEffect(() => {
+    if (WORKSPACES_ENABLED && !workspaceId) return
     let live = true
     const since = new Date(Date.now() - Number(windowHours) * 3600_000).toISOString()
     const params = new URLSearchParams({ since, limit: '200' })
@@ -67,7 +73,8 @@ export function IngressTab() {
     if (statuses.size) params.set('status', [...statuses].join(','))
     setRows(null)
     setError(null)
-    fetch(`${api}/api/sync-logs/webhooks?${params}`, { credentials: 'include' })
+    const headers: Record<string, string> = WORKSPACES_ENABLED && workspaceId ? { 'x-nexus-workspace-id': workspaceId } : {}
+    fetch(`${api}/api/sync-logs/webhooks?${params}`, { credentials: 'include', cache: 'no-store', headers })
       .then(async (r) => (r.ok ? r.json() : Promise.reject(new Error(`The event list could not be read (HTTP ${r.status}).`))))
       .then((body) => {
         if (!live) return
@@ -76,13 +83,15 @@ export function IngressTab() {
       })
       .catch((e: Error) => { if (live) { setError(e.message); setRows([]) } })
     return () => { live = false }
-  }, [api, channel, statuses, windowHours, reload])
+  }, [api, channel, statuses, windowHours, reload, workspaceId])
 
   const act = useCallback(async (id: string, action: 'retry' | 'replay') => {
+    if (WORKSPACES_ENABLED && !workspaceId) return
     setBusyId(id)
     setNotice(null)
     try {
-      const res = await fetch(`${api}/api/sync-logs/webhooks/${id}/${action}`, { method: 'POST', credentials: 'include' })
+      const headers: Record<string, string> = WORKSPACES_ENABLED && workspaceId ? { 'x-nexus-workspace-id': workspaceId } : {}
+      const res = await fetch(`${api}/api/sync-logs/webhooks/${id}/${action}`, { method: 'POST', credentials: 'include', headers })
       const body = await res.json().catch(() => ({}))
       setNotice(inboundActionNotice(action, res.status, body))
     } catch (e) {
@@ -92,7 +101,7 @@ export function IngressTab() {
       // A failed response can still leave a durable queued receipt. Read its state.
       setReload((n) => n + 1)
     }
-  }, [api])
+  }, [api, workspaceId])
 
   const statusCount = useCallback(
     (id: InboundStatus) => totals?.byStatus?.find((s) => s.status === id)?.count ?? 0,
@@ -129,6 +138,8 @@ export function IngressTab() {
   return (
     <div className="nds-ingress">
       <MetricStrip metrics={metrics} />
+      <EbayQuarantinePanel key={workspaceId ?? 'legacy'} accounts={accounts} loading={accountsLoading} error={accountsError}
+        workspaceId={workspaceId} workspaceName={workspaceName} onAssigned={() => setReload(value => value + 1)} />
 
       <Card
         header="Inbound events"

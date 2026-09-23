@@ -54,9 +54,9 @@ export function ChannelsClient() {
   const [pending, setPending] = useState<{ channel: CatalogueChannel; options: StartOptions; accountLabel?: string } | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'info' | 'danger'; title: string; text?: string; workspaceId?: string } | null>(null)
 
-  const accounts = useAccounts(reload, WORKSPACES_ENABLED)
+  const accounts = useAccounts(reload, true, activeProfile?.id)
   const catalogue = useCatalogue()
-  const ads = useAdsConnections(reload)
+  const ads = useAdsConnections(reload, activeProfile?.id)
 
   const popup = useConnectPopup(
     (m) => {
@@ -109,7 +109,7 @@ export function ChannelsClient() {
       {/* No PageHeader: the settings shell already renders the title and the
           nav's description above every settings page — a second copy was the
           same two lines twice on screen (measured on prod 2026-08-29). */}
-      <Tabs ariaLabel="Channels sections" tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs ariaLabel="Channels sections" tabs={tabs} active={tab} onChange={setTab} overflow="scroll" />
 
       {((popup.error && !pending) || accounts.error) && (
         <Banner tone="danger" title={popup.error && !pending ? 'Connection failed' : 'Accounts could not be loaded'} onDismiss={popup.error && !pending ? popup.clearError : undefined}>
@@ -138,7 +138,8 @@ export function ChannelsClient() {
           />
         )}
         {tab === 'health' && <HealthTab />}
-        {tab === 'ingress' && <IngressTab />}
+        {tab === 'ingress' && <IngressTab key={activeProfile?.id ?? 'legacy'} accounts={accounts.data?.accounts ?? []} accountsLoading={accounts.loading} accountsError={accounts.error}
+          workspaceId={activeProfile?.id} workspaceName={activeProfile?.name} />}
         {tab === 'diagnostics' && (
           <DiagnosticsTab accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />
         )}
