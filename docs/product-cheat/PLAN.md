@@ -6904,6 +6904,6 @@ Amazon's real rate for this account (the header sets it); the eBay app's daily c
 changed HTML or entities (a first run with drift on `product_description` alone would be the tell); the resolver's time per listing;
 production Amazon·IT listing count; whether the propagation preview offers content fields.
 
-| # | Question | Ruling (2026-09-23 ~21:30 UTC, twenty-eighth set) |
+| # | Question | Ruling (2026-09-23 ~21:05 UTC, twenty-eighth set) |
 |---|---|---|
 | **R-41** | A-39 — Step 3.5b | ✅ **(a)** Build slice b1 (Amazon content reads) now, with the one additive column and the writer's true count; b2 (eBay) after the eBay drift slice and one read of the eBay daily call limit |

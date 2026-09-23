@@ -27,7 +27,7 @@ been exercised.
 | **0.4** Migration history replay | ✅ **CLOSED** — a fresh database builds from a baseline | `1eaecb03d` |
 | **1.1** Delist FK cascade | ✅ **STRUCK** — premise false; no migration needed, nothing to build | `647c1e4d1` |
 | **1.2** Never orphan a live listing | ✅ **BUILT** | `5c2030a44` |
-| **1.3** Reversible unpublish | 🟢 **UNBLOCKED 2026-09-23** — Step 3.1's doors are open on production (measured) | — |
+| **1.3** Reversible unpublish | ✅ **BUILT (R-38, R-39)** — hard delete + "stop selling": Amazon closes the market's offer (SCT.6's channel half, shared), eBay quantity 0 under the out-of-stock control; FBA and an unknown/off control refused before the delete. Both mechanisms proven live and restored. ⬜ not run live end-to-end through the worker; eBay single-SKU path never run live | `65e1d9c0a` |
 | **1.4** Gate the Amazon delete | ✅ **CLOSED** — Amazon was already done; the real hole was eBay's permission | `6ff3b6b58` |
 | **1.5** Price cell read-only | ✅ **BUILT, then LIFTED by Step 2.2 part 2** — the hold did its job and is deleted | `cf49c88d2` |
 | **A-8** `apps/api` suite was not gated | ✅ **BUILT** — 833 test files now run on every push | `43ace2666` |
@@ -76,7 +76,9 @@ been exercised.
 | **A-35 / Step 3.4** The first live write and read-back | ✅ **RULED R-35 — CLOSED 2026-09-23**: Amazon·IT backend search terms on `GALE-JACKET-BLACK-MEN-S` — preview passed, write `ACCEPTED` and read back in 15 s, restored and read back, a delayed re-read equals the saved value (the probe was live ~45 s). Seeds Step 3.5 | see `git log` |
 | **A-36 / Step 3.5a** What the channel holds that differs from us | ✅ **RULED R-36, BUILT**: `ChannelDrift` (additive migration `20260923a`), one writer, fed by the Amazon (quantity + price) and Shopify read-backs; the list's new **"Differs on the channel"** filter; the old one renamed **"Has overrides"**; the Amazon dedupe per market; 10 mutations red. ⬜ eBay mapping (next slice), 3.5b content reads (for approval). 🟠 Local DB has 2 pending migrations (not applied by this lane) | see `git log` |
 | **A-37 / Step 1.3** Reversible unpublish — the live proof | ✅ **RULED R-37; proven live and restored**: eBay quantity 0 (out-of-stock control on) keeps the item `Active`, restores to 10; Amazon merchant quantity 0 reads back, restores to 2. 🔴 The Amazon quantity is shared across EU markets — the test likely paused the SKU EU-wide for ~90 s (restored) | — |
-| **A-38** Step 1.3's Amazon half already exists (SCT.6 per-market offer close/reopen); quantity 0 is the wrong Amazon mechanism | 🟡 **FOR YOUR APPROVAL** — recommended: build unpublish on SCT.6 close (Amazon) + the proven quantity 0 (eBay), after one live SCT.6 close/reopen | — |
+| **A-38** Step 1.3's Amazon half already exists (SCT.6 per-market offer close/reopen) | ✅ **RULED R-38 / R-39** — SCT.6 close + replay proven live on `xracingbxn48` Amazon·IT (no Nexus row written; re-read equal at ~1, 2.5, 3.7 min); the build is for the hard-delete flow (no republish exists) | `f7bd4b085`, `65e1d9c0a` |
+| **Step 3.5 eBay slice** The eBay quantity read-back records drift per listing | ✅ **BUILT (R-36)** — one per-entry verdict; a diff lands on the product's own listing on that ItemID, else the ItemID's one owner as `quantity:<SKU>`; ambiguous = counted, not guessed. 🔴 The list hides eBay shells — the filter now reaches through them | `298364359` |
+| **A-39 / Step 3.5b** Amazon content reads | ✅ **RULED R-41, slice b1 BUILT** — nightly 03:37 UTC per business, ≤ 10 min, ≤ 1 read/s, rotating; one additive column `ChannelDrift.checkedBySource` (migration `20260923b`); the writer keeps the true count. On with the deploy (`NEXUS_ENABLE_CONTENT_DRIFT=0` holds it). ⬜ b2 (eBay) later | `22ed2676b` |
 | **3.2** The four measurements | ✅ **CLOSED 2026-09-23** — M1 ✅, M2 = 0, M3 ✅, M4 = 0, predictions written first; the gate (15.7 #1) `sheet-payload-parity.vitest.test.ts` built, 3 mutations red; the production sample (15.7 #2) is Step 3.5b's rotation | see `git log` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -152,7 +154,35 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 3, 2026-09-24 ~01:30 (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 4, 2026-09-23 ~21:35 UTC (READ THIS FIRST; everything below is history)
+
+**Times in this section are UTC, measured with `date -u`.** Handoff 3's "2026-09-24 ~01:30" was not UTC (its commit
+`f4c90dd19` is 20:09 UTC on 09-23).
+
+**Branch `pes/phase-0`. NOT deployed:** `main` is still `0a563d6d5`. The next merge to `main` (the Owner's) ships A-30, A-32,
+A-33, 3.5a and everything below, with **two additive migrations** (`20260923a_channel_drift`, `20260923b_channel_drift_checked_by_source`).
+
+**Done this session (rulings R-38 … R-41 at the end of PLAN.md; all four closure fields in each section):**
+- **R-38** — SCT.6 offer close + verbatim replay proven LIVE on `xracingbxn48` Amazon·IT (channel only, no Nexus row written;
+  both `ACCEPTED`; offer absent ~30 s; re-read equal at ~1, 2.5, 3.7 min). The read found this SKU's DE offer closed by the SCT.6
+  pilot since 2026-07-26. Tool `tools/sct6-close-probe.mts`. `f7bd4b085`.
+- **Step 1.3 BUILT (R-39)** — `65e1d9c0a`. The only producer of unpublish is the hard delete, so there is no republish.
+- **Step 3.5 eBay slice BUILT (R-36)** — `298364359`. The list hides eBay shells; the filter now reaches through them.
+- **A-39 / Step 3.5b slice b1 BUILT (R-41)** — `22ed2676b`. 🔴 The job is ON with the next deploy (03:37 UTC nightly, reads only).
+- **R-40** — the Owner: *"do all the running of the commands yourself."* This lane runs the read-only production tools.
+- Work ran as three-plus sub-agents with disjoint files (the Owner asked for 2–3); this session verified and committed each.
+- `axis-stores.mjs` mid-way (21:09 UTC): legacy `va` sizes **35** (not grown), colours **44**; store 301 / 285.
+
+**Running when this was written:** a background wait that runs `readiness-age.mjs` + `axis-stores.mjs` at **02:35 UTC
+2026-09-24** (output in this session's scratchpad). If this session is gone, the next one runs both itself (R-40) and records
+them: Step 2.7 closes if both businesses show `readiness-reconcile` SUCCESS, `stopped: complete`; legacy `va` must stay ≤ 35 / 44.
+
+**Waiting on the Owner:** the merge to `main` (then the migrations apply) · the one-minute paste check by hand (A-34).
+**Next, in order:** record the 02:35 runs · after the merge: `node docs/product-cheat/tools/prod-run.mjs content-drift` (read only)
+and the first night's `content-drift` CronRun line · A-39 slice b2 (eBay content — needs one read of the eBay daily call limit) ·
+eBay single-SKU unpublish never run live. R-34: listing CONTENT writes stay LAST. Not this lane's: Phase 4, `docs/listings/`, flat files.
+
+### Where this lane stands — handoff 3, 2026-09-24 ~01:30 [not UTC — 20:09 UTC 2026-09-23] (history)
 
 **Branch `pes/phase-0`, all pushed. NOT deployed:** `main` is still `0a563d6d5`. The branch = `main` + everything below.
 The next merge to `main` ships A-30, A-32, A-33 and Step 3.5a, including one **additive** migration
