@@ -1,0 +1,516 @@
+{
+ "workspace": "nexus_legacy_workspace",
+ "database": "neondb",
+ "entries": [
+  {
+   "id": "cmrr88bn104h9pj01q2wd2x5q",
+   "sku": "VENTRA-JACKET-4XL-YELLOW-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy27q004ipm0pulqrqc3q",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-L",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy25r004dpm0pto3mdieg",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-M",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrqxeqdx0ce2qn01e198e4x4",
+   "sku": "IT-MOSS-JACKET-GREEN-MEN-XXS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrr88b5j04gtpj01byc34suf",
+   "sku": "VENTRA-JACKET-5XL-RED-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmr8kdzh1000iqu018gcg4ft3",
+   "sku": "WATERPROOF-OVERJACKET-BLACK-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrqxeq600cdwqn01b195yxxl",
+   "sku": "IT-MOSS-JACKET-BLACK-MEN-XXS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmokmy267004epm0p3zwlfs75",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-S",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy282004jpm0pp4tvaicp",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-M",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy27d004hpm0pp6tmb8ur",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-3XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrqxeqgm0ce4qn01tx64qgqe",
+   "sku": "IT-MOSS-JACKET-GREEN-MEN-XS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrcvks4q09m9oi01jqqo39ef",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmr8kdzjk000kqu01rem9tdt3",
+   "sku": "WATERPROOF-OVERJACKET-BLACK-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmr8kdzom000oqu01ersxvajb",
+   "sku": "WATERPROOF-OVERJACKET-BLACK-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkrze09m5oi017fkn08oj",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2b4004rpm0plo9khkmo",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrqxeqm00ce8qn01tjohisao",
+   "sku": "MOSS-JACKET-YELLOW-MEN-XXS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrcvkrif09ltoi01rb12e532",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkr7p09lloi01ymscyzuy",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy24v004bpm0pnretnc03",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-3XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrqxeqjc0ce6qn01vvo2s403",
+   "sku": "IT-MOSS-JACKET-GREEN-MEN-5XL",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmokmy28t004lpm0p553jej2g",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrqxeqrc0cecqn01m47vrhhg",
+   "sku": "MOSS-JACKET-YELLOW-MEN-5XL",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrr88anw04gdpj01bgk8zkvv",
+   "sku": "VENTRA-JACKET-XXS-RED-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkr5209ljoi01btkahuuu",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy28e004kpm0phglcwa5f",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-S",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrbbxufy1hnhnw018if1qt41",
+   "sku": "AIRMESH-JACKET-BLACK-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxuqi1hnpnw01lnbnp9w8",
+   "sku": "AIRMESH-JACKET-YELLOW-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxuil1hnjnw014upag97e",
+   "sku": "AIRMESH-JACKET-BLACK-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy26l004fpm0pmqik9ttg",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrbbxuns1hnnnw01b3730f5r",
+   "sku": "AIRMESH-JACKET-BLACK-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkro409lxoi015lzl2xcn",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxuvq1hntnw01jhbuh7ta",
+   "sku": "AIRMESH-JACKET-YELLOW-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88bi204h5pj01fw0acj88",
+   "sku": "VENTRA-JACKET-XXS-YELLOW-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88b0h04gnpj01im7v7ktl",
+   "sku": "VENTRA-JACKET-3XL-RED-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88bkk04h7pj01lmipdn3g",
+   "sku": "VENTRA-JACKET-3XL-YELLOW-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88bfl04h3pj01nysayyjg",
+   "sku": "VENTRA-JACKET-5XL-YELLOW-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkrfn09lroi01yv7pf77a",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrqxeqop0ceaqn01lk6u3s1y",
+   "sku": "MOSS-JACKET-YELLOW-MEN-XS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrr88aqf04gfpj01lvwedc5t",
+   "sku": "VENTRA-JACKET-XS-RED-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88axx04glpj019twdmslb",
+   "sku": "VENTRA-JACKET-XXS-RED-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxul71hnlnw01lpipzm5d",
+   "sku": "AIRMESH-JACKET-BLACK-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88avf04gjpj01x9slwkde",
+   "sku": "VENTRA-JACKET-5XL-RED-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88asx04ghpj01g85pqwwv",
+   "sku": "VENTRA-JACKET-M-RED-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkr2609lhoi01yjtvy3b4",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrqxeqb90ce0qn01n2lfcqco",
+   "sku": "IT-MOSS-JACKET-BLACK-MEN-5XL",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrcvkqzk09lfoi01i6fa71pv",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88bpj04hbpj01148cs1lf",
+   "sku": "VENTRA-JACKET-5XL-YELLOW-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88b8104gvpj01y7idvu96",
+   "sku": "VENTRA-JACKET-XXS-YELLOW-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkrcz09lpoi01ge6wqq2e",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvkrac09lnoi01nt7wfdqq",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxut51hnrnw01l7j8epip",
+   "sku": "AIRMESH-JACKET-YELLOW-MEN-XS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrbbxuya1hnvnw01scb413s6",
+   "sku": "AIRMESH-JACKET-YELLOW-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88b2z04grpj0157tiufv0",
+   "sku": "VENTRA-JACKET-4XL-RED-WOMEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2c9004upm0poth4btv1",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-L",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrcvkrl609lvoi01dfjapl2m",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrqxeq8n0cdyqn01q41atlzh",
+   "sku": "IT-MOSS-JACKET-BLACK-MEN-XS",
+   "variations": {
+    "Style Name": "Da motociclista"
+   },
+   "variantAttributes": {
+    "Style Name": "Da motociclista"
+   }
+  },
+  {
+   "id": "cmrr88bak04gzpj01qfuvyiny",
+   "sku": "VENTRA-JACKET-XS-YELLOW-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrr88bd104h1pj01xxz28eya",
+   "sku": "VENTRA-JACKET-M-YELLOW-MEN",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmrcvks2209m7oi01xqs6f5vg",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2dg004xpm0ppp9uxbrp",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrcvkrwj09m3oi01dpbiy9s4",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-XXS",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2d1004wpm0ptosxx4yt",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-S",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrcvkrqz09lzoi01aiq5tsr7",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2cm004vpm0pzh2o426o",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-M",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmrcvkrtn09m1oi01bons7mop",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-5XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2bw004tpm0pxt2ouayb",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-3XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmr8kdzm4000mqu01m124ng5i",
+   "sku": "WATERPROOF-OVERJACKET-BLACK-MEN-4XL",
+   "variations": null,
+   "variantAttributes": null
+  },
+  {
+   "id": "cmokmy2ac004ppm0pips3wowb",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-M",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy2dv004ypm0pnv3tzas9",
+   "sku": "AIREON-PANT-NERO-NEO-MEN-XXL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy25c004cpm0ppxy62jvo",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-L",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy271004gpm0pbtmi1bn7",
+   "sku": "AIREON-JACKET-CREMA-E-VINO-MEN-XXL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy2bi004spm0pmrn6u0z0",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-XXL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy296004mpm0p8f8agifv",
+   "sku": "AIREON-JACKET-NERO-NEO-MEN-XXL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy29k004npm0peyivp03j",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-3XL",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy29y004opm0p4s3n18hq",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-L",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy2aq004qpm0pz70nwv2s",
+   "sku": "AIREON-PANT-CREMA-E-VINO-MEN-S",
+   "variations": {},
+   "variantAttributes": {}
+  },
+  {
+   "id": "cmokmy24i004apm0p2qbpuvc5",
+   "sku": "AIR-MESH-JACKET-MEN-XXL-BLACK",
+   "variations": {
+    "Size": "XXL",
+    "Color": "Nero"
+   },
+   "variantAttributes": {
+    "Size": "XS",
+    "Color": "Nero"
+   }
+  }
+ ]
+}

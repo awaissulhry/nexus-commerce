@@ -5654,3 +5654,21 @@ yellow). Two more arms and mutations (the family's name ignored; disagreeing sib
 writes it (2.6a), the known wrong value is gone (2.6d), no collision in it (measured).
 
 ### Cost when — linear in children (~300 rows, one statement each). **Rollback** — `--revert <record>`.
+
+---
+
+## Step 2.6 — CLOSED (2026-09-23). The production data run, done on the Owner's authorisation (R-26 / "I authorize you to do it on my behalf").
+
+| | Result on production |
+|---|---|
+| Dry run (after the VENTRA correction) | 78 products — 77 sizes and 77 colours from eBay·IT (16 in the family's own words), 1 legacy value dropped |
+| `--apply` | **`WROTE 78 products. Left to do after the write: 0`**; before-state record: `docs/product-cheat/records/fill-variation-store-nexus_legacy_workspace-2026-09-23T06-05-33-185Z.json` (undo: `prod-run.mjs fill-axes --revert <that file>`) |
+| `tools/axis-stores.mjs` after | store colour **301** (224 + 77), size **285** (208 + 77); legacy sizes 36 → **35**; store vs legacy **0** differ; store vs eBay·IT sizes 200 same / **0** differ; no child holds a value only on a channel; **no collision** in either bag. Colours vs eBay: 42 differ, all VENTRA — the store keeps the full colourway on purpose |
+
+**All four closure fields:** *Done when* — one store holds a child's size and colour (2.6a–c3), the sheet shows and writes
+it (2.6a), the known wrong value is gone (2.6d), no collision (measured above). *Cost when* — flat (2.6a–c3), linear
+~300 rows (2.6d, one statement each). *Gate* — the Step 2.6 test files, 60+ mutations red across the slices; the
+single-writer scan is Step 2.6's own gate. *Rollback* — revert each commit; 2.6d by its record.
+
+Also: **Step 2.1 (b) Motovento dry run** (production): 0 cached schemas, **0 rows** — nothing to apply. Step 2.1 (b) is
+done for both businesses.
