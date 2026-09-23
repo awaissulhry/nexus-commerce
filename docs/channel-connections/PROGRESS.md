@@ -30,7 +30,10 @@ typecheck, two killed/restored mutations and independent review pass. It is loca
 not deployed. C10 adds durable eBay claims and atomic database effects/completion: 15
 real PostgreSQL tests, three killed/restored critical mutations, typecheck and independent
 review pass. It is not yet wired into receivers. See [CX-REMAINING](build/CX-REMAINING.md).
-Next: grant-version fencing, stored-payload dispatch and transactional domain handlers. Live-read probe
+C11a adds atomic grant versions and prevents stale key-rotation/backfill/rollback
+writes from replacing newer credentials: 18 real PostgreSQL cases, 118 regressions,
+five killed/restored mutations, typecheck and independent review pass locally.
+Next: current-refresh-grant inspection, stored-payload dispatch and transactional domain handlers. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22

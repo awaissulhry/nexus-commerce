@@ -70,7 +70,10 @@ const prismaMock = {
     update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const r = rows.get(where.id)
       if (!r) throw new Error(`fake prisma: no row ${where.id}`)
-      for (const [k, v] of Object.entries(data)) if (v !== undefined) r[k] = v
+      for (const [k, v] of Object.entries(data)) if (v !== undefined) {
+        r[k] = typeof v === 'object' && v !== null && 'increment' in v
+          ? Number(r[k] ?? 0) + Number(v.increment) : v
+      }
       updates.push({ id: where.id, data })
       return { ...r }
     }),
@@ -271,6 +274,7 @@ async function seedRow(opts: { creds?: Creds | null; plaintext?: Record<string, 
     refreshTokenExpiresAt: creds?.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : null,
     refreshLeaseUntil: null,
     refreshLeaseOwner: null,
+    grantVersion: 0,
     lastRefreshAt: null,
     lastError: null,
     lastErrorAt: null,

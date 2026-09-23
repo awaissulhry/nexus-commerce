@@ -164,6 +164,7 @@ export async function runCredentialsRotate(): Promise<string> {
     let rotated = 0
     let alreadyCurrent = 0
     let failed = 0
+    let contended = 0
     const keyIds = new Set<string>()
 
     for (const row of rows) {
@@ -175,10 +176,13 @@ export async function runCredentialsRotate(): Promise<string> {
           alreadyCurrent++
           continue
         }
-        await prisma.channelConnection.update({
-          where: { id: row.id },
+        const saved = await prisma.channelConnection.updateMany({
+          where: { id: row.id, credentialsEnc: row.credentialsEnc },
           data: { credentialsEnc: result.blob, credentialsKeyId: result.keyId },
         })
+        // Reconnect, refresh or disconnect may win while crypto work is running.
+        // Keep that writer's material; a deliberate rerun can inspect it afresh.
+        if (saved.count !== 1) { contended++; continue }
         await recordConnectionEvent({
           connectionId: row.id,
           channelKey: 'SYSTEM',
@@ -208,6 +212,7 @@ export async function runCredentialsRotate(): Promise<string> {
     let appRotated = 0
     let appAlreadyCurrent = 0
     let appFailed = 0
+    let appContended = 0
 
     for (const app of apps) {
       const data: Partial<Record<AppSecretField, string>> = {}
@@ -235,7 +240,10 @@ export async function runCredentialsRotate(): Promise<string> {
       const changed = Object.keys(data) as AppSecretField[]
       if (changed.length === 0) continue
       try {
-        await prisma.channelApp.update({ where: { id: app.id }, data })
+        const saved = await prisma.channelApp.updateMany({
+          where: { id: app.id, ...Object.fromEntries(changed.map(field => [field, app[field]])) }, data,
+        })
+        if (saved.count !== 1) { appContended += changed.length; continue }
         appRotated += changed.length
         // No connection event here: ChannelApp is not a connection and
         // recordConnectionEvent is keyed by connectionId. Inventing one would put a
@@ -256,8 +264,8 @@ export async function runCredentialsRotate(): Promise<string> {
 
     const keys = [...keyIds].join(',') || 'none'
     return (
-      `connections=${rows.length} rotated=${rotated} alreadyCurrent=${alreadyCurrent} failed=${failed} ` +
-      `appSecrets=${appSecrets} appRotated=${appRotated} appAlreadyCurrent=${appAlreadyCurrent} appFailed=${appFailed} ` +
+      `connections=${rows.length} rotated=${rotated} alreadyCurrent=${alreadyCurrent} failed=${failed} contended=${contended} ` +
+      `appSecrets=${appSecrets} appRotated=${appRotated} appAlreadyCurrent=${appAlreadyCurrent} appFailed=${appFailed} appContended=${appContended} ` +
       `keyIds=${keys} kmsConfigured=${targetIsKms}`
     )
   })

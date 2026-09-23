@@ -223,7 +223,15 @@ function refreshSnapshot(row: ConnRow): Prisma.ChannelConnectionWhereInput {
     id: row.id, credentialsEnc: row.credentialsEnc, accessToken: row.accessToken,
     refreshToken: row.refreshToken, ebayAccessToken: row.ebayAccessToken, ebayRefreshToken: row.ebayRefreshToken,
     isActive: row.isActive, authStatus: row.authStatus, refreshLeaseOwner: row.refreshLeaseOwner,
+    grantVersion: row.grantVersion,
   }
+}
+
+/** Representation-only maintenance must not restore an obsolete credential/expiry tuple. */
+function credentialMaintenanceSnapshot(row: ConnRow): Prisma.ChannelConnectionWhereInput {
+  return { ...refreshSnapshot(row), tokenExpiresAt: row.tokenExpiresAt,
+    ebayTokenExpiresAt: row.ebayTokenExpiresAt, accessTokenExpiresAt: row.accessTokenExpiresAt,
+    refreshTokenExpiresAt: row.refreshTokenExpiresAt }
 }
 
 function assertRefreshable(row: ConnRow): void {
@@ -640,6 +648,9 @@ export async function storeGrant(
   }
   const identity = grant.identity
   await writeCredentials(connectionId, creds, {
+    // Same row write as credential replacement: concurrent reconsents cannot
+    // share a generation. This is local ordering, not provider issuance time.
+    grantVersion: { increment: 1 },
     isActive: true,
     managedBy: 'oauth',
     authStatus: 'connected',
@@ -750,7 +761,7 @@ export async function encryptLegacyRow(connectionId: string): Promise<'encrypted
     throw new Error(`Round-trip mismatch for ${connectionId}; plaintext left in place`)
   }
   const n = await prisma.channelConnection.updateMany({
-    where: { id: connectionId, credentialsEnc: null },
+    where: credentialMaintenanceSnapshot(row),
     data: {
       credentialsEnc: blob,
       credentialsKeyId: keyId,
@@ -769,8 +780,8 @@ export async function restorePlaintextRow(connectionId: string): Promise<boolean
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
   if (!row?.credentialsEnc) return false
   const c = (await decryptCredentials(row.credentialsEnc)) as unknown as Credentials
-  await prisma.channelConnection.update({
-    where: { id: connectionId },
+  const saved = await prisma.channelConnection.updateMany({
+    where: credentialMaintenanceSnapshot(row),
     data: {
       accessToken: c.accessToken,
       refreshToken: c.refreshToken ?? null,
@@ -780,7 +791,7 @@ export async function restorePlaintextRow(connectionId: string): Promise<boolean
         : {}),
     },
   })
-  return true
+  return saved.count === 1
 }
 
 export const __tokenTest = {

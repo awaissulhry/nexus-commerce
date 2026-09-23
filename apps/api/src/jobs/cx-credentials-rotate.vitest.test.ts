@@ -21,16 +21,16 @@ const appUpdates: Array<{ where: unknown; data: Record<string, unknown> }> = []
 const prismaMock = {
   channelConnection: {
     findMany: vi.fn(async () => rows),
-    update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+    updateMany: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
       updates.push(args)
-      return args
+      return { count: 1 }
     }),
   },
   channelApp: {
     findMany: vi.fn(async () => appRows),
-    update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+    updateMany: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
       appUpdates.push(args)
-      return args
+      return { count: 1 }
     }),
   },
 }

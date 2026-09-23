@@ -119,3 +119,57 @@ Unknown/introspection errors must remain retryable, and inactive token evidence 
 not be described as proof of the provider's revocation reason. Primary source checked
 2026-09-23: https://developer.ebay.com/develop/guides/sell/authorization . No live
 introspection or activation is implied or performed by this amendment.
+
+## C11a — grant versions and stale credential maintenance
+
+**Implemented, tested and independently reviewed locally; not deployed.**
+
+`storeGrant` now advances a dedicated monotonic `grantVersion` in the same database
+update as credential replacement. Ordinary access-token refresh and representation-only
+key maintenance do not advance it. The additive migration assigns existing rows zero,
+meaning pre-versioned, and enforces a nonnegative value. This is local concurrency
+ordering, never a claim about eBay's issuance or revocation timestamp.
+
+Independent review found that version tracking alone would be unsound: credential-key
+rotation could re-encrypt an old snapshot and overwrite a newer grant while retaining
+its newer version. Rotation now compares the original encrypted blob before writing;
+application-secret rotation likewise compares every field being replaced. Contended
+writes are counted separately, not called rotated. A deliberate rerun reads a fresh
+snapshot. Backfill and the retained plaintext rollback helper also compare their
+consumed credential/expiry tuple, active/auth state, refresh owner and grant version.
+They cannot resurrect credentials after disconnect or replace a concurrent grant.
+The canonical refresh snapshot additionally includes the version.
+
+Proof: seven real PostgreSQL generation cases and eleven credential-writer race cases
+pass, zero skips. Six concurrent consent writers are observed waiting on an actual row
+lock before release; each receives a distinct version paired with its own credentials.
+Tests also prove related-write rollback, ordinary-refresh preservation, read-guest
+refusal, reconnect/refresh/disconnect races during re-encryption, app-secret replacement,
+legacy backfill/revoke/expiry races, and a positive plaintext rollback control. The
+rotation races use synthetic target-key results with real local ciphertext; they prove
+database fencing, **not live KMS operation**. No AWS or channel request is made.
+
+Initial generation reproduction: five failed/two passed. Initial stale-maintenance
+reproduction: six failed/two passed. The extra expiry control initially exposed test
+fixture Date serialization (local offset into a timestamp-without-zone column), fixed
+by sending its explicit UTC ISO value; this was not a product-logic failure. Existing
+token/owner/rotation regressions: 118 passed. API typecheck passed. The full canonical
+PostgreSQL runner passed **147 tests across 14 suites, zero failures/skips**, including
+existing stock, pool, copy, assortment, routing and deletion controls. Evidence:
+`c11a-canonical-postgres.log`. This verifies the new schema alongside existing DB flows.
+
+The read/compute/write counter mutation lost versions under concurrent consent and was
+killed (one failed/six passed), then restored. Four further maintenance mutations were killed and restored: removing the connection
+rotation snapshot caused three failures; the app-secret snapshot one; the backfill
+snapshot three; and the plaintext restore snapshot two. Independent review approved
+the amended C11a implementation and test coverage. Evidence: `c11a-version-red.log`,
+`c11a-version-green.log`, `c11a-version-lost-update-mutation.log`,
+`c11a-writers-red.log`, `c11a-final-postgres.log`, `c11a-final-regressions.log`,
+`c11a-typecheck-final.log`, under `/private/tmp/cx-completion-20260922/`.
+
+Activation must require the canonical token service at processing time as well as setup;
+the retained legacy token rollback path is not covered by this new-grant contract. The
+unused legacy `EbayAuthService.saveTokens` has no production callers; current OAuth
+callbacks go through `storeGrant`. Current-refresh-token introspection and the atomic
+revocation handler are still to be integrated. A local version increase means discard
+stale evidence and re-evaluate, not blindly ignore the incoming notice.

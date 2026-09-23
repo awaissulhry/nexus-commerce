@@ -6721,6 +6721,9 @@ model ChannelConnection {
   // Distributed refresh lease (pgbouncer-safe; no advisory lock across HTTP).
   refreshLeaseUntil     DateTime?
   refreshLeaseOwner     String?
+  // Advances with a new consent/adoption, never an ordinary token refresh.
+  // Zero identifies a grant saved before version tracking was introduced.
+  grantVersion          Int       @default(0)
   // { userId, username, storeName?, storeUrl?, sellerId?, shopDomain? }
   identity              Json?
   apiVersion            String?
