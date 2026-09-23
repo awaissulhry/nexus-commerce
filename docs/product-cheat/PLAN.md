@@ -6907,3 +6907,109 @@ production Amazon·IT listing count; whether the propagation preview offers cont
 | # | Question | Ruling (2026-09-23 ~21:05 UTC, twenty-eighth set) |
 |---|---|---|
 | **R-41** | A-39 — Step 3.5b | ✅ **(a)** Build slice b1 (Amazon content reads) now, with the one additive column and the writer's true count; b2 (eBay) after the eBay drift slice and one read of the eBay daily call limit |
+
+| # | Question | Ruling (2026-09-23 ~22:45 UTC, twenty-ninth set) |
+|---|---|---|
+| **R-42** | One live eBay test of a SINGLE-SKU item (Step 1.3's untested path) | ✅ **Yes** — quantity 0, read back, the old quantity put back, read again; hidden about a minute |
+
+### Step 1.3 single-SKU eBay proof + A-39 b2's eBay call limits — PREDICTIONS written before the runs (2026-09-23 ~22:45 UTC, R-40, R-42)
+
+Tool `docs/product-cheat/tools/ebay-single-probe.mts`. The live step calls the BUILT adapter itself —
+`dispatchChannelDelist` with an in-memory `UNPUBLISH_LISTING` job (no queue row, no Nexus row written) — so it proves the
+code that ships, not a copy. The restore is one `ReviseInventoryStatus` (ItemID + the saved quantity).
+
+- **Read.** Among live eBay·IT listings (not AIREON), at least one ItemID whose `GetItem` has NO variations, is `Active`,
+  has `OutOfStockControl` true and remaining > 0. (If none: "could not run", stated — not a pass.) The account preference
+  reads `ON`. `GetApiAccessRules` answers `Success` with a daily hard limit per call, including `GetItem`.
+- **Test.** The adapter answers `SUCCESS`, `NOT_SELLING`, evidence `remainingBefore = [{ sku: null, remaining: N }]`,
+  `zeroed = [<ItemID>]`. Read back within ~15 s: remaining **0**, still `Active`, the same ItemID. Restore → `Success`; read
+  back: remaining **N**, `Active`. A delayed re-read ≥ 1 minute later: **N**, `Active`.
+
+### Step 1.3 single-SKU eBay proof + eBay call limits — RESULTS (2026-09-23 22:46–22:50 UTC, R-40, R-42)
+
+Records: `records/step-1.3-ebay-single-read-2026-09-23T22-46-26-067Z.json`, `…T22-46-54-007Z.json`, `…T22-47-57-728Z.json`.
+
+- 🔴 **The live test COULD NOT RUN — there is no target, measured.** Production holds **31** live eBay ItemIDs, all eBay·IT
+  (read only, `BEGIN READ ONLY`): 26 parentless non-AIREON ItemIDs — every one read by `GetItem` has variations (8–40); one
+  ItemID linked only to child products (`257584954808`) — 20 GALE variation SKUs; 4 AIREON (R-27, not touched; families).
+  **No single-SKU eBay item exists**, so the adapter's single-item path (ItemID + quantity 0) cannot be proven live today. It
+  stays gated by its unit arms only; it is reached only if a single-SKU item is ever listed. Nothing was sent.
+- The account's out-of-stock preference: `true` (as on 2026-09-23 14:19).
+- 🔴 **`GetApiAccessRules` answers HTTP 410** (retired by eBay). Its replacement, the Developer Analytics API
+  (`/developer/analytics/v1_beta/rate_limit/`, the account's token), answers: **Trading API, 5,000 calls a day for the whole
+  app** (one shared pool: `GetItem`, `ReviseInventoryStatus`, `GetUserPreferences` all show the same `remaining`); at 22:46 UTC
+  **1,070 `GetItem`, 30 `ReviseInventoryStatus`** used since the 07:00 UTC reset, 3,838 left. The 30-minute quantity read-back
+  (31 ItemIDs × 48 runs ≈ 1,500 `GetItem` a day) is the main user. The user-level limit read returned no resources.
+- **For A-39 b2:** one `GetItem` per ItemID carries every variation's specifics, so a nightly eBay content pass over today's
+  catalogue costs **~31 calls** — under 1% of the pool. A budget of ≤ 300 calls a night leaves ~2,000 a day spare.
+
+### Step 3.6 / A-34 — browser check, second attempt: PREDICTION written before the run (2026-09-23 ~22:58 UTC, R-40)
+
+**Why the first attempt measured nothing:** the grid pastes through AG Grid's clipboard module, which reads the clipboard
+(`navigator.clipboard.readText`) on its own key handler; the synthetic `cmd+v` reached a text box (native paste) but the grid
+got no text. **This attempt** stubs ONLY the page's `navigator.clipboard.readText` to return the test text, then presses the
+real key on a focused grid cell — everything after the read (AG's paste pipeline, `processDataFromClipboard`, the write gate,
+the save, the server's judgement, the screen) is the product's own path. Local app: web :3000 → API :8091 started with the
+LOCAL `DATABASE_URL` set explicitly (not inferred), background jobs off; the local database now has every migration.
+
+**Prediction** (studio sheet of `xavia-knee-slider`, Shared scope): (1) paste `ACTIVE / BOGUS-STATUS / ACTIVE` into Status on
+three child rows → one save request; the two unchanged rows send nothing (write gate); `BOGUS-STATUS` is refused by the server
+and the cell goes back to its stored value with the reason on screen; the database keeps the stored value on all three.
+(2) Positive control: paste `A34-CONTROL` into an empty free-text cell → saved (a request and the stored value); then restored
+by value.
+
+### Step 3.6 / A-34 — browser check, second attempt: RESULTS (2026-09-23 22:52–22:55 UTC, R-40)
+
+Local app on the local database (API started with `DATABASE_URL` set to `127.0.0.1:55439` explicitly; its boot log showed ads
+data 15 days stale — the local copy, not production). Hydrated (React on the grid cells). Only `navigator.clipboard.readText`
+was stubbed; every save was recorded by wrapping the page's `fetch` (request body + response).
+
+| Prediction | Measured |
+|---|---|
+| (1) paste `ACTIVE / BOGUS-STATUS / ACTIVE` into Status on black / blue / green → ONE save request; the two unchanged rows send nothing | ✅ ONE `PATCH /products/bulk`, carrying only blue's `status: BOGUS-STATUS` |
+| the server refuses it, per row, with its reason | ✅ 400 `{"errors":[{"id":…blue,"field":"status","error":"Status must be one of ACTIVE, DRAFT, INACTIVE"}]}` |
+| the reason is on screen | ✅ in the cell, in its tooltip, in the header (*"Shared product — Blocked. Status must be one of…"*), footer *"1 refused · 1 cell blocked"*, top *"1 change not saved"* |
+| the cell goes back to its stored value | ❌ **Wrong — it KEEPS the refused text**, marked blocked and "not saved", for the person to correct. The database kept `ACTIVE` (re-read). Honest (nothing claims it saved), but not a revert |
+| (2) positive control: a valid write saves | ✅ black's Manufacturer cleared (`A34-CONTROL` → empty): 200, `updated: 1`, version 2 → 3 — **while the refused cell was still on screen** (one refused cell does not block other saves) |
+| clean-up | pasting `ACTIVE` over the refused cell cleared it (200, `unchanged: 1`, nothing written); the page read *"Saved"*; the database re-read at 22:55:18: every child `ACTIVE`, every manufacturer empty |
+
+🔴 **Correction to the FIRST attempt (A-34 RESULTS above):** its *"no save request at all … Nothing was written"* was **false**. The
+local audit log holds `manufacturer: null → "A34-CONTROL"` on `xavia-knee-slider-black`, a `bulk-patch` from 127.0.0.1 at
+**2026-09-23 12:45:56 UTC** (the first attempt's labels were not UTC) — the control paste DID save; the network read came
+before the write, or missed it. That value stayed in the local database until this check cleared it through the sheet.
+Nothing on production was involved.
+
+**Step 3.6 — CLOSED on its re-scoped premise (A-34):** the server refuses per row (gated, 4 arms, 3 mutations) and the grid shows
+each refusal with its reason, sends only what changed, and does not block other saves — measured. **One behaviour is for the
+Owner to judge, not a defect found:** a refused cell keeps the typed value (marked, not saved) instead of reverting to the
+stored value. *Done when* ✅ (on the re-scoped premise) · *Cost when* `flat` · *Gate* the server arms · *Rollback* n/a.
+
+## A-40 — A-39 slice b2 (eBay content reads): no clean seam for "ours" today. FOR YOUR RULING. Nothing built.
+
+**2026-09-23. Read only: sub-agent S5's trace (it stopped before building, as told); lines cited in its report.**
+
+- "Ours" for an eBay title + item specifics = what `prepareEbayPublication` (`services/pim/studio-publication-ebay.ts`) would send.
+  Its two pure parts (`buildFlatRow`, `buildSharedListingInput`) are fed by ~30 INLINE lines (`:107-164`: the resolved-cell
+  overlay, the title fallback `cells.title ?? listing.title ?? product.name`, the variation-axis step). Calling the pure parts
+  without them gives different values; copying them is a second opinion of the payload (forbidden). Calling the whole builder
+  needs the live publish gate, makes live calls and stops at ~20 publish checks.
+- 🔴 **Shells are not built by the studio at all:** 18 of production's 31 eBay ItemIDs are `EBAY_LISTING_SHELL`; their
+  variations come from `SharedListingMembership` and go out through the flat-file shared-listing push. The flat-file editors
+  and their two route files are no-touch; whether a shell's "ours" can be assembled WITHOUT them is not traced yet.
+
+**Recommendation — one (a):** extract `:107-164` into ONE exported function (e.g. `buildEbayListingInput(facts)`), called by
+`prepareEbayPublication` with behaviour unchanged and a parity arm (the XML's title and item specifics = the function's) — the
+A-33 / SCT.6 pattern. Then b2 compares title + item specifics for the **13 studio-shaped ItemIDs**; a shell is recorded
+*"not compared: shell listing"*, never as clean. The shells come back as their own question after a read-only trace (can their
+"ours" be built from the stored rows and the pure `buildSharedListingInput`, touching no flat-file file?).
+(b) Stop b2 here: eBay content is not compared; Amazon (b1) stays.
+
+- **Done when** — an eBay studio listing whose title or an item specific differs has an `ebay-content` entry; identical → 0 + clock;
+  a shell → not compared, with its reason. **Cost when** — ~13–31 `GetItem` a night (< 1% of the 5,000-a-day pool). **Gate** — the
+  parity arm (red if the extraction changes the payload) + the b2 arms and mutations in S5's directive. **Rollback** — revert.
+- Files it would hold: `services/pim/studio-publication-ebay.ts` (the extraction only), `jobs/content-drift.job.ts` (an eBay pass),
+  new files under `services/channel-drift/`, tests.
+
+| # | Question | Ruling (2026-09-23 ~23:00 UTC, thirtieth set) |
+|---|---|---|
+| **R-43** | A-40 — eBay content reads | ✅ **(a)** Extract the builder's inline `:107-164` into one exported function (behaviour unchanged, parity arm), then build b2 for the studio-shaped ItemIDs; shells recorded "not compared" until their own question |

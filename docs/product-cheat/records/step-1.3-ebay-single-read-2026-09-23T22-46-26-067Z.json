@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-23T22:46:26.066Z",
+ "mode": "read",
+ "execute": false,
+ "preference": {
+  "ack": "Success",
+  "outOfStockControlPreference": "true"
+ },
+ "error": "eBay GetApiAccessRules HTTP 410"
+}
