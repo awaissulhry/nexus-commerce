@@ -28,6 +28,7 @@ export type ConnectionEventType =
   | 'heartbeat_failed'
   | 'scope_drift'
   | 'status_change'
+  | 'inbound_failed'
   | 'secret_rotated'
   | 'signing_key_created'
   | 'kms_fallback'

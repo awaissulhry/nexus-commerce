@@ -82,6 +82,7 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-write-drift',
   'channel-data-stale',
   'channel-authorization-revoked',
+  'channel-notification-unresolved',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]

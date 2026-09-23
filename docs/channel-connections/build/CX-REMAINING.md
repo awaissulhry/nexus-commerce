@@ -312,3 +312,41 @@ cases; the last full runner remains147, with subsequent additions tested separat
 need C11d's stored-payload dispatcher integration. The new receipt/claim protocol and
 manual reset must ship together with that execution path; no topic activation follows
 from this slice alone.
+
+## C11d2 — atomic unresolved-event warnings
+
+**Implemented, tested and independently reviewed locally; not deployed or activated.**
+
+Both eBay dead-letter paths—an exhausted processing attempt and five abandoned claims—
+can now persist their required warning inside the receipt transaction. The callback
+receives authoritative stored context, and a final disposition guard refuses altered
+terminal/lease/trust fields. Warning/audit failure rolls the DLQ change back, keeping
+the event recoverable. Retries and explicit auth/rate holds emit no terminal warning.
+The account itself is never revoked because processing exhausted its budget.
+
+The dedicated warning writes only to active owners of the receipt's profile, excludes
+the ambient actor and provider/error content, and records an `inbound_failed` audit.
+Notification identity is per receipt/recipient and remains deduped after manual replay
+and read-state changes. A missing or readable foreign account receives no audit FK;
+its state is unchanged, and the receipt-profile owners still see the unresolved event.
+The Ingress link matches the existing Channels tab.
+
+Final domain suite:25 real PostgreSQL tests pass, zero skips (nine additions since
+C11c), plus15 existing claim controls and121 legacy alert/lifecycle/token regressions.
+Typecheck passes. Initial warning reproduction: six failed/seventeen passed; old
+claim/finish helpers ignored required callbacks. Mutations were applied/restored on
+the clean23-case intermediate baseline: omitting final-attempt warning caused4
+failures; omitting crash-exhaustion warning2; removing final disposition fencing1;
+calling the warning on ordinary retry/holds1. Review approved and suggested the later
+replay/read and missing/foreign account controls, all added and passing in the25.
+
+Evidence: `c11d2-warning-red.log`, `c11d2-warning-final.log`,
+`c11d2-warning-reviewed.log`, `c11d2-regressions.log`,
+`c11d2-typecheck-reviewed.log`, `c11d2-*-mutation.log`, under
+`/private/tmp/cx-completion-20260922/`. Canonical registration now requires182 cases;
+the last full runner remains147, with later additions run separately.
+
+The dispatcher must supply this strict callback on **both claim and finish paths**.
+Current-active/grant-changed uncertainty uses bounded retry, never an auth/rate hold
+that refunds the budget. Receiver/worker/manual execution wiring is still next and is
+required before a deployment package may activate this protocol.

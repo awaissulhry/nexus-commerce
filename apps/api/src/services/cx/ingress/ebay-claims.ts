@@ -36,6 +36,21 @@ const claimWhere = (claim: EbayInboundClaim): Prisma.WebhookEventWhereInput => (
 const receiptSelect = { id: true, workspaceId: true, eventType: true, connectionId: true,
   payload: true, providerTimestamp: true, createdAt: true } as const
 
+export type EbayDeadLetterEffect = (tx: Tx, receipt: Readonly<EbayInboundReceipt>) => Promise<void>
+
+/** The row is already locked. A required warning failure must roll back its DLQ transition. */
+async function persistDeadLetterEffect(tx: Tx, id: string, effect: EbayDeadLetterEffect) {
+  const row = await tx.webhookEvent.findUniqueOrThrow({ where: { id }, select: { ...receiptSelect, attempts: true } })
+  const { attempts, ...receipt } = row
+  await effect(tx, receipt)
+  const retained = await tx.webhookEvent.findFirst({ where: {
+    id, workspaceId: row.workspaceId, channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
+    status: 'dlq', attempts, isProcessed: false, processedAt: null,
+    leaseToken: null, leaseUntil: null, nextAttemptAt: null,
+  }, select: { id: true } })
+  if (!retained) throw new EbayInboundClaimLost()
+}
+
 /** An operator reset must serialize with a worker claim, and never steal its lease. */
 export async function queueEbayReplay(request: ReplayRequest): Promise<ReplayOutcome> {
   const workspaceId = workspaceIdForQuery()
@@ -69,7 +84,7 @@ async function extendLockedClaim(tx: Tx, claim: Pick<EbayInboundClaim, 'id' | 'l
 }
 
 /** The database clock and conditional UPDATE choose one owner, including after a crash. */
-export async function claimEbayInbound(id: string): Promise<EbayInboundClaim | null> {
+export async function claimEbayInbound(id: string, onDeadLetter?: EbayDeadLetterEffect): Promise<EbayInboundClaim | null> {
   return prisma.$transaction(async tx => {
     const now = await databaseTime(tx)
     const eligible: Prisma.WebhookEventWhereInput = {
@@ -87,9 +102,10 @@ export async function claimEbayInbound(id: string): Promise<EbayInboundClaim | n
     if (claimed.count !== 1) {
       // Crashes consume attempts too. An abandoned fifth attempt must not loop forever.
       const reason = 'Processing attempt budget exhausted; inspect the event before replay.'
-      await tx.webhookEvent.updateMany({ where: { ...eligible, attempts: { gte: MAX_INBOUND_ATTEMPTS } },
+      const exhausted = await tx.webhookEvent.updateMany({ where: { ...eligible, attempts: { gte: MAX_INBOUND_ATTEMPTS } },
         data: { status: 'dlq', isProcessed: false, processedAt: null, nextAttemptAt: null,
           leaseToken: null, leaseUntil: null, lastError: reason, error: reason } })
+      if (exhausted.count === 1 && onDeadLetter) await persistDeadLetterEffect(tx, id, onDeadLetter)
       return null
     }
     // A lock wait must not shorten the new owner's lease. Sample the clock again
@@ -118,7 +134,7 @@ export type EbayInboundFailure =
   | { kind: 'defer'; code: 'AUTH_REQUIRED' | 'RATE_LIMITED'; reason: string }
 
 /** A failure cannot release another worker's claim, or consume its retry budget. */
-export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayInboundFailure): Promise<boolean> {
+export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayInboundFailure, onDeadLetter?: EbayDeadLetterEffect): Promise<boolean> {
   if (workspaceIdForQuery() !== claim.workspaceId) return false
   return prisma.$transaction(async tx => {
     const owned = await tx.webhookEvent.updateMany({ where: claimWhere(claim), data: { leaseToken: claim.leaseToken } })
@@ -132,6 +148,7 @@ export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayIn
       nextAttemptAt: dead ? null : new Date(now.getTime() + (outcome.kind === 'defer' ? 300_000 : inboundBackoffMs(claim.attempt))),
       ...(outcome.kind === 'defer' ? { attempts: claim.attempt - 1 } : {}), lastError: reason, error: reason,
     } })
+    if (result.count === 1 && dead && onDeadLetter) await persistDeadLetterEffect(tx, claim.id, onDeadLetter)
     return result.count === 1
   }, transactionOptions)
 }

@@ -26,7 +26,9 @@ mutations. C11b adds reviewed owner-only refresh-grant evidence (42 focused test
 transaction (16 real PostgreSQL cases,121 regressions,5 killed mutations). These
 remain local. C11d1 adds reviewed DB-clock scheduling and fenced operator reset
 (7 real PostgreSQL replay cases). Receiver/worker/manual execution integration remains
-open and must accompany deployment of the new replay protocol.
+open and must accompany deployment of the new replay protocol. C11d2 adds reviewed
+atomic unresolved-event warnings (domain suite25 realPG,121 regressions,4 killed
+mutations), still local and requiring dispatcher wiring.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
 SUCCESS, exact health/readiness build, protected diagnostic GET401, migration
