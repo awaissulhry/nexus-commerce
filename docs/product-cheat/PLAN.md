@@ -6382,3 +6382,69 @@ read back the same way).
   publish gate, Amazon's validation preview, `submitListingPayload`) write a real Amazon attribute that reads back. It did
   not go through the queue and the production worker, and it did not start from a sheet edit on production — the sheet →
   payload half is M1 (measured locally). Side effects: the gate's attempt audit and the API call log; no Nexus data written.
+
+---
+
+## A-36 — Step 3.5 (reconciliation): the premise is half false — the READS exist, the RECORD and the FILTER do not. FOR YOUR APPROVAL. Nothing built.
+
+**2026-09-23. A read-only survey (a search agent), with three of its claims re-read by this lane (marked ✓).**
+
+| Field | Read back from the channel today | Stored as | Shown |
+|---|---|---|---|
+| Quantity | Amazon (report, daily 04:15), eBay (every 30 min), Shopify (every 6 h) — all ON | `SyncHealthLog` / `ChannelStockEvent` — ✓ **no listing, market or account column** | health / sync-control panels |
+| Price | Amazon, Shopify (same jobs); **eBay: none** | `SyncHealthLog` `CHANNEL_PRICE_READBACK` | **nowhere** — no route or page reads it |
+| Status | eBay "ended" → shared-listing memberships only; Amazon only via import rows / `ListingIssue` | — | — |
+| Images | Amazon/Shopify snapshot sweep (**OFF** by default); eBay readback ON | `ChannelLiveImage` (snapshot, no drift row) | the Images tab's live strip |
+| Content (title, description, bullets, attributes, item specifics) | **on demand only** — Amazon flat-file "verify against live" (title, description, brand, bullets); an eBay route (title only) | nothing | nothing scheduled |
+| Channel-reported problems | Amazon issues on writes, feeds, reads | `ListingIssue`, one row per listing + fingerprint | flat-file chip, preflight panel |
+
+**Two defects found, both small, both re-read:**
+1. ✓ 🔴 **The product list's "Channel drift (has overrides)" filter does not measure channel drift.** `driftCount` counts a
+   product's listings with any `followMaster*=false` (`product-read-cache.service.ts:241-251`) — it never looks at a channel.
+   The label promises something the number does not hold (R4).
+2. ✓ The Amazon quantity read-back deduplicates per **product** only (`amazon-qty-readback.job.ts:187-195`) while its comment
+   says *"per product+marketplace"* — a second market's drift is hidden for 24 h.
+
+### Recommendation — one: 15.2's shape, fed by the reads that already exist, in two slices
+
+- **3.5a (one additive migration — pre-approved class):** a `ChannelDrift` table shaped like `ReadinessIndex`'s coordinate
+  (listing, channel, market, account) with `lastCheckedAt`, `driftCount`, `driftedFields` (capped at 50). ONE writer helper;
+  the EXISTING quantity and price read-backs write through it (no second reader). The product sheet gets a real
+  *"Differs on the channel"* filter reading it; the old filter is renamed to what it counts (*"Has overrides"*); the dedupe
+  gains the market. Files outside this lane (the read-back jobs, the product list) are named in the claim row first.
+- **3.5b (for approval after 3.5a):** content — a bounded, rotating read of Amazon attributes and eBay item specifics
+  through the Step 3.4 read path, on the resumable-sweep helper (15.6) with a daily budget, writing the same table.
+
+- **Done when** (the plan's) — a listing whose channel value differs from ours has a drift row, and the sheet filters to it;
+  a positive control with no difference has none. **Cost when** — a drift refresh never delays a publish job; content reads
+  fit a daily API budget (rotation, as 15.1's A-30 fix). **Gate** — a seeded difference + a no-difference control; the
+  renamed filter's count test. **Rollback** — drop the table; restore the label.
+
+---
+
+## A-37 — Step 1.3 (reversible unpublish): the premise holds, the mechanics are unproven. FOR YOUR APPROVAL. Nothing sent.
+
+**Measured (read, 2026-09-23):** Amazon and eBay still refuse an unpublish (`channel-delist.service.ts:122-125`,
+`AMAZON_UNPUBLISH_NOT_IMPLEMENTED` / `EBAY_UNPUBLISH_NOT_IMPLEMENTED`); "delete" works — Amazon `deleteListingsItem`, eBay
+`EndFixedPriceItem`. The plan's own open item stands: *"Amazon's and eBay's reversible-unpublish mechanics are judgement,
+not verified against their API docs"* (Part 14, #2). I read Amazon's SP-API pages on partial updates and listing workflows
+(2026-09-23): **neither states what removing an offer does to the listing** — a search summary claimed it, the pages do
+not. So the mechanism is not built on a claim.
+
+| Channel | Candidate "stop selling, keep everything" | Reverse | Open question |
+|---|---|---|---|
+| eBay | quantity → 0 with the seller's *out-of-stock control* on (`ReviseInventoryStatus`, already in the codebase) — the item is hidden, the same ItemID stays | quantity back | is out-of-stock control ON for the account (a read: `GetUserPreferences`)? |
+| Amazon, merchant-fulfilled | `fulfillment_availability` quantity → 0 — the SKU, ASIN and offer stay | quantity back | none on paper; still unmeasured |
+| Amazon, FBA | 🔴 **not offered** — Amazon manages FBA stock and this programme never touches FBA quantity (standing rule); the unpublish stays **refused by name** for FBA | — | — |
+
+### Recommendation — one: prove each live on ONE listing, the way Step 3.4 did, then build
+
+1. **Read only:** eBay `GetUserPreferences` (out-of-stock control), and pick one merchant-fulfilled Amazon listing and one eBay
+   listing with stock (not AIREON).
+2. **Live, one listing each, Owner-approved runs:** unpublish by the candidate → read back (not buyable, the same
+   ItemID / SKU / ASIN) → restore the saved quantity → read back again. Each listing is unbuyable for about a minute.
+3. **Only then build:** the two `delistCapability` rows change to the proven path; FBA stays refused by name; the existing
+   refusal tests are inverted with a test for the reversible path (the plan's gate).
+
+- **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without
+  losing its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
