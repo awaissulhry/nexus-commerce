@@ -5672,3 +5672,21 @@ single-writer scan is Step 2.6's own gate. *Rollback* — revert each commit; 2.
 
 Also: **Step 2.1 (b) Motovento dry run** (production): 0 cached schemas, **0 rows** — nothing to apply. Step 2.1 (b) is
 done for both businesses.
+
+---
+
+## A-29 — One store, two channel names for one colour (AIREON). For the Owner; nothing is sent today.
+
+**Found 2026-09-23 on the production re-count after 2.6d.** The store now holds AIREON's colour as eBay·IT names it —
+`Nero Neo | Giacca`, `Crema e Vino | Pantaloni`; the suffix is what keeps AIREON's jackets and pants from colliding on
+eBay. Amazon·IT's own listings say `Nero Neo` / `Crema e Vino` (store vs Amazon·IT colour: 40 differ, all AIREON).
+
+- **Today:** nothing was sent. The 2.6d script writes the store only (no event, no queue row), and Amazon keeps its
+  listings' own values.
+- **Next Amazon publish of AIREON:** Amazon's `color` has no channel store (`channel-specs/amazon.ts`), so a publish
+  would resolve it from the store and send `Nero Neo | Giacca` — where before 2.6d it had no colour at all.
+
+| # | Option | |
+|---|---|---|
+| **a** | A per-channel value name (the "value-map store" VP.2 already asked for): the store keeps one code per colour, each channel keeps its own label | 🟢 **Recommended**, before the next Amazon publish of AIREON. A feature, not a fix — it needs its own step |
+| b | Revert the 40 AIREON colour fills (`--revert` restores all 78 from the record; a per-SKU revert would need a small script) | Back to no colour on the sheet for AIREON; Amazon unchanged |
