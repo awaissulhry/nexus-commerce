@@ -152,7 +152,41 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — 2026-09-23 ~11:00 (READ THIS FIRST; handoff 2 below is history)
+### Where this lane stands — handoff 3, 2026-09-24 ~01:30 (READ THIS FIRST; everything below is history)
+
+**Branch `pes/phase-0`, all pushed. NOT deployed:** `main` is still `0a563d6d5`. The branch = `main` + everything below.
+The next merge to `main` ships A-30, A-32, A-33 and Step 3.5a, including one **additive** migration
+(`20260923a_channel_drift`, a new table).
+
+**Closed or built since handoff 2 (all four closure fields, mutation-proven, rulings R-27 … R-37 at the end of PLAN.md):**
+A-31 (CI red: price-door tests) · A-30 (nightly readiness: oldest first + the dry run counts) · Step 3.1 (both doors OPEN on
+production, read only) · **Step 3.4 (the first live write + read-back, restored)** · Step 3.2 CLOSED (M1–M4 + the
+sheet↔payload gate) · Step 3.3 CLOSED (A-33: one serializer for both Amazon payload builders) · A-32 (production counted:
+25 Amazon·DE Italian titles, 21 live; the publish preview names them) · A-34 (3.6 re-scoped; server gate built; the browser
+check COULD NOT MEASURE) · **Step 3.5a (ChannelDrift table, one writer, Amazon + Shopify feed it, "Differs on the channel"
+filter, old filter renamed "Has overrides")** · A-37 (quantity-0 unpublish proven live on eBay + Amazon and restored).
+
+**Waiting on the Owner:**
+1. **A-38** (for approval): Step 1.3's Amazon half already exists as SCT.6 per-market offer close/reopen
+   (`amazon-market-offer.service.ts`); recommended: build unpublish on SCT.6 (Amazon) + proven quantity 0 (eBay), after one live
+   SCT.6 close/reopen.
+2. **After 02:17 UTC 2026-09-24:** `node docs/product-cheat/tools/readiness-age.mjs` (closes Step 2.7 if both businesses show
+   `readiness-reconcile` SUCCESS, `stopped: complete`) and `node docs/product-cheat/tools/axis-stores.mjs` (legacy `va` must not grow).
+3. The one-minute paste check by hand (A-34). The merge to `main`. Two pending migrations on the LOCAL database
+   (`20260922a` from the channel lane + `20260923a`) — not applied by this lane.
+4. **R-34: listing CONTENT work comes LAST** (the 25 DE titles, AIREON's per-channel colour — R-27). Do not raise it earlier.
+
+**Next, in order:** A-38's build once ruled · Step 3.5b (content reads, rotating, on the resumable sweep — needs an amendment)
+· the eBay drift slice (its read-back diffs per product across shared SKUs) · Phase 4 is not this lane's.
+
+**Session rules learned (this handoff):** the safety check ALLOWED read-only production tools and live channel writes once the
+Owner ruled in the chat (R-30, R-33, R-35, R-37); each live write: read → preview → write → read back → restore → delayed
+re-read. 🔴 Amazon EU merchant quantity is ONE number for all EU markets — a quantity-0 test on one market pauses the SKU
+EU-wide (it happened, ~90 s, restored); per-market stops use SCT.6. FBA quantity is never touched. A schema change also needs
+`packages/database/scripts/generate-baseline.mjs` (the push hook's baseline test). The push hook takes ~15 min; AE.4 may flake
+once. Tools for this lane live in `docs/product-cheat/tools/` (`*.mts` run with `npx tsx` from the repo root or `apps/api`).
+
+### Where this lane stands — 2026-09-23 ~11:00 (history)
 
 **Housekeeping done.** The two handoff commits pushed (every gate green). `origin/main` (`0a563d6d5`) merged into
 `pes/phase-0` as `06b2bc485`: the merged tree is `main` plus `PROGRESS.md` only.
