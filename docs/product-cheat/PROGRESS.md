@@ -163,12 +163,20 @@ Rulings R-11 … R-22 are at the end of PLAN.md.
    defect: a sheet size edit lands where no publisher reads). Four stores, not three; production has no
    colliding variants; one wrong value (`AIR-MESH-JACKET-MEN-XXL-BLACK`). Count tool:
    `node docs/product-cheat/tools/axis-stores.mjs` (`--local` for local).
-3. **2.7 on production — R-21: after this branch deploys** (`tools/prod-run.mjs backfill`, dry run first).
+3. **2.7 on production — R-21: after this branch deploys** (`tools/prod-run.mjs backfill`, dry run first). The deploy is
+   the next step: see the deploy checklist (R-22 ✅; merge measured).
 4. **Deploy checklist (before this branch is deployed):** count `CustomAttribute` rows with type
    select/multiselect AND `localizable` on production (R-22 would stop showing their per-language values);
    the **256** DE/ES Amazon stock rows marked sent for Italy on 2026-09-08 — check Amazon IT stock for
    those SKUs once Step 3.1 opens the credentials; Amazon BE (two languages) stays refused on the two
    one-language paths until its first listing.
+   **Measured 2026-09-23 (read only, on the Owner's authorisation):** ✅ R-22 — production holds **0** per-language
+   choice lists (1 choice list in all), so nothing stops showing. The branch adds **no migration**. It is **77 commits
+   ahead of `main`, 25 behind**; a merge has **2 conflicts**, both Amazon test files (`amazon-validation-preview`,
+   `amazon-classifications`) that `main`'s channel-connections lane (`a05f3792f`) and this lane (A-8) fixed for the same
+   cause in different ways — take `main`'s isolated fixtures and re-run. 🔴 A push to `main` deploys production for
+   every lane, and that lane pushes to `main`: the merge is coordinated by the Owner, and done outside this shared tree
+   (a separate worktree) so no other session's files move.
    **Step 2.6 (a–c2), added 2026-09-23:** read and write paths only, no migration. After deploy, re-run
    `tools/axis-stores.mjs` (read only): the legacy `variantAttributes` key counts (`SPELLINGS … va`) must not
    grow any more — only the two flat-file creates still write it — and the store (`vr`) is where new values
