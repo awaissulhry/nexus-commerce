@@ -1,0 +1,59 @@
+{
+ "at": "2026-09-23T13:27:16.810Z",
+ "mode": "restore",
+ "execute": true,
+ "payload": {
+  "productType": "COAT",
+  "patches": [
+   {
+    "op": "replace",
+    "path": "/attributes/generic_keyword",
+    "value": [
+     {
+      "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+     }
+    ]
+   }
+  ]
+ },
+ "submit": {
+  "success": true,
+  "status": "ACCEPTED",
+  "error": null,
+  "dryRun": false,
+  "issues": []
+ },
+ "publish": {
+  "success": true,
+  "status": "SUCCESS",
+  "mode": "live",
+  "message": "Product GALE-JACKET-BLACK-MEN-S synced to AMAZON",
+  "error": null
+ },
+ "readBack": {
+  "want": [
+   {
+    "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+    "language_tag": "it_IT",
+    "marketplace_id": "APJ6JRA9NG5V4"
+   }
+  ],
+  "matched": true,
+  "reads": [
+   {
+    "afterSeconds": 15,
+    "value": [
+     {
+      "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+     }
+    ],
+    "error": null
+   }
+  ]
+ },
+ "record": "docs/product-cheat/records/step-3.4-before-2026-09-23T13-25-41-419Z.json"
+}

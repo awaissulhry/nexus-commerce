@@ -6336,3 +6336,49 @@ is invisible on the page; R-34 (content work last) is kept — this is a probe t
 - **Cost when** — `flat`. **Gate** — becomes the seed of Step 3.5 (the read-back). **Rollback** — step 4.
 - 🔴 A live write to a real listing: nothing is sent before your word on this amendment, and each production run is yours
   to authorise.
+
+| # | Question | Ruling (2026-09-23, twenty-third set) |
+|---|---|---|
+| **R-35** | A-35 — Step 3.4, the first live write and read-back | ✅ **The recommendation** (the Owner: *"Please go ahead."*): Amazon·IT backend search terms on `GALE-JACKET-BLACK-MEN-S`, one attribute, read back after a delay, restore by value |
+
+### Step 3.4 — the path, and the PREDICTION written before any write (2026-09-23 ~21:00, R-35)
+
+**The trace (read):** no Nexus path today sends ONE attribute for ONE listing without either a production Nexus data write
+or a whole-family publish: the studio publish is family-wide; the queue CONTENT push sends title, description, bullets and
+search terms together (R-34: titles are not touched); the mapping cascade sends only its selected roots, but needs its value
+stored first (`generic_keyword` → the product's `keywords`, shared by every market) and a queue row the production worker
+sends. **So the probe runs the cascade's own send path without the queue:** `amazonRootPatch` + `buildAmazonListingPatch`
+(`source: FM_CATALOG_CASCADE`) → `listingPublishService.publish` with Amazon's gate (mode, circuit, rate limit, audit) →
+Amazon's own validation preview (`amazonContentRefusal`) → `submitListingPayload`. No Nexus data write, no queue row.
+The sheet → payload half is M1 (measured). Tool: `docs/product-cheat/tools/live-write-probe.mts` (`--read`, `--write
+--preview`, `--write --execute-approved`, `--restore --execute-approved`), each step a separate run.
+
+**Prediction:** `--read` finds `generic_keyword` on `GALE-JACKET-BLACK-MEN-S` (Amazon·IT) and saves it. The preview
+passes Amazon's own check. The write answers `ACCEPTED` with no issues, and within 3 minutes `getListingsItem` shows
+`generic_keyword[0].value` = the probe. The restore puts the saved value back, read back the same way.
+
+## Step 3.4 — CLOSED (2026-09-23, R-35). The first live write and read-back — the claim the programme rests on — holds.
+
+**Amazon·IT, `GALE-JACKET-BLACK-MEN-S` (ASIN `B0BMS5B768`, product type `COAT`), `generic_keyword` (backend search
+terms, not shown to buyers).** Tool `docs/product-cheat/tools/live-write-probe.mts`; every step's record in `records/`.
+
+| Step (UTC) | Result |
+|---|---|
+| 13:25:41 `--read` | saved the live value: one entry, Italian, `it_IT` (`step-3.4-before-2026-09-23T13-25-41-419Z.json`) |
+| 13:25:57 `--write --preview` | ONE patch (`replace /attributes/generic_keyword`, `it_IT`, Amazon·IT); **Amazon's own check passed** |
+| 13:26:31 `--write --execute-approved` | gate `live` → `SUCCESS`; Amazon **`ACCEPTED`, 0 issues**; read back after **15 s** = `nexusprobe132557` ✅ |
+| 13:27:16 `--restore --execute-approved` | the saved value sent back → `ACCEPTED`, 0 issues; read back after **15 s** = the saved value ✅ |
+| 13:29:15 `--read` (a delayed, independent re-read) | **the saved value, exactly** ✅ — the probe was live ~45 s, on a field buyers do not see |
+
+**Against the prediction:** every line held (preview passes; `ACCEPTED`; read back within 3 minutes — in 15 s; restore
+read back the same way).
+
+- **Done when ✅** — a value written from Nexus was read back from Amazon and matched; the restore was read back too.
+- **Cost when** — `flat` (two PATCHes, a handful of reads).
+- **Gate** — the probe's read-back is the seed of Step 3.5 (reconciliation): `live-write-probe.mts --read` is a working
+  channel read of one attribute with its record.
+- **Rollback** — done and verified (the delayed re-read).
+- **What it proves, and what it does not:** Nexus's cascade serializer (`amazonRootPatch`, A-33) and its send path (the
+  publish gate, Amazon's validation preview, `submitListingPayload`) write a real Amazon attribute that reads back. It did
+  not go through the queue and the production worker, and it did not start from a sheet edit on production — the sheet →
+  payload half is M1 (measured locally). Side effects: the gate's attempt audit and the API call log; no Nexus data written.
