@@ -5899,3 +5899,95 @@ today; recorded for the channel-connections lane (P1.3's `resolveDestinations`),
 Also: the resumable-sweep suite (10) green; `apps/api` `tsc --noEmit`: 0 errors.
 
 ### Cost when — nightly still bounded at 10 min; the order costs one walk of every live root per batch (two indexed queries per 200 roots, ~100 at 10,000), against 25 families at 2–4 s each. A catalogue above one night's budget now refreshes every ⌈due ÷ families per night⌉ nights. Rollback — revert the commit; the data is derived.
+
+---
+
+## Step 3.2 — M1 and M2: the trace, and the predictions WRITTEN BEFORE ANY RUN (2026-09-23 ~13:40)
+
+**Status of the four.** **M4 is done** (Step 2.4: 365 → **0** channel-declared columns on a real Shared page, with a
+positive control). **M3 is half done:** Step 2.3 proved the two one-language paths refuse a multi-language market, and
+A-22 traced that the other paths send every language; no payload was captured for a non-default language. **M1 and M2
+were never run.** This section is M1 and M2.
+
+### The trace (read, not run)
+
+| | |
+|---|---|
+| Where an Amazon·IT channel cell is stored | An `attr_*` field with no channel store → `ChannelListing.overrideData[<key>]` (`bulk-edit.service.ts:1413`, `:1959`). Only four Amazon fields have their own store (`channel-specs/amazon.ts:45-73`: title/description/bullets as listing columns; variation theme, brand, condition, list price) |
+| Builders that read it (through `resolveBatch` → `resolve-channel-field.ts`) | the **studio publication** (`studio-publication-amazon.ts:32` `prepareAmazonPublication`, via `applyResolvedMappingToAmazonFeed`) and the **cockpit publish** (`amazon-cockpit-publish.routes.ts`) |
+| Builders that import no resolver and never read `overrideData` | the listing wizard (`listing-wizard/submission.service.ts`, `amazon-publish.adapter.ts`), the queue push (`outbound-sync.service.ts`), the batch feed (`channel-batch/amazon-batch-feed.service.ts`). 🟠 Traced by imports only — a cell typed on the sheet cannot reach them unless another path copies it |
+| The capture seam | `readPublicationFacts(rootId, scope)` + `prepareAmazonPublication(facts)` — builds the JSON listings feed, sends nothing (`sendAmazonPublication` is separate). Seller id and region come from the `ChannelConnection` row, the spec from `CategorySchema`; no network when the schema is cached |
+
+### How it is measured
+
+`docs/product-cheat/tools/payload-capture.mts`, **local catalogue only** (refuses any host but 127.0.0.1), everything
+inside ONE `inDatabaseTransaction` that is **thrown away** at the end (nested writes join it; after-commit effects never
+run), `fetch` stubbed to throw, Redis at a dead port. Product: `1J-EYE5-Y0TW` (GLOVES, 5 children, a live Amazon·IT
+listing on the primary account). AIREON is not used (R-27).
+
+### Predictions (written before the first run)
+
+- **M1.** A distinctive text (`M1-PROBE-…`) typed through the sheet's own write (`applyProductBulkEdits`, `target:
+  'channel'`, Amazon·IT) into one child's free-text Amazon attribute: (1) it lands in that listing's `overrideData`;
+  (2) it appears in the studio publication feed **in that child's message only**, at `attributes.<attribute>[0].value`;
+  (3) the feed built BEFORE the write does not contain it (control); (4) after the rollback, `overrideData` is back to its
+  before-state. 🔴 If (2) fails, Step 2.2's premise (Correction 2) was a trace that an experiment refutes.
+- **M2.** For the same child, sheet vs payload. Prediction: **0** disagreements on attributes the resolver owns (both read
+  the same `resolveBatch` cell); disagreements **only** where another builder owns the attribute — content (`item_name`,
+  `product_description`, `bullet_point`, `generic_keyword`, from the content resolver), offer/price/quantity, images,
+  variation theme — **5–15 roots**. A number outside that range is a finding.
+
+### Step 3.2 — M1 and M2 RESULTS (2026-09-23, local catalogue, one family)
+
+**Run:** `cd apps/api && npx tsx ../../docs/product-cheat/tools/payload-capture.mts --sku xavia-knee-slider --fulfillment FBM --m2`
+— record `records/step-3.2-m1-m2-xavia-knee-slider-2026-09-23.json`. Every run: **rolled back** (the listing re-read
+outside the transaction is unchanged) and **0 network attempts**.
+
+**Three stated preconditions, all inside the thrown-away transaction** (the builder refuses before it reads any attribute
+without them; none touches an attribute): the local Amazon account is `disconnected` → set `connected`; the local cached
+Amazon·IT schemas have expired (the builder then re-fetches from Amazon — the stub caught `api.amazon.com/auth/o2/token`) →
+`expiresAt` moved a day ahead; 9 family products had no fulfilment method → `FBM`.
+
+**Families the builder refused locally** (publish guards, not payload results): `1J-EYE5-Y0TW`, `UD-LVLM-1H8T`,
+`GALE-JACKET`, `IT-MOSS-JACKET`, `WATERPROOF-OVERJACKET-BLACK-MEN`, `3K-HP05-BH9I` — *"N variants cannot be told apart"*
+(the local copy does not carry the 2.6d fill that production has); `AIR-MESH-JACKET-MEN`, `REGAL-JACKET` — *"A saved
+mapping no longer exists in the category schema"* (old local schema copies). **One family built:** `xavia-knee-slider`
+(AUTO_ACCESSORY, parent + 8 children).
+
+#### M1 — ✅ all four predictions held
+
+| Prediction | Measured |
+|---|---|
+| (1) lands in the listing's `overrideData` | `overrideData.part_number` (the sheet's response: `updated: 1`, `versionOf: channelListing`) |
+| (2) in that child's message only, at `attributes.<attr>[0].value` | `xavia-knee-slider-black` only, `attributes.part_number[0].value` = the probe, `marketplace_id: APJ6JRA9NG5V4` (Amazon·IT) |
+| (3) the feed built before the write does not contain it | 0 paths |
+| (4) after the rollback, the listing is as before | yes |
+
+**So an Amazon·IT channel override reaches the studio publication payload.** Correction 2 (a trace) is now an
+experiment. Scope: the studio publication path, measured; the cockpit uses the same two functions, traced; the wizard,
+the queue push and the batch feed do not read `overrideData`, traced — a sheet override cannot reach those three.
+
+#### M2 — the number: **0** value disagreements; 1 value the sheet shows that is never sent
+
+| Over the family (9 products) | |
+|---|---|
+| Sheet values (non-empty, excluding `productType`, which is the message header and matched 9/9) | **62**, in **54** attributes (roots) — the comparison is per attribute |
+| Same in the payload | **53** attributes (incl. the parent's variation theme: sheet cell `theme.code: COLOR`, payload `COLOR` — my first count called it a difference because it read the engine cell object as a plain value) |
+| **Different** | **0** attributes |
+| **Shown on the sheet, not sent** | **1** attribute — the PARENT row shows `child_parent_sku_relationship … child_relationship_type: variation`; the builder drops that attribute for a parent on purpose (a parent has no parent). A display quirk, not a payload defect |
+| Sent, not on the sheet | 16 = `purchasable_offer` + `fulfillment_availability` on each of the 8 children — owned by the offer/stock builder; the Amazon sheet shows those fields empty (Review §3a: no Amazon price column) |
+
+**Against the prediction:** *"0 disagreements on resolver-owned attributes"* — ✅ held. *"5–15 roots differ where
+another builder owns the attribute"* — ❌ **wrong, too pessimistic:** 2 per child (offer, stock), 1 on the parent; this
+family carries no content or image values on Amazon·IT, so those owners never showed up. By Part 13 (*"M2's diff is near
+zero → Phase 3 shrinks"*), this points the good way — 🔴 **on one small family, locally.** It is a number, not yet a
+trend: a fixture pins a dimension, and this one holds no content, no images, 6–7 values a product.
+
+#### ⬜ Stated, not hidden
+
+- M2 on the families with content, sizes and many attributes (the jackets) needs them to build first: the local copy
+  needs the 2.6d fill and fresh schemas. On production those guards pass, but a production run of this tool is a new
+  production-reading tool — the Owner's word first.
+- **M3 is still not captured as a payload** (Step 2.3 proved the refusals; the language tag in a built payload is
+  unmeasured). The tool is Amazon·IT-only today.
+- **Step 3.2's gate** (15.7: a fixture gate in the push hook + a sampled production metric) is not built.
