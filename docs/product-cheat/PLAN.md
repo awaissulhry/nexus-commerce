@@ -6556,6 +6556,11 @@ merchant quantity is **one shared number per SKU across the EU markets** (*"prov
 most likely made `xracingbxn48` unbuyable in EVERY EU market it sells in, not only Italy, for about 90 seconds. Restored and
 re-read. No order was lost that the records show; nothing else was touched.
 
+🟠 **Correction to the A-34 browser check (Step 3.6):** its text says the local web talked to an API *"on the local
+database"*. That was INFERRED (the API process ran from `apps/api` with no `DATABASE_URL` of its own, so `apps/api/.env` would
+win), not discriminated — the standing rule is to discriminate, never infer. Nothing was written in that check (no save
+request was sent), so no data is in question; the sentence should read "most likely the local database, not proven".
+
 ## A-38 — Step 1.3's Amazon half ALREADY EXISTS (SCT.6 close/reopen); quantity 0 is the wrong Amazon mechanism. FOR YOUR APPROVAL.
 
 **Found reading `services/amazon-market-offer.service.ts` (SCT.6):** per-market Amazon **offer CLOSE / REOPEN** — close deletes
