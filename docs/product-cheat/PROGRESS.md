@@ -178,6 +178,14 @@ Rulings R-11 … R-22 are at the end of PLAN.md.
    cause in different ways — take `main`'s isolated fixtures and re-run. 🔴 A push to `main` deploys production for
    every lane, and that lane pushes to `main`: the merge is coordinated by the Owner, and done outside this shared tree
    (a separate worktree) so no other session's files move.
+   **Deploy prepared (2026-09-23), waiting for the Owner's two commands** — this session's safety check refuses a
+   push to `main` (production deploy) and the merge commit that leads to it. In the separate worktree
+   `/private/tmp/nexus-product-cheat-deploy-20260923` (branch `deploy/product-cheat-20260923`): `main` merged in, the two
+   Amazon test conflicts resolved with `main`'s version (staged, not committed), `npm ci`, the three workspace packages
+   built, local-only env files copied (never the production root `.env`; a placeholder non-local root `.env` so the
+   R-VT-12 guard test can prove refusal), full `apps/api` suite green there. The Owner runs:
+   `git -C /private/tmp/nexus-product-cheat-deploy-20260923 commit -m "merge: main into pes/phase-0 for its deploy"` then
+   `git -C /private/tmp/nexus-product-cheat-deploy-20260923 push origin HEAD:main` (every gate, then the deploy).
    **Step 2.6 (a–c2), added 2026-09-23:** read and write paths only, no migration. After deploy, re-run
    `tools/axis-stores.mjs` (read only): the legacy `variantAttributes` key counts (`SPELLINGS … va`) must not
    grow any more — only the two flat-file creates still write it — and the store (`vr`) is where new values
