@@ -192,6 +192,50 @@ export interface SheetPage {
   schemaAge: Array<{ productType: string; fetchedAt: string }>
   /** Markets that actually carry listings — the switcher's options. */
   availableMarkets: string[]
+  /** Step 2.4 / R4 — coordinates this market has that the page's products are not listed on. */
+  coordinatesNotListed: string[]
+  /**
+   * A-20 (R-14) / R4 — how many of this page's products have no product family. Until every product
+   * has one, this grid's Shared columns come from the channels its products are listed on, not from
+   * a family, so the gap is stated rather than left to look like the family's choice.
+   */
+  productsWithoutFamily: { count: number; of: number }
+}
+
+/**
+ * A-20 (R-14) — the page's products whose family ROOT has no product family. A variation carries no
+ * `familyId` of its own (measured: 341 of 355 local products are null, nearly all of them children),
+ * so each row is judged by its root; the map keeps one entry per root.
+ */
+export function productsWithoutFamily(
+  flat: ReadonlyArray<Record<string, unknown>>,
+  parentById: ReadonlyMap<string, unknown>,
+): { count: number; of: number } {
+  const roots = new Map<string, boolean>()
+  for (const row of flat) {
+    const root = rootOf(row, parentById)
+    // R-14 ruling (a): a shell is an extra eBay listing OF a product that has its own family, and the
+    // product list already hides shells by default (`list-products.service.ts`). Not a missing family.
+    if (!root || root.productType === LISTING_SHELL) continue
+    roots.set(root.id, !root.familyId)
+  }
+  return { count: [...roots.values()].filter(Boolean).length, of: roots.size }
+}
+
+const LISTING_SHELL = 'EBAY_LISTING_SHELL'
+type RootFacts = { id: string; familyId?: string | null; productType?: string | null }
+function rootOf(row: Record<string, unknown>, parentById: ReadonlyMap<string, unknown>): RootFacts | undefined {
+  const rootId = (row.parentId as string | null | undefined) ?? (row.id as string)
+  return (rootId === row.id ? row : parentById.get(rootId)) as RootFacts | undefined
+}
+
+/**
+ * 🔴 Step 2.4 move 2 for the grid (A-20 (b), unblocked by R-14 (a)) — the FAMILY decides Shared's
+ * columns, as it already does in the product editor (`studio-sheet.service.ts`): the families of the
+ * page's roots. A variation has no family of its own; a shell has none and is not counted missing.
+ */
+export function gridFamilyIds(flat: ReadonlyArray<Record<string, unknown>>, parentById: ReadonlyMap<string, unknown>): string[] {
+  return [...new Set(flat.map(row => rootOf(row, parentById)?.familyId).filter((id): id is string => !!id))].sort()
 }
 
 export interface GetSheetRowsInput {
@@ -426,8 +470,20 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     select: { translations: true, platformAttributes: true },
   })
   const ebayCategoryIds = [...new Set(ebayCategoryRows.map((r) => (r.platformAttributes as { categoryId?: unknown } | null)?.categoryId).filter((c): c is string => typeof c === 'string' && c.length > 0))].sort()
-  const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes, ebayCategoryIds })
-  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets } = columnSet
+  // 🔴 Step 2.4 — the page's own products decide which coordinates the Shared scope declares.
+  // Without this the sheet showed a channel's attributes because SOMEBODY ELSE's product was
+  // listed there. `flat` is this page's families and their variations, which is exactly the set
+  // the columns are being built for.
+  const columnSet: SheetColumnSet = await getSheetColumns({
+    market, productTypes, variationAxes, ebayCategoryIds,
+    productIds: flat.map((r) => r.id as string),
+    scopeKind: 'master',
+    familyIds: gridFamilyIds(flat, parentById),
+    // Every attribute these products already hold a value for stays a column (as in the editor),
+    // so the family owning the columns never hides a stored value.
+    savedFields: (await import('./family-sheet-schema.js')).savedAttributeFields(flat.map((r) => r.categoryAttributes)),
+  })
+  const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed } = columnSet
 
   // ── 3. the listings for these products on this market's coordinates ─
   const productIds = flat.map((r) => r.id as string)
@@ -552,7 +608,8 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     }
   })
 
-  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets }
+  return { market, locale, coordinates, columns, rows, total, page, limit, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed,
+    productsWithoutFamily: productsWithoutFamily(flat, parentById) }
 }
 
 export { coordinatesFor }

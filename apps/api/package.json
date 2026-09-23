@@ -12,7 +12,8 @@
     "start:prod": "cd ../../packages/database && node scripts/migrate-direct.mjs && cd ../../apps/api && NODE_ENV=production node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:security": "vitest run src/lib/auth src/routes/auth-routes.vitest.test.ts"
+    "test:security": "vitest run src/lib/auth src/routes/auth-routes.vitest.test.ts",
+    "test:hook": "vitest run --disableConsoleIntercept --silent"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1121.0",

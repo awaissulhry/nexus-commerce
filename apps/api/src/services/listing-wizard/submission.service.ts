@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 import { amazonParentVariationAttributes } from './amazon-publish.adapter.js'
 import { marketCurrency, marketCurrencyRows } from '../pim/market-currency.js'
 import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
@@ -329,6 +330,7 @@ async function resolveAmazonChildren(
       id: true,
       sku: true,
       variantAttributes: true,
+      categoryAttributes: true,
       basePrice: true,
       totalStock: true,
     },
@@ -379,8 +381,7 @@ async function resolveAmazonChildren(
 
     for (const v of variants) {
       const cl = clByProductMp.get(`${v.id}:${mp}`)
-      const variationAttributes =
-        (v.variantAttributes as Record<string, unknown> | null) ?? {}
+      const variationAttributes = variationBag(v)   // R-23 (Step 2.6c): the store first; it read the legacy bag only
       childMap.set(v.sku, {
         masterSku: v.sku,
         // ChannelListing has no per-child SKU override field; pass undefined
@@ -960,7 +961,7 @@ export class SubmissionService {
     const shopifyFamily = wizard.channels.some(c => c.platform.toUpperCase() === 'SHOPIFY') && wizard.productId
       ? await this.prisma.product.findFirst({ where: { id: wizard.productId, deletedAt: null }, select: {
           id: true, parentId: true, name: true, variationAxes: true, sku: true, basePrice: true, totalStock: true,
-          children: { where: { deletedAt: null }, orderBy: { id: 'asc' }, select: { id: true, sku: true, basePrice: true, totalStock: true, variantAttributes: true } },
+          children: { where: { deletedAt: null }, orderBy: { id: 'asc' }, select: { id: true, sku: true, basePrice: true, totalStock: true, variantAttributes: true, categoryAttributes: true } },
         } }) : null
     if (shopifyFamily) {
       // Shared stock — a pooled product publishes the pool's number, not its business's own total.
@@ -1160,7 +1161,7 @@ export class SubmissionService {
             options: (shopifyFamily?.variationAxes ?? []).map(name => ({ name })),
             variants: shopifyFamily?.children.length ? shopifyFamily.children.map(child => ({
               nexusId: child.id, sku: child.sku, price: String(child.basePrice), inventory_quantity: child.totalStock,
-              options: (child.variantAttributes ?? {}) as Record<string, string>, inventory_management: 'shopify', inventory_policy: 'deny',
+              options: variationBag(child) as Record<string, string>, inventory_management: 'shopify', inventory_policy: 'deny',
             })) : [{
               nexusId: shopifyFamily?.id, sku: wizard.product?.sku ?? shopifyFamily?.sku ?? '',
               price: typeof effectivePrice === 'number' ? effectivePrice.toFixed(2) : String(shopifyFamily?.basePrice ?? '0.00'),

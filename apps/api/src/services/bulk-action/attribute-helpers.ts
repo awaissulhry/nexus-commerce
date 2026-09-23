@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 /**
  * W1.8 — ATTRIBUTE_UPDATE helpers extracted from
  * bulk-action.service.ts. These are pure functions: no `this.`, no
@@ -84,11 +85,8 @@ export function readProductAttribute(
     if (jsonKey.length === 0) {
       return { currentValue: null, kind: 'unsupported' }
     }
-    const raw = product.variantAttributes
-    const obj =
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {}
+    // R-23 (Step 2.6c-2) — the before-value comes from the store first, as the write goes there.
+    const obj = variationBag({ categoryAttributes: product.categoryAttributes, variantAttributes: product.variantAttributes })
     return {
       currentValue: obj[jsonKey] ?? null,
       kind: 'variantAttribute',

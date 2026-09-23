@@ -15,7 +15,7 @@
  * now. Every edit autosaves on its own and paints the server's answer on that cell.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Search } from 'lucide-react'
+import { AlertTriangle, EyeOff, FolderX, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
 import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
@@ -435,6 +435,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
   }, [onMarketChange])
 
   const staleTypes = data?.schemaAge.filter((a) => Date.now() - new Date(a.fetchedAt).getTime() > 7 * 864e5) ?? []
+  const amazonSchemaMissing = data?.schemaMissing.filter((m) => !m.startsWith('MASTER:')) ?? []
 
   return (
     <GridSheet
@@ -455,15 +456,41 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
               {marketOptions.length > 1 && (
                 <SegmentedControl size="sm" options={marketOptions} value={market} onChange={switchMarket} ariaLabel="Market" />
               )}
-              {(staleTypes.length > 0 || (data?.schemaMissing.length ?? 0) > 0) && (
+              {/* `MASTER:` entries are the family schema's own note; the "without family" pill states that gap. */}
+              {(staleTypes.length > 0 || amazonSchemaMissing.length > 0) && (
                 <InfoTip
                   tip={
-                    data && data.schemaMissing.length > 0
-                      ? `No cached Amazon schema for ${data.schemaMissing.join(', ')} — those columns carry no length caps or closed lists.`
+                    amazonSchemaMissing.length > 0
+                      ? `No cached Amazon schema for ${amazonSchemaMissing.join(', ')} — those columns carry no length caps or closed lists.`
                       : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`
                   }
                 >
                   <Pill tone="warning" size="md"><AlertTriangle size={11} /> caps</Pill>
+                </InfoTip>
+              )}
+              {/*
+                Step 2.4 / R4 — a column that vanishes is worse than one that states why. The
+                sheet now builds its coordinates from THESE products' listings, so a channel this
+                page sells nothing on contributes no columns. That is deliberate, and it is said
+                here rather than left to look like a missing feature.
+              */}
+              {(data?.coordinatesNotListed.length ?? 0) > 0 && (
+                <InfoTip
+                  tip={`No listing on ${data!.coordinatesNotListed.join(', ')} for the products on this page, so those columns are not shown. They return when a listing exists.`}
+                >
+                  <Pill tone="neutral" size="md"><EyeOff size={11} /> {data!.coordinatesNotListed.length} not listed</Pill>
+                </InfoTip>
+              )}
+              {/*
+                A-20 (R-14) / R4 — this sheet takes its columns from the channels, not from a product
+                family, until every product has a family. Said here, with the count, so it does not
+                read as the family's choice.
+              */}
+              {(data?.productsWithoutFamily?.count ?? 0) > 0 && (
+                <InfoTip
+                  tip={`${data!.productsWithoutFamily.count} of ${data!.productsWithoutFamily.of} products on this page have no product family. Until every product has one, this sheet takes its columns from the channels the products are listed on, not from a family.`}
+                >
+                  <Pill tone="neutral" size="md"><FolderX size={11} /> {data!.productsWithoutFamily.count} without family</Pill>
                 </InfoTip>
               )}
               <Button size="sm" onClick={reload} disabled={loading}>{loading ? 'Loading…' : 'Reload'}</Button>

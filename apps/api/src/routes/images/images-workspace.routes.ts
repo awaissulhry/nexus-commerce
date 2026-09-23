@@ -1,3 +1,4 @@
+import { variationBag } from '../../services/pim/shared-variation-values.js'
 import { saveGalleryAssignments, normalizeScopeFields, type ListingImageUpsert, type ImageScope } from '../../services/images/gallery-assignment.service.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 /**
@@ -237,13 +238,11 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // Prefer child Products if they exist; fall back to ProductVariation records.
       const rawVariants = effectiveChildren.length > 0
         ? effectiveChildren.map((c) => {
-            // variantAttributes is canonical; fall back to categoryAttributes.variations
-            // for products created via the old bulk-create route that left variantAttributes null.
-            const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
-            const attrs = (c.variantAttributes as Record<string, string> | null)
-              ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars)
-                ? catVars as Record<string, string>
-                : null)
+            // R-23 (Step 2.6c) — the one store (`categoryAttributes.variations`) first; a legacy
+            // `variantAttributes` key only for an axis the store lacks. This was `VA ?? VAR`, so a stale
+            // legacy value (AIR-MESH-JACKET-MEN-XXL-BLACK: XS) beat the store's XXL on every image screen.
+            const bag = variationBag(c) as Record<string, string>
+            const attrs = Object.keys(bag).length ? bag : null
             return {
               id: c.id,
               sku: c.sku,

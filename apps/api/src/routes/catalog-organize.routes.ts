@@ -1,7 +1,9 @@
+import { variationValueRefusal } from '../services/pim/shared-variation-values.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import prisma from '../db.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+import { writeVariationValues } from '../services/pim/category-attributes-write.js'
 
 /**
  * /api/catalog/organize — session-based publish + undo.
@@ -11,6 +13,21 @@ import { fireOutboundJobs } from '../services/outbound-enqueue.js'
  * GET  /sessions  — recent sessions for the history panel (Phase 5).
  * POST /undo/:id  — restore pre-publish state + create reversal queue rows.
  */
+/** R-25 (A-28 #1) — the undo snapshot carries BOTH stores' before-state, marked so the undo can tell it from a row
+ * written before R-25 (which holds the legacy `variantAttributes` alone, and cannot restore the store). */
+const ORGANIZE_BEFORE = '__organizeBefore'
+function organizeBefore(product: { variantAttributes: unknown; categoryAttributes: unknown }) {
+  const store = (product.categoryAttributes as { variations?: unknown } | null)?.variations
+  return { [ORGANIZE_BEFORE]: 2, variantAttributes: product.variantAttributes ?? null, variations: store ?? null }
+}
+function readOrganizeBefore(value: unknown): { legacy: unknown; store?: Record<string, unknown> | null } {
+  if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>)[ORGANIZE_BEFORE] === 2) {
+    const snapshot = value as { variantAttributes?: unknown; variations?: unknown }
+    return { legacy: snapshot.variantAttributes ?? null, store: (snapshot.variations ?? null) as Record<string, unknown> | null }
+  }
+  return { legacy: value ?? null }
+}
+
 const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── POST /api/catalog/organize/publish ───────────────────────────
@@ -49,6 +66,9 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Clean attributes — strip blank values.
       const cleanedAttrs: Record<string, string> = {}
+      // R-26 — a value that is not text or a number refuses THIS change, by name; it is never stored as "[object Object]".
+      const refusal = Object.entries(attributes).map(([k, v]) => variationValueRefusal(String(k).trim(), v)).find(Boolean)
+      if (refusal) { errors.push({ productId, sku: '?', error: refusal }); continue }
       for (const [k, v] of Object.entries(attributes)) {
         const key = String(k).trim()
         const val = String(v ?? '').trim()
@@ -66,6 +86,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
               parentId: true,
               isParent: true,
               variantAttributes: true,
+              categoryAttributes: true,
               channelListings: {
                 select: {
                   id: true,
@@ -116,16 +137,13 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
               parentId: toParentId,
               isParent: false,
-              ...(Object.keys(cleanedAttrs).length > 0
-                ? {
-                    variantAttributes: cleanedAttrs as any,
-                    categoryAttributes: {
-                      variations: cleanedAttrs,
-                    } as any,
-                  }
-                : {}),
             },
           })
+          // Steps 2.6b / 2.6c-2 (R-23) — the child's axis map replaces the store's; every other attribute stays,
+          // and the legacy `variantAttributes` is emptied, never written. (It used to replace the whole bag with
+          // `{ variations }`, deleting every other attribute, and to write the legacy bag.)
+          if (Object.keys(cleanedAttrs).length > 0) await writeVariationValues(tx, productId, { set: cleanedAttrs, unset: [],
+            legacyDrop: Object.keys((product.variantAttributes ?? {}) as Record<string, unknown>) }, { replaceStore: true })
 
           // 2. Ensure parent flag is set.
           if (!parent.isParent) {
@@ -195,7 +213,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             productId,
             toParentId,
             fromParentId: product.parentId ?? null,
-            fromVariantAttributes: (product.variantAttributes as any) ?? null,
+            fromVariantAttributes: organizeBefore(product) as any,
             attributes: cleanedAttrs as any,
             status: 'APPLIED',
             queueIds,
@@ -306,14 +324,18 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
     now: Date,
   ): Promise<void> {
     const undoQueueIds: string[] = []
+    const before = readOrganizeBefore(change.fromVariantAttributes)
     await prisma.$transaction(async (tx) => {
       await tx.product.update({
         where: { id: change.productId },
         data: {
           parentId: change.fromParentId ?? null,
-          variantAttributes: (change.fromVariantAttributes as any) ?? null,
+          variantAttributes: (before.legacy as any) ?? null,
         },
       })
+      // R-25 (A-28 #1) — restore the store too. Publish replaced it (Step 2.6c-2), so an undo that restored only the
+      // legacy bag left the new axis values live — the store is what every publisher reads (R-23).
+      if (before.store !== undefined) await writeVariationValues(tx, change.productId, { set: before.store ?? {}, unset: [], legacyDrop: [] }, { replaceStore: true })
       const listings = await tx.channelListing.findMany({
         where: { productId: change.productId },
         select: { id: true, channel: true, marketplace: true },

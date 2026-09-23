@@ -62,31 +62,11 @@ export function workspacePolicySql() {
   }
   sql.push('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexus_workspace_runtime;')
   for (const model of ownership.workspaceModels) sql.push(...workspaceModelSql(model))
-  sql.push(`CREATE OR REPLACE FUNCTION nexus_channel_route_sync() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
-    BEGIN
-      IF TG_OP = 'DELETE' THEN DELETE FROM "ChannelAccountRoute" WHERE "connectionId" = OLD.id; RETURN OLD; END IF;
-      IF NEW."externalAccountId" IS NOT NULL THEN
-        INSERT INTO "ChannelAccountOwnership" ("channelType", environment, "externalAccountId", "workspaceId")
-          VALUES (NEW."channelType", COALESCE(NEW."connectionMetadata"->>'environment', 'production'), NEW."externalAccountId", NEW."workspaceId")
-          ON CONFLICT DO NOTHING;
-        IF NOT EXISTS (SELECT 1 FROM "ChannelAccountOwnership" WHERE "channelType" = NEW."channelType" AND environment = COALESCE(NEW."connectionMetadata"->>'environment', 'production') AND "externalAccountId" = NEW."externalAccountId" AND "workspaceId" = NEW."workspaceId") THEN
-          RAISE EXCEPTION 'This seller account belongs to another business profile' USING ERRCODE = '23505';
-        END IF;
-      END IF;
-      IF NEW."isActive" THEN
-        INSERT INTO "ChannelAccountRoute" ("connectionId", "workspaceId", "channelType", "externalAccountId", "destinationIds")
-          VALUES (NEW.id, NEW."workspaceId", NEW."channelType", NEW."externalAccountId", ARRAY(
-            SELECT DISTINCT identifier FROM "ConnectionScope" s CROSS JOIN LATERAL unnest(ARRAY[s."externalId", s.metadata->>'accountId']) identifier
-            WHERE s."connectionId" = NEW.id AND s."isActive" AND s.kind = 'profile' AND identifier IS NOT NULL
-          ))
-          ON CONFLICT ("connectionId") DO UPDATE SET "workspaceId" = EXCLUDED."workspaceId", "channelType" = EXCLUDED."channelType", "externalAccountId" = EXCLUDED."externalAccountId", "destinationIds" = EXCLUDED."destinationIds";
-      ELSE DELETE FROM "ChannelAccountRoute" WHERE "connectionId" = NEW.id; END IF;
-      RETURN NEW;
-    END $$;`)
+  sql.push(readFileSync(new URL('../workspaces/cx-account-integrity.sql', import.meta.url), 'utf8'))
   sql.push('DROP TRIGGER IF EXISTS nexus_channel_route ON "ChannelConnection";')
   sql.push('CREATE TRIGGER nexus_channel_route AFTER INSERT OR UPDATE OR DELETE ON "ChannelConnection" FOR EACH ROW EXECUTE FUNCTION nexus_channel_route_sync();')
   sql.push(`INSERT INTO "ChannelAccountOwnership" ("channelType", environment, "externalAccountId", "workspaceId") SELECT DISTINCT "channelType", COALESCE("connectionMetadata"->>'environment', 'production'), "externalAccountId", "workspaceId" FROM "ChannelConnection" WHERE "externalAccountId" IS NOT NULL ON CONFLICT DO NOTHING;`)
-  sql.push(`INSERT INTO "ChannelAccountRoute" ("connectionId", "workspaceId", "channelType", "externalAccountId") SELECT id, "workspaceId", "channelType", "externalAccountId" FROM "ChannelConnection" WHERE "isActive" ON CONFLICT ("connectionId") DO NOTHING;`)
+  sql.push(`INSERT INTO "ChannelAccountRoute" ("connectionId", "workspaceId", "channelType", "externalAccountId", "inboundAliases") SELECT c.id, c."workspaceId", c."channelType", c."externalAccountId", nexus_channel_inbound_aliases(c) FROM "ChannelConnection" c WHERE c."isActive" ON CONFLICT ("connectionId") DO NOTHING;`)
   sql.push(`CREATE OR REPLACE FUNCTION nexus_channel_scope_route_sync() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
     DECLARE target_id text;
     BEGIN

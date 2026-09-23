@@ -27,3 +27,34 @@ export const DELIST_OPERATOR_COPY = {
 } as const
 
 export type DelistErrorCode = keyof typeof DELIST_OPERATOR_COPY
+
+/**
+ * 🔴 PLAN Step 1.2 — the sentence a refused hard delete carries.
+ *
+ * The danger it names: you pick an action, the product is hard-deleted locally, the adapter then
+ * REFUSES, and the listing keeps selling on the channel with no product row left to manage it.
+ * The default path produced exactly that — the bulk-delete modal preselects `unpublish` whenever
+ * a live listing exists, and Amazon and eBay both refuse `unpublish`.
+ *
+ * R4, an absent thing is stated: the refusal names the coordinate, the listing id, why it stays
+ * live, and the two ways forward. The "why" is `DELIST_OPERATOR_COPY` — the same sentence the queue
+ * would have shown after the fact — so the operator reads one wording, not two.
+ */
+export const HARD_DELETE_NO_CHANNEL_ACTION =
+  'No channel action was chosen, so nothing is sent and the listing keeps selling.'
+
+export const HARD_DELETE_NEXT_STEPS =
+  'Remove the listing from the channel instead (permanent), or disconnect the listing first.'
+
+/** `reason` for one coordinate that would be left live. `cause` is null when nothing is sent. */
+export function hardDeleteOrphanReason(input: {
+  channel: string
+  marketplace: string | null
+  externalListingId: string | null
+  cause: DelistErrorCode | null
+}): string {
+  const where = `${input.channel}${input.marketplace ? ` · ${input.marketplace}` : ''}`
+  const which = input.externalListingId ? ` ${input.externalListingId}` : ''
+  const why = input.cause ? DELIST_OPERATOR_COPY[input.cause] : HARD_DELETE_NO_CHANNEL_ACTION
+  return `${where} listing${which} would stay live. ${why} ${HARD_DELETE_NEXT_STEPS}`
+}

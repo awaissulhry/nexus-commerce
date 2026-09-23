@@ -34,6 +34,7 @@
  * 80–90% of typical Amazon required fields.
  */
 
+import { variationBag } from '../pim/shared-variation-values.js'
 import type { PrismaClient } from '@nexus/database'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import {
@@ -563,10 +564,10 @@ export class SchemaParserService {
     // variations service surfaces them so the frontend's lookups line up.
     const variationRows = await this.prisma.product.findMany({
       where: { parentId: opts.productId },
-      select: { id: true, sku: true, variantAttributes: true },
+      select: { id: true, sku: true, variantAttributes: true, categoryAttributes: true },
     })
     const variations = variationRows.map((v) => {
-      const raw = (v.variantAttributes ?? {}) as Record<string, unknown>
+      const raw = variationBag(v)   // R-23 (Step 2.6c): the store first
       const attrs: Record<string, string> = {}
       for (const [k, val] of Object.entries(raw)) {
         if (typeof val === 'string') attrs[k.toLowerCase()] = val

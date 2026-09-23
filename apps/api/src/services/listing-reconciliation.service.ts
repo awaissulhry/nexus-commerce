@@ -29,6 +29,7 @@ import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { mergeCategoryAttributes } from './pim/category-attributes-write.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
 export type ReconStatus = 'PENDING' | 'CONFIRMED' | 'CONFLICT' | 'CREATE_NEW' | 'IGNORE'
@@ -175,7 +176,7 @@ function resolveMatch(
  *   ProductImage              ← all images (MAIN + ALTs); existing
  *                                Amazon-sourced images are replaced
  */
-async function enrichProductFromAmazon(
+export async function enrichProductFromAmazon(
   sku: string,
   mpId: string,
   amazonService: AmazonService,
@@ -209,14 +210,14 @@ async function enrichProductFromAmazon(
   // Raw Amazon attributes — stored as-is so nothing is lost.
   // Keys like bullet_point, color, size, material, apparel_size_system,
   // outer_material, gender, closure_type, etc. are all preserved.
-  if (Object.keys(details.rawAttributes).length > 0) {
-    productUpdate.categoryAttributes = details.rawAttributes
-  }
+  // Step 2.6b (R-23) — MERGED into the stored bag: replacing it deleted `variations`, the one store
+  // for a variant's size and colour, and every attribute Amazon did not return.
+  const rawAttributes = Object.keys(details.rawAttributes).length > 0 ? details.rawAttributes : null
 
-  if (Object.keys(productUpdate).length > 0) {
-    await prisma.product.update({
-      where: { id: match.productId },
-      data: productUpdate as any,
+  if (Object.keys(productUpdate).length > 0 || rawAttributes) {
+    await prisma.$transaction(async (tx) => {
+      if (Object.keys(productUpdate).length > 0) await tx.product.update({ where: { id: match.productId }, data: productUpdate as any })
+      if (rawAttributes) await mergeCategoryAttributes(tx, match.productId, rawAttributes)
     })
   }
 

@@ -51,3 +51,51 @@ export function hardDeleteConfirmation(input: {
               : input.typed !== phrase ? `Type ${phrase} exactly to confirm.` : null
   return { phrase, reason, armed: reason === null }
 }
+
+/**
+ * 🔴 PLAN Step 1.2 — read the bulk-hard-delete response, which can now succeed PARTLY.
+ *
+ * The API refuses any product whose live listing the chosen action would leave selling, and
+ * returns per-row `outcomes` (15.10 — "487 deleted · 13 refused", never one throw on row 14).
+ * Before this existed, the caller ignored the body and announced `product.deleted` for every
+ * selected id: with a refusal in play that is a claim that a deletion happened when it did not.
+ *
+ * Kept here, beside the other pure hard-delete rules, so it can be tested as logic rather than
+ * asserted as the text of a component.
+ *
+ * An older API build returns no `outcomes` key. That is NOT "nothing was deleted" — it is "this
+ * build does not say", so the previous behaviour is kept for it. A measurement that was never
+ * taken must not read as a measurement of zero.
+ */
+export interface HardDeleteOutcome {
+  productId: string
+  sku: string | null
+  outcome: 'deleted' | 'refused'
+  reasons: string[]
+}
+
+export function interpretHardDeleteOutcomes(
+  raw: unknown,
+  selectedIds: readonly string[],
+): { deletedIds: string[]; refused: HardDeleteOutcome[]; reported: boolean } {
+  const outcomes = (raw as { outcomes?: unknown } | null | undefined)?.outcomes
+  if (!Array.isArray(outcomes)) return { deletedIds: [...selectedIds], refused: [], reported: false }
+
+  const parsed = outcomes.filter((row): row is HardDeleteOutcome =>
+    !!row && typeof row === 'object'
+    && typeof (row as HardDeleteOutcome).productId === 'string'
+    && ((row as HardDeleteOutcome).outcome === 'deleted' || (row as HardDeleteOutcome).outcome === 'refused'))
+
+  return {
+    deletedIds: parsed.filter(row => row.outcome === 'deleted').map(row => row.productId),
+    refused: parsed.filter(row => row.outcome === 'refused'),
+    reported: true,
+  }
+}
+
+/** One line per refused product, for the operator. Never empty when a refusal exists. */
+export function hardDeleteRefusalLines(refused: readonly HardDeleteOutcome[]): string {
+  return refused
+    .map(row => `${row.sku ?? row.productId}: ${row.reasons.length ? row.reasons.join(' ') : 'Refused; no reason was given.'}`)
+    .join('\n')
+}

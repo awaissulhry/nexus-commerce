@@ -412,7 +412,7 @@ export async function generateCombinations(input: GenerateInput): Promise<Genera
           productType: source?.productType ?? parentRow.productType ?? null,
           basePrice: source?.basePrice ?? parentRow.basePrice ?? null,
           totalStock: source?.totalStock ?? 0,
-          variantAttributes: axisPairs as never,
+          // R-23 (Step 2.6c-2) — the one store; the legacy `variantAttributes` is never written.
           categoryAttributes: { ...copiedCategory, variations: axisPairs } as never,
         },
         select: { id: true, sku: true },

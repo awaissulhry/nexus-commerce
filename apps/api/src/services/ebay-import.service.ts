@@ -18,6 +18,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { mergeCategoryAttributes } from './pim/category-attributes-write.js'
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
 
@@ -141,7 +142,15 @@ export async function importEbayCatalog(): Promise<{
       }
 
       if (existing) {
-        await prisma.product.update({ where: { id: existing.id }, data })
+        // Step 2.6b (R-23) — eBay's aspects are MERGED into the stored bag. Replacing it deleted
+        // `variations`, the one store for a variant's size and colour, and every other attribute.
+        // R-25 (A-28 #2) — and the update keeps the product's own type and bullets: `productType: 'APPAREL'` and
+        // `bulletPoints: []` are create-time defaults, and on an existing product they overwrote whatever it was.
+        const { categoryAttributes: aspects, productType: _createType, bulletPoints: _createBullets, ...columns } = data
+        await prisma.$transaction(async (tx) => {
+          await tx.product.update({ where: { id: existing.id }, data: columns })
+          if (aspects) await mergeCategoryAttributes(tx, existing.id, aspects)
+        })
         updated++
         results.push({ sku: item.sku, action: 'updated', id: existing.id })
       } else {

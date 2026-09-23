@@ -1746,6 +1746,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             purged: 0,
             ghostCacheRemoved: 0,
             skipped: productIds.length,
+            // Step 1.2 — the same keys on every path, so a caller never has to test for their
+            // presence to know whether anything was refused.
+            refused: 0,
+            outcomes: [] as Array<{ productId: string; sku: string | null; outcome: 'deleted' | 'refused'; reasons: string[] }>,
             channelCascadeEnqueued: 0,
             channelSkipped: [],
             dependents: {
@@ -1759,7 +1763,68 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        const ids = eligible.map((r) => r.id)
+        // ══════════════════════════════════════════════════════════════
+        // 🔴 PLAN Step 1.2 — never orphan a live listing.
+        //
+        // Before today this route deleted the product and ASKED the channel afterwards. When the
+        // adapter refused — which Amazon and eBay both do for `unpublish`, and Shopify does for
+        // both actions — the listing kept selling with no product row left to manage it. The
+        // modal even preselects `unpublish` whenever a live listing exists
+        // (BulkActionBar.tsx: `setChannelAction(data.channelListings.length === 0 ? 'none' : 'unpublish')`),
+        // so the orphaning path was the DEFAULT path, not an edge case.
+        //
+        // The system already knew: GET /products/hard-delete-preflight lists exactly these
+        // listings and the modal shows them. Nothing enforced it. This is the enforcement.
+        //
+        // Both rules are read from their owners rather than restated here — `whereDelistTargets`
+        // from the enqueue (the same rows the cascade would act on) and `delistCapability` from
+        // the delist service (the same table the adapters refuse by). When Step 1.3 lands
+        // reversible unpublish, that table changes and this refusal lifts with it.
+        const { whereDelistTargets } = await import('../services/outbound-enqueue.js')
+        const { delistCapability } = await import('../services/channel-delist.service.js')
+        const { hardDeleteOrphanReason } = await import('../services/delist-error-codes.js')
+        const { sellingRisk } = await import('@nexus/shared/listing-risk')
+
+        const eligibleIds = eligible.map((r) => r.id)
+        const delistTargets = eligibleIds.length > 0
+          ? await tx.channelListing.findMany({
+              where: whereDelistTargets(eligibleIds),
+              select: { productId: true, channel: true, marketplace: true, region: true, externalListingId: true },
+            })
+          : []
+
+        /** One entry per coordinate this delete would leave selling with nothing managing it. */
+        const orphanWould: Array<{ productId: string; reason: string }> = []
+        for (const listing of delistTargets) {
+          if (!sellingRisk(listing)) continue
+          // 'none' sends nothing at all, so no channel can remove anything.
+          const capability = channelAction === 'none' ? null : delistCapability(listing.channel, channelAction)
+          if (capability?.removes === true) continue
+          if (!listing.productId) continue
+          orphanWould.push({
+            productId: listing.productId,
+            reason: hardDeleteOrphanReason({
+              channel: listing.channel,
+              marketplace: listing.marketplace ?? listing.region,
+              externalListingId: listing.externalListingId,
+              cause: capability === null ? null : capability.errorCode,
+            }),
+          })
+        }
+
+        const refusedReasons = new Map<string, string[]>()
+        for (const entry of orphanWould) {
+          const existing = refusedReasons.get(entry.productId)
+          if (existing) existing.push(entry.reason)
+          else refusedReasons.set(entry.productId, [entry.reason])
+        }
+
+        // 15.10 — outcomes, not a throw. A bulk delete of 500 that meets a live listing on row 14
+        // must still report the other 499, each by name, instead of dying partway with no record.
+        const refusedProducts = eligible.filter((r) => refusedReasons.has(r.id))
+        const deletable = eligible.filter((r) => !refusedReasons.has(r.id))
+
+        const ids = deletable.map((r) => r.id)
         const productIdFilter = { productId: { in: ids } }
 
         // D.1 — Channel cascade. Capture coordinate/SKU/guards before purge;
@@ -1779,7 +1844,9 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         // (AuditLog has no FK to Product).
         await tx.auditLog.createMany({
           data: [
-            ...eligible.map((r) => ({
+            // Step 1.2 — `deletable`, not `eligible`. A refused product is NOT hard-deleted, and an
+            // audit row saying it was would be a false record of a destructive act.
+            ...deletable.map((r) => ({
               userId: actor,
               entityType: 'Product',
               entityId: r.id,
@@ -1847,17 +1914,38 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             ? await tx.product.deleteMany({ where: { id: { in: ids } } })
             : { count: 0 }
 
-        // Wipe ALL targeted cache rows — both for purged Products and
-        // any ghost rows whose Product was already gone.
+        // Wipe the targeted cache rows — for purged Products and for any ghost rows whose Product
+        // was already gone.
+        //
+        // 🔴 Step 1.2 — NOT `productIds`. A product refused for orphan risk still exists, and
+        // wiping its cache row would remove it from the bin UI (which reads ProductReadCache) while
+        // the Product row survives — invisible and undeletable. It must stay listed so the operator
+        // can act on the reason they were given.
         const cacheRows = await tx.productReadCache.deleteMany({
-          where: { id: { in: productIds } },
+          where: { id: { in: [...ids, ...ghostCacheRows.map((r) => r.id)] } },
         })
 
         return {
           purged: products.count,
           ghostCacheRemoved: ghostCacheRows.length,
+          // `skipped` keeps its original meaning — ids that matched no bin row and no ghost row —
+          // so existing callers read the same number. A refusal is NOT folded in here: it is a
+          // different thing from "not found", and hiding it in this count is the silent skip R4
+          // forbids.
           skipped:
             productIds.length - eligible.length - ghostCacheRows.length,
+          // 🔴 Step 1.2 / 15.10 — per-row outcomes. "487 deleted · 13 refused" with every refused
+          // coordinate named, instead of one throw on row 14 that says nothing about the other 499.
+          refused: refusedProducts.length,
+          outcomes: [
+            ...deletable.map((r) => ({ productId: r.id, sku: r.sku, outcome: 'deleted' as const, reasons: [] as string[] })),
+            ...refusedProducts.map((r) => ({
+              productId: r.id,
+              sku: r.sku,
+              outcome: 'refused' as const,
+              reasons: refusedReasons.get(r.id) ?? [],
+            })),
+          ],
           channelCascadeEnqueued,
           channelSkipped,
           dependents: {

@@ -168,22 +168,36 @@ function applyLayer(
   }
 }
 
-/** Legacy variation labels remain addressable while supplying the canonical Master axes.
- * An explicit canonical value wins. Conflicting aliases never choose a value by key order. */
+const objectBag = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+
+/** Legacy variation labels remain addressable as raw keys (`Taglia`, `Body Type`, …). */
 function applyVariantLayer(acc: ResolvedAttributes, product: ProductLike): void {
-  const variations = product.categoryAttributes?.variations
-  const bag = { ...(product.variantAttributes && typeof product.variantAttributes === 'object' ? product.variantAttributes : {}),
-    ...(variations && typeof variations === 'object' && !Array.isArray(variations) ? variations : {}) }
-  applyLayer(acc, bag, 'variant', product.id)
-  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return
+  applyLayer(acc, { ...objectBag(product.variantAttributes), ...objectBag(product.categoryAttributes?.variations) }, 'variant', product.id)
+}
+
+/** R-23 (A-26 / A-27) — a variant's size, colour and style live in ONE store: `categoryAttributes.variations`,
+ * then the legacy `variantAttributes` — the order every publisher reads (`storedVariationValues`). Applied
+ * AFTER the flat `categoryAttributes` layer, so a flat `size` / `color` key, which no publisher reads, can no
+ * longer hide or contradict the stored value (production, 2026-09-23: `size: null` over `Size: 'L'` showed an
+ * empty cell while eBay was sent `L`). The flat key answers only when neither bag holds the axis.
+ * An explicit canonical key wins inside a bag. Conflicting aliases never choose a value by key order. */
+function applyVariantAxes(acc: ResolvedAttributes, product: ProductLike): void {
+  const bags = [objectBag(product.categoryAttributes?.variations), objectBag(product.variantAttributes)]
   // Legacy "Body Type" is not a stable identity: imports also use it for gender.
   for (const axis of ['color', 'size', 'style']) {
-    if (Object.prototype.hasOwnProperty.call(bag, axis) && bag[axis] !== undefined) continue
-    const matches = Object.entries(bag).filter(([key, value]) => canonicalVariantAxis(key) === axis && value !== undefined)
-    if (!matches.length) continue
-    const conflict = new Set(matches.map(([, value]) => JSON.stringify(value))).size > 1
-    acc[axis] = { value: conflict ? null : matches[0][1], source: 'variant', inheritedFrom: product.id,
-      ...(conflict ? { warnings: [`Conflicting variant attributes supply ${axis}: ${matches.map(([key]) => key).join(', ')}. Set the canonical ${axis} attribute to resolve the conflict.`] } : {}) }
+    for (const bag of bags) {
+      if (Object.prototype.hasOwnProperty.call(bag, axis) && bag[axis] !== undefined) {
+        acc[axis] = { value: bag[axis], source: 'variant', inheritedFrom: product.id }
+        break
+      }
+      const matches = Object.entries(bag).filter(([key, value]) => canonicalVariantAxis(key) === axis && value !== undefined)
+      if (!matches.length) continue
+      const conflict = new Set(matches.map(([, value]) => JSON.stringify(value))).size > 1
+      acc[axis] = { value: conflict ? null : matches[0][1], source: 'variant', inheritedFrom: product.id,
+        ...(conflict ? { warnings: [`Conflicting variant attributes supply ${axis}: ${matches.map(([key]) => key).join(', ')}. Set this variant's ${axis} to resolve the conflict.`] } : {}) }
+      break
+    }
   }
 }
 
@@ -248,6 +262,7 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
     if (synthesize) applySynthesisLayer(acc, owner, locale)
     if (owner === product) applyVariantLayer(acc, product)
     applyLayer(acc, owner.categoryAttributes, owner === product && parent ? 'variant' : 'master', owner.id)
+    if (owner === product) applyVariantAxes(acc, product)
     if (synthesize) applyCanonicalFacts(acc, owner)
     if (owner.countryOfOrigin) applyLayer(acc, { countryOfOrigin: owner.countryOfOrigin, country_of_origin: owner.countryOfOrigin }, 'masterColumn', owner.id)
   }

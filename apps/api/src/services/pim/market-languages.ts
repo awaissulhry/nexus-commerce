@@ -31,6 +31,19 @@ export function marketLanguages(channel: string, code: string, rows?: readonly M
   return prisma.marketplace.findFirst({ where: coordinate, select: { languages: true, language: true } }).then(read)
 }
 
+/**
+ * A-22 (R-18) — a publish path that serializes ONE language refuses a market that carries more.
+ * The listing editor's publish sends every language (`amazon-content-payload.ts`); a one-language
+ * path would send one — or a tag-less entry — and an Amazon `replace` could drop the others.
+ * `null` = this market carries one language and the path may go ahead.
+ */
+export async function oneLanguagePathRefusal(channel: string, code: string): Promise<string | null> {
+  const languages = await marketLanguages(channel, code)
+  if (languages.length <= 1) return null
+  const name = channel.toUpperCase() === 'AMAZON' ? 'Amazon' : channel.toUpperCase() === 'EBAY' ? 'eBay' : channel
+  return `${name} · ${marketCode(code)} carries ${languages.length} languages (${languages.join(', ')}), and this path sends one. Publish its content through the listing editor, which sends every language.`
+}
+
 /** Regional serialization only; the language is supplied by the authority or
  * by an explicitly selected language from that row. UK's region is ISO GB. */
 export function languageTag(language: string, code: string): string {

@@ -1,3 +1,4 @@
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { inDatabaseTransaction } from '../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { normalizeLanguage } from '../services/pim/content-language.js'
@@ -521,11 +522,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { sku: 'asc' },
       })
       const enriched = children.map((c) => {
-        const ca = c.categoryAttributes
-        const variations =
-          ca && typeof ca === 'object' && !Array.isArray(ca) && (ca as any).variations
-            ? ((ca as any).variations as Record<string, string>)
-            : null
+        // R-23 (Step 2.6c) — `variations` is the one store, with a legacy key only for an axis it lacks.
+        const bag = variationBag(c) as Record<string, string>
+        const variations = Object.keys(bag).length ? bag : null
         return { ...c, variations }
       })
       return { success: true, children: enriched }
@@ -1468,7 +1467,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 validationStatus: 'VALID',
                 validationErrors: [],
                 hasChannelOverrides: false,
-                variantAttributes: (v.variationAttributes ?? {}) as any,
+                // R-23 (Step 2.6c-2) — the one store; the legacy `variantAttributes` is never written.
+                categoryAttributes: { variations: v.variationAttributes ?? {} } as any,
               } as any,
             })
           }
@@ -2483,13 +2483,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         variants: variants.map(v => {
-          let attrs: Record<string, string> = {}
-          if (v.variantAttributes && typeof v.variantAttributes === 'object' && !Array.isArray(v.variantAttributes)) {
-            attrs = v.variantAttributes as Record<string, string>
-          } else {
-            const cat = v.categoryAttributes as any
-            if (cat?.variations && typeof cat.variations === 'object') attrs = cat.variations
-          }
+          const attrs = variationBag(v) as Record<string, string>   // R-23 (Step 2.6c): the store first
           return {
             sku: v.sku,
             fnsku: v.fnsku ?? null,

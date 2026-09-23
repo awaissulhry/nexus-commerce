@@ -592,3 +592,57 @@ Before preparing any future release, integrate only this already-published main 
 the isolated branch and run applicable gates against it. Never publish unpublished
 PES history or touch its working changes. Quarantine recovery/key maintenance/archive,
 transactional order/erasure handlers and all other matrix dependencies remain open.
+
+
+## I1 — integration with published main0a563d6d (local)
+
+The isolated branch merges only the already-published/main-serving0a563d6d snapshot;
+no unpublished PES work or shared working change is included. Git reported no conflicts.
+Incoming hooks add database/full-API gates and retain existing gates. The lockfile only
+records the database package's already-resolved Vitest dependency.
+
+Integration review exposed fresh-bootstrap omissions. The generated baseline is now
+regenerated from Prisma (no production dump). Shared `cx-account-integrity.sql`, copied
+exactly into new20260923d_cx_bootstrap_parity, installs the existing lease-pair and
+nonnegative-grant constraints, exact deployed active-account/workspace-primary partial
+indexes, failed-signature index and final Shopify/eBay/Etsy routing functions. These
+are existing production semantics; no alias backfill or business-row DML is introduced.
+The generator has one route-function source. The previously missed quarantine policy
+manifest entry is fixed too: the parity gate first failed on it, and now all13 shared
+policy files match their migration bytes. All447 models pass schema/column/ownership
+checks. Existing migration files, including deployed20260922a, are unchanged.
+
+Bootstrap now commits schema, migration history and runtime policies together. A
+controlled policy failure previously left448 tables and stamped history; rollback
+now leaves zero tables/history. The migration-gate fixture's schema includes its PID
+so concurrent worktrees do not drop/truncate each other's fixture.23 database-package
+tests pass, with six applied/restored mutations killed: both CHECKs, both unique
+indexes, alias propagation and atomic BEGIN. Alias fixture setup was corrected to
+actually activate the inserted connections; the alias mutation then proved its guard.
+
+The integrated233-case realPG run passed232 and exposed one previously impossible
+fixture: two active copies of the same account ID across environments violate the
+actual deployed index, which lacks an environment dimension. The corrected24-case
+admission suite passes under production-equivalent rights: it explicitly asserts that
+restriction, then preserves both same-ID environment-routing/receipt-namespace checks
+using legitimate inactive sandbox history. No assertion or production constraint was
+weakened, and simultaneous active copies are not claimed supported. Other18 suites
+passed unchanged. API typecheck passes. Independent review approves these repairs.
+Full pre-push/integrated release gates still remain before any approved push.
+
+Evidence: `c11-upstream-bootstrap-red.log`, `c11-upstream-routing-constraints-red.log`,
+`c11-upstream-atomic-bootstrap-red.log`, `c11-upstream-bootstrap-final.log`,
+`c11-policy-registration-red.log`, `c11-bootstrap-*-mutation.log`,
+`c11-integrated-postgres-first.log`, `c11-integrated-admission-final.log`,
+`c11-integrated-typecheck.log`, under `/private/tmp/cx-completion-20260922/`.
+
+### Next required containment: D8 retention
+
+Actual code still dynamically deletes WebhookEvent through data-retention-sweep's
+model map. Privacy's GET can create the default90-day policy. The existing source
+ratchet misses this dynamic delete, and no archive writer exists. Historical
+scripts/data-wipe-2026-05-20-execute.mjs also names the table. This is a release blocker,
+not a closed archive criterion. Next: archive completed old receipts in place, retain
+all proof/payload/identity, DB DELETE/TRUNCATE protection, race-safe legacy replay,
+honest archived/deleted counters and privacy wording. Quarantine resolvedAt means
+routing handoff, not successful processing; key maintenance/recovery remain open.

@@ -1,0 +1,61 @@
+// Diagnostic for PLAN A-18. Copy to apps/api/src/services/pim/price-door-reset.probe.vitest.test.ts to run.
+// Expected on 7221436aa: 2 failed, 1 passed. Product code is unchanged; all rows are disposable.
+import { afterAll, expect, it, vi } from 'vitest'
+
+const state = vi.hoisted(() => ({ db: null as any }))
+vi.mock('@nexus/database', async () => {
+  // Vitest's R-VT-12 guard has already pinned and verified this local URL.
+  process.env.NEXUS_TEST_CONCURRENT_PG_URL = process.env.DATABASE_URL
+  const { concurrentDatabase } = await import('../../test-support/concurrent-database.js')
+  state.db = await concurrentDatabase()
+  return { default: state.db.client }
+})
+vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => undefined) }))
+
+import prisma from '../../db.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+import { channelOverrideKeys } from './channel-field-map.js'
+import { channelValuePatch } from './channel-value-mutation.js'
+import { resolveAttributes } from './attribute-resolver.js'
+import { writeChannelPrices } from './channel-price-write.service.js'
+
+const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID,
+  actorUserId: null, membershipId: null, roleKeys: [] }, work)
+
+async function seed(id: string, following: boolean) {
+  const product = await prisma.product.create({ data: { id, sku: id, name: id, basePrice: 10 } })
+  const listing = await prisma.channelListing.create({ data: { productId: id, channel: 'EBAY',
+    channelMarket: 'EBAY_DE', marketplace: 'DE', region: 'EU',
+    price: following ? null : 25, priceOverride: following ? null : 25, followMasterPrice: following,
+    overrideData: { price: 99, ebay_price: 98, unrelated: 'keep' } } })
+  return { product, listing }
+}
+
+it('control: the current sheet reset removes both legacy price keys and preserves unrelated data', () => scoped(async () => {
+  const { product, listing } = await seed('price-reset-control', false)
+  const patch = channelValuePatch(listing as any, { kind: 'listingColumn', column: 'price',
+    followFlag: 'followMasterPrice' }, channelOverrideKeys('ebay_price'), 'INHERIT')
+  await prisma.channelListing.update({ where: { id: listing.id }, data: patch as any })
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  expect(stored.overrideData).toEqual({ unrelated: 'keep' })
+  expect(resolveAttributes({ product: product as any, parent: null, channelListing: stored as any, marketLanguages: ['de'], locale: 'de' }).price).toBeUndefined()
+}))
+
+it.each([false, true])('price-door reset preserves that cleanup when already following = %s', following => scoped(async () => {
+  const { product, listing } = await seed(`price-reset-${following}`, following)
+  const result = await writeChannelPrices({ targets: [{ listingId: listing.id, price: null,
+    expectedVersion: listing.version }], actor: 'A-18 probe', source: 'MANUAL_OVERRIDE' })
+  const stored = await prisma.channelListing.findUniqueOrThrow({ where: { id: listing.id } })
+  const resolved = resolveAttributes({ product: product as any, parent: null, channelListing: stored as any, marketLanguages: ['de'], locale: 'de' })
+  console.log(JSON.stringify({ followingBefore: following, outcome: result.results[0]?.outcome,
+    price: stored.price, priceOverride: stored.priceOverride, followMasterPrice: stored.followMasterPrice,
+    overrideData: stored.overrideData, resolvedPrice: resolved.price,
+    events: await prisma.priceChangeEvent.count({ where: { productId: product.id } }),
+    queue: await prisma.outboundSyncQueue.findMany({ where: { channelListingId: listing.id },
+      select: { syncType: true, payload: true } }) }))
+  expect(stored).toMatchObject({ price: null, priceOverride: null, followMasterPrice: true })
+  expect.soft(stored.overrideData).toEqual({ unrelated: 'keep' })
+  expect.soft(resolved.price).toBeUndefined()
+}))
+
+afterAll(async () => { await state.db?.close() })

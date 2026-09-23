@@ -29,6 +29,7 @@
  * URL is passed through unchanged.
  */
 import { spawnSync } from 'node:child_process'
+import { checkAppliedButMissing, reportAndExitCode } from './check-applied-but-missing.mjs'
 
 const url = process.env.DATABASE_URL ?? ''
 if (!url) {
@@ -45,6 +46,25 @@ if (direct === url) {
   console.log('[migrate] DATABASE_URL is already a direct endpoint — using it as-is')
 } else {
   console.log(`[migrate] stripping pooler for migrations: ${host(url)} -> ${host(direct)}`)
+}
+
+// ── Applied-but-missing gate (PLAN Step 0.1 / amendment A-2) ──────
+//
+// Refuse BEFORE applying anything if this database records a migration that has no folder in
+// prisma/migrations/. Nothing else in the pipeline looks in that direction: check-schema-drift
+// reads only repo files, check-migrations-state computes only the opposite set, and
+// `migrate deploy` applies pending migrations without noticing extra ones.
+//
+// It runs here rather than in .githooks/pre-push because the check has to query the target
+// database, and a push hook would need a production credential on every developer's machine —
+// which is the variable PLAN Step 0.3 exists to remove. Here it is already present.
+//
+// `DATABASE_URL` is deliberately the DIRECT url, matching the migration that follows it.
+const gate = await checkAppliedButMissing({ connectionString: direct })
+const gateExit = reportAndExitCode(gate)
+if (gateExit !== 0) {
+  console.error('[migrate] refusing to deploy — see the applied-but-missing report above')
+  process.exit(gateExit)
 }
 
 const res = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {

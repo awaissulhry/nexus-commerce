@@ -1,3 +1,5 @@
+import { variationValuesPlan } from './pim/shared-variation-values.js'
+import { writeVariationValues } from './pim/category-attributes-write.js'
 import { assertWriteAccount } from './write-account-guard.js'
 import { requireTranslationGeneration, previewCatalogTranslation } from './pim/catalog-translate.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
@@ -2933,16 +2935,9 @@ export class BulkActionService {
       // categoryAttributes path but writes per-variant values on
       // Product (used for child products that carry Color / Size /
       // material values for Amazon variation themes).
-      const raw = (item as ProductLike).variantAttributes
-      const current =
-        raw && typeof raw === 'object' && !Array.isArray(raw)
-          ? (raw as Record<string, unknown>)
-          : {}
-      const merged = { ...current, [jsonKey!]: newValue }
-      await this.prisma.product.update({
-        where: { id: item.id },
-        data: { variantAttributes: merged as any },
-      })
+      // R-23 (Step 2.6c-2) — the path keeps its name, but the value goes to the one store
+      // (`categoryAttributes.variations`); the legacy bag loses the axis and is never written.
+      await writeVariationValues(this.prisma, item.id, variationValuesPlan({ categoryAttributes: (item as ProductLike).categoryAttributes, variantAttributes: (item as ProductLike).variantAttributes }, { [jsonKey!]: newValue }))
     }
 
     // Enqueue per-ChannelListing OutboundSyncQueue rows so the cron

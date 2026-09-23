@@ -47,6 +47,26 @@ node packages/database/scripts/check-column-drift.mjs || {
   exit 1
 }
 
+# PLAN Step 0.1 / amendment A-2 — the applied-but-missing gate's OWN test.
+#
+# The gate itself (check-applied-but-missing.mjs) cannot run here: detecting a migration that is
+# on the database with no folder in the repo means querying that database, and a push hook would
+# need a production credential on every developer's machine — the variable PLAN Step 0.3 exists
+# to remove. The gate therefore runs at deploy, inside migrate-direct.mjs.
+#
+# What runs HERE is its test suite, so the gate cannot rot between deploys. The decision is a pure
+# function and every branch is covered without a database; the four DB-backed arms use a throwaway
+# schema on the LOCAL dev Postgres and skip cleanly when it is absent. Proven able to fail:
+# blanking the drift set turns 3 of the 10 arms red.
+echo "→ Running @nexus/database gate tests..."
+npm run test --workspace=@nexus/database --silent > /tmp/database-tests.log 2>&1 || {
+  echo "❌ @nexus/database tests FAILED"
+  tail -40 /tmp/database-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/database-tests.log | tail -1 || true
+echo "✓ @nexus/database gate tests passed"
+
 # 2026-09-16 — row-level security has TWO builders: the generator the test database
 # applies, and the migrations every deployed database applies. Both checks below exist
 # because each of these went wrong TWICE in one day and was caught only by counting by
@@ -463,6 +483,49 @@ npm run test --workspace=@nexus/web --silent > /tmp/web-tests.log 2>&1 || {
 }
 grep -E "Tests +[0-9]+ passed" /tmp/web-tests.log | tail -1 || true
 echo "✓ apps/web tests passed"
+
+# PLAN amendment A-8 (2026-09-22) — the apps/api suite. Until today the hook ran only
+# `test:security` for this workspace, which is `vitest run src/lib/auth src/routes/auth-routes…`
+# — AUTH ONLY. The other 833 `*.vitest.test.ts` files plus 72 under `__tests__/` never ran on a
+# push, so SEVEN rows of the plan's gate ledger that read "Test suite" were guarding nothing.
+#
+# That is the same defect this file already records for apps/web at the block above: tests
+# "written, reviewed and committed as if they were gates while asserting nothing". It had simply
+# never been checked for apps/api. Two examples found when the suite was first run end to end:
+# five VALIDATION_PREVIEW arms had stopped exercising their subject and four of them still passed,
+# and one credentials arm was asserting env variables that P6.1 moved into a database table.
+#
+# Cost: ~50 s (measured; 882 files, 11,142 tests). The two full Next.js builds below dwarf it.
+#
+# 🔴 It runs `test:hook`, not `test`, and the difference is `--disableConsoleIntercept`.
+# Every test passes on either — 11,012 passed in every one of ~15 runs — but the plain `vitest run`
+# EXIT CODE is not reliable: the run intermittently ends with
+#   `EnvironmentTeardownError: [vitest-worker]: Closing rpc while "onUserConsoleLog" was pending`
+# which vitest counts as an unhandled error and exits 1 although nothing failed. Measured here:
+#
+#   vitest run                       exit 1 in 2 of 4 runs
+#   vitest run --silent              exit 1 in 2 of 3 runs   (--silent hides the DISPLAY, not the RPC)
+#   vitest run --pool=threads        exit 1 in 2 of 8 runs   (faster, but does NOT fix it)
+#   vitest run --disableConsoleIntercept   exit 1 in 0 of 8 runs
+#
+# The last one is the only option that addresses the named mechanism rather than correlating with
+# it: `onUserConsoleLog` IS the console-forwarding RPC, and this flag stops intercepting console
+# output instead of shipping it to the reporter. The cost is that a log line is no longer attributed
+# to its test file — which is why the interactive `test` script is left alone, and only the hook,
+# which passes `--silent` anyway, gives that up.
+#
+# A flaky exit code cannot be a gate: a push that fails one time in two teaches people to bypass it.
+#
+# Placed BEFORE the builds for the same reason as apps/web: a broken assertion should fail here
+# rather than after several minutes of `next build`.
+echo "→ Running apps/api unit tests..."
+npm run test:hook --workspace=@nexus/api --silent > /tmp/api-tests.log 2>&1 || {
+  echo "❌ apps/api tests FAILED"
+  tail -40 /tmp/api-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/api-tests.log | tail -1 || true
+echo "✓ apps/api tests passed"
 
 echo "→ Building apps/web..."
 # Build into a dir unique to THIS push. Concurrent pushes previously shared `.next` and

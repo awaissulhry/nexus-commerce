@@ -3,30 +3,87 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
+/** R-23 (Step 2.6c) — a product's variation values as ONE bag, for readers that match raw axis keys. The
+ * store (`categoryAttributes.variations`) wins; a legacy `variantAttributes` key fills in only for an axis
+ * the store does not hold — compared by canonical axis, so a legacy `Taglia: 'XS'` never sits beside the
+ * store's `Size: 'XXL'` (production, AIR-MESH-JACKET-MEN-XXL-BLACK). The raw-key twin of
+ * `storedVariationValues`. */
+export function variationBag(product: { categoryAttributes: unknown; variantAttributes: unknown }): Record<string, unknown> {
+  const store = object(object(product.categoryAttributes).variations)
+  const held = new Set(Object.keys(store).map(canonicalVariantAxis))
+  const bag: Record<string, unknown> = { ...store }
+  for (const [key, value] of Object.entries(object(product.variantAttributes))) {
+    if (!held.has(canonicalVariantAxis(key))) bag[key] = value
+  }
+  return bag
+}
+
+/** R-25 / R-26 — a variation value is text or a number. `String()` stored an object as "[object Object]" (the GALE
+ * junk key, via the retired Matrix tab). Returns the refusal sentence, or null when the value may be written. */
+export function variationValueRefusal(key: string, value: unknown): string | null {
+  if (value === null || value === undefined || typeof value === 'string' || typeof value === 'number') return null
+  return `A variation value must be text or a number; "${key}" is ${Array.isArray(value) ? 'a list' : typeof value}.`
+}
+
+/** A planned write of a product's variation values (R-23, Step 2.6c-2). `set` / `unset` address the ONE store,
+ * `categoryAttributes.variations`. `legacyDrop` lists the legacy `variantAttributes` keys of every axis touched:
+ * they are removed, never written, so a stale legacy value can never answer again for an axis that was edited
+ * (`variationBag` lets the legacy bag fill in only for an axis the store lacks — a cleared store axis would
+ * otherwise bring the old value back). Written by `writeVariationValues` (`category-attributes-write.ts`). */
+export type VariationWritePlan = { set: Record<string, unknown>; unset: string[]; legacyDrop: string[]; changed: boolean }
+
+function planVariationWrite(product: { categoryAttributes: unknown; variantAttributes: unknown },
+  entries: ReadonlyArray<{ axis: string; value?: unknown; remove: boolean }>): VariationWritePlan {
+  const variations = object(object(product.categoryAttributes).variations)
+  const legacy = object(product.variantAttributes)
+  const set: Record<string, unknown> = {}
+  const unset: string[] = []
+  const legacyDrop: string[] = []
+  for (const { axis, value, remove } of entries) {
+    const canonical = canonicalVariantAxis(axis)
+    // Every spelling the store already holds for this axis moves together, so the store never disagrees with itself.
+    for (const key of new Set([axis, ...Object.keys(variations).filter(k => canonicalVariantAxis(k) === canonical)])) {
+      if (remove) unset.push(key)
+      else set[key] = value
+    }
+    for (const key of Object.keys(legacy)) if (canonicalVariantAxis(key) === canonical && !legacyDrop.includes(key)) legacyDrop.push(key)
+  }
+  return { set, unset, legacyDrop, changed: Object.keys(set).length > 0 || unset.length > 0 || legacyDrop.length > 0 }
+}
+
 /** Scalar edits and channel pushes address the same declared variation values. */
 export function variationAttributePatch(
   product: { categoryAttributes: unknown; variantAttributes: unknown },
   axes: readonly string[],
   patch: Record<string, unknown>,
   remove: readonly string[],
-) {
-  const attributes = object(product.categoryAttributes)
-  const variations = object(attributes.variations)
+): VariationWritePlan {
+  const variations = object(object(product.categoryAttributes).variations)
   const legacy = object(product.variantAttributes)
-  const set: Record<string, unknown> = {}
-  const unset: string[] = []
+  const entries: Array<{ axis: string; value?: unknown; remove: boolean }> = []
   for (const field of new Set([...Object.keys(patch), ...remove])) {
     const canonical = canonicalVariantAxis(field)
+    // R-23 — an axis the product already holds is a variation value even when its family declares none
+    // (`xracing`: `variationAxes = []`, every child stores `Size`). Declared-only, such an edit landed in
+    // the flat key alone: shown on the sheet, never published.
     const axis = axes.find(key => canonicalVariantAxis(key) === canonical)
-    if (!axis) continue
-    const keys = new Set([axis, ...Object.keys(variations), ...Object.keys(legacy)]
-      .filter(key => canonicalVariantAxis(key) === canonical))
-    for (const key of keys) {
-      if (remove.includes(field)) unset.push(key)
-      else set[key] = patch[field]
-    }
+      ?? [...Object.keys(variations), ...Object.keys(legacy)].find(key => canonicalVariantAxis(key) === canonical)
+    if (axis) entries.push({ axis, value: patch[field], remove: remove.includes(field) })
   }
-  return { set, unset, changed: Object.keys(set).length > 0 || unset.length > 0 }
+  return planVariationWrite(product, entries)
+}
+
+/** A writer that names its axes directly (attach, organize, the variant-attributes route, auto-detect, bulk
+ * "Set attribute"): these keys are set in the store, `deletes` are cleared, and each axis leaves the legacy bag. */
+export function variationValuesPlan(
+  product: { categoryAttributes: unknown; variantAttributes: unknown },
+  writes: Record<string, unknown>,
+  deletes: readonly string[] = [],
+): VariationWritePlan {
+  return planVariationWrite(product, [
+    ...Object.entries(writes).map(([axis, value]) => ({ axis, value, remove: false })),
+    ...deletes.map(axis => ({ axis, remove: true })),
+  ])
 }
 
 /** Preserve stored order and append previously unseen values using the size/colour canon. */

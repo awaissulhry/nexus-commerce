@@ -69,9 +69,11 @@ function getAttr(
   child: ChildRow,
   axis: string,
 ): string | undefined {
+  // R-23 (Step 2.6c) — `variations` is the one store (the API sends it with a legacy key only for an
+  // axis the store lacks); the legacy bag answers only when the store has no value for this axis.
   const raw =
-    (child.variantAttributes as Record<string, unknown> | null)?.[axis] ??
-    (child.variations as Record<string, string> | null)?.[axis]
+    (child.variations as Record<string, string> | null)?.[axis] ??
+    (child.variantAttributes as Record<string, unknown> | null)?.[axis]
   if (raw == null) return undefined
   return String(raw)
 }
@@ -174,7 +176,7 @@ export default function MatrixWorkspace({
   })
 
   // Derive axes once. Prefer parent.variationAxes; fall back to
-  // whatever the children's variantAttributes already use, which is
+  // whatever the children's variation store already uses, which is
   // necessary when the parent row hasn't backfilled variationAxes
   // (legacy rows).
   const axes: string[] = useMemo(() => {
@@ -187,8 +189,8 @@ export default function MatrixWorkspace({
     const seen = new Set<string>()
     for (const c of children) {
       const attrs =
-        (c.variantAttributes as Record<string, unknown> | null) ??
         (c.variations as Record<string, string> | null) ??
+        (c.variantAttributes as Record<string, unknown> | null) ??
         {}
       for (const k of Object.keys(attrs)) seen.add(k)
     }

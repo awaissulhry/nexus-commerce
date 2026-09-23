@@ -38,7 +38,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "postinstall": "prisma generate && node scripts/build-runtime.mjs",
     "check:drift": "node scripts/check-schema-drift.mjs",
-    "check:column-drift": "node scripts/check-column-drift.mjs"
+    "check:column-drift": "node scripts/check-column-drift.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@nexus/shared": "*",
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "tsx": "^4.21.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.5"
   }
 }

@@ -1,3 +1,4 @@
+import { variationBag } from './pim/shared-variation-values.js'
 import { loadStoredVariationProjection } from './pim/stored-variation-projection.js'
 /**
  * Amazon Variation Payload Builder Service
@@ -213,9 +214,11 @@ export class AmazonMapperService {
       const axisEntries = parseVariationMapping(variationMapping).entries;
       if (axisEntries.length > 0) {
         for (const entry of axisEntries) {
-          const value = categoryAttributesForAxes[entry.axisKey]
-            ?? categoryAttributesForAxes[entry.axisKey.toLowerCase()]
-            ?? (childProduct.variantAttributes as Record<string, any> | undefined)?.[entry.axisKey];
+          // R-23 (Step 2.6c) — the one store first (it was never read here), then the flat keys.
+          const stored = variationBag(childProduct)[entry.axisKey]
+          const value = (stored !== undefined && stored !== null && stored !== '' ? stored : undefined)
+            ?? categoryAttributesForAxes[entry.axisKey]
+            ?? categoryAttributesForAxes[entry.axisKey.toLowerCase()];
           if (value === undefined || value === null || value === '') continue;
           attributes[entry.target] = value;
         }

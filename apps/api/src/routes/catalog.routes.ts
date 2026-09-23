@@ -1,3 +1,6 @@
+import { variationValuesPlan, variationValueRefusal } from '../services/pim/shared-variation-values.js'
+import { writeVariationValues } from '../services/pim/category-attributes-write.js'
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import type { FastifyInstance } from "fastify";
@@ -12,6 +15,7 @@ import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
 import { masterPriceService } from "../services/master-price.service.js";
 import { applyStockMovement } from "../services/stock-movement.service.js";
+import { replaceCategoryAttributesKeepingVariations } from "../services/pim/category-attributes-write.js";
 
 // ── Request/Response Types ───────────────────────────────────────────────
 
@@ -766,6 +770,7 @@ export async function catalogRoutes(app: FastifyInstance) {
                 sku: true,
                 name: true,
                 variantAttributes: true,
+                categoryAttributes: true,
               },
             },
           },
@@ -784,7 +789,7 @@ export async function catalogRoutes(app: FastifyInstance) {
           id: c.id,
           sku: c.sku,
           name: c.name,
-          variationAttributes: c.variantAttributes,
+          variationAttributes: variationBag(c),   // R-23 (Step 2.6c): the store first
         }));
         return { success: true, data: { ...rest, variations } };
       } catch (error) {
@@ -870,7 +875,11 @@ export async function catalogRoutes(app: FastifyInstance) {
       }
       const directData: Record<string, any> = {}
       let directDirty = false
-      if (categoryAttributes !== undefined) {
+      // Step 2.6b (R-23) — the client's bag replaces the stored one, except `variations` (the one store
+      // for a variant's size and colour) when the client did not send that key. A non-object is written as before.
+      const bagReplace = categoryAttributes && typeof categoryAttributes === 'object' && !Array.isArray(categoryAttributes)
+        ? categoryAttributes as Record<string, unknown> : undefined
+      if (categoryAttributes !== undefined && !bagReplace) {
         directData.categoryAttributes = categoryAttributes
         directDirty = true
       }
@@ -900,6 +909,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         if (directDirty) {
           await tx.product.update({ where: { id }, data: directData })
         }
+        if (bagReplace) await replaceCategoryAttributesKeepingVariations(tx, id, bagReplace)
         // Return the post-tx state for the response.
         return tx.product.findUnique({ where: { id } })
       })
@@ -1248,6 +1258,9 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (variantAttributes && typeof variantAttributes === 'object') {
         for (const [k, v] of Object.entries(variantAttributes)) {
           const key = String(k).trim()
+          // R-26 — the same refusal as the variant-attributes route: never store "[object Object]".
+          const refusal = variationValueRefusal(key, v)
+          if (refusal) return reply.status(400).send({ success: false, error: { code: "VALIDATION_ERROR", message: refusal } })
           const val = String(v ?? '').trim()
           if (key && val) cleanedVariantAttrs[key] = val
         }
@@ -1272,14 +1285,8 @@ export async function catalogRoutes(app: FastifyInstance) {
           validationStatus: "VALID",
           syncChannels: [],
           status: "DRAFT",
-          ...(hasVariantAttrs
-            ? {
-                variantAttributes: cleanedVariantAttrs as any,
-                categoryAttributes: {
-                  variations: cleanedVariantAttrs,
-                } as any,
-              }
-            : {}),
+          // R-23 (Step 2.6c-2) — the one store only; the legacy `variantAttributes` is never written.
+          ...(hasVariantAttrs ? { categoryAttributes: { variations: cleanedVariantAttrs } as any } : {}),
         },
       });
 
@@ -1747,6 +1754,9 @@ export async function catalogRoutes(app: FastifyInstance) {
       for (const [k, v] of Object.entries(incoming)) {
         const key = String(k).trim();
         if (!key) continue;
+        // R-25 (A-28 #3) — a variation value is text or a number; an object is refused by name, never stringified.
+        const refusal = variationValueRefusal(key, v);
+        if (refusal) return reply.status(400).send({ success: false, error: refusal });
         const val = String(v ?? '').trim();
         if (val === '') deletes.push(key);
         else writes[key] = val;
@@ -1765,27 +1775,10 @@ export async function catalogRoutes(app: FastifyInstance) {
             .status(404)
             .send({ success: false, error: 'Product not found' });
         }
-        const currentVA =
-          (product.variantAttributes as Record<string, string> | null) ?? {};
-        const nextVA = { ...currentVA, ...writes };
-        for (const k of deletes) delete nextVA[k];
-
-        const currentCA =
-          (product.categoryAttributes as
-            | { variations?: Record<string, string> }
-            | null) ?? {};
-        const currentVariations = currentCA.variations ?? {};
-        const nextVariations = { ...currentVariations, ...writes };
-        for (const k of deletes) delete nextVariations[k];
-        const nextCA = { ...currentCA, variations: nextVariations };
-
-        await prisma.product.update({
-          where: { id: productId },
-          data: {
-            variantAttributes: nextVA as any,
-            categoryAttributes: nextCA as any,
-          },
-        });
+        // R-23 (Step 2.6c-2) — through the one writer: the store takes the values, the legacy bag loses the axes.
+        await writeVariationValues(prisma, productId, variationValuesPlan(product, writes, deletes));
+        const after = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { categoryAttributes: true, variantAttributes: true } });
+        const nextVA = variationBag(after);
         // Best-effort sync to the ProductVariation row (matched by sku).
         await prisma.productVariation
           .updateMany({

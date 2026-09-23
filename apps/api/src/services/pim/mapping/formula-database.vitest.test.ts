@@ -45,7 +45,10 @@ afterAll(async () => {
   await app.close(); await fixture.database.close()
 }, process.env.FORMULA_BROWSER_FIXTURE === '1' ? 3_600_000 : 30_000)
 
-describe('formula recovery through the real product API and PostgreSQL', () => {
+// PGlite runs in-process on one connection, so the full hook suite starves it of CPU: measured
+// 2026-09-22, 'resumes an interrupted batch' took ~1.7 s alone and exceeded 10 s under `test:hook`.
+// The limit is a load budget, not a correctness bound; tests that need more still set their own.
+describe('formula recovery through the real product API and PostgreSQL', { timeout: 30_000 }, () => {
   it('applies once, replays a lost response, reloads history and restores values', async () => {
     const { input, result } = await apply()
     expect(result.status).toBe('SUCCESS')

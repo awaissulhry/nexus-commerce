@@ -4,6 +4,7 @@ import { loadAmazonSpec } from '../channel-specs/index.js'
 import { attributesFromCells } from './schema-requirements.js'
 import { valuesEqual } from '../resolver-shadow.js'
 import { primaryConnectionIds } from '../../connection-resolver.service.js'
+import { oneLanguagePathRefusal } from '../market-languages.js'
 
 /** Revalidate queued mapping values at dispatch. A stale proposal cannot overwrite
  * a newer product edit, alias override or mapping during the queue's grace window. */
@@ -14,6 +15,9 @@ export async function prepareMappingDispatch(item: any) {
   }
   if (listing.syncPaused || listing.offerClosedAt) throw new Error('This listing is paused or closed. Mapping publication is blocked.')
   if (!['AMAZON', 'EBAY'].includes(listing.channel)) throw new Error('Publish mapped fields through this channel’s listing editor.')
+  // A-22 (R-18): this path resolves and tags one language.
+  const oneLanguage = await oneLanguagePathRefusal(listing.channel, listing.marketplace)
+  if (oneLanguage) throw new Error(oneLanguage)
   const resolved = await resolveBatch({ channel: listing.channel, marketplace: listing.marketplace,
     channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, productIds: [listing.productId] })
   const product = resolved.products[0]

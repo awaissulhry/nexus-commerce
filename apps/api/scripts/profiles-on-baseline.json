@@ -1,6 +1,6 @@
 {
   "//": "Files that fail with NEXUS_WORKSPACES_ENABLED=1 and how many tests each. Only ever shrinks — see scripts/profiles-on-ratchet.mjs.",
-  "measuredAt": "2026-09-16",
+  "measuredAt": "2026-09-22",
   "files": {
     "src/jobs/cx-heartbeat.vitest.test.ts": 7,
     "src/lib/cron/clustered.vitest.test.ts": 4,

@@ -1,3 +1,4 @@
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Channel pricing + inventory + Amazon sync-data endpoints for the
@@ -93,7 +94,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           where: { parentId: id, deletedAt: null },
           select: {
             id: true, sku: true, basePrice: true,
-            variantAttributes: true,
+            variantAttributes: true, categoryAttributes: true,
             channelListings: {
               where: { channel },
               select: { marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
@@ -105,7 +106,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         variantRows = children.map((c) => ({
           variantId: c.id, // child Product ID — matches Matrix tab's child.id
           sku: c.sku,
-          attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+          attributes: variationBag(c) as Record<string, string>,   // R-23 (Step 2.6c): the store first
           basePrice: c.basePrice != null ? Number(c.basePrice) : null,
           markets: c.channelListings.map((cl) => ({
             marketplace: cl.marketplace,
@@ -177,7 +178,14 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn.get(ch) ?? null, syncStatus: 'PENDING' },
         select: { id: true },
       })).id
-      const t: PriceWriteTarget = { listingId }
+      /**
+       * 🔴 Step 2.2 — `PATCH /channel-pricing` takes no version from its client yet, so it cannot
+       * compare against one. It says so rather than re-reading the row it is about to write, which
+       * the step rejected by name: *"a compare-and-set that always succeeds."* When the client
+       * starts sending a version, this becomes `expectedVersion: u.expectedVersion` and the
+       * unguarded branch goes away.
+       */
+      const t: PriceWriteTarget = { listingId, unguardedReason: 'legacy-channel-pricing' }
       if (u.price !== undefined) t.price = u.price
       if (u.salePrice !== undefined) t.sale = { value: u.salePrice, start: (u as { salePriceStart?: string | null }).salePriceStart ?? null, end: (u as { salePriceEnd?: string | null }).salePriceEnd ?? null }
       targets.push(t)
@@ -223,7 +231,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         ? await prisma.product.findMany({
             where: { parentId: id, deletedAt: null },
             select: {
-              id: true, sku: true, totalStock: true, variantAttributes: true,
+              id: true, sku: true, totalStock: true, variantAttributes: true, categoryAttributes: true,
               channelListings: {
                 where: { channel },
                 select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true, fulfillmentMethod: true },
@@ -328,7 +336,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const variantRows = children.map((c) => ({
         variantId: c.id,
         sku: c.sku,
-        attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+        attributes: variationBag(c) as Record<string, string>,   // R-23 (Step 2.6c): the store first
         physicalStock: c.totalStock ?? 0,
         markets: c.channelListings.map((cl) => buildMarket(cl, c.id, c.sku)),
       }))

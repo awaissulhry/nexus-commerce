@@ -234,10 +234,13 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     expect((await database.pool.query('SELECT count(*)::int AS n FROM "WebhookEvent" WHERE "externalId"=$1', [admission.ebayReceiptExternalId('production', body.notification.notificationId)])).rows[0].n).toBe(0)
   })
 
-  it('keeps production and sandbox identities and receipt namespaces separate', async () => {
+  it('keeps environment routing distinct while honoring deployed active-account uniqueness', async () => {
     const body = payload()
     await seed(body.notification.data.userId, OWNER, true, 'production')
-    await seed(body.notification.data.userId, OTHER, true, 'sandbox')
+    // The deployed legacy index does not include environment. Two active copies
+    // of this exact identity are currently refused; retained inactive history is valid.
+    await expect(seed(body.notification.data.userId, OTHER, true, 'sandbox')).rejects.toMatchObject({ code: '23505', constraint: 'ChannelConnection_active_account_key' })
+    await seed(body.notification.data.userId, OTHER, false, 'sandbox')
     expect(await receive(body)).toMatchObject({ kind: 'accepted', workspaceId: OWNER })
     expect(await receive(body, 'sandbox')).toMatchObject({ kind: 'accepted', workspaceId: OTHER })
   })

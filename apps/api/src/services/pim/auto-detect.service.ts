@@ -1,3 +1,4 @@
+import { writeVariationValues } from './category-attributes-write.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 
@@ -260,16 +261,19 @@ export async function applyGroupings(approvedGroups: ApprovedGroup[]) {
       mastersCreated++
 
       for (const child of group.children) {
+        const before = await prisma.product.findUnique({ where: { id: child.productId }, select: { variantAttributes: true } })
         await prisma.product.update({
           where: { id: child.productId },
           data: {
             parentId: master.id,
-            variantAttributes: child.attributes,
             variationTheme: group.variationAxes.join(' / '),
             isParent: false,
             isMaster: false,
           },
         })
+        // R-23 (Step 2.6c-2) — the child's axis map replaces the store's; the legacy bag is emptied, never written.
+        await writeVariationValues(prisma, child.productId, { set: child.attributes, unset: [],
+          legacyDrop: Object.keys((before?.variantAttributes ?? {}) as Record<string, unknown>) }, { replaceStore: true })
         childrenLinked++
       }
 

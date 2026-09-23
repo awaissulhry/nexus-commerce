@@ -17,7 +17,8 @@ vi.mock('./fulfillment-method.service.js', () => ({ setFulfillmentMethod: vi.fn(
 vi.mock('./channel-price-write.service.js', () => ({ writeChannelPrices: vi.fn() }))
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 
-import { paramsForChange, restoreWrites } from './matrix-write.service.js'
+import { applyCell, paramsForChange, restoreWrites } from './matrix-write.service.js'
+import { writeChannelPrices } from './channel-price-write.service.js'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -74,5 +75,29 @@ describe('restoreWrites — the writes that take a live cell back to its capture
     expect(restoreWrites('r', 'AMAZON:EU', formula, cells({ price: { value: 90, currency: 'EUR', source: 'override', formula: null, clamped: null } }))).toEqual([])
     const fba = cells({ sync: { kind: 'FBA_EXCLUDED', via: null, mode: 'FOLLOW', intended: null, held: null, buffer: 0, poolAvailable: 10, routedLocations: [], fbaAtAmazon: 4, oversold: false } })
     expect(restoreWrites('r', 'AMAZON:EU', fba, cells({ sync: { ...fba.sync!, mode: 'PINNED' } }))).toEqual([])
+  })
+})
+
+// A-17 (R-12) — the price the operator saw reaches the door, so a version moved by something else can be retried.
+describe('applyCell passes the price it read as expectedPrice', () => {
+  const read = (price: { value: number | null; source: 'master' | 'override' | 'formula'; clamped?: 'floor' | 'ceiling' | null }) => ({
+    rows: [{ id: 'row', cells: { 'EBAY:IT': { listingId: 'listing', version: 7, price: { currency: 'EUR', formula: null, clamped: null, ...price },
+      sale: null, listing: null, fulfilment: null, sync: null, queue: null, writable: { price: true }, writeBlockedReason: {} } } }],
+    coordinates: [{ key: 'EBAY:IT', kind: 'market', channel: 'EBAY', market: 'IT', label: 'eBay · IT', region: null }],
+  }) as never
+  const ctx = { productId: 'row', actor: 'tester', can: () => true }
+  const cell = { rowId: 'row', coordinateKey: 'EBAY:IT', cell: 'price', value: 30, expectedVersion: 7 } as never
+  it.each([
+    ['a pinned price', { value: 25, source: 'override' as const }, 25],
+    ['a price following the master', { value: 10, source: 'master' as const }, null],
+    ['a clamped price', { value: 25, source: 'override' as const, clamped: 'floor' as const }, undefined],
+  ])('%s', async (_name, price, expected) => {
+    const door = vi.mocked(writeChannelPrices)
+    door.mockReset().mockResolvedValue({ results: [{ listingId: 'listing', productId: 'row', channel: 'EBAY', marketplace: 'IT', outcome: 'applied', version: 8, guarded: true, queueId: null }], applied: 1, refused: 0, noop: 0, conflict: 0 })
+    await applyCell(read(price), cell, ctx)
+    const target = door.mock.calls[0][0].targets[0] as Record<string, unknown>
+    expect(target).toMatchObject({ listingId: 'listing', price: 30, expectedVersion: 7 })
+    if (expected === undefined) expect(target).not.toHaveProperty('expectedPrice')
+    else expect(target.expectedPrice).toBe(expected)
   })
 })

@@ -120,7 +120,10 @@ describe('product family actions against the production Prisma schema', () => {
     await post('/api/amazon/pim/unlink-child', { productId: 'child' })
     const good = await post('/api/pim/attach-to-parent', { parentId: 'standalone', productIds: ['child', 'child'], axisValues: { child: { Size: 'L' } } })
     expect(good.json()).toMatchObject({ attached: 1, errors: [] })
-    expect(await row('child')).toMatchObject({ parentId: 'standalone', version: 5, variantAttributes: { Color: 'Black', Size: 'L' }, categoryAttributes: { material: 'Cotton', variations: { Color: 'Black', Size: 'L' } } })
+    // R-23 (Step 2.6c-2) reversed the legacy half: the new axis goes to the one store only; the legacy bag is never written.
+    const child = await row('child')
+    expect(child).toMatchObject({ parentId: 'standalone', version: 5, categoryAttributes: { material: 'Cotton', variations: { Color: 'Black', Size: 'L' } } })
+    expect(child.variantAttributes).toEqual({ Color: 'Black' })
   })
   it.each(['child', 'archived'])('refuses %s as an attach destination', async parentId => {
     const res = await post('/api/pim/attach-to-parent', { parentId, productIds: ['standalone'] })

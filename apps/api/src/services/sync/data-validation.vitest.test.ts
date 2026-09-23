@@ -43,7 +43,9 @@ describe('product validation across business profiles', () => {
       const channel = await database.client.channel.create({ data: { type: 'EBAY', name: 'eBay' } })
       await database.client.listing.create({ data: { channelId: channel.id, channelPrice: 5 } })
     })
-  })
+    // PGlite starts in-process; ~2 s alone, starved past the 10 s default under the full hook suite
+    // (profiles-ON ratchet, 2026-09-22). The same load budget the other PGlite suites set.
+  }, 120_000)
   afterAll(async () => { process.env.NEXUS_WORKSPACES_ENABLED = flagBefore; await database.close() })
 
   it('with no profile in scope (the PUBLIC health routes), checks every active profile and sums the findings', async () => {

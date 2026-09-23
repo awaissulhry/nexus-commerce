@@ -1,3 +1,4 @@
+import { variationBag } from './pim/shared-variation-values.js'
 import prisma from '../db.js'
 import { getInventoryFnskus, isFbaInboundConfigured } from './fba-inbound.service.js'
 
@@ -12,17 +13,10 @@ export interface FnskuLookupResult {
   imageUrl: string | null
 }
 
-// Extract color/size/gender from child Product — try variantAttributes first,
-// fall back to categoryAttributes.variations (both shapes are used in prod data).
+// Extract color/size/gender from a child Product. R-23 (Step 2.6c): the one store
+// (`categoryAttributes.variations`) first; a legacy `variantAttributes` key only for an axis it lacks.
 function extractAttrs(p: { variantAttributes: unknown; categoryAttributes: unknown }): Record<string, string> {
-  if (p.variantAttributes && typeof p.variantAttributes === 'object' && !Array.isArray(p.variantAttributes)) {
-    return p.variantAttributes as Record<string, string>
-  }
-  const cat = p.categoryAttributes as any
-  if (cat?.variations && typeof cat.variations === 'object') {
-    return cat.variations as Record<string, string>
-  }
-  return {}
+  return variationBag(p) as Record<string, string>
 }
 
 export async function lookupFnskus(skus: string[], marketplace = 'IT'): Promise<FnskuLookupResult[]> {

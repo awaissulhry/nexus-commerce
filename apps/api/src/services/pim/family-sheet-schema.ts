@@ -32,13 +32,33 @@ export function savedAttributeFields(bags: unknown[]): FieldDefinition[] {
 export async function familySheetFields(familyIds: string[], locale = 'it'): Promise<FieldDefinition[]> {
   const ids = [...new Set(familyIds)]
   const effective = await Promise.all(ids.map(id => familyHierarchyService.resolveEffectiveAttributes(id)))
-  const requirements = new Map<string, boolean>()
+  /**
+   * 🔴 PLAN Step 2.1 (A-14, approved). `schema.prisma:736-739`: `required = true` with an EMPTY
+   * `channels` array means required everywhere; with `['AMAZON']` it means required on Amazon.
+   * This file used to read
+   *
+   *     const required = a.required && (a.channels?.length ?? 0) === 0
+   *
+   * which keeps only the first case and DISCARDS the second. Measured on the scale fixture before
+   * the change: five attributes marked `required = true` with a channel list came out of the
+   * column build with `requiredBy: []` — indistinguishable from the ones marked optional.
+   *
+   * `everywhere` keeps its old meaning exactly, so `familyRules[...].required` — read by
+   * `packages/shared/master-sheet.ts:90` for the Master coordinate — is unchanged. The channel
+   * codes travel separately, because the Master coordinate is NOT the place an Amazon-only
+   * requirement becomes a hard requirement; on Shared it is a marker, per the step's `Done when`.
+   */
+  const requirements = new Map<string, { everywhere: boolean; channels: Set<string> }>()
   const familyRules = new Map<string, NonNullable<FieldDefinition['familyRules']>>()
   for (const [index, attributes] of effective.entries()) for (const a of attributes) {
-    const required = a.required && (a.channels?.length ?? 0) === 0
-    requirements.set(a.attributeId, requirements.get(a.attributeId) === true || required)
+    const channels = a.required ? (a.channels ?? []).filter(Boolean) : []
+    const everywhere = a.required && channels.length === 0
+    const seen = requirements.get(a.attributeId) ?? { everywhere: false, channels: new Set<string>() }
+    seen.everywhere ||= everywhere
+    for (const channel of channels) seen.channels.add(String(channel).toUpperCase())
+    requirements.set(a.attributeId, seen)
     const rules = familyRules.get(a.attributeId) ?? {}
-    rules[ids[index]] = { required, sortOrder: a.sortOrder }
+    rules[ids[index]] = { required: everywhere, sortOrder: a.sortOrder }
     familyRules.set(a.attributeId, rules)
   }
   if (!requirements.size) return []
@@ -61,7 +81,8 @@ export async function familySheetFields(familyIds: string[], locale = 'it'): Pro
       type: MASTER_FIELD_OPTIONS[a.code] ? 'select' : ['number', 'boolean', 'date'].includes(a.type) ? a.type as 'number' | 'boolean' | 'date'
         : a.type === 'select' || a.type === 'multiselect' ? 'select' : 'text',
       category: 'category', editable: !['asset', 'reference'].includes(a.type),
-      required: requirements.get(a.id),
+      required: requirements.get(a.id)?.everywhere,
+      requiredChannels: [...(requirements.get(a.id)?.channels ?? [])].sort(),
       familyRules: familyRules.get(a.id),
       validation,
       group: { key: `master:${a.group.code}`, label: a.group.label },

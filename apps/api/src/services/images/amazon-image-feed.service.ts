@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 import { assertWriteAccountPerSku } from '../write-account-guard.js'
 import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
@@ -126,12 +127,9 @@ export async function resolveAmazonImages(
     // fallback axisValue is null → per-group (per-colour) images never resolve →
     // spurious MAIN_MISSING. Must stay in sync with images-workspace.routes.ts.
     variants = children.map((c) => {
-      const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
-      const attrs = (c.variantAttributes as Record<string, string> | null)
-        ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars)
-          ? (catVars as Record<string, string>)
-          : null)
-      return { id: c.id, sku: c.sku, amazonAsin: c.amazonAsin, variationAttributes: attrs }
+      // R-23 (Step 2.6c) — the one store first; a legacy key only for an axis the store lacks.
+      const bag = variationBag(c) as Record<string, string>
+      return { id: c.id, sku: c.sku, amazonAsin: c.amazonAsin, variationAttributes: Object.keys(bag).length ? bag : null }
     })
   } else {
     variants = await prisma.productVariation.findMany({
@@ -784,10 +782,7 @@ async function applyPublishResults(
     })
     for (const c of kids) {
       errorChildIds.add(c.id)
-      const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
-      const attrs = (c.variantAttributes as Record<string, string> | null)
-        ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars) ? (catVars as Record<string, string>) : null)
-      if (attrs) for (const v of Object.values(attrs)) errorAxisValues.add(String(v))
+      for (const v of Object.values(variationBag(c))) errorAxisValues.add(String(v))   // R-23: the store first
     }
   }
 

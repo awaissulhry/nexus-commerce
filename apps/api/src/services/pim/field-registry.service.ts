@@ -63,7 +63,19 @@ export interface FieldDefinition {
   /** Default column width in px for the bulk-ops table. */
   width?: number
   editable: boolean
+  /** Required on EVERY channel — `FamilyAttribute.required` with an empty `channels` array. */
   required?: boolean
+  /**
+   * PLAN Step 2.1 — required on THESE channels only (`'AMAZON'`, `'EBAY'`, …), never everywhere.
+   *
+   * 🔴 `schema.prisma:736-739` says `required = true` with a non-empty `channels` means *"required
+   * on these channels"*, and `family-sheet-schema.ts` used to collapse that to `false` — five
+   * attributes marked required came out of the column build indistinguishable from the optional
+   * ones. This carries the fact to the ONE place that knows which coordinates are in view
+   * (`sheet-columns.service.ts`), which turns the channel codes into the coordinate labels that
+   * `SheetColumn.requiredBy` already speaks. No second requirement vocabulary reaches the column.
+   */
+  requiredChannels?: string[]
   helpText?: string
 }
 

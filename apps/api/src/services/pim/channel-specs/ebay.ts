@@ -101,7 +101,11 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const conditions = (input.conditions ?? []).filter((c) => c && typeof c.value === 'string' && c.value)
     .map(c => ({ ...c, value: toInventoryCondition(c.value) }))
   const listingFields: ChannelFieldSpec[] = [
-    listing('price', 'Prezzo', 'Listing price', { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' } }),
+    // Step 2.2: sheet price edits now use writeChannelPrices; the temporary hold is lifted.
+    listing('price', 'Prezzo', 'Listing price', {
+      kind: 'number', requirement: 'required',
+      channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' },
+    }),
     listing('quantity', 'Quantità disponibile', 'Available quantity', { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),
     listing('title', 'Titolo', 'Title', { kind: 'text', maxLength: 80, requirement: 'required', masterKey: 'name', channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }),
     listing('subtitle', 'Sottotitolo', 'Subtitle', { kind: 'text', maxLength: 55, channelStore: pa('subtitle') }),

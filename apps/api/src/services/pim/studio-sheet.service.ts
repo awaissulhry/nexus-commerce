@@ -1,3 +1,4 @@
+import { variationBag } from './shared-variation-values.js'
 import { offerActiveHonoured } from '@nexus/shared/listing-capabilities'
 import { inDatabaseReadTransaction } from '../../lib/database-context.js'
 import { studioContentFacts } from './studio-content-wire.js'
@@ -1536,7 +1537,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         } })
       } catch { productMediaError = 'Saved media needs attention. Open the gallery to inspect it.' }
 
-      const axisValues = axisValuesFromCells((product as unknown as { variantAttributes?: unknown }).variantAttributes, root.variationAxes ?? [], values)
+      const axisValues = axisValuesFromCells(variationBag(product as never), root.variationAxes ?? [], values)   // R-23 (Step 2.6c): the store first; it read the legacy bag only
 
       const flat: FlatRow = {}
       for (const [k, cell] of Object.entries(values)) flat[k] = cell.mapped?.status === 'mapped' ? cell.mapped.value : cell.value

@@ -40,6 +40,10 @@ export function parseThemeAxes(theme: unknown): string[] {
 // ⚠ APPEND-ONLY: __dimN__ keys stored in _axisValueOrder/_axisSortOrder are
 // ARRAY-POSITION-derived. Inserting or reordering groups shifts every stored
 // order's key. New groups go at the END; existing groups gain entries only.
+// Step 2.6c-3 (R-23): this is also the PRODUCT side's table — canonicalVariantAxis
+// (pim/variant-attribute-keys.ts) derives colour / size / style from it. The eBay
+// flat-file client mirrors it byte-for-byte (variationValueOrder.pure.ts, guarded by
+// its parity test, a no-touch area), so an edit here needs that copy in the same commit.
 export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
   ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],

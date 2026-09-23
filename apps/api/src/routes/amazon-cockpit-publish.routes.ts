@@ -33,6 +33,7 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import { resolveBatch } from '../services/pim/mapping/resolve-batch.service.js'
+import { oneLanguagePathRefusal } from '../services/pim/market-languages.js'
 import { loadAmazonSpec } from '../services/pim/channel-specs/index.js'
 import { applyResolvedMappingToAmazonFeed, type AttributePatch } from '../services/amazon/mapping-payload.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
@@ -153,8 +154,8 @@ export default async function amazonCockpitPublishRoutes(
     const submissions: SubmissionResult[] = []
 
     for (const mp of marketplaces) {
-      const marketplaceId =
-        MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
+      // A-23 (R-19): never fall back to Italy. A market this publisher has no id for is refused below.
+      const marketplaceId: string | undefined = MARKETPLACE_ID_MAP[mp]
       let result: SubmissionResult = {
         marketplace: mp,
         ok: false,
@@ -166,6 +167,7 @@ export default async function amazonCockpitPublishRoutes(
       }
 
       try {
+        if (!marketplaceId) throw new Error(`Amazon · ${mp} has no marketplace id in this publisher, so nothing was sent.`)
         let listing = await prisma.channelListing.findFirst({
           where: { productId: id, channel: 'AMAZON', marketplace: mp, channelConnectionId: account, aliasKey: body.aliasKey ?? '' },
         })
@@ -174,6 +176,9 @@ export default async function amazonCockpitPublishRoutes(
         const refusal = assertPushAllowed(listing)
           ?? (closed.has(`${listing.productId}|${listing.marketplace.toUpperCase()}`) ? assertPushAllowed({offerClosedAt:'closed'}) : null)
         if (refusal) throw new Error(`${refusal.code}: ${refusal.sentence}`)
+        // A-22 (R-18): this route builds one language's feed; refuse a market that carries more.
+        const oneLanguage = await oneLanguagePathRefusal('AMAZON', mp)
+        if (oneLanguage) throw new Error(oneLanguage)
         const isNewListing = !listing.isPublished
         const resolved = await resolveBatch({ channel: 'AMAZON', marketplace: mp, channelConnectionId: listing.channelConnectionId,
           aliasKey: listing.aliasKey, productIds: [id] })

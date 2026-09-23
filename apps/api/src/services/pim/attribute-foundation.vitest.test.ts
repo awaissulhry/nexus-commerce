@@ -32,8 +32,14 @@ describe('family-owned Master', () => {
     expect(all.filter(c => c.kind === 'variationTheme')).toHaveLength(1)
   })
   it('keeps localized family keys canonical and closed lists strict', () => {
-    const { columns: all } = buildSheetColumns({ familySchema: true, fields: [{ id: 'attr_finish', label: 'Finish', category: 'category', type: 'select', options: ['matte', 'gloss'], localizable: true, editable: true }], coordinates: [], scopeKind: 'master' })
-    expect(fieldColumns(all)[0]).toMatchObject({ key: 'finish', storage: 'localizedContent', mode: 'strict' })
+    const { columns: all } = buildSheetColumns({ familySchema: true, fields: [
+      { id: 'attr_finish', label: 'Finish', category: 'category', type: 'select', options: ['matte', 'gloss'], localizable: true, editable: true },
+      { id: 'attr_care_note', label: 'Care', category: 'category', type: 'text', localizable: true, editable: true },
+    ], coordinates: [], scopeKind: 'master' })
+    // A-25 (R-22): a closed list stores ONE code for every language, even when flagged localizable;
+    // a localizable text keeps per-language storage. Both keep their canonical key.
+    expect(fieldColumns(all).find(c => c.key === 'finish')).toMatchObject({ storage: 'categoryAttributes', mode: 'strict' })
+    expect(fieldColumns(all).find(c => c.key === 'care_note')).toMatchObject({ storage: 'localizedContent' })
   })
   it('keeps shared definitions and historical values without importing Amazon requirements', () => {
     const amazon: SheetCoordinate = { ...ebay, channel: 'AMAZON', label: 'Amazon · IT' }

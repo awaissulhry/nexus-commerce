@@ -1,0 +1,259 @@
+/**
+ * PLAN Step 0.4 — the baseline must build the schema `schema.prisma` describes.
+ *
+ * THE RISK THIS GUARDS. `prisma/baseline.sql` is how a FRESH database is built, because the
+ * 467-migration history does not replay (443 apply, 24 fail — ordering, not missing migrations).
+ * A baseline that has drifted from `schema.prisma` would stand databases up with the wrong schema,
+ * silently, and every fixture built on them would be measuring the wrong thing.
+ *
+ * 🔴 WHY THE ASSERTION IS NOT "the diff is empty". It cannot be, and finding that out is the
+ * reason this file reads the DATABASE rather than believing the tool.
+ *
+ *   `@default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))` is applied
+ *   correctly — measured on a database built from this baseline, the column default really is
+ *   `NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)`. Postgres normalises the
+ *   expression with `::text` casts, and `prisma migrate diff` does not recognise it as its own. So
+ *   it reports the same 420 `SET DEFAULT` statements FOREVER, on a database that already has them.
+ *
+ * So the gate says what is actually true: the residual diff may contain those defaults and
+ * NOTHING else. Any other statement is real drift and fails. A weaker "diff is empty" assertion
+ * could never have gone green; a "table names match" assertion would have passed while a column
+ * type or an index differed.
+ *
+ * 🔴 DATABASE TARGET. A throwaway database on the LOCAL Postgres, created and dropped here. The
+ * host is asserted to be loopback before anything is written. Production is never touched.
+ */
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import pg from 'pg'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const pkgRoot = join(here, '..')
+const repoRoot = join(pkgRoot, '..', '..')
+
+const localUrl = readFileSync(join(repoRoot, 'apps/api/.env'), 'utf8').match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim()
+const host = localUrl ? new URL(localUrl).hostname : ''
+const isLoopback = host === '127.0.0.1' || host === 'localhost'
+const canRun = Boolean(localUrl) && isLoopback
+
+const DB = `nexus_baseline_check_${process.pid}`
+const adminUrl = localUrl ? `${localUrl.slice(0, localUrl.lastIndexOf('/'))}/postgres` : ''
+const targetUrl = localUrl ? `${localUrl.slice(0, localUrl.lastIndexOf('/'))}/${DB}` : ''
+
+async function admin(sql: string) {
+  const c = new pg.Client({ connectionString: adminUrl })
+  await c.connect(); await c.query(sql); await c.end()
+}
+
+/** The one class of statement Prisma cannot round-trip. Anything else in the residual is drift. */
+const UNREPRESENTABLE = /^ALTER TABLE "[^"]+" ALTER COLUMN "workspaceId" SET DEFAULT NULLIF\(current_setting\('nexus\.workspace_id', true\), ''\);$/
+
+describe.runIf(canRun)('prisma/baseline.sql', () => {
+  let residual = ''
+  let tables = 0
+  let defaults = 0
+
+  beforeAll(async () => {
+    expect(isLoopback, `refusing a non-loopback target: ${host}`).toBe(true)
+    await admin(`DROP DATABASE IF EXISTS "${DB}"`)
+    await admin(`CREATE DATABASE "${DB}"`)
+
+    const client = new pg.Client({ connectionString: targetUrl })
+    await client.connect()
+    await client.query(readFileSync(join(pkgRoot, 'prisma', 'baseline.sql'), 'utf8'))
+    tables = (await client.query(
+      `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
+    )).rows[0].n
+    defaults = (await client.query(
+      `SELECT count(*)::int AS n FROM information_schema.columns
+       WHERE table_schema = 'public' AND column_name = 'workspaceId' AND column_default IS NOT NULL`,
+    )).rows[0].n
+    await client.end()
+
+    residual = execFileSync('npx', [
+      'prisma', 'migrate', 'diff',
+      '--from-url', targetUrl,
+      '--to-schema-datamodel', 'prisma/schema.prisma',
+      '--script',
+    ], { cwd: pkgRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  }, 600_000)
+
+  afterAll(async () => { if (canRun) await admin(`DROP DATABASE IF EXISTS "${DB}"`) }, 60_000)
+
+  it('positive control — the baseline really built a schema', () => {
+    expect(tables).toBeGreaterThan(400)
+  })
+
+  it('🔴 the workspaceId defaults ARE applied — measured in the database, not asked of Prisma', () => {
+    // `prisma migrate diff` reports these as missing on a database that has them, because Postgres
+    // stores the expression normalised with `::text` casts. An earlier version of the generator
+    // believed that report and appended 420 duplicate ALTER statements. information_schema settles
+    // it: the defaults are emitted inline by `CREATE TABLE` and are really there.
+    expect(defaults).toBeGreaterThan(400)
+  })
+
+  it('🔴 the residual diff contains NOTHING but those defaults — anything else is real drift', () => {
+    const statements = residual
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('--'))
+    const unexpected = statements.filter(line => !UNREPRESENTABLE.test(line))
+    expect(unexpected, `unexpected drift:\n${unexpected.slice(0, 10).join('\n')}`).toEqual([])
+    // And the known ones must still be the only thing there, not zero of everything.
+    expect(statements.length).toBeGreaterThan(400)
+  })
+})
+
+/**
+ * A-13 (ruled 2026-09-22, option a) — a database built by `bootstrap-fresh-database.mjs` must be
+ * ISOLATED, not merely schema-correct.
+ *
+ * 🔴 WHAT THIS GUARDS, measured before the fix. `baseline.sql` is a pure `schema.prisma` dump and
+ * holds 0 `CREATE POLICY`, 0 `ROW LEVEL SECURITY` and 0 `GRANT`, because a schema cannot express a
+ * policy. The bootstrap therefore produced a database with **0 policies against production's 444**
+ * and no grants for `nexus_workspace_runtime` — the role `workspace-adapter.js:11` switches to on
+ * every query. The application died with `permission denied for table Product`, which is the loud
+ * failure and the safe one. The dangerous case was fixing THAT by adding the grants alone: the app
+ * then runs perfectly with every business reading every other business's rows.
+ *
+ * 🔴 The tests above could not have caught it. They assert the SCHEMA matches `schema.prisma`.
+ * They never connect the application and never count a policy. A gate measures what the step
+ * built, never what it left out — so the omission needs its own gate.
+ */
+describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just schema', () => {
+  const BOOT = `nexus_bootstrap_check_${process.pid}`
+  const bootUrl = localUrl ? `${localUrl.slice(0, localUrl.lastIndexOf('/'))}/${BOOT}` : ''
+  let counts = { policies: 0, rls: 0, grants: 0, workspaces: 0, deployedColumn: 0 }
+
+  beforeAll(async () => {
+    expect(isLoopback, `refusing a non-loopback target: ${host}`).toBe(true)
+    await admin(`DROP DATABASE IF EXISTS "${BOOT}"`)
+    await admin(`CREATE DATABASE "${BOOT}"`)
+    execFileSync('node', [join(pkgRoot, 'scripts', 'bootstrap-fresh-database.mjs')], {
+      cwd: repoRoot, encoding: 'utf8', env: { ...process.env, DATABASE_URL: bootUrl }, maxBuffer: 16 * 1024 * 1024,
+    })
+    const c = new pg.Client({ connectionString: bootUrl })
+    await c.connect()
+    counts = (await c.query(`
+      SELECT (SELECT count(*)::int FROM pg_policies) AS policies,
+             (SELECT count(*)::int FROM pg_class cl JOIN pg_namespace n ON n.oid = cl.relnamespace
+               WHERE n.nspname = 'public' AND cl.relrowsecurity) AS rls,
+             (SELECT count(*)::int FROM information_schema.role_table_grants
+               WHERE grantee = 'nexus_workspace_runtime') AS grants,
+             (SELECT count(*)::int FROM "Workspace" WHERE status = 'active') AS workspaces,
+             (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_name = 'ChannelListing' AND column_name = 'variationExcluded') AS "deployedColumn"`)).rows[0]
+    await c.query(`INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt")
+      VALUES ('bootstrap-other-profile','Bootstrap other profile','test','bootstrap-other-profile',now())`)
+    await c.end()
+  }, 600_000)
+
+  afterAll(async () => { if (canRun) await admin(`DROP DATABASE IF EXISTS "${BOOT}"`) }, 60_000)
+
+  it('🔴 every business-owned table carries a row-level-security policy', () => {
+    // Not "> 0": a single stray policy would pass that. The isolation layer covers hundreds of
+    // tables, and a count that collapses is the failure this guards.
+    expect(counts.policies).toBeGreaterThan(400)
+    expect(counts.rls).toBeGreaterThan(400)
+  })
+
+  it('🔴 the runtime role can actually reach the tables — a policy with no GRANT is a dead database', () => {
+    expect(counts.grants).toBeGreaterThan(400)
+  })
+
+  it('🔴 an ACTIVE Workspace row exists — the policy reads it, so without one every legacy row is invisible', () => {
+    expect(counts.workspaces).toBeGreaterThan(0)
+  })
+
+  it('carries the deployed-only column the disposable test database also adds', () => {
+    expect(counts.deployedColumn).toBe(1)
+  })
+
+  async function refusesInvalidReceiptState(sql: string, constraint: string) {
+    await asRuntime(async c => {
+      await expect(c.query(sql)).rejects.toMatchObject({ code: '23514', constraint })
+    })
+  }
+
+  async function asRuntime(work: (client: pg.Client) => Promise<void>) {
+    const c = new pg.Client({ connectionString: bootUrl })
+    await c.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE nexus_workspace_runtime')
+      await c.query("SELECT set_config('nexus.workspace_id', 'nexus_legacy_workspace', true)")
+      await work(c)
+    } finally { await c.query('ROLLBACK'); await c.end() }
+  }
+
+  it('refuses a negative grant generation under the actual runtime role', async () => {
+    await refusesInvalidReceiptState(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","grantVersion","updatedAt")
+      VALUES ('baseline-negative-grant','nexus_legacy_workspace','EBAY',-1,now())`, 'ChannelConnection_grant_version_check')
+  })
+
+  it('refuses a half-written processing lease under the actual runtime role', async () => {
+    await refusesInvalidReceiptState(`INSERT INTO "WebhookEvent" (id,"workspaceId",channel,"eventType","externalId",payload,"leaseToken","updatedAt")
+      VALUES ('baseline-unpaired-lease','nexus_legacy_workspace','EBAY','AUTHORIZATION_REVOCATION','baseline-lease','{}','test-fence',now())`, 'WebhookEvent_lease_pair_check')
+  })
+
+  it('routes newly connected Shopify, eBay and Etsy identities through their verified aliases', async () => {
+    await asRuntime(async c => {
+      for (const [channel, id, identity, expected] of [
+        ['SHOPIFY', 'shopify-bootstrap', { userId: 'shop-gid', username: 'shop.myshopify.com', extra: { myshopifyDomain: 'shop.myshopify.com' } }, ['shop.myshopify.com']],
+        ['EBAY', 'ebay-bootstrap', { userId: 'ebay-bootstrap', username: 'synthetic-seller' }, ['ebay-bootstrap', 'synthetic-seller']],
+        ['ETSY', 'etsy-bootstrap', { userId: 'etsy-user', extra: { shopId: '577001' } }, ['577001']],
+      ] as const) {
+        await c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId",identity,"isActive","updatedAt")
+          VALUES ($1,'nexus_legacy_workspace',$2,$1,$3,true,now())`, [id, channel, JSON.stringify(identity)])
+        const routes = await c.query('SELECT "inboundAliases" FROM "ChannelAccountRoute" WHERE "connectionId"=$1', [id])
+        expect(routes.rows[0].inboundAliases.sort()).toEqual([...expected].sort())
+      }
+    })
+  })
+
+  it('permits distinct active accounts and inactive history but refuses a duplicate active identity', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, external: string, active: boolean) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","updatedAt")
+        VALUES ($1,'nexus_legacy_workspace','EBAY',$2,$3,now())`, [id, external, active])
+      await insert('active-one', 'seller-one', true)
+      await insert('active-two', 'seller-two', true)
+      await insert('inactive-history', 'seller-one', false)
+      await expect(insert('duplicate-active', 'seller-one', true)).rejects.toMatchObject({ code: '23505', constraint: 'ChannelConnection_active_account_key' })
+    })
+  })
+
+  it('permits a primary in each profile but refuses a second primary in one profile/channel', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, workspaceId: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isPrimary","updatedAt")
+        VALUES ($1,$2,'EBAY',$1,true,now())`, [id, workspaceId])
+      await insert('primary-one', 'nexus_legacy_workspace')
+      await c.query("SELECT set_config('nexus.workspace_id', 'bootstrap-other-profile', true)")
+      await insert('primary-other', 'bootstrap-other-profile')
+      await c.query("SELECT set_config('nexus.workspace_id', 'nexus_legacy_workspace', true)")
+      await expect(insert('primary-duplicate', 'nexus_legacy_workspace')).rejects.toMatchObject({ code: '23505', constraint: 'ChannelConnection_workspace_channel_primary_key' })
+    })
+  })
+})
+
+describe.runIf(canRun)('fresh bootstrap atomicity', () => {
+  it('does not stamp completed history or leave partial tables when policy installation fails', async () => {
+    const failureDb = `nexus_bootstrap_failure_${process.pid}`
+    const failureUrl = `${localUrl!.slice(0, localUrl!.lastIndexOf('/'))}/${failureDb}`
+    await admin(`CREATE DATABASE "${failureDb}"`)
+    const c = new pg.Client({ connectionString: failureUrl })
+    await c.connect()
+    try {
+      // Deterministic policy-stage failure after the baseline/history stages.
+      await c.query('CREATE FUNCTION nexus_channel_route_sync() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$')
+      expect(() => execFileSync('node', [join(pkgRoot, 'scripts', 'bootstrap-fresh-database.mjs')], {
+        cwd: repoRoot, encoding: 'utf8', env: { ...process.env, DATABASE_URL: failureUrl }, stdio: 'pipe',
+      })).toThrow()
+      const remaining = await c.query("SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='public'")
+      expect(remaining.rows[0].n).toBe(0)
+      expect((await c.query("SELECT to_regclass('public._prisma_migrations') AS history")).rows[0].history).toBeNull()
+    } finally { await c.end(); await admin(`DROP DATABASE "${failureDb}"`) }
+  }, 60_000)
+})

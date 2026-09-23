@@ -197,7 +197,11 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const rounded = v === null ? null : Math.round(v * 100) / 100
         if (rounded !== null && p.value === rounded && p.source === 'override') return noop()
         if (rounded === null && p.source === 'master') return noop()
-        const r = await writeChannelPrices({ targets: [{ listingId: cells.listingId, price: rounded, expectedVersion: cells.version }], actor: ctx.actor, source: 'MANUAL_OVERRIDE', reason: 'matrix' })
+        /* A-17 (R-12): this read passed the version check above, so its price is the one the operator saw. A verb
+           runs row after row on one read; a quantity write in between would otherwise turn a price nobody touched
+           into a conflict. A clamped number is not the stored override, so it is never a basis for a retry. */
+        const seen = p.clamped ? undefined : p.source === 'override' ? p.value : p.source === 'master' ? null : undefined
+        const r = await writeChannelPrices({ targets: [{ listingId: cells.listingId, price: rounded, expectedVersion: cells.version, ...(seen !== undefined ? { expectedPrice: seen } : {}) }], actor: ctx.actor, source: 'MANUAL_OVERRIDE', reason: 'matrix' })
         const mine = r.results[0]!
         return mine.outcome === 'applied' ? applied(mine.version) : { ...base, outcome: mine.outcome, reason: mine.reason, version: mine.version }
       }

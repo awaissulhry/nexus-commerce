@@ -175,7 +175,8 @@ describe('PATCH /products/:id/studio/matrix — the door', () => {
     } finally { delete process.env.NEXUS_RBAC_MODE }
     const ok = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 }])
     expect(ok.json().results[0]).toMatchObject({ outcome: 'applied', version: 4 })
-    expect(mocks.prices).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', price: 90, expectedVersion: 3 }], source: 'MANUAL_OVERRIDE' }))
+    // A-17: the cell follows the master in the read, so the door is told the operator saw "following" (null).
+    expect(mocks.prices).toHaveBeenCalledWith(expect.objectContaining({ targets: [{ listingId: 'l-c1-it', price: 90, expectedVersion: 3, expectedPrice: null }], source: 'MANUAL_OVERRIDE' }))
   })
   it('refuses a malformed body at the boundary', async () => {
     expect((await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1' }] } })).statusCode).toBe(400)
