@@ -1,13 +1,14 @@
 /**
- * Step 2.6c-3 (A-27, R-23) — ONE synonym table for a variation axis, on the product side and the eBay side.
+ * Step 2.6c-3 (A-27, R-23) — the product side reads the SAME synonym table as the eBay side.
  *
  * Before: `canonicalVariantAxis` (product side) kept its own short list, and the eBay side kept
- * `AXIS_SYNONYM_GROUPS`. They disagreed — `talla` / `groesse` were a size to the product side only; `size name`,
- * `color name`, `misura`, `kleur`, `maat`, … to the eBay side only — so one child's axis could be two axes.
+ * `AXIS_SYNONYM_GROUPS`. They disagreed — `size name`, `color name`, `misura`, `kleur`, `maat`, … were an axis to
+ * the eBay side only — so one child's axis could be two axes.
  *
- * The eBay push stores `__dimN__` keys by GROUP POSITION, so the table is append-only. Measured on production
- * (2026-09-23, `tools/axis-stores.mjs`): stored keys `__dim0__` / `__dim1__` only; axis names in use Colore,
- * Taglia, Color, Size (+ `Style Name` in the bags) — the two spellings appended to the size group re-key nothing.
+ * The table stays in `ebay-theme-axes.ts`, unchanged: the eBay flat-file client mirrors it byte-for-byte (a no-touch
+ * area, guarded by its web parity test), and the eBay push stores `__dimN__` keys by group position. Two spellings
+ * the product side knew stay product-only (`talla`, `groesse`) until that no-touch copy can change. Production
+ * (2026-09-23, `tools/axis-stores.mjs`): stored keys `__dim0__` / `__dim1__`; names in use Colore, Taglia, Color, Size.
  */
 import { describe, expect, it } from 'vitest'
 import { AXIS_SYNONYM_GROUPS as SHARED, canonicalVariantAxis } from './variant-attribute-keys.js'
@@ -29,7 +30,7 @@ const PRODUCT_BEFORE: Record<string, string> = {
 }
 const NAMES = ['color', 'size', 'style']
 
-describe('one synonym table', () => {
+describe('one synonym table, product side and eBay side', () => {
   it('the eBay side uses the shared object itself, not a copy', () => {
     expect(EBAY).toBe(SHARED)
   })
@@ -51,6 +52,12 @@ describe('one synonym table', () => {
   })
   it('the product side still recognises every spelling it did before', () => {
     for (const [spelling, name] of Object.entries(PRODUCT_BEFORE)) expect([spelling, canonicalVariantAxis(spelling)]).toEqual([spelling, name])
+  })
+  it('the only disagreement left is named: talla and groesse are sizes to the product side only', () => {
+    for (const spelling of ['talla', 'groesse']) {
+      expect(canonicalVariantAxis(spelling)).toBe('size')
+      expect(axisSynonymKey(spelling)).toBe(spelling)
+    }
   })
   it('control: the eBay-only aspect groups (material, gender) do not become product axes', () => {
     expect(canonicalVariantAxis('Materiale')).toBe('materiale')

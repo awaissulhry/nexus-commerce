@@ -1,26 +1,27 @@
+import { AXIS_SYNONYM_GROUPS } from '../ebay-theme-axes.js'
+
 /**
- * Stable variation-axis identities — ONE synonym table for the product side and the eBay side (Step 2.6c-3, R-23).
- * The product side used its own short list here while the eBay side kept `AXIS_SYNONYM_GROUPS`; they disagreed on
- * `talla` / `groesse` (product only) and `size name`, `color name`, `misura`, `kleur`, `maat`, … (eBay only).
+ * Stable variation-axis identities — the product side reads the SAME synonym table as the eBay side (Step 2.6c-3,
+ * R-23). It used to keep its own short list here while the eBay side kept `AXIS_SYNONYM_GROUPS`; they disagreed on
+ * `size name`, `color name`, `misura`, `kleur`, `maat`, … (eBay only), so one child's axis could be two axes.
  *
- * ⚠ APPEND-ONLY, and the ORDER is load-bearing: the eBay push stores `__dimN__` keys in `_axisValueOrder` /
- * `_axisSortOrder` by GROUP POSITION (`axisSynonymKey`, `ebay-theme-axes.ts`). New groups go at the END; existing
- * groups gain entries at their END only. Production, 2026-09-23: the stored keys are `__dim0__` and `__dim1__`, and
- * the axis names in use are Colore, Taglia, Color, Size — so the two spellings appended below re-key nothing.
+ * The table lives in `ebay-theme-axes.ts` — the source of truth since EFX Phase 2, mirrored byte-for-byte by the
+ * eBay flat-file client (a no-touch area) and guarded by its parity test. Imported AND re-exported: a bare
+ * `export … from` binds nothing locally, and the map below uses it.
  */
-export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
-  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko', 'talla', 'groesse'],
-  ['stile', 'style', 'style name', 'style_name'],
-  ['materiale', 'material', 'material name', 'material_name'],
-  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
-]
+export { AXIS_SYNONYM_GROUPS }
 
 /** The product side names the first three groups; the other two are eBay aspect synonyms only. */
 const CANONICAL_NAMES = ['color', 'size', 'style'] as const
+/** Two size spellings the product side knew that the table does not. Adding them to the table needs the no-touch
+ * flat-file client copy changed in the same commit, so they stay product-only until the Owner lifts that for the
+ * one file. Production, 2026-09-23 (`tools/axis-stores.mjs`): neither is in use. */
+const PRODUCT_ONLY: Record<string, (typeof CANONICAL_NAMES)[number]> = { talla: 'size', groesse: 'size' }
 const fold = (value: string) => value.toLowerCase().replace(/[\s_-]/g, '')
-const CANONICAL = new Map<string, string>(AXIS_SYNONYM_GROUPS.slice(0, CANONICAL_NAMES.length)
-  .flatMap((group, i) => group.map((spelling) => [fold(spelling), CANONICAL_NAMES[i]] as const)))
+const CANONICAL = new Map<string, string>([
+  ...AXIS_SYNONYM_GROUPS.slice(0, CANONICAL_NAMES.length).flatMap((group, i) => group.map((spelling) => [fold(spelling), CANONICAL_NAMES[i]] as const)),
+  ...Object.entries(PRODUCT_ONLY),
+])
 
 /** Stable variation-axis identities, shared by source resolution and the product sheet. */
 export function canonicalVariantAxis(value: string): string {

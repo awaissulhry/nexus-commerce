@@ -5571,22 +5571,38 @@ products and **Colore, Taglia** on two eBay listings; the stored order keys are 
 `Fit Type`, `Team Name`, `Athlete`), both tables classified every spelling in use the same way — the change moves
 nothing in today's data.
 
-### What was built
+### What was built — and a correction on the way
+
+🔴 **First version refused by the push:** it moved the table into `pim/variant-attribute-keys.ts` and appended `talla`
+/ `groesse`. A web parity test failed: the eBay flat-file client keeps a byte-for-byte THIRD copy of the table
+(`products/ebay-flat-file/variationValueOrder.pure.ts`) and its test reads the table's literal text from
+`ebay-theme-axes.ts`. That client is a no-touch area, and R-26's blanket word does not lift a no-touch rule. So:
 
 | Where | What |
 |---|---|
-| `pim/variant-attribute-keys.ts` | `AXIS_SYNONYM_GROUPS` moves here — the one table. `canonicalVariantAxis` derives colour / size / style from its first three groups (folded the same way as before: case, spaces, `_`, `-`). `talla` and `groesse` are appended to the size group — append-only |
-| `ebay-theme-axes.ts` | Imports AND re-exports the shared table (a bare `export … from` binds nothing locally, and its own functions use it) |
+| `ebay-theme-axes.ts` | The table stays here, **unchanged** (a comment added: it is the product side's table too, and the flat-file copy must change in the same commit as any edit) |
+| `pim/variant-attribute-keys.ts` | Imports and re-exports that table; `canonicalVariantAxis` derives colour / size / style from its first three groups (folded as before: case, spaces, `_`, `-`). Two spellings the product side knew and the table lacks — `talla`, `groesse` — stay a named product-only list |
 
-The product side now also knows `size name`, `color name`, `misura`, `kleur`, `maat`, `stile`, … ; the eBay side now
-also knows `talla`, `groesse`. The material and gender groups stay eBay-aspect synonyms only.
+The product side now also knows `size name`, `color name`, `misura`, `kleur`, `maat`, `stile`, … — the two sides agree on
+every spelling in the table. The only disagreement left is named: `talla` / `groesse` (product only, unused on
+production). Adding them to the table needs the no-touch flat-file copy changed — the Owner's word, for one file.
 
-### Done when / Gate — ✅ `axis-synonyms-one-table.vitest.test.ts` (6 arms), 5 mutations red
+### Done when / Gate — ✅ `axis-synonyms-one-table.vitest.test.ts` (7 arms), 5 mutations red; the web parity test green
 
-The eBay side uses the shared object; the table is append-only against its pre-2.6c-3 copy; every spelling the eBay
-table knew keeps its `__dimN__` (stored orders do not move); both sides agree on every spelling of the three product
-axes, in any case that lowercases back; the product side still knows every spelling it knew; control: material and
+The product side uses the table object itself; the table is unchanged (append-only prefix and every stored `__dimN__`
+key); both sides agree on every spelling of the three product axes, in any case that lowercases back; the product
+side still knows every spelling it knew; the remaining gap (`talla`, `groesse`) is pinned; control: material and
 gender do not become product axes. Mutations: the product side back to its short list · `talla` dropped · a group
-inserted at the front · an eBay-side local copy · the product side absorbing the eBay-only groups.
+inserted at the front · a product-side local copy · the product side absorbing the eBay-only groups.
+`variationValueOrder.parity.vitest.test.ts` (web): 3/3. Full `apps/api` suite: 884 files pass.
 
-### Cost when — `flat`. **Rollback** — revert the commit (both tables return; no stored key moved).
+### Cost when — `flat`. **Rollback** — revert the commit (no stored key moved; the table text never changed).
+
+---
+
+## Step 2.1 (b) — APPLIED on production (Xavia Racing), 2026-09-23. Run by the Owner.
+
+`tools/prod-run.mjs derive --apply` → **`WROTE 5 rows. FamilyAttribute rows now required with a channel list: 5`** —
+the five `supplier_declared_dg_hz_regulation` rows for Amazon on the five families, exactly as the dry run showed, and
+`0 already required` before, so `--revert` would undo exactly these five. ⬜ Motovento: the dry run was not seen in this
+session (it holds one family-less draft; 0 rows expected).
