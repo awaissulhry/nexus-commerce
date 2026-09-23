@@ -120,6 +120,18 @@ try {
     count(k.id) FILTER (WHERE ${obj(`(k."categoryAttributes"::jsonb -> 'variations')`)} = '{}'::jsonb)::int AS children_without_vr
     FROM "Product" pa JOIN "Product" k ON k."parentId" = pa.id AND k."deletedAt" IS NULL
     WHERE pa."deletedAt" IS NULL AND cardinality(pa."variationAxes") > 0 GROUP BY 1 ORDER BY 1`)
+  // 8 — Step 2.6c-3: every axis NAME spelling in use, where the two synonym tables could disagree
+  // (variant-attribute-keys.ts vs ebay-theme-axes.ts AXIS_SYNONYM_GROUPS). Stored order keys are position keys.
+  out.axisNames = await q(`
+    SELECT "workspaceId" AS ws, 'variationAxes' AS src, a AS key, count(*)::int AS n FROM "Product" p, unnest(p."variationAxes") a
+      WHERE p."deletedAt" IS NULL GROUP BY 1, 2, 3
+    UNION ALL SELECT l."workspaceId", 'listing _variationAxes', a, count(*)::int FROM "ChannelListing" l,
+      jsonb_array_elements_text(CASE WHEN jsonb_typeof(l."platformAttributes"::jsonb -> '_variationAxes') = 'array' THEN l."platformAttributes"::jsonb -> '_variationAxes' ELSE '[]'::jsonb END) a GROUP BY 1, 2, 3
+    UNION ALL SELECT l."workspaceId", 'listing _axisValueOrder', e.key, count(*)::int FROM "ChannelListing" l,
+      jsonb_each(${obj(`(l."platformAttributes"::jsonb -> '_axisValueOrder')`)}) e GROUP BY 1, 2, 3
+    UNION ALL SELECT l."workspaceId", 'listing _axisSortOrder', e.key, count(*)::int FROM "ChannelListing" l,
+      jsonb_each(${obj(`(l."platformAttributes"::jsonb -> '_axisSortOrder')`)}) e GROUP BY 1, 2, 3
+    ORDER BY 1, 2, 4 DESC`)
   await c.query('ROLLBACK')
 } finally {
   await c.end()

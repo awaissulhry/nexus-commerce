@@ -167,6 +167,10 @@ Rulings R-11 … R-22 are at the end of PLAN.md.
    the **256** DE/ES Amazon stock rows marked sent for Italy on 2026-09-08 — check Amazon IT stock for
    those SKUs once Step 3.1 opens the credentials; Amazon BE (two languages) stays refused on the two
    one-language paths until its first listing.
+   **Step 2.6 (a–c2), added 2026-09-23:** read and write paths only, no migration. After deploy, re-run
+   `tools/axis-stores.mjs` (read only): the legacy `variantAttributes` key counts (`SPELLINGS … va`) must not
+   grow any more — only the two flat-file creates still write it — and the store (`vr`) is where new values
+   appear. The one child with an empty flat `size` key will show its stored size on the sheet.
 5. Blocked, not forgotten: 1.3 / Phase 3 on 3.1 (credentials). 0.3 (rotation) is the Owner's — do not
    raise it. Unruled: D-D, D-F, D-G (15.9's flip), the third readiness vocabulary. Step 4.0: read the
    review (`PLAN-REVIEW-2026-09-22.md` §4) first — `check-contrast.mjs` measures the wrong palette.
@@ -212,7 +216,9 @@ approval **before building**. Each turn reports what changed, whether it worked,
 8. 🟡 **2.1 (b) on production — OK given; Xavia Racing dry run done (5 rows); Motovento dry run and
    `--apply` next** (`tools/prod-run.mjs derive`, run by the Owner). **2.7 on production — R-21: after
    this branch deploys.**
-9. 🟡 **Step 2.6 — D-D ruled (R-23 (a)); A-27 approved (R-24).** ✅ 2.6a, 2.6b, 2.6c-1 (readers) and 2.6c-2 (one writer) built; next c3 (one synonym table — measure first). A-28 waits for the Owner.
+9. 🟡 **Step 2.6 — D-D ruled (R-23 (a)); A-27 approved (R-24).** ✅ 2.6a, 2.6b, 2.6c-1 (readers) and 2.6c-2 (one writer) built and pushed. c3 (one synonym table) waits for the Owner's
+   production count (`tools/axis-stores.mjs`, `AXISNAMES` lines): locally every spelling in use is classified the same by
+   both tables; adding `talla` / `groesse` to the eBay table re-keys any saved order that uses them. A-28 waits for the Owner.
 
 ### Still blocked, not forgotten
 
