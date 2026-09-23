@@ -78,9 +78,17 @@ async function liveItem(itemId: string, accountId: string, market: string) {
   return publicationDigest(fields.map(key => stable.match(new RegExp(`<${key}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${key}>`))?.[0] ?? ''))
 }
 
-export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+/**
+ * PLAN R-43 (A-39 slice b2) — the listing input this builder sends, extracted from `prepareEbayPublication` with its
+ * behaviour unchanged: every refusal from the ItemID checks to the shared input, and the title / item specifics / variations
+ * it computes. No publish gate, no media gallery, no description render, no live call — so a READER (the nightly eBay content
+ * read, `channel-drift/ebay-content-ours.ts`) takes "ours" from the builder itself, never from a second copy of it.
+ *
+ * `currency`: the publish path passes none, as before (so `buildSharedListingInput` refuses it — P4.4a, stated in PLAN.md);
+ * a reader passes the market's. It feeds only the input's `currency` field, never its title or item specifics.
+ */
+export async function buildEbayListingInput(facts: PublicationFacts, options: { currency?: string } = {}) {
   const { scope, parent, products, listings } = facts
-  if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
   const ids = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id))]
   if (ids.length > 1) throw new Error('These products belong to different eBay listings. Choose one listing alias before publishing.')
   const itemId = ids[0] ?? null
@@ -161,7 +169,14 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
       row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value
     }
   }
-  const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder)
+  const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency)
+  return { shared, itemId, parentListing, settings, galleries, variants }
+}
+
+export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+  const { scope, parent, products } = facts
+  if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
+  const { shared, itemId, parentListing, settings, galleries, variants } = await buildEbayListingInput(facts)
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')

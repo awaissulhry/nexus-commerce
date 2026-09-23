@@ -409,8 +409,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // A-39 (R-41) — Step 3.5b's Amazon content read. On-demand run ONLY: the job is SCHEDULED in index.ts
   // (startContentDriftCron). A manual run reads Amazon (≤ 1 read a second) and writes ChannelDrift, as the nightly does.
   'content-drift': async () => {
-    const { runContentDrift, describeContentDrift } = await import('./content-drift.job.js')
-    return describeContentDrift(await runContentDrift())
+    // A-39 b2 (R-43) — the eBay pass first (its own slice), then Amazon: the same run as the nightly.
+    const { runNightlyContentDrift } = await import('./content-drift.job.js')
+    return (await runNightlyContentDrift()).line
   },
 }
 

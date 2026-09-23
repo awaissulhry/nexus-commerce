@@ -7013,3 +7013,49 @@ A-33 / SCT.6 pattern. Then b2 compares title + item specifics for the **13 studi
 | # | Question | Ruling (2026-09-23 ~23:00 UTC, thirtieth set) |
 |---|---|---|
 | **R-43** | A-40 — eBay content reads | ✅ **(a)** Extract the builder's inline `:107-164` into one exported function (behaviour unchanged, parity arm), then build b2 for the studio-shaped ItemIDs; shells recorded "not compared" until their own question |
+
+### A-40 — the shells question, answered (2026-09-23 ~23:05 UTC, read only: sub-agent S6's trace, two claims re-read by this lane ✓)
+
+**Nexus never writes a LIVE shell's title or item specifics.** A shell's push through the flat-file route is a safe no-op once
+the item exists: `pushSharedListings` answers `SKIPPED_EXISTS` → reported as `POOL`, *"no eBay write — pool-managed
+stewardship"* (`routes/ebay-flat-file.routes.ts:2176-2186` ✓, `:2426-2441` ✓). Title and item specifics are sent only once, at
+creation (`buildSharedListingInput` → `AddFixedPriceItem`); later writes touch variations and quantities only. A shell's
+stored rows are assembled only inside the no-touch route (`GET /ebay/flat-file/rows`), and the push takes them from the page.
+
+So comparing a shell's title or item specifics would flag values Nexus never sends — **not drift**. Decision (no ruling needed —
+it narrows scope, touches nothing): shells are recorded **"not compared: Nexus does not write a live shell's title or item
+specifics"**, permanently, not "later". A-40's real scope is the 13 studio-shaped ItemIDs. Traps noted for b2: list values over
+65 characters are split into several values; aspect names fold to Italian on IT; Condition is never sent.
+
+| # | Question | Ruling (2026-09-23 ~23:15 UTC, thirty-first set) |
+|---|---|---|
+| **R-44** | Lanes and Phase 4 | ✅ The Owner: *"We can work in multiple lanes using multiple sub-agents … we need to start with the UI work as well."* Step 0.2's one-lane rule is relaxed to: parallel sub-agent lanes with DISJOINT files, named in the claim row, one session verifies and commits. **Phase 4 starts now in this session** |
+| **R-45** | D-F / Step 4.1 — the four removed browser gates | ✅ **Yes, they come back** (editor-open, control census, grid chrome, the 7:1 contrast gate) — a ratchet, one at a time: write/run → record the red number → fix to green → keep in the hook. No UI implementation before its gate is in |
+
+## A-40 — BUILT (R-43). eBay content reads for the studio-shaped ItemIDs; shells "not compared" for good.
+
+Built by sub-agent S5; re-run by this lane (12 drift files, 66 tests; every studio publication suite, 5 files, 53 tests; `tsc` 0).
+
+| Where | What |
+|---|---|
+| `services/pim/studio-publication-ebay.ts` | NEW exported `buildEbayListingInput(facts, { currency? })` = the builder's old inline `:84-164`. `prepareEbayPublication` keeps its publish gate FIRST, then calls it exactly as before. **Byte-for-byte:** the builder's full XML on the fixture has the same sha256 before and after |
+| new `services/pim/studio-publication-ebay.parity.vitest.test.ts` | the parity gate: the builder's XML title + item specifics = the extracted function's |
+| new `services/channel-drift/ebay-content-ours.ts` / `ebay-content-compare.ts` | "ours" for one ItemID OWNER listing through the extracted function (the market's own currency); a shell → *"shell listing: Nexus does not write a live shell's title or item specifics…"*, no eBay call; a builder refusal / failed read / inactive item → not compared, with its reason. Compare: title; aspect names case-insensitive; values as a SET (trim, spaces, NFC) |
+| `jobs/content-drift.job.ts` (+ `cron-registry.ts`) | the eBay pass runs first in its own 5-minute slice, then Amazon; one `GetItem` per ItemID, ≥ 1 s apart, ≤ 300 a night, per-source clock `ebay-content` |
+
+**Done when** — ✅ in tests (an eBay studio listing whose title or an aspect differs has an `ebay-content` entry; identical → 0 + clock;
+a shell → not compared with its reason). **Cost when** — ≤ 31 `GetItem` a night today (< 1% of the 5,000 pool). **Gate** — 21 new
+arms; **14 mutations, 13 red** — 🟠 one equivalent mutant (M8a: the real eBay spec already puts the title cell on the row through
+the overlay), replaced by M8c on a real value → red. **Rollback** — revert; `NEXUS_ENABLE_CONTENT_DRIFT=0` holds both passes.
+⬜ Not covered: the child-only ItemID `257584954808` (no owner listing, so never read); the dry-run script counts Amazon only.
+
+## A-41 — The studio eBay publication has been REFUSED for every family since 2026-09-21. FOR YOUR RULING. Nothing built.
+
+**Found by S5, measured in tests on the old AND new code:** `4774b48ff` (2026-09-21, the channel lane's P4.4a *"a currency per
+market, from the data"*) made `buildSharedListingInput` refuse a missing currency (`requireCurrency`). The studio's
+`prepareEbayPublication` passes none → *"No currency was resolved for the IT market"* on every family; the publish review
+catches it as an issue, so nothing is sent. **Fix, recommended:** pass the market's own currency
+(`facts.destination.currency`, `workspace-destination.ts:64`) at the publish path — ONE argument — plus an arm: the builder with a
+resolved market publishes its preview; a market with no currency is still refused by name. **Done when** — the studio eBay
+preview builds for a family on eBay·IT (test) and the refusal arm stays red for a market with no currency. **Rollback** — revert.
+🟠 Not measured: whether anyone has tried a studio eBay publish since 09-21 (production logs, read only, if you want the number).
