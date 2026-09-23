@@ -1,7 +1,7 @@
 import prisma from '../../../db.js'
 import { resolveBatch } from './resolve-batch.service.js'
 import { loadAmazonSpec } from '../channel-specs/index.js'
-import { attributesFromCells } from './schema-requirements.js'
+import { amazonRootPatch, mappedAmazonRoots } from '../../amazon/mapping-payload.js'
 import { valuesEqual } from '../resolver-shadow.js'
 import { primaryConnectionIds } from '../../connection-resolver.service.js'
 import { oneLanguagePathRefusal } from '../market-languages.js'
@@ -38,14 +38,10 @@ export async function prepareMappingDispatch(item: any) {
     if ((await primaryConnectionIds(['AMAZON'])).get('AMAZON') !== listing.channelConnectionId) throw new Error('This outbound adapter supports the primary Amazon account only.')
     const spec = await loadAmazonSpec(listing.marketplace, product.category.channelCategoryId ?? '')
     const roots = new Set(spec.fields.filter(f => selected.some(s => s.field.fieldKey === f.key)).map(f => f.attribute))
-    if (spec.fields.some(f => roots.has(f.attribute) && resolved.catalogue!.fields.some(field => field.fieldKey === f.key && field.sourceOwner))) {
-      throw new Error('A mapped compound attribute contains listing-owned values. Publish it through the structured listing editor.')
-    }
-    const values = Object.fromEntries(Object.values(product.cells).filter(c => spec.fields.some(f => f.key === c.fieldKey && roots.has(f.attribute))).map(c => [c.fieldKey, c.value]))
-    const attributes = attributesFromCells(spec, values)
-    payload.mappingAttributePatches = [...roots].map(root => attributes[root] === undefined
-      ? { op: 'delete', path: `/attributes/${root}` }
-      : { op: 'replace', path: `/attributes/${root}`, value: attributes[root] })
+    // A-33 (R-31) — the studio builder's serializer and patch, so a clear carries the schema selectors here too
+    // (it went out by name alone until now). It also refuses a root with listing-owned leaves.
+    const attributes = mappedAmazonRoots(spec, resolved.catalogue!.fields, product.cells, roots)
+    payload.mappingAttributePatches = [...roots].map(root => amazonRootPatch(spec, root, attributes[root]))
   } else {
     const aspects: Record<string, string[] | null> = {}
     for (const { field, cell } of selected) {

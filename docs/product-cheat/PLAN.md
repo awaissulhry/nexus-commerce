@@ -6141,3 +6141,53 @@ judge, so the grid cannot drift from it. Nothing else is built unless the check 
 - **Done when** — the browser check passes on both sheets, recorded with its screenshots. **Cost when** — `flat`.
 - **Gate** — the server arms above become a test (four arms, a mutation removing each refusal). **Rollback** — n/a.
 - 🔴 The check writes real local values on its valid rows; it restores them by value afterwards.
+
+---
+
+## OWNER RULING — 2026-09-23 (twenty-first set)
+
+The Owner: *"Perfect. I'll go with your recommendations. Please go ahead."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-30** | A-32 — 25 Amazon·DE listings pin an Italian title | ✅ **(a)** Count on production first (read only, the Owner runs it), then decide per listing; the publish preview names such a listing |
+| **R-31** | A-33 — the two Amazon payload builders drifted | ✅ **(a)** One function for both, plus the parity gate |
+| **R-32** | A-34 — Step 3.6's premise changed | ✅ **(a)** Re-scope 3.6 to a browser check on both sheets; build only what fails |
+
+---
+
+## A-33 — BUILT (R-31). Step 3.3: one serializer for both Amazon payload builders, and the parity gate.
+
+| Where | What |
+|---|---|
+| `services/amazon/mapping-payload.ts` | New `mappedAmazonRoots(spec, catalogue, cells, roots)` (serialises the mapped roots, refuses a root with a listing-owned leaf) and `amazonRootPatch(spec, root, value)` (replace, or a delete **with the schema selectors**). `applyResolvedMappingToAmazonFeed` uses both |
+| `services/pim/mapping/prepare-dispatch.ts` | The cascade's Amazon branch uses the same two. Its own serializer, refusal and name-only delete are gone |
+| new `services/amazon/mapping-parity.vitest.test.ts` | The Step 3.3 gate: one fixture through BOTH callers; the same patch per root is required |
+
+**Behaviour change, stated:** a cascade clear now carries `value: [{ marketplace_id: … }]` (the selectors), and a clear of an
+attribute whose schema declares no selectors is **refused by name** (*"Cannot clear X: the category schema declares no
+attribute selectors."*) — the studio already refused it — instead of going out by name alone. The cascade's refusal of a
+listing-owned leaf now uses the studio's sentence.
+
+### Done when — ✅
+A cascade clear carries the schema selectors (the clear arm) · the gate diffs the two callers on one fixture: 5 arms green
+(a value, a clear, a compound root, a listing-owned leaf, a two-root control) · a divergence in either turns it red (below).
+
+### Gate — ✅ red on the old code, and 6 mutations 6 red (Python harness, per-file backups, sha256 restored)
+
+| Mutation | parity | mapping-payload | prepare-dispatch |
+|---|---|---|---|
+| P1 the cascade file as it was before A-33 — **the "red today" proof** | 🔴 2 (the clear, the refusal) | green | green |
+| P2 the cascade deletes by name alone (one line) | 🔴 1 | green | green |
+| P3 the studio deletes by name alone | 🔴 1 | 🔴 2 | green |
+| P4 the SHARED patch drops the selectors (both agree, wrongly) | 🔴 1 (the clear arm pins the selectors) | 🔴 2 | green |
+| P5 the shared refusal of a listing-owned leaf removed | 🔴 1 | green | green |
+| P6 the cascade serialises only the leaves it selected | 🔴 1 (the compound root) | green | 🔴 1 |
+
+Existing suites: `mapping-payload` 6, `prepare-dispatch` 5, `outbound-sync` — 61 green with the gate's 5 (66). `tsc --noEmit`: 0.
+
+### Cost when — `flat`. Rollback — revert the commit.
+
+🟠 **NOT checked (A-33's open item stays open):** whether the cascade can select a content field (`item_name` …) — the
+studio sends content from the content resolver with its review gate, the cascade from the mapping cell. Neither the gate
+nor this build covers it. Carried to Step 3.5.

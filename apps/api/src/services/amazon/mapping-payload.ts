@@ -4,6 +4,33 @@ import { attributeDeleteValue, attributesFromCells, validateSchemaAttributes } f
 import { isPresent } from '../pim/resolve-channel-field.js'
 
 export interface AttributePatch { op: 'replace' | 'delete'; path: string; value?: unknown }
+
+type MappedField = { fieldKey: string; sourceOwner?: unknown; schemaKnown?: boolean }
+
+/**
+ * A-33 (R-31) — the ONE serializer of mapped Amazon attribute roots, shared by the studio / cockpit feed (below) and the
+ * mapping cascade (`pim/mapping/prepare-dispatch.ts`). They had drifted: `e0791ea9d` (2026-09-14, the GALE import) made the
+ * studio clear an attribute by its schema selectors "instead of deleting by name alone", and the cascade kept deleting by
+ * name alone. One function, so a fix cannot land in one builder again.
+ *
+ * A root that also holds listing-owned leaves is refused: a partial envelope would overwrite them.
+ */
+export function mappedAmazonRoots(spec: ChannelSpec, catalogue: readonly MappedField[], cells: Record<string, { value?: unknown } | undefined>, roots: ReadonlySet<string>): Record<string, unknown> {
+  for (const root of roots) {
+    if (spec.fields.some(f => f.attribute === root && catalogue.some(field => field.fieldKey === f.key && field.sourceOwner))) {
+      throw new Error(`The mixed ownership of ${root} requires a structured listing edit.`)
+    }
+  }
+  const mapped = new Set(catalogue.filter(f => !f.sourceOwner && f.schemaKnown !== false).map(f => f.fieldKey))
+  return attributesFromCells(spec, Object.fromEntries(spec.fields.filter(f => roots.has(f.attribute) && mapped.has(f.key)).map(f => [f.key, cells[f.key]?.value])))
+}
+
+/** A-33 — one root as a listing patch. A clear names the instance by the schema's selector values (`attributeDeleteValue`). */
+export function amazonRootPatch(spec: ChannelSpec, root: string, value: unknown): AttributePatch {
+  return value === undefined
+    ? { op: 'delete', path: `/attributes/${root}`, value: attributeDeleteValue(spec, root) }
+    : { op: 'replace', path: `/attributes/${root}`, value }
+}
 /** Overlay the real resolver outputs onto the actual JSON feed envelope. Pricing,
  * inventory, media and policy attributes retain their owning builder's values. */
 export function applyResolvedMappingToAmazonFeed(feedBody: string, result: ResolveBatchResult, spec: ChannelSpec): string {
@@ -25,17 +52,12 @@ export function applyResolvedMappingToAmazonFeed(feedBody: string, result: Resol
     return fullUpdate || isPresent(cell.value) ? cell.errors.map(e => `${field.label}: ${e}`) : []
   })
   if (problems.length) throw new Error(`Mapping validation failed: ${problems.join('; ')}`)
-  const values = Object.fromEntries(fields.map(f => [f.fieldKey, product.cells[f.fieldKey]?.value]))
-  const attributes = attributesFromCells(spec, values)
   const roots = new Set(spec.fields.filter(f => fields.some(field => field.fieldKey === f.key)).map(f => f.attribute))
+  // A-33 — the shared serializer; it also refuses a root with listing-owned leaves.
+  const attributes = mappedAmazonRoots(spec, result.catalogue.fields, product.cells, roots)
   const next = { ...(message.attributes ?? {}) }
   const removed = new Set<string>()
   for (const root of roots) {
-    // A compound root with both listing-owned and mapped leaves needs a structured
-    // owner merge; refuse to overwrite it with a partial envelope.
-    if (spec.fields.some(f => f.attribute === root && result.catalogue!.fields.some(field => field.fieldKey === f.key && field.sourceOwner))) {
-      throw new Error(`The mixed ownership of ${root} requires a structured listing edit.`)
-    }
     delete next[root]
     if (attributes[root] !== undefined) next[root] = attributes[root]
     else if (spec.fields.some(f => f.attribute === root && product.cells[f.key]?.provenance === 'override')) removed.add(root)
@@ -48,8 +70,8 @@ export function applyResolvedMappingToAmazonFeed(feedBody: string, result: Resol
   if (removed.size && !fullUpdate) {
     message.operationType = 'PATCH'
     message.patches = [
-      ...Object.entries(next).map(([key, value]) => ({ op: 'replace', path: `/attributes/${key}`, value })),
-      ...[...removed].map(key => ({ op: 'delete', path: `/attributes/${key}`, value: attributeDeleteValue(spec, key) })),
+      ...Object.entries(next).map(([key, value]) => amazonRootPatch(spec, key, value)),
+      ...[...removed].map(key => amazonRootPatch(spec, key, undefined)),
     ]
     delete message.attributes
   } else message.attributes = next
