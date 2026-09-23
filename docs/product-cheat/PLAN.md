@@ -5507,3 +5507,44 @@ Full `apps/api` hook suite: **883 files pass**. Profiles ON: the gate files pass
 baseline 35 known failures, not worse. `tsc`: 0.
 
 ### Cost when — `flat`. **Rollback** — revert the commit.
+
+---
+
+## OWNER RULING — 2026-09-23 (seventeenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-25** | A-28 — three data-loss paths found while building 2.6b–c2 | ✅ **(a)** Fix all three, one test arm each (the Owner: *"I agree with you. Go ahead, continue. I'll go with your recommendation."*) |
+
+Still open for the Owner: whether Step 2.1 (b)'s `--apply` on Xavia Racing printed `WROTE 5 rows` / `now: 5` (the
+Owner wrote "Done"; the output was not seen in this session), and the production `AXISNAMES` count for 2.6c-3.
+
+---
+
+## A-28 — BUILT (R-25). Three data-loss paths closed.
+
+| # | Where | What |
+|---|---|---|
+| 1 | `catalog-organize.routes.ts` | The publish snapshot now holds BOTH stores' before-state (`{ __organizeBefore: 2, variantAttributes, variations }`, inside the existing `fromVariantAttributes` JSON — no migration); undo restores the store through the one writer as well as the legacy bag. Only the undo reads that field. A row written before R-25 holds the legacy bag alone: its undo restores that, and cannot restore the store |
+| 2 | `ebay-import.service.ts` | The update path no longer sets `productType: 'APPAREL'` or `bulletPoints: []` — create-time defaults that overwrote an existing product's own. A created product still gets them |
+| 3 | `catalog.routes.ts` — `PATCH /variant-attributes` | A value that is not text or a number is refused by name (400, nothing written) instead of being stored as `"[object Object]"`. A number is still accepted |
+
+### Done when — ✅ three arms in `variation-one-writer.vitest.test.ts`
+
+Publish then undo returns the store (`Size: XXL`), the legacy bag (`Taglia: XS`), the other attributes and the parent
+link to their before-state · an existing product keeps `OUTERWEAR` and its bullets through an import (control: a
+created one gets `APPAREL` and `[]`) · an object value is refused by name and the store is unchanged (control: `44` is
+stored as `'44'`).
+
+### Gate — ✅ 5 mutations, 5 red
+
+Undo not restoring the store · the snapshot leaving the store out · the import overwriting the type again · the route
+stringifying again · the route refusing a number too. Full `apps/api` suite: **883 files pass**; profiles ON: the gate
+file passes. `tsc`: 0.
+
+### ⬜ Not done, stated
+
+The add-child route and organize publish still sanitise values with `String(v)` too; only the variant-attributes route
+was named in A-28. Same refusal would apply; not built without a word.
+
+### Cost when — `flat`. **Rollback** — revert the commit.

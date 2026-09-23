@@ -222,6 +222,40 @@ describe('2.6c-2 — each writer: the value goes to the store, the axis leaves t
   })
 })
 
+describe('R-25 (A-28) — three more data-loss paths', () => {
+  it('#1 organize undo restores the store as well as the legacy bag (it restored the legacy bag only)', async () => {
+    await scoped(() => prisma.product.create({ data: { id: 'undo-me', sku: 'undo-me', name: 'u', basePrice: 10,
+      categoryAttributes: { material: 'Mesh', variations: { Size: 'XXL' } }, variantAttributes: { Taglia: 'XS' } } }))
+    const app = await routeApp(catalogOrganizeRoutes)
+    const published = await app.inject({ method: 'POST', url: '/api/catalog/organize/publish', payload: { changes: [{ productId: 'undo-me', toParentId: 'organize-parent', attributes: { Taglia: 'S' } }] } })
+    expect(published.statusCode, published.body).toBe(200)
+    expect(store(await read('undo-me'))).toEqual({ Taglia: 'S' })
+    const undone = await app.inject({ method: 'POST', url: `/api/catalog/organize/undo/${published.json().sessionId}` })
+    expect(undone.statusCode, undone.body).toBe(200)
+    const after = await read('undo-me')
+    expect(after).toMatchObject({ parentId: null, categoryAttributes: { material: 'Mesh', variations: { Size: 'XXL' } }, variantAttributes: { Taglia: 'XS' } })
+  })
+  it('#2 the eBay import keeps an existing product\'s type and bullets (it wrote APPAREL and [])', async () => {
+    await scoped(() => prisma.product.create({ data: { id: 'kept-typed', sku: 'kept-typed', name: 't', basePrice: 10, productType: 'OUTERWEAR', bulletPoints: ['Waterproof'] } }))
+    ebayItems.items = [{ sku: 'kept-typed', product: { title: 'T', aspects: { Colore: ['Blu'] } } }, { sku: 'brand-new-from-ebay', product: { title: 'N', aspects: {} } }]
+    await scoped(() => importEbayCatalog())
+    expect(await read('kept-typed')).toMatchObject({ productType: 'OUTERWEAR', bulletPoints: ['Waterproof'] })
+    // Control: a product the import CREATES still gets the create-time defaults.
+    expect(await scoped(() => prisma.product.findFirstOrThrow({ where: { sku: 'brand-new-from-ebay' } }))).toMatchObject({ productType: 'APPAREL', bulletPoints: [] })
+  })
+  it('#3 the variant-attributes route refuses an object by name instead of storing "[object Object]"; a number is fine', async () => {
+    await scoped(() => prisma.product.create({ data: { id: 'no-junk', sku: 'no-junk', name: 'j', basePrice: 10, categoryAttributes: { variations: { Taglia: 'M' } } } }))
+    const app = await routeApp(catalogRoutes)
+    const refused = await app.inject({ method: 'PATCH', url: '/api/catalog/products/no-junk/variant-attributes', payload: { Taglia: { value: 'L' } } })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error).toBe('A variation value must be text or a number; "Taglia" is object.')
+    expect(store(await read('no-junk'))).toEqual({ Taglia: 'M' })
+    const numeric = await app.inject({ method: 'PATCH', url: '/api/catalog/products/no-junk/variant-attributes', payload: { Taglia: 44 } })
+    expect(numeric.statusCode, numeric.body).toBe(200)
+    expect(store(await read('no-junk'))).toEqual({ Taglia: '44' })
+  })
+})
+
 // ── the source scan ────────────────────────────────────────────────────────────────────────────────────────
 const API_SRC = join(__dirname, '../..')
 function sourceFiles(dir: string): string[] {
@@ -256,8 +290,9 @@ const NOT_A_WRITE: Array<[string, string, string]> = [
   ['services/bulk-action/attribute-helpers.ts', 'variantAttributes: product.variantAttributes })', 'input to variationBag'],
   ['services/shopify/content-workspace.service.ts', "variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {}", 'input to the helpers'],
   ['services/assortment/field-groups.ts', "variantAttributes: g('attributes'),", 'the assortment copy field map: copies the column as-is between businesses, never a new value'],
-  // The one write left outside the writer: the organize undo restores a snapshot (A-28, for the Owner).
-  ['routes/catalog-organize.routes.ts', 'variantAttributes: (change.fromVariantAttributes as any) ?? null,', 'organize undo (A-28)'],
+  // The one write left outside the writer: the organize undo restores the snapshot it took (R-25).
+  ['routes/catalog-organize.routes.ts', 'variantAttributes: product.variantAttributes ?? null, variations: store ?? null', 'builds the undo snapshot object (stored in fromVariantAttributes), not a column write (R-25)'],
+  ['routes/catalog-organize.routes.ts', 'variantAttributes: (before.legacy as any) ?? null,', 'organize undo restores the exact before-state (R-25)'],
 ]
 const FLAT_FILE_ASSIGNMENTS = ['services/amazon/flat-file.service.ts', 'services/ebay-flat-file-create.logic.ts']
 

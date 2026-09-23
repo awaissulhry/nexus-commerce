@@ -67,7 +67,8 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   ['routes/marketing-automation.routes.ts', 'variantAttributes: (product.variantAttributes ?? undefined)', 'AI prompt pass-through'],
   // Writers — since Step 2.6c-2 they pass the legacy bag INTO the one writer's plan (to drop its keys), never write it.
   ['routes/catalog.routes.ts', 'const variantAttributes = request.body.variantAttributes;', 'the request body, not the column'],
-  ['routes/catalog-organize.routes.ts', 'fromVariantAttributes: (product.variantAttributes as any) ?? null,', 'the organize undo snapshot (A-28)'],
+  ['routes/catalog-organize.routes.ts', 'variantAttributes: product.variantAttributes ?? null, variations: store ?? null', 'the organize undo snapshot of both stores (R-25)'],
+  ['routes/catalog-organize.routes.ts', 'legacy: snapshot.variantAttributes ?? null', 'reads the undo snapshot object, not the column (R-25)'],
   ['routes/catalog-organize.routes.ts', 'legacyDrop: Object.keys((product.variantAttributes ?? {})', 'organize publish empties the legacy bag'],
   ['services/pim/auto-detect.service.ts', 'legacyDrop: Object.keys((before?.variantAttributes ?? {})', 'auto-detect empties the legacy bag'],
   ['services/bulk-action.service.ts', 'variationValuesPlan({ categoryAttributes: (item as ProductLike).categoryAttributes, variantAttributes: (item as ProductLike).variantAttributes }', 'into the one writer\'s plan'],

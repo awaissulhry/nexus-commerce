@@ -61,7 +61,7 @@ been exercised.
 | **2.6b** Four writers stop wiping the store | ✅ **BUILT** — organize publish, eBay import, Amazon reconciliation, catalog PATCH merge instead of replace; 5 arms on real PostgreSQL, 7 mutations red | see `git log` |
 | **2.6c-1** Every reader takes the store first | ✅ **BUILT** — 23 of 24 live readers read through `variationBag` (the 24th moves with its writer in c2); a source scan names every remaining direct read (32 exceptions, each with a reason); 6 mutations red | see `git log` |
 | **2.6c-2** One writer; the legacy bag never written | ✅ **BUILT** — every writer sets the store and REMOVES the touched axis from the legacy bag (a stale legacy size cannot come back on clear); real-database gates consolidated onto one in-process database (the server's lock table overflowed); 27 mutations red across Step 2.6 | see `git log` |
-| **A-28** Three findings: organize undo leaves the store changed; eBay import overwrites type and bullets; the variant-attributes route stringifies objects | 🟡 **FOR YOUR RULING** — recommended (a): fix all three, one arm each. Not built | — |
+| **A-28** Three findings: organize undo leaves the store changed; eBay import overwrites type and bullets; the variant-attributes route stringifies objects | ✅ **RULED R-25 (a), BUILT** — undo restores both stores (snapshot inside the existing JSON, no migration); the import keeps type and bullets; objects refused by name; 5 mutations red | see `git log` |
 | **2.1 (b) on production** (2026-09-23) | 🟡 **Dry run done by the Owner** — Xavia Racing: **5** rows (the same 5 as local), `0 already required`, so `--revert` is exact. Waiting: Motovento dry run, then `--apply` | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 
@@ -218,7 +218,7 @@ approval **before building**. Each turn reports what changed, whether it worked,
    this branch deploys.**
 9. 🟡 **Step 2.6 — D-D ruled (R-23 (a)); A-27 approved (R-24).** ✅ 2.6a, 2.6b, 2.6c-1 (readers) and 2.6c-2 (one writer) built and pushed. c3 (one synonym table) waits for the Owner's
    production count (`tools/axis-stores.mjs`, `AXISNAMES` lines): locally every spelling in use is classified the same by
-   both tables; adding `talla` / `groesse` to the eBay table re-keys any saved order that uses them. A-28 waits for the Owner.
+   both tables; adding `talla` / `groesse` to the eBay table re-keys any saved order that uses them. ✅ A-28 built (R-25).
 
 ### Still blocked, not forgotten
 

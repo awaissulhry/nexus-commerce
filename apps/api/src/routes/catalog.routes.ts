@@ -1751,6 +1751,11 @@ export async function catalogRoutes(app: FastifyInstance) {
       for (const [k, v] of Object.entries(incoming)) {
         const key = String(k).trim();
         if (!key) continue;
+        // R-25 (A-28 #3) — a variation value is text or a number. `String()` stored an object as "[object Object]"
+        // (the GALE junk key, via the retired Matrix tab); refuse it by name instead.
+        if (v !== null && v !== undefined && typeof v !== 'string' && typeof v !== 'number') {
+          return reply.status(400).send({ success: false, error: `A variation value must be text or a number; "${key}" is ${Array.isArray(v) ? 'a list' : typeof v}.` });
+        }
         const val = String(v ?? '').trim();
         if (val === '') deletes.push(key);
         else writes[key] = val;
