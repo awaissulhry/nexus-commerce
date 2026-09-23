@@ -1102,3 +1102,33 @@ complete fresh traversal and actual cold recovery/key-retirement approval remain
 Neither these primitive tests nor current workspace status establishes global key
 migration completeness. Other channel handlers/financial/stock/publishing acceptance
 and their earlier approval/policy dependencies remain unchanged.
+
+
+## C11f3 — quarantine integrity independent of adoptability (local)
+
+C11f2 is committed396469275. A private shared crypto helper now verifies the sealed
+binding, raw-byte digest, canonical base64/size, version and stored envelope-key
+metadata before opening quarantine. Strict maintenance preserves verified future-topic,
+malformed-JSON and opaque bodies; account adoption still applies its existing strict
+JSON/delivery/topic/immutable-subject checks afterward. No maintenance DB write or
+new public payload reader is introduced by this slice.
+
+Review caught a missing-target boundary: undefined could select the underlying
+compatibility reencrypt path. A shared runtime resource-ARN validator now runs before
+source access, and the wrapper checks replacement KMS mode/key explicitly. Undefined,
+null, empty, env and alias controls prove zero source decrypt/encrypt requests.
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11-f3-crypto-red.log records the initially missing module (not a behavioral red).
+- c11-f3-crypto-reviewed.log:79 focused cases pass after the review fix.
+- c11-f3-postgres.log:32 real PostgreSQL adoption/ownership/routing cases pass under
+  production-equivalent owner permissions, zero skips.
+- c11-f3-mutations.log and individual logs: six applied/restored mutations killed
+  (binding, key metadata, digest, canonical base64, strict target, opaque-body support).
+  The missing-target mutation is the behavioral reproduction of the review finding.
+- Independent final source review approves. Final broader regressions/typecheck are
+  pass111 tests (c11-f3-final.log) and c11-f3-typecheck-final.log respectively.
+
+Private maintenance authority, global inventory, narrow cipher CAS with atomic audit,
+complete fresh traversal and actual key-retirement approval remain. This slice does
+not certify any production envelope, change a key, grant a role or activate processing.

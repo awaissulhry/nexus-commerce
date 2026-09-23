@@ -553,6 +553,12 @@ export class CredentialsMaintenanceError extends Error {
   }
 }
 
+export function assertCredentialsMaintenanceKey(target: unknown): asserts target is string {
+  if (typeof target !== 'string' || !/^arn:[a-z0-9-]+:kms:[a-z0-9-]+:\d{12}:key\/[A-Za-z0-9-]+$/.test(target)) {
+    throw new CredentialsMaintenanceError('target_invalid', 'Maintenance requires a resolved KMS key resource ARN.')
+  }
+}
+
 /**
  * A resolved resource enables strict maintenance: no fallback, cold KMS opens,
  * and exact serialized-content preservation. No target retains legacy behavior.
@@ -560,9 +566,7 @@ export class CredentialsMaintenanceError extends Error {
  */
 export async function reencryptCredentials(blob: string, targetKeyArn?: string): Promise<EncryptCredentialsResult> {
   if (targetKeyArn === undefined) return encryptCredentials(await decryptCredentials(blob))
-  if (!/^arn:[a-z0-9-]+:kms:[a-z0-9-]+:\d{12}:key\/[A-Za-z0-9-]+$/.test(targetKeyArn)) {
-    throw new CredentialsMaintenanceError('target_invalid', 'Maintenance requires a resolved KMS key resource ARN.')
-  }
+  assertCredentialsMaintenanceKey(targetKeyArn)
   const original = await credentialsPlaintext(blob, true)
   parseCredentialsJson(original)
   let result: EncryptCredentialsResult

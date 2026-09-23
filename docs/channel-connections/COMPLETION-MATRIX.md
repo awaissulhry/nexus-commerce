@@ -25,8 +25,13 @@ constraints. The full local package gate passes on c65db206b (256 realPG/zero sk
 11504 API,4603 web,both builds,127 security; detailed skips/ratchet in build record).
 U1 adds reviewed shared retention fields with real-browser/typecheck/build proof.
 U2 corrects Ingress queued/completed feedback and preserves keyboard focus; see its
-current build record. Quarantine recovery/key maintenance, transactional order/erasure
-work and all channel-specific operational dependencies below remain open.
+current build record. C11e1/e2 add reviewed owner-only recovery APIs/UI and profile
+read-race guards (264 realPG and full local API/web/build gates in their record).
+C11f1/f2 add owned-only maintenance, strict pinned/cold/lossless encryption and cache
+race fixes (11543 full API tests,44 targeted realPG,7 mutations for f2). C11f3 adds
+quarantine integrity separate from adoptability (79 focused,32 realPG,6 mutations).
+These are local only. Global quarantine authority/inventory/atomic maintenance audit,
+transactional order/erasure work and channel operational dependencies remain open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
 SUCCESS, exact health/readiness build, protected diagnostic GET401, migration
@@ -64,7 +69,7 @@ proof remains dated. New continuation slices are still unpushed/undeployed.
 | P1.6 | Approved groups removed; build/P1.6-delete-list.md | Baseline | Remaining live dependencies retained | Do not equate zero traffic with unneeded fallback | New deletions separately |
 | P1.7 | Preview and ended-listing guards; build/P1.7.md | Baseline | Historical fixtures; partial flat-file cap amendment | Keep approved 200-row preview policy and guard mutations | Live proof |
 | P1.8 | contract/channel-contracts.ts has only four checks | Baseline | Switch historically on; accounts absent; coverage partial | Add supported contract coverage/partial state; configure test accounts | Test accounts + channel calls |
-| P2.1 | C9–C11d7 local durable protocol, archive and rolling holds; package256 realPG/zero skips | C1 in published baseline; new protocol local only | New processing defaults OFF; no live signal proof | C11d6 local archive14 realPG/91 regressions and DB guards; C11d7 rollout9 realPG/5 mutations. Quarantine recovery/key maintenance and live delivery/recovery proof remain | Implementation + approved deployment/activation |
+| P2.1 | C9–C11d7 local durable protocol, archive and rolling holds; package256 realPG/zero skips | C1 in published baseline; new protocol local only | New processing defaults OFF; no live signal proof | C11d6 local archive14 realPG/91 regressions and DB guards; C11d7 rollout9 realPG/5 mutations. Owner recovery API/UI is locally reviewed; global key maintenance and live delivery/recovery proof remain | Implementation + approved deployment/activation |
 | P2.2 | Amazon per-type subscriptions and parsing; build/P2.2.md | Baseline | New types gated; every type arrival not proven | Actual subscription inventory and per-type real arrivals | Live calls/subscriptions |
 | P2.3 | eBay notifications.ts/routes/handlers independently audited | C3/C8 deployed 439d9e3d3 | Startup log proves automatic setup disabled; no new subscription provisioned | C3 transport/status fixed; C8 readiness/explicit activation hold (83 tests); revocation processor now locally wired; operational quarantine, account-token topic coverage and real delivery remain open | Implementation + approved catalogue/activation |
 | P2.4 | Shopify reconciliation/lifecycle; build/P2.4.md | Baseline | Store connected; no fresh uninstall/privacy proof | Preserve connection and regression coverage | Any test uninstall/write |

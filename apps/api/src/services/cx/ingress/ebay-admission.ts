@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
-import { encryptCredentials, decryptCredentials } from '../../../lib/crypto.js'
+import { encryptCredentials } from '../../../lib/crypto.js'
 import { legacyIngress, withIngressWorkspace } from '../../../lib/workspace-ingress.js'
 import { LEGACY_WORKSPACE_ID, requireWorkspace } from '../../../lib/workspace-context.js'
 import { recordInboundInTx, type InboundWriteResult } from './ledger.js'
 import { readEbayNoticeIdentity, readEbayPublicationTime, type EbayNoticeIdentity } from './ebay-revocation-notice.js'
 import { verifyEbayNotification, type EbayEnvironment } from './ebay-signature.js'
+import { openEbayQuarantineBody } from './ebay-quarantine-crypto.js'
 
 type Tx = Prisma.TransactionClient
 type Quarantine = NonNullable<Awaited<ReturnType<typeof prisma.ebayNoticeQuarantine.findUnique>>>
@@ -86,14 +87,7 @@ async function seal(notice: Notice, header?: string) {
 
 async function open(row: Quarantine): Promise<Notice> {
   try {
-    if (!row.payloadEnc) throw new Error()
-    const saved = await decryptCredentials(row.payloadEnc)
-    const expected = { environment: row.environment, signatureOk: row.signatureOk, externalId: row.externalId,
-      topic: row.topic, subjectHash: row.subjectHash, payloadDigest: row.payloadDigest }
-    const savedBinding = saved.binding as Record<string, unknown> | undefined
-    if (saved.version !== 1 || !savedBinding || Object.entries(expected).some(([key, value]) => savedBinding[key] !== value) || typeof saved.rawBody !== 'string') throw new Error()
-    const rawBody = Buffer.from(saved.rawBody, 'base64')
-    if (!rawBody.length || rawBody.length > MAX_BYTES || digest(rawBody) !== row.payloadDigest) throw new Error()
+    const rawBody = await openEbayQuarantineBody(row)
     const payload: unknown = JSON.parse(rawBody.toString('utf8'))
     const identity = readEbayNoticeIdentity(payload)
     if (!row.signatureOk || identity.topic !== row.topic || identity.notificationId !== row.externalId || !identity.userId
