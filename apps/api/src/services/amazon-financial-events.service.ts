@@ -1,4 +1,3 @@
-import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * Amazon Financial Events Ingestion (Phase 2A — Financial)
  *
@@ -83,16 +82,17 @@ interface FinancialSyncSummary {
    * measurement, and every existing reader of `txCreated` sums writes.
    */
   dryRun?: boolean
-  /** How many rows the write path IDENTIFIED as new. On a real run this equals `txCreated`. */
+  /** Candidate provider identities absent from the new-key lookup, not approved money writes. */
   txWouldCreate?: number
-  /**
-   * 🔴 The number this mode exists for. §4b measured that the v0 path stores
-   * `amazonTransactionId` as the bare `amazonOrderId` while this path stores
-   * `orderId/sellerOrderItemId/postedDate`, so this path cannot see v0's rows and would
-   * write a SECOND one for the same money. This counts the would-be duplicates, over a
-   * real window, without writing any of them.
-   */
+  /** Legacy API field name: counts same-order/type v0 overlap RISK, not proven duplicate amounts. */
   txWouldDuplicateV0?: number
+  /** Counts above assess identity/order overlap, not equivalence of financial amounts. */
+  comparisonScope?: 'identity_and_order_overlap_only'
+  transactionsWithoutOrderId?: number
+  unmatchedTransactions?: number
+  duplicateTransactions?: number
+  accountId?: string
+  marketplaceId?: string | null
   /** DA-RT.17 — diagnostics: first 10 AmazonOrderIds from fetched
    *  events whose row doesn't exist in our Order table, AND first 10
    *  channelOrderIds we DO have for AMAZON orders in the same window
@@ -401,18 +401,10 @@ export async function syncYesterdayFinancialEvents(): Promise<FinancialSyncSumma
 // ─────────────────────────────────────────────────────────────────────
 // 2024-06-19 Transactions API — replacement for the deprecated v0 path
 //
-// Amazon migrated Finance API access to /finances/2024-06-19/transactions.
-// Existing v0 endpoints (/financialEvents, /financialEventGroups) return
-// 403 for new authorizations even when "Finance and Accounting" is granted.
-// Probe at GET /api/amazon/finance/probe confirms 2024-06-19 returns 200.
-//
-// The new Transaction model is flatter than v0's FinancialEvent — one row
-// per transaction (vs nested ShipmentItemList). Mapping to FinancialTransaction:
-//   - amazonOrderId  ← relatedIdentifiers[AMAZON_ORDER_ID].relatedIdentifierValue
-//   - transactionType ← 'Order' (Shipment) | 'Refund' | other
-//   - amount         ← totalAmount.currencyAmount
-//   - fees           ← breakdowns by breakdownType (Commission, FBA Fees, etc.)
-// ─────────────────────────────────────────────────────────────────────
+// Finances 2024-06-19 identifies transactions by transactionId and orders by
+// relatedIdentifiers[ORDER_ID]. Its recursive monetary breakdowns do not have
+// the v0 writer's semantics. This reader measures overlap only; cutover is held.
+// Official model: amzn/selling-partner-api-models, finances_2024-06-19.json.
 
 interface NewMoney {
   currencyAmount?: number
@@ -421,13 +413,14 @@ interface NewMoney {
 interface NewBreakdown {
   breakdownType?: string
   breakdownAmount?: NewMoney
+  breakdowns?: NewBreakdown[]
 }
 interface NewRelatedId {
   relatedIdentifierName?: string
   relatedIdentifierValue?: string
 }
 interface NewTransaction {
-  sellerOrderItemId?: string
+  transactionId?: string
   transactionType?: string
   postedDate?: string
   totalAmount?: NewMoney
@@ -439,40 +432,16 @@ interface NewTransaction {
   marketplaceDetails?: { marketplaceId?: string; marketplaceName?: string }
 }
 
-/**
- * P5.2 — read one `/finances/2024-06-19/transactions` page, whichever envelope it
- * arrives in, and REFUSE a page it cannot read.
- *
- * ## Why this exists
- *
- * Measured 2026-09-21 on the development database: `/finances/2024-06-19/transactions`
- * has **0 calls ever**, while v0's `listFinancialEvents` has **112 (108 × 200)** and
- * feeds all **1,792** `FinancialTransaction` rows. The new path is built, wired through
- * the gateway, and has never run — so nobody has seen Amazon's answer to it, and
- * `routes/amazon.routes.ts` says as much: *"the parser hasn't been updated for
- * Amazon's `{payload: {...}}` wrapper yet"*.
- *
- * 🔴 **The old code read `data.transactions ?? []`.** If Amazon wraps the list — as v0
- * does, and as P5.1 found `searchOrders` and `getOrder` each do differently — that
- * yields `[]`, the loop ends, and the sync returns **success with
- * `orderEventsFetched: 0`**. A settlement day silently recorded as "no transactions",
- * which is indistinguishable from a genuinely quiet day.
- *
- * P5.1's finding, in as many words: *"Three envelopes in one migration. v0 wraps in
- * `payload`; `searchOrders` puts the list under `orders`; `getOrder` wraps one order in
- * `order`. The wrong one gives every field `undefined` and no error."*
- *
- * So: both shapes are accepted, exactly as `fetchReport` already accepts `url` and
- * `location` for the same reason. And a body carrying **neither** is a parse failure,
- * not an empty day — it throws, naming the keys Amazon actually sent, because
- * *"could not measure" and "measured empty" must not look the same*.
- */
+/** Accept either observed envelope. An unreadable page is never a quiet day. */
 export function readTransactionsPage(body: unknown): { transactions: NewTransaction[]; nextToken?: string } {
   const root = (body ?? {}) as Record<string, unknown>
   const payload = (root.payload ?? {}) as Record<string, unknown>
 
   for (const envelope of [root, payload]) {
     if (Array.isArray(envelope.transactions)) {
+      if (envelope.nextToken != null && (typeof envelope.nextToken !== 'string' || !envelope.nextToken.trim())) {
+        throw new Error('[fin-tx-2024] invalid nextToken; pagination completeness cannot be established.')
+      }
       return {
         transactions: envelope.transactions as NewTransaction[],
         // The token travels with the list it paginates: a `payload` envelope carries
@@ -490,166 +459,48 @@ export function readTransactionsPage(body: unknown): { transactions: NewTransact
   )
 }
 
-async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
-
-function sumBreakdowns(
-  breakdowns: NewBreakdown[] | undefined,
-  matcher: (type: string) => boolean,
-): number {
-  return (breakdowns ?? [])
-    .filter((b) => b.breakdownType && matcher(b.breakdownType))
-    .reduce((s, b) => s + (b.breakdownAmount?.currencyAmount ?? 0), 0)
+function transactionOrderId(tx: NewTransaction): string | undefined {
+  for (const id of tx.relatedIdentifiers ?? []) {
+    if (!id || typeof id !== 'object' || Array.isArray(id) ||
+        typeof id.relatedIdentifierName !== 'string' || !id.relatedIdentifierName.trim() ||
+        typeof id.relatedIdentifierValue !== 'string' || !id.relatedIdentifierValue.trim() ||
+        id.relatedIdentifierName.trim() !== id.relatedIdentifierName || id.relatedIdentifierValue.trim() !== id.relatedIdentifierValue) {
+      throw new Error('Finances transaction has a malformed related identifier.')
+    }
+  }
+  const ids = (tx.relatedIdentifiers ?? []).filter(id => id.relatedIdentifierName === 'ORDER_ID')
+    .map(id => id.relatedIdentifierValue)
+  if (ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size > 1) {
+    throw new Error('Finances transaction has invalid or ambiguous ORDER_ID identifiers.')
+  }
+  return ids[0]
 }
 
-function findRelatedId(
-  ids: NewRelatedId[] | undefined,
-  name: string,
-): string | undefined {
-  return ids?.find((r) => r.relatedIdentifierName === name)?.relatedIdentifierValue
-}
-
-/**
- * P5.2 — one 2024-06-19 transaction, either written or COUNTED.
- *
- * `opts.dryRun` skips exactly one statement: the `create`. Everything that decides
- * *whether* a row would be written — the related-id lookup, the order match, the type
- * map, the identifier build and the idempotency check — runs identically, because a
- * count produced by a second, "equivalent" predicate is a count of something else. The
- * banked rule is that a write's routing predicate binds its readers; re-deriving it one
- * line away diverges on the first case that differs.
- */
-async function processNewTransaction(
-  tx: NewTransaction,
-  opts: { dryRun?: boolean } = {},
-): Promise<{ created: number; skipped: number; wouldDuplicateV0: number }> {
-  const amazonOrderId = findRelatedId(tx.relatedIdentifiers, 'AMAZON_ORDER_ID')
-  if (!amazonOrderId) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
-
+/** Identity-only overlap assessment. No money mapping or write is implied by a candidate. */
+async function assessNewTransaction(tx: NewTransaction, accountId: string, amazonOrderId?: string): Promise<{
+  created: number; skipped: number; wouldDuplicateV0: number; orderId?: string;
+  reason?: 'without_order' | 'unmatched_order' | 'existing';
+}> {
+  if (!amazonOrderId) return { created: 0, skipped: 1, wouldDuplicateV0: 0, reason: 'without_order' }
   const order = await prisma.order.findFirst({
-    where: { channel: 'AMAZON', channelOrderId: amazonOrderId },
-    select: { id: true, currencyCode: true },
-  })
-  if (!order) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
-
-  // Map Amazon transactionType → Nexus transactionType
-  // Shipment = Order revenue, Refund = Refund, all others kept as raw string
-  const rawType = tx.transactionType ?? 'Unknown'
-  const txType =
-    rawType === 'Shipment' ? 'Order' :
-    rawType === 'Refund' ? 'Refund' :
-    rawType
-
-  // Idempotency: unique key is (orderId, transactionType, amazonTransactionId).
-  // Use sellerOrderItemId + postedDate as transaction-level uniqueness so we
-  // can ingest multiple shipments/refunds for the same order.
-  const txIdentifier = tx.sellerOrderItemId
-    ? `${amazonOrderId}/${tx.sellerOrderItemId}/${tx.postedDate ?? ''}`
-    : `${amazonOrderId}/${tx.postedDate ?? ''}`
-
-  const existing = await prisma.financialTransaction.findFirst({
-    where: {
-      orderId: order.id,
-      transactionType: txType,
-      amazonTransactionId: txIdentifier,
-    },
+    where: { channel: 'AMAZON', channelOrderId: amazonOrderId, channelConnectionId: accountId },
     select: { id: true },
   })
-  if (existing) return { created: 0, skipped: 1, wouldDuplicateV0: 0 }
-
-  // Sum breakdowns — Amazon uses negative numbers for fees, positive for revenue
-  const principal = sumBreakdowns(tx.breakdowns, (t) => t === 'Principal')
-  const tax = sumBreakdowns(tx.breakdowns, (t) => t === 'Tax' || t.endsWith('Tax'))
-  const shipping = sumBreakdowns(tx.breakdowns, (t) => t.startsWith('Shipping'))
-  const commission = Math.abs(
-    sumBreakdowns(tx.breakdowns, (t) => t === 'Commission' || t === 'RefundCommission'),
-  )
-  const fbaFee = Math.abs(
-    sumBreakdowns(tx.breakdowns, (t) =>
-      t.startsWith('FBA') || t === 'Fulfillment Fees' || t === 'FBAFees',
-    ),
-  )
-  const otherFees = Math.abs(
-    sumBreakdowns(tx.breakdowns, (t) =>
-      !['Principal', 'Tax', 'Commission', 'RefundCommission'].includes(t) &&
-      !t.startsWith('Shipping') && !t.startsWith('FBA') &&
-      t !== 'Fulfillment Fees' && t !== 'FBAFees' && !t.endsWith('Tax'),
-    ),
-  )
-
-  const totalAmount = tx.totalAmount?.currencyAmount ?? 0
-  const currencyCode = tx.totalAmount?.currencyCode ?? order.currencyCode ?? 'EUR'
-  const grossRevenue = principal + shipping
-  const totalFees = commission + fbaFee + otherFees
-  const netRevenue = grossRevenue - totalFees + tax
-
-  const postedDate = tx.postedDate ? new Date(tx.postedDate) : new Date()
-
-  /**
-   * 🔴 The dry-run arm. It returns BEFORE the create and after everything that decides,
-   * so the count is the count the real write would produce.
-   *
-   * It also answers the question §4b raised and could not settle without writing: the v0
-   * path stored this money under the BARE `amazonOrderId`, so a v0 row is invisible to
-   * the idempotency check above, which looks for `txIdentifier`. Looking for the v0
-   * shape here turns "these two paths would double-write" from an argument about string
-   * formats into a number measured on a real window.
-   */
-  if (opts.dryRun) {
-    const v0Row = await prisma.financialTransaction.findFirst({
-      where: { orderId: order.id, transactionType: txType, amazonTransactionId: amazonOrderId },
-      select: { id: true },
-    })
-    return { created: 1, skipped: 0, wouldDuplicateV0: v0Row ? 1 : 0 }
-  }
-
-  await prisma.financialTransaction.create({
-    data: {
-      amazonTransactionId: txIdentifier,
-      orderId: order.id,
-      transactionType: txType,
-      transactionDate: postedDate,
-      amount: totalAmount,
-      currencyCode,
-      amazonFee: commission,
-      fbaFee,
-      paymentServicesFee: 0,
-      ebayFee: 0,
-      paypalFee: 0,
-      otherFees,
-      grossRevenue,
-      netRevenue,
-      status: 'Completed',
-      amazonMetadata: {
-        source: 'finances/2024-06-19/transactions',
-        postedDate: tx.postedDate,
-        rawTransactionType: rawType,
-        description: tx.description,
-        sellerOrderItemId: tx.sellerOrderItemId,
-        breakdowns: (tx.breakdowns ?? []) as unknown as Array<Record<string, unknown>>,
-      } as unknown as object,
-    },
+  if (!order) return { created: 0, skipped: 1, wouldDuplicateV0: 0, reason: 'unmatched_order' }
+  const transactionType = tx.transactionType === 'Shipment' ? 'Order' : tx.transactionType!
+  const existing = await prisma.financialTransaction.findFirst({
+    where: { orderId: order.id, transactionType, amazonTransactionId: tx.transactionId },
+    select: { id: true },
   })
-
-  return { created: 1, skipped: 0, wouldDuplicateV0: 0 }
+  if (existing) return { created: 0, skipped: 1, wouldDuplicateV0: 0, orderId: order.id, reason: 'existing' }
+  const legacy = await prisma.financialTransaction.findFirst({
+    where: { orderId: order.id, transactionType, amazonTransactionId: amazonOrderId },
+    select: { id: true },
+  })
+  return { created: 1, skipped: 0, wouldDuplicateV0: legacy ? 1 : 0, orderId: order.id }
 }
 
-/**
- * Pulls /finances/2024-06-19/transactions for the window, paginates via
- * nextToken, and writes one FinancialTransaction per Amazon Transaction.
- * Idempotent — re-running over the same window skips existing rows.
- */
-/**
- * P5.2 — probe the 2024-06-19 endpoint and WRITE NOTHING.
- *
- * The only thing standing between this endpoint and the migration is that nobody has
- * seen Amazon's answer to it (**0 calls ever**). Finding out used to mean running the
- * real sync, which is a production **write** — it creates `FinancialTransaction` rows.
- *
- * This asks the same question as a **read**: one page, report which envelope came
- * back and how many transactions were in it, write nothing, keep no payload. The
- * standing rules already allow a production read, so settling the envelope no longer
- * needs a write to be approved.
- */
+/** One-page envelope probe, never a financial write. A live call still needs approval. */
 export interface FinancialEnvelopeProbe {
   ok: boolean
   /** 'bare' = {transactions}, 'payload' = {payload:{transactions}}, null = neither. */
@@ -660,16 +511,19 @@ export interface FinancialEnvelopeProbe {
   rootKeys: string[]
   windowStart: string
   windowEnd: string
-  marketplaceId: string
+  marketplaceId: string | null
+  accountId?: string
   error?: string
 }
 
 export async function probeFinancialTransactionsEnvelope(
   windowStart: Date,
   windowEnd: Date,
-  marketplaceId?: string,
+  marketplaceId?: string | null,
+  accountId?: string,
 ): Promise<FinancialEnvelopeProbe> {
-  const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+  if (marketplaceId === null && !accountId) throw new Error('An account-wide Finances probe requires an explicit accountId.')
+  const mid = marketplaceId === null ? null : marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
   const upperBound = new Date(Math.min(windowEnd.getTime(), Date.now() - 180_000))
   const base: FinancialEnvelopeProbe = {
     ok: false, envelope: null, transactionsOnFirstPage: 0, hasNextToken: false, rootKeys: [],
@@ -677,11 +531,11 @@ export async function probeFinancialTransactionsEnvelope(
   }
   try {
     const authorization = await import('../lib/amazon-sp-client.js')
-    const account = await authorization.amazonAccount()
+    const account = await authorization.amazonAccount({ accountId })
     const qs = new URLSearchParams({
       postedAfter: windowStart.toISOString(),
       postedBefore: upperBound.toISOString(),
-      marketplaceId: mid,
+      ...(mid !== null ? { marketplaceId: mid } : {}),
     }).toString()
     // P1.2 — through the channel gateway, like the sync itself. A read.
     const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
@@ -701,6 +555,7 @@ export async function probeFinancialTransactionsEnvelope(
     const page = envelope ? readTransactionsPage(body) : { transactions: [], nextToken: undefined }
     return {
       ...base,
+      accountId: account.id,
       ok: envelope !== null,
       envelope,
       transactionsOnFirstPage: page.transactions.length,
@@ -722,50 +577,59 @@ export async function probeFinancialTransactionsEnvelope(
  * The rule lives here, next to the two paths, rather than in the route, so it is one
  * predicate with one test rather than a sentence a reader has to trust.
  */
-export function financialsDryRunRefusal(body: { useV0?: boolean; dryRun?: boolean }): string | null {
+export function financialsDryRunRefusal(body: { useV0?: boolean; dryRun?: boolean; probe?: boolean; accountId?: string }): string | null {
+  for (const flag of ['useV0', 'dryRun', 'probe'] as const) {
+    if (body[flag] !== undefined && typeof body[flag] !== 'boolean') return `${flag} must be a boolean. Nothing was written.`
+  }
+  if (body.accountId !== undefined && body.useV0 !== false && body.probe !== true) return 'accountId is supported only by the 2024 probe or dry run. The v0 writer was not called.'
+  if (body.useV0 === false && body.dryRun !== true && body.probe !== true) return 'Finances 2024 cutover is held pending reconciliation. Use dryRun: true. Nothing was written.'
   if (body.dryRun !== true) return null
   if (body.useV0 === false) return null
   return 'dryRun is only available on the 2024-06-19 path. Send {"useV0": false, "dryRun": true}. Nothing was written.'
 }
 
 /**
- * P5.2 — pull the window and either WRITE it or COUNT it.
- *
- * `opts.dryRun` is the cheapest of the three safe comparisons §4b named. The plan's own
- * next step — "one live `{useV0:false}` call, then compare counts against v0" — is a
- * **write**, and over a window v0 has already synced it would create a second row for
- * the same money. This runs the identical fetch and the identical decision path and
- * writes nothing, so the comparison can be made before anything is at stake.
+ * P5.2 — bounded identity/order-overlap measurement, with no financial writes.
+ * Provider transaction IDs do not bridge v0's order-level money records. Until that
+ * reconciliation and monetary mapping are proved, the new writer is deliberately held.
  */
 export async function syncFinancialTransactions(
   windowStart: Date,
   windowEnd: Date,
-  marketplaceId?: string,
-  opts: { dryRun?: boolean } = {},
+  marketplaceId?: string | null,
+  opts: { dryRun?: boolean; accountId?: string } = {},
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
-  const dryRun = opts.dryRun === true
-  const mid = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
-  const authorization = await import('../lib/amazon-sp-client.js')
-  const account = await authorization.amazonAccount()
+  if (opts.dryRun !== true) throw new Error('Finances 2024 cutover is held pending reconciliation. Use dryRun: true; no channel call or money write was made.')
+  if (opts.accountId !== undefined && (typeof opts.accountId !== 'string' || !opts.accountId.trim())) throw new Error('accountId must be a nonempty string.')
+  const dryRun = true
+  if (marketplaceId !== null && (typeof marketplaceId !== 'string' || !marketplaceId.trim())) throw new Error('Choose an explicit marketplaceId, or null with an accountId for an account-wide Finances comparison.')
+  if (marketplaceId === null && !opts.accountId) throw new Error('An account-wide Finances comparison requires an explicit accountId.')
+  const mid = marketplaceId
 
   // Clamp upper bound to "now - 3min" — same SP-API data-propagation guard
   // we use for getOrders.
   const SP_API_CLOCK_SKEW_MS = 180_000
   const minAgo = new Date(Date.now() - SP_API_CLOCK_SKEW_MS)
   const upperBound = windowEnd.getTime() > minAgo.getTime() ? minAgo : windowEnd
+  const span = upperBound.getTime() - windowStart.getTime()
+  if (!Number.isFinite(span) || span <= 0 || span > 180 * 86_400_000) {
+    throw new Error('The Finances date window must be valid, increasing, and no longer than 180 days.')
+  }
+  const authorization = await import('../lib/amazon-sp-client.js')
+  const account = await authorization.amazonAccount({ accountId: opts.accountId })
 
   const collected: NewTransaction[] = []
   let nextToken: string | undefined
   let pages = 0
+  const tokens = new Set<string>()
   while (true) {
-    const params: Record<string, string> = nextToken
-      ? { nextToken }
-      : {
+    const params: Record<string, string> = {
           postedAfter: windowStart.toISOString(),
           postedBefore: upperBound.toISOString(),
-          marketplaceId: mid,
-        }
+          ...(mid !== null ? { marketplaceId: mid } : {}),
+          ...(nextToken ? { nextToken } : {}),
+    }
     const qs = new URLSearchParams(params).toString()
     // P1.2 — through the channel gateway (the same account; rate bucket; call ledger).
     const res = await (await import('./gateway/amazon-sdk.js')).amazonSellerFetch({
@@ -780,7 +644,9 @@ export async function syncFinancialTransactions(
     collected.push(...page.transactions)
     pages++
     nextToken = page.nextToken
-    if (!nextToken || pages >= 50) break
+    if (!nextToken) break
+    if (pages >= 50 || tokens.has(nextToken)) throw new Error('Finances pagination is incomplete: page bound or repeated nextToken.')
+    tokens.add(nextToken)
     // light pacing — endpoint is generous but be polite
     await new Promise((r) => setTimeout(r, 200))
   }
@@ -791,13 +657,29 @@ export async function syncFinancialTransactions(
   let txSkipped = 0
   let ordersMatched = 0
   let txWouldDuplicateV0 = 0
+  let transactionsWithoutOrderId = 0, unmatchedTransactions = 0, duplicateTransactions = 0
+  const transactionIds = new Map<string, string>()
+  const matchedOrders = new Set<string>()
   for (const tx of collected) {
-    const r = await processNewTransaction(tx, { dryRun })
+    if (!tx || typeof tx.transactionId !== 'string' || !tx.transactionId.trim()) throw new Error('Finances transaction has no valid transactionId.')
+    if (typeof tx.transactionType !== 'string' || !tx.transactionType.trim()) throw new Error('Finances transaction has no valid transactionType.')
+    if (tx.relatedIdentifiers !== undefined && !Array.isArray(tx.relatedIdentifiers)) throw new Error('Finances transaction has invalid relatedIdentifiers.')
+    const orderId = transactionOrderId(tx)
+    const identity = JSON.stringify([tx.transactionType, orderId ?? null])
+    if (transactionIds.has(tx.transactionId)) {
+      if (transactionIds.get(tx.transactionId) !== identity) throw new Error('Finances pagination returned conflicting identities for one transactionId.')
+      txSkipped++; duplicateTransactions++; continue
+    }
+    transactionIds.set(tx.transactionId, identity)
+    const r = await assessNewTransaction(tx, account.id, orderId)
     txWouldCreate += r.created
     txSkipped += r.skipped
     txWouldDuplicateV0 += r.wouldDuplicateV0
-    if (r.created > 0) ordersMatched++
+    if (r.orderId) matchedOrders.add(r.orderId)
+    if (r.reason === 'without_order') transactionsWithoutOrderId++
+    if (r.reason === 'unmatched_order') unmatchedTransactions++
   }
+  ordersMatched = matchedOrders.size
 
   if (dryRun) {
     logger.info('[fin-tx-2024] DRY RUN — nothing written', {
@@ -811,14 +693,17 @@ export async function syncFinancialTransactions(
     orderEventsFetched: collected.length,
     refundEventsFetched: 0,
     ordersMatched,
-    ordersSkipped: 0,
+    ordersSkipped: unmatchedTransactions,
     // 🔴 Zero on a dry run, because zero rows were created. Every existing reader of
     // this field sums writes, and a dry run must not add to that sum.
-    txCreated: dryRun ? 0 : txWouldCreate,
+    txCreated: 0,
     txSkipped,
     durationMs: Date.now() - t0,
     dryRun,
     txWouldCreate,
     txWouldDuplicateV0,
+    comparisonScope: 'identity_and_order_overlap_only',
+    accountId: account.id, marketplaceId: mid,
+    transactionsWithoutOrderId, unmatchedTransactions, duplicateTransactions,
   }
 }

@@ -34,16 +34,28 @@ import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '.
  * ever received is a belief, and a belief that is never contradicted is how
  * `marketplace.order.created` survived in the eBay receiver for weeks.
  */
-export const ETSY_ORDER_EVENTS: Record<string, { purpose: string; evidence: 'named_by_plan' | 'assumed' }> = {
-  'order.paid': { purpose: 'A receipt is paid — pull it and ingest the order.', evidence: 'named_by_plan' },
-  'order.shipped': { purpose: 'A receipt shipped — refresh it.', evidence: 'assumed' },
-  'order.cancelled': { purpose: 'A receipt was cancelled — refresh it.', evidence: 'assumed' },
-  'order.refunded': { purpose: 'A receipt was refunded — refresh it.', evidence: 'assumed' },
+// https://developers.etsy.com/documentation/essentials/webhooks/ (2026-09-22).
+export const ETSY_ORDER_EVENTS: Record<string, { purpose: string; evidence: 'official' }> = {
+  'order.paid': { purpose: 'A receipt is paid — pull it and ingest the order.', evidence: 'official' },
+  'order.shipped': { purpose: 'A receipt shipped — refresh it.', evidence: 'official' },
+  'order.canceled': { purpose: 'A receipt was canceled — refresh it.', evidence: 'official' },
+  'order.delivered': { purpose: 'A receipt was delivered — refresh it.', evidence: 'official' },
 }
 
 /** The receipt id an Etsy order event is about, wherever Etsy puts it. */
 export function etsyReceiptIdFrom(payload: unknown): string | null {
   const body = payload as Record<string, any> | null
+  // Extract IDs only. Never fetch a webhook-supplied URL, and never fall back to a
+  // legacy receipt_id when a supplied resource URL is invalid or names another shop.
+  if (body && 'resource_url' in body) {
+    if (typeof body.resource_url !== 'string') return null
+    try {
+      const url = new URL(body.resource_url)
+      const match = /^\/v3\/application\/shops\/([1-9]\d*)\/receipts\/([1-9]\d*)$/.exec(url.pathname)
+      if (url.origin !== 'https://api.etsy.com' || url.username || url.password || url.search || url.hash || !match) return null
+      return match[1] === String(body.shop_id ?? '') ? match[2] : null
+    } catch { return null }
+  }
   const candidates = [
     body?.receipt_id, body?.receiptId,
     body?.data?.receipt_id, body?.data?.receiptId,
@@ -80,12 +92,13 @@ export async function handleEtsyOrderEvent(
   // without being told which account it means is how a write lands in the wrong store
   // the day a second one is connected. Asking the ledger is both safer and simpler —
   // it already knew.
-  const accountId = ((payload as any)?.__nexusAccountId as string | undefined) ?? context?.connectionId ?? null
+  const accountId = context?.connectionId ?? null
   if (!accountId) {
     throw new Error('This Etsy notification has no connected account on its ledger row, so no shop can be asked about it.')
   }
   const { pullEtsyReceipt } = await import('../services/etsy/receipts.service.js')
-  const receipt = await pullEtsyReceipt(accountId, receiptId)
+  const shopId = (payload as Record<string, unknown> | null)?.shop_id
+  const receipt = await pullEtsyReceipt(accountId, receiptId, shopId == null ? undefined : String(shopId))
   if (!receipt) {
     throw new Error(`Etsy receipt ${receiptId} could not be read back for this shop.`)
   }
@@ -108,7 +121,7 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
     const body = (request as RawBodyRequest).rawBody
     const payload = request.body as Record<string, any> | undefined
     const eventType = String(
-      request.headers['x-etsy-event'] ?? payload?.event ?? payload?.type ?? 'unknown',
+      payload?.event_type ?? payload?.event ?? payload?.type ?? 'unknown',
     )
 
     const secret = process.env.ETSY_WEBHOOK_SIGNING_SECRET || null
@@ -144,7 +157,8 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
     const shopId = String(payload?.shop_id ?? payload?.shopId ?? payload?.data?.shop_id ?? '')
     let route: { workspaceId: string; connectionId: string }
     try {
-      route = await verifiedChannelWorkspace('ETSY', shopId || undefined)
+      if (!/^[1-9]\d*$/.test(shopId)) throw new Error('The notification has no valid shop id.')
+      route = await verifiedChannelWorkspace('ETSY', shopId)
     } catch (error) {
       await legacyIngress(() =>
         recordInbound({
@@ -181,7 +195,7 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
         return reply.send({ success: true, message: 'Recorded' })
       }
       try {
-        await handleEtsyOrderEvent({ ...(payload ?? {}), __nexusAccountId: route.connectionId })
+        await handleEtsyOrderEvent(payload ?? {}, { connectionId: route.connectionId })
         await completeInbound(written.id, true)
         return reply.send({ success: true })
       } catch (error) {

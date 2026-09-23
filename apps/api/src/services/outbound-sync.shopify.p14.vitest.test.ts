@@ -16,10 +16,11 @@ const h = vi.hoisted(() => ({
   fail: null as string | null,
   queueFindUnique: vi.fn(async (_args: any) => null),
   queueFindMany: vi.fn(async (_args: any) => []),
+  native: vi.fn(), queueUpdate: vi.fn(), claim: vi.fn(),
 }))
 vi.mock('../db.js', () => ({
   default: {
-    outboundSyncQueue: { findUnique: h.queueFindUnique, findMany: h.queueFindMany },
+    outboundSyncQueue: { findUnique: h.queueFindUnique, findMany: h.queueFindMany, update:h.queueUpdate, updateMany:h.claim },
     channelListing: {
       findUnique: vi.fn(async () => ({ id: 'listing-1', channelConnectionId: h.listingAccount, stockBuffer: 0, fulfillmentMethod: 'FBM', quantity: h.listingQuantity, marketplace: 'GLOBAL', syncPaused: false, listingStatus: h.listingStatus })),
       findMany: vi.fn(async ({ where }: any) => {
@@ -50,6 +51,7 @@ vi.mock('./shopify/listing-write.service.js', () => ({
     return 'Shopify stock set and read back.'
   }),
 }))
+vi.mock('./shopify/offer-sync.service.js', () => ({ syncNativeShopifyOffer:h.native }))
 
 import { OutboundSyncService } from './outbound-sync.service.js'
 
@@ -59,6 +61,10 @@ const listing = (account: string | null = 'conn-B') => ({ id: 'listing-1', chann
 const row = (extra: Record<string, unknown> = {}) => ({ id: 'q1', syncType: 'QUANTITY_UPDATE', channelListingId: 'listing-1', product: { id: 'p1', sku: 'SKU-1' }, channelListing: listing(), payload: { quantity: 3 }, ...extra })
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  h.native.mockResolvedValue('Native offer confirmed')
+  h.claim.mockResolvedValue({count:1})
+  h.queueFindMany.mockResolvedValue([])
   vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'true')
   vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'live')
   // The old path's env credentials are set: they must not be used.
@@ -70,6 +76,20 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
 describe('P1.4 — the Shopify queue: the row\'s own account, never the env credentials', () => {
+  it.each(['ACCOUNT_NEEDS_SIGNIN','TOKEN_UNAVAILABLE'])('preserves native Shopify %s holds',async code=>{
+    h.native.mockRejectedValue(Object.assign(new Error('Credential hold'),{code}))
+    expect(await service.syncToShopify(row({channelListing:{...listing(),platformAttributes:{nexusFamilyId:'family'}}}))).toMatchObject({status:'FAILED',errorCode:code})
+    expect(h.sent).toHaveLength(0)
+  })
+  it('resumes an auth-held native listing through its original lane',async()=>{
+    const held=row({targetChannel:'SHOPIFY',syncStatus:'FAILED',retryCount:3,errorCode:'AUTH_REQUIRED',channelListing:{...listing(),platformAttributes:{nexusFamilyId:'family'}}})
+    h.queueFindMany.mockImplementation(async(args:any)=>args.where.syncStatus==='FAILED' ? [{...held,channelListing:args.include.channelListing ? held.channelListing : undefined}] as any : [])
+    await new OutboundSyncService().processPendingSyncs()
+    expect(h.native).toHaveBeenCalledTimes(1)
+    expect(h.native).toHaveBeenCalledWith(expect.objectContaining({channelListing:held.channelListing}))
+    expect(h.sent).toHaveLength(0)
+    expect(h.queueUpdate).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({syncStatus:'SUCCESS'})}))
+  })
   it('a row for the second account is sent through the second account; no direct call with the env token', async () => {
     const r = await service.syncToShopify(row({ channelConnectionId: 'conn-B' }))
     expect(r.status).toBe('SUCCESS')

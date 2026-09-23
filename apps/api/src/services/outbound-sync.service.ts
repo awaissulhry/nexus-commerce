@@ -125,7 +125,8 @@ const AUTH_DEFER_MS = 15 * 60_000;
 // Deliberately narrow: eBay transient 401s ("Invalid access token") keep
 // their existing transient/circuit classification and self-heal via token
 // refresh.
-const AUTH_CLASS_RE = /Unauthorized|invalid_grant|Access to requested resource is denied/i;
+const AUTH_CLASS_RE = /Unauthorized|invalid_grant|Access to requested resource is denied|writes are paused until the operator reconnects|Held, nothing sent:.*(?:needs to be reconnected|no .* token for this account)/i;
+const AUTH_HOLD_CODES = new Set(['AUTH_REQUIRED', 'ACCOUNT_NEEDS_SIGNIN', 'CONNECTION_NEEDS_REAUTH', 'TOKEN_UNAVAILABLE']);
 
 export function withJitter(ms: number): number {
   return Math.round(ms * (1 + Math.random() * 0.2));
@@ -159,7 +160,7 @@ export function computeFailureDisposition(
       errorCode: "CIRCUIT_OPEN_DEFERRED",
     };
   }
-  if (opts?.errorCode === "AUTH_REQUIRED" || AUTH_CLASS_RE.test(errorMessage)) {
+  if (AUTH_HOLD_CODES.has(opts?.errorCode ?? '') || AUTH_CLASS_RE.test(errorMessage)) {
     return {
       kind: "deferral",
       nextRetryAt: new Date(now + withJitter(AUTH_DEFER_MS)),
@@ -956,7 +957,9 @@ export class OutboundSyncService {
           stats.processed++;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
-          await this.handleSyncFailure(item, errorMessage);
+          await this.handleSyncFailure(item, errorMessage, {
+            errorCode: typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
+          });
           stats.failed++;
           stats.errors.push({
             queueId: item.id,
@@ -974,13 +977,15 @@ export class OutboundSyncService {
           nextRetryAt: {
             lte: new Date(),
           },
-          retryCount: {
-            lt: 3,
-          },
+          isDead: false,
+          OR: [{ retryCount: { lt: 3 } }, { errorCode: 'AUTH_REQUIRED' }],
         },
         include: {
           product: true,
+          channelListing: true,
         },
+        take: 200,
+        orderBy: { nextRetryAt: 'asc' },
       });
 
       console.log(`Processing ${retryItems.length} retry items`);
@@ -1033,7 +1038,9 @@ export class OutboundSyncService {
           stats.processed++;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
-          await this.handleSyncFailure(item, errorMessage);
+          await this.handleSyncFailure(item, errorMessage, {
+            errorCode: typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
+          });
           stats.failed++;
           stats.errors.push({
             queueId: item.id,
@@ -2202,7 +2209,8 @@ export class OutboundSyncService {
         return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS", message };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message };
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message,
+          errorCode: typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined };
       }
     }
 
@@ -2256,7 +2264,8 @@ export class OutboundSyncService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       writeAttemptLog({ channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "failed", payloadDigest: digestPayload(payload), errorMessage: message.slice(0, 300), durationMs: Date.now() - t0 });
-      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message };
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message,
+        errorCode: typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined };
     }
   }
 
@@ -2434,7 +2443,8 @@ export class OutboundSyncService {
       writeAttemptLog({ channel: "ETSY", marketplace: "GLOBAL", sellerId: destination.connectionId, sku, productId: product?.id ?? null, mode: "live", outcome: "success", payloadDigest: digestPayload(payload), errorMessage: null, durationMs: Date.now() - t0 });
       return { success: true, queueId, channel: "ETSY", status: "SUCCESS", message };
     } catch (error) {
-      return failed(error instanceof Error ? error.message : String(error));
+      return failed(error instanceof Error ? error.message : String(error),
+        typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined);
     }
   }
 

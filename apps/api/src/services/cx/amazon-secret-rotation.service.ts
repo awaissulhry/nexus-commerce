@@ -41,10 +41,11 @@ import { alertService, AlertType } from '../monitoring/alert.service.js'
 import { getChannelApp, storeClientSecret } from './apps.service.js'
 import { setAppSecretExpiry, daysUntil } from './app-secret-expiry.js'
 import { CRON_ACTOR, recordConnectionEvent, SYSTEM_ACTOR } from './events.service.js'
+import { rotationQueuePolicyProblem } from './amazon-rotation-policy.js'
 
 export const ROTATION_SCOPE = 'sellingpartnerapi::client_credential:rotation'
 export const ROTATE_DAYS_BEFORE_EXPIRY = 30
-export const AMAZON_NOTIFICATIONS_PRINCIPAL = '437568002678'
+export { AMAZON_NOTIFICATIONS_PRINCIPAL } from './amazon-rotation-policy.js'
 const NEW_SECRET = 'APPLICATION_OAUTH_CLIENT_NEW_SECRET'
 const SECRET_EXPIRY = 'APPLICATION_OAUTH_CLIENT_SECRET_EXPIRY'
 const DAY_MS = 86_400_000
@@ -99,6 +100,15 @@ async function secretWorks(clientId: string, clientSecret: string): Promise<bool
 }
 
 async function alert(title: string, message: string): Promise<void> {
+  try {
+    const { raiseAmazonRotationAlert } = await import('./amazon-rotation-alert.service.js')
+    const result = await raiseAmazonRotationAlert(title, message)
+    if (!result.recipients) logger.error('[amazon-secret-rotation] no active owning-profile recipient could be notified')
+  } catch {
+    // Never copy a storage/credential error into a notification or log.
+    logger.error('[amazon-secret-rotation] owning-profile notification could not be persisted')
+  }
+  // Preserve any explicitly configured email delivery on the existing alert path.
   await alertService.createAlert(AlertType.CONNECTION_HEALTH, title, message, 1).catch(() => null)
 }
 
@@ -145,8 +155,8 @@ export async function handleAmazonCredentialMessage(body: string): Promise<Crede
     const expiresAt = fresh.newClientSecretExpiryTime ? new Date(String(fresh.newClientSecretExpiryTime)) : new Date(Date.now() + 180 * DAY_MS)
     try {
       await storeClientSecret('AMAZON_SP', 'production', fresh.newClientSecret, Number.isNaN(expiresAt.getTime()) ? null : expiresAt)
-    } catch (err) {
-      await recordConnectionEvent({ channelKey: 'AMAZON_SP', type: 'secret_rotation_failed', actor: SYSTEM_ACTOR, detail: { step: 'store', error: err instanceof Error ? err.message : String(err) } })
+    } catch {
+      await recordConnectionEvent({ channelKey: 'AMAZON_SP', type: 'secret_rotation_failed', actor: SYSTEM_ACTOR, detail: { step: 'store', error: 'Credential storage failed; sensitive exception details withheld.' } })
       await alert('Amazon app secret: the new secret could not be saved', 'The new secret works, but Nexus could not store it. The message stays on the queue and is retried.')
       return 'store_failed'
     }
@@ -188,14 +198,11 @@ export async function credentialQueueProblem(): Promise<string | null> {
   const queueUrl = credentialQueueUrl()
   if (!queueUrl) return 'No credential queue is configured (AMAZON_APP_CREDENTIAL_QUEUE_URL).'
   try {
-    const attributes = await sqsClientFor(queueUrl).send(new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['Policy'] }))
+    const attributes = await sqsClientFor(queueUrl).send(new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['Policy', 'QueueArn'] }))
     const policy = attributes.Attributes?.Policy ?? ''
-    if (!policy.includes(AMAZON_NOTIFICATIONS_PRINCIPAL) || !/sqs:SendMessage/i.test(policy)) {
-      return `The credential queue policy does not let Amazon (${AMAZON_NOTIFICATIONS_PRINCIPAL}) send messages to it.`
-    }
-    return null
-  } catch (err) {
-    return `Nexus cannot read the credential queue: ${err instanceof Error ? err.message : String(err)}`
+    return rotationQueuePolicyProblem(policy, attributes.Attributes?.QueueArn)
+  } catch {
+    return 'Nexus cannot read the credential queue. Check its region and IAM permissions; sensitive error details are withheld.'
   }
 }
 
@@ -204,6 +211,8 @@ export async function requestAmazonSecretRotation(reason: string): Promise<{ req
   const problem = await credentialQueueProblem()
   if (problem) return { requested: false, error: problem }
   const app = await getChannelApp('AMAZON_SP')
+  let phase: 'token_exchange' | 'rotation_request' = 'token_exchange'
+  let status: number | undefined
   try {
     // gateway-exempt: OAuth token exchange (LWA client_credentials) — never carries a seller's data
     const tokenResponse = await fetch(LWA_TOKEN_URL, {
@@ -212,24 +221,27 @@ export async function requestAmazonSecretRotation(reason: string): Promise<{ req
       body: new URLSearchParams({ grant_type: 'client_credentials', client_id: app.clientId, client_secret: app.clientSecret, scope: ROTATION_SCOPE }).toString(),
       signal: AbortSignal.timeout(20_000),
     })
+    status = tokenResponse.status
     const token = tokenResponse.ok ? ((await tokenResponse.json()) as { access_token?: string }).access_token : undefined
     if (!token) throw new Error(`the rotation token was refused (HTTP ${tokenResponse.status})`)
     const slug = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
     // P1.2 — through the channel gateway: app-level connection setup, recorded on the call ledger.
     const { amazonGrantlessFetch } = await import('../gateway/amazon-sdk.js')
+    phase = 'rotation_request'
+    status = undefined
     const response = await amazonGrantlessFetch({ token, host: `sellingpartnerapi-${slug}.amazon.com`, method: 'POST', path: '/applications/2023-11-30/clientSecret', operation: 'applications.rotateApplicationClientSecret' })
+    status = response.status
     if (response.status !== 204) {
-      const text = (await response.text().catch(() => '')).slice(0, 300)
-      throw new Error(`Amazon answered HTTP ${response.status}${text ? `: ${text}` : ''}`)
+      throw new Error('Amazon did not confirm the rotation request.')
     }
     await recordConnectionEvent({ channelKey: 'AMAZON_SP', type: 'secret_rotation_requested', actor: CRON_ACTOR, detail: { reason } })
     logger.info('[amazon-secret-rotation] rotation requested', { reason })
     return { requested: true, status: 204 }
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err)
-    await recordConnectionEvent({ channelKey: 'AMAZON_SP', type: 'secret_rotation_failed', actor: CRON_ACTOR, detail: { step: 'request', error } })
+  } catch {
+    const error = `Amazon app-secret rotation failed during ${phase}${status === undefined ? '' : ` (HTTP ${status})`}; sensitive provider details withheld.`
+    await recordConnectionEvent({ channelKey: 'AMAZON_SP', type: 'secret_rotation_failed', actor: CRON_ACTOR, detail: { step: 'request', phase, ...(status === undefined ? {} : { status }) } })
     await alert('Amazon app secret: automatic rotation could not start', `Nexus asked Amazon for a new app secret and it failed: ${error}. Rotate by hand in the Solution Provider Portal before the expiry date, then record the new date.`)
-    return { requested: false, error }
+    return { requested: false, error, ...(status === undefined ? {} : { status }) }
   }
 }
 

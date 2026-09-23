@@ -68,6 +68,9 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
   ETSY: {
     'order.paid': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
     'order.shipped': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    'order.canceled': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    'order.delivered': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+    // Historical stored names remain replayable, never offered as subscriptions.
     'order.cancelled': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
     'order.refunded': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
   },

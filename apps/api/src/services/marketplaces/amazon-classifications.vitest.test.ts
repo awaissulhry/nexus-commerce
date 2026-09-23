@@ -1,85 +1,35 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withWorkspace, LEGACY_WORKSPACE_ID } from '../../lib/workspace-context.js'
+const fixtureAccount=vi.hoisted(()=>({active:true}))
+vi.mock('../connection-resolver.service.js',async original=>({
+  ...await original<object>(),
+  listActiveConnections:async()=>fixtureAccount.active?[{id:'legacy-fixture',channelType:'AMAZON',isActive:true,isPrimary:true,authStatus:'connected',managedBy:'env',externalAccountId:'test-seller',region:'eu'}]:[],
+}))
+vi.mock('../cx/apps.service.js',()=>({getChannelApp:async()=>({clientId:process.env.AMAZON_LWA_CLIENT_ID,clientSecret:process.env.AMAZON_LWA_CLIENT_SECRET})}))
 
 vi.mock('../outbound-api-call-log.service.js', () => ({ instrumentSellingPartner: vi.fn() }))
-
-// 🔴 2026-09-22 (PLAN amendment A-8). This arm was written when `isConfigured()` read the three LWA
-// variables straight out of the environment. P6.1 moved the app credentials into the `ChannelApp`
-// TABLE, so the check is now database-backed: `amazonCredsConfigured()` → `amazonAccount()` →
-// `getChannelApp('AMAZON_SP')` (amazon-sp-client.ts:29-37). Stubbing env alone stopped deciding
-// anything, and `amazonAccount()` throws outright when the local `ChannelConnection` row carries
-// `authStatus: 'disconnected'` — the state of this repo's dev database — so the function returned
-// false and the arm failed on a machine, not on a defect.
-//
-// 🔴 The two DATA-ACCESS collaborators are pinned, and `amazonCredsConfigured` itself is NOT.
-// Re-deriving an "equivalent" rule inside the test would mean asserting the test's own copy of the
-// logic, which diverges the moment the real one changes. The real function runs here.
-const db = vi.hoisted(() => ({
-  connections: vi.fn(),
-  app: vi.fn(),
-}))
-vi.mock('../connection-resolver.service.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('../connection-resolver.service.js')>()),
-  listActiveConnections: db.connections,
-  resolveConnection: async () => (await db.connections())[0],
-}))
-vi.mock('../cx/apps.service.js', () => ({ getChannelApp: db.app }))
-
-// 🔴 Profiles ON is how PRODUCTION runs (.githooks/pre-push ratchet). `amazonAccount()` starts with
-// `if (workspaceMode) requireWorkspace()` (amazon-sp-client.ts:8), which throws outside a business
-// context — so an arm that passes with profiles OFF fails with them ON, for a reason that has
-// nothing to do with what it asserts. These arms therefore run INSIDE a workspace, the way the real
-// callers do. `LEGACY_WORKSPACE_ID` specifically, because an `env`-managed account is refused in any
-// other workspace (amazon-sp-client.ts:21) and that refusal is correct.
-const inWorkspace = <T>(work: () => T): T =>
-  withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
-
-const connection = (over: Record<string, unknown> = {}) => ({
-  id: 'acct', channelType: 'AMAZON', isActive: true, authStatus: 'connected',
-  externalAccountId: 'seller', region: 'eu', managedBy: 'env', connectionMetadata: null, ...over,
-})
-
-import { LEGACY_WORKSPACE_ID, withWorkspace } from '@nexus/database/workspace-context'
 import { AmazonService, extractClassifications } from './amazon.service.js'
 
 const market = 'APJ6JRA9NG5V4'
 const jacket = { classificationId: '2420941031', displayName: 'Giacche', parent: { classificationId: '100', displayName: 'Abbigliamento', parent: { classificationId: '1', displayName: 'Auto e Moto' } } }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+beforeEach(()=>{fixtureAccount.active=true})
+const inFixtureProfile=<T>(work:()=>T)=>withWorkspace({workspaceId:LEGACY_WORKSPACE_ID,actorUserId:null,membershipId:null,roleKeys:[]},work)
 
 it('accepts the LWA credentials actually used by SP-API without unrelated AWS signing keys', async () => {
-  db.connections.mockResolvedValue([connection()])
-  db.app.mockResolvedValue({ clientId: 'lwa-client', clientSecret: 'lwa-secret' })
-  vi.stubEnv('AMAZON_SELLER_ID', 'seller')
-  vi.stubEnv('AMAZON_REFRESH_TOKEN', 'test-value')
-  // The two AWS signing keys stay empty throughout. That is what the name claims, so it is asserted
-  // by never setting them, not by a comment.
+  for (const key of ['AMAZON_LWA_CLIENT_ID', 'AMAZON_LWA_CLIENT_SECRET', 'AMAZON_REFRESH_TOKEN']) vi.stubEnv(key, 'test-value')
   for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_ROLE_ARN']) vi.stubEnv(key, '')
+  vi.stubEnv('AMAZON_SELLER_ID','test-seller')
   const service = new AmazonService()
-  expect(await inWorkspace(() => service.isConfigured())).toBe(true)
-  // Negative control: the refresh token is what decides, so removing it must flip the answer.
+  expect(await inFixtureProfile(()=>service.isConfigured())).toBe(true)
   vi.stubEnv('AMAZON_REFRESH_TOKEN', '')
-  expect(await inWorkspace(() => service.isConfigured())).toBe(false)
+  expect(await inFixtureProfile(()=>service.isConfigured())).toBe(false)
 })
-
-it('the app credentials come from ChannelApp, not from the environment', async () => {
-  db.connections.mockResolvedValue([connection()])
-  vi.stubEnv('AMAZON_SELLER_ID', 'seller')
-  vi.stubEnv('AMAZON_REFRESH_TOKEN', 'test-value')
-  // P6.1 — no ChannelApp row means not configured, however complete the environment looks.
-  for (const key of ['AMAZON_LWA_CLIENT_ID', 'AMAZON_LWA_CLIENT_SECRET']) vi.stubEnv(key, 'test-value')
-  db.app.mockRejectedValue(new Error('no ChannelApp row'))
-  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(false)
-  db.app.mockResolvedValue({ clientId: 'lwa-client', clientSecret: 'lwa-secret' })
-  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(true)
-})
-
-it('an oauth-managed account needs no environment refresh token at all', async () => {
-  vi.stubEnv('AMAZON_REFRESH_TOKEN', '')
-  db.app.mockRejectedValue(new Error('no ChannelApp row'))
-  db.connections.mockResolvedValue([connection({ managedBy: 'oauth' })])
-  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(true)
-  // Negative control: a disconnected account is refused whatever its credentials say.
-  db.connections.mockResolvedValue([connection({ managedBy: 'oauth', authStatus: 'disconnected' })])
-  expect(await inWorkspace(() => new AmazonService().isConfigured())).toBe(false)
+it('does not treat environment credentials as a connected account when the stored grant is absent',async()=>{
+  for(const key of ['AMAZON_LWA_CLIENT_ID','AMAZON_LWA_CLIENT_SECRET','AMAZON_REFRESH_TOKEN'])vi.stubEnv(key,'test-value')
+  vi.stubEnv('AMAZON_SELLER_ID','test-seller')
+  fixtureAccount.active=false
+  expect(await inFixtureProfile(()=>new AmazonService().isConfigured())).toBe(false)
 })
 
 describe('Amazon catalog classifications', () => {

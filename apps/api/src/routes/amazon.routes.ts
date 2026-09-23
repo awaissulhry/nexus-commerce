@@ -1,3 +1,4 @@
+import amazonFinancialsRoutes from './amazon-financials.routes.js'
 import { getAmazonAccessToken, getAmazonRegion } from '../lib/amazon-sp-client.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -1700,95 +1701,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // POST /api/amazon/financials/sync — pull financial events for a date
-  // window and write FinancialTransaction rows. Body: { start?, end?, daysBack? }
-  // Defaults to yesterday if no range given. Safe to re-run (idempotent).
-  fastify.post<{
-    Body?: { start?: string; end?: string; daysBack?: number; useV0?: boolean; marketplaceId?: string; probe?: boolean; dryRun?: boolean }
-  }>('/financials/sync', async (request, reply) => {
-    const { syncFinancialEvents, syncYesterdayFinancialEvents, syncFinancialTransactions, probeFinancialTransactionsEnvelope, financialsDryRunRefusal } = await import('../services/amazon-financial-events.service.js')
-    try {
-      const body = request.body ?? {}
-
-      /**
-       * P5.2 — `{"probe": true}` asks the 2024-06-19 endpoint which envelope it uses
-       * and WRITES NOTHING.
-       *
-       * The endpoint has 0 calls ever, so its response shape is the one thing blocking
-       * the migration. Finding out used to require running the real sync, which
-       * creates `FinancialTransaction` rows — a production write. This is a read, so
-       * it needs no write approval, and it keeps no payload: only the envelope name,
-       * a count, and the top-level keys.
-       */
-      if (body.probe === true) {
-        const end = new Date(Date.now() - 180_000)
-        const days = typeof body.daysBack === 'number' && body.daysBack > 0 ? Math.min(body.daysBack, 30) : 1
-        const start = body.start ? new Date(body.start) : new Date(end.getTime() - days * 86_400_000)
-        return { success: true, probe: await probeFinancialTransactionsEnvelope(start, end, body.marketplaceId) }
-      }
-      // Default to /finances/v0/financialEvents — the original endpoint with mature
-      // event-shape parsing (nested ShipmentItemList per order), 108 successful calls
-      // and all 1,792 FinancialTransaction rows behind it.
-      //
-      // P5.2 — the 2024-06-19/transactions path (`useV0: false`) now reads EITHER
-      // envelope and REFUSES a body it cannot parse, so its first real run can no
-      // longer report a silent zero. What it still has is **0 calls ever**: nobody has
-      // seen Amazon's answer to it. v0 stays the default until one live call settles
-      // the shape, and its deadline is 2027-08-27 — there is time to do that properly.
-      const useV0 = body.useV0 !== false
-
-      /**
-       * P5.2 — `{"useV0": false, "dryRun": true}` runs the real fetch and the real
-       * decision path and WRITES NOTHING, reporting `txWouldCreate` and
-       * `txWouldDuplicateV0`.
-       *
-       * This is the cheapest of the three safe comparisons `build/P5.2.md` §4b named
-       * after it measured that the plan's own next step double-writes: v0 stores
-       * `amazonTransactionId` as the bare order id, this path stores
-       * `orderId/sellerOrderItemId/postedDate`, and nothing bridges them.
-       *
-       * 🔴 A dry run is offered on the 2024-06-19 path ONLY. v0 has no dry-run arm, so
-       * accepting the flag there would silently perform a real write — the shape where
-       * an API accepts a flag it IGNORES. It is refused by name instead.
-       */
-      const dryRun = body.dryRun === true
-      const refusal = financialsDryRunRefusal(body)
-      if (refusal) return reply.code(400).send({ success: false, error: refusal })
-
-      let summary
-      if (body.start && body.end) {
-        const start = new Date(body.start)
-        let end = new Date(body.end)
-        // Same clamp as daysBack path — protects scaffold callers that pass
-        // T-23:59:59Z for "today" windows.
-        const minAgo = new Date(Date.now() - 180_000)
-        if (end > minAgo) end = minAgo
-        summary = useV0
-          ? await syncFinancialEvents(start, end)
-          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
-      } else if (typeof body.daysBack === 'number') {
-        // Clamp `end` to now − 3 min (SP-API rejects PostedBefore within
-        // its ~2-min data-propagation window).
-        const end = new Date(Date.now() - 180_000)
-        const start = new Date(end.getTime() - body.daysBack * 24 * 60 * 60 * 1000)
-        summary = useV0
-          ? await syncFinancialEvents(start, end)
-          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
-      } else {
-        // Yesterday window
-        const end = new Date()
-        end.setHours(0, 0, 0, 0)
-        const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
-        summary = useV0
-          ? await syncYesterdayFinancialEvents()
-          : await syncFinancialTransactions(start, end, body.marketplaceId, { dryRun })
-      }
-      return { success: true, ...summary }
-    } catch (err) {
-      fastify.log.error({ err }, '[amazon/financials/sync] failed')
-      return reply.code(500).send({ success: false, error: err instanceof Error ? err.message : String(err) })
-    }
-  })
+  await fastify.register(amazonFinancialsRoutes)
 
   // POST /api/amazon/settlements/sync — Phase 6.B settlement-report ingester.
   // Lists already-published settlement reports in the window, downloads each,

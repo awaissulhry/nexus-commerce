@@ -365,6 +365,14 @@ describe('RT.2 — disposition treats EBAY_REVISE_DEBOUNCED as budget-free defer
 
 describe('AS.1 — auth-class failures are budget-free AUTH_REQUIRED deferrals', () => {
   const NOW = 1_700_000_000_000
+  it.each(['ACCOUNT_NEEDS_SIGNIN', 'CONNECTION_NEEDS_REAUTH', 'TOKEN_UNAVAILABLE'])('defers %s even after the row has exhausted its ordinary retry budget', errorCode => {
+    expect(computeFailureDisposition({ retryCount:3, maxRetries:3 },'opaque',{errorCode,retryable:false},NOW))
+      .toMatchObject({kind:'deferral',errorCode:'AUTH_REQUIRED'})
+  })
+  it('retains the token service reconnect hold when an older caller drops its code', () => {
+    expect(computeFailureDisposition({retryCount:3,maxRetries:3},'Connection account-2 is needs_reauth; writes are paused until the operator reconnects.',undefined,NOW))
+      .toMatchObject({kind:'deferral',errorCode:'AUTH_REQUIRED'})
+  })
 
   it('the P0b-era honest 403 message defers as AUTH_REQUIRED (~15min) without burning budget', () => {
     const d = computeFailureDisposition(

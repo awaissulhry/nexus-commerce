@@ -18,9 +18,10 @@ const m = vi.hoisted(() => {
     read: vi.fn(), many: vi.fn(), audit: vi.fn(),
     inventory: vi.fn(), content: vi.fn(),
     destinations: vi.fn(),
+    queueUpdate: vi.fn(),
   }
 })
-vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many } } }))
+vi.mock('../db.js', () => ({ default: { channelListing: { findUnique: m.read, findMany: m.many }, outboundSyncQueue: { update: m.queueUpdate } } }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('./sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
 vi.mock('./channel-publish-audit.service.js', () => ({ writeAttemptLog: m.audit, digestPayload: () => 'stub' }))
@@ -58,6 +59,18 @@ beforeEach(() => {
 afterEach(() => { expect(m.outbound).not.toHaveBeenCalled(); vi.unstubAllEnvs() })
 
 describe('P4.6e — the gates, in order', () => {
+  it.each(['ACCOUNT_NEEDS_SIGNIN', 'CONNECTION_NEEDS_REAUTH', 'TOKEN_UNAVAILABLE'])('preserves %s through dispatch and parks the queue row without spending retry budget', async code => {
+    live()
+    m.inventory.mockRejectedValue(Object.assign(new Error('Credential hold'), { code }))
+    const item = row({ retryCount:3,maxRetries:3 })
+    const result = await service.dispatchSync(item)
+    expect(result).toMatchObject({success:false,errorCode:code})
+    await service.handleSyncFailure(item,result.error,{errorCode:result.errorCode,retryable:result.retryable})
+    const data = m.queueUpdate.mock.calls[0][0].data
+    expect(data).toMatchObject({errorCode:'AUTH_REQUIRED',nextRetryAt:expect.any(Date)})
+    expect(data).not.toHaveProperty('retryCount')
+    expect(data).not.toHaveProperty('isDead')
+  })
   it('a paused listing is refused before anything else', async () => {
     m.read.mockResolvedValue({ syncPaused: true })
     expect(await service.syncToEtsy(row())).toMatchObject({ channel: 'ETSY', status: 'SKIPPED', errorCode: 'PUSH_SYNC_PAUSED', retryable: false })

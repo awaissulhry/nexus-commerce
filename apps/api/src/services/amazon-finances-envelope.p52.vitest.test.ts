@@ -93,12 +93,12 @@ describe('readTransactionsPage (P5.2)', () => {
 describe('the probe (P5.2 — a read, not a write)', () => {
   const HERE = import.meta.dirname
   const svc = readFileSync(join(HERE, 'amazon-financial-events.service.ts'), 'utf8')
-  const route = readFileSync(join(HERE, '..', 'routes', 'amazon.routes.ts'), 'utf8')
+  const route = readFileSync(join(HERE, '..', 'routes', 'amazon-financials.routes.ts'), 'utf8')
 
   it('exists, and is reachable with {"probe": true}', () => {
     expect(svc).toContain('export async function probeFinancialTransactionsEnvelope(')
     expect(route).toContain('if (body.probe === true) {')
-    expect(route).toContain('await probeFinancialTransactionsEnvelope(start, end, body.marketplaceId)')
+    expect(route.includes('await probeFinancialTransactionsEnvelope(start, end, body.marketplaceId, body.accountId)')).toBe(true)
   })
 
   it('WRITES NOTHING — that is the whole point of it', () => {
@@ -150,7 +150,7 @@ describe('the probe (P5.2 — a read, not a write)', () => {
 describe('wiring (P5.2)', () => {
   const HERE = import.meta.dirname
   const svc = readFileSync(join(HERE, 'amazon-financial-events.service.ts'), 'utf8')
-  const route = readFileSync(join(HERE, '..', 'routes', 'amazon.routes.ts'), 'utf8')
+  const route = readFileSync(join(HERE, '..', 'routes', 'amazon-financials.routes.ts'), 'utf8')
 
   it('the pagination loop goes through the reader', () => {
     expect(svc).toContain('const page = readTransactionsPage(await res.json())')
@@ -161,7 +161,7 @@ describe('wiring (P5.2)', () => {
   it('v0 is still the default, and the comment no longer claims an un-updated parser', () => {
     expect(route).toContain('const useV0 = body.useV0 !== false')
     expect(route).not.toContain("the parser hasn't been updated")
-    expect(route).toContain('0 calls ever')
+    expect(route).toContain('financialsDryRunRefusal(body)')
   })
 
   it('the v0 path was not touched (positive control)', () => {
