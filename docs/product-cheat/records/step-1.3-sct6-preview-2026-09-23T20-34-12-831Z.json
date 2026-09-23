@@ -1,0 +1,65 @@
+{
+ "at": "2026-09-23T20:34:12.831Z",
+ "mode": "preview",
+ "execute": false,
+ "patches": {
+  "close": {
+   "op": "delete",
+   "path": "/attributes/purchasable_offer",
+   "value": [
+    {
+     "marketplace_id": "APJ6JRA9NG5V4",
+     "currency": "EUR",
+     "audience": "ALL"
+    }
+   ]
+  },
+  "replay": {
+   "op": "replace",
+   "path": "/attributes/purchasable_offer",
+   "value": [
+    {
+     "currency": "EUR",
+     "end_at": {
+      "value": "2023-05-30"
+     },
+     "audience": "ALL",
+     "map_price": [
+      {
+       "schedule": [
+        {
+         "value_with_tax": 330
+        }
+       ]
+      }
+     ],
+     "discounted_price": [
+      {
+       "schedule": [
+        {
+         "end_at": "2023-05-30T00:00:00.000+02:00",
+         "start_at": "2023-03-30T00:00:00.000+02:00",
+         "value_with_tax": 349.94
+        }
+       ]
+      }
+     ],
+     "our_price": [
+      {
+       "schedule": [
+        {
+         "value_with_tax": 399.95
+        }
+       ]
+      }
+     ],
+     "marketplace_id": "APJ6JRA9NG5V4"
+    }
+   ]
+  }
+ },
+ "preview": {
+  "close": null,
+  "replay": null
+ }
+}

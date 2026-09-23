@@ -6527,7 +6527,7 @@ the table only); the package's tests pass (17/17).
 
 ### Cost when — `flat` per read-back row (one read + one write per compared listing, inside jobs that already run). The filter adds one indexed query. Rollback — revert the commit; the migration is additive (drop the table to undo).
 
-### Step 1.3 / A-37 — the read (2026-09-23 ~16:20 UTC) and the PREDICTIONS written before the live runs (R-37)
+### Step 1.3 / A-37 — the read (2026-09-23 14:19–14:21 UTC by the records' own timestamps; first written "~16:20 UTC", which was local time) and the PREDICTIONS written before the live runs (R-37)
 
 **Read (`tools/unpublish-probe.mts --read`, record `records/step-1.3-read-…json`):** eBay's out-of-stock control is **ON**, for
 the account and for item `256564203510` — so quantity 0 hides the item and keeps its ItemID (off, it would END the item,
@@ -6544,7 +6544,7 @@ Amazon's own read: **`xracingbxn48`** (ASIN `B0BTCBPVTS`, `DEFAULT` quantity 2, 
   same ASIN and SKU, the offer still present (`BUYABLE` may lag). Restore → 2, read back.
 Each listing is unbuyable for about a minute; each run always attempts its restore, even when a read-back fails.
 
-### Step 1.3 / A-37 — RESULTS of the live proof (2026-09-23 ~16:22–16:25 UTC, R-37)
+### Step 1.3 / A-37 — RESULTS of the live proof (2026-09-23 14:22–14:25 UTC by the records' own timestamps; first written "~16:22–16:25 UTC", which was local time, R-37)
 
 | Channel | Result (records `records/step-1.3-*-test-…json`) |
 |---|---|
@@ -6583,3 +6583,113 @@ merchant-only listing, read back (it has never been measured by this lane). File
 
 - **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without losing
   its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
+
+### A-38 — addendum before the ruling (2026-09-23 ~20:30 UTC, read only, lines re-read)
+
+Two facts in `services/amazon-market-offer.service.ts` that change how "republish" must work. Nothing built, nothing sent.
+
+1. 🔴 **Reopen does not put back the listing's own stock settings.** Close saves them (`offerCloseSnapshot.control`:
+   `followMasterQuantity`, `quantityOverride`, `syncPaused`, `:192`), but reopen never reads them: it FORCES
+   `followMasterQuantity: true`, `quantityOverride: null` (`:310`) and queues a quantity push (`:316`). That is right for
+   SCT.6's own use (rejoin the stock pool). For "unpublish → republish" it is not a reversal: a listing that had its own
+   quantity comes back following the master, and the push sends the master quantity to Amazon (one EU-wide number).
+2. 🟠 **A close with no live offer read replays only a price.** If the live read fails, the snapshot falls back to
+   `our_price` from our column (`:145`); reopen then sends that alone — the shape that wipes an Amazon sale price
+   (the review's §3a trap). The live proof must read the full offer first and refuse to run on the `db` fallback.
+
+**So the live proof and the build, refined (for the ruling):**
+- **Live proof — channel only.** A probe sends the SAME two Amazon calls SCT.6 sends (delete this market's
+  `purchasable_offer` by its selectors; replay the captured offer), on ONE merchant-only listing
+  (`xracingbxn48`, Amazon·IT, as in A-37), with **no production database write**: read (full offer saved) → preview →
+  close → read back (no offer in IT, same ASIN/SKU) → replay → read back (the offer equals the saved one) → delayed re-read.
+  The listing is not buyable in Italy for about a minute; other markets and the shared quantity are not touched.
+- **Build.** Unpublish on Amazon calls the SCT.6 close; republish calls the SCT.6 reopen and then puts back the saved
+  `control` (not "follow"). eBay as A-38's table. Tests per path; the two refusal tests inverted.
+
+| # | Question | Ruling (2026-09-23 ~20:35 UTC, twenty-fifth set) |
+|---|---|---|
+| **R-38** | A-38 — Step 1.3 on SCT.6 (Amazon) + quantity 0 (eBay) | ✅ **Approve, refined** (the addendum above): first ONE live channel-only SCT.6 close + replay on `xracingbxn48` Amazon·IT, no production database write, read back, restored; then build — republish also puts back the saved stock settings |
+
+### Step 1.3 / A-38 — the SCT.6 live proof: PREDICTIONS written before any run (2026-09-23 ~20:45 UTC, R-38)
+
+Tool: `docs/product-cheat/tools/sct6-close-probe.mts` — `--read` · `--preview --record <f>` · `--test --record <f>
+--execute-approved` · `--restore --record <f> --execute-approved` (recovery only). It sends the SAME calls SCT.6 sends
+(`amazonSpApiClient.getListingsItem` for the snapshot, `patchPurchasableOffer` `delete` with the selectors SCT.6 builds,
+`replace` with the verbatim snapshot), through the same client singleton and its write-account guard. **No listing, product
+or queue row is written**; side effects: the API gateway's call log and a token refresh.
+
+- **Read.** `xracingbxn48` on Amazon·IT: ASIN `B0BTCBPVTS`, merchant-only (`DEFAULT` only), ONE `purchasable_offer` instance
+  for `APJ6JRA9NG5V4` (EUR); the Nexus row has `offerClosedAt` null and is not FBA. The Amazon SKU equals the product SKU
+  (SCT.6 patches `product.sku`). Every other Amazon market it is listed on is read too, for the "siblings untouched" check.
+- **Preview.** Amazon's `VALIDATION_PREVIEW` accepts both the delete (by selectors) and the replay (the verbatim snapshot).
+  If either is refused, nothing is sent.
+- **Test.** Close → `ACCEPTED`, 0 issues; within 3 minutes the IT read shows **no `purchasable_offer`**, the same ASIN and
+  SKU, `DEFAULT` quantity unchanged. Replay → `ACCEPTED`; within 3 minutes the IT offer **deep-equals the snapshot**; the
+  quantity is unchanged. Sibling markets: offer and quantity identical before and after.
+- **Delayed re-read** (≥ 1 minute after): the IT offer equals the snapshot; status `BUYABLE` again (it may lag).
+- If the replay fails, the tool retries once; then `--restore` replays the saved offer. The listing is not buyable in Italy
+  for about a minute; the shared EU quantity is not touched.
+
+### Step 1.3 / A-38 — RESULTS of the SCT.6 live proof (2026-09-23 20:33–20:36 UTC, R-38)
+
+Records: `records/step-1.3-sct6-before-2026-09-23T20-33-36-328Z.json` (read), `…-preview-…T20-34-12-831Z.json`,
+`…-test-…T20-34-54-731Z.json`, `…-read-compare-…T20-36-24-612Z.json` (delayed re-read).
+
+| Step (UTC) | Result |
+|---|---|
+| 20:33:36 `--read` | Amazon·IT: ASIN `B0BTCBPVTS`, `DEFAULT` only, quantity 2, ONE offer instance (EUR, `audience: ALL`, `our_price` 399.95, a `discounted_price` whose schedule ended 2023-05-30, `map_price` 330, an `end_at` of 2023-05-30). Nexus row: not closed, FBM. Amazon SKU = product SKU. All six safety checks true |
+| 20:34:12 `--preview` | Amazon's `VALIDATION_PREVIEW` accepted **both** the close (selector `{marketplace_id, currency, audience}`) and the verbatim replay |
+| 20:34:54 `--test` | Fresh read = the saved one. **Close → `ACCEPTED`**; read after 15 s: **no `purchasable_offer`**, same ASIN and SKU, `DEFAULT` 2 unchanged (the summary still said `BUYABLE` — it lags, as in A-37). **Replay → `ACCEPTED`**; read after 15 s: the offer **deep-equals the snapshot**, quantity 2. Germany: offer and quantity identical before and after |
+| 20:36:24 `--read --record` | IT offer equal, quantity equal, `BUYABLE`+`DISCOVERABLE`; DE equal |
+
+**Against the prediction:** every line held. The IT offer was absent for about 30 seconds.
+
+🟢 **A second, older measurement of the END state, found by the read:** this SKU's **Germany** offer was closed by SCT.6 on
+**2026-07-26** (the Nexus row's `offerClosedAt`; the SCT.6 pilot). Amazon·DE today: no `purchasable_offer`, status `[]`
+(neither buyable nor discoverable), `DEFAULT` quantity 2 kept. So a close holds for two months and does not touch the
+shared quantity.
+🟠 Stated, not built on: that DE row has `offerActive: true` beside its `offerClosedAt` — close writes `false`; something set
+it back, or the column came later with a default. The push refusal reads `offerClosedAt`, not `offerActive`. For the build
+to check.
+**Delayed re-reads** (the replay was sent ~20:35:21): 20:36:24 (~1 min), 20:37:56 (~2.5 min), 20:39:04 (~3.7 min) — each: IT offer and quantity equal to the saved read, `BUYABLE`; DE equal. (A "5+ minutes" re-read was announced here; the latest so far is 3.7 minutes — stated as measured.)
+
+### A-38 — second addendum: the build's premise changed. FOR YOUR RULING. Nothing built.
+
+**Read after the live proof (lines re-read):**
+1. 🔴 **`UNPUBLISH_LISTING` has ONE producer: the bulk hard delete** (`enqueueDelistCascade`, `outbound-enqueue.ts:67`, called
+   only from `products-catalog.routes.ts:1836`). The job runs AFTER the local product and its `ChannelListing` rows are
+   deleted (`productId: null`, `channelListingId: null`; the payload carries the coordinate and the seller SKU). So:
+   - there is **no republish from Nexus** in this flow (the UI copy already says *"There is no relist from here"*), and
+     R-38's *"republish puts back the saved stock settings"* has **no place to live**;
+   - SCT.6's `closeMarketOffers` **cannot be called** by the job — it loads the `ChannelListing` row, which is gone.
+     The job can run SCT.6's **channel half** only (the snapshot read + the delete by selectors — what the live proof ran).
+2. 🔴 **The route's orphan guard asks per CHANNEL, not per listing** (`delistCapability(listing.channel, action)`,
+   `products-catalog.routes.ts:1801`). If the Amazon row simply said "removes", an **FBA** listing would pass the guard, the
+   product would be deleted, and the job would then refuse FBA — an orphan, the very thing Step 1.2 stops. The guard needs the
+   listing's fulfilment (known locally) to refuse FBA before the delete.
+3. 🟠 **eBay: an item with its out-of-stock control OFF** is known only by a channel read. Quantity 0 would END it (a new
+   ItemID on relist). The job would have to refuse it — after the product is already deleted: an orphan again.
+4. The channel sheet's offer toggle is a local mark only (*"Wave-1: the outward-facing half does not ship"*,
+   `channelActions.ts`); SCT.6 is reached from the sync-control routes. SCT.6's reopen forcing "follow" is its own design
+   (rejoin the pool); nothing in Step 1.3 calls it.
+
+**Recommendation — one (a):** build Step 1.3 for the flow that exists — *"stop selling, keep the identifiers, then delete
+the local record"*:
+- **Amazon:** one shared function extracted from SCT.6 (the snapshot read + the delete by selectors), called by
+  `closeMarketOffers` AND by the delist adapter — one rule, one owner. The job saves the verbatim offer in its own record, so
+  a person can put it back. The guard refuses **FBA** by name, per listing, before the delete.
+- **eBay:** quantity 0 on every SKU of the ItemID (read from eBay first). The out-of-stock control is read at job time; if
+  it is OFF the job sends nothing and says so by name. To stop that becoming an orphan, the guard also refuses an eBay
+  unpublish unless the ACCOUNT's out-of-stock preference was read ON (a stored read, refreshed when the job runs).
+- The UI copy that says *"Amazon and eBay: the request is refused"* changes to what now happens. The two refusal tests are
+  inverted, a test per path.
+- **Not in (a):** republish (no Nexus path exists); SCT.6's reopen behaviour (another lane's design).
+
+| # | Option | |
+|---|---|---|
+| **a** | The build above | 🟢 **Recommended** — the only flow that sends `UNPUBLISH_LISTING` |
+| b | First build a republish path in Nexus (keep the local record, mark the listing closed) — a new feature, bigger | Changes the hard-delete meaning; not in the plan |
+
+| # | Question | Ruling (2026-09-23 ~20:50 UTC, twenty-sixth set) |
+|---|---|---|
+| **R-39** | A-38 second addendum — the build | ✅ **(a)** Build Step 1.3 for the hard-delete flow: Amazon = SCT.6's channel half as ONE shared function (the offer saved on the job's record; FBA refused per listing before the delete); eBay = quantity 0 on every SKU of the ItemID, refused before the delete unless the out-of-stock control is known ON. No republish. UI copy and the refusal tests follow |
