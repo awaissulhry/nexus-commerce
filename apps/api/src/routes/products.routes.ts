@@ -1467,7 +1467,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
                 validationStatus: 'VALID',
                 validationErrors: [],
                 hasChannelOverrides: false,
-                variantAttributes: (v.variationAttributes ?? {}) as any,
+                // R-23 (Step 2.6c-2) — the one store; the legacy `variantAttributes` is never written.
+                categoryAttributes: { variations: v.variationAttributes ?? {} } as any,
               } as any,
             })
           }

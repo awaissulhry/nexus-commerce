@@ -34,7 +34,9 @@ it('creates exactly the reviewed new combination as DRAFT, with coherent axis st
   await generateCombinations({ ...input(), dryRun: false, previewToken: preview.previewToken })
   expect(fixture.created).toHaveLength(1)
   expect(fixture.created[0]).toMatchObject({ status: 'DRAFT', sku: 'P-NERO-L', parentId: 'parent',
-    categoryAttributes: { color: 'Nero', size: 'L', variations: { Color: 'Nero', Size: 'L' } }, variantAttributes: { Color: 'Nero', Size: 'L' } })
+    categoryAttributes: { color: 'Nero', size: 'L', variations: { Color: 'Nero', Size: 'L' } } })
+  // R-23 (Step 2.6c-2) reversed this: the axis values go to the one store; the legacy bag is never written.
+  expect(fixture.created[0]).not.toHaveProperty('variantAttributes')
   expect(fixture.created[0]).not.toHaveProperty('channelListings')
 })
 

@@ -65,13 +65,13 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   ['routes/listing-content.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['jobs/listing-quality-snapshot.job.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],
   ['routes/marketing-automation.routes.ts', 'variantAttributes: (product.variantAttributes ?? undefined)', 'AI prompt pass-through'],
-  // Writers — Step 2.6c-2 moves them to one helper.
+  // Writers — since Step 2.6c-2 they pass the legacy bag INTO the one writer's plan (to drop its keys), never write it.
   ['routes/catalog.routes.ts', 'const variantAttributes = request.body.variantAttributes;', 'the request body, not the column'],
-  ['routes/catalog.routes.ts', '(product.variantAttributes as Record<string, string> | null) ?? {};', 'PATCH /variant-attributes merge (a writer, 2.6c-2)'],
-  ['routes/catalog-organize.routes.ts', 'fromVariantAttributes: (product.variantAttributes as any) ?? null,', 'the organize undo snapshot (a writer, A-28)'],
-  ['services/pim/product-relationship.service.ts', '...(product.variantAttributes as object ?? {})', 'attachProduct merge (a writer, 2.6c-2)'],
-  ['services/bulk-action.service.ts', 'const raw = (item as ProductLike).variantAttributes', 'bulk "Set attribute variantAttributes.X" (a writer, 2.6c-2)'],
-  ['services/bulk-action/attribute-helpers.ts', 'const raw = product.variantAttributes', 'its before-value (a writer, 2.6c-2)'],
+  ['routes/catalog-organize.routes.ts', 'fromVariantAttributes: (product.variantAttributes as any) ?? null,', 'the organize undo snapshot (A-28)'],
+  ['routes/catalog-organize.routes.ts', 'legacyDrop: Object.keys((product.variantAttributes ?? {})', 'organize publish empties the legacy bag'],
+  ['services/pim/auto-detect.service.ts', 'legacyDrop: Object.keys((before?.variantAttributes ?? {})', 'auto-detect empties the legacy bag'],
+  ['services/bulk-action.service.ts', 'variationValuesPlan({ categoryAttributes: (item as ProductLike).categoryAttributes, variantAttributes: (item as ProductLike).variantAttributes }', 'into the one writer\'s plan'],
+  ['services/bulk-action/attribute-helpers.ts', 'variationBag({ categoryAttributes: product.categoryAttributes, variantAttributes: product.variantAttributes })', 'the before-value, through the helper'],
   // No-touch zone (flat files).
   ['services/amazon/flat-file.service.ts', 'data.variantAttributes = axes', 'flat-file create — no-touch'],
   ['services/ebay-flat-file-create.logic.ts', 'data.variantAttributes = attrs', 'flat-file create — no-touch'],

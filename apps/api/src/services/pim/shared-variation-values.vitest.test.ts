@@ -3,13 +3,13 @@ import { completeAxisValueOrder, variationAttributePatch } from './shared-variat
 
 describe('shared variation mutation', () => {
   const product = { categoryAttributes: { material: 'Leather', variations: { Color: 'Nero', Size: 'S' } }, variantAttributes: { Colore: 'Nero', Size: 'S' } }
-  it('updates declared and existing aliases in both push/read bags without changing another axis', () => {
-    expect(variationAttributePatch(product, ['Colore', 'Taglia'], { color: 'Giallo' }, [])).toEqual({ changed: true, set: { Colore: 'Giallo', Color: 'Giallo' }, unset: [] })
+  it('updates the declared axis and the store\'s own spellings; the legacy spelling leaves the legacy bag (R-23, 2.6c-2)', () => {
+    expect(variationAttributePatch(product, ['Colore', 'Taglia'], { color: 'Giallo' }, [])).toEqual({ changed: true, set: { Colore: 'Giallo', Color: 'Giallo' }, unset: [], legacyDrop: ['Colore'] })
     expect(product.categoryAttributes.variations.Size).toBe('S')
   })
   it('resets all aliases of the selected axis and leaves unrelated attributes outside this path', () => {
-    expect(variationAttributePatch(product, ['Colore', 'Taglia'], {}, ['size'])).toEqual({ changed: true, set: {}, unset: ['Taglia', 'Size'] })
-    expect(variationAttributePatch(product, ['Colore', 'Taglia'], { material: 'Mesh' }, [])).toEqual({ changed: false, set: {}, unset: [] })
+    expect(variationAttributePatch(product, ['Colore', 'Taglia'], {}, ['size'])).toEqual({ changed: true, set: {}, unset: ['Taglia', 'Size'], legacyDrop: ['Size'] })
+    expect(variationAttributePatch(product, ['Colore', 'Taglia'], { material: 'Mesh' }, [])).toEqual({ changed: false, set: {}, unset: [], legacyDrop: [] })
   })
   it('preserves explicit blank values instead of mistaking them for a reset', () => {
     expect(variationAttributePatch(product, ['Colore'], { color: null }, []).set).toEqual({ Colore: null, Color: null })

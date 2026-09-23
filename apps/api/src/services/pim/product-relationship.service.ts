@@ -1,3 +1,5 @@
+import { variationValuesPlan } from './shared-variation-values.js'
+import { writeVariationValues } from './category-attributes-write.js'
 import type { Prisma } from '@prisma/client'
 import { productRoleOf } from '@nexus/shared/master-sheet'
 import prisma from '../../db.js'
@@ -56,12 +58,9 @@ export async function attachProduct(tx: Prisma.TransactionClient, parentId: stri
   const changed = product.parentId !== parentId
   if (changed) await assertNoRelationshipAliases(tx, [productId])
   if (!changed && !Object.keys(axes).length) return false
-  const attributes = (product.categoryAttributes ?? {}) as Record<string, any>
-  await tx.product.update({ where: { id: productId }, data: {
-    parentId, isParent: false, version: { increment: 1 },
-    ...(Object.keys(axes).length ? { variantAttributes: { ...(product.variantAttributes as object ?? {}), ...axes },
-      categoryAttributes: { ...attributes, variations: { ...(attributes.variations ?? {}), ...axes } } } : {}),
-  } })
+  await tx.product.update({ where: { id: productId }, data: { parentId, isParent: false, version: { increment: 1 } } })
+  // R-23 (Step 2.6c-2) — through the one writer: the store takes the axes, the legacy bag loses them.
+  if (Object.keys(axes).length) await writeVariationValues(tx, productId, variationValuesPlan(product, axes))
   await productReadCacheService.refreshInTransaction(tx, [productId, parentId])
   return true
 }

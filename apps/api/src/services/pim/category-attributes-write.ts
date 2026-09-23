@@ -24,3 +24,19 @@ export const replaceCategoryAttributesKeepingVariations = (db: RawWriter, produc
         END,
         "updatedAt" = now()
     WHERE id = ${productId}`
+
+/** R-23 (Step 2.6c-2) — THE writer of a product's variation values. `set` / `unset` go to the one store,
+ * `categoryAttributes.variations`; `legacyDrop` keys leave the legacy `variantAttributes`, which is never written.
+ * `replaceStore` replaces the whole `variations` object (organize publish sets a child's full axis map). */
+export const writeVariationValues = (db: RawWriter, productId: string,
+  plan: { set: Record<string, unknown>; unset: readonly string[]; legacyDrop: readonly string[] }, options: { replaceStore?: boolean } = {}) =>
+  db.$executeRaw`UPDATE "Product"
+    SET "categoryAttributes" = COALESCE("categoryAttributes", '{}'::jsonb) || jsonb_build_object('variations',
+          CASE WHEN ${options.replaceStore === true}::boolean
+            THEN ${JSON.stringify(plan.set)}::jsonb
+            ELSE ((CASE WHEN jsonb_typeof("categoryAttributes" -> 'variations') = 'object' THEN "categoryAttributes" -> 'variations' ELSE '{}'::jsonb END)
+                  - ${[...plan.unset]}::text[]) || ${JSON.stringify(plan.set)}::jsonb
+          END),
+        "variantAttributes" = CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" - ${[...plan.legacyDrop]}::text[] ELSE "variantAttributes" END,
+        "updatedAt" = now()
+    WHERE id = ${productId}`

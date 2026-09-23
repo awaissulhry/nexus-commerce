@@ -1,3 +1,5 @@
+import { variationValuesPlan } from '../services/pim/shared-variation-values.js'
+import { writeVariationValues } from '../services/pim/category-attributes-write.js'
 import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
@@ -1280,14 +1282,8 @@ export async function catalogRoutes(app: FastifyInstance) {
           validationStatus: "VALID",
           syncChannels: [],
           status: "DRAFT",
-          ...(hasVariantAttrs
-            ? {
-                variantAttributes: cleanedVariantAttrs as any,
-                categoryAttributes: {
-                  variations: cleanedVariantAttrs,
-                } as any,
-              }
-            : {}),
+          // R-23 (Step 2.6c-2) — the one store only; the legacy `variantAttributes` is never written.
+          ...(hasVariantAttrs ? { categoryAttributes: { variations: cleanedVariantAttrs } as any } : {}),
         },
       });
 
@@ -1773,27 +1769,10 @@ export async function catalogRoutes(app: FastifyInstance) {
             .status(404)
             .send({ success: false, error: 'Product not found' });
         }
-        const currentVA =
-          (product.variantAttributes as Record<string, string> | null) ?? {};
-        const nextVA = { ...currentVA, ...writes };
-        for (const k of deletes) delete nextVA[k];
-
-        const currentCA =
-          (product.categoryAttributes as
-            | { variations?: Record<string, string> }
-            | null) ?? {};
-        const currentVariations = currentCA.variations ?? {};
-        const nextVariations = { ...currentVariations, ...writes };
-        for (const k of deletes) delete nextVariations[k];
-        const nextCA = { ...currentCA, variations: nextVariations };
-
-        await prisma.product.update({
-          where: { id: productId },
-          data: {
-            variantAttributes: nextVA as any,
-            categoryAttributes: nextCA as any,
-          },
-        });
+        // R-23 (Step 2.6c-2) — through the one writer: the store takes the values, the legacy bag loses the axes.
+        await writeVariationValues(prisma, productId, variationValuesPlan(product, writes, deletes));
+        const after = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { categoryAttributes: true, variantAttributes: true } });
+        const nextVA = variationBag(after);
         // Best-effort sync to the ProductVariation row (matched by sku).
         await prisma.productVariation
           .updateMany({

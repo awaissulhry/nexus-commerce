@@ -5395,10 +5395,11 @@ production does it — a preHandler that runs the handler inside `withWorkspace(
 |---|---|---|
 | 1 | **Organize undo does not restore the store.** It restores the parent link and `variantAttributes` only; `categoryAttributes.variations` keeps the values the publish wrote. Since R-23 that is the store publishers read, so an undone organize still publishes the new sizes. The session keeps no before-copy of `variations` to restore from | `catalog-organize.routes.ts`, `revertChange` |
 | 2 | **The eBay Inventory import overwrites an existing product's type and bullets.** On the update path it sets `productType: 'APPAREL'` and `bulletPoints: []` for every item, whatever the product was | `ebay-import.service.ts:126-134` |
+| 3 | **`PATCH /catalog/products/:id/variant-attributes` stringifies any value.** `String(v)` turns an object into `"[object Object]"` and stores it — the source of the local GALE junk key (via the retired Matrix tab). Found 2026-09-23 while building 2.6c-2; the route now writes through the one writer but still sanitises with `String()` | `catalog.routes.ts`, the sanitise loop |
 
 | # | Option | |
 |---|---|---|
-| **a** | (1) record the before-copy of `variations` with the organize change and restore it on undo (an additive column, or inside the existing JSON); (2) on the update path, stop setting `productType` and `bulletPoints` — set them only when creating | 🟢 **Recommended.** Both are small and each gets one test arm |
+| **a** | (1) record the before-copy of `variations` with the organize change and restore it on undo (an additive column, or inside the existing JSON); (2) on the update path, stop setting `productType` and `bulletPoints` — set them only when creating; (3) refuse a non-text value by name instead of stringifying it | 🟢 **Recommended.** All three are small and each gets one test arm |
 | b | Record both, build later | Both paths stay live |
 
 ---
@@ -5448,5 +5449,61 @@ Full `apps/api` hook suite: **883 files pass** (profiles ON too for the new file
 `ebay-image-axis.pure.ts` unions both stores for axis candidates, and the legacy bag's key casing can win there —
 names only, not values. The dead old editor (`tabs/MatrixTab`, `VariationsTab`, the cockpit tabs) still reads
 the legacy bag first; nothing mounts it.
+
+### Cost when — `flat`. **Rollback** — revert the commit.
+
+---
+
+## Step 2.6c-2 — BUILT (A-27 / R-24). One writer; the legacy bag is never written again.
+
+### The design point, measured before building
+
+Readers (2.6c-1) let the legacy `variantAttributes` fill in for an axis the store lacks. So a writer that merely
+**stopped writing** the legacy bag would bring a stale legacy value back the moment the store's axis is cleared
+(AIR-MESH shape: clear the store's `XXL` and the legacy `XS` reappears). The one writer therefore sets the store
+**and removes the touched axis from the legacy bag**. The "clear" arm below is that trap, and it goes red when
+the removal is mutated away.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `shared-variation-values.ts` | One plan for every write: `set` / `unset` for the store (every spelling the store already holds moves together), `legacyDrop` for the legacy bag. `variationAttributePatch` (the sheet) and new `variationValuesPlan` (writers that name their axes) both produce it |
+| `category-attributes-write.ts` — `writeVariationValues` | THE writer: one atomic statement; the store takes the plan, the legacy bag only loses keys; `replaceStore` for writers that set a child's whole axis map |
+| The sheet (`bulk-edit.service.ts`) | Its SQL no longer adds to the legacy bag; it removes the touched axes |
+| Attach (`product-relationship.service.ts`), `PATCH /catalog/products/:id/variant-attributes`, bulk "Set attribute `variantAttributes.X`" (+ its before-value) | Through the one writer (the bulk path keeps its name; the value goes to the store) |
+| Organize publish, auto-detect groupings | The child's axis map replaces the store's; the legacy bag is emptied |
+| Add child, generate combinations, create-wizard children | Create with the store only; the legacy bag is never written |
+
+Two existing tests asserted the legacy bag was written (`family-generate-transaction`, `product-relationship`); R-23
+reverses that, and each now asserts it is not. Not touched: the two flat-file creates (no-touch zone) and the
+organize undo restore (A-28).
+
+### Done when — ✅ `variation-one-writer.vitest.test.ts`
+
+Each live writer through its own entry point — the sheet (set, and **clear: the stale legacy XS does not come back**),
+the variant-attributes route (set, then delete), attach, add child, organize publish — puts the value in the store
+and leaves no key of that axis in the legacy bag. A source scan: raw SQL may only **remove** from the legacy bag; a
+direct assignment exists only in the two no-touch flat-file creates; every other `variantAttributes: <value>` line
+is one of 19 named non-writes (DTOs, inputs to the helpers) plus the organize undo (A-28), none stale.
+
+🔴 **The gate files were consolidated.** Every real-database arm of Step 2.6 (2.6a end-to-end, 2.6b writers, 2.6c-2)
+now lives in this one file, on the in-process database (`formulaDatabase`, PGlite). Three files each creating a
+`concurrentDatabase()` at once — plus the machine's other sessions — overflowed the local server's lock table
+(`53200 out of shared memory`, "increase max_locks_per_transaction"), failing files that pass alone; the price
+gate's close hook also timed out under that load. These arms test what a write stores, not a race, so they need no
+separate server database. `category-attributes-keep-store.vitest.test.ts` is folded in (its products renamed
+`kept-*`); `axis-one-store.vitest.test.ts` keeps its pure arms.
+
+### Gate — ✅ every Step 2.6 proof re-run on the consolidated files: 27 mutations, 27 red
+
+c2: the sheet SQL writing the legacy bag again · the plan never dropping legacy keys (4 arms, incl. the trap) ·
+the writer leaving the legacy bag untouched · store spellings not moved together · add child writing the legacy
+bag · organize not emptying it · attach writing it (7). 2.6a (7), 2.6b (7), c1 (6) re-run, all red. 2.6a's
+"fallback takes any held key" mutation, equivalent before, is now **red**: the plan no longer re-filters the axis
+name, and the "a size edit never touches a colour" control catches it.
+
+Full `apps/api` hook suite: **883 files pass**. Profiles ON: the gate files pass; `product-relationship` stays at its
+baseline 35 known failures, not worse. `tsc`: 0.
 
 ### Cost when — `flat`. **Rollback** — revert the commit.

@@ -2054,7 +2054,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         SET "categoryAttributes" = ((COALESCE("categoryAttributes", '{}'::jsonb) - ${remove}::text[]) || ${JSON.stringify(patch)}::jsonb)
               || jsonb_build_object('variations',
                 ((CASE WHEN jsonb_typeof("categoryAttributes"->'variations') = 'object' THEN "categoryAttributes"->'variations' ELSE '{}'::jsonb END) - ${axes.unset}::text[]) || ${JSON.stringify(axes.set)}::jsonb),
-            "variantAttributes" = ((CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" ELSE '{}'::jsonb END) - ${axes.unset}::text[]) || ${JSON.stringify(axes.set)}::jsonb
+            -- R-23 (Step 2.6c-2): the legacy bag is never written; the touched axes leave it.
+            "variantAttributes" = CASE WHEN jsonb_typeof("variantAttributes") = 'object' THEN "variantAttributes" - ${axes.legacyDrop}::text[] ELSE "variantAttributes" END
         WHERE id = ${productId}
       `
       return prisma.$executeRaw`

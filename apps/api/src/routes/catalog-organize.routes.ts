@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import prisma from '../db.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
-import { mergeCategoryAttributes } from '../services/pim/category-attributes-write.js'
+import { writeVariationValues } from '../services/pim/category-attributes-write.js'
 
 /**
  * /api/catalog/organize — session-based publish + undo.
@@ -117,12 +117,13 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
               parentId: toParentId,
               isParent: false,
-              ...(Object.keys(cleanedAttrs).length > 0 ? { variantAttributes: cleanedAttrs as any } : {}),
             },
           })
-          // Step 2.6b (R-23) — set the child's axis values in the store; every other attribute stays.
-          // This used to replace the whole bag with `{ variations }`, deleting every other attribute.
-          if (Object.keys(cleanedAttrs).length > 0) await mergeCategoryAttributes(tx, productId, { variations: cleanedAttrs })
+          // Steps 2.6b / 2.6c-2 (R-23) — the child's axis map replaces the store's; every other attribute stays,
+          // and the legacy `variantAttributes` is emptied, never written. (It used to replace the whole bag with
+          // `{ variations }`, deleting every other attribute, and to write the legacy bag.)
+          if (Object.keys(cleanedAttrs).length > 0) await writeVariationValues(tx, productId, { set: cleanedAttrs, unset: [],
+            legacyDrop: Object.keys((product.variantAttributes ?? {}) as Record<string, unknown>) }, { replaceStore: true })
 
           // 2. Ensure parent flag is set.
           if (!parent.isParent) {
