@@ -106,7 +106,9 @@ async function open(row: Quarantine): Promise<Notice> {
 async function writeOwned(tx: Tx, notice: Notice, connectionId: string, history?: { receivedAt: Date; deliveries: number }): Promise<InboundWriteResult> {
   const result = await recordInboundInTx(tx, { channel: 'EBAY', eventType: notice.topic,
     externalId: ebayReceiptExternalId(notice.environment, notice.externalId), connectionId,
-    payload: notice.payload, rawBody: notice.rawBody, signatureOk: true, verifiedBy: 'ebay_ecdsa', queueForRetry: true,
+    // Unscheduled admission is invisible to old workers during a rolling deploy.
+    // The ready protocol-aware worker activates and claims it atomically.
+    payload: notice.payload, rawBody: notice.rawBody, signatureOk: true, verifiedBy: 'ebay_ecdsa', queueForRetry: false,
     providerTimestamp: readEbayPublicationTime(notice.payload),
   }, history)
   if (!result.id) throw new EbayAdmissionError(result.conflict ? 'identity_conflict' : 'storage_unavailable')
@@ -120,7 +122,7 @@ async function existingReceipt(tx: Tx, notice: Notice, workspaceId: string) {
 
 async function sameSubject(tx: Tx, stored: NonNullable<Awaited<ReturnType<typeof existingReceipt>>>, notice: Notice): Promise<boolean> {
   if (stored.eventType !== notice.topic || !stored.signatureOk || stored.verifiedBy !== 'ebay_ecdsa') return false
-  // Archiving removes payload, never the bound account or delivery/trust metadata.
+  // Archived history retains its bound account and delivery/trust metadata.
   // A duplicate may increment delivery history, but cannot restore or replay it.
   if (stored.archivedAt && stored.connectionId) {
     const account = await tx.channelConnection.findUnique({ where: { id: stored.connectionId }, select: { externalAccountId: true, connectionMetadata: true } })

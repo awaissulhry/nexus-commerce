@@ -710,3 +710,50 @@ independent privileged controls. This redundant protection is not counted as a k
 single guard. Removing archive locks caused the deterministic second archiver to take
 500 instead of1 and caused expected blocked replay timeouts; the clean247-case rerun
 has no failures/skips. Evidence: c11d6-*-mutation.log and c11d6-final-regressions.log.
+
+
+## C11d7 — mixed-version eBay admission and atomic activation (local)
+
+Review of published0a563d6d proved its old worker selects any due pending/failed row,
+finds no eBay handler, and unconditionally dead-letters it. A flag in the new binary
+cannot constrain an old process. Admission and owner quarantine adoption now ALWAYS
+leave a new receipt pending/attempt0/nextAttemptAt=null, including after redelivery.
+The ready new selector includes pristine held protocol receipts within its existing
+four-row bound. Activation and claim happen in ONE fenced conditional UPDATE, using
+DB time; there is no separately committed due-time exposure. Only verified, bound,
+unprocessed, unarchived, unscheduled, unleased, attempt0 protocol-prefixed receipts
+qualify. Historical inline, failed/DLQ, attempted and delayed work is not reset.
+Existing retries retain leases, backoff and attempt budgets. Replay checks readiness
+inside the locked queue function before changing its schedule, as well as route checks.
+
+This simpler ALWAYS-held admission avoids a separate admission/flag branch and also
+lets a compatible enabled worker pick up new deliveries normally on its next sweep.
+Unsupported topics remain in private quarantine; no new topic activation follows.
+The existing real replay/archive/domain fixtures now explicitly enable the processing
+prerequisites when exercising successful replay; assertions and safeguards are kept.
+
+Evidence in /private/tmp/cx-completion-20260922/:
+- c11d7-rollout-defect-red.log reproduces five failures with a valid grant fixture.
+  Earlier c11d7-rollout-red*.log failed on an incomplete synthetic GrantResult and
+  is not counted as defect proof; it was corrected to the actual grant contract.
+- c11d7-rollout-first.log:69 realPG cases pass across rollout/admission/replay/archive/
+  processor suites. Expanded rollout suite9/zero skips passes in
+  c11d7-rollout-expanded.log, including direct claim refusal with each prerequisite
+  OFF, old-worker positive DLQ control, concurrent one-effect activation, DB clock,
+  bounded selection and fourteen ineligible states.
+- c11d7-regressions.log:87 focused tests/5files pass; API typecheck passes.
+- Five applied/restored mutations killed: queued admission, claim readiness, pristine
+  attempt budget, held selection and replay readiness. Source independently approved.
+  Whole-package canonical gates remain pending; no deployment or channel call.
+
+Required rollout/rollback order (approval and actual observation still pending):
+1. Keep notification setup/processing OFF; no old-version replay during overlap.
+2. Deploy the protocol-aware build to every receiver and worker. Logical archival
+   and additive DB guards are part of the explicit package approval.
+3. Prove all old workers AND in-flight sweeps have exited; prove old replay endpoints
+   cannot be reached. If this cannot be established, do not enable processing; use
+   a separately reviewed database protocol guard or compatibility rollout instead.
+4. Only after operational quarantine recovery/key readiness and approval, enable the
+   compatible processors. They activate held receipts without rebinding or resetting.
+5. After any activation, roll back only to a protocol-aware build. Turning the flag
+   OFF does not make rollback to0a safe: already scheduled retries remain old-visible.

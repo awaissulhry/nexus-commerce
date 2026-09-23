@@ -75,6 +75,7 @@ describe.skipIf(!concurrentDatabaseUrl())('transactional account revocation in P
   beforeAll(async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
     vi.stubEnv('NEXUS_CX_TOKEN_SERVICE', '1')
+    vi.stubEnv('NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '1')
     vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
     vi.stubEnv('NEXUS_KMS_KEY_ID', '')
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('Network request inside database-only revocation tests') }))

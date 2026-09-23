@@ -34,6 +34,8 @@ async function deadLetter(id: string) { await database.pool.query('UPDATE "Webho
 describe.skipIf(!concurrentDatabaseUrl())('fenced manual eBay replay in PostgreSQL', () => {
   beforeAll(async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    vi.stubEnv('NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '1')
+    vi.stubEnv('NEXUS_CX_TOKEN_SERVICE', '1')
     database = await concurrentDatabase({ maxConnections: 8 })
     await database.pool.query('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Replay other business\',\'test\',$1,now())', [OTHER])
     await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","updatedAt") VALUES (\'replay-seller\',$1,\'EBAY\',\'replay-seller\',now())', [OWNER])

@@ -330,7 +330,7 @@ export interface ReplayRequest {
   workspaceId?: string | null
 }
 
-export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified' | 'changed'
+export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified' | 'changed' | 'processing_held'
 
 /**
  * One shape rather than a discriminated union on `ok`.

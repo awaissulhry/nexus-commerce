@@ -8,10 +8,9 @@ import { claimEbayInbound, commitEbayInbound, finishEbayInbound, type EbayInboun
 import { raiseEbayFailureNotificationInTx } from './ebay-failure-notification.js'
 import { EbayNoticeInvalid, parseEbayRevocationNotice } from './ebay-revocation-notice.js'
 import { MAX_INBOUND_ATTEMPTS } from './ledger.js'
+import { ebayInboundProcessingEnabled, ebayInboundProcessingReady, heldEbayInboundWhere } from './ebay-processing-policy.js'
 
-/** Deployment alone must not start provider introspection or account lifecycle writes. */
-export const ebayInboundProcessingEnabled = () => process.env.NEXUS_ENABLE_EBAY_INBOUND_PROCESSING === '1'
-export const ebayInboundProcessingReady = () => ebayInboundProcessingEnabled() && tokenServiceEnabled()
+export { ebayInboundProcessingEnabled, ebayInboundProcessingReady } from './ebay-processing-policy.js'
 
 /** Separate bounded selection prevents held/leased eBay rows starving other channels. */
 export async function dueEbayInboundEvents(limit = 4) {
@@ -19,8 +18,9 @@ export async function dueEbayInboundEvents(limit = 4) {
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
   return prisma.webhookEvent.findMany({ where: {
     channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
-    status: { in: ['pending', 'failed'] }, nextAttemptAt: { not: null, lte: clock.now },
-    OR: [{ leaseToken: null }, { leaseUntil: { lte: clock.now } }],
+    OR: [{ status: { in: ['pending', 'failed'] }, nextAttemptAt: { not: null, lte: clock.now },
+      OR: [{ leaseToken: null }, { leaseUntil: { lte: clock.now } }],
+    }, heldEbayInboundWhere()],
   }, select: { id: true, workspaceId: true }, orderBy: [{ nextAttemptAt: 'asc' }, { id: 'asc' }], take: Math.max(1, Math.min(4, Math.floor(limit) || 4)) })
 }
 

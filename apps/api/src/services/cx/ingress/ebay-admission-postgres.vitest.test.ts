@@ -90,7 +90,7 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     if (result.kind !== 'accepted') throw new Error('Expected owned receipt')
     const row = await inOwner(() => database.client.webhookEvent.findUnique({ where: { id: result.receiptId } }))
     expect(row).toMatchObject({ workspaceId: OWNER, connectionId, payload: body, status: 'pending', isProcessed: false, signatureOk: true, verifiedBy: 'ebay_ecdsa', deliveries: 1 })
-    expect(row!.nextAttemptAt).toBeInstanceOf(Date)
+    expect(row!.nextAttemptAt).toBeNull()
     expect(row!.externalId).toBe(`ebay:production:${body.notification.notificationId}`)
     expect((await database.pool.query('SELECT count(*)::int AS n FROM "EbayNoticeQuarantine" WHERE "externalId"=$1', [body.notification.notificationId])).rows[0].n).toBe(0)
   })

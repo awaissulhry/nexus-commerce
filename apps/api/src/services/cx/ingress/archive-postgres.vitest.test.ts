@@ -55,7 +55,7 @@ async function waitForBlocked(pid: number) {
 }
 
 describe.skipIf(!concurrentDatabaseUrl())('inbound archive and replay races in PostgreSQL', () => {
-  beforeAll(async () => { vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); database = await concurrentDatabase({ maxConnections: 10 }) }, 180_000)
+  beforeAll(async () => { vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '1'); vi.stubEnv('NEXUS_CX_TOKEN_SERVICE', '1'); database = await concurrentDatabase({ maxConnections: 10 }) }, 180_000)
   beforeEach(async () => { workspaceId = await newProfile(); afterReplayRead = undefined; beforeArchiveWrite = undefined })
   afterAll(async () => { await database?.close(); vi.unstubAllEnvs() }, 60_000)
 

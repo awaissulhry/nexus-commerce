@@ -5,6 +5,7 @@ import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { activeDatabaseTransaction } from '../../../lib/database-context.js'
 import { lockOwnedEbayAccount } from '../ebay-identity.js'
 import { inboundBackoffMs, MAX_INBOUND_ATTEMPTS, type ReplayOutcome, type ReplayRequest } from './ledger.js'
+import { ebayInboundProcessingReady, heldEbayInboundWhere } from './ebay-processing-policy.js'
 
 export const EBAY_INBOUND_LEASE_MS = 180_000
 
@@ -68,6 +69,7 @@ export async function queueEbayReplay(request: ReplayRequest): Promise<ReplayOut
         signatureOk: true, verifiedBy: true, nextAttemptAt: true, leaseToken: true, leaseUntil: true } })
     if (row.signatureOk !== true || row.verifiedBy !== 'ebay_ecdsa') return { ok: false, reason: 'unverified' }
     if (row.archivedAt) return { ok: false, reason: 'archived' }
+    if (!ebayInboundProcessingReady()) return { ok: false, reason: 'processing_held' }
     const now = await databaseTime(tx)
     if ((row.leaseToken && row.leaseUntil && row.leaseUntil > now) || (row.status === 'pending' && row.nextAttemptAt)) {
       return { ok: false, reason: 'already_pending' }
@@ -92,8 +94,9 @@ export async function claimEbayInbound(id: string, onDeadLetter?: EbayDeadLetter
     const now = await databaseTime(tx)
     const eligible: Prisma.WebhookEventWhereInput = {
       id, channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
-      status: { in: ['pending', 'failed'] }, nextAttemptAt: { lte: now },
-      OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }],
+      OR: [{ status: { in: ['pending', 'failed'] }, nextAttemptAt: { lte: now },
+        OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }],
+      }, ...(ebayInboundProcessingReady() ? [heldEbayInboundWhere()] : [])],
     }
     const leaseToken = randomUUID()
     const leaseUntil = new Date(now.getTime() + EBAY_INBOUND_LEASE_MS)

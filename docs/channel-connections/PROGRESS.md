@@ -44,9 +44,11 @@ Published main is now merged locally with reviewed bootstrap parity/atomicity re
 (23 database tests,6 killed mutations; see I1 in CX-REMAINING). C11d6 now replaces
 the dynamic webhook delete with bounded in-place archival and database deletion
 guards (14 realPG archive cases,24 admission compatibility cases,78 regressions).
-It remains local. Review also found a rolling-deployment hazard: old workers can
-DLQ newly queued eBay receipts. Admission must hold them unscheduled until compatible
-workers are everywhere; processing activation and rollback need this explicit fence.
+C11d6 is committed as539b95c2c, with247 realPG/zero skips and91 final regressions.
+C11d7 now also fixes the old-worker hazard locally: admission/adoption remain
+unscheduled; compatible ready workers activate and claim atomically. Nine rollout
+realPG cases and five killed mutations pass. Activation still requires old workers
+and in-flight sweeps retired; rollback after activation must be protocol-aware.
 
 
 ### Approved production release — 2026-09-22
