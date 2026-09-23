@@ -6448,3 +6448,29 @@ not. So the mechanism is not built on a claim.
 
 - **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without
   losing its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
+
+---
+
+## Step 3.2 — CLOSED (2026-09-23). The gate (15.7 #1) is built; the sampled production metric (15.7 #2) is carried to Step 3.5b.
+
+**Gate:** new `services/pim/sheet-payload-parity.vitest.test.ts` — one product, one live Amazon·IT listing, a cached
+category schema, three values stored where the sheet stores them; the SHEET (`getStudioSheet`, channel scope) and the
+PAYLOAD (`readPublicationFacts` → `prepareAmazonPublication`, built, never sent) must agree on every attribute the sheet
+shows, and the payload may add only its own builders' roots (offer, stock, content, parentage). A positive control
+(the sheet shows the three values) and a control that the comparison sees a difference.
+
+🟠 **My first version compared against half the builder** (`applyResolvedMappingToAmazonFeed` alone) and failed on all
+three attributes: a listing setting is serialised one level up, by the studio builder, so that payload was empty. Not a
+product defect — a gate measuring the wrong layer. Fixed to call the studio builder itself.
+
+| Mutation (`studio-publication-amazon.ts`, sha256 restored) | Red |
+|---|---|
+| G1 the studio stops serialising listing-owned attributes | 2 of 2 |
+| G2 "Listing settings" treated as another builder's | 2 of 2 |
+| G3 the studio sends a stray attribute no builder owns | the parity arm |
+
+**Step 3.2's four numbers, all with predictions written first:** M1 ✅ (an override reaches the payload) · M2 = **0** value
+disagreements (one local family, now a push-hook gate) · M3 ✅ (3,482 entries carry their market's tag; R-LX-6 holds; the
+25 Amazon·DE Italian titles are A-32, content deferred by R-34) · M4 = **0** (Step 2.4).
+**Closure:** Done when ✅ · Cost when `flat` ✅ · Gate ✅ (above) · Rollback — remove the test. 15.7 #2 (N coordinates a day
+on production) IS Step 3.5b's rotation — carried there (A-36).
