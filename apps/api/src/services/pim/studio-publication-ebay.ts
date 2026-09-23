@@ -84,8 +84,9 @@ async function liveItem(itemId: string, accountId: string, market: string) {
  * it computes. No publish gate, no media gallery, no description render, no live call — so a READER (the nightly eBay content
  * read, `channel-drift/ebay-content-ours.ts`) takes "ours" from the builder itself, never from a second copy of it.
  *
- * `currency`: the publish path passes none, as before (so `buildSharedListingInput` refuses it — P4.4a, stated in PLAN.md);
- * a reader passes the market's. It feeds only the input's `currency` field, never its title or item specifics.
+ * `currency`: the market's own (`facts.destination.currency`). Both the publish path and a reader pass it; since P4.4a
+ * (`4774b48ff`) `buildSharedListingInput` refuses a missing one by name (A-41, R-46). It feeds only the input's `currency`
+ * field, never its title or item specifics.
  */
 export async function buildEbayListingInput(facts: PublicationFacts, options: { currency?: string } = {}) {
   const { scope, parent, products, listings } = facts
@@ -176,7 +177,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
 export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
   const { scope, parent, products } = facts
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
-  const { shared, itemId, parentListing, settings, galleries, variants } = await buildEbayListingInput(facts)
+  const { shared, itemId, parentListing, settings, galleries, variants } = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')

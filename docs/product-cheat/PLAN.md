@@ -7059,3 +7059,22 @@ catches it as an issue, so nothing is sent. **Fix, recommended:** pass the marke
 resolved market publishes its preview; a market with no currency is still refused by name. **Done when** — the studio eBay
 preview builds for a family on eBay·IT (test) and the refusal arm stays red for a market with no currency. **Rollback** — revert.
 🟠 Not measured: whether anyone has tried a studio eBay publish since 09-21 (production logs, read only, if you want the number).
+
+| # | Question | Ruling (2026-09-23 ~23:40 UTC, thirty-second set) |
+|---|---|---|
+| **R-46** | A-41 — the studio eBay publish refused since 09-21 | ✅ **Yes, fix it**: pass the market's own currency at the publish path; a market with no currency stays refused by name |
+
+### A-41 — PREDICTION written before the change (R-46)
+With `prepareEbayPublication` passing `facts.destination.currency`, and the test's currency fill REMOVED (so nothing but the
+builder supplies it): the golden arm (title + item specifics) and the parity arm pass; a fixture whose market has **no**
+currency is refused *"No currency was resolved for the IT market"*. Mutation: the argument removed → the golden and parity
+arms go red (the old P4.4a refusal).
+
+## A-41 — BUILT (R-46). The studio eBay publish passes the market's own currency again.
+
+`services/pim/studio-publication-ebay.ts`: `prepareEbayPublication` → `buildEbayListingInput(facts, { currency:
+facts.destination.currency })` (one argument; the comment says why). The parity test no longer fills a currency for the builder.
+**Against the prediction:** ✅ golden + parity pass with nothing filled; ✅ the XML carries `<Currency>EUR</Currency>`; ✅ a market with
+no currency is refused *"No currency was resolved for the IT market"*. **Gate — 2 mutations, 2 red** (the argument removed → 3 arms
+red; a fixed `EUR` instead of the market's → the no-currency arm red); sha256 restored. Related suites 11 files / 82 tests green;
+`tsc` 0. **Done when** ✅ (in tests; no live eBay publish was run). **Cost when** `flat`. **Rollback** — revert the commit.

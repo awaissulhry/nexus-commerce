@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * overrides the stored value, a >65-character list that the builder splits into values):
  *   · golden — the Title and ItemSpecifics the builder SENDS (the XML), recorded on the builder before the extraction;
  *   · parity — the same Title and ItemSpecifics come out of `buildEbayListingInput` given the market's currency;
- *   · today — with no currency the publish path is refused (it passes none since P4.4a; stated in PLAN.md, not fixed here).
+ *   · currency (A-41, R-46) — the publish path passes the market's own currency; a market with none is refused by name.
  * Everything the builder reads outside the fixture is stubbed; `buildFlatRow`, `buildSharedListingInput` and the XML
  * serialiser are REAL.
  */
@@ -46,7 +46,7 @@ vi.mock('../ebay-trading-api.service.js', async original => ({
   ...(await original<typeof import('../ebay-trading-api.service.js')>()),
   callTradingApi: async () => ({ ack: 'Success', errors: [], raw: '<Item><ItemID>111</ItemID><SellingStatus><ListingStatus>Active</ListingStatus></SellingStatus></Item>' }),
 }))
-// The publish path passes no currency (P4.4a); the golden/parity arms fill the market's, the "today" arm does not.
+// A-41: nothing is filled any more (`currencyFill` stays undefined) — the builder must pass the market's currency itself.
 vi.mock('../ebay-shared-listing-push.service.js', async original => {
   const real = await original<typeof import('../ebay-shared-listing-push.service.js')>()
   return { ...real, buildSharedListingInput: (...args: Parameters<typeof real.buildSharedListingInput>) => {
@@ -96,7 +96,7 @@ const GOLDEN_SPECIFICS: Record<string, string[]> = {
 }
 const asLists = (specifics: Record<string, string | string[]>) => Object.fromEntries(Object.entries(specifics).map(([k, v]) => [k, Array.isArray(v) ? v : [v]]))
 
-beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX; m.currencyFill = 'EUR' })
+beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX; m.currencyFill = undefined })
 
 describe('the eBay studio builder — Title and ItemSpecifics', () => {
   it('golden: sends the resolved title and the overlaid, split item specifics (recorded before the extraction)', async () => {
@@ -109,15 +109,20 @@ describe('the eBay studio builder — Title and ItemSpecifics', () => {
     expect(Object.keys(sent.itemSpecifics)).not.toContain('Colore')
   })
 
-  it('today: with no currency the publish path is refused at the shared input (P4.4a) — the reader passes the market\'s', async () => {
-    m.currencyFill = undefined
-    await expect(builder.prepareEbayPublication(fixture())).rejects.toThrow(/No currency was resolved for the IT market/)
+  it('A-41: the publish path passes the market\'s own currency', async () => {
+    const plan = await builder.prepareEbayPublication(fixture())
+    expect(plan.xml).toMatch(/<Currency>EUR<\/Currency>/)
+  })
+
+  it('A-41: a market with no currency is still refused by name', async () => {
+    const facts = fixture()
+    facts.destination.currency = null
+    await expect(builder.prepareEbayPublication(facts)).rejects.toThrow(/No currency was resolved for the IT market/)
   })
 
   it('parity: buildEbayListingInput gives the same Title and ItemSpecifics the builder sends', async () => {
     const plan = await builder.prepareEbayPublication(fixture())
     const sent = parseEbayItemContent(plan.xml)
-    m.currencyFill = undefined // the reader supplies its own currency; nothing is filled for it
     const built = await (builder as any).buildEbayListingInput(fixture(), { currency: 'EUR' })
     expect(built.shared.title).toBe(sent.title)
     expect(asLists(built.shared.itemSpecifics)).toEqual(sent.itemSpecifics)
