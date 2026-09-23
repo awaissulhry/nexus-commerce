@@ -51,14 +51,36 @@ export async function recordChannelReadback(input: {
 /**
  * The product ids a "differs on the channel" filter matches: every product with a drifted listing, and its parent —
  * the product list shows families by their parent row.
+ *
+ * An eBay LISTING SHELL is hidden from the list by default, and a shared ItemID's owner listing is usually a shell: its
+ * entries name the variant by SKU (`quantity:<SKU>`, the eBay read-back's field). So for a shell's drifted listing, the
+ * products those SKUs name (the shell's workspace, not deleted) and their parents are matched too. Only a shell's
+ * entries are read this way; every other listing matches its own product and parent, as before.
  */
 export async function productIdsWithChannelDrift(): Promise<string[]> {
   const rows = await prisma.channelDrift.findMany({ where: { driftCount: { gt: 0 } },
-    select: { channelListing: { select: { productId: true, product: { select: { parentId: true } } } } } })
+    select: { driftedFields: true, channelListing: { select: { productId: true, product: { select: { parentId: true, productType: true, workspaceId: true } } } } } })
   const ids = new Set<string>()
+  const shellSkus = new Map<string, Set<string>>()
   for (const r of rows) {
     ids.add(r.channelListing.productId)
     if (r.channelListing.product?.parentId) ids.add(r.channelListing.product.parentId)
+    if (r.channelListing.product?.productType !== 'EBAY_LISTING_SHELL') continue
+    const workspaceId = r.channelListing.product.workspaceId
+    for (const e of Array.isArray(r.driftedFields) ? r.driftedFields as DriftEntry[] : []) {
+      const at = typeof e?.field === 'string' ? e.field.indexOf(':') : -1
+      if (at < 0 || at === e.field.length - 1) continue
+      const skus = shellSkus.get(workspaceId) ?? new Set<string>()
+      skus.add(e.field.slice(at + 1))
+      shellSkus.set(workspaceId, skus)
+    }
+  }
+  for (const [workspaceId, skus] of shellSkus) {
+    const named = await prisma.product.findMany({ where: { workspaceId, sku: { in: [...skus] }, deletedAt: null }, select: { id: true, parentId: true } })
+    for (const p of named) {
+      ids.add(p.id)
+      if (p.parentId) ids.add(p.parentId)
+    }
   }
   return [...ids]
 }

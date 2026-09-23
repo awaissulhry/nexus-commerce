@@ -6734,6 +6734,32 @@ off while the account's is on, or Amazon shows FBA stock our data does not, the 
 listing keeps selling with no product row; the job's outcome names it. ⬜ `delist-cascade.local.vitest.test.ts` edited, not run
 (needs the Docker rehearsal database and rewrites `docs/audits/…/pr2/rehearsal*.json`, which carry another session's changes).
 
+## Step 3.5 — the eBay drift slice BUILT (R-36). The eBay quantity read-back now records drift per LISTING.
+
+Built by sub-agent S2; re-run by this lane (86 tests across 7 files green; S2: 12 + 9 green with business profiles ON, `tsc` 0).
+
+**The trace (read, local counts):** the real eBay quantity read-back is the Trading `GetItem` pass
+(`services/ebay-inventory-readback.service.ts`, every 30 min from `jobs/ebay-readback.job.ts`). It compared per MEMBERSHIP
+(ItemID + SKU) and never named a listing. Local copy: 672 active memberships, 30 ItemIDs, 216 SKUs; **every (ItemID, market) has
+exactly ONE parentless owner listing (30 of 30)**; 176 memberships also have their own child listing on that ItemID; 496 are
+represented only by the ItemID's owner listing — usually an `EBAY_LISTING_SHELL` product.
+
+| Where | What |
+|---|---|
+| `services/ebay-inventory-readback.service.ts` | `tradingEntryVerdict` — ONE per-entry comparison rule, read by the old diff (behaviour unchanged) and by the new pure `tradingDriftRecords`: a difference goes on that product's own listing on that ItemID (`quantity`); else on the ItemID's one owner listing (`quantity:<SKU>`); 0 or 2+ owners → not recorded, counted `driftUnmapped` (never a guess). One `recordChannelReadback` per listing, source `ebay-trading-getitem`, each in `try { await } catch {}` |
+| `jobs/ebay-readback.job.ts` | the summary prints `drift recorded=N unmapped=N` |
+| `services/channel-drift.service.ts` (`productIdsWithChannelDrift`) | 🔴 **found on the way:** the product list HIDES shell products by default (`list-products.service.ts:431-433`, `:557`), so drift on a shell owner (most eBay memberships) would never show in the filter. Now a shell's `quantity:<SKU>` entries also match the products those SKUs name (same business, not deleted) and their parents |
+
+**Done when** (the plan's) — ✅ an eBay listing whose quantity differs has a drift row, and the product list filters to its
+product (also through a shell); a clean listing has a row at 0. **Cost when** — `flat` per compared entry (one query for the
+ItemIDs' listings per pass; one write per listing). **Gate** — 8 + 6 new arms; mutations **15 run, 14 red**: the drift write
+never happens · exact child ignored · ambiguous ItemID guessed · market not matched · owner field drops the SKU · clean listing not
+recorded · a failed drift write escapes · a second "compared" rule · (reader) shell entries ignored · wrong business matched · …;
+🟠 **one stayed green**: removing the reader's business filter — row security already hides the other business's product, so
+the test cannot see it; the filter stays as a second guard. **Rollback** — revert the commit.
+⬜ Not in the slice, stated: the Inventory-API pass (compares nothing itself); eBay price (no eBay price read-back); the pass
+still reads every account with the primary account's token (MAP.7, not this lane's).
+
 ### Step 2.6 post-deploy check — mid-way RESULT (2026-09-23 21:09 UTC, run by this lane under R-40, read only)
 
 `node docs/product-cheat/tools/axis-stores.mjs` (production, `BEGIN READ ONLY`, role `readOnly: on`): legacy `va` sizes **35**
