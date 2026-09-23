@@ -1,3 +1,4 @@
+import { AXIS_SYNONYM_GROUPS } from './pim/variant-attribute-keys.js'
 /**
  * EFX D4 — the ONE eBay variation-theme parser.
  *
@@ -38,15 +39,11 @@ export function parseThemeAxes(theme: unknown): string[] {
 // axisSynonymKey WITHOUT importing the push service (which would create a
 // create.logic → push-service import cycle).
 // ⚠ APPEND-ONLY: __dimN__ keys stored in _axisValueOrder/_axisSortOrder are
-// ARRAY-POSITION-derived. Inserting or reordering groups shifts every stored
-// order's key. New groups go at the END; existing groups gain entries only.
-export const AXIS_SYNONYM_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
-  ['colore', 'color', 'colour', 'color name', 'color_name', 'couleur', 'farbe', 'kleur', 'colour name', 'colori'],
-  ['taglia', 'size', 'size name', 'size_name', 'misura', 'größe', 'grosse', 'taille', 'maat', 'maten', 'koko'],
-  ['stile', 'style', 'style name', 'style_name'],
-  ['materiale', 'material', 'material name', 'material_name'],
-  ['genere', 'gender', 'department', 'target audience', 'target_audience'],
-]
+// ARRAY-POSITION-derived. Step 2.6c-3 (R-23): the groups are ONE table shared with
+// the product side, in pim/variant-attribute-keys.ts — edit them there, append-only.
+// Imported AND re-exported: a bare `export { x } from` binds nothing locally, and
+// axisSynonymKey / ASPECT_SYNONYM_GROUPS below use it.
+export { AXIS_SYNONYM_GROUPS }
 
 // Incident #19 — language-duplicate ASPECTS (Brand+Marca, Season+Stagione…):
 // legacy products carry English aspect keys beside the Italian schema keys,

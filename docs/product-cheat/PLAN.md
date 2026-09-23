@@ -5548,3 +5548,43 @@ The add-child route and organize publish still sanitise values with `String(v)` 
 was named in A-28. Same refusal would apply; not built without a word.
 
 ### Cost when — `flat`. **Rollback** — revert the commit.
+
+---
+
+## OWNER RULING — 2026-09-23 (eighteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-26** | Everything still waiting for the Owner's word in Step 2.6 | ✅ *"For everything that needs my okay, you have it. Please continue."* Read as: build 2.6c-3; apply A-28 #3's refusal to the two other routes that stringify (add child, organize publish); prepare the 2.6d data runs (the Owner runs them — this session cannot reach production). **Not** read as: touching a no-touch area, merging or deploying the branch, or raising the credential rotation |
+
+---
+
+## Step 2.6c-3 — BUILT (A-27 / R-26). One synonym table.
+
+### Measured first (production, run by the Owner, read only)
+
+`tools/axis-stores.mjs` `AXISNAMES`: axis names in use are **Colore (242), Taglia (217), Size (1), Color (1)** on
+products and **Colore, Taglia** on two eBay listings; the stored order keys are **`__dim0__`, `__dim1__`** only; no
+`_axisSortOrder` keys. With the bags' spellings (`Color`, `Size`, `Colore`, `Taglia`, `Style Name`, `Body Type`,
+`Fit Type`, `Team Name`, `Athlete`), both tables classified every spelling in use the same way — the change moves
+nothing in today's data.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `pim/variant-attribute-keys.ts` | `AXIS_SYNONYM_GROUPS` moves here — the one table. `canonicalVariantAxis` derives colour / size / style from its first three groups (folded the same way as before: case, spaces, `_`, `-`). `talla` and `groesse` are appended to the size group — append-only |
+| `ebay-theme-axes.ts` | Imports AND re-exports the shared table (a bare `export … from` binds nothing locally, and its own functions use it) |
+
+The product side now also knows `size name`, `color name`, `misura`, `kleur`, `maat`, `stile`, … ; the eBay side now
+also knows `talla`, `groesse`. The material and gender groups stay eBay-aspect synonyms only.
+
+### Done when / Gate — ✅ `axis-synonyms-one-table.vitest.test.ts` (6 arms), 5 mutations red
+
+The eBay side uses the shared object; the table is append-only against its pre-2.6c-3 copy; every spelling the eBay
+table knew keeps its `__dimN__` (stored orders do not move); both sides agree on every spelling of the three product
+axes, in any case that lowercases back; the product side still knows every spelling it knew; control: material and
+gender do not become product axes. Mutations: the product side back to its short list · `talla` dropped · a group
+inserted at the front · an eBay-side local copy · the product side absorbing the eBay-only groups.
+
+### Cost when — `flat`. **Rollback** — revert the commit (both tables return; no stored key moved).
