@@ -6277,3 +6277,62 @@ to `ACTIVE` with its own reason on screen; the database keeps `ACTIVE` on all th
 
 **Step 3.6 status:** the premise is re-scoped (A-34), the server half is gated; ⏳ the on-screen half (a refused cell goes
 back with its reason) is the Owner's one-minute check. **Cost when** — `flat`. **Rollback** — remove the test.
+
+---
+
+## OWNER RULING — 2026-09-23 (twenty-second set)
+
+The Owner: *"I'll go with your recommendation, and as far as content and making changes is concerned, I'll make changes to
+the listing data, like titles and all, later because I'll still need to work a lot. We need to get other things done, and
+that is what we should be doing last."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-33** | What next: Step 3.1's premise check | ✅ **(a)** Check Step 3.1 on production, **read only**: one Amazon read and one eBay read against the real accounts; if both work, write Step 3.4's plan for approval |
+| **R-34** | Listing CONTENT changes (the 25 Amazon·DE titles of A-32, AIREON's per-channel colour name of A-29/R-27, any title/description data work) | ✅ **Deferred to the END of the programme.** The Owner edits listing data himself, later. The build work comes first. The A-32 preview warning stays; nothing is written to listing content by this lane |
+
+---
+
+## Step 3.1 — the premise changed: BOTH DOORS ARE OPEN on production (measured 2026-09-23 under R-33)
+
+**Run:** `npx tsx docs/product-cheat/tools/channel-read-probe.mts --execute-approved` — one listing READ per channel, each with
+the SELLER ACCOUNT's own credentials, production; record `records/step-3.1-channel-read-probe-2026-09-23T13-04-50-794Z.json`.
+A read counts as open only when it returns the thing asked for (Amazon's client turns a 404 into "success" with no ASIN;
+eBay's client fakes success with an empty body outside production unless `NEXUS_EBAY_REAL_API` is set — the probe sets it
+and requires the body).
+
+| Door | Result |
+|---|---|
+| **Amazon SP-API** (account `cmothu9bo…`, OAuth, `connected`) | `getListingsItem` `GALE-JACKET-BLACK-MEN-S` on Amazon·IT → **ASIN `B0BMS5B768` = the stored ASIN**, status `DISCOVERABLE` |
+| **eBay Trading** (account `cmr4aaqb…`, OAuth, `connected`) | `GetItem 256564203510` with the account's user token → **`Success`**, the same ItemID back, `Active`, 473-byte body |
+
+🟠 **First run could not measure** (stated): both calls stopped with *"No ChannelSpec registered"* — the probe had not loaded
+the connector registry the API loads at boot (`index.ts:192`). Added; the second run is the result. No listing was written.
+
+**Step 3.1 — Done when ✅** (one eBay call and one Amazon call succeed against a real account). **Cost when** — `flat`.
+**Rollback** — n/a. **Gate** — the recurring health check is the channel-connections lane's heartbeat
+(`jobs/cx-heartbeat.job.ts`); not re-measured by this lane — stated, not claimed. The doors were opened by that lane's
+P0–P6 work, not by this one.
+
+**This unblocks 1.3 (reversible unpublish), 3.4 (the first live write and read-back) and 3.5 (reconciliation).**
+
+## A-35 — Step 3.4, the first live write and read-back: the plan. FOR YOUR APPROVAL. Nothing sent.
+
+The plan's own rules for it: one field, one coordinate, a fixture product; a probe stays inside the fixture family; a
+transport failure is an UNKNOWN outcome (re-read after a delay); restore **by value**; a zero-change round trip proves
+nothing — the write must change a value.
+
+**Recommendation — one:** write **Amazon·IT backend search terms** (`generic_keyword`) on **one** GALE child
+(`GALE-JACKET-BLACK-MEN-S`, the listing the 3.1 probe read). Backend search terms are not shown to buyers, so the probe
+is invisible on the page; R-34 (content work last) is kept — this is a probe that restores, not a content change.
+1. **Read only first:** save the listing's current `generic_keyword` (`getListingsItem`, `includedData=attributes`), and
+   trace which path writes exactly ONE attribute to ONE listing (the mapping cascade's `mappingAttributePatches`, fixed by
+   A-33, or the queue push) — a whole-family studio publish is too wide for this step.
+2. **Write** a distinctive probe value through that path (predicted and written down first).
+3. **Read back** after a delay, twice (a `000` may still commit); the value must match.
+4. **Restore by value** (the saved one) through the same path; read back again; must match the saved value.
+
+- **Done when** — a value written from Nexus is read back from Amazon and matches, and the restore is read back too.
+- **Cost when** — `flat`. **Gate** — becomes the seed of Step 3.5 (the read-back). **Rollback** — step 4.
+- 🔴 A live write to a real listing: nothing is sent before your word on this amendment, and each production run is yours
+  to authorise.

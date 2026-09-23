@@ -27,7 +27,7 @@ been exercised.
 | **0.4** Migration history replay | ✅ **CLOSED** — a fresh database builds from a baseline | `1eaecb03d` |
 | **1.1** Delist FK cascade | ✅ **STRUCK** — premise false; no migration needed, nothing to build | `647c1e4d1` |
 | **1.2** Never orphan a live listing | ✅ **BUILT** | `5c2030a44` |
-| **1.3** Reversible unpublish | 🔴 **BLOCKED** on Step 3.1 (no live eBay/Amazon credentials) | — |
+| **1.3** Reversible unpublish | 🟢 **UNBLOCKED 2026-09-23** — Step 3.1's doors are open on production (measured) | — |
 | **1.4** Gate the Amazon delete | ✅ **CLOSED** — Amazon was already done; the real hole was eBay's permission | `6ff3b6b58` |
 | **1.5** Price cell read-only | ✅ **BUILT, then LIFTED by Step 2.2 part 2** — the hold did its job and is deleted | `cf49c88d2` |
 | **A-8** `apps/api` suite was not gated | ✅ **BUILT** — 833 test files now run on every push | `43ace2666` |
@@ -72,6 +72,8 @@ been exercised.
 | **A-32** Amazon·DE listings pin an Italian title; a publish sends it tagged German | ✅ **RULED R-30, BUILT** — **production counted: 25 Amazon·DE titles, 21 live** (AIR-MESH-JACKET-MEN 6, REGAL-JACKET 13, VENTRA-JACKET 4, IT-MOSS-JACKET 1, MISANO-JACKET-XS-BLACK 1); FR/ES 0. The studio publish preview now names such a listing (warning); 5 mutations red. ⏳ **The Owner decides per listing**: German title, or follow the product | see `git log` |
 | **A-33 / Step 3.3** The two Amazon payload builders had drifted (a cascade clear went out by name alone) | ✅ **RULED R-31, BUILT — Step 3.3 CLOSED**: one serializer + one patch for both; the parity gate (5 arms) is red on the old cascade and on 6 mutations; a cascade clear now carries the schema selectors | see `git log` |
 | **A-34 / Step 3.6** The server already refuses a bad paste, per row | ✅ **RULED R-32; gate BUILT** (4 arms on the real save path, 3 mutations red). ⚠️ **Browser check: could not measure** — the local Amazon account is disconnected, and the automated paste does not reach the grid (a text field takes it; no save request was sent). ⏳ **The Owner's one-minute check**: paste a too-long value next to a valid one in the studio sheet | see `git log` |
+| **3.1** Open the two shut doors | ✅ **Premise changed — both OPEN on production** (read only, R-33): Amazon `getListingsItem` → the stored ASIN; eBay `GetItem` with the account token → `Success`, `Active`. Opened by the channel-connections lane. Unblocks 1.3, 3.4, 3.5 | — |
+| **A-35** Step 3.4 — the first live write and read-back | 🟡 **FOR YOUR APPROVAL** — recommended: Amazon·IT backend search terms on one GALE child (not shown to buyers), one attribute, read back after a delay, restore by value | — |
 | **3.2** The four measurements | 🟡 **M1 ✅** override reaches the studio payload. **M2 = 0** value disagreements (one local family; the jacket families stop at local publish guards). **M3 ✅ measured** on all 725 local Amazon listings, 3,482 entries (IT/DE/FR/ES): every entry carries the market's tag and R-LX-6 holds, but 🔴 **25 DE listings pin an Italian title as their own → A-32 (for your ruling)**. **M4 ✅**. ⬜ the 15.7 gate. Tools: `payload-capture.mts`, `content-language.mts` (local only, rolled back, no network) | see `git log` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
