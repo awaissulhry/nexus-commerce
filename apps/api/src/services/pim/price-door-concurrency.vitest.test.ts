@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 /**
  * PLAN Step 2.2, Gate (2) — two concurrent price edits give one `applied` and one `conflict`.
@@ -10,13 +10,20 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
  * releases the row. Only then does the listing-version compare-and-set decide the winner.
  */
 const state = vi.hoisted(() => ({ db: null as any }))
-vi.mock('@nexus/database', async () => {
-  // R-VT-12 has verified this URL. The helper creates its own database, never uses the catalogue.
-  process.env.NEXUS_TEST_CONCURRENT_PG_URL = process.env.DATABASE_URL
-  const { concurrentDatabase } = await import('../../test-support/concurrent-database.js')
-  state.db = await concurrentDatabase()
-  return { default: state.db.client }
-})
+/**
+ * A-31 (R-29) — NOTHING connects at load. This file used to build its database from `DATABASE_URL` inside this factory,
+ * so on the CI runner (no PostgreSQL) it failed to LOAD and turned `main` red. Like every other `concurrentDatabase()`
+ * file it now runs only when `NEXUS_TEST_CONCURRENT_PG_URL` names a server — the push hook's throwaway one
+ * (`scripts/run-real-postgres-tests.mjs`) — and the client is created in `beforeAll`, behind the skip.
+ */
+vi.mock('@nexus/database', () => ({
+  default: new Proxy({}, { get: (_target, property) => {
+    const client = state.db?.client
+    if (!client) throw new Error(`price-door-concurrency: no database (needs NEXUS_TEST_CONCURRENT_PG_URL); read "${String(property)}"`)
+    const value = client[property]
+    return typeof value === 'function' ? value.bind(client) : value
+  } }),
+}))
 vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => undefined) }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emitMany: vi.fn(), emitManyTx: vi.fn() } }))
@@ -27,13 +34,16 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
 import { applyProductBulkEdits } from '../products/bulk-edit.service.js'
+import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID,
   actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
-beforeAll(() => scoped(async () => {
-  await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'DE', name: 'Germany', currency: 'EUR', region: 'EU', language: 'de', languages: ['de'] } })
-}), 120_000)
+describe.skipIf(!concurrentDatabaseUrl())(`Step 2.2 Gate 2 — concurrent price writes (needs ${CONCURRENT_PG_ENV})`, () => {
+beforeAll(async () => {
+  state.db = await concurrentDatabase()
+  await scoped(() => prisma.marketplace.create({ data: { channel: 'EBAY', code: 'DE', name: 'Germany', currency: 'EUR', region: 'EU', language: 'de', languages: ['de'] } }))
+}, 120_000)
 afterAll(async () => { await state.db?.close() }, 60_000)
 
 async function seed(id: string) {
@@ -181,3 +191,4 @@ it('A-17 race: a price write that lands in the gap keeps the conflict and its pr
   expect(Number(stored.price)).toBe(27)
   expect(await prisma.priceChangeEvent.count({ where: { productId: product.id } })).toBe(0)
 }), 60_000)
+})

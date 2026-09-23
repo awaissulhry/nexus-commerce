@@ -68,7 +68,7 @@ been exercised.
 | **2.1 (b) on production** (2026-09-23) | ✅ **APPLIED by the Owner — Xavia Racing: `WROTE 5 rows`, count 5** (dry run first, `0 already required` before, `--revert` exact). ✅ Motovento: 0 rows (no cached schemas). **Done for both businesses** | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
 | **A-30** Step 2.7 measured again: the rows came from the old nightly job; the backfill dry run cannot see what is due; the new nightly recomputes every family tonight; 🔴 past its budget the nightly re-does the same first families forever | 🟡 **FOR YOUR RULING** — recommended: 2.7 becomes *verify the first nightly* (no production write), plus a small fix (oldest first; the dry run counts). Production age check needs your word | — |
-| **A-31** GitHub CI red on the deploy commit `0a563d6d5` | 🟡 **FOR YOUR RULING** — reproduced: this lane's two price-door test files need a real database at load; CI has none. Recommended: skip without a test server, like every other real-server test. Vercel ✅ deployed | — |
+| **A-31** GitHub CI red on the deploy commit `0a563d6d5` | ✅ **RULED R-29, BUILT** — reset test on PGlite, race test skips without a test server and runs in the push hook's real-PostgreSQL stage (11/11); CI step here: 0 failed; 6 mutations red. 🟠 `main`'s CI turns green at the next merge. Found: the price door takes a second connection for an account-less listing (P1.3 owner) | see `git log` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 

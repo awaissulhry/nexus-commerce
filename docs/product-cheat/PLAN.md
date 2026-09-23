@@ -5808,3 +5808,57 @@ count) so the push hook still runs it on every push. One commit.
 - 🔴 `scripts/run-real-postgres-tests.mjs` is shared (AE and channel-connections lanes list files there): **one appended
   entry**, named in the claim row before the edit. The fix reaches CI only when `pes/phase-0` is next merged to `main`
   — the Owner's merge.
+
+---
+
+## OWNER RULING — 2026-09-23 (twentieth set)
+
+The Owner: *"I'll go with your recommendation. We need to get everything done quickly according to the plan. Proceed
+with your recommendation and continue."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-28** | A-30 — Step 2.7 | ✅ **The recommendation.** 2.7 becomes *verify the first nightly after the deploy* (no production write by this lane; D-E no longer needed). Build: `dueFamilies` oldest first, and the job offers `countOutstanding` so the dry run counts. The read-only age check (`tools/readiness-age.mjs`) is authorised |
+| **R-29** | A-31 — CI red on `0a563d6d5` | ✅ **The recommendation.** `price-door-reset` → `formulaDatabase()`; `price-door-concurrency` skips without `NEXUS_TEST_CONCURRENT_PG_URL` and joins `scripts/run-real-postgres-tests.mjs` |
+
+---
+
+## A-31 — BUILT (R-29). The two price-door test files no longer turn CI red.
+
+| File | Change |
+|---|---|
+| `services/pim/price-door-reset.vitest.test.ts` | On `formulaDatabase()` (PGlite) — it tests what a write stores. Its listings now name their eBay account, as live listings do (see the finding below) |
+| `services/pim/price-door-concurrency.vitest.test.ts` | Still `concurrentDatabase()` (a race). Nothing connects at load; `describe.skipIf(!concurrentDatabaseUrl())`; the database is made in `beforeAll` |
+| `scripts/run-real-postgres-tests.mjs` | One appended suite: *price door race*, **11** expected |
+
+### 🔴 Found while moving it — a second connection inside the price door's transaction (for the P1.3 owner; not built)
+
+A direct `writeChannelPrices` call on a listing with **no** account timed out at 5,000 ms on PGlite. The queue row's
+destination falls to step 4, *"the channel's only account"* (`outbound-destination.ts:90`), which calls
+`listActiveConnections` (`connection-resolver.service.ts:159`) on the **outer** client — outside the transaction it runs
+in. On a pool that is a second connection per price write; on a one-connection database it waits for the transaction
+that waits for it. The sheet path does not hit it (its outer transaction is in context). Harmless on production's pool
+today; recorded for the channel-connections lane (P1.3's `resolveDestinations`), which owns the file.
+
+### Done when — ✅
+
+- CI's step *"Product grid resolver, write contracts and disposable PostgreSQL regressions"*, run here with CI's settings
+  (from `apps/api`, `DATABASE_URL` at a server that does not exist, no `NEXUS_TEST_CONCURRENT_PG_URL`): **183 files pass,
+  1 skipped (the race), 0 failed** — before the fix, 3 failed to load. CI's next step (web grid regressions, never reached
+  on `0a563d6d5`): **233 files pass**.
+- `price-door-reset`: 16/16 with no server and 16/16 with the dev server. `price-door-concurrency`: skipped with no server;
+  **11/11** on a throwaway server through the runner.
+- 🟠 The CI run on `main` itself turns green only after the Owner's next merge of `pes/phase-0` into `main`.
+
+### Gate — ✅ 6 mutations, 6 red (Python harness, per-file backups, sha256 restored every time)
+
+| Mutation | Result |
+|---|---|
+| M1 reset builds a server database at load again | 🔴 RED — the file fails to load (CI shape) |
+| M2 race connects at load again | 🔴 RED — fails to load |
+| M3 race without its skip | 🔴 RED — `beforeAll` has no server |
+| M4 race skipped even on the runner's server | 🔴 RED — runner: *0 passed, 11 skipped (expected 11 passed)* |
+| M5 reset listings with no account (the old fixture) | 🔴 RED — 11 failed (the 5,000 ms timeout) |
+| M6 the door keeps legacy price keys (A-18's defect), on the new database | 🔴 RED — 8 failed: the moved file still catches its defect |
+
+### Cost when — `flat`. Rollback — revert the commit.
