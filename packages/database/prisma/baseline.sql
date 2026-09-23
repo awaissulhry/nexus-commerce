@@ -9350,6 +9350,7 @@ CREATE TABLE "ChannelDrift" (
     "driftCount" INTEGER NOT NULL DEFAULT 0,
     "driftedFields" JSONB NOT NULL DEFAULT '[]',
     "lastCheckedAt" TIMESTAMP(3) NOT NULL,
+    "checkedBySource" JSONB NOT NULL DEFAULT '{}',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

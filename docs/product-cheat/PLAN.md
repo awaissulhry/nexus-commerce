@@ -6754,11 +6754,41 @@ represented only by the ItemID's owner listing — usually an `EBAY_LISTING_SHEL
 product (also through a shell); a clean listing has a row at 0. **Cost when** — `flat` per compared entry (one query for the
 ItemIDs' listings per pass; one write per listing). **Gate** — 8 + 6 new arms; mutations **15 run, 14 red**: the drift write
 never happens · exact child ignored · ambiguous ItemID guessed · market not matched · owner field drops the SKU · clean listing not
-recorded · a failed drift write escapes · a second "compared" rule · (reader) shell entries ignored · wrong business matched · …;
+recorded · a failed drift write escapes · a second "compared" rule; the reader: the shell branch never runs · the named product's
+parent not added · a deleted product matched · every listing's colon fields mapped · the SKU read as the whole field · clean rows read;
 🟠 **one stayed green**: removing the reader's business filter — row security already hides the other business's product, so
 the test cannot see it; the filter stays as a second guard. **Rollback** — revert the commit.
 ⬜ Not in the slice, stated: the Inventory-API pass (compares nothing itself); eBay price (no eBay price read-back); the pass
 still reads every account with the primary account's token (MAP.7, not this lane's).
+
+## A-39 slice b1 — BUILT (R-41). Each night, what Amazon holds for a listing's content is compared with what we would send.
+
+Built by sub-agent S4; re-run by this lane (125 tests across 13 drift files green, `packages/database` 17/17, `tsc` api 0; the
+four database gates pass: schema drift, column drift, model ownership, policy parity).
+
+| Where | What |
+|---|---|
+| `schema.prisma` + migration `20260923b_channel_drift_checked_by_source` (additive: one `JSONB NOT NULL DEFAULT '{}'` column) + `baseline.sql` (+1 line, by its script) | `ChannelDrift.checkedBySource` — a clock PER SOURCE (`at`, `outcome`, up to 3 reasons) |
+| `services/channel-drift.service.ts` | the writer keeps the TRUE count; under the 50 cap the FRESH entries are kept; a not-compared read keeps its entries and does not move `lastCheckedAt`. S2's reader untouched |
+| new `services/channel-drift/amazon-content-ours.ts` | "ours" for ONE listing through the builder's own seams: `resolvePublishContent` → the review gate → `buildAmazonContentEntries`; `resolveBatch` (cached schemas only) → `mappedAmazonRoots` + the listing settings. A wiring arm requires ours == the studio payload (`prepareAmazonPublication`) root for root |
+| new `services/channel-drift/amazon-content-compare.ts` | pure compare: content per (attribute, language tag), attributes per leaf we send; trim / collapse spaces / NFC; our language missing = not compared (R-LX-6); theirs absent = drift |
+| new `jobs/content-drift.job.ts` (+ `index.ts` one line, `cron-registry.ts` one entry, `scripts/content-drift-dry-run.ts`, `prod-run.mjs content-drift`) | `03:37` UTC daily, per business; never-checked first, then oldest (20 h horizon); 10-min budget, batch 25, ≥ 1 s between Amazon reads; a 404 / failed read / missing schema / resolver error = not compared with its reason. CronRun line = 15.7 #2: *compared N · drifted M · not compared K (reasons)*. **On with the next deploy; `NEXUS_ENABLE_CONTENT_DRIFT=0` holds it** |
+
+**Done when** — ✅ in tests: a listing whose Amazon title or a sent attribute differs has an `amazon-content` entry and the list
+filters to it; an identical one has a row at 0 with its clock; one that could not be compared says why. ⬜ On production: after
+the merge + migration. **Cost when** — bounded: ≤ 10 min and ≤ 1 Amazon read a second per business per night whatever the
+catalogue; a listing is re-read every ⌈listings ÷ listings-per-night⌉ nights. **Gate** — 28 new arms; **12 mutations, 12 red**
+(language tag ignored ×2 sides · a missing language counted · id-order rotation · a 404 stored clean · the cap hides the count ·
+the cap drops the fresh entries · normalisation removed · pace ignored · not-compared moves `lastCheckedAt` · a second opinion of
+the content · the migration loses its column → `check-column-drift`). **Rollback** — `NEXUS_ENABLE_CONTENT_DRIFT=0`; revert the
+commit; the column is additive (data derived).
+
+⬜ **Not measured, stated:** no production or Amazon read yet; the attribute half is proven on one fixture (3 text/enum roots) —
+compound and multi-instance roots may show compare artefacts on a first run; the resolver's time per listing (so listings per
+night). 🟠 **Correction to A-39's first-run prediction:** for the 21 live DE listings with a pinned Italian title (A-32), "ours"
+IS that Italian text under `de_DE` (the resolver trusts the listing's own column), so they read as drift only if Amazon·DE holds a
+DIFFERENT title. The A-32 preview warning is what names them, not this job. First production check (read only, after the merge):
+`node docs/product-cheat/tools/prod-run.mjs content-drift`.
 
 ### Step 2.6 post-deploy check — mid-way RESULT (2026-09-23 21:09 UTC, run by this lane under R-40, read only)
 

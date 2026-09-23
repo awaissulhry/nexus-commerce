@@ -17,18 +17,53 @@ export const DRIFT_FIELD_CAP = 50
 export type DriftField = { field: string; ours: unknown; theirs: unknown }
 export type DriftEntry = DriftField & { source: string; checkedAt: string }
 
-/** Pure: one source's fresh read merged into a listing's stored entries, capped. */
-export function mergeDrift(previous: unknown, source: string, compared: readonly string[], differing: readonly DriftField[], checkedAt: Date): DriftEntry[] {
+/**
+ * A-39 (R-41) — one clock PER SOURCE (`ChannelDrift.checkedBySource`): when this source last looked, whether it could
+ * compare, why not, and how many of ITS fields differed at that read (the true number, before any cap).
+ * `lastCheckedAt` stays the row's "any source compared" time.
+ */
+export type SourceClock = { at: string; outcome: 'compared' | 'not_compared'; reason?: string; differing: number; notCompared?: number }
+
+/**
+ * Pure: one source's fresh read merged into a listing's stored entries.
+ *
+ * 🔴 A-39 — the cap used to keep the OLD entries first and cut the list at 50, and `driftCount` was the cut length: a
+ * big read lost its own fresh entries and the count said so nowhere. Now the STORED list is capped with this read's
+ * entries kept first (the oldest other entries give way), and the count is the TRUE count: this source's differing
+ * fields, plus every other source's own count from its clock (or its stored entries, for a row written before clocks).
+ */
+export function mergeDriftCounted(previous: unknown, clocks: unknown, source: string, compared: readonly string[], differing: readonly DriftField[], checkedAt: Date): { entries: DriftEntry[]; count: number; sourceCount: number } {
   const prior = Array.isArray(previous) ? previous as DriftEntry[] : []
   const kept = prior.filter(e => !(e.source === source && compared.includes(e.field)))
   const fresh = differing.filter(d => compared.includes(d.field))
     .map(d => ({ field: d.field, ours: d.ours ?? null, theirs: d.theirs ?? null, source, checkedAt: checkedAt.toISOString() }))
-  return [...kept, ...fresh].slice(0, DRIFT_FIELD_CAP)
+  const sourceCount = fresh.length + kept.filter(e => e.source === source).length
+  const byClock = (clocks && typeof clocks === 'object' ? clocks : {}) as Record<string, Partial<SourceClock> | undefined>
+  const others = new Set([...kept.map(e => e.source), ...Object.keys(byClock)])
+  others.delete(source)
+  let count = sourceCount
+  for (const other of others) {
+    const own = byClock[other]?.differing
+    count += typeof own === 'number' ? own : kept.filter(e => e.source === other).length
+  }
+  const freshStored = fresh.slice(0, DRIFT_FIELD_CAP)
+  const room = DRIFT_FIELD_CAP - freshStored.length
+  const keptStored = room > 0 ? kept.slice(Math.max(0, kept.length - room)) : []
+  return { entries: [...keptStored, ...freshStored], count, sourceCount }
+}
+
+/** Pure: the stored entries only (3.5a's shape). */
+export function mergeDrift(previous: unknown, source: string, compared: readonly string[], differing: readonly DriftField[], checkedAt: Date): DriftEntry[] {
+  return mergeDriftCounted(previous, null, source, compared, differing, checkedAt).entries
 }
 
 /**
  * Record one read-back of one listing. `compared` = every field this source compared (a field that now matches is
  * cleared); `differing` = the ones that differ, with our value and the channel's.
+ *
+ * A-39 — `outcome: 'not_compared'` (with its `reason`) records that the source LOOKED and could not compare: its clock
+ * moves (a rotation goes on to the next listing), nothing is cleared, and `lastCheckedAt` is not advanced — a listing
+ * that could not be compared never reads as checked and clean.
  */
 export async function recordChannelReadback(input: {
   channelListingId: string
@@ -38,14 +73,23 @@ export async function recordChannelReadback(input: {
   compared: readonly string[]
   differing: readonly DriftField[]
   checkedAt?: Date
+  outcome?: SourceClock['outcome']
+  reason?: string
+  notCompared?: number
 }): Promise<{ driftCount: number }> {
   const checkedAt = input.checkedAt ?? new Date()
-  const existing = await prisma.channelDrift.findFirst({ where: { channelListingId: input.channelListingId }, select: { id: true, driftedFields: true } })
-  const entries = mergeDrift(existing?.driftedFields, input.source, input.compared, input.differing, checkedAt)
-  const data = { channel: input.channel, marketplace: input.marketplace, driftCount: entries.length, driftedFields: entries as never, lastCheckedAt: checkedAt }
+  const outcome = input.outcome ?? 'compared'
+  const compared = outcome === 'compared' ? input.compared : []
+  const existing = await prisma.channelDrift.findFirst({ where: { channelListingId: input.channelListingId }, select: { id: true, driftedFields: true, checkedBySource: true } })
+  const clocks = (existing?.checkedBySource && typeof existing.checkedBySource === 'object' ? existing.checkedBySource : {}) as Record<string, unknown>
+  const merged = mergeDriftCounted(existing?.driftedFields, clocks, input.source, compared, outcome === 'compared' ? input.differing : [], checkedAt)
+  const clock: SourceClock = { at: checkedAt.toISOString(), outcome, differing: merged.sourceCount,
+    ...(input.reason ? { reason: input.reason.slice(0, 300) } : {}), ...(input.notCompared ? { notCompared: input.notCompared } : {}) }
+  const data = { channel: input.channel, marketplace: input.marketplace, driftCount: merged.count, driftedFields: merged.entries as never,
+    checkedBySource: { ...clocks, [input.source]: clock } as never, ...(outcome === 'compared' || !existing ? { lastCheckedAt: checkedAt } : {}) }
   if (existing) await prisma.channelDrift.update({ where: { id: existing.id }, data })
-  else await prisma.channelDrift.create({ data: { channelListingId: input.channelListingId, ...data } })
-  return { driftCount: entries.length }
+  else await prisma.channelDrift.create({ data: { channelListingId: input.channelListingId, ...data, lastCheckedAt: checkedAt } })
+  return { driftCount: merged.count }
 }
 
 /**

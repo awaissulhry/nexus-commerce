@@ -19728,6 +19728,9 @@ model ChannelDrift {
   driftCount       Int            @default(0)
   driftedFields    Json           @default("[]")
   lastCheckedAt    DateTime
+  /// A-39 (R-41) — one clock PER SOURCE: { "<source>": { at, outcome: "compared" | "not_compared", reason? } }.
+  /// `lastCheckedAt` is shared by every source; a rotating source needs its own "when did I last look".
+  checkedBySource  Json           @default("{}")
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 

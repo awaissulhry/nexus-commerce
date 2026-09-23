@@ -406,6 +406,12 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const { runShopifyQtyReadback } = await import('./shopify-qty-readback.job.js')
     return runShopifyQtyReadback()
   },
+  // A-39 (R-41) — Step 3.5b's Amazon content read. On-demand run ONLY: the job is SCHEDULED in index.ts
+  // (startContentDriftCron). A manual run reads Amazon (≤ 1 read a second) and writes ChannelDrift, as the nightly does.
+  'content-drift': async () => {
+    const { runContentDrift, describeContentDrift } = await import('./content-drift.job.js')
+    return describeContentDrift(await runContentDrift())
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {
