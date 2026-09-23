@@ -6693,3 +6693,161 @@ the local record"*:
 | # | Question | Ruling (2026-09-23 ~20:50 UTC, twenty-sixth set) |
 |---|---|---|
 | **R-39** | A-38 second addendum — the build | ✅ **(a)** Build Step 1.3 for the hard-delete flow: Amazon = SCT.6's channel half as ONE shared function (the offer saved on the job's record; FBA refused per listing before the delete); eBay = quantity 0 on every SKU of the ItemID, refused before the delete unless the out-of-stock control is known ON. No republish. UI copy and the refusal tests follow |
+
+| # | Question | Ruling (2026-09-23 ~21:00 UTC, twenty-seventh set) |
+|---|---|---|
+| **R-40** | Who runs the read-only production tools | ✅ The Owner: *"I want you to do all the running of the commands yourself."* This lane runs `readiness-age.mjs` and `axis-stores.mjs` itself. Live channel writes and production data writes still need the Owner's word per run |
+
+### Step 2.6 post-deploy check / Step 2.7 verify — PREDICTIONS written before the runs (2026-09-23 ~21:00 UTC, R-40)
+
+- **`axis-stores.mjs` now (~15 h after 2.6d, mid-way) and again after 02:17 UTC 2026-09-24:** the legacy `va` sizes stay
+  **35** (the count after 2.6d, 2026-09-23 ~06:05 UTC) or fewer; store colour **301** / size **285**, or more only if
+  new children were created; store vs legacy **0** differ. A legacy count ABOVE 35 means a writer still writes the legacy bag.
+- **`readiness-age.mjs` after the 02:17 UTC nightly (run ~02:35 UTC):** `CronRun` `readiness-reconcile` SUCCESS for both
+  businesses, summary `stopped: complete`, 0 failed; every live root has a row computed after the 06:46 UTC deploy; roots
+  due now = 0. The deployed job is the id-order one (A-30 is not deployed) — at 34 roots it still covers all in one night.
+
+## Step 1.3 — BUILT (R-38, R-39). Hard delete + "stop selling": Amazon closes the market's offer, eBay goes to quantity 0.
+
+Built by sub-agent S1; re-run by this lane (209 API tests across 11 files green, `tsc` api 0 / web 0, web test 33, i18n check).
+
+| Where | What |
+|---|---|
+| `services/amazon-market-offer.service.ts` | New `closeAmazonOfferOnChannel` = SCT.6's channel half (live read → selector → `patchPurchasableOffer` delete). `closeMarketOffers` calls it; its DB writes and DB-price fallback unchanged (SCT.6's 12 arms untouched and green) |
+| `services/channel-delist.service.ts` | `delistCapability(channel, action, facts)` per LISTING. Amazon unpublish: the shared close, no fallback — a failed read = UNKNOWN, nothing sent; any non-`DEFAULT` fulfilment on Amazon's read = refused (FBA never touched); no offer = `NOT_SELLING`, nothing sent; ACCEPTED = SUCCESS with evidence (the verbatim offer, source, product type, submission id). eBay unpublish: GetItem → item out-of-stock control not on = refused; not Active = `NOT_SELLING`; else quantity 0 per SKU (≤ 4 a call; a single item by ItemID), `remainingBefore` kept as evidence. `readEbayOutOfStockPreference`. Evidence → `payload.channelEvidence` + the `CHANNEL_DELIST_OUTCOME` event |
+| `services/delist-error-codes.ts` | 7 new codes (`AMAZON_UNPUBLISH_FBA` / `_READ_FAILED` / `_NO_PRODUCT_TYPE`, `EBAY_UNPUBLISH_OOS_OFF` / `_OOS_UNKNOWN` / `_FAILED` / `_PARTIAL`); the two old `*_NOT_IMPLEMENTED` kept for old queue rows |
+| `routes/products-catalog.routes.ts` | bulk hard delete, `unpublish` only: each eBay account's out-of-stock preference read once, ≤ 5 s, in parallel, BEFORE the transaction (unknown = refused); the guard passes FBA facts + that preference per listing |
+| web `en.json` / `it.json` + `hardDelete.vitest.test.ts` | the copy says what now happens. 🟠 Found: the Italian label still read *"Annulla pubblicazione (consigliato)"* — the "(recommended)" string A-9 said no longer existed (A-9 searched English only). Now *"Interrompi la vendita su ogni canale"*; the English label *"End the listing"* over-stated eBay → *"Stop selling on each channel"*; two stale Italian bodies rewritten to the English meaning |
+
+**Done when** (the plan's) — ✅ the two mechanisms returned success and stopped selling without losing identifiers, **read back
+live**: eBay quantity 0 (A-37, variation SKU), Amazon offer close (A-38, and the pilot's DE close since 2026-07-26). ⬜ Not run
+live: the job end-to-end through the production worker, and eBay's SINGLE-SKU path (ItemID + quantity 0). **Cost when** —
+`flat` per listing (one read + one or two writes); an `unpublish` hard delete with eBay listings waits ≤ 5 s once per account.
+**Gate** — the two refusal tests inverted; 34 new delist arms, 10 new guard arms, 11 channel-half arms; **13 mutations, 13 red**
+(guard forgets FBA · ignores the eBay preference · sends despite FBA stock · evidence not saved · eBay sends with the control off ·
+SCT.6 selector drift · preference read for every action · sends past a failed read · partial failure as success · SCT.6 loses
+its fallback · all SKUs in one call · dry run undetected · one account's preference for all). **Rollback** — revert the commit;
+the refusals return.
+
+🔴 **Residual, stated (not preventable without a per-item channel read inside the delete request):** if an ITEM's own control is
+off while the account's is on, or Amazon shows FBA stock our data does not, the JOB refuses after the product is deleted — that
+listing keeps selling with no product row; the job's outcome names it. ⬜ `delist-cascade.local.vitest.test.ts` edited, not run
+(needs the Docker rehearsal database and rewrites `docs/audits/…/pr2/rehearsal*.json`, which carry another session's changes).
+
+### Step 2.6 post-deploy check — mid-way RESULT (2026-09-23 21:09 UTC, run by this lane under R-40, read only)
+
+`node docs/product-cheat/tools/axis-stores.mjs` (production, `BEGIN READ ONLY`, role `readOnly: on`): legacy `va` sizes **35**
+(= the post-2.6d count, ✅ not grown), legacy `va` colours **44** (first recorded here); store `vr` colour **301** / size **285**
+(✅ unchanged); `va` vs `vr` **0** differ on both axes; live children 301 (Xavia Racing) + 20 (Motovento). The day-after run
+follows at ~02:35 UTC.
+
+## A-39 — Step 3.5b: read what the channel holds for listing CONTENT, a few hundred listings a night, into `ChannelDrift`. FOR YOUR APPROVAL. Nothing built.
+
+**2026-09-23. Read only: code trace by sub-agent S3 (every line cited was read, unless marked *inferred*). No production read, no network.**
+**Re-read by this lane ✓ (three claims):** the writer keeps old entries first, then caps at 50, and `driftCount` is the capped
+length (`channel-drift.service.ts` `mergeDrift` / `recordChannelReadback`); `item_name`…`generic_keyword` carry a `masterKey`
+(`channel-specs/amazon.ts:46-49`); a 404 read returns `success: true, asin: null` (`amazon-sp-api.client.ts:1281-1288`).
+R-34 is kept: this is **reads only**. Nothing is written to any channel or to any listing's content.
+
+### What the code says
+
+| Piece | What exists | Where |
+|---|---|---|
+| Sweep helper | cursor derived from "still outstanding", wall-clock budget (default 10 min), dry run default, failure cap, `countOutstanding` optional | `services/pim/resumable-sweep.ts:48-121` |
+| A-30 rotation | due = never computed, then oldest first; the count uses the same predicate | `jobs/readiness-reconcile.job.ts:50-96` |
+| Per-business runs | a global cron runs once per active business, each in its own workspace scope | `lib/cron/clustered.ts:142-157` |
+| Drift writer | a source replaces only the fields it compared; matches cleared; other sources kept | `services/channel-drift.service.ts:21-49` |
+| 🔴 Cap | old entries are kept FIRST, then the fresh ones, then `slice(0, 50)`; `driftCount` = the capped length | `channel-drift.service.ts:26`, `:45` |
+| 🔴 One clock | `lastCheckedAt` is ONE per listing, set by ANY source (the daily quantity read-backs set it) | `channel-drift.service.ts:45`; schema `ChannelDrift` |
+| Filter | "Differs on the channel" = any `driftCount > 0`, plus the parent | `channel-drift.service.ts:55-63`, `ProductsWorkspace.tsx:1260-1272` |
+| Screen | 🟠 no web code reads `driftedFields` — the filter finds the PRODUCT, nothing shows WHICH field | repo search: 0 readers |
+| Amazon read | `getListingsItem` with `includedData: ['summaries','attributes']` (the Step 3.4 read). 🔴 A 404 returns `success: true, asin: null` | `tools/live-write-probe.mts` `readAttr`; `clients/amazon-sp-api.client.ts:1281-1288` |
+| Amazon "ours": content | `resolvePublishContent` → `buildAmazonContentEntries` (pure). A market language with no text is OMITTED, never sent as another language (R-LX-6) | `amazon-content-payload.ts:25-56`; `publish-review-gate.ts:45` |
+| Amazon "ours": attributes | `resolveBatch` cells → `mappedAmazonRoots` / `attributesFromCells` (A-33's shared serializer) | `mapping-payload.ts:18-26`; `studio-publication-amazon.ts:127-146` |
+| Full builder | `prepareAmazonPublication` refuses a whole FAMILY on ~15 publish guards (images, fulfilment, closed offer, theme…) | `studio-publication-amazon.ts:35-113` |
+| eBay read | `GetItem` with `IncludeItemSpecifics` exists | `studio-publication-ebay.ts:48-51`; `marketing/ebay-listing-index.service.ts:201` |
+| eBay parsers | 🔴 five hand-written `NameValueList` parsers; three keep only the FIRST `<Value>` (a multi-value aspect loses values) | `ebay-membership-reconcile.service.ts:56`, `ebay-axes-convert.service.ts:64`, `ebay-variation-relabel.service.ts:251` (first only); `ebay-listing-index.service.ts:113` (whole block) |
+| eBay "ours" | the eBay builder is live-mode only (`prepareEbayPublication` throws otherwise) | `studio-publication-ebay.ts:83` |
+| Rate buckets | Amazon: 5/s, burst 10, per account × `GET /listings/2021-08-01/items` — shared with every other listing read of that account; the refill follows Amazon's header. eBay: 10/s, burst 50, ONE bucket for all Trading calls of the account | `gateway/rate.ts:18-24`, `:175-179`; `gateway/channels.ts:156-163` |
+| Daily caps | 🟠 none recorded in code for either channel (no `GetApiAccessRules` read anywhere) | repo search: 0 |
+| Name clash | `jobs/sync-drift-detection.job.ts` compares listing vs MASTER in our own database; it never reads a channel | `:1-45` |
+
+**A-33's open item — answered from the code:** yes, the mapping cascade CAN send a content field. `item_name`, `product_description`,
+`bullet_point` and `generic_keyword` have a `masterKey` (`channel-specs/amazon.ts:46-49`), so they have no source owner
+(`source-definition-plan.ts:61`), and `prepare-dispatch.ts:30` refuses only an owned, erroring or untranslated field. The value then
+comes from the MAPPING cell, not from the content resolver and its review gate. Step 3.4 used exactly this path for `generic_keyword`.
+🟠 Not traced: whether the propagation preview ever OFFERS a content field (the entries come from `apply-mapping.service.ts:192`).
+So two writers can send a title: 3.5b is how a difference between them becomes visible.
+
+### Scope
+
+- **In (slice b1 — Amazon):** `item_name`, `product_description`, `bullet_point`, `generic_keyword` per language tag; every attribute
+  root the studio builder serialises from resolver cells and listing settings.
+- **Out, stated:** price and quantity (3.5a), images (`ChannelLiveImage`), variation theme and parent links (structure), offers, FBA,
+  every attribute we do not send (Amazon holds catalogue data from others — "theirs only" is not drift).
+- **Slice b2 — eBay title + item-level item specifics:** after the eBay drift slice (S2) maps an item to its listings across shared SKUs,
+  and after one read of the app's eBay daily call limit.
+
+### How ours and theirs are compared
+
+- Ours = what the builder WOULD send for that listing (the two seams above), built per listing, never the whole family — so one
+  family's publish guard does not blind the read. Theirs = the listing read. Field names: `item_name[de_DE]`, `color`, ….
+- Content: per (attribute, language tag), the ordered list of values; trim, collapse spaces, Unicode NFC. Our language missing =
+  **not compared** (R-LX-6: Amazon keeps its text; not drift). Ours present, theirs absent = drift (`theirs: null`).
+- Attributes: per root, only the leaves we send; scalars compared as text; key order ignored.
+- 🔴 Could not compare (404 `asin: null`, no schema, resolver error) is recorded as **not compared, with the reason** — never as clean.
+
+### Rotation and budget
+
+- One cron a day per business, 10-minute budget (as A-30), batch 25, paced at **≤ 1 read a second** (20% of the Amazon bucket;
+  live publishing keeps the rest). At most ~600 listings a night per business; the resolver time makes it fewer (*inferred*).
+- Local copy: 725 Amazon listings with content (273 IT + 214 DE + 115 FR + 123 ES, Step 3.2 M3) → one full pass in ~2 nights.
+  Production per-market Amazon counts: only DE/FR/ES known (214/115/123, A-32).
+- Order: never checked, then the oldest content check. 🔴 This needs a per-source clock (`lastCheckedAt` is shared). **One additive
+  column:** `ChannelDrift.checkedBySource Json @default("{}")` — `{ "amazon-content": { at, outcome, reason } }`. It also carries
+  "not compared". Sorted in memory, as `dueFamilies` does.
+- Source name: `amazon-content` (b1), `ebay-content` (b2). The writer change: `driftCount` = the TRUE count; only the stored list is
+  capped at 50, and the row says it was capped.
+- 15.7 #2 (the sampled production metric) = this job's own daily `CronRun` line: compared N, drifted M, not compared K (with reasons).
+
+### What the Owner sees
+
+The existing "Differs on the channel" filter now also finds content differences. 🟠 Not in 3.5b: a screen showing WHICH field and
+both values — proposed as the next step (the data is in `driftedFields`).
+
+### Recommendation — one
+
+**(a) Build slice b1 (Amazon) now, as above; b2 (eBay) after S2's mapping and one read of the eBay daily limit.**
+Alternative (b): b1 and b2 together — needs the eBay item→listing mapping first, so it waits either way.
+
+- **Done when** — a listing whose Amazon title (or a sent attribute) differs from ours has an `amazon-content` drift entry and the
+  product list filters to it; an identical listing has a row at 0; a listing that could not be compared says so.
+- **Cost when** — per business per night: bounded at 10 minutes and ≤ 1 Amazon read a second whatever the catalogue; a listing is
+  re-checked every ⌈listings ÷ ~600⌉ nights (10,000 listings → ~17 nights, stated).
+- **Gate** — arms: a seeded title difference → one entry (ours, theirs); an identical listing → 0 and the clock set; a missing DE
+  text → not compared, no entry; a 404 read → not compared, reason kept; three listings, budget for one a night, three nights →
+  each once, oldest first; 60 differing roots → count 60, stored 50, capped flag; another source's entry survives.
+  Mutations: language tag ignored; a missing language counted as drift; rotation in id order; not-compared stored as clean; the cap
+  hides the count; normalisation removed (a trailing space becomes drift); the pace ignored.
+- **Rollback** — the cron's env switch off; revert the commit; the column is additive (data derived).
+- **Files it would hold** — `packages/database/prisma/schema.prisma` (one column) + a new migration + `baseline.sql`
+  (`generate-baseline.mjs`); `services/channel-drift.service.ts` (true count, clock); new `services/channel-drift/amazon-content-compare.ts`
+  (pure compare); new `jobs/content-drift.job.ts`; `index.ts` (one start line); `jobs/cron-registry.ts` (one entry); new tests.
+
+### Predictions a first run would test
+
+- The dry run's outstanding count = a direct count of Amazon listings with an ASIN, per business (local: 725).
+- The 21 LIVE Amazon·DE listings with a pinned Italian title (A-32) show `item_name[de_DE]` drift — unless Amazon holds the same
+  Italian text (then that is the finding). A positive control on real data.
+- 0 HTTP 429 from the sweep; the account's other listing reads keep their speed (gateway ledger).
+- Not-compared only for 404s, a missing schema, or a resolver error — not for publish guards.
+
+### Not measured
+
+Amazon's real rate for this account (the header sets it); the eBay app's daily call limit; whether Amazon returns descriptions with
+changed HTML or entities (a first run with drift on `product_description` alone would be the tell); the resolver's time per listing;
+production Amazon·IT listing count; whether the propagation preview offers content fields.
+
+| # | Question | Ruling (2026-09-23 ~21:30 UTC, twenty-eighth set) |
+|---|---|---|
+| **R-41** | A-39 — Step 3.5b | ✅ **(a)** Build slice b1 (Amazon content reads) now, with the one additive column and the writer's true count; b2 (eBay) after the eBay drift slice and one read of the eBay daily call limit |
