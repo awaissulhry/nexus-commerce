@@ -1,3 +1,4 @@
+import { variationValueRefusal } from '../services/pim/shared-variation-values.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { createOutboundRowsAndReturn } from '../services/outbound-rows.js'
 import prisma from '../db.js'
@@ -65,6 +66,9 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Clean attributes — strip blank values.
       const cleanedAttrs: Record<string, string> = {}
+      // R-26 — a value that is not text or a number refuses THIS change, by name; it is never stored as "[object Object]".
+      const refusal = Object.entries(attributes).map(([k, v]) => variationValueRefusal(String(k).trim(), v)).find(Boolean)
+      if (refusal) { errors.push({ productId, sku: '?', error: refusal }); continue }
       for (const [k, v] of Object.entries(attributes)) {
         const key = String(k).trim()
         const val = String(v ?? '').trim()

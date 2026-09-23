@@ -5544,8 +5544,10 @@ file passes. `tsc`: 0.
 
 ### ⬜ Not done, stated
 
-The add-child route and organize publish still sanitise values with `String(v)` too; only the variant-attributes route
-was named in A-28. Same refusal would apply; not built without a word.
+~~The add-child route and organize publish still sanitise values with `String(v)` too.~~ ✅ **Built under R-26:** one
+helper (`variationValueRefusal`, `shared-variation-values.ts`) now refuses a non-text value by name in all three
+routes — add child with a 400, organize publish as a per-change error (nothing attached, store unchanged). One arm,
+3 mutations red (each route put back, and the helper refusing nothing).
 
 ### Cost when — `flat`. **Rollback** — revert the commit.
 

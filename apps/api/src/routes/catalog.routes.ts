@@ -1,4 +1,4 @@
-import { variationValuesPlan } from '../services/pim/shared-variation-values.js'
+import { variationValuesPlan, variationValueRefusal } from '../services/pim/shared-variation-values.js'
 import { writeVariationValues } from '../services/pim/category-attributes-write.js'
 import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -1258,6 +1258,9 @@ export async function catalogRoutes(app: FastifyInstance) {
       if (variantAttributes && typeof variantAttributes === 'object') {
         for (const [k, v] of Object.entries(variantAttributes)) {
           const key = String(k).trim()
+          // R-26 — the same refusal as the variant-attributes route: never store "[object Object]".
+          const refusal = variationValueRefusal(key, v)
+          if (refusal) return reply.status(400).send({ success: false, error: { code: "VALIDATION_ERROR", message: refusal } })
           const val = String(v ?? '').trim()
           if (key && val) cleanedVariantAttrs[key] = val
         }
@@ -1751,11 +1754,9 @@ export async function catalogRoutes(app: FastifyInstance) {
       for (const [k, v] of Object.entries(incoming)) {
         const key = String(k).trim();
         if (!key) continue;
-        // R-25 (A-28 #3) — a variation value is text or a number. `String()` stored an object as "[object Object]"
-        // (the GALE junk key, via the retired Matrix tab); refuse it by name instead.
-        if (v !== null && v !== undefined && typeof v !== 'string' && typeof v !== 'number') {
-          return reply.status(400).send({ success: false, error: `A variation value must be text or a number; "${key}" is ${Array.isArray(v) ? 'a list' : typeof v}.` });
-        }
+        // R-25 (A-28 #3) — a variation value is text or a number; an object is refused by name, never stringified.
+        const refusal = variationValueRefusal(key, v);
+        if (refusal) return reply.status(400).send({ success: false, error: refusal });
         const val = String(v ?? '').trim();
         if (val === '') deletes.push(key);
         else writes[key] = val;

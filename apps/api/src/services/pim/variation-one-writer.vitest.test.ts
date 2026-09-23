@@ -254,6 +254,19 @@ describe('R-25 (A-28) — three more data-loss paths', () => {
     expect(numeric.statusCode, numeric.body).toBe(200)
     expect(store(await read('no-junk'))).toEqual({ Taglia: '44' })
   })
+  it('#3 (R-26) add child and organize publish refuse an object the same way; nothing is written', async () => {
+    const message = 'A variation value must be text or a number; "Taglia" is object.'
+    const catalog = await routeApp(catalogRoutes)
+    const child = await catalog.inject({ method: 'POST', url: '/api/catalog/products/parent/children', payload: { sku: 'junk-child', name: 'j', variantAttributes: { Taglia: { value: 'L' } } } })
+    expect(child.statusCode).toBe(400)
+    expect(child.json().error.message).toBe(message)
+    expect(await scoped(() => prisma.product.count({ where: { sku: 'junk-child' } }))).toBe(0)
+    await scoped(() => prisma.product.create({ data: { id: 'junk-organized', sku: 'junk-organized', name: 'j', basePrice: 10, categoryAttributes: { variations: { Taglia: 'M' } } } }))
+    const organize = await routeApp(catalogOrganizeRoutes)
+    const res = await organize.inject({ method: 'POST', url: '/api/catalog/organize/publish', payload: { changes: [{ productId: 'junk-organized', toParentId: 'organize-parent', attributes: { Taglia: { value: 'L' } } }] } })
+    expect(res.json()).toMatchObject({ published: 0, errors: [{ productId: 'junk-organized', error: message }] })
+    expect(await read('junk-organized')).toMatchObject({ parentId: null, categoryAttributes: { variations: { Taglia: 'M' } } })
+  })
 })
 
 // ── the source scan ────────────────────────────────────────────────────────────────────────────────────────

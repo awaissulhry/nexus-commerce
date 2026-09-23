@@ -18,6 +18,13 @@ export function variationBag(product: { categoryAttributes: unknown; variantAttr
   return bag
 }
 
+/** R-25 / R-26 — a variation value is text or a number. `String()` stored an object as "[object Object]" (the GALE
+ * junk key, via the retired Matrix tab). Returns the refusal sentence, or null when the value may be written. */
+export function variationValueRefusal(key: string, value: unknown): string | null {
+  if (value === null || value === undefined || typeof value === 'string' || typeof value === 'number') return null
+  return `A variation value must be text or a number; "${key}" is ${Array.isArray(value) ? 'a list' : typeof value}.`
+}
+
 /** A planned write of a product's variation values (R-23, Step 2.6c-2). `set` / `unset` address the ONE store,
  * `categoryAttributes.variations`. `legacyDrop` lists the legacy `variantAttributes` keys of every axis touched:
  * they are removed, never written, so a stale legacy value can never answer again for an axis that was edited
