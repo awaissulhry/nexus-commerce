@@ -54,6 +54,14 @@ const prismaMock = {
       }
       return row ?? args.data
     }),
+    updateMany: vi.fn(async ({ where, data }: any) => {
+      const row = rows.get(where.id)
+      if (!row || Object.entries(where).some(([key, value]) => value !== undefined &&
+        (value instanceof Date ? row[key]?.getTime() !== value.getTime() : row[key] !== value))) return { count: 0 }
+      updates.push({ id: row.id, data })
+      Object.assign(row, data)
+      return { count: 1 }
+    }),
   },
   $queryRawUnsafe: vi.fn(async (..._args: unknown[]) => {
     lastRawArgs = _args

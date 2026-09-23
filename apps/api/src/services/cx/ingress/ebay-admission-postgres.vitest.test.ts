@@ -67,6 +67,7 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     // Exercise the deployed migration, including its policies, over the previous schema.
     await database.pool.query('DROP TABLE "EbayNoticeQuarantine"')
     await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260923c_cx_ebay_quarantine/migration.sql', import.meta.url), 'utf8'))
+    await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260923e_cx_inbound_archive/migration.sql', import.meta.url), 'utf8'))
     await database.pool.query('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Admission other business\',\'test\',$1,now())', [OTHER])
     await database.pool.query('INSERT INTO "Role" (id,key,name,permissions,"updatedAt") VALUES (\'admission-owner-role\',\'OWNER\',\'Owner\',ARRAY[]::text[],now()) ON CONFLICT (key) DO NOTHING')
     const role = (await database.pool.query('SELECT id FROM "Role" WHERE key=\'OWNER\'')).rows[0].id

@@ -9,7 +9,7 @@
  *      exports with re-download (server regenerates idempotently;
  *      links auto-expire after 7 days).
  *   2. Data retention — per-data-type retention windows. Orders are
- *      floor-locked at 7y for IT fiscal compliance.
+ *      configured with a 7y minimum and excluded from the automatic sweep.
  *   3. Consent log — DPA / TOS / cookie / marketing toggles. Each
  *      change appends a new row (append-only audit).
  *   4. Delete account — dry-run only in this phase. Lists the
@@ -113,7 +113,7 @@ const CONSENT_KINDS = [
 const RETENTION_LABELS: Record<string, { label: string; description: string }> = {
   orders: {
     label: 'Orders',
-    description: 'Pinned at 7 years minimum by Italian fiscal law.',
+    description: 'Configured minimum: 7 years. Orders are not deleted by this retention job.',
   },
   auditLog: {
     label: 'Audit log',
@@ -125,7 +125,7 @@ const RETENTION_LABELS: Record<string, { label: string; description: string }> =
   },
   webhookEvents: {
     label: 'Inbound webhook events',
-    description: 'Channel-to-Nexus webhook deliveries.',
+    description: 'Completed deliveries are archived after this window. Payloads and delivery history remain stored; nothing is deleted.',
   },
   stockLogs: {
     label: 'Stock movements',
@@ -430,7 +430,7 @@ function RetentionCard({
   return (
     <Card
       title="Data retention"
-      description="How long we keep each kind of data. The retention cron sweeps rows past their window. Orders are floor-locked at 7 years for Italian fiscal compliance."
+      description="Choose retention windows for each data type. Completed webhook deliveries are archived in place; pending work and retries remain available."
       icon={<History size={14} />}
     >
       <div className="space-y-3">
@@ -441,21 +441,24 @@ function RetentionCard({
           return (
             <div
               key={key}
-              className="grid grid-cols-[1fr_auto_auto] gap-3 items-center"
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 items-center sm:grid-cols-[minmax(0,1fr)_auto_auto]"
             >
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <div className="min-w-0 col-span-2 sm:col-span-1">
+                <div id={`retention-label-${key}`} className="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {def.label}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <div id={`retention-description-${key}`} className="text-xs text-slate-500 dark:text-slate-400">
                   {def.description}
                 </div>
               </div>
               <input
                 type="range"
+                aria-labelledby={`retention-label-${key}`}
+                aria-describedby={`retention-description-${key}`}
+                aria-valuetext={`${current} days`}
                 min={floor}
                 max={ceil}
-                step={key === 'orders' ? 365 : 30}
+                step={1}
                 value={current}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, [key]: Number(e.target.value) }))
@@ -463,8 +466,8 @@ function RetentionCard({
                 className="w-32 sm:w-40 accent-blue-600"
               />
               <span className="text-xs font-mono tabular-nums text-slate-700 dark:text-slate-300 w-20 text-right">
-                {current >= 365
-                  ? `${Math.round(current / 365)}y`
+                {current >= 365 && current % 365 === 0
+                  ? `${current / 365}y`
                   : `${current}d`}
               </span>
             </div>

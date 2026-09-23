@@ -470,6 +470,11 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
   seller lock/fresh committed reads provide that fence. A current active sibling
   keeps the old receipt unresolved; it is never silently retargeted. Username-only
   identity cannot authorize a grant, even when profile mode is off.
+- D8 initially archives completed receipts in place, preserving payload, identity and
+  proof; unfinished/retry/DLQ work is excluded. Database DELETE/TRUNCATE guards also
+  protect quarantine. This bounds each pass but does not reclaim storage or settle
+  fiscal/erasure policy. Automatic policy-based archival must be included explicitly
+  in the next deployment approval and production verification.
 - These amendments are local implementation, not deployment or live proof. Sources,
   tradeoffs, failures, race tests and review evidence are in
   [CX-REMAINING](build/CX-REMAINING.md), C11d3/C11d4. Channel activation and destructive

@@ -60,6 +60,7 @@ const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },
+  { name: 'retained inbound history (archive/replay races and database deletion guards)', file: 'src/services/cx/ingress/archive-postgres.vitest.test.ts', expect: 14 },
   { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
   { name: 'private eBay admission (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 24 },

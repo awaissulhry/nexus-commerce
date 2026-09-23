@@ -12,5 +12,6 @@
   "listing-end-times.sql": "20260919b_listing_end_times",
   "assortment-sync.sql": "20260919d_ae4_live_sync",
   "ebay-quarantine.sql": "20260923c_cx_ebay_quarantine",
-  "cx-account-integrity.sql": "20260923d_cx_bootstrap_parity"
+  "cx-account-integrity.sql": "20260923d_cx_bootstrap_parity",
+  "inbound-history.sql": "20260923e_cx_inbound_archive"
 }

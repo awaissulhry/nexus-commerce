@@ -330,7 +330,7 @@ export interface ReplayRequest {
   workspaceId?: string | null
 }
 
-export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified'
+export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified' | 'changed'
 
 /**
  * One shape rather than a discriminated union on `ok`.
@@ -378,9 +378,14 @@ export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> 
   // such an event ever moves again. Refusing every `pending` row would have made the
   // one case the button exists for the one case it could not touch.
   if (row.status === 'pending' && row.nextAttemptAt) return { ok: false, reason: 'already_pending' }
-  await prisma.webhookEvent.update({
-    where: { id: row.id },
+  const saved = await prisma.webhookEvent.updateMany({
+    where: { id: row.id, workspaceId: row.workspaceId, channel: row.channel, status: row.status,
+      archivedAt: null, nextAttemptAt: row.nextAttemptAt, signatureOk: row.signatureOk, verifiedBy: row.verifiedBy },
     data: { status: 'pending', attempts: 0, nextAttemptAt: new Date(), lastError: null, isProcessed: false, processedAt: null },
   })
+  if (saved.count !== 1) {
+    const current = await prisma.webhookEvent.findUnique({ where: { id: row.id }, select: { archivedAt: true } })
+    return { ok: false, reason: !current ? 'not_found' : current.archivedAt ? 'archived' : 'changed' }
+  }
   return { ok: true, channel: row.channel, eventType: row.eventType }
 }

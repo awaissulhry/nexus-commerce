@@ -636,7 +636,7 @@ Evidence: `c11-upstream-bootstrap-red.log`, `c11-upstream-routing-constraints-re
 `c11-integrated-postgres-first.log`, `c11-integrated-admission-final.log`,
 `c11-integrated-typecheck.log`, under `/private/tmp/cx-completion-20260922/`.
 
-### Next required containment: D8 retention
+### D8 retention defect discovered before C11d6 (historical)
 
 Actual code still dynamically deletes WebhookEvent through data-retention-sweep's
 model map. Privacy's GET can create the default90-day policy. The existing source
@@ -646,3 +646,67 @@ not a closed archive criterion. Next: archive completed old receipts in place, r
 all proof/payload/identity, DB DELETE/TRUNCATE protection, race-safe legacy replay,
 honest archived/deleted counters and privacy wording. Quarantine resolvedAt means
 routing handoff, not successful processing; key maintenance/recovery remain open.
+
+
+## C11d6 — retain inbound history and fence archival/replay (local)
+
+The default-on retention job dynamically dispatched WebhookEvent to deleteMany;
+its privacy GET could create the90-day policy. New archiveCompletedInbound uses the
+database clock, completion age, workspace scope,500-row bound and SKIP LOCKED. Only
+completed/isProcessed=true, unscheduled, unleased, unarchived rows qualify. It sets
+archivedAt and retains all receipt payload/identity/proof/history; archiveUri remains
+null. This is logical archival, not cold storage or reclaimed database space.
+
+New shared inbound-history.sql and exact-copy migration20260923e_cx_inbound_archive
+block DELETE and TRUNCATE for WebhookEvent and EbayNoticeQuarantine, including owner
+SQL, and revoke runtime privileges. Fresh bootstrap and deployed migration have the
+same14-file policy manifest. The partial candidate index matches eligibility.
+Legacy replay now uses a guarded compare-and-set, so an archive winning after its
+initial read cannot be reopened. eBay retains its locked replay protocol. Existing
+tests use fresh scoped fixtures instead of bypassing production retention guards.
+The historical wipe script no longer names WebhookEvent and was not executed.
+The source ratchet now checks dynamic delete maps and2484 operational scripts across
+root/API/database directories, plus1659 API source files.
+
+The retention job reports archived/deleted counts separately and never falls back to
+delete on archive failure. Privacy wording describes actual behavior; the existing
+2555-day order floor is unchanged and the job still does not delete orders. An
+unsupported legal assertion was removed; no fiscal-policy decision is implied.
+Real-browser testing found native range-step rounding of valid values. All policy
+sliders now preserve exact integer days, with associated labels/descriptions and
+exact ARIA values. Review found the same bug for2800-day orders, now fixed too.
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11d6-postgres-reviewed.log:14 archive/replay/privileged-delete cases and24 admission
+  compatibility cases pass under production-equivalent owner permissions, zero skips.
+  Includes both archive/replay race orders for Shopify/eBay,501 rows with concurrent
+  archivers, DB-clock skew, cross-profile exclusion and immutable redelivery history.
+- c11d6-fixture-regressions.log:78 retention/health/alerts/legacy-replay regressions pass.
+- c11d6-api-typecheck.log passes. Independent source review approved except exact-order
+  slider precision, corrected and browser-proven. Final91 focused regressions and web
+  typecheck pass. Canonical247 realPG/20files/zero skips passes with production-equivalent
+  permissions (c11d6-canonical-postgres.log). Full pre-push remains a package gate.
+- retention-preview/: actual RetentionCard bundled with app styles; synthetic data,
+  system-font fallback and local-only save endpoint. Eight320/768/1024/1440 light/dark
+  views have no overflow; visible screenshots inspected. All six sliders and both
+  buttons have keyboard focus; text contrast light4.76/dark6.96; no browser errors
+  after correcting the test fixture's duplicate-React import. Exact-values.json
+  proves2800/730/180/90/365/7 remain exact. This is component proof, not full-app or
+  WCAG AAA certification. Agent test tab/server closed; no production privacy GET.
+
+Future deployment approval must explicitly cover policy-based automatic archival,
+its candidate census and post-deploy receipt preservation check. No C9+ code has been
+pushed/deployed/activated. Quarantine rekey/recovery remains open. A separate rollout
+review found the old0a worker can select queued verified eBay rows and DLQ them with
+its obsolete handler registry. Next slice must hold new admission/adoption unscheduled
+until readiness, atomically claim pristine held receipts, and guard replay scheduling.
+Compatible worker retirement/activation/rollback evidence is a release requirement.
+
+Six applied/restored critical mutations were killed: owner DELETE, TRUNCATE, archive
+row locking, legacy replay archived CAS, dynamic deletion-map registration, and the
+historical operational DELETE. The first one-table TRUNCATE mutation survived because
+CASCADE still hit the other protected table; removing both TRUNCATE guards failed the
+independent privileged controls. This redundant protection is not counted as a killed
+single guard. Removing archive locks caused the deterministic second archiver to take
+500 instead of1 and caused expected blocked replay timeouts; the clean247-case rerun
+has no failures/skips. Evidence: c11d6-*-mutation.log and c11d6-final-regressions.log.

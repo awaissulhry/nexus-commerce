@@ -106,5 +106,6 @@ export function workspacePolicySql() {
   // Byte-for-byte the tail of 20260919d.
   sql.push(readFileSync(new URL('../workspaces/assortment-sync.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/ebay-quarantine.sql', import.meta.url), 'utf8'))
+  sql.push(readFileSync(new URL('../workspaces/inbound-history.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

@@ -1074,7 +1074,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
             queued.reason === 'unverified'
               ? 'This delivery was not verified and cannot be replayed. Request a new verified delivery from the channel.'
               : queued.reason === 'archived'
-              ? 'This event is archived; its payload is no longer on the row.'
+              ? 'Archived events cannot be replayed.'
+              : queued.reason === 'changed'
+                ? 'This event changed. Reload it before retrying.'
               : queued.reason === 'already_pending'
                 ? 'This event is already queued for the retry worker.'
                 : 'Webhook event not found'
@@ -1123,15 +1125,16 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           if (!canReplayInbound(event.channel, event.eventType)) return reply.code(409).send({ error: 'This eBay event has no supported replay action yet.' })
         }
 
-        // Decision D8 — archived events are not replayable: the payload has moved and
-        // the row only holds a pointer to it. Say that, rather than replaying `{}`.
+        // Decision D8 — archived receipts retain their history and cannot be replayed.
         const queued = await replayInbound({ id: event.id })
         if (!queued.ok) {
           const message =
             queued.reason === 'unverified'
               ? 'This delivery was not verified and cannot be replayed. Request a new verified delivery from the channel.'
               : queued.reason === 'archived'
-              ? 'This event is archived; its payload is no longer on the row.'
+              ? 'Archived events cannot be replayed.'
+              : queued.reason === 'changed'
+                ? 'This event changed. Reload it before retrying.'
               : queued.reason === 'already_pending'
                 ? 'This event is already queued for the retry worker.'
                 : 'Webhook event not found'

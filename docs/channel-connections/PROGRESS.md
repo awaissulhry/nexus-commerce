@@ -41,8 +41,12 @@ A fresh read at12:52Z found published main and public health build **0a563d6d**
 main in the isolated tree and retest. Do not import unpublished shared-tree history.
 This narrow read does not replace the dated439d9e3d business/flag/deployment proof.
 Published main is now merged locally with reviewed bootstrap parity/atomicity repairs
-(23 database tests,6 killed mutations; see I1 in CX-REMAINING). The dynamic webhook
-retention delete is the next release blocker; archive protection is not yet implemented.
+(23 database tests,6 killed mutations; see I1 in CX-REMAINING). C11d6 now replaces
+the dynamic webhook delete with bounded in-place archival and database deletion
+guards (14 realPG archive cases,24 admission compatibility cases,78 regressions).
+It remains local. Review also found a rolling-deployment hazard: old workers can
+DLQ newly queued eBay receipts. Admission must hold them unscheduled until compatible
+workers are everywhere; processing activation and rollback need this explicit fence.
 
 
 ### Approved production release — 2026-09-22
