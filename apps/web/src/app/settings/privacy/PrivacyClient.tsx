@@ -34,6 +34,10 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { Card as DesignCard } from '@/design-system/components/Card'
+import { Field } from '@/design-system/components/Field'
+import { Button as DesignButton } from '@/design-system/primitives/Button'
+import { Input as DesignInput } from '@/design-system/primitives/Input'
 
 export interface ExportRow {
   id: string
@@ -366,6 +370,11 @@ function formatBytes(n: number): string {
 
 // ─── Retention card ──────────────────────────────────────────────
 
+function validRetentionDays(raw: string, floor: number, ceiling: number): boolean {
+  const days = Number(raw)
+  return raw.trim() !== '' && Number.isSafeInteger(days) && days >= floor && days <= ceiling
+}
+
 function RetentionCard({
   state,
   onSaved,
@@ -375,21 +384,25 @@ function RetentionCard({
   onSaved: (next: Record<string, number>) => void
   onError: (msg: string) => void
 }) {
-  const [draft, setDraft] = useState<Record<string, number>>(
-    state?.policies ?? {},
+  const [draft, setDraft] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(state?.policies ?? {}).map(([key, days]) => [key, String(days)])),
   )
   const [busy, setBusy] = useState(false)
+
+  const valid = !!state && Object.keys(RETENTION_LABELS).every(key =>
+    validRetentionDays(draft[key] ?? String(state.defaults[key]), state.floors[key], state.ceilings[key]),
+  )
 
   const dirty = useMemo(() => {
     if (!state) return false
     for (const k of Object.keys(draft)) {
-      if (draft[k] !== state.policies[k]) return true
+      if (Number(draft[k]) !== state.policies[k]) return true
     }
     return false
   }, [draft, state])
 
   const save = async () => {
-    if (!state) return
+    if (!state || !valid || busy) return
     setBusy(true)
     try {
       const res = await fetch(
@@ -397,7 +410,7 @@ function RetentionCard({
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ policies: draft }),
+          body: JSON.stringify({ policies: Object.fromEntries(Object.entries(draft).map(([key, days]) => [key, Number(days)])) }),
         },
       )
       if (!res.ok) {
@@ -414,86 +427,62 @@ function RetentionCard({
   }
 
   const reset = () => {
-    if (state) setDraft(state.defaults)
+    if (state) setDraft(Object.fromEntries(Object.entries(state.defaults).map(([key, days]) => [key, String(days)])))
   }
 
   if (!state) {
     return (
-      <Card title="Data retention" icon={<AlertTriangle size={14} />}>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+      <DesignCard header="Data retention" headingLevel={3}>
+        <p className="text-sm text-[var(--nds-text-muted)]">
           Retention policy could not be loaded.
         </p>
-      </Card>
+      </DesignCard>
     )
   }
 
   return (
-    <Card
-      title="Data retention"
+    <DesignCard
+      header={<span className="inline-flex items-center gap-2"><History size={14} aria-hidden />Data retention</span>}
+      headingLevel={3}
       description="Choose retention windows for each data type. Completed webhook deliveries are archived in place; pending work and retries remain available."
-      icon={<History size={14} />}
     >
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {Object.entries(RETENTION_LABELS).map(([key, def]) => {
-          const current = draft[key] ?? state.defaults[key]
+          const current = draft[key] ?? String(state.defaults[key])
           const floor = state.floors[key]
           const ceil = state.ceilings[key]
           return (
-            <div
-              key={key}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 items-center sm:grid-cols-[minmax(0,1fr)_auto_auto]"
-            >
-              <div className="min-w-0 col-span-2 sm:col-span-1">
-                <div id={`retention-label-${key}`} className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {def.label}
-                </div>
-                <div id={`retention-description-${key}`} className="text-xs text-slate-500 dark:text-slate-400">
-                  {def.description}
-                </div>
-              </div>
-              <input
-                type="range"
-                aria-labelledby={`retention-label-${key}`}
-                aria-describedby={`retention-description-${key}`}
-                aria-valuetext={`${current} days`}
+            <Field key={key} label={def.label} className="min-w-0"
+              hint={`${def.description} Use a whole number from ${floor} to ${ceil} days.`}>
+              <DesignInput
+                type="number"
+                aria-invalid={!validRetentionDays(current, floor, ceil) || undefined}
                 min={floor}
                 max={ceil}
                 step={1}
                 value={current}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, [key]: Number(e.target.value) }))
-                }
-                className="w-32 sm:w-40 accent-blue-600"
+                disabled={busy}
+                suffix="days"
+                onChange={(event) => {
+                  const value = event.target.value
+                  setDraft((d) => ({ ...d, [key]: value }))
+                }}
+                fieldClassName="self-start w-40"
               />
-              <span className="text-xs font-mono tabular-nums text-slate-700 dark:text-slate-300 w-20 text-right">
-                {current >= 365 && current % 365 === 0
-                  ? `${current / 365}y`
-                  : `${current}d`}
-              </span>
-            </div>
+            </Field>
           )
         })}
-        <div className="flex items-center gap-2 pt-2 border-t border-subtle dark:border-slate-800">
-          <button
-            type="button"
-            onClick={reset}
-            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            <RotateCcw size={12} /> Reset to defaults
-          </button>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || busy}
-            className="inline-flex items-center gap-2 h-8 px-3 rounded-md bg-slate-900 dark:bg-slate-800 text-white text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50"
-          >
-            {busy && <Loader2 size={13} className="animate-spin" />}
-            Save retention
-          </button>
-        </div>
       </div>
-    </Card>
+      <div className="flex items-center justify-between gap-2 mt-4">
+        <DesignButton onClick={reset} disabled={busy} size="sm" variant="quiet">
+          <RotateCcw size={12} /> Reset to defaults
+        </DesignButton>
+        <DesignButton onClick={save} disabled={!dirty || !valid || busy} size="sm" variant="primary">
+          {busy && <Loader2 size={13} className="animate-spin" />}
+          Save retention
+        </DesignButton>
+      </div>
+    </DesignCard>
   )
 }
 

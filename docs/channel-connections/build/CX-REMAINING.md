@@ -776,3 +776,48 @@ account-isolation assertions and production constraints remain intact. The focus
 8-file/79-test rerun passes (c11-i2-fixtures.log). No skips, assertions, timeouts or
 production behavior changed. Independent fixture review approved. The full hook
 rerun is pending. Failed evidence retained as c11d7-prepush-first.log and c11d7-full-api-first.log.
+
+
+I2 final package gate passes on backend/sourcec65db206b:23 database tests,4603web/
+13skips,11504API/287skips, both builds,127security,2725routes/0unmapped,256realPG/
+21files/zero skips. Profiles-ON measured922files with41known failing/217tests, none
+new or worse. The287 default-suite skips include the realPG cases run separately;
+they are not represented as default-suite passes. Full evidence c11-i2-prepush.log,
+c11-i2-full-api.log and c11-i2-profiles-on.log. No push followed the manually invoked
+hook (its final “pushing” text is generic). All continuation code remains local.
+
+## U1 — shared retention controls and exact day entry (local)
+
+AGENTS.md requires shared design-system controls for changed UI. The retention card
+now composes existing Card/Field/Input/Button; no shared DS file changes or factory
+mirror are needed. It preserves exact integer days, existing floors/ceilings and
+numeric API payloads; label, range hint and invalid state are associated with each
+control. Drafts remain text while typing, invalid/empty/fractional/out-of-range values
+cannot save, and controls are disabled during a save. Other privacy cards are unchanged.
+
+Review found NumberStepper clamps every keystroke; real typing2800 became3650.
+That intermediate choice is rejected, not claimed successful. Existing DS Input now
+allows2→28→280→2800 with invalid partial drafts retained and saving disabled. Normal
+Audit730 typing, keyboard clearing, invalid2000/2800.5/3651 and valid local91 save are
+proven in the actual component browser. The browser client's fill('') did not clear;
+Meta+A/Backspace explicitly did and the empty validation proof is recorded separately.
+The original raw-slider precision fix remains historical C11d6 evidence, superseded
+by this shared-control implementation.
+
+Under retention-preview/: input-metrics.json (320/768/1024/1440,light/dark,nooverflow,
+all6 names/hints), input-keyboard.json (6fields+Reset+Save), input-console.json (noerrors),
+input-dark-320.png and input-light-1440.png visually inspected. Hint contrast5.32light/
+7.38dark. Shared focus styling is visible in screenshots; computed transient shadow
+values during rapid tabbing are not a latency/accessibility certification. Synthetic
+localhost-only data/save endpoint, actual component/app+DS styles, system-font fallback;
+no production privacy read/write. Browser viewport restored, test tab/server closed.
+Intermediate stepper artifacts are prefixed ds-*; final artifacts are input-* and
+explicit ds-input-* typing/validation proofs. Web typecheck and final production build pass (c11-u1-final-typecheck.log,
+c11-u1-final-build.log); independent final review approves. No whole-app or WCAG AAA claim follows.
+
+### Next uncovered UI contract
+
+IngressTab still says “Replayed, and it succeeded” for any2xx replay response, while
+the truthful new eBay API can return202/queued:true for deferred/retry/another worker.
+Correct that display with response-contract regression/browser proof before release.
+Quarantine recovery/operator visibility/key maintenance and all matrix work remain.
