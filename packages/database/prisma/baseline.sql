@@ -2395,6 +2395,20 @@ CREATE TABLE "EbayNoticeQuarantine" (
 );
 
 -- CreateTable
+CREATE TABLE "EbayQuarantineMaintenanceAudit" (
+    "operationId" UUID NOT NULL,
+    "quarantineId" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sessionUser" TEXT NOT NULL,
+    "oldKeyId" TEXT NOT NULL,
+    "newKeyId" TEXT NOT NULL,
+    "oldCipherDigest" TEXT NOT NULL,
+    "newCipherDigest" TEXT NOT NULL,
+
+    CONSTRAINT "EbayQuarantineMaintenanceAudit_pkey" PRIMARY KEY ("operationId","quarantineId")
+);
+
+-- CreateTable
 CREATE TABLE "ChannelLiveImage" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -10548,6 +10562,9 @@ CREATE INDEX "EbayNoticeQuarantine_firstOwnerWorkspaceId_resolvedAt_idx" ON "Eba
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EbayNoticeQuarantine_environment_signatureOk_externalId_key" ON "EbayNoticeQuarantine"("environment", "signatureOk", "externalId");
+
+-- CreateIndex
+CREATE INDEX "EbayQuarantineMaintenanceAudit_quarantineId_recordedAt_idx" ON "EbayQuarantineMaintenanceAudit"("quarantineId", "recordedAt");
 
 -- CreateIndex
 CREATE INDEX "ChannelLiveImage_productId_channel_idx" ON "ChannelLiveImage"("productId", "channel");

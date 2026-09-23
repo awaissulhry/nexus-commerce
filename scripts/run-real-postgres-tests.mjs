@@ -44,7 +44,7 @@
  *      report, so one suite's passes can never cover for another's skips. A suite that skipped measured
  *      nothing: that is a failure here, not a pass.
  *
- *   node scripts/run-real-postgres-tests.mjs
+ *   node scripts/run-real-postgres-tests.mjs                     # production-equivalent owner by default
  *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
  */
@@ -64,6 +64,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
   { name: 'private eBay admission and recovery (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 32 },
+  { name: 'private quarantine maintenance (roles, CAS, atomic audit and handoff races)', file: 'src/services/cx/ingress/ebay-quarantine-maintenance-postgres.vitest.test.ts', expect: 26 },
   { name: 'mixed-version eBay rollout (held admission and atomic activation)', file: 'src/services/cx/ingress/ebay-rollout-postgres.vitest.test.ts', expect: 9 },
   { name: 'stored eBay execution (claims, holds, warnings, selection and worker integration)', file: 'src/services/cx/ingress/ebay-processing-postgres.vitest.test.ts', expect: 17 },
   { name: 'atomic grant versions (reconnect, rollback, inspection and concurrent replacement)', file: 'src/services/cx/grant-version-postgres.vitest.test.ts', expect: 10 },
@@ -121,7 +122,7 @@ try {
   // --owner production: the suites connect as a NON-superuser that bypasses row security — the rights
   // production's migration role was measured with (neondb_owner: rolsuper false, rolbypassrls true) — so
   // every door, trigger and policy is created and run without a superuser (shared stock plan risk 8).
-  const owner = flag('--owner') ?? 'superuser'
+  const owner = flag('--owner') ?? 'production'
   if (!['superuser', 'production'].includes(owner)) { console.error(`❌ --owner must be superuser or production, not ${owner}`); process.exit(1) }
   const user = owner === 'production' ? 'nexus_owner' : 'postgres'
   if (owner === 'production') {

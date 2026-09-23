@@ -475,6 +475,14 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
   protect quarantine. This bounds each pass but does not reclaim storage or settle
   fiscal/erasure policy. Automatic policy-based archival must be included explicitly
   in the next deployment approval and production verification.
+- Quarantine encryption maintenance uses a separate restricted operator role and a
+  two-column CAS with mandatory atomic audit. Tenant cron is not elevated; sealed
+  binding/digest checks remain separate from account adoption. Global inventory and
+  cold recovery proof are still required. Same-resource KMS material rotation does
+  not require rewriting stored envelopes; key-resource migration does.
+- Rollback artifacts must carry every applied migration folder, even before new
+  processing is enabled; the startup applied-but-missing gate rejects old images
+  that omit them. A protocol-aware rollback build must be tested before deployment.
 - These amendments are local implementation, not deployment or live proof. Sources,
   tradeoffs, failures, race tests and review evidence are in
   [CX-REMAINING](build/CX-REMAINING.md), C11d3/C11d4. Channel activation and destructive

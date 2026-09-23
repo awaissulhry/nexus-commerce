@@ -1132,3 +1132,99 @@ Evidence under /private/tmp/cx-completion-20260922:
 Private maintenance authority, global inventory, narrow cipher CAS with atomic audit,
 complete fresh traversal and actual key-retirement approval remain. This slice does
 not certify any production envelope, change a key, grant a role or activate processing.
+
+
+## C11f4 — private quarantine CAS and mandatory audit (local; reviewed and tested)
+
+C11f3 is committede67d8c85e. New additive20260923f creates application-scoped,
+append-only EbayQuarantineMaintenanceAudit and a restricted database CAS. The caller
+must hold a separate NOLOGIN maintenance role with EXECUTE only. A second NOLOGIN,
+NOBYPASSRLS role owns the definer function, has quarantine SELECT/two-column UPDATE
+and audit INSERT only; it owns neither table. No operator login or tenant runtime
+receives maintenance authority in this migration. Ordinary cron is not elevated.
+
+The function changes only payloadEnc/payloadKeyId if original cipher/key/digest and
+verified state still match. It calculates old/new ciphertext SHA-256 digests itself,
+records database time/session_user/operation UUID, and inserts the audit in the same
+transaction. Failed audit insertion rolls back replacement. Contention/no-op never
+writes a success audit. The SECURITY INVOKER trigger recognizes only the dedicated
+writer identity, not a caller GUC, and freezes every other field, including resolved
+pointer and delivery history. Existing ordinary admission/adoption rules remain.
+SQL establishes authority/CAS/audit, not plaintext equivalence; C11f3's sealed crypto
+helper remains a required trusted-maintenance step. Positive fixtures now use it too.
+
+Material implementation decisions and constraints:
+- PostgreSQL17's restricted owner tests exposed that regranting ADMIN to one's own
+  grantor fails. Keep the role creator's existing administrative authority; temporarily
+  grant only SET/INHERIT and schema CREATE for function replacement/ownership, then
+  remove them transactionally. Effective schema CREATE remaining through PUBLIC is
+  refused. Role attributes/membership are validated; explicit table ACLs are narrowed.
+- The current guard and maintenance SQL share one canonical ebay-quarantine.sql;
+  historical20260923c is untouched. New migration has an outer BEGIN/COMMIT. The parity
+  gate strips only that exact complete wrapper and still compares every policy byte.
+  Review found BEGIN-without-COMMIT initially passed; a regression now rejects it.
+- Bootstrap blanket grants are explicitly revoked from runtime/PUBLIC for the audit.
+  Audits have INSERT-only writer RLS and UPDATE/DELETE/TRUNCATE rejection, including
+  ordinary owner SQL. A database administrator can still change DDL; this is not an
+  assertion against a malicious administrator or externally tamper-evident storage.
+- Repeated migration/shared-policy application and parallel throwaway-database
+  bootstraps exercise cluster-wide roles. No operational operator provisioning,
+  production KMS recovery, global inventory completeness or retirement follows.
+
+Official references reviewed: [function ownership](https://www.postgresql.org/docs/17/sql-alterfunction.html),
+[role options](https://www.postgresql.org/docs/17/sql-grant.html),
+[definer security](https://www.postgresql.org/docs/17/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY),
+[built-in binary hashes](https://www.postgresql.org/docs/17/functions-binarystring.html).
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11-f4-authority-red.log: missing maintenance role prevents setup (not behavioral red).
+- c11-f4-authority-first.log: ADMIN regrant setup failure retained; second.log passes11.
+- c11-f4-authority-races.log:14/15 plus32adoption pass; missing required updatedAt in the
+  new handoff fixture fixed without changing assertions/production code.
+- c11-f4-authority-complete.log:26 maintenance +32adoption cases pass with production-
+  equivalent owner and zero skips. Real restricted operator login; exact digests;
+  denied role impersonation/function alteration/runtime audit insertion; strict inputs;
+  stale CAS; two overlapping rewraps; observed blocked redelivery/adoption; audit failure
+  rollback; all-fields trigger under explicitly rolled-back test-only privileges.
+- c11-f4-database-baseline.log:20 baseline/parity controls pass before the additional
+  missing-COMMIT regression. Model-ownership448models and14-file policy parity pass.
+- Independent SQL/security review approves, including the fixed missing-COMMIT gate.
+  c11-f4-mutations.log: seven applied/restored realPG mutations killed by assertion
+  failures (cipher/key/digest CAS, runtime EXECUTE, all-fields guard, audit failure
+  propagation and temporary-elevation removal). Final combined gate passes; see below.
+- The canonical realPG harness previously defaulted to superuser. It now defaults to
+  production-equivalent NOSUPERUSER ownership: effective-role assertions cannot be
+  honestly measured under superuser. Explicit diagnostic owner overrides remain;
+  no assertion or privilege requirement was weakened. The change was made before
+  the current full hook reached its realPG step; application source stayed fixed.
+- Fresh public-only observation18:08:25Z: main remains0a563d6d5700a9aded3a53cf64c9fcf543facb04,
+  /api/health200/healthy/build0a563d6d. No private/business/KMS/flag state reverified.
+  Evidence production-public-observation-c11-f4.json. Existing alert details remain
+  dated16:27Z, not recertified by this minimal observation.
+
+Next: restricted global metadata inventory and a separate explicit maintenance entry
+point, cold checks/rewrap through the reviewed helper, trustworthy traversal/completeness
+and contention/failure reporting, operator provisioning/retirement procedure. The
+function alone does not close operational quarantine readiness or authorize its use.
+
+Final C11f4 gate (c11-f4-prepush.log):11569 API/322existing-or-realPG-only skips,
+4640web/13skips,both builds,127security,2727routes/0unmapped,31 database gate tests,
+291canonical realPG in22files with zero skips under production-equivalent permissions.
+Profiles-ON measures927files:41known failing/217tests,none new/worse. This was a manual
+normal-hook invocation, not a push despite its final generic “pushing” output.
+
+Authorized read-only compatibility observation at18:14:49Z used a pinned Neon target,
+READ ONLY transaction and known Motovento business marker. PostgreSQL170011;
+neondb_owner is NOSUPERUSER/BYPASSRLS/CREATEDB/CREATEROLE; public schema has no PUBLIC
+CREATE; new maintenance roles absent; no20260923 migrations applied. No credential
+was decrypted or printed. Evidence c11-f4-production-compatibility-read.json.
+This verifies relevant role/version prerequisites, not successful production DDL,
+operator provisioning, KMS recovery, flags or affected business behavior.
+
+Independent release audit found a new prerequisite: published0a's migrate-direct
+runs checkAppliedButMissing. After20260923a..f apply, an ordinary rollback to that
+old image refuses startup because it lacks those migration folders. Additive columns
+alone do not make rollback operational. Prepare/review/test a protocol-aware rollback
+artifact containing the complete applied migration history before asking deployment
+approval. Candidate c65db206b plus current history is under review, not yet approved
+or built. After any activation, retain the protocol-aware requirement as well.

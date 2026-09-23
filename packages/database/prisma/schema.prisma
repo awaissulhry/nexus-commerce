@@ -5194,8 +5194,8 @@ model WebhookEvent {
 }
 
 // Application-scoped eBay notices whose business/account cannot yet be established.
-// No tenant-facing payload reader. Ciphertext and routing proof are immutable;
-// a reviewed handoff links the one business ledger row without deleting this history.
+// No tenant-facing payload reader. Routing proof is immutable; a dedicated audited
+// CAS may rewrap ciphertext. Owner handoff links one business receipt without deleting history.
 model EbayNoticeQuarantine {
   id                    String    @id @default(uuid())
   environment           String
@@ -5221,6 +5221,22 @@ model EbayNoticeQuarantine {
   @@unique([environment, signatureOk, externalId])
   @@index([subjectHash, receivedAt])
   @@index([firstOwnerWorkspaceId, resolvedAt])
+}
+
+// Application maintenance only. Database function inserts atomically with rewrap;
+// runtime has no access and history is append-only, including for ordinary owner SQL.
+model EbayQuarantineMaintenanceAudit {
+  operationId     String   @db.Uuid
+  quarantineId    String
+  recordedAt      DateTime @default(now())
+  sessionUser     String
+  oldKeyId        String
+  newKeyId        String
+  oldCipherDigest String
+  newCipherDigest String
+
+  @@id([operationId, quarantineId])
+  @@index([quarantineId, recordedAt])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────

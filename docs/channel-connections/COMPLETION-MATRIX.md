@@ -30,7 +30,10 @@ read-race guards (264 realPG and full local API/web/build gates in their record)
 C11f1/f2 add owned-only maintenance, strict pinned/cold/lossless encryption and cache
 race fixes (11543 full API tests,44 targeted realPG,7 mutations for f2). C11f3 adds
 quarantine integrity separate from adoptability (79 focused,32 realPG,6 mutations).
-These are local only. Global quarantine authority/inventory/atomic maintenance audit,
+C11f4 adds private database CAS/mandatory audit (26maintenance+32adoption realPG);
+full gate passes11569API,4640web,bothbuilds,291realPG/zero skips,127security;
+profiles ratchet unchanged. These are local only. Global quarantine inventory/
+operator entry point and actual maintenance proof,
 transactional order/erasure work and channel operational dependencies remain open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
@@ -122,3 +125,8 @@ proof remains dated. New continuation slices are still unpushed/undeployed.
 
 P7's green week and each destructive-drop approval remain mandatory. The approved deployment and additive Etsy alias migration are now applied. No
 connection deletion, manual credential change, channel activation or P7 drop was performed.
+
+Release prerequisite added2026-09-23: prepare and test a protocol-aware rollback
+artifact containing all applied migration folders. Published0a alone fails its own
+applied-but-missing startup gate after20260923a..f. Relevant production PG17.11/role
+attributes were verified read-only18:14Z; actual migration and rollout remain unapproved.
