@@ -1,3 +1,4 @@
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 /**
  * Catalog organization endpoints — backs /catalog/organize (renamed
@@ -462,6 +463,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
             sku: true,
             name: true,
             variantAttributes: true,
+            categoryAttributes: true,
             amazonAsin: true,
             ebayItemId: true,
           },
@@ -469,7 +471,8 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           success: true,
           parent: { id: parent.id, sku: parent.sku, name: parent.name },
-          children,
+          // R-23 (Step 2.6c) — the organize screen reads `variantAttributes`; send it the store-first bag.
+          children: children.map(({ categoryAttributes: _store, ...c }) => ({ ...c, variantAttributes: variationBag({ categoryAttributes: _store, variantAttributes: c.variantAttributes }) })),
         }
       } catch (err) {
         fastify.log.error(

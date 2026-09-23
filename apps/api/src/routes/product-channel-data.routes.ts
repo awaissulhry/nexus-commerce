@@ -1,3 +1,4 @@
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Channel pricing + inventory + Amazon sync-data endpoints for the
@@ -93,7 +94,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           where: { parentId: id, deletedAt: null },
           select: {
             id: true, sku: true, basePrice: true,
-            variantAttributes: true,
+            variantAttributes: true, categoryAttributes: true,
             channelListings: {
               where: { channel },
               select: { marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
@@ -105,7 +106,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         variantRows = children.map((c) => ({
           variantId: c.id, // child Product ID — matches Matrix tab's child.id
           sku: c.sku,
-          attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+          attributes: variationBag(c) as Record<string, string>,   // R-23 (Step 2.6c): the store first
           basePrice: c.basePrice != null ? Number(c.basePrice) : null,
           markets: c.channelListings.map((cl) => ({
             marketplace: cl.marketplace,
@@ -230,7 +231,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         ? await prisma.product.findMany({
             where: { parentId: id, deletedAt: null },
             select: {
-              id: true, sku: true, totalStock: true, variantAttributes: true,
+              id: true, sku: true, totalStock: true, variantAttributes: true, categoryAttributes: true,
               channelListings: {
                 where: { channel },
                 select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true, platformAttributes: true, fulfillmentMethod: true },
@@ -335,7 +336,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const variantRows = children.map((c) => ({
         variantId: c.id,
         sku: c.sku,
-        attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+        attributes: variationBag(c) as Record<string, string>,   // R-23 (Step 2.6c): the store first
         physicalStock: c.totalStock ?? 0,
         markets: c.channelListings.map((cl) => buildMarket(cl, c.id, c.sku)),
       }))

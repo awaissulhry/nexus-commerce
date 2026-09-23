@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 import { marketLanguages } from '../pim/market-languages.js'
 /**
  * Phase 5.5: Amazon-listing content generation.
@@ -1475,8 +1476,8 @@ Rules for the response:
       const flat = flattenAttrs(product.categoryAttributes as Record<string, unknown>)
       if (flat) lines.push(`- Category attributes: ${flat}`)
     }
-    if (product.variantAttributes && typeof product.variantAttributes === 'object') {
-      const flat = flattenAttrs(product.variantAttributes as Record<string, unknown>)
+    {
+      const flat = flattenAttrs(variationBag(product as never))   // R-23 (Step 2.6c): the store first
       if (flat) lines.push(`- Variation: ${flat}`)
     }
     return lines.join('\n')

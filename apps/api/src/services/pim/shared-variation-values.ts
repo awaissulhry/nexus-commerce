@@ -3,6 +3,21 @@ import { canonicalVariantAxis } from './variant-attribute-keys.js'
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
+/** R-23 (Step 2.6c) — a product's variation values as ONE bag, for readers that match raw axis keys. The
+ * store (`categoryAttributes.variations`) wins; a legacy `variantAttributes` key fills in only for an axis
+ * the store does not hold — compared by canonical axis, so a legacy `Taglia: 'XS'` never sits beside the
+ * store's `Size: 'XXL'` (production, AIR-MESH-JACKET-MEN-XXL-BLACK). The raw-key twin of
+ * `storedVariationValues`. */
+export function variationBag(product: { categoryAttributes: unknown; variantAttributes: unknown }): Record<string, unknown> {
+  const store = object(object(product.categoryAttributes).variations)
+  const held = new Set(Object.keys(store).map(canonicalVariantAxis))
+  const bag: Record<string, unknown> = { ...store }
+  for (const [key, value] of Object.entries(object(product.variantAttributes))) {
+    if (!held.has(canonicalVariantAxis(key))) bag[key] = value
+  }
+  return bag
+}
+
 /** Scalar edits and channel pushes address the same declared variation values. */
 export function variationAttributePatch(
   product: { categoryAttributes: unknown; variantAttributes: unknown },

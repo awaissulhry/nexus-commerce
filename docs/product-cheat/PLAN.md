@@ -5400,3 +5400,53 @@ production does it — a preHandler that runs the handler inside `withWorkspace(
 |---|---|---|
 | **a** | (1) record the before-copy of `variations` with the organize change and restore it on undo (an additive column, or inside the existing JSON); (2) on the update path, stop setting `productType` and `bulletPoints` — set them only when creating | 🟢 **Recommended.** Both are small and each gets one test arm |
 | b | Record both, build later | Both paths stay live |
+
+---
+
+## Step 2.6c-1 — BUILT (A-27 / R-24). Every reader takes a variant's values from the one store first.
+
+2.6c is built in three commits: **c1** readers (this), **c2** one writer + the legacy bag no longer written,
+**c3** one synonym table (measured first).
+
+### What was measured first
+
+A read-only sort of all 90 non-test files that name `variantAttributes` (291 hits) into reader, writer,
+pass-through and other: **24 live readers** took the legacy bag first or only. On production one child
+disagrees (`AIR-MESH-JACKET-MEN-XXL-BLACK`: store `XXL`, legacy `XS`); each of those readers showed or sent `XS`.
+
+### What was built
+
+| Where | What |
+|---|---|
+| `shared-variation-values.ts` — new `variationBag` | One raw-key bag: the store wins; a legacy key fills in only for an axis the store lacks (by canonical axis, so `Taglia: XS` never sits beside `Size: XXL`) |
+| 23 API reader sites in 17 files | Read through `variationBag`: every image screen and the Amazon image feed/preview (`VA ?? VAR` before), the Amazon media workspace and the legacy Amazon mapper (the store was never read), the eBay description theme (the legacy bag won a shared key), FNSKU labels, variant search, the AI prompt, the list wizard (3 sites), the Amazon and Shopify wizard submissions, channel pricing and inventory panels, `GET /catalog/products/:id`, the organize parents feed, Shopify options, `GET /products/:id/children`, the Studio row identity |
+| web `products/[id]/matrix/MatrixWorkspace.tsx` | Reads `variations` (now the store-first bag from the API) before the legacy bag — 2 sites |
+
+Of the 24 readers the sort found, 23 are fixed here (the two organize-screen reads at their API feeds); the
+24th — the bulk "Set attribute `variantAttributes.X`" before-value — is its writer's pair and moves with it in
+c2. Two more sites that were not first-readers were aligned: Shopify options, and `GET /products/:id/children`
+(its `variations` field is now the store-first bag). The flat-file image modal is fixed at its source (the
+images-workspace route), so the flat-file area is not touched.
+
+### Done when — ✅ `variation-store-readers.vitest.test.ts` (8 arms)
+
+The helper by value (AIR-MESH, legacy-only, empty, the Studio row base); a **source scan** of `apps/api/src`:
+every production line that reads `variantAttributes` directly must be one of **32 named exceptions**, each with
+its reason (the helpers, pass-throughs into them, unions, the writers c2 moves, the two no-touch flat-file
+creates); no exception may be stale; the F6 page reads the store first. Positive control: the scan sees the
+helpers themselves.
+
+### Gate — ✅ 6 mutations, 6 red
+
+Each of four readers put back (image workspace, FNSKU, wizard submission, Studio row) · the web page's order
+swapped back · the helper letting the legacy bag win.
+
+Full `apps/api` hook suite: **883 files pass** (profiles ON too for the new file). `tsc` (api): 0.
+
+### ⬜ Not done, stated
+
+`ebay-image-axis.pure.ts` unions both stores for axis candidates, and the legacy bag's key casing can win there —
+names only, not values. The dead old editor (`tabs/MatrixTab`, `VariationsTab`, the cockpit tabs) still reads
+the legacy bag first; nothing mounts it.
+
+### Cost when — `flat`. **Rollback** — revert the commit.

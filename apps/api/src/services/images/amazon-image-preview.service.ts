@@ -20,6 +20,7 @@
  *   • missingSlots — which slots are empty, for the drill-down.
  */
 
+import { variationBag } from '../pim/shared-variation-values.js'
 import prisma from '../../db.js'
 import {
   resolveAmazonImages,
@@ -101,10 +102,8 @@ export async function buildAmazonImagePreview(input: {
   ])
   const attrsById = new Map<string, Record<string, string>>()
   for (const c of children) {
-    const raw = (c.variantAttributes as Record<string, string> | null)
-      ?? ((c.categoryAttributes as Record<string, unknown> | null)?.variations as Record<string, string> | null)
-      ?? null
-    if (raw && typeof raw === 'object') attrsById.set(c.id, raw)
+    const raw = variationBag(c) as Record<string, string>   // R-23 (Step 2.6c): the store first
+    if (Object.keys(raw).length) attrsById.set(c.id, raw)
   }
   for (const v of pvs) {
     if (attrsById.has(v.id)) continue

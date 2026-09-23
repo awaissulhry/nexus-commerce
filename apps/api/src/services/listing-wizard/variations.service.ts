@@ -13,6 +13,7 @@
  * which children to include in the listing.
  */
 
+import { variationBag } from '../pim/shared-variation-values.js'
 import type { PrismaClient } from '@nexus/database'
 import { bundledThemesFor } from './product-types.constants.js'
 import { EbayCategoryService } from '../ebay-category.service.js'
@@ -135,6 +136,7 @@ export class VariationsService {
             id: true,
             sku: true,
             variantAttributes: true,
+            categoryAttributes: true,
             basePrice: true,
             totalStock: true,
           },
@@ -151,8 +153,7 @@ export class VariationsService {
       : null
 
     const children: VariationChild[] = (product.children ?? []).map((v) => {
-      const rawAttrs =
-        (v.variantAttributes as Record<string, unknown> | null) ?? {}
+      const rawAttrs = variationBag(v)   // R-23 (Step 2.6c): the store first
       const attrs = lowerKeyMap(rawAttrs)
       const missing = selected
         ? selected.requiredAttributes.filter((k) => isEmptyValue(attrs[k]))
@@ -213,6 +214,7 @@ export class VariationsService {
             id: true,
             sku: true,
             variantAttributes: true,
+            categoryAttributes: true,
             basePrice: true,
             totalStock: true,
           },
@@ -335,8 +337,7 @@ export class VariationsService {
     const children: MultiChannelVariationChild[] = (
       product.children ?? []
     ).map((v) => {
-      const rawAttrs =
-        (v.variantAttributes as Record<string, unknown> | null) ?? {}
+      const rawAttrs = variationBag(v)   // R-23 (Step 2.6c): the store first
       const attrs = lowerKeyMap(rawAttrs)
       const missingByChannel: Record<string, string[]> = {}
       for (const [channelKey, selectedThemeId] of Object.entries(

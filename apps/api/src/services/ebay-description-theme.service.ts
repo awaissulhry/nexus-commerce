@@ -1,3 +1,4 @@
+import { variationBag } from './pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { resolveChannelConnectionId } from './connection-resolver.service.js'
 import { resolveBatch } from './pim/mapping/resolve-batch.service.js'
@@ -306,9 +307,8 @@ async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, 
       // categoryAttributes.variations — missing it meant their per-colour
       // section never matched); compare case-insensitively so "nero" finds
       // the "Nero" bucket.
-      const ca = (variant.categoryAttributes ?? {}) as Record<string, unknown>
-      const caVar = ca && typeof ca.variations === 'object' && ca.variations !== null ? ca.variations as Record<string, unknown> : {}
-      const attrs = { ...(caVar), ...((variant.variantAttributes ?? {}) as Record<string, unknown>) }
+      // R-23 (Step 2.6c) — the one store first. This merge let the legacy bag WIN on a shared key.
+      const attrs = variationBag(variant)
       const byLower = new Map([...groups.entries()].map(([k, v]) => [k.toLowerCase(), v]))
       for (const v of Object.values(attrs)) {
         const hit = typeof v === 'string' ? byLower.get(v.toLowerCase()) : undefined

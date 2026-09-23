@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
@@ -74,8 +75,8 @@ export async function readAmazonMedia(destination: WorkspaceDestination, tx: Pri
     const sku = skus.length === 1 ? skus[0] : skus.length === 0 && !aliasKey ? row.product.sku : ''
     const theme = row.variationTheme ?? marketValue(values.variation_theme, market!.marketplaceId!)
     const attributes = amazonVariationAttributes(values, theme, market!.marketplaceId!)
-    const local = mediaObject(row.product.variantAttributes)
-    for (const axis of (theme ?? '').split('/').filter(Boolean)) if (typeof local[axis.toLowerCase()] === 'string' && !attributes[axis.toLowerCase()]) attributes[axis.toLowerCase()] = local[axis.toLowerCase()]
+    const local = variationBag(row.product)   // R-23 (Step 2.6c): the store first; it read the legacy bag only
+    for (const axis of (theme ?? '').split('/').filter(Boolean)) { const value = local[axis.toLowerCase()]; if (typeof value === 'string' && !attributes[axis.toLowerCase()]) attributes[axis.toLowerCase()] = value }
     if (!parsed) {
       const slots: AmazonMediaDraft['common'] = {}
       for (const slot of amazonImageSlots) {

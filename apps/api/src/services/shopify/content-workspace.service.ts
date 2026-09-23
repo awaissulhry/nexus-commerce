@@ -1,3 +1,4 @@
+import { variationBag } from '../pim/shared-variation-values.js'
 import { hasVariationMappingOverride } from '@nexus/shared/variation-mapping'
 import { resolveVariationCategory } from '../pim/variation-theme-facts.js'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
@@ -94,7 +95,7 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
     const followed = sellable.get(p.id) ?? p.totalStock
     const stock = offer && !offer.followMasterQuantity ? offer.quantityOverride ?? offer.quantity ?? followed : followed
     const compareAtPrice = nativeListingValue(offer, 'compareAtPrice')
-    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: { ...object('variantAttributes' in p ? p.variantAttributes : {}), ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
+    return { id: p.id, sku: String(nativeListingValue(offer, 'sku', p.sku) ?? ''), options: { ...variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }) as Record<string, string>, ...storedVariationValues({ categoryAttributes: p.categoryAttributes, variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {} }, family.variationAxes) }, price: String(price), ...(compareAtPrice !== undefined ? { compareAtPrice: compareAtPrice === null ? null : String(compareAtPrice) } : {}), stock: Math.max(0, stock - (offer?.stockBuffer ?? 0)), shopifyVariantId: publish.variantIds?.[p.id] ?? null }
   })
   const revision = digest([family, market?.schemaMapping, mediaFiles, listings.map(l => [l.id, l.version, l.platformAttributes, l.priceOverride, l.quantityOverride, l.price, l.quantity, l.followMasterPrice, l.followMasterQuantity, l.stockBuffer])])
   const errors = inspectShopifyContent(draft, variants)

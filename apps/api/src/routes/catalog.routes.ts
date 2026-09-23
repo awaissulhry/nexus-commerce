@@ -1,3 +1,4 @@
+import { variationBag } from '../services/pim/shared-variation-values.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import type { FastifyInstance } from "fastify";
@@ -767,6 +768,7 @@ export async function catalogRoutes(app: FastifyInstance) {
                 sku: true,
                 name: true,
                 variantAttributes: true,
+                categoryAttributes: true,
               },
             },
           },
@@ -785,7 +787,7 @@ export async function catalogRoutes(app: FastifyInstance) {
           id: c.id,
           sku: c.sku,
           name: c.name,
-          variationAttributes: c.variantAttributes,
+          variationAttributes: variationBag(c),   // R-23 (Step 2.6c): the store first
         }));
         return { success: true, data: { ...rest, variations } };
       } catch (error) {
