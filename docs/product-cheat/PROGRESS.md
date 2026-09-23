@@ -1,7 +1,7 @@
 # The Product Sheet — PROGRESS
 
-**Updated 2026-09-23 (handoff 2 below). Branch `pes/phase-0` — 40 commits ahead of `main`, all pushed. Nothing
-merged, so nothing is deployed and nothing has migrated production.**
+**Updated 2026-09-23 ~11:00 (see "Where this lane stands" below). Branch `pes/phase-0` holds `main` (`0a563d6d5`, DEPLOYED
+06:46 UTC, no migration) plus docs only.**
 
 **Latest continuation:** **Step 2.2 part 2 is BUILT** under **R-11** (A-18 (a)): the sheet writes
 prices through the one door, the reset cleanup lives in the door, and the eBay hold is lifted.
@@ -61,12 +61,14 @@ been exercised.
 | **2.6b** Four writers stop wiping the store | ✅ **BUILT** — organize publish, eBay import, Amazon reconciliation, catalog PATCH merge instead of replace; 5 arms on real PostgreSQL, 7 mutations red | see `git log` |
 | **2.6c-1** Every reader takes the store first | ✅ **BUILT** — 23 of 24 live readers read through `variationBag` (the 24th moves with its writer in c2); a source scan names every remaining direct read (32 exceptions, each with a reason); 6 mutations red | see `git log` |
 | **2.6c-2** One writer; the legacy bag never written | ✅ **BUILT** — every writer sets the store and REMOVES the touched axis from the legacy bag (a stale legacy size cannot come back on clear); real-database gates consolidated onto one in-process database (the server's lock table overflowed); 27 mutations red across Step 2.6 | see `git log` |
-| **A-29** AIREON: the store holds eBay's colour name (`Nero Neo \| Giacca`); Amazon·IT says `Nero Neo` | 🟡 **FOR YOUR RULING** — nothing sent today; a future Amazon publish of AIREON would carry the suffix. Recommended: a per-channel value name (its own step) | — |
+| **A-29** AIREON: the store holds eBay's colour name (`Nero Neo \| Giacca`); Amazon·IT says `Nero Neo` | ✅ **RULED R-27 (a)** — a per-channel value name is its own later step. 🔴 **Do not publish AIREON to Amazon until then.** Nothing sent | — |
 | **2.6d** The data run (fill 77 sizes + 77 colours from eBay·IT; drop the one wrong legacy value) | ✅ **APPLIED on production** (on the Owner's authorisation): 78 products, 0 left, store colour 301 / size 285, no collision; record kept for `--revert`. **Step 2.6 CLOSED** | see `git log` |
 | **2.6c-3** One synonym table | ✅ **BUILT under R-26** — production counted first; the product side reads the eBay table (unchanged, because a no-touch flat-file copy mirrors it byte-for-byte); `talla`/`groesse` stay product-only, named; 5 mutations red | see `git log` |
 | **A-28** Three findings: organize undo leaves the store changed; eBay import overwrites type and bullets; the variant-attributes route stringifies objects | ✅ **RULED R-25 (a), BUILT** — undo restores both stores (snapshot inside the existing JSON, no migration); the import keeps type and bullets; objects refused by name; 5 mutations red | see `git log` |
 | **2.1 (b) on production** (2026-09-23) | ✅ **APPLIED by the Owner — Xavia Racing: `WROTE 5 rows`, count 5** (dry run first, `0 already required` before, `--revert` exact). ✅ Motovento: 0 rows (no cached schemas). **Done for both businesses** | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
+| **A-30** Step 2.7 measured again: the rows came from the old nightly job; the backfill dry run cannot see what is due; the new nightly recomputes every family tonight; 🔴 past its budget the nightly re-does the same first families forever | 🟡 **FOR YOUR RULING** — recommended: 2.7 becomes *verify the first nightly* (no production write), plus a small fix (oldest first; the dry run counts). Production age check needs your word | — |
+| **A-31** GitHub CI red on the deploy commit `0a563d6d5` | 🟡 **FOR YOUR RULING** — reproduced: this lane's two price-door test files need a real database at load; CI has none. Recommended: skip without a test server, like every other real-server test. Vercel ✅ deployed | — |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
 
@@ -141,7 +143,18 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 2, 2026-09-23 ~09:00 (READ THIS FIRST; the older handoff below is history)
+### Where this lane stands — 2026-09-23 ~11:00 (READ THIS FIRST; handoff 2 below is history)
+
+**Housekeeping done.** The two handoff commits pushed (every gate green). `origin/main` (`0a563d6d5`) merged into
+`pes/phase-0` as `06b2bc485`: the merged tree is `main` plus `PROGRESS.md` only.
+**Vercel:** ✅ `0a563d6d5` deployed to Production. 🔴 **GitHub CI #4162 on it is red** — [A-31](PLAN.md) (two of this
+lane's test files need a real database at load).
+**Step 2.7:** [A-30](PLAN.md), for the Owner — nothing built, no production read. The read-only age tool
+(`tools/readiness-age.mjs`) was refused by the session's safety check and needs the Owner's word.
+**A-29:** ruled R-27 — AIREON waits for a per-channel colour name; do not publish it to Amazon until then.
+**Still to do:** re-run `tools/axis-stores.mjs` after a day (2026-09-24): the legacy `va` counts must not grow.
+
+### Where this lane stands — handoff 2, 2026-09-23 ~09:00 (history)
 
 **DEPLOYED.** `pes/phase-0` was merged with `main` in a separate worktree and pushed to `main` by the Owner:
 `main` = **`0a563d6d5`** ("merge: main into pes/phase-0 for its deploy"). Railway deploy `7cdbe141` **SUCCESS 06:46 UTC**

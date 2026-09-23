@@ -5690,3 +5690,121 @@ eBay. Amazon·IT's own listings say `Nero Neo` / `Crema e Vino` (store vs Amazon
 |---|---|---|
 | **a** | A per-channel value name (the "value-map store" VP.2 already asked for): the store keeps one code per colour, each channel keeps its own label | 🟢 **Recommended**, before the next Amazon publish of AIREON. A feature, not a fix — it needs its own step |
 | b | Revert the 40 AIREON colour fills (`--revert` restores all 78 from the record; a per-SKU revert would need a small script) | Back to no colour on the sheet for AIREON; Amazon unchanged |
+
+---
+
+## OWNER RULING — 2026-09-23 (nineteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-27** | A-29 — AIREON's colour: one store, two channel names | ✅ **(a)** A per-channel value name is **its own later step**. 🔴 **Do not publish AIREON to Amazon until that step is built.** Nothing was sent; the 2.6d fill stays |
+
+---
+
+## A-30 — Step 2.7's premise, measured again: the rows exist, the dry run cannot see what is due, and the nightly sweep starves families past its budget. FOR YOUR RULING.
+
+**2026-09-23. Read only: a code trace (lines re-read) and a scratch simulation of the real job. Production NOT read yet —
+the age check needs the Owner's word (see "Not measured" below). Nothing built.**
+
+### What the code says
+
+1. **Where the 9,886 rows came from.** The OLD nightly job (on `main` since `3161da57b`, 2026-09-13) swept **every** root
+   family every night at `17 2 * * *`, on unless `NEXUS_ENABLE_READINESS_RECONCILE=0`
+   (`git show 439d9e3d3:apps/api/src/jobs/readiness-reconcile.job.ts`). Five writers also refresh a family on every edit
+   (`produceReadiness`: `bulk-edit.service.ts:2669`, `master-content.service.ts:157`, `catalog-translate.ts:151`,
+   `catalog-transfer.service.ts:242`, `content-write.ts:88`). Step 2.7's *"Production has 0 rows"* predates that job.
+2. 🔴 **The backfill dry run cannot say what is due.** `runResumableSweep` returns in its dry-run branch **before** it
+   calls `nextBatch` (`resumable-sweep.ts`, `if (dryRun)`), and the job offers no `countOutstanding`, so `planned` is
+   `null`. The printed `9886 → 9886` only says that nothing was written. *"Nothing due"* was **could not measure**, not
+   **measured empty**.
+3. **The deployed nightly (15.1) does recompute under the new rules.** It takes every live root with no
+   `ReadinessIndex` row newer than **20 h** (`dueFamilies`, `readiness-reconcile.job.ts:38-57`) and writes through the
+   deployed `reconcileFamilyReadiness`. With business profiles ON it runs once per active business
+   (`lib/cron/clustered.ts`, the `NEXUS_WORKSPACES_ENABLED` branch). A row the old job wrote at its 02:17 run is more than
+   20 h old at the next tick (02:17 on 2026-09-24, API clock), so **every family is due then**. Production has **34** live
+   roots (32 Xavia Racing + 2 Motovento, [FAMILY-ASSIGNMENT-2026-09-22.md](FAMILY-ASSIGNMENT-2026-09-22.md)): at 2–4 s a
+   family (A-21) that is ~1–2.5 min, inside the 10-min budget. A family edited since the deploy is already recomputed.
+   Edge: a row written by an edit between 06:17 and 06:46 UTC (old code, still < 20 h old) is skipped once and refreshed
+   the night after.
+
+### 🔴 A latent defect in 15.1 — the rotation does not rotate
+
+`dueFamilies` walks roots in **id order**, not by age (its comment says *"oldest work first"*; the code does not do
+that). Past the budget, the next night finds **the same first families** due again (their rows are now > 20 h old) and
+spends the whole budget on them. The rest are **never** computed by the nightly.
+
+Scratch simulation — the real `runReadinessReconcile` + `runResumableSweep`, a mocked database, 3 s per family, the
+cron's own 10-min budget, four nights 24 h apart:
+
+| Catalogue | Every night | Never computed after 4 nights |
+|---|---|---|
+| 500 families | the same 200 (`f000`–`f199`), `stopped: budget` | **300** |
+| 150 families (control) | all 150, `stopped: complete` | 0 |
+
+So the plan's *"a larger catalogue fills on a rotation over several nights"* (Step 2.7 Cost when; 15.1 "Stated, not
+hidden") is **false**. The resume test (`readiness-reconcile.vitest.test.ts`, "stops on the budget…") runs its second
+run at once, while run 1's rows are still fresh: it pins the clock, so the two-night case was never run.
+🟢 **Not live on production today:** 34 roots fit one night. It bites above ~150–300 roots a business.
+
+### Not measured (needs the Owner's word)
+
+A read-only tool, `tools/readiness-age.mjs` (`BEGIN READ ONLY`, Neon host only, `--local` dry run), to print: rows per
+business before / after the deploy; rows per UTC hour; the job's own `CronRun` rows (`readiness-reconcile`: start, end,
+status, summary); roots due now by the job's own predicate; live products with no row. The session's safety check
+refused to create it. It answers *when* the 9,886 rows were computed, and — after 02:17 on 2026-09-24 — whether the first
+new nightly ran to `complete` for both businesses.
+
+### Recommendation — one
+
+**Re-scope Step 2.7 from "a one-shot production write" to "verify the first nightly after the deploy", and fix the two
+defects above before it closes.**
+
+- **No production write by this lane.** D-E is no longer needed: the deployed nightly does the recompute.
+- **Verify (read only, after 02:17 on 2026-09-24):** `CronRun` shows `readiness-reconcile` SUCCESS for both businesses,
+  `stopped: complete`, 0 failed; no live product has a row older than the deploy.
+- **Build (small, one commit, after the ruling):** (1) `dueFamilies` takes the **oldest** first (never-computed, then the
+  oldest `computedAt`), with a two-night arm that is red on today's code; (2) the job offers `countOutstanding` from the
+  same predicate, so the dry run prints a real due count. Mutation-proven as usual.
+- **Done when** — the verify above passes, and both arms are green. **Cost when** — nightly bounded at 10 min; with
+  oldest-first, a catalogue above the budget refreshes every ⌈roots ÷ families-per-night⌉ nights. **Gate** — the two new
+  arms + the existing 16. **Rollback** — revert the commit; the data is derived.
+
+---
+
+## A-31 — GitHub CI is red on the deploy commit, and two of this lane's test files are the cause. FOR YOUR RULING.
+
+**2026-09-23. Found on the post-deploy check. Nothing built.**
+
+- **Vercel:** ✅ `0a563d6d5` is deployed to **Production** and active (GitHub → Deployments, *"Deployed to Production by
+  vercel"*). Railway: SUCCESS 06:46 UTC (handoff 2).
+- 🔴 **GitHub CI #4162 on `0a563d6d5` FAILED** in the step *"Product grid resolver, write contracts and disposable
+  PostgreSQL regressions"* (5 m 49 s). CI #4161 on `main`'s commit before the merge (`439d9e3d3`) passed. The deploy is
+  not blocked by CI (Deploy API #1907 ran), so this is a red signal on `main`, not an outage.
+- **Reproduced here** with CI's settings (that step's command, run from `apps/api`, `DATABASE_URL` at a server that does
+  not exist, as on the CI runner, which has no PostgreSQL): **3 files fail to load**, 181 pass.
+  - `services/pim/price-door-concurrency.vitest.test.ts` (Step 2.2 Gate 2, `1c2efb671`) and
+    `services/pim/price-door-reset.vitest.test.ts` (Step 2.2 part 2, `a55d8da5f`) — **this lane's.** Each builds a real
+    database from `DATABASE_URL` inside its `vi.mock('@nexus/database')` factory, unconditionally:
+    `ECONNREFUSED 127.0.0.1:5432`. Every other `concurrentDatabase()` file skips unless `NEXUS_TEST_CONCURRENT_PG_URL` is
+    set (`describe.skipIf(!concurrentDatabaseUrl())`, e.g. `stock-concurrency.vitest.test.ts:52`) and runs on the push
+    hook's throwaway server (`scripts/run-real-postgres-tests.mjs`). Locally they pass because `DATABASE_URL` is the dev
+    server.
+  - `studio-publication-transports.vitest.test.ts` — **not** a cause: *"Cannot find module '.prisma/client/default'"*
+    while the push hook was regenerating the client at the same moment; alone it passes 21/21.
+- 🟠 CI's own log was not read (the browser tool refused the page read). The step and the reproduction agree.
+
+### Recommendation — one
+
+**Make the two files behave like every other real-server test.** (1) `price-door-reset` tests what a write stores, not a
+race, so it moves to `formulaDatabase()` (the standing rule; three `concurrentDatabase()` files already overflowed the
+local lock table once). (2) `price-door-concurrency` is a race, so it stays on `concurrentDatabase()`, skips unless
+`NEXUS_TEST_CONCURRENT_PG_URL` is set, and gets one line in `scripts/run-real-postgres-tests.mjs` (its expected pass
+count) so the push hook still runs it on every push. One commit.
+
+- **Done when** — the CI step's command, run with CI's settings, reports 0 failed files; the push hook's real-PostgreSQL
+  stage lists the race file with its count; the next CI run on `main` is green in that step.
+- **Gate** — mutations: each arm's guard removed goes red on its new database (the race file on the throwaway server).
+- **Cost when** — `flat`. **Rollback** — revert the commit.
+- 🔴 `scripts/run-real-postgres-tests.mjs` is shared (AE and channel-connections lanes list files there): **one appended
+  entry**, named in the claim row before the edit. The fix reaches CI only when `pes/phase-0` is next merged to `main`
+  — the Owner's merge.
