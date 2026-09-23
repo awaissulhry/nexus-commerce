@@ -6235,3 +6235,45 @@ is written by this build.
 `tsc --noEmit`: 0. Related suites (studio publication, plan, database): 34 green.
 
 ### Cost when — `flat` (three comparisons per product at preview). Rollback — revert the commit.
+
+### Step 3.6 / A-34 — browser check: PREDICTION WRITTEN BEFORE THE RUN (2026-09-23 ~19:15)
+
+Local app (web :3000 → API :8091, local database; Amazon publish gated, queue workers off). The studio sheet of
+`xavia-knee-slider`, **Shared scope** — the Amazon scope is closed on this machine (*"The Amazon account is
+disconnected"*), eBay is not set up for this family, so the channel half cannot run here.
+Paste a 3-row block into the Status column (children black, blue, green): `ACTIVE`, `BOGUS-STATUS`, `ACTIVE`.
+**Prediction:** rows 1 and 3 send nothing (unchanged — `writeGate`); row 2 is refused by the server and the cell goes back
+to `ACTIVE` with its own reason on screen; the database keeps `ACTIVE` on all three.
+
+### Step 3.6 / A-34 — RESULTS (R-32)
+
+**Browser check — COULD NOT MEASURE, stated with its controls (not a pass):**
+- The **channel scope** cannot open on this machine: the local Amazon account is `disconnected` (*"Reconnect it in Settings →
+  Channels"*) and eBay is not set up for the family. Reconnecting needs credentials — not this session's to do.
+- On the **Shared scope** the automated paste never reached the grid: after pasting `ACTIVE / BOGUS-STATUS / ACTIVE` into
+  Status, and a single valid `A34-CONTROL` into an empty Manufacturer cell, the tab's network log shows **no save request
+  at all** (only notification polls through `localhost:3000/backend/api/…`) and the cells are unchanged. Positive control:
+  the same clipboard and the same `cmd+v` DO paste into the page's search box. So the synthetic key reaches a text field
+  but not the grid's paste handler — the probe measured nothing, in either direction. Nothing was written.
+- **Left for the Owner (one minute, by hand):** in the studio sheet, paste two cells where one is too long / off-list →
+  the bad cell goes back with its reason, the good one saves. Or reconnect the local Amazon account and ask for the
+  channel half.
+
+**Gate — ✅ BUILT:** new `services/products/paste-validity.vitest.test.ts` — the REAL save path (`applyProductBulkEdits`
+→ the real column builder over a cached Amazon·IT schema) on PGlite; what is STORED is asserted.
+
+| Arm | Result |
+|---|---|
+| over the column's cap (5) → refused, per row, not stored | ✅ |
+| off a closed list → refused, per row, not stored | ✅ |
+| control: a valid value → stored | ✅ |
+| a paste across rows → judged per row: the valid row stored, the bad row refused and not stored | ✅ |
+
+| Mutation (Python harness, per-file backups, sha256 restored) | Red |
+|---|---|
+| V1 the length check never refuses (the shape check and the cap check) | the cap arm |
+| V2 the closed list never refuses (both spellings of the check) | the list arm + the per-row arm |
+| V3 all-or-nothing — any refused row refuses the request | the per-row arm |
+
+**Step 3.6 status:** the premise is re-scoped (A-34), the server half is gated; ⏳ the on-screen half (a refused cell goes
+back with its reason) is the Owner's one-minute check. **Cost when** — `flat`. **Rollback** — remove the test.
