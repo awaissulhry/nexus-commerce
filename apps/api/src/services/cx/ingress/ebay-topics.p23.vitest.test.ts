@@ -116,3 +116,12 @@ describe("the subscription asks for the version eBay lists for that topic", () =
     expect(out.detail).toContain('no usable payload version')
   })
 })
+
+// DOCUMENTED fixture: eBay Notification API release 1.6.6 (2025-12-01).
+// https://www.developer.ebay.com/develop/api/notification/release-notes
+it('names ORDER_CONFIRMATION for seller checkout, keeping ITEM_SOLD only for old ledger replays', () => {
+  expect(EBAY_DESIRED_TOPICS.map(t => t.topicId)).toContain('ORDER_CONFIRMATION')
+  expect(EBAY_DESIRED_TOPICS.map(t => t.topicId)).not.toContain('ITEM_SOLD')
+  expect(ebayTopicAction('ORDER_CONFIRMATION', {})).toEqual({ action: 'order_created', via: 'topic' })
+  expect(ebayTopicAction('ITEM_SOLD', {})).toEqual({ action: 'order_created', via: 'legacy_alias' })
+})

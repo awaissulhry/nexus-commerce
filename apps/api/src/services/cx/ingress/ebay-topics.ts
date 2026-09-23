@@ -38,7 +38,7 @@ export type EbayTopicVia = 'topic' | 'legacy_alias' | 'payload_shape' | 'none'
 const TOPIC_ROUTES: Record<string, EbayTopicAction> = {
   MARKETPLACE_ACCOUNT_DELETION: 'account_deletion',
   AUTHORIZATION_REVOCATION: 'authorization_revoked',
-  ITEM_SOLD: 'order_created',
+  ORDER_CONFIRMATION: 'order_created',
   ITEM_PRICE_REVISION: 'listing_changed',
   ITEM_AVAILABILITY: 'listing_changed',
 }
@@ -50,6 +50,7 @@ const TOPIC_ROUTES: Record<string, EbayTopicAction> = {
  * subscription topics, and keeping them apart is what stops that happening by accident.
  */
 const LEGACY_ALIASES: Record<string, EbayTopicAction> = {
+  ITEM_SOLD: 'order_created',
   'marketplace.order.created': 'order_created',
   'marketplace.order.cancelled': 'order_cancelled',
   'marketplace.inventory_item.updated': 'listing_changed',

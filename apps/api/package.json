@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "cd ../../packages/shared && npm run build && cd ../events && npm run build && cd ../../apps/api && npx prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
+    "build": "cd ../../packages/shared && npm run build && cd ../events && npm run build && cd ../../apps/api && npx prisma generate --schema=../../packages/database/prisma/schema.prisma && node --max-old-space-size=4096 ../../node_modules/typescript/bin/tsc",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prestart": "cd ../../packages/database && node scripts/migrate-direct.mjs",
     "start": "node dist/index.js",

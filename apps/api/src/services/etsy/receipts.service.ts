@@ -79,10 +79,11 @@ export async function pullEtsyReceipts(accountId: string, since: Date): Promise<
 }
 
 /** One receipt by id, which is what a webhook names. */
-export async function pullEtsyReceipt(accountId: string, receiptId: string | number): Promise<EtsyReceipt | null> {
+export async function pullEtsyReceipt(accountId: string, receiptId: string | number, expectedShopId?: string): Promise<EtsyReceipt | null> {
   const id = String(receiptId)
   if (!/^[1-9]\d*$/.test(id)) throw new Error('An Etsy receipt id must be a positive whole number.')
   const { get, shopId } = await etsyReader(accountId)
+  if (expectedShopId !== undefined && expectedShopId !== shopId) throw new Error('The Etsy receipt names a different shop from its connected account.')
   try {
     return await get<EtsyReceipt>(`/shops/${shopId}/receipts/${id}`)
   } catch (error) {

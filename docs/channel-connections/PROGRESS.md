@@ -1,10 +1,12 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-21**, end of the second session. Scope is **Amazon, eBay and Etsy only** —
-the Owner deferred P8, which takes Shopify and WooCommerce out of the active set with it.
+Updated **2026-09-22**. Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
+(Owner report); this does not restart **P8, which remains deferred**.
 
-**Every package P0–P6 is BUILT and deployed.** What is left is switches, probes, portals and one
-blocked clean-up. Nothing is half-written.
+**Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
+Package labels are not proof of every acceptance criterion. Finances cutover, full eBay event
+coverage, live validation, Owner setup, and cleanup must be reconciled against current evidence.
+The latest isolated connections package is built and tested but not yet deployed.
 
 ✅ **The handover's deploy warning is closed.** `6cfcb143` (commit `090db711`) reached
 **SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
@@ -12,6 +14,99 @@ read against the wrong clock. `/api/health` reports the serving build as its com
 characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
+
+### Approved production release — 2026-09-22
+
+The Owner approved “Deploy it all and push to production.” C1–C8 were pushed normally
+as `65782117a` and Railway deployment `a257e041-a61c-4614-a8c9-6c2516622832` reached
+SUCCESS. At21:20Z both public health routes served65782117 and protected diagnostics
+returned401. The exact Etsy migration checksum/finish and exclusive Motovento shop
+routing passed, with all18 connections/scopes/state/presence preserved, including
+Shopify. Automatic eBay setup and Amazon rotation are observed OFF at startup.
+
+GitHub's clean compiler exhausted its default2GiB heap. The independently reviewed,
+compiler-only4GiB repair `c54406b47` passed normal hooks and was pushed. Both GitHub
+clean builds now pass; final CI/image rollout is still in progress. No type/test
+requirement was weakened. Vendor probes, channel activation, exact-ten deletion and
+P7 drops remain separately gated. The full plan is still open.
+
+### Active continuation audit — 2026-09-22, after 17:00 UTC
+
+Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and
+[CX-COMPLETION](build/CX-COMPLETION.md) before historical package summaries. Fresh
+read-only production inspection identifies Etsy as **ItalianHideCraft**, shop
+`57783036`, in **Motovento**, workspace `bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`,
+connection `cmubtwtad00ctmu01w4qsruxt`. Active/connected; all twelve stored scopes.
+The signed-in Etsy portal has **zero webhook endpoints**, with the four official
+events visible as a positive control. No reconnection or ownership move is needed.
+
+The Xavia eBay 13/12 difference is the `managedBy=transferred` Motovento tombstone,
+which Accounts intentionally excludes. Browser count not newly measured; fresh DB
+rows plus the exact Accounts predicate explain the count. Preserve the tombstone.
+
+Independent audits found unimplemented/unsafe criteria in Finances identity/money,
+eBay event handling and subscription contracts, Etsy payload/routing/order ingestion,
+auth-held retries, rotation alert delivery, contract coverage, eBay price readback
+and the studio error pane. **Do not activate from old “BUILT” labels.**
+C1–C8 are committed through `571371bfc`: replay trust, Etsy contract/shop routing,
+eBay transport and activation holds, Finances read-only containment, auth-held retry
+recovery, reliable test transport, and private owner rotation alerts. All slices were
+independently reviewed. C6 full API: **11188 passed / 137 skipped / zero errors**.
+C7 canonical passed builds, 4591 web, 124 security and 106 real PostgreSQL tests; its
+profiles-ON gate required removal of the now-fixed Amazon classifications exception.
+That exception is removed. Final C8 full API **11215 passed /137 skipped /zero errors**;
+canonical gate **passed on 571371bfc**, including profiles-ON887files/41known failing/
+217tests, none new/worse. No push. [Concrete release approval](RELEASE-C1-C8.md).
+Etsy's latest 20:28Z read shows 37 successful/account-attributed calls in 24 hours,
+zero webhook ingress, and no need to reconnect. Earlier probe timestamp serialization
+subtracted two hours; CX-COMPLETION records the correction and retains raw evidence.
+
+Verification correction: the prior full API log also contains **two unhandled
+EnvironmentTeardownError rejections**, omitted from the earlier six-failure summary.
+The canonical pre-push gate was green; the full API run was not green.
+
+### Prior package snapshot — historical; the active continuation above supersedes it
+
+**Latest Owner correction:** Etsy is **already connected under a different business profile**.
+The profile name/ID was not supplied. Discover it with authorized read-only inspection; do not
+assume Xavia Racing owns Etsy, reconnect it, or infer all-profile absence from one profile's view.
+Verify the four webhook registrations, routing, scopes, and live-mode state in its owning profile;
+connection alone does not establish those facts. [Next-session prompt](NEXT-SESSION-PROMPT.md).
+
+Read [the latest findings and Owner-only actions](2026-09-22-HANDOVER.md) and
+[CX cleanup proof](build/CX-CLEANUP.md). Guarded deletion, the legacy eBay token-report
+fix, verification-token preflight and documented order topic are built in separate commits;
+the report now includes encrypted-credential presence and shares dead-row eligibility with
+deletion. **Final canonical pre-push gate passed** on `4abb1a371`, including both real
+PostgreSQL delete tests and the profiles-ON ratchet. Full API suite: **11066 passed,
+six baseline Amazon failures, 132 skipped**; independent review approved. Deployment is
+pending production approval; Railway and `/api/health` still confirm baseline `7c70556ea`.
+**No production row has been deleted.** Fresh read-only evidence reduces the proposal to **ten**, whose exact IDs
+are in [CX-DELETE-LIST](build/CX-DELETE-LIST.md); Owner confirmation is still required.
+
+The corrected public API origin is **https://nexusapi-production-b7bb.up.railway.app**.
+The former Railway host resolved but served 404; **api.xavia.it has no DNS**. The three
+readers share source resolution, deliberately not validation policy. Shopify setup and
+its 91 accepted scopes are recorded in the latest handover; the two rejected payment
+mandate scopes are removed. Etsy is connected per the latest Owner report; its owning profile,
+four webhook registrations, and live operation still need verification.
+
+Production eBay reads at **16:22:22Z / 16:23:18Z on 2026-09-22**: 13 rows, all 13
+schema-derived relations counted, 11 with zero cascading dependents but only **ten eligible**.
+`cmt0ksbbs01r4mo01c9diw1qp` has encrypted credentials and one surviving ConnectionEvent;
+retain it alongside live primary `cmr4aaqb00025nz016k18rup9` (destroys 15) and
+`cmt142bli01vcp4010fjo2k13` (destroys one ConnectionScope, unlinks 2079 ConnectionEvent).
+Both plaintext refresh columns are empty even on the credentialed live primary. The Owner's
+13 database rows / 12 Accounts rows discrepancy remains open. Notifications:
+0 destinations / 0 subscriptions, positively controlled by 27 topics; 03:55 failure is
+195019 (verification-token format). A healthy challenge hash does not validate that format.
+Fresh live application catalogue is pending permission and browser API access.
+
+**Release isolation:** shared tree currently belongs to `pes/phase-0`; this work is in
+`/private/tmp/nexus-channel-connections-20260922`, based on remote main `7c70556ea`.
+Push only the commits on this isolated package branch. Never push the other session's history.
+
+### Earlier package history (current corrections above take precedence)
 
 | Package | State |
 |---|---|
@@ -35,7 +130,7 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 | 3 | ✅ **P6.8 — Etsy and Shopify are READY (2026-09-21)** — `{"ready":true}` for both after the Owner set the variables; the Shopify app is registered (legacy install flow, not embedded, both callback hosts allow-listed) and 🔴 **Shopify refused two of our own scopes — `read_payment_mandate`/`write_payment_mandate` do not exist** and are removed. Etsy's 4 webhooks remain. *Original finding below.* | **Owner** | Measured live 2026-09-21: `GET /api/cx/connect/etsy\|shopify/readiness` → `ready: false, channel_unavailable, "is not set up on this Nexus server"`, while `amazon_sp`, `amazon_ads` and `ebay` all return `ready: true`. **There is no `ChannelApp` row and no env credential** — `getChannelApp` throws from the one branch that needs both to be missing. **Set on `@nexus/api`:** `ETSY_API_KEY` + `ETSY_SHARED_SECRET`; `SHOPIFY_APP_CLIENT_ID` + `SHOPIFY_APP_CLIENT_SECRET`. Boot's `seedChannelApps()` then creates the rows. **Only then** register `${NEXUS_PUBLIC_API_URL}/api/cx/callback/<key>` and Etsy's 4 webhooks. 🔴 `build/P6.8.md` §1's table says a row DOES exist — it names no database and is most likely the dev one; the live reading wins. |
 | 4 | **P6.6** env token — **clean so far, needs the clock** | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. 📏 **Re-measured 2026-09-21** (`build/P6.6.md` §6b) and this time it is a **real zero**: two deployments, **0** lines, with *both* controls — the `get-logs` filter proved to match a bracketed prefix (`ads-v1-sync`), and the Orders probe proved an SP-API call ran inside the window. Still only ~**32 minutes** across two processes, and the warning is once per process, so the row needs a day with a full cron cycle. Nothing to build. |
 | 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
-| 6 | 🔴 **Nothing is listed on Etsy through Nexus — and now the REASON is known** | **Owner** | Measured in production: **0 Etsy `ChannelListing` rows**, **0 Etsy accounts connected** on either profile. 🔴 **2026-09-21: that is not because products are missing — Etsy cannot be connected at all** (row 3). The account count could never have been anything but zero. Every Etsy writer is built and idle behind a credential, not behind a catalogue. |
+| 6 | **Etsy connected in another profile — Owner correction 2026-09-22** | **Either / Owner for gated actions** | The earlier zero-account/zero-listing measurements are historical. Discover the owning profile read-only and verify its current connection, listing counts, webhook routing, scopes and publishing mode. Do not reconnect or move ownership merely because Xavia Racing has no Etsy row. |
 | 7 | **P7b** destructive drops | **Owner** | Needs a **green week** (day 1 = 2026-09-21) **and a separate yes per table**. 🔴 `AmazonAdsConnection` is NOT a candidate — 49 files read it; CX.3c moves ownership first. |
 | 8 | **Section 8** Owner items | **Owner** | 1, 2, 3, 4, 8, 9, 10 are live. **Items 5 and 6 are struck through** — neither reconnect is needed. 🔴 Item 3, the **Neon password in git history**, is the only one where someone else could act first. |
 
@@ -50,7 +145,7 @@ Full record: `build/SWITCH-ON.md`.
 | Amazon **Orders** 2026-01-01 | 🟢 **gate cleared 2026-09-21** — the money question is answered (row 1). Waiting only on the Owner's yes |
 | Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) — now **measurable** without writing, via the §4c dry run |
 | `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
-| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ products (rows 5–6) |
+| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ Connection reported complete in another profile; verify current mode and obtain any required enablement approval (rows 5–6) |
 
 ### 0b. ✅ ALL VERIFIED on deployment `be9f2554` (build `0adbf6e8`), 2026-09-21
 

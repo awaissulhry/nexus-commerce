@@ -23,6 +23,14 @@ export type InboundStatus = 'pending' | 'done' | 'failed' | 'dlq'
 /** What established trust for this event, or that nothing did. */
 export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
 
+/** A retry cannot turn an audit record of a rejected delivery into trusted work. */
+export function isVerifiedInbound(event: { channel: string; signatureOk?: boolean | null; verifiedBy?: string | null }): boolean {
+  return event.signatureOk === true || (
+    event.signatureOk === null && event.verifiedBy === 'sqs_iam' &&
+    (event.channel === 'AMAZON' || event.channel === 'AMAZON_ADS')
+  )
+}
+
 export interface InboundRecord {
   channel: string
   eventType: string
@@ -214,6 +222,8 @@ export interface DueInboundEvent {
   externalId: string
   payload: unknown
   attempts: number
+  signatureOk: boolean | null
+  verifiedBy: string | null
   /**
    * The connected account this event arrived on, recorded by the receiver.
    *
@@ -257,7 +267,7 @@ export async function dueInboundEvents(limit = 50, now: Date = new Date()): Prom
       archivedAt: null,
       nextAttemptAt: { not: null, lte: now },
     },
-    select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true, connectionId: true },
+    select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true, connectionId: true, signatureOk: true, verifiedBy: true },
     orderBy: { nextAttemptAt: 'asc' },
     take: limit,
   })
@@ -270,7 +280,7 @@ export interface ReplayRequest {
   workspaceId?: string | null
 }
 
-export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending'
+export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified'
 
 /**
  * One shape rather than a discriminated union on `ok`.
@@ -302,10 +312,11 @@ export interface ReplayOutcome {
 export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> {
   const row = await prisma.webhookEvent.findUnique({
     where: { id: req.id },
-    select: { id: true, workspaceId: true, channel: true, eventType: true, status: true, archivedAt: true, nextAttemptAt: true },
+    select: { id: true, workspaceId: true, channel: true, eventType: true, status: true, archivedAt: true, nextAttemptAt: true, signatureOk: true, verifiedBy: true },
   })
   if (!row) return { ok: false, reason: 'not_found' }
   if (req.workspaceId && row.workspaceId !== req.workspaceId) return { ok: false, reason: 'wrong_workspace' }
+  if (!isVerifiedInbound(row)) return { ok: false, reason: 'unverified' }
   if (row.archivedAt) return { ok: false, reason: 'archived' }
   // Refuse only what is ALREADY in the worker's queue. A `pending` row with no time
   // on it is not queued for anything — that is the shape a receiver leaves behind when

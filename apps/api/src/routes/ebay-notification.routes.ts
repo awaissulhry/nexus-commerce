@@ -169,14 +169,14 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   // This route now does the thing that was missing: create the destination eBay
   // delivers to, and subscribe the real topics, checked against eBay's own catalogue.
   app.post('/admin/setup-ebay-notifications', async (req, reply) => {
-    const { setupEbayNotifications } = await import('../services/cx/connectors/ebay/notifications.js')
+    const { setupEbayNotifications, ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
     const query = req.query as { environment?: string; onlyHandled?: string }
     const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
     const result = await setupEbayNotifications({
       environment,
       // Default: subscribe only the topics Nexus can act on. A topic with no handler
       // would arrive, be recorded and then dead-letter (P2.1) — visible, but noise.
-      skipTopicsWithoutHandlers: query.onlyHandled !== 'false',
+      skipTopicsWithoutHandlers: true,
     })
     if (!result.configured) {
       return reply.status(400).send({ ok: false, ...result })
@@ -184,7 +184,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     // A wrong topic id is reported as its own thing, not folded into "failed". It is
     // the finding this package exists to surface.
     return reply.send({
-      ok: result.notOffered.length === 0,
+      ok: ebayNotificationSetupSucceeded(result),
       ...result,
       hint: result.notOffered.length
         ? `eBay's catalogue does not contain: ${result.notOffered.join(', ')}. Correct them in services/cx/ingress/ebay-topics.ts.`
@@ -223,7 +223,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
      * see the thing that is broken is worse than none, because it is quoted. It was
      * quoted: `PROGRESS.md` §4 sends the next session here.
      */
-    const { ebayNotificationConfig } = await import('../services/cx/connectors/ebay/notifications.js')
+    const { ebayNotificationConfig, ebayVerificationTokenError } = await import('../services/cx/connectors/ebay/notifications.js')
     const config = ebayNotificationConfig()
     const endpoint = config.endpoint
     try {
@@ -240,7 +240,11 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
          * Without this, a null `endpoint` reads as "eBay has nothing" when it means
          * "we did not ask for anything".
          */
-        configured: { hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken },
+        configured: {
+          hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken,
+          verificationTokenValid: !ebayVerificationTokenError(config.verificationToken),
+        },
+        configurationError: ebayVerificationTokenError(config.verificationToken),
         destination: ours,
         /**
          * 🔴 "Could not measure" is not "measured empty". `destination: null` alone

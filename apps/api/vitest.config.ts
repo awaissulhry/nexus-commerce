@@ -13,6 +13,7 @@
 //   • `npx tsx <path>/<name>.test.ts`     — legacy custom runners
 
 import { defineConfig } from 'vitest/config'
+import { availableParallelism } from 'node:os'
 import { applyTestDatabaseGuard } from './src/lib/testing/database-target.js'
 
 /**
@@ -30,8 +31,10 @@ import { applyTestDatabaseGuard } from './src/lib/testing/database-target.js'
  * Deliberate escape hatch: `ALLOW_PROD_DB_TESTS=1`, which prints the host it let past.
  */
 const databaseTarget = applyTestDatabaseGuard()
+const parallelism = availableParallelism()
+const workerLimit = Math.max(1, Math.min(4, Math.floor(parallelism / 2)))
 // eslint-disable-next-line no-console
-console.log(`[apps/api vitest config] ${databaseTarget.message}`)
+console.log(`[apps/api vitest config] ${databaseTarget.message}\n[apps/api vitest config] ${workerLimit} file workers for ${parallelism} available CPUs`)
 
 // These suites inspect or temporarily modify the shared local catalogue. Run
 // them after disposable regressions and one at a time so a characterization
@@ -64,6 +67,15 @@ export default defineConfig({
     // `.vitest.test.ts` suffix elsewhere.
     exclude: ['node_modules/**', 'dist/**'],
     environment: 'node',
+    // Keep console output on stdout/stderr. Vitest 4's console RPC can reject at
+    // teardown (vitest-dev/vitest#11153); this documented transport option neither
+    // hides logs nor ignores unhandled errors. A deliberate rejection canary still
+    // exits 1. Bound file workers to avoid PGlite fixture contention; real database
+    // races still run with multiple connections in the dedicated PostgreSQL gate.
+    disableConsoleIntercept: true,
+    // Fixed four-worker execution oversubscribes small CI runners. Keep capacity
+    // for the embedded databases/source guards without relaxing any test timeout.
+    maxWorkers: workerLimit,
     // Per-test timeout: 10s default. DB-touching tests should bump
     // explicitly via `it.concurrent('...', { timeout: 30_000 }, ...)`.
     testTimeout: 10_000,

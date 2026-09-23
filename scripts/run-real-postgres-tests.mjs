@@ -49,7 +49,7 @@
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -59,6 +59,8 @@ const API = `${ROOT}/apps/api`
 const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
+  { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
+  { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
   { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
@@ -85,12 +87,13 @@ if (!image) skip(`no PostgreSQL 17 image on this machine (docker pull ${IMAGES[0
 const name = `nexus-real-pg-${process.pid}`
 const reportDir = mkdtempSync(join(tmpdir(), 'nexus-real-pg-'))
 let started = false
+let preserveEvidence = false
 const stop = () => {
   if (started) {
     started = false
     try { docker('stop', name) } catch { /* already gone */ }
   }
-  rmSync(reportDir, { recursive: true, force: true })
+  if (!preserveEvidence) rmSync(reportDir, { recursive: true, force: true })
 }
 process.on('exit', stop)
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stop(); process.exit(130) })
@@ -153,6 +156,14 @@ try {
   }
   console.error(`❌ real-PostgreSQL tests FAILED — vitest exit ${run.status}${report ? '' : '; no JSON report was written'}`)
   for (const v of verdicts) console.error(`${v.ok ? '  ✓' : '  ✗'} ${v.line}`)
+  preserveEvidence = true
+  writeFileSync(join(reportDir, 'output.log'), output)
+  for (const file of report?.testResults ?? []) {
+    for (const assertion of file.assertionResults ?? []) {
+      if (assertion.status === 'failed') console.error(`FAILED TEST: ${assertion.fullName}\n${(assertion.failureMessages ?? []).join('\n')}`)
+    }
+  }
+  console.error(`Full local test evidence retained at ${reportDir}`)
   console.error(output.split('\n').filter((l) => /FAIL|AssertionError|Error:|expected|skipped/.test(l)).slice(0, 40).join('\n'))
   process.exit(1)
 } finally {

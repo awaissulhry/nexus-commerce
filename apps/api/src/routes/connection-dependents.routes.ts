@@ -1,7 +1,7 @@
 /**
  * `GET /api/admin/connection-dependents` — what a connection delete would take with it.
  *
- * **Reads only.** No `create`, no `update`, no `delete`. It exists so the Owner can decide
+ * **GET reads only.** DELETE below separately rechecks and locks one dead row. The report lets the Owner decide
  * whether deleting a dead connection is a tidy-up or a data loss, with the numbers in front of
  * them rather than an assurance.
  *
@@ -15,9 +15,22 @@
  * "It says disconnected" is a fact about the token. It says nothing about what points at the row.
  */
 import type { FastifyInstance } from 'fastify'
-import { connectionDependentsReport, dependentRelations } from '../services/connection-dependents.service.js'
+import { connectionDependentsReport, dependentRelations, deleteDeadConnection } from '../services/connection-dependents.service.js'
 
 export default async function connectionDependentsRoutes(app: FastifyInstance) {
+  // One explicit ID; never accept a caller's cached "safe" verdict or a channel-wide delete.
+  app.delete<{ Params: { id: string } }>('/admin/connection-dependents/:id', async (req, reply) => {
+    try {
+      return reply.send(await deleteDeadConnection(req.params.id))
+    } catch (err) {
+      const failure = err as { statusCode?: number; code?: string; dependents?: unknown }
+      return reply.code(failure.statusCode ?? 500).send({
+        deleted: false, code: failure.code ?? 'connection_delete_failed',
+        error: err instanceof Error ? err.message.slice(0, 400) : 'Connection deletion failed.',
+        ...(failure.dependents ? { dependents: failure.dependents } : {}),
+      })
+    }
+  })
   /**
    * `?channel=EBAY` narrows to one channel; omitted, it reports every connection in the
    * business profile the request carries.
