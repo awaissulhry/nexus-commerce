@@ -17,7 +17,9 @@ Current source audit: three independent reviewers plus main-session source/contr
 inspection. Fresh production evidence and new slices: [CX-COMPLETION](build/CX-COMPLETION.md).
 New local continuation: [CX-REMAINING](build/CX-REMAINING.md). C9's atomic receipt
 identity fix is reviewed, with eight real PostgreSQL cases and 70 existing regressions
-passing; it is not deployed. Durable processing and domain idempotency remain open.
+passing. C10 adds the reviewed claim/atomic-completion foundation with 15 real PostgreSQL
+cases and three killed guard mutations. Both are local, not deployed. Receiver integration
+and domain idempotency remain open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
 SUCCESS, exact health/readiness build, protected diagnostic GET401, migration

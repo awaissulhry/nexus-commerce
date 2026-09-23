@@ -60,6 +60,7 @@ const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },
+  { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },

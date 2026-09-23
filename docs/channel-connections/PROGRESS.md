@@ -27,8 +27,10 @@ characters, which is the cheapest way to tell *deployed* from *built*.
 C9 fixes concurrent receipt insertion and prevents delivery IDs being reused across
 account/event/trust identities. Eight real PostgreSQL tests, 70 existing regressions,
 typecheck, two killed/restored mutations and independent review pass. It is local,
-not deployed. See [CX-REMAINING](build/CX-REMAINING.md). Next: durable eBay claims and
-stored-payload processing, followed by transactional domain effects. Live-read probe
+not deployed. C10 adds durable eBay claims and atomic database effects/completion: 15
+real PostgreSQL tests, three killed/restored critical mutations, typecheck and independent
+review pass. It is not yet wired into receivers. See [CX-REMAINING](build/CX-REMAINING.md).
+Next: grant-version fencing, stored-payload dispatch and transactional domain handlers. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22

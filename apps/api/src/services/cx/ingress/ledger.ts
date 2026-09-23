@@ -31,7 +31,7 @@ export function isVerifiedInbound(event: { channel: string; signatureOk?: boolea
   )
 }
 
-export interface InboundRecord {
+interface InboundRecordFields {
   channel: string
   eventType: string
   /** The channel's own id when it gives one; a body digest is used when it does not. */
@@ -46,6 +46,11 @@ export interface InboundRecord {
   lastError?: string | null
   status?: InboundStatus
 }
+
+/** Existing inline/broker flows stay opt-out; only eBay is being moved to this queue. */
+export type InboundRecord = InboundRecordFields & (
+  { queueForRetry?: false } | { channel: 'EBAY'; queueForRetry: true }
+)
 
 export interface InboundWriteResult {
   id: string | null
@@ -93,6 +98,10 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
   const status: InboundStatus = rec.status ?? (rec.signatureOk === false ? 'failed' : 'pending')
 
   try {
+    if (rec.queueForRetry && String(rec.channel) !== 'EBAY') {
+      logger.error('[cx-ingress] durable receipt scheduling is not configured for this channel', { channel: rec.channel })
+      return { id: null, duplicate: false }
+    }
     const id = crypto.randomUUID()
     const inserted = await prisma.webhookEvent.createMany({
       skipDuplicates: true,
@@ -107,6 +116,7 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
         providerTimestamp: rec.providerTimestamp ?? null,
         connectionId: rec.connectionId ?? null,
         status,
+        nextAttemptAt: rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending' ? new Date() : null,
         deliveries: 1,
         signatureOk: rec.signatureOk,
         verifiedBy: rec.verifiedBy,

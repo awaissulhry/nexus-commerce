@@ -5166,6 +5166,9 @@ model WebhookEvent {
   attempts      Int       @default(0)
   deliveries    Int       @default(0)
   nextAttemptAt DateTime?
+  // eBay processing ownership. Inline Shopify/SQS handling does not acquire a lease.
+  leaseToken    String?
+  leaseUntil    DateTime?
   // Tri-state on purpose: true = checked and passed, false = checked and
   // failed, null = this transport carries no signature. Amazon's SQS
   // notifications are unsigned JSON trusted via the queue's IAM policy, so
