@@ -47,6 +47,7 @@ import { resolveIntendedQuantity } from '../sync-control-core.js'
 import { priceDrift, priceDriftMessage } from '../price-readback.service.js'
 import { shopifyAdmin } from './admin-client.js'
 import { readShopifyAvailable, type LinkedListingRow } from './listing-write.service.js'
+import { recordChannelReadback } from '../channel-drift.service.js'
 
 export const SHOPIFY_QTY_READBACK = 'shopify-qty-readback'
 
@@ -213,6 +214,23 @@ export async function readBackShopifyQuantities(options: { heal?: boolean } = {}
           resolutionKind: resolution.kind,
           resolutionQuantity: (resolution as { quantity?: number | null }).quantity,
         })
+        // A-36 (Step 3.5a) — one ChannelDrift record per listing, before the quantity skips: a paused listing's price
+        // still counts. A field is only "compared" when both sides answered (priceDrift's and the verdict's own rules).
+        const qtyCompared = verdict.kind !== 'UNREADABLE' && verdict.kind !== 'SKIPPED'
+        const priceCompared = live.price != null && Number.isFinite(live.price) && listing.price != null
+        const compared = [...(qtyCompared ? ['quantity'] : []), ...(priceCompared ? ['price'] : [])]
+        if (compared.length) {
+          const intended = (verdict as { intended?: number | null }).intended
+          const differing = [
+            ...(qtyCompared && live.available !== intended ? [{ field: 'quantity', ours: intended, theirs: live.available }] : []),
+            ...(drift ? [{ field: 'price', ours: drift.intendedPrice, theirs: drift.channelPrice }] : []),
+          ]
+          // Best effort, and never this listing's verdict: a failed drift write must not turn into "unreadable".
+          try {
+            await recordChannelReadback({ channelListingId: listing.id, channel: 'SHOPIFY', marketplace: listing.marketplace ?? 'GLOBAL',
+              source: 'shopify-inventory-level', compared, differing })
+          } catch { /* observability best-effort */ }
+        }
         if (verdict.kind === 'UNREADABLE') { result.unreadable++; continue }
         if (verdict.kind === 'SKIPPED') { result.skipped++; continue }
 

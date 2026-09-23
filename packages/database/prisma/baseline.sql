@@ -9341,6 +9341,22 @@ CREATE TABLE "ReadinessIndex" (
 );
 
 -- CreateTable
+CREATE TABLE "ChannelDrift" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channelListingId" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "driftCount" INTEGER NOT NULL DEFAULT 0,
+    "driftedFields" JSONB NOT NULL DEFAULT '[]',
+    "lastCheckedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChannelDrift_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "SellerReferenceLabel" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -14240,6 +14256,15 @@ CREATE INDEX "ReadinessIndex_workspaceId_idx" ON "ReadinessIndex"("workspaceId")
 CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");
 
 -- CreateIndex
+CREATE INDEX "ChannelDrift_workspaceId_idx" ON "ChannelDrift"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ChannelDrift_driftCount_idx" ON "ChannelDrift"("driftCount");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelDrift_workspaceId_channelListingId_key" ON "ChannelDrift"("workspaceId", "channelListingId");
+
+-- CreateIndex
 CREATE INDEX "SellerReferenceLabel_workspaceId_idx" ON "SellerReferenceLabel"("workspaceId");
 
 -- CreateIndex
@@ -15240,4 +15265,7 @@ ALTER TABLE "ChannelListingTranslation" ADD CONSTRAINT "ChannelListingTranslatio
 
 -- AddForeignKey
 ALTER TABLE "ReadinessIndex" ADD CONSTRAINT "ReadinessIndex_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelDrift" ADD CONSTRAINT "ChannelDrift_channelListingId_fkey" FOREIGN KEY ("channelListingId") REFERENCES "ChannelListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

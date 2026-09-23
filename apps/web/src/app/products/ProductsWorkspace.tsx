@@ -291,6 +291,8 @@ export default function ProductsWorkspace() {
   const hasBrand = searchParams.get('hasBrand')
   const hasGtin = searchParams.get('hasGtin')
   const driftOnly = searchParams.get('driftOnly')
+  // A-36 (Step 3.5a) — listings whose CHANNEL holds a different value (ChannelDrift). `driftOnly` counts overrides.
+  const channelDrift = searchParams.get('channelDrift')
   // F.1 — recycle-bin lens. ?deleted=true flips the workspace into
   // soft-deleted-rows-only mode: the grid filters to deletedAt NOT
   // NULL, the bulk-action bar swaps Activate/Draft/Inactive/Tag/
@@ -520,13 +522,14 @@ export default function ProductsWorkspace() {
     if (hasBrand) qs.set('hasBrand', hasBrand)
     if (hasGtin) qs.set('hasGtin', hasGtin)
     if (driftOnly) qs.set('driftOnly', driftOnly)
+    if (channelDrift) qs.set('channelDrift', channelDrift)
     if (showDeleted) qs.set('deleted', 'true')
     qs.set('sort', sortBy)
     if (sortStack.length > 0) qs.set('sorts', sortStack.join(','))
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, showDeleted, sortBy, sortStack.join(',')])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, channelDrift, showDeleted, sortBy, sortStack.join(',')])
 
   const {
     data: productsData,
@@ -840,6 +843,7 @@ export default function ProductsWorkspace() {
       hasBrand: undefined,
       hasGtin: undefined,
       driftOnly: undefined,
+      channelDrift: undefined,
       page: undefined,
     })
   }, [updateUrl])
@@ -1062,7 +1066,7 @@ export default function ProductsWorkspace() {
   )
 
   // Reset selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), workflowStageFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly])
+  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), workflowStageFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, channelDrift])
 
   // P.15 — page-level keyboard shortcuts. Layered on top of the
   // global CommandPalette which owns Cmd+K / `?` / `/` / 'g <l>'
@@ -1136,7 +1140,7 @@ export default function ProductsWorkspace() {
     productTypeFilters.length + brandFilters.length + familyFilters.length + workflowStageFilters.length + tagFilters.length +
     fulfillmentFilters.length + missingChannelFilters.length +
     (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0) +
-    (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
+    (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0) + (channelDrift ? 1 : 0)
 
   // Secondary filter count — only the filters that live in the FiltersPopover
   // (status/channel/stock are shown inline in Row 2, not counted here).
@@ -1146,7 +1150,7 @@ export default function ProductsWorkspace() {
     (workflowStageFilters.length > 0 ? 1 : 0) + (tagFilters.length > 0 ? 1 : 0) +
     (fulfillmentFilters.length > 0 ? 1 : 0) + (missingChannelFilters.length > 0 ? 1 : 0) +
     (hasPhotos ? 1 : 0) + (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) +
-    (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
+    (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0) + (channelDrift ? 1 : 0)
 
   // FP.4 — build the dimension list for the shared FilterPopover.
   // Italian renderLabel for productType is preserved by pre-rendering
@@ -1250,12 +1254,22 @@ export default function ProductsWorkspace() {
     values: missingChannelFilters,
     onChange: (next) => updateUrl({ missingChannels: next.length > 0 ? next.join(',') : undefined, page: undefined }),
   })
+  // A-36 — this toggle counts listings with a field that does not follow the master; it never looks at a channel, so
+  // it is named for what it counts. (Its key stays, so a saved layout keeps working.)
   secondaryFilterDimensions.push({
     key: 'channelDrift',
-    label: 'Channel drift (has overrides)',
+    label: 'Has overrides',
     type: 'toggle',
     value: driftOnly === 'true',
     onChange: (next) => updateUrl({ driftOnly: next ? 'true' : undefined, page: undefined }),
+  })
+  // A-36 (Step 3.5a) — the channel's own value differs from ours (read back from the channel, stored in ChannelDrift).
+  secondaryFilterDimensions.push({
+    key: 'differsOnChannel',
+    label: 'Differs on the channel',
+    type: 'toggle',
+    value: channelDrift === 'true',
+    onChange: (next) => updateUrl({ channelDrift: next ? 'true' : undefined, page: undefined }),
   })
 
   const clearSecondaryFilters = () => updateUrl({
@@ -1268,6 +1282,7 @@ export default function ProductsWorkspace() {
     marketplaces: undefined,
     missingChannels: undefined,
     driftOnly: undefined,
+    channelDrift: undefined,
     hasPhotos: undefined,
     hasDescription: undefined,
     hasBrand: undefined,

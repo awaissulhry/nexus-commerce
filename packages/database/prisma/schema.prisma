@@ -1521,6 +1521,8 @@ model VariantChannelListing {
 model ChannelListing {
   translations  ChannelListingTranslation[]
   listingClaims ChannelListingClaim[]
+  /// PLAN Step 3.5a (A-36) — what the channel holds that differs from us, for THIS listing (at most one: `listing_drift`).
+  channelDrifts ChannelDrift[]
   // Business ownership comes from verified database context.
   workspaceId   String                      @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id            String                      @id @default(cuid())
@@ -19708,6 +19710,30 @@ model ReadinessIndex {
   @@index([channel, market, language, state])
   @@index([productId])
   @@index([workspaceId])
+}
+
+/// PLAN Step 3.5a (A-36, R-36) — what a CHANNEL holds that differs from what Nexus holds, per listing coordinate.
+/// ONE row per listing (the listing IS the coordinate: channel + market + account + alias). Written ONLY by
+/// `recordChannelReadback` (apps/api/src/services/channel-drift.service.ts), fed by the read-backs that already exist
+/// (Amazon's merchant-listings report: quantity + price; Shopify's inventory levels). Each source replaces only the
+/// fields it read. `driftedFields` = [{ field, ours, theirs, source, checkedAt }], capped at 50. A listing that was
+/// checked and matches keeps its row with `driftCount` 0 — "checked and clean" is not "never checked".
+model ChannelDrift {
+  workspaceId      String         @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String         @id @default(cuid())
+  channelListingId String
+  channelListing   ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  channel          String
+  marketplace      String
+  driftCount       Int            @default(0)
+  driftedFields    Json           @default("[]")
+  lastCheckedAt    DateTime
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([workspaceId, channelListingId], name: "listing_drift")
+  @@index([workspaceId])
+  @@index([driftCount])
 }
 
 /// LX.FIN (R-LX-24, on LX.R's R-LX-12) — the SELLER-OWNED reference labels, cached in the database.

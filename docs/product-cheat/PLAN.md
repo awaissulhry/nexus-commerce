@@ -6474,3 +6474,55 @@ disagreements (one local family, now a push-hook gate) · M3 ✅ (3,482 entries 
 25 Amazon·DE Italian titles are A-32, content deferred by R-34) · M4 = **0** (Step 2.4).
 **Closure:** Done when ✅ · Cost when `flat` ✅ · Gate ✅ (above) · Rollback — remove the test. 15.7 #2 (N coordinates a day
 on production) IS Step 3.5b's rotation — carried there (A-36).
+
+| # | Question | Ruling (2026-09-23, twenty-fourth set — the Owner: *"Yes, please go ahead. I'll go with your recommendations."*) |
+|---|---|---|
+| **R-36** | A-36 — Step 3.5 | ✅ **(a)** 3.5a: a `ChannelDrift` table fed by the existing read-backs, a real "differs on the channel" filter, the old filter renamed "Has overrides", the dedupe gains the market. 3.5b (content reads) comes back for approval |
+| **R-37** | A-37 — Step 1.3 | ✅ **(a)** Prove each unpublish mechanism live on one listing (eBay quantity 0 + out-of-stock control; Amazon merchant-fulfilled quantity 0; FBA stays refused), restore, then build |
+
+---
+
+## Step 3.5a — BUILT (A-36, R-36). What the channel holds that differs from us: one table, one writer, a real filter.
+
+| Where | What |
+|---|---|
+| `schema.prisma` + migration `20260923a_channel_drift` (additive: one table; row security emitted by `workspaceModelSql`, the AE.2 pattern) + `model-ownership.json` + `scoped-keys.json` | `ChannelDrift` — one row per listing (`listing_drift` = workspace + listing): `channel`, `marketplace`, `driftCount`, `driftedFields` (capped 50: field, ours, theirs, source, checkedAt), `lastCheckedAt` |
+| new `services/channel-drift.service.ts` | the ONE writer `recordChannelReadback` (a source replaces what it compared: differences stored, matches cleared, another source's entries kept; a checked-and-clean listing keeps its row at 0) + `productIdsWithChannelDrift` (drifted products and their parents) |
+| `jobs/amazon-qty-readback.job.ts` | `amazonDriftRecords` (the report's own skip rules: FBA stock never compared, no price on either side is not a drift, an unreported SKU is not recorded) → the writer, per listing; **both dedupes now per product AND market** (A-36 defect 2) |
+| `services/shopify/quantity-readback.service.ts` | the writer, per listing, before the quantity skips (a paused or unreadable listing's price still counts); a failed drift write never changes a listing's verdict |
+| `services/products/list-products.service.ts` | `channelDrift=true` narrows BOTH list paths (live table and read cache) |
+| web `app/products/ProductsWorkspace.tsx` | the old toggle is renamed **"Has overrides"** (what it counts; its key kept for saved layouts — A-36 defect 1); a new toggle **"Differs on the channel"** |
+
+**Not in 3.5a, stated:** eBay's read-back compares per product across shared SKUs (no listing id at the diff) — its mapping is
+the next slice; content reads are 3.5b (for approval). 🟠 **Local database:** two migrations are pending there — the channel
+lane's `20260922a_cx_etsy_shop_alias` (live on production) and this one; `migrate deploy` applies both. Not applied by this
+lane (another lane's migration on the shared local database). Until then, locally, the new toggle errors and the read-backs
+skip their drift write (best effort). Production gets the table with the next merge to `main` (additive).
+
+### Done when — ✅ (the plan's)
+A listing whose channel value differs from ours has a drift row, and the product list filters to it (the drifted child's
+PARENT row, on both list paths); a positive control with no difference has none (the clean product is not listed).
+
+### Gate — ✅ 13 new arms (writer 4, Amazon 3, Shopify 3, list 3), 10 mutations 10 red (Python harness, per-file backups, sha256 restored)
+
+| Mutation | Red |
+|---|---|
+| D1 a matching field is not cleared | writer arms |
+| D2 a source wipes another source's entries | writer arm |
+| D3 the filter forgets the parent | writer + list arms |
+| D4 the Amazon job stops writing drift | job arm |
+| D5 the quantity dedupe is per product only again | job arm (the fake log REMEMBERS, so a second market is swallowed) |
+| D6 FBA stock is compared | pure arm |
+| D7 Shopify counts an unreadable quantity as compared | Shopify arm |
+| D8 the live list path is not narrowed | list arm |
+| D9 the cache list path is not narrowed | 🟠 **escaped first** — the fixture's cache was empty, so the list never took the cache path. Fixed: the cache is filled by its real writer and the arm REQUIRES `useCache: true`. Then red |
+| D10 the migration loses its table | `check-schema-drift.mjs` |
+
+Also: my first Shopify wiring used `recordChannelReadback(…).catch()`, and the EXISTING Shopify arms caught it — a call that
+did not return a promise threw, and the loop counted the listing "unreadable". Now `try { await … } catch {}`.
+Database gates (table drift, column drift, model ownership, policy parity): all pass. `tsc`: api 0, web 0.
+🟠 **The push hook caught one thing I missed:** a fresh database is built from `prisma/baseline.sql` (Step 0.4), and the
+`@nexus/database` baseline test found the new table missing from it. Regenerated with `generate-baseline.mjs` (+28 lines,
+the table only); the package's tests pass (17/17).
+
+### Cost when — `flat` per read-back row (one read + one write per compared listing, inside jobs that already run). The filter adds one indexed query. Rollback — revert the commit; the migration is additive (drop the table to undo).
