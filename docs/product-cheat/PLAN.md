@@ -5862,3 +5862,40 @@ today; recorded for the channel-connections lane (P1.3's `resolveDestinations`),
 | M6 the door keeps legacy price keys (A-18's defect), on the new database | 🔴 RED — 8 failed: the moved file still catches its defect |
 
 ### Cost when — `flat`. Rollback — revert the commit.
+
+---
+
+## A-30 — BUILT (R-28). The nightly readiness sweep rotates, and its dry run counts. Step 2.7 waits only for the verify.
+
+| What | Where |
+|---|---|
+| `dueFamilies` returns EVERY due root, **oldest first** (never computed, then the oldest `computedAt`; a tie keeps the database's id order). One walk: roots 200 a page, each page's newest row per root by `groupBy … _max` on the `productId` index | `jobs/readiness-reconcile.job.ts` |
+| The job offers `countOutstanding` from the same predicate, so `planned` / `remaining` are numbers and the dry run prints *"N of N outstanding"* | same file |
+| New read-only tool: rows per business before / after the deploy, per UTC hour, the job's own `CronRun` rows, roots due now, products with no row since the deploy | `docs/product-cheat/tools/readiness-age.mjs` |
+
+### Done when — the build ✅; Step 2.7 itself ⏳
+
+- ✅ **Two nights, measured on the job itself** (scratch simulation, 500 families at 3 s, the cron's 10-min budget):
+  before — the same 200 every night, **300 never computed**; after — night 1 `f000–f199`, night 2 `f200–f399`, night 3
+  the last 100 then the oldest 100, **0 never computed**, night 4 moves on to the next oldest.
+- ✅ **Two instruments agree on the local catalogue:** `prod-run.mjs backfill --local` (dry run, new code) prints
+  **`42 of 42 outstanding`**; `readiness-age.mjs --local` counts **42** roots due. Before, the dry run printed no count.
+- ⏳ **Step 2.7 closes on the verify (R-28), read only, after the first nightly on production (02:17 on 2026-09-24, API
+  clock):** `CronRun` `readiness-reconcile` SUCCESS for both businesses, `stopped: complete`, 0 failed; no live product
+  without a row since the deploy. The deployed job is still the id-order one until the next merge to `main` — at 34
+  roots it covers the whole catalogue in one night either way. The session's safety check refuses the production run of
+  the tool; the Owner runs it.
+
+### Gate — ✅ 8 tests (6 adapted, 2 new), 5 mutations, 5 red (Python harness, per-file backup, sha256 restored)
+
+| Mutation | Red arms |
+|---|---|
+| A1 id order instead of oldest first (today's defect) | the three-nights arm, the horizon arm |
+| A2 never-computed families last | the three-nights arm, the horizon arm |
+| A3 no count offered to the sweep | the dry-run count arm, the three-nights arm (`planned: 12`) |
+| A4 the horizon ignored (every family due) | 5 arms |
+| A5 a stale family not due (only never-computed) | the three-nights arm, the horizon arm |
+
+Also: the resumable-sweep suite (10) green; `apps/api` `tsc --noEmit`: 0 errors.
+
+### Cost when — nightly still bounded at 10 min; the order costs one walk of every live root per batch (two indexed queries per 200 roots, ~100 at 10,000), against 25 families at 2–4 s each. A catalogue above one night's budget now refreshes every ⌈due ÷ families per night⌉ nights. Rollback — revert the commit; the data is derived.

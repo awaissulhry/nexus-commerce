@@ -67,7 +67,7 @@ been exercised.
 | **A-28** Three findings: organize undo leaves the store changed; eBay import overwrites type and bullets; the variant-attributes route stringifies objects | ✅ **RULED R-25 (a), BUILT** — undo restores both stores (snapshot inside the existing JSON, no migration); the import keeps type and bullets; objects refused by name; 5 mutations red | see `git log` |
 | **2.1 (b) on production** (2026-09-23) | ✅ **APPLIED by the Owner — Xavia Racing: `WROTE 5 rows`, count 5** (dry run first, `0 already required` before, `--revert` exact). ✅ Motovento: 0 rows (no cached schemas). **Done for both businesses** | — |
 | **A-21** Step 2.7's premise re-checked — the "after 2.1" rule protects nothing; ~2–4 s per family | ✅ **RULED R-15** — ordering rule struck. 🔴 **D-E NOT approved**; count production roots first | — |
-| **A-30** Step 2.7 measured again: the rows came from the old nightly job; the backfill dry run cannot see what is due; the new nightly recomputes every family tonight; 🔴 past its budget the nightly re-does the same first families forever | 🟡 **FOR YOUR RULING** — recommended: 2.7 becomes *verify the first nightly* (no production write), plus a small fix (oldest first; the dry run counts). Production age check needs your word | — |
+| **A-30** Step 2.7 measured again: rows from the old nightly; the dry run could not count; 🔴 past its budget the nightly re-did the same first families forever | ✅ **RULED R-28, BUILT** — oldest first + the dry run counts (`42 of 42` local, matching `readiness-age.mjs`); 500-family simulation: 300 never computed → 0; 5 mutations red. ⏳ **Step 2.7 closes on the verify** after the 02:17 nightly on 2026-09-24 (production read — the Owner runs `readiness-age.mjs`) | see `git log` |
 | **A-31** GitHub CI red on the deploy commit `0a563d6d5` | ✅ **RULED R-29, BUILT** — reset test on PGlite, race test skips without a test server and runs in the push hook's real-PostgreSQL stage (11/11); CI step here: 0 failed; 6 mutations red. 🟠 `main`'s CI turns green at the next merge. Found: the price door takes a second connection for an account-less listing (P1.3 owner) | see `git log` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -149,8 +149,9 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 `pes/phase-0` as `06b2bc485`: the merged tree is `main` plus `PROGRESS.md` only.
 **Vercel:** ✅ `0a563d6d5` deployed to Production. 🔴 **GitHub CI #4162 on it is red** — [A-31](PLAN.md) (two of this
 lane's test files need a real database at load).
-**Step 2.7:** [A-30](PLAN.md), for the Owner — nothing built, no production read. The read-only age tool
-(`tools/readiness-age.mjs`) was refused by the session's safety check and needs the Owner's word.
+**Step 2.7:** A-30 BUILT under R-28 (oldest first; the dry run counts). ⏳ Closes on the verify after the 02:17
+nightly on 2026-09-24: the Owner runs `node docs/product-cheat/tools/readiness-age.mjs` (read only; the session's
+safety check refuses it). **A-31 BUILT** under R-29 (CI's red step passes here; `main` turns green at the next merge).
 **A-29:** ruled R-27 — AIREON waits for a per-channel colour name; do not publish it to Amazon until then.
 **Still to do:** re-run `tools/axis-stores.mjs` after a day (2026-09-24): the legacy `va` counts must not grow.
 
