@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
-import { inboundBackoffMs, MAX_INBOUND_ATTEMPTS } from './ledger.js'
+import { inboundBackoffMs, MAX_INBOUND_ATTEMPTS, type ReplayOutcome, type ReplayRequest } from './ledger.js'
 
 export const EBAY_INBOUND_LEASE_MS = 180_000
 
@@ -35,6 +35,32 @@ const claimWhere = (claim: EbayInboundClaim): Prisma.WebhookEventWhereInput => (
 })
 const receiptSelect = { id: true, workspaceId: true, eventType: true, connectionId: true,
   payload: true, providerTimestamp: true, createdAt: true } as const
+
+/** An operator reset must serialize with a worker claim, and never steal its lease. */
+export async function queueEbayReplay(request: ReplayRequest): Promise<ReplayOutcome> {
+  const workspaceId = workspaceIdForQuery()
+  if (request.workspaceId && request.workspaceId !== workspaceId) return { ok: false, reason: 'wrong_workspace' }
+  return prisma.$transaction(async tx => {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "WebhookEvent" WHERE id=${request.id}
+        AND "workspaceId"=${workspaceId} AND channel='EBAY' FOR UPDATE`
+    if (!locked.length) return { ok: false, reason: 'not_found' }
+    const row = await tx.webhookEvent.findUniqueOrThrow({ where: { id: request.id },
+      select: { id: true, channel: true, eventType: true, status: true, archivedAt: true,
+        signatureOk: true, verifiedBy: true, nextAttemptAt: true, leaseToken: true, leaseUntil: true } })
+    if (row.signatureOk !== true || row.verifiedBy !== 'ebay_ecdsa') return { ok: false, reason: 'unverified' }
+    if (row.archivedAt) return { ok: false, reason: 'archived' }
+    const now = await databaseTime(tx)
+    if ((row.leaseToken && row.leaseUntil && row.leaseUntil > now) || (row.status === 'pending' && row.nextAttemptAt)) {
+      return { ok: false, reason: 'already_pending' }
+    }
+    await tx.webhookEvent.update({ where: { id: row.id }, data: {
+      status: 'pending', attempts: 0, nextAttemptAt: now, leaseToken: null, leaseUntil: null,
+      lastError: null, error: null, isProcessed: false, processedAt: null,
+    } })
+    return { ok: true, channel: row.channel, eventType: row.eventType }
+  }, transactionOptions)
+}
 
 /** Called while this transaction holds the receipt row lock. */
 async function extendLockedClaim(tx: Tx, claim: Pick<EbayInboundClaim, 'id' | 'leaseToken'>) {

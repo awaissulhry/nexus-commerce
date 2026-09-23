@@ -102,6 +102,11 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
       logger.error('[cx-ingress] durable receipt scheduling is not configured for this channel', { channel: rec.channel })
       return { id: null, duplicate: false }
     }
+    let nextAttemptAt: Date | null = null
+    if (rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending') {
+      const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+      nextAttemptAt = clock.now
+    }
     const id = crypto.randomUUID()
     const inserted = await prisma.webhookEvent.createMany({
       skipDuplicates: true,
@@ -116,7 +121,7 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
         providerTimestamp: rec.providerTimestamp ?? null,
         connectionId: rec.connectionId ?? null,
         status,
-        nextAttemptAt: rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending' ? new Date() : null,
+        nextAttemptAt,
         deliveries: 1,
         signatureOk: rec.signatureOk,
         verifiedBy: rec.verifiedBy,
@@ -341,6 +346,10 @@ export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> 
   if (req.workspaceId && row.workspaceId !== req.workspaceId) return { ok: false, reason: 'wrong_workspace' }
   if (!isVerifiedInbound(row)) return { ok: false, reason: 'unverified' }
   if (row.archivedAt) return { ok: false, reason: 'archived' }
+  if (row.channel === 'EBAY') {
+    const { queueEbayReplay } = await import('./ebay-claims.js')
+    return queueEbayReplay(req)
+  }
   // Refuse only what is ALREADY in the worker's queue. A `pending` row with no time
   // on it is not queued for anything — that is the shape a receiver leaves behind when
   // it dies between recording an arrival and handling it, and replay is the only way

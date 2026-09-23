@@ -37,7 +37,10 @@ C11b adds reviewed owner-only current-refresh-grant inspection (42 focused tests
 10 real PostgreSQL grant cases); it has no production caller.
 C11c adds reviewed atomic revocation/audit/owner notifications and receipt completion
 (16 real PostgreSQL cases, 121 existing regressions, five killed guard mutations).
-Next: receiver/worker/manual replay wiring, then transactional order and erasure handlers. Live-read probe
+C11d1 closes initial clock skew and manual-reset races (7 real PostgreSQL replay
+cases,15 claim cases,33 regressions and4 killed mutations; reviewed locally).
+Next: atomic unresolved-event warnings and receiver/worker/manual replay execution
+wiring, then transactional order and erasure handlers. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22

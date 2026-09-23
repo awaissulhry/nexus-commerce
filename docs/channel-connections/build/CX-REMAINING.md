@@ -282,3 +282,33 @@ receiver/worker/manual replay integration; initial DB-clock scheduling; bounded
 unresolved-notice retries and final owner warning; private lease fields in diagnostics.
 The old inline eBay receiver and legacy lifecycle wrapper remain until that integration
 replaces their execution path. No eBay topic has been declared ready or activated.
+
+## C11d1 — database scheduling and fenced manual replay
+
+**Implemented, tested and independently reviewed locally; not deployed.**
+
+Initial verified eBay scheduling now reads database time before its atomic receipt
+insert (one extra scalar read per scheduled arrival). The application clock cannot
+put a new receipt into the far future. The existing `replayInbound` entry point now
+sends eBay resets through a receipt-row lock and authoritative rechecks of the signature
+scheme, archive state, queue and active lease. A reset clears old lease tokens and
+error/processed fields, uses database time, and preserves payload/account/delivery
+identity. Other channel replay paths keep their existing behavior.
+
+Seven new real PostgreSQL cases pass, plus15 existing claim cases and33 ledger/retry
+regressions; API typecheck passes. The original implementation failed five of seven
+new cases: future scheduling, stale operator read versus worker claim, simultaneous
+operator resets, and a successful signature verdict with the wrong verifier. Tests
+observe actual lock blocking and use a controlled application clock. Applied/restored
+mutations each killed their intended control: application time for initial scheduling,
+application time for replay, removal of the replay row lock, and removal of the eBay
+verifier check. Independent review approved. Evidence: `c11d1-replay-red.log`,
+`c11d1-replay-final.log`, `c11d1-regressions.log`, `c11d1-typecheck.log`, and
+`c11d1-*-mutation.log` under `/private/tmp/cx-completion-20260922/`.
+
+This closes C10's initial-clock caveat. Canonical PostgreSQL registration requires173
+cases; the last full runner remains147, with subsequent additions tested separately.
+**Do not deploy this as a standalone replay activation:** the legacy route/worker still
+need C11d's stored-payload dispatcher integration. The new receipt/claim protocol and
+manual reset must ship together with that execution path; no topic activation follows
+from this slice alone.
