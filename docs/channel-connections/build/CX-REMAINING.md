@@ -757,3 +757,22 @@ Required rollout/rollback order (approval and actual observation still pending):
    compatible processors. They activate held receipts without rebinding or resetting.
 5. After any activation, roll back only to a protocol-aware build. Turning the flag
    OFF does not make rollback to0a safe: already scheduled retries remain old-visible.
+
+
+## I2 — faithful account fixtures after full-package verification (local)
+
+C11d7 is committed asf8f87e8af. The first whole-package hook passed23 database tests,
+policy/schema/security source gates and4603 web tests (13 skips), then correctly failed
+the full API suite:8 failed files,4 failed tests,11452 passed,335 skipped. Six files
+failed their setup; two reached four failing test cases. Every failure is the existing
+deployed ChannelConnection_active_account_key now faithfully installed by bootstrap:
+older fixtures created multiple active same-channel/null-marketplace/null-external-ID
+accounts, violating its documented sentinel uniqueness. The valid admission fixture
+was fixed in I1; the full suite exposed eight more of the same fixture class.
+
+Only those eight test files receive distinct synthetic externalAccountId values for
+their intentionally distinct accounts. All active flags, primary controls, aliases,
+account-isolation assertions and production constraints remain intact. The focused
+8-file/79-test rerun passes (c11-i2-fixtures.log). No skips, assertions, timeouts or
+production behavior changed. Independent fixture review approved. The full hook
+rerun is pending. Failed evidence retained as c11d7-prepush-first.log and c11d7-full-api-first.log.
