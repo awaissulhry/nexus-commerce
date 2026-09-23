@@ -8,6 +8,7 @@ import { readExcludedListingIds } from './variation-excluded.js'
 import { resolveBatch } from './mapping/resolve-batch.service.js'
 import { marketLanguages } from './market-languages.js'
 import { publishContentIssues, resolvePublishContent, requireReviewedContent } from './publish-review-gate.js'
+import { foreignOwnTextIssues } from './foreign-own-text.js'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -68,6 +69,11 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     for (const issue of publishContentIssues(content)) {
       if (issue.severity === 'ERROR' && !requireReviewedContent()) continue
       issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: issue.severity === 'ERROR' ? 'error' : 'warning' })
+    }
+    // A-32 (R-30) — a pinned own text that is the primary-language text, on a market that speaks another language.
+    for (const issue of foreignOwnTextIssues({ channel: scope.channel, marketplace: scope.marketplace, marketLanguages: languages,
+      product: product as any, parent: product.id === parent.id ? null : parent as any, listing: listing as any })) {
+      issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: 'warning' })
     }
   }
   const alias = destination.aliasKey ? await prisma.productListingAlias.findUnique({ where: { id: destination.aliasKey }, select: { label: true } }) : null

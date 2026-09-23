@@ -6191,3 +6191,47 @@ Existing suites: `mapping-payload` 6, `prepare-dispatch` 5, `outbound-sync` — 
 🟠 **NOT checked (A-33's open item stays open):** whether the cascade can select a content field (`item_name` …) — the
 studio sends content from the content resolver with its review gate, the cascade from the mapping cell. Neither the gate
 nor this build covers it. Carried to Step 3.5.
+
+---
+
+## A-32 — BUILT (R-30): counted on production; the publish preview names such a listing. The data decision is the Owner's.
+
+### Production count — read only (`tools/foreign-own-text.mjs`, `BEGIN READ ONLY`, rolled back; record `records/a-32-foreign-own-text-production-2026-09-23.txt`)
+
+Run 2026-09-23 under R-30 (the session's safety check allowed this read-only run). Positive control: 1,057 listings visible,
+452 on markets that do not speak Italian. The same tool on the local copy gives the same 25 as Step 3.2's M3.
+
+| Business · market | Listings | Own text = the Italian product text | Live |
+|---|---|---|---|
+| Xavia Racing · Amazon·DE | 214 | **25 — all titles** (0 descriptions, 0 bullets) | **21** |
+| Xavia Racing · Amazon·FR / ES | 115 / 123 | 0 | — |
+
+The 25: AIR-MESH-JACKET-MEN 6 (parent + 5), REGAL-JACKET 13 (parent + 12), VENTRA-JACKET 4 (parent + 3), IT-MOSS-JACKET 1,
+MISANO-JACKET-XS-BLACK 1. Motovento: none.
+
+### The preview line
+
+| Where | What |
+|---|---|
+| new `services/pim/foreign-own-text.ts` | `foreignOwnTextIssues(...)`: a PINNED own title / description / bullets equal to the product's (or parent's) primary-language text, on a market whose languages do not include it. A following listing is not named (R-LX-6 omits the missing language) |
+| `services/pim/studio-publication-plan.ts` | The studio publish preview adds it per product as a **warning**, naming the field: *"This Amazon · DE listing's own title is the Italian text, and it would go out as German. Give it German text, or let it follow the product."* |
+
+### Done when — the build ✅; the data ⏳ (the Owner's, per listing)
+The preview names a DE listing with a pinned Italian title; a German title, an Italian market and a following listing are
+not named (controls). **For the Owner:** the 25 listings — per listing, give it a German title, or let it follow the
+product (the title then follows; with no German product text R-LX-6 omits it, so Amazon keeps the title it has). Nothing
+is written by this build.
+
+### Gate — ✅ 7 arms (6 rule + 1 wiring), 5 mutations 5 red
+
+| Mutation | Red |
+|---|---|
+| F1 the preview does not call the rule | the wiring arm |
+| F2 a following listing is named too | rule + wiring |
+| F3 a market speaking the primary language is checked too | rule + wiring |
+| F4 the parent's text is ignored | rule (the parent arm) |
+| F5 the preview refuses instead of warning | the wiring arm |
+
+`tsc --noEmit`: 0. Related suites (studio publication, plan, database): 34 green.
+
+### Cost when — `flat` (three comparisons per product at preview). Rollback — revert the commit.
