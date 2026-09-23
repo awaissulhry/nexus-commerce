@@ -62,6 +62,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },
   { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
+  { name: 'private eBay admission (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 24 },
   { name: 'atomic grant versions (reconnect, rollback, inspection and concurrent replacement)', file: 'src/services/cx/grant-version-postgres.vitest.test.ts', expect: 10 },
   { name: 'credential maintenance races (rotation, backfill and rollback)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 11 },
   { name: 'transactional eBay revocation and unresolved owner warnings', file: 'src/services/cx/revocation-postgres.vitest.test.ts', expect: 25 },
@@ -150,8 +151,8 @@ try {
     const statuses = file?.assertionResults?.map((test) => test.status) ?? []
     const count = (status) => statuses.filter((s) => s === status).length
     const passed = count('passed'), failed = count('failed'), skipped = statuses.length - passed - failed
-    const ok = !!file && passed === suite.expect && failed === 0 && skipped === 0
-    const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped` : 'not in the report'
+    const ok = file?.status === 'passed' && passed === suite.expect && failed === 0 && skipped === 0
+    const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped; suite ${file.status}` : 'not in the report'
     return { suite, ok, line: `${suite.name}: ${detail} (expected ${suite.expect} passed)` }
   })
 
@@ -170,6 +171,10 @@ try {
     }
   }
   console.error(`Full local test evidence retained at ${reportDir}`)
+  // Hook failures can leave every assertion green and JSON's file.message empty.
+  // Surface the actual failure before ordinary application/Redis log noise.
+  const hookFailure = output.indexOf('Failed Suites')
+  if (hookFailure >= 0) console.error(output.slice(hookFailure).split('\n').slice(0, 40).join('\n'))
   console.error(output.split('\n').filter((l) => /FAIL|AssertionError|Error:|expected|skipped/.test(l)).slice(0, 40).join('\n'))
   process.exit(1)
 } finally {

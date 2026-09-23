@@ -15,6 +15,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Neither can be confused for the other.
  */
 import crypto from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -88,6 +89,19 @@ export function digestOf(body: Buffer | string | null | undefined): string | nul
  * the inbound payload as part of a failed INSERT diagnostic.
  */
 export async function recordInbound(rec: InboundRecord): Promise<InboundWriteResult> {
+  return persistInbound(prisma, rec)
+}
+
+/** A quarantine handoff must commit its business receipt and destination pointer together. */
+export async function recordInboundInTx(tx: Prisma.TransactionClient, rec: InboundRecord,
+  history?: { receivedAt: Date; deliveries: number },
+): Promise<InboundWriteResult> {
+  return persistInbound(tx, rec, history)
+}
+
+async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' | '$queryRaw'>, rec: InboundRecord,
+  history?: { receivedAt: Date; deliveries: number },
+): Promise<InboundWriteResult> {
   const payloadDigest = digestOf(rec.rawBody ?? null)
   const externalId =
     rec.externalId && rec.externalId !== ''
@@ -104,11 +118,11 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
     }
     let nextAttemptAt: Date | null = null
     if (rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending') {
-      const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+      const [clock] = await db.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
       nextAttemptAt = clock.now
     }
     const id = crypto.randomUUID()
-    const inserted = await prisma.webhookEvent.createMany({
+    const inserted = await db.webhookEvent.createMany({
       skipDuplicates: true,
       data: {
         id,
@@ -122,7 +136,8 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
         connectionId: rec.connectionId ?? null,
         status,
         nextAttemptAt,
-        deliveries: 1,
+        deliveries: history?.deliveries ?? 1,
+        ...(history ? { createdAt: history.receivedAt } : {}),
         signatureOk: rec.signatureOk,
         verifiedBy: rec.verifiedBy,
         payloadDigest,
@@ -133,7 +148,7 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
     if (inserted.count === 1) return { id, duplicate: false }
 
     try {
-      const existing = await prisma.webhookEvent.update({
+      const existing = await db.webhookEvent.update({
         where: {
           channel_externalId: workspaceKey({ channel: rec.channel, externalId }),
           eventType: rec.eventType,
@@ -141,7 +156,7 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
           signatureOk: rec.signatureOk,
           verifiedBy: rec.verifiedBy,
         },
-        data: { deliveries: { increment: 1 } },
+        data: { deliveries: { increment: history?.deliveries ?? 1 } },
         select: { id: true, status: true },
       })
       return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }

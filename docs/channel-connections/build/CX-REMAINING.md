@@ -350,3 +350,94 @@ The dispatcher must supply this strict callback on **both claim and finish paths
 Current-active/grant-changed uncertainty uses bounded retry, never an auth/rate hold
 that refunds the budget. Receiver/worker/manual execution wiring is still next and is
 required before a deployment package may activate this protocol.
+
+
+## C11d3 — verified admission, original ownership and private quarantine
+
+**Implemented, tested and independently reviewed locally.
+Not deployed, enabled or production-verified.**
+
+Admission owns a raw-byte snapshot and signature verification. It reads the official
+`notification.notificationId` and `notification.data.userId`; mutable username and
+legacy eiasToken are never routing fallbacks. The full revocation parser requires
+schema1.0, an explicit immutable userId and valid UTC revocation time; publication
+is a separate optional transmission time. Requiring userId is a conservative Nexus
+automation rule, not a claim that eBay documents it as mandatory.
+
+Known notices bind to exactly one owned OAuth account in the matching environment.
+An active account wins over its inactive history. Unknown/ambiguous verified notices
+remain encrypted in the application-scoped `EbayNoticeQuarantine`, never a default
+business ledger. Invalid signatures retain metadata/digest only: no raw body, header,
+ciphertext or KMS operation. RLS denies tenant readers; updates are column-limited,
+source proof is immutable and runtime deletion is denied. Production/sandbox public
+key caches and delivery namespaces are separate.
+
+Every delivery path serializes on environment/trust/provider ID. A narrow system-only
+lookup discovers the original receipt's workspace even when a later signed delivery
+changes or omits its subject; ambiguous historical bindings refuse admission. Its
+(channel, externalId) index avoids a full ledger scan. No payload crosses that lookup.
+An archived business cannot cause a second quarantine/receipt. Archived receipt retries
+increment only delivery history, preserving erased payload and terminal scheduling.
+
+Explicit owner adoption decrypts outside database locks, checks cipher/digest binding,
+rechecks current owner authority under workspace/user locks, and atomically writes the
+business receipt, immutable destination pointer and audit. Original known ownership
+survives later account transfer; unknown-first messages require explicit adoption.
+The same global delivery lookup also fences historical cross-profile handoff conflicts.
+A narrow system-only ownership SHARE-lock function closes first-admission/transfer
+races without granting runtime UPDATE rights to the ownership index. Existing bound
+receipts already block supported reassignment, including completed/archived receipts.
+A global admission-index table was considered and rejected as unnecessary for this
+supported transfer model; metadata lookup plus existing transfer guards suffice.
+
+Independent review exposed the changed-subject cross-profile duplicate, archived-
+workspace fallthrough and historical handoff conflict; all received regression cases.
+Other reproduced defects: invalid identifier control characters/calendar dates,
+archived-payload duplicate refusal and shared signing-key cache across environments.
+The signature regression uses real EC keys, including a negative cross-environment
+signature and a positive sandbox signature. Tests make no live vendor calls.
+
+Evidence in `/private/tmp/cx-completion-20260922/`:
+`c11d3-parser-controls-red.log` → `c11d3-parser-controls-green.log` (34 cases),
+`c11d3-admission-extension-red.log`, `c11d3-global-identity-red.log`,
+`c11d3-signature-environment-red.log` → `c11d3-regressions.log` (86 passing),
+and `c11d3-admission-reviewed-final.log` (23 realPG before the final historical-
+handoff case/metadata-only rejection amendment). Six applied/restored mutations
+were killed: ownership lock, original-profile lookup, cipher binding, owner recheck
+first-owner restriction and historical adoption binding. Final canonical result follows below.
+
+Deployment/activation prerequisites remain explicit: receiver/worker/manual replay
+wiring; cross-record reconnect fencing; bounded operational recovery and an owner
+adoption surface; quarantine key maintenance/archive policy and observable failures.
+Immutable ciphertext currently prevents routine re-encryption, so keys needed by
+unresolved quarantine must not be retired. The public receiver must return no internal
+workspace/receipt/quarantine IDs. No latency/SLO or complete AAA claim is made: current
+bounds are1MiB ingress,4 routing retries and30s transaction timeout, with verification
+and crypto outside locks; realPG establishes isolation and atomicity, not production
+latency. No UI is changed, so accessibility work remains with the operator surface.
+
+The revocation contract remains application-level with base OAuth scope. Sources:
+https://developer.ebay.com/updates/newsletter/q3_2021_news
+https://www.developer.ebay.com/develop/guides/buy/buy-communication-guide
+https://developer.ebay.com/develop/api/buy/notification_events
+The deletion topic's ACK/escalation contract is not generalized to revocation.
+Activation still needs the approved live catalogue/contract proof.
+
+Final review approved the bounded local foundation with no required source findings.
+Typecheck, model-ownership classification (447 models) and exact migration/policy-tail
+comparison pass. The first full canonical run used production-equivalent owner rights:
+all206 assertions passed, including the final24 admission cases, but the process
+correctly failed because assortment/copy-unknown-market teardown reported
+`permission denied to terminate process` at `DROP DATABASE ... WITH (FORCE)`.
+The isolated3-case suite then passed unchanged. The failing run is retained as
+`c11d3-canonical-postgres.log`, with full output under the runner's reported temp path;
+this is not relabeled green. PostgreSQL limits FORCE to sessions the current role may
+terminate (https://www.postgresql.org/docs/17/sql-dropdatabase.html). The remaining
+backend's identity was not captured, so its precise origin is not established.
+The unchanged full recheck **passes206 assertions/17files/zero skips**, including
+all24 admission cases, in `c11d3-canonical-postgres-recheck.log`. This supersedes the
+old147 full-run baseline for local engineering evidence, not the retained failed run.
+The unexplained cleanup backend is a test-harness reproducibility limitation, not a
+production assertion. Gate diagnostics now also require each file's passed status
+and surface failed-suite/hook details before unrelated logs; no timeout, assertion,
+role, or hook was weakened. No broader rerun is warranted after the successful gate.

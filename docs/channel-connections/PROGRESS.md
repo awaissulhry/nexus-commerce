@@ -41,6 +41,7 @@ C11d1 closes initial clock skew and manual-reset races (7 real PostgreSQL replay
 cases,15 claim cases,33 regressions and4 killed mutations; reviewed locally).
 C11d2 adds reviewed atomic unresolved-event warnings (domain suite25 real PostgreSQL
 cases,121 regressions,4 killed mutations), including crash exhaustion and replay dedupe.
+C11d3 adds locally tested private admission/quarantine and original delivery ownership; review,86 regressions,6 killed mutations and the206-case realPG gate pass (zero skips); see CX-REMAINING. It is unshipped. A newly confirmed cross-record reconnect race remains next: row-level grantVersion alone does not fence a newer grant on another connection for the same seller.
 Next: receiver/worker/manual replay execution wiring, then transactional order and
 erasure handlers. All new slices remain local. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.

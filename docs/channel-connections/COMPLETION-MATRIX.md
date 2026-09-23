@@ -39,6 +39,10 @@ verification, not a completion declaration for every channel flow. The additive 
 alias migration is the approved data change. Separately prepared vendor probes,
 connection deletion, new channel activation and P7 drops have not been executed.
 
+C11d3 private eBay admission is local only; original-profile and quarantine race
+proofs are in [CX-REMAINING](build/CX-REMAINING.md). Cross-record reconnect fencing,
+execution wiring, operational recovery/key maintenance and activation remain open.
+
 | Requirement | Implementation / test evidence | Deployed | Enabled / production proof | Remaining acceptance | Dependency |
 |---|---|---|---|---|---|
 | P0.1 | Gateway mode guards; build/P0.1.md | Baseline | Production modes need fresh read; no per-operation proof | Preserve zero-call fixtures; audit live enabled operations | Live proof |

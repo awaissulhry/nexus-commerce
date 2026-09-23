@@ -22,6 +22,7 @@
     "WorkspaceMemberAccount",
     "ChannelAccountGrant",
     "ChannelAccountOwnership",
+    "EbayNoticeQuarantine",
     "AssortmentShare",
     "CatalogLink",
     "StockPoolGrant",

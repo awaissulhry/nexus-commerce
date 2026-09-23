@@ -5132,6 +5132,7 @@ model PasswordResetToken {
 // ── Webhook Event Tracking ─────────────────────────────────────────
 
 model WebhookEvent {
+  ebayQuarantine EbayNoticeQuarantine?
   // Business ownership comes from verified database context.
   workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String    @id @default(cuid())
@@ -5185,10 +5186,41 @@ model WebhookEvent {
   @@unique([workspaceId, channel, externalId], name: "channel_externalId", map: "WebhookEvent_channel_externalId_key")
   @@index([isProcessed])
   @@index([channel])
+  @@index([channel, externalId])
   @@index([channel, providerTimestamp])
   @@index([status, nextAttemptAt])
   @@index([connectionId])
   @@index([workspaceId])
+}
+
+// Application-scoped eBay notices whose business/account cannot yet be established.
+// No tenant-facing payload reader. Ciphertext and routing proof are immutable;
+// a reviewed handoff links the one business ledger row without deleting this history.
+model EbayNoticeQuarantine {
+  id                    String    @id @default(uuid())
+  environment           String
+  signatureOk           Boolean   @default(false)
+  externalId            String
+  topic                 String
+  subjectHash           String?
+  firstOwnerWorkspaceId String?
+  // Rejected signatures retain metadata/digest only, never arbitrary private bodies.
+  payloadEnc            String?
+  payloadKeyId          String?
+  payloadDigest         String
+  verificationKeyId     String?
+  receivedAt            DateTime  @default(now())
+  lastReceivedAt        DateTime  @default(now())
+  deliveries            Int       @default(1)
+  reason                String
+  resolvedWorkspaceId   String?
+  resolvedReceiptId     String?   @unique
+  resolvedReceipt       WebhookEvent? @relation(fields: [resolvedReceiptId], references: [id], onDelete: Restrict)
+  resolvedAt            DateTime?
+
+  @@unique([environment, signatureOk, externalId])
+  @@index([subjectHash, receivedAt])
+  @@index([firstOwnerWorkspaceId, resolvedAt])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────
