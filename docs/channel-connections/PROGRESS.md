@@ -55,7 +55,10 @@ are corrected in reviewedc65db206b (79 focused tests). Full package gate passes:
 11504API,4603web,256realPG/zero skips,both builds,127security,2725RBAC/0unmapped;
 profiles ratchet41known failing/217tests,none new/worse. See I2 for skips/evidence.
 U1 migrates the changed retention card to shared DS controls; real-browser proof,
-final typecheck/build and independent review pass. Next UI defect: Ingress treats eBay202/queued replay as completed success.
+final typecheck/build and independent review pass (fad6d5f60). U2 fixes Ingress202/queued
+feedback and keyboard focus locally:28 tests,2 killed mutations, actual-browser response
+proof, independent review and final build pass. Quarantine recovery/key
+maintenance is next, followed by remaining channel handlers and operational proof.
 
 
 ### Approved production release — 2026-09-22

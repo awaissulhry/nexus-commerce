@@ -821,3 +821,33 @@ IngressTab still says “Replayed, and it succeeded” for any2xx replay respons
 the truthful new eBay API can return202/queued:true for deferred/retry/another worker.
 Correct that display with response-contract regression/browser proof before release.
 Quarantine recovery/operator visibility/key maintenance and all matrix work remain.
+
+
+## U2 — truthful replay feedback and retained keyboard focus (local)
+
+Ingress previously rendered every2xx replay as completed, including the new eBay
+202/queued response. A response-contract helper now renders queued work as info/Queued,
+confirmed synchronous completion as success/Completed, and failed/invalid responses
+as Result not confirmed. It retains legacy200/success:true completion semantics.
+An HTTP error with queued:true stays an error. Retry requires an explicit queue
+acknowledgement. The one-minute promise is removed. The list reloads even after an
+ambiguous/failed response because durable work may still have been queued.
+
+Actual browser testing revealed refresh unmounted the action row and lost keyboard
+focus to the body. A named result region now receives focus after each response and
+remains mounted through refresh; it is outside normal tab order. Existing DS Banner
+status/alert semantics remain. Review corrected overbroad “unfinished work stays
+queued” copy; terminal/unsupported outcomes need not remain queued.
+
+Evidence: c11-u2-notice-red.log reproduces original feedback failures after extracting
+the existing UI decision; final15 response-contract cases plus13 grid/detail cases
+pass. Two restored mutations remove queued classification and success-envelope checks;
+they fail4/5 intended assertions respectively. Actual IngressTab+NexusGrid+DS under
+localhost synthetic HTTP202/200/503 proves Queued/Completed/error and corresponding
+refreshed totals. ingress-preview/outcomes.json, layout.json (390/1280 light/dark,
+no page overflow, keyboard Enter) and focus-result.json (all3 outcomes retain named
+region focus with native visible outline). This is local browser proof, not a live
+channel call, full-auth integration or production observation. Test server/tab closed,
+viewport restored. Independent final review approves. Final 28 regressions and web
+production build pass (c11-u2-final-regressions.log, c11-u2-final-build.log); the build
+also completes its TypeScript gate. No production or provider call was performed.

@@ -17,11 +17,12 @@
  * uses — so the two screens cannot disagree about what a status means.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, Banner, Field, Listbox, MetricStrip, EmptyState } from '@/design-system/components'
 import { Button, FilterChip, Skeleton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { InboundGrid, inboundStatusOf, type InboundRow, type InboundStatus } from './ChannelEventsGrid'
+import { inboundActionNotice, type InboundActionNotice } from './inbound-action-notice'
 
 const STATUSES: Array<{ id: InboundStatus; label: string; hint: string }> = [
   { id: 'dlq', label: 'Dead letters', hint: 'Out of attempts. Nothing will try these again.' },
@@ -51,8 +52,12 @@ export function IngressTab() {
   const [totals, setTotals] = useState<Totals | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
+  const [notice, setNotice] = useState<InboundActionNotice | null>(null)
+  const noticeRef = useRef<HTMLDivElement>(null)
   const [reload, setReload] = useState(0)
+
+  // Reloading can remove the action row; keep keyboard users at its result.
+  useEffect(() => { if (notice) noticeRef.current?.focus() }, [notice])
 
   useEffect(() => {
     let live = true
@@ -79,18 +84,13 @@ export function IngressTab() {
     try {
       const res = await fetch(`${api}/api/sync-logs/webhooks/${id}/${action}`, { method: 'POST', credentials: 'include' })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body?.error ?? `The ${action} did not succeed (HTTP ${res.status}).`)
-      setNotice({
-        tone: 'success',
-        text: action === 'retry'
-          ? 'Queued. The retry worker picks it up within a minute.'
-          : 'Replayed, and it succeeded.',
-      })
-      setReload((n) => n + 1)
+      setNotice(inboundActionNotice(action, res.status, body))
     } catch (e) {
-      setNotice({ tone: 'danger', text: e instanceof Error ? e.message : String(e) })
+      setNotice({ tone: 'danger', title: 'Result not confirmed', text: e instanceof Error ? e.message : String(e) })
     } finally {
       setBusyId(null)
+      // A failed response can still leave a durable queued receipt. Read its state.
+      setReload((n) => n + 1)
     }
   }, [api])
 
@@ -157,7 +157,9 @@ export function IngressTab() {
         </div>
 
         {error && <Banner tone="danger" title="The list could not be read">{error}</Banner>}
-        {notice && <Banner tone={notice.tone} title={notice.tone === 'success' ? 'Done' : 'That did not work'}>{notice.text}</Banner>}
+        {notice && <div ref={noticeRef} tabIndex={-1} role="region" aria-label={`Event action: ${notice.title}`}>
+          <Banner tone={notice.tone} title={notice.title}>{notice.text}</Banner>
+        </div>}
 
         {rows === null ? <Skeleton height={220} /> : (
           <InboundGrid
@@ -171,7 +173,7 @@ export function IngressTab() {
       {stuck.length > 0 && (
         <Card
           header={`${stuck.length} event${stuck.length === 1 ? '' : 's'} need attention`}
-          description="Retry puts an event back in the worker's queue. Replay runs it now and tells you what happened."
+          description="Retry queues an event. Replay attempts processing now. Check the event for its final result."
         >
           <ul className="nds-ingress-stuck">
             {stuck.map((row) => (

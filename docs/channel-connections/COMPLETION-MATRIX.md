@@ -15,20 +15,18 @@ scope: Amazon, eBay, Etsy. Shopify stays connected; P8 stays deferred.
 
 Current source audit: three independent reviewers plus main-session source/contract
 inspection. Fresh production evidence and new slices: [CX-COMPLETION](build/CX-COMPLETION.md).
-New local continuation: [CX-REMAINING](build/CX-REMAINING.md). C9's atomic receipt
-identity fix is reviewed, with eight real PostgreSQL cases and 70 existing regressions
-passing. C10 adds the reviewed claim/atomic-completion foundation with 15 real PostgreSQL
-cases and three killed guard mutations. Both are local, not deployed. Receiver integration
-and domain idempotency remain open. C11a also has reviewed grant-version/credential
-maintenance fencing: 18 real PostgreSQL cases, 118 regressions and five killed
-mutations. C11b adds reviewed owner-only refresh-grant evidence (42 focused tests,
-10 real PostgreSQL grant cases). C11c adds the reviewed atomic revocation domain
-transaction (16 real PostgreSQL cases,121 regressions,5 killed mutations). These
-remain local. C11d1 adds reviewed DB-clock scheduling and fenced operator reset
-(7 real PostgreSQL replay cases). Receiver/worker/manual execution integration remains
-open and must accompany deployment of the new replay protocol. C11d2 adds reviewed
-atomic unresolved-event warnings (domain suite25 realPG,121 regressions,4 killed
-mutations), still local and requiring dispatcher wiring.
+New local continuation: [CX-REMAINING](build/CX-REMAINING.md). C9–C11d7 implement
+atomic receipt identity, durable claims, grant generations, current-refresh inspection,
+transactional revocation/owner warnings, private admission and same-/cross-record
+seller fences, stored receipt execution, archive-never-delete, and rolling-deployment
+holds. They are independently reviewed locally and remain undeployed/default-OFF.
+I1/I2 integrate only published main and make bootstrap/test fixtures match deployed
+constraints. The full local package gate passes on c65db206b (256 realPG/zero skips,
+11504 API,4603 web,both builds,127 security; detailed skips/ratchet in build record).
+U1 adds reviewed shared retention fields with real-browser/typecheck/build proof.
+U2 corrects Ingress queued/completed feedback and preserves keyboard focus; see its
+current build record. Quarantine recovery/key maintenance, transactional order/erasure
+work and all channel-specific operational dependencies below remain open.
 The Owner approved deployment. Final commit `439d9e3d3` (C1–C8 plus two verification
 repairs) is pushed to main and serving in production. At 21:54Z: native Railway
 SUCCESS, exact health/readiness build, protected diagnostic GET401, migration
@@ -66,14 +64,14 @@ proof remains dated. New continuation slices are still unpushed/undeployed.
 | P1.6 | Approved groups removed; build/P1.6-delete-list.md | Baseline | Remaining live dependencies retained | Do not equate zero traffic with unneeded fallback | New deletions separately |
 | P1.7 | Preview and ended-listing guards; build/P1.7.md | Baseline | Historical fixtures; partial flat-file cap amendment | Keep approved 200-row preview policy and guard mutations | Live proof |
 | P1.8 | contract/channel-contracts.ts has only four checks | Baseline | Switch historically on; accounts absent; coverage partial | Add supported contract coverage/partial state; configure test accounts | Test accounts + channel calls |
-| P2.1 | C9–C11d5 local durable admission/claims/processing/replay;233 realPG/176 regressions/9 wiring mutations | C1 in published baseline; new protocol local only | New processing defaults OFF; no live signal proof | C11d6 local archive14 realPG/91 regressions and DB guards; C11d7 rollout9 realPG/5 mutations. Quarantine recovery/key maintenance and live delivery/recovery proof remain | Implementation + approved deployment/activation |
+| P2.1 | C9–C11d7 local durable protocol, archive and rolling holds; package256 realPG/zero skips | C1 in published baseline; new protocol local only | New processing defaults OFF; no live signal proof | C11d6 local archive14 realPG/91 regressions and DB guards; C11d7 rollout9 realPG/5 mutations. Quarantine recovery/key maintenance and live delivery/recovery proof remain | Implementation + approved deployment/activation |
 | P2.2 | Amazon per-type subscriptions and parsing; build/P2.2.md | Baseline | New types gated; every type arrival not proven | Actual subscription inventory and per-type real arrivals | Live calls/subscriptions |
 | P2.3 | eBay notifications.ts/routes/handlers independently audited | C3/C8 deployed 439d9e3d3 | Startup log proves automatic setup disabled; no new subscription provisioned | C3 transport/status fixed; C8 readiness/explicit activation hold (83 tests); revocation processor now locally wired; operational quarantine, account-token topic coverage and real delivery remain open | Implementation + approved catalogue/activation |
 | P2.4 | Shopify reconciliation/lifecycle; build/P2.4.md | Baseline | Store connected; no fresh uninstall/privacy proof | Preserve connection and regression coverage | Any test uninstall/write |
 | P2.5 | Etsy receiver/receipts; C2 contract/routing: 35 focused + 5 real PostgreSQL tests | C2 deployed 439d9e3d3 | Migration checksum/finished state and exclusive shop57783036→Motovento route verified;12 scopes preserved | Finish transactional ingest/poll; register4 actual events and prove freshness | Stock policy/history boundary + registration/live call |
 | P2.6 | C11a–d5 local: current-grant and seller fences; atomic revocation/owner warnings; receiver/worker/manual wiring;25 domain/10 seller/17 processor realPG | Legacy baseline only | Production still has the old path; new processing remains undeployed/OFF | Operational quarantine readiness and real signal/reconnect proof | Implementation + approved deployment/activation/live event |
 | P2.7 | AMS dedupe and subscription check; build/P2.7.md | Baseline | Every live profile hourly arrival not freshly proved | Per-profile dataset/read controls | Live read if needed |
-| P2.8 | Ingress DS tab; C11d5 local stored-ID replay/readiness preflight and private lease omission | C1 in published baseline; new routes local | No new UI/browser proof | Quarantine operator surface and browser keyboard/responsive verification | Implementation + browser observation |
+| P2.8 | Ingress DS tab; C11d5 local stored-ID replay/readiness preflight and private lease omission | C1 in published baseline; new routes/UI local | U2 synthetic actual-Ingress browser proof; no new production UI observation | Quarantine operator surface and browser keyboard/responsive verification | Implementation + browser observation |
 | P3.1 | Gateway error vocabulary; build/P3.1.md real/shape fixtures | Baseline | No new outgoing call measured | Preserve channel codes/messages and fixture distinctions | None local |
 | P3.2 | ListingIssue recorders and suppression job; build/P3.2.md | Baseline | Suppression pull defaults off; one-minute live rejection proof missing | Verify switch, listing attribution and rejected-change timing | Production enablement/live call |
 | P3.3 | cx/account-calls.service.ts; studio syncQueue.ts says ListingIssue dormant | Baseline partial | Diagnostics exists; studio rejection pane not built | Finish shared listing-error presentation with studio boundary respected | Deployment |
@@ -109,13 +107,13 @@ proof remains dated. New continuation slices are still unpushed/undeployed.
 | Dimension | Acceptance threshold | Current proof / unresolved evidence |
 |---|---|---|
 | Correctness | Exact money/currency/quantity semantics; zero duplicate financial effects; no quiet partial reads | C4 correct identifiers, rejects partial pagination, performs zero money writes. Monetary reconciliation/cutover still open. |
-| Account isolation | Every write and inbound action names exactly one owner; foreign/missing/ambiguous identity causes zero effects | C2 five real PostgreSQL routing tests including alias collisions; finance account binding mutation killed; C7 owner-profile notification isolation proved. eBay processors and Etsy ingest remain. |
+| Account isolation | Every write and inbound action names exactly one owner; foreign/missing/ambiguous identity causes zero effects | C2 five realPG routing cases; C11d3 admission24 and C11d4 seller10 realPG cases, stored processor17 and rollout9 cases. Quarantine operator access and transactional order/stock isolation remain. |
 | Security | Invalid/missing verification executes zero handlers; credentials never in diagnostics; no auth bypass | C1 38 tests/two killed mutations; existing boolean-only credential report retained. KMS/Neon rotation still Owner dependencies. |
-| Resilience | Failed work remains recoverable; sign-in/rate holds spend zero row retries; no premature SUCCESS | C3 real CronRun recorder tests; C5 77 tests and native Shopify resume proof. eBay durable replay remains. |
+| Resilience | Failed work remains recoverable; sign-in/rate holds spend zero row retries; no premature SUCCESS | C3/C5 deployed guards; C9–C11d7 local durable claims/replay/warnings and archive races, including five rollout and six archive mutations. Production delivery/recovery observation remains. |
 | Performance | Bounded traversal/work, account concurrency preserved; measure real latency/backlog against P3.6 targets | Notification reads max20 pages/collection, finances max50 pages, retry drain max200 rows. No production p95/positive-load claim yet. |
 | Accessibility | Existing DS controls; keyboard-only critical paths, responsive 390/1280 widths, light/dark; no serious/critical accessible-name/focus violations | U1 actual retention component uses shared DS Card/Field/Input/Button: key-by-key typing, validation, keyboard/focus,320–1440 widths and light/dark checked with synthetic local data; hint contrast5.32/7.38. Full-app Ingress/Diagnostics and studio errors remain unverified; no WCAG AAA claim. |
 | Observability | Failed/rejected/unknown events remain visible; complete=true/healthy only with positive evidence; owning-profile alerts | C1 rejects remain in ledger; C3 failed cron persists FAILED; empty/partial compare explicit. C7 persists rotation owner alerts; production delivery still unobserved. |
-| Maintainability | Named slice commits, independent review, typecheck, canonical ratchets, no new suppressions/skips/weakened hooks | C1–C8 reviewed; final full API11215passed/137skipped/zero errors. Final canonical passed both builds,4591web,124security,106realPG/zero skips,RBAC2724/0unmapped. Profiles ratchet41known failing/217tests,none new/worse; one fixed exception removed. |
+| Maintainability | Named slice commits, independent review, typecheck, canonical ratchets, no new suppressions/skips/weakened hooks | C9–C11d7/I1/I2 locally reviewed. Canonical on c65db206b:11504API/287skips,4603web/13skips,both builds,127security,256realPG/zero skips,RBAC2725/0unmapped. Profiles ratchet41known failing/217tests,none new/worse. U1/U2 have separate UI proofs; next push reruns hooks. |
 
 P7's green week and each destructive-drop approval remain mandatory. The approved deployment and additive Etsy alias migration are now applied. No
 connection deletion, manual credential change, channel activation or P7 drop was performed.
