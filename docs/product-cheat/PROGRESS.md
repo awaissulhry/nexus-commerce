@@ -1,6 +1,6 @@
 # The Product Sheet — PROGRESS
 
-**Updated 2026-09-22. Branch `pes/phase-0` — 40 commits ahead of `main`, all pushed. Nothing
+**Updated 2026-09-23 (handoff 2 below). Branch `pes/phase-0` — 40 commits ahead of `main`, all pushed. Nothing
 merged, so nothing is deployed and nothing has migrated production.**
 
 **Latest continuation:** **Step 2.2 part 2 is BUILT** under **R-11** (A-18 (a)): the sheet writes
@@ -140,6 +140,41 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 ---
 
 ## Next — start here
+
+### Where this lane stands — handoff 2, 2026-09-23 ~09:00 (READ THIS FIRST; the older handoff below is history)
+
+**DEPLOYED.** `pes/phase-0` was merged with `main` in a separate worktree and pushed to `main` by the Owner:
+`main` = **`0a563d6d5`** ("merge: main into pes/phase-0 for its deploy"). Railway deploy `7cdbe141` **SUCCESS 06:46 UTC**
+(health check passed; the only error lines are the old pg SSL warning and `[fleet-workflow] clock resync failed`, which
+the previous deploy had too). Vercel deploys from `main` on its own — **not checked** from this session.
+
+**Closed today (all pushed, all four closure fields, mutation-proven):** Step 2.6 (a, b, c1, c2, c3, d — one store
+for a child's size/colour, R-23/R-24/R-26) · A-28 (R-25) · Step 2.1 (b) on production for both businesses (Xavia 5 rows;
+Motovento 0). Production data runs done **on the Owner's authorisation**: 2.6d fill (78 products, record in
+`docs/product-cheat/records/`, `prod-run.mjs fill-axes --revert <file>` undoes it).
+
+**Open, in order:**
+1. 🔴 **Step 2.7's premise changed — MEASURE before any write.** Production already holds **9,886 `ReadinessIndex`
+   rows** (the plan said 0). `prod-run.mjs backfill` dry run: `9886 → 9886`, nothing due, no count of stale families
+   printed. Unknown: when those rows were computed and whether the deployed nightly sweep (15.1) recomputes them under the
+   new rules. The read-only age check was stopped by the Owner before it ran — ask before re-running it. Likely outcome:
+   Step 2.7 becomes "verify the nightly sweep ran", not a one-shot — an amendment for the Owner.
+2. **Post-deploy checks:** re-run `tools/axis-stores.mjs` after a day — the legacy `va` counts must not grow (only the
+   two flat-file creates still write it); confirm the Vercel deploy of `0a563d6d5`.
+3. **A-29** (AIREON colour: store holds eBay's `Nero Neo | Giacca`, Amazon says `Nero Neo`): RULED — a per-channel value
+   name as its own later step; **do not publish AIREON to Amazon until then.** Nothing was sent.
+4. **Git housekeeping:** the shared tree's `pes/phase-0` has one unpushed docs commit (this handoff) and does NOT contain
+   the merge — merge `origin/main` into it (or fast-forward) before new work. The deploy worktree
+   `/private/tmp/nexus-product-cheat-deploy-20260923` (branch `deploy/product-cheat-20260923`, own `node_modules`, a
+   placeholder non-local root `.env` for the R-VT-12 guard) can be removed with `git worktree remove` once not needed.
+5. Still blocked: 1.3 / Phase 3 on 3.1 (credentials); 0.3 (rotation) is the Owner's — do not raise it. Deploy checklist
+   left: the 256 DE/ES Amazon stock rows marked sent for Italy (needs 3.1). Unruled: D-F, D-G, the third readiness
+   vocabulary.
+
+**Session rules learned today:** this session's safety check blocks production access and deploys unless the Owner
+authorises in the chat; even then, a push to `main` and the merge commit leading to it were refused — the Owner ran
+those two commands. A real-database gate belongs on `formulaDatabase()` unless it tests a race (3 `concurrentDatabase()`
+files overflowed the local lock table). `AXIS_SYNONYM_GROUPS` has a no-touch flat-file mirror + parity test.
 
 ### Where this lane stands — handoff, 2026-09-23 (read this first)
 
