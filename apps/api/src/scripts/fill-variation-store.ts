@@ -69,8 +69,8 @@ async function main() {
     const fills = actions.flatMap((a) => a.fills.map((f) => ({ sku: a.sku, ...f })))
     const drops = actions.flatMap((a) => a.drops.map((d) => ({ sku: a.sku, ...d })))
     console.log(`database ${database} · business ${WORKSPACE} · ${rows.length} live children · ${rows.filter((r) => r.ebaySpecifics).length} with an eBay·IT listing`)
-    console.log(`PLAN — ${actions.length} products: ${fills.filter((f) => f.axis === 'size').length} sizes and ${fills.filter((f) => f.axis === 'color').length} colours filled from eBay·IT, ${drops.length} contradicting legacy values dropped`)
-    for (const f of fills) console.log(`   FILL  ${f.sku.padEnd(40)} ${f.axis.padEnd(5)} ${f.key} = ${JSON.stringify(f.value)}`)
+    console.log(`PLAN — ${actions.length} products: ${fills.filter((f) => f.axis === 'size').length} sizes and ${fills.filter((f) => f.axis === 'color').length} colours filled from eBay·IT (${fills.filter((f) => f.from === 'siblings').length} in the family's own words), ${drops.length} contradicting legacy values dropped`)
+    for (const f of fills) console.log(`   FILL  ${f.sku.padEnd(40)} ${f.axis.padEnd(5)} ${f.key} = ${JSON.stringify(f.value)}${f.from === 'siblings' ? '   (the family\'s name for eBay\'s value)' : ''}`)
     for (const d of drops) console.log(`   DROP  ${d.sku.padEnd(40)} legacy ${d.key} = ${JSON.stringify(d.legacy)} (the store says ${JSON.stringify(d.store)})`)
 
     if (!APPLY) { console.log('\n(dry run — pass --apply to write; it saves a record for --revert first)'); return }

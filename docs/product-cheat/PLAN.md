@@ -5634,9 +5634,18 @@ so a bag with `Taglia: XXL` (agrees) and `Size: XS` (contradicts) kept the wrong
 fails on the old line. Mutations: siblings' key ignored · fill over a stored value · fill over a legacy-only value ·
 drop of an agreeing value · an eBay list value not unwrapped. Full `apps/api` suite: **885 files pass**. `tsc`: 0.
 
+### 🔴 Corrected after the Owner's production dry run (2026-09-23)
+
+The first production dry run would have stored VENTRA's colour as eBay writes it (`Rosso | Donna`) while every VENTRA
+sibling holding both stores the full colourway (`Grigio-Rosso-Nero | Donna`) — two names for one colour in one family.
+The planner now uses the FAMILY's name for an eBay value when every sibling holding both agrees (16 of the 77
+colours: VENTRA); otherwise eBay's value as-is (AIREON has no store siblings; its suffix keeps jackets and pants
+apart). Checked: MOSS-JACKET-YELLOW's `Grigio` matches its siblings' store and eBay alike (only the SKU says
+yellow). Two more arms and mutations (the family's name ignored; disagreeing siblings still teaching): 7 red.
+
 ### The production run — the Owner's (this session cannot reach production)
 
-1. `node docs/product-cheat/tools/prod-run.mjs fill-axes` (dry run) — expect `78 products: 77 sizes and 77 colours …, 1 … dropped`.
+1. `node docs/product-cheat/tools/prod-run.mjs fill-axes` (dry run) — expect `78 products: 77 sizes and 77 colours … (16 in the family's own words), 1 … dropped`.
 2. `… fill-axes --apply` — expect `WROTE 78 products. Left to do after the write: 0`, and a record path.
 3. `node docs/product-cheat/tools/axis-stores.mjs` — expect store coverage colour **301**, size **285** (224 / 208 + 77),
    and no `ONLYHERE … "stores":"eb"` rows. Undo: `… fill-axes --revert <the record path>`.

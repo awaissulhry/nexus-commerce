@@ -5,7 +5,9 @@
  * Measured on production, 2026-09-23 (`tools/axis-stores.mjs`):
  * - 77 children hold a size only on a channel (37 on eBay only, 40 on eBay + Amazon), and 77 a colour — the store and
  *   the legacy bag are empty for them, so the sheet shows nothing while the live eBay·IT listing carries a value.
- *   FILL copies the eBay·IT item specific into the store, so the store matches the live listing.
+ *   FILL copies the eBay·IT item specific into the store, so the store matches the live listing — in the FAMILY's
+ *   words: where the child's siblings hold both an eBay value and a store value, the store's name is used
+ *   (VENTRA: eBay `Rosso | Donna` is stored as `Grigio-Rosso-Nero | Donna` by every sibling that has both).
  * - One child's legacy bag contradicts the store (AIR-MESH-JACKET-MEN-XXL-BLACK: legacy `XS`, store `XXL`, Amazon
  *   `XXL`). Since 2.6c no reader takes the legacy value first, but it is a trap. DROP removes a legacy key only where it
  *   contradicts the store; a legacy value that agrees stays untouched.
@@ -25,7 +27,7 @@ export type FillChild = {
 export type FillAction = {
   id: string
   sku: string
-  fills: Array<{ axis: FillAxis; key: string; value: string }>
+  fills: Array<{ axis: FillAxis; key: string; value: string; from: 'eBay·IT' | 'siblings' }>
   drops: Array<{ key: string; legacy: string; store: string }>
   plan: VariationWritePlan
 }
@@ -54,6 +56,17 @@ function chooseKey(axis: FillAxis, siblings: FillChild[], declared: readonly str
   return common ?? declared.find((key) => canonicalVariantAxis(key) === axis) ?? ebayKey
 }
 
+/** What the family calls an eBay value: the store value of every sibling holding both, when they all agree. */
+function learnedName(siblings: readonly FillChild[], axis: FillAxis, ebayValue: string): string | null {
+  const names = new Set<string>()
+  for (const sibling of siblings) {
+    const ebay = valueOf(object(sibling.ebaySpecifics), axis)
+    const stored = valueOf(object(object(sibling.categoryAttributes).variations), axis)
+    if (ebay && stored && ebay.value.toLowerCase() === ebayValue.toLowerCase()) names.add(stored.value)
+  }
+  return names.size === 1 ? [...names][0]! : null
+}
+
 export function planVariationStoreFill(children: readonly FillChild[], declaredAxes: ReadonlyMap<string, readonly string[]>): FillAction[] {
   const byParent = new Map<string, FillChild[]>()
   for (const child of children) byParent.set(child.parentId, [...(byParent.get(child.parentId) ?? []), child])
@@ -68,7 +81,12 @@ export function planVariationStoreFill(children: readonly FillChild[], declaredA
       const old = valueOf(legacy, axis)
       if (!stored && !old) {
         const ebay = valueOf(object(child.ebaySpecifics), axis)
-        if (ebay) fills.push({ axis, key: chooseKey(axis, byParent.get(child.parentId) ?? [], declaredAxes.get(child.parentId) ?? [], ebay.key), value: ebay.value })
+        if (ebay) {
+          const siblings = byParent.get(child.parentId) ?? []
+          const learned = learnedName(siblings, axis, ebay.value)
+          fills.push({ axis, key: chooseKey(axis, siblings, declaredAxes.get(child.parentId) ?? [], ebay.key),
+            value: learned ?? ebay.value, from: learned && learned !== ebay.value ? 'siblings' : 'eBay·IT' })
+        }
       } else if (stored && old) {
         // Per legacy KEY, not per axis: a bag holding `Taglia: XXL` (agrees) and `Size: XS` (contradicts) must lose `Size`.
         for (const [key, value] of Object.entries(legacy)) {
