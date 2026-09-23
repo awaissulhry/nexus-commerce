@@ -303,7 +303,10 @@ const NOT_A_WRITE: Array<[string, string, string]> = [
   ['services/bulk-action/attribute-helpers.ts', 'variantAttributes: product.variantAttributes })', 'input to variationBag'],
   ['services/shopify/content-workspace.service.ts', "variantAttributes: 'variantAttributes' in p ? p.variantAttributes : {}", 'input to the helpers'],
   ['services/assortment/field-groups.ts', "variantAttributes: g('attributes'),", 'the assortment copy field map: copies the column as-is between businesses, never a new value'],
-  // The one write left outside the writer: the organize undo restores the snapshot it took (R-25).
+  ['scripts/fill-variation-store.ts', 'variantAttributes: c.variantAttributes, ebaySpecifics', 'the 2.6d fill plan\'s input, not a write'],
+  ['scripts/fill-variation-store.ts', 'variantAttributes: p.variantAttributes ?? null', 'the 2.6d --apply record of the before-state, written to a file'],
+  // Two restores of a recorded before-state, never a new value: the organize undo (R-25) and the 2.6d --revert.
+  ['scripts/fill-variation-store.ts', 'data: { variantAttributes: entry.variantAttributes === null', '2.6d --revert restores the recorded before-state'],
   ['routes/catalog-organize.routes.ts', 'variantAttributes: product.variantAttributes ?? null, variations: store ?? null', 'builds the undo snapshot object (stored in fromVariantAttributes), not a column write (R-25)'],
   ['routes/catalog-organize.routes.ts', 'variantAttributes: (before.legacy as any) ?? null,', 'organize undo restores the exact before-state (R-25)'],
 ]

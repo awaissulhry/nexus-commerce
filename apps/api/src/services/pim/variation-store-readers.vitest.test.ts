@@ -73,6 +73,11 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   ['services/pim/auto-detect.service.ts', 'legacyDrop: Object.keys((before?.variantAttributes ?? {})', 'auto-detect empties the legacy bag'],
   ['services/bulk-action.service.ts', 'variationValuesPlan({ categoryAttributes: (item as ProductLike).categoryAttributes, variantAttributes: (item as ProductLike).variantAttributes }', 'into the one writer\'s plan'],
   ['services/bulk-action/attribute-helpers.ts', 'variationBag({ categoryAttributes: product.categoryAttributes, variantAttributes: product.variantAttributes })', 'the before-value, through the helper'],
+  // Step 2.6d (R-26) — the data run: it reads the legacy bag to compare it with the store, records it, restores it.
+  ['services/pim/variation-store-fill.ts', 'const legacy = object(child.variantAttributes)', 'the fill plan compares the legacy bag with the store'],
+  ['scripts/fill-variation-store.ts', 'variantAttributes: c.variantAttributes, ebaySpecifics', 'the fill plan\'s input'],
+  ['scripts/fill-variation-store.ts', 'variantAttributes: p.variantAttributes ?? null', 'the --apply record of the before-state'],
+  ['scripts/fill-variation-store.ts', 'data: { variantAttributes: entry.variantAttributes === null', '--revert restores the recorded before-state'],
   // No-touch zone (flat files).
   ['services/amazon/flat-file.service.ts', 'data.variantAttributes = axes', 'flat-file create — no-touch'],
   ['services/ebay-flat-file-create.logic.ts', 'data.variantAttributes = attrs', 'flat-file create — no-touch'],

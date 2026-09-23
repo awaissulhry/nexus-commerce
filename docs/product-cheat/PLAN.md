@@ -5606,3 +5606,42 @@ inserted at the front · a product-side local copy · the product side absorbing
 the five `supplier_declared_dg_hz_regulation` rows for Amazon on the five families, exactly as the dry run showed, and
 `0 already required` before, so `--revert` would undo exactly these five. ⬜ Motovento: the dry run was not seen in this
 session (it holds one family-less draft; 0 rows expected).
+
+---
+
+## Step 2.6d — BUILT (A-27 / R-26). The data run is ready; the Owner runs it on production.
+
+### What it does (`scripts/fill-variation-store.ts`, planned by `services/pim/variation-store-fill.ts`)
+
+| | |
+|---|---|
+| **FILL** | A child with no size / colour in the store AND none in the legacy bag takes the live eBay·IT item specific — the value the listing is selling today. The key follows what its siblings store (else the parent's declared axis, else the eBay name). Values are kept exactly as eBay shows them: the suffix (`Nero Neo \| Giacca`, `… \| Pantaloni`) is what keeps AIREON's jackets and pants from colliding, and the store already holds such values (VENTRA) |
+| **DROP** | A legacy key that contradicts the store leaves the legacy bag — per key (AIR-MESH-JACKET-MEN-XXL-BLACK's `XS`) |
+| Writes | Through `writeVariationValues`, after saving the before-state of every product it touches to `docs/product-cheat/records/…json`; then re-plans and must find **0** left |
+| `--revert <record>` | Restores the store and the legacy bag from that record |
+
+### Rehearsed on the local catalogue (2026-09-23)
+
+Dry run: **78 products — 77 sizes and 77 colours from eBay·IT, 1 legacy value dropped** (the production numbers).
+`--apply`: store coverage colour 222 → **299**, size 206 → **283**; legacy sizes 36 → 35; the eBay-only rows gone;
+re-plan **0**; **no collision** in the store (the old AIR-MESH one gone too). `--revert`: every count back to its
+before-state (a product that had no `variations` key gets `{}` back — read the same).
+
+### Gate — ✅ `variation-store-fill.vitest.test.ts` (7 arms), 5 mutations red; the two Step 2.6 scans name the script's lines
+
+🔴 **A mutation escaped first**, and it was a real defect: the drop compared only the FIRST legacy spelling of an axis,
+so a bag with `Taglia: XXL` (agrees) and `Size: XS` (contradicts) kept the wrong `XS`. Now per key, with an arm that
+fails on the old line. Mutations: siblings' key ignored · fill over a stored value · fill over a legacy-only value ·
+drop of an agreeing value · an eBay list value not unwrapped. Full `apps/api` suite: **885 files pass**. `tsc`: 0.
+
+### The production run — the Owner's (this session cannot reach production)
+
+1. `node docs/product-cheat/tools/prod-run.mjs fill-axes` (dry run) — expect `78 products: 77 sizes and 77 colours …, 1 … dropped`.
+2. `… fill-axes --apply` — expect `WROTE 78 products. Left to do after the write: 0`, and a record path.
+3. `node docs/product-cheat/tools/axis-stores.mjs` — expect store coverage colour **301**, size **285** (224 / 208 + 77),
+   and no `ONLYHERE … "stores":"eb"` rows. Undo: `… fill-axes --revert <the record path>`.
+
+**Step 2.6 closes when that run is done:** one store holds a child's size and colour (2.6a–c3), the sheet shows and
+writes it (2.6a), the known wrong value is gone (2.6d), no collision in it (measured).
+
+### Cost when — linear in children (~300 rows, one statement each). **Rollback** — `--revert <record>`.
