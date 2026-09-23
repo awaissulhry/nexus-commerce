@@ -1,5 +1,5 @@
 /**
- * Re-encrypt every stored credential under the CURRENT key.
+ * Re-encrypt owned channel credentials and application secrets under the checked key.
  *
  * `lib/crypto.ts` has shipped `reencryptCredentials` since CX.1 with a docblock saying
  * it "exists for the deliberate rotation job" — and nothing ever called it. This is
@@ -13,9 +13,11 @@
  * degraded, needs_reauth) keeps its env-keyed envelope indefinitely, and nobody can
  * answer "are all credentials KMS-wrapped now?" without querying the database.
  *
- * Running this makes the migration immediate, complete and reportable: it returns the
- * count moved and the resulting key ids, so the answer to that question is a line of
- * output rather than an inference.
+ * A workspace run covers its owned connection envelopes, including inactive rows,
+ * and the application secrets below. Every replacement must retain the preflight
+ * key/mode, and any failed or contended item makes the run incomplete. Format counts
+ * do not prove decryption, target-key coverage or safe retirement. Quarantine and
+ * other encryption consumers require their separate global maintenance inventory.
  *
  * ── What "every stored credential" covers (2026-09-21) ───────────────────────
  * Two tables, not one. `ChannelConnection.credentialsEnc` holds a channel's OAuth
@@ -49,6 +51,7 @@ import {
   isCredentialsBlob,
 } from '../lib/crypto.js'
 import { recordConnectionEvent, SYSTEM_ACTOR } from '../services/cx/events.service.js'
+import { workspaceIdForQuery } from '../lib/workspace-context.js'
 
 /**
  * The `ChannelApp` columns that hold an encrypted blob. Named once so the rotation and
@@ -94,6 +97,16 @@ function isOnTargetKey(storedBlob: string, produced: { mode: string; keyId: stri
     : stored.version === 'v1'
 }
 
+/** Preflight is a snapshot: later fallback/configuration changes must never alter its target. */
+function assertMaintenanceTarget(storedBlob: string, produced: { blob: string; mode: string; keyId: string }, target: { mode: string; keyId: string }) {
+  const stored = credentialsKeyIdOf(storedBlob), actual = credentialsKeyIdOf(produced.blob)
+  if (produced.mode !== target.mode || produced.keyId !== target.keyId
+    || (actual.version === 'v2' ? produced.mode !== 'kms' || actual.keyId !== target.keyId : produced.mode !== 'env' || produced.keyId !== 'env')
+    || (stored.version === 'v2' && actual.version === 'v1')) {
+    throw new Error('The replacement envelope does not match the maintenance target; the original was retained.')
+  }
+}
+
 /**
  * Prove the configured key can BOTH wrap and unwrap, using a throwaway payload.
  *
@@ -127,11 +140,11 @@ export async function runCredentialsPreflight(): Promise<string> {
     const v = await verifyCurrentKey()
     if (!v.ok) {
       logger.error('[cx-preflight] the configured credential key cannot round-trip', { mode: v.mode, error: v.error })
-      return `FAILED kmsConfigured=${kmsConfigured} mode=${v.mode} error=${v.error ?? 'unknown'} — do NOT rotate`
+      throw new Error(`FAILED kmsConfigured=${kmsConfigured} mode=${v.mode} — configured key round-trip failed; do NOT rotate`)
     }
     if (kmsConfigured && v.mode !== 'kms') {
       // Configured but silently falling back is the one state that looks fine and is not.
-      return `WARNING kmsConfigured=true but encryption used mode=${v.mode} — the key is set and NOT being used; check the key id and kms:GenerateDataKey`
+      throw new Error(`FAILED kmsConfigured=true but encryption used mode=${v.mode} — the key is set and NOT being used; check the key id and kms:GenerateDataKey`)
     }
     return `ok mode=${v.mode} keyId=${v.keyId} kmsConfigured=${kmsConfigured}`
   })
@@ -139,27 +152,28 @@ export async function runCredentialsPreflight(): Promise<string> {
 
 export async function runCredentialsRotate(): Promise<string> {
   return recordCronRun('cx-credentials-rotate', async () => {
+    const workspaceId = workspaceIdForQuery()
     const rows = await prisma.channelConnection.findMany({
-      where: { credentialsEnc: { not: null } },
+      where: { workspaceId, credentialsEnc: { not: null } },
       select: { id: true, channelType: true, credentialsEnc: true, credentialsKeyId: true },
     })
     const apps = await prisma.channelApp.findMany({
       where: { OR: [{ clientSecretEnc: { not: null } }, { signingKeyEnc: { not: null } }] },
       select: { id: true, channelKey: true, environment: true, clientSecretEnc: true, signingKeyEnc: true },
     })
-    if (rows.length === 0 && apps.length === 0) return 'no stored credentials — nothing to rotate'
+    if (rows.length === 0 && apps.length === 0) return 'no owned connection credentials or app secrets — quarantine not examined'
 
     // Refuse to touch anything unless the target key can wrap AND unwrap. This job
     // re-encrypts EVERY channel's credential, so a key that wraps but cannot unwrap
     // would take out every connection at once — and the plaintext columns are gone.
     const preflight = await verifyCurrentKey()
     if (!preflight.ok) {
-      return `REFUSED — the configured key failed a round-trip (mode=${preflight.mode}): ${preflight.error ?? 'unknown'}. Nothing was changed.`
+      throw new Error(`REFUSED — the configured key failed a round-trip (mode=${preflight.mode}). Nothing was changed.`)
     }
 
     const targetIsKms = !!process.env.NEXUS_KMS_KEY_ID
     if (targetIsKms && preflight.mode !== 'kms') {
-      return `REFUSED — NEXUS_KMS_KEY_ID is set but encryption fell back to mode=${preflight.mode}. Rotating now would rewrite every credential under the ENV key while appearing to enable KMS. Nothing was changed.`
+      throw new Error(`REFUSED — NEXUS_KMS_KEY_ID is set but encryption fell back to mode=${preflight.mode}. Rotating now would rewrite every credential under the ENV key while appearing to enable KMS. Nothing was changed.`)
     }
     let rotated = 0
     let alreadyCurrent = 0
@@ -170,6 +184,7 @@ export async function runCredentialsRotate(): Promise<string> {
     for (const row of rows) {
       try {
         const result = await reencryptCredentials(row.credentialsEnc!)
+        assertMaintenanceTarget(row.credentialsEnc!, result, preflight)
         keyIds.add(result.keyId)
         // Already under the target key ⇒ nothing gained by writing.
         if (isOnTargetKey(row.credentialsEnc!, result)) {
@@ -177,7 +192,7 @@ export async function runCredentialsRotate(): Promise<string> {
           continue
         }
         const saved = await prisma.channelConnection.updateMany({
-          where: { id: row.id, credentialsEnc: row.credentialsEnc },
+          where: { id: row.id, workspaceId, credentialsEnc: row.credentialsEnc },
           data: { credentialsEnc: result.blob, credentialsKeyId: result.keyId },
         })
         // Reconnect, refresh or disconnect may win while crypto work is running.
@@ -222,6 +237,7 @@ export async function runCredentialsRotate(): Promise<string> {
         appSecrets++
         try {
           const result = await reencryptCredentials(blob)
+          assertMaintenanceTarget(blob, result, preflight)
           keyIds.add(result.keyId)
           if (isOnTargetKey(blob, result)) {
             appAlreadyCurrent++
@@ -263,11 +279,13 @@ export async function runCredentialsRotate(): Promise<string> {
     }
 
     const keys = [...keyIds].join(',') || 'none'
-    return (
+    const summary = (
       `connections=${rows.length} rotated=${rotated} alreadyCurrent=${alreadyCurrent} failed=${failed} contended=${contended} ` +
       `appSecrets=${appSecrets} appRotated=${appRotated} appAlreadyCurrent=${appAlreadyCurrent} appFailed=${appFailed} appContended=${appContended} ` +
-      `keyIds=${keys} kmsConfigured=${targetIsKms}`
+      `keyIds=${keys} kmsConfigured=${targetIsKms} connectionsScope=owned-workspace appSecretsScope=application quarantine=not-examined recovery=not-verified`
     )
+    if (failed || contended || appFailed || appContended) throw new Error(`INCOMPLETE ${summary}`)
+    return summary
   })
 }
 
@@ -282,8 +300,8 @@ export async function runCredentialsRotate(): Promise<string> {
 export async function runCredentialsStatus(): Promise<string> {
   return recordCronRun('cx-credentials-status', async () => {
     const rows = await prisma.channelConnection.findMany({
-      where: { isActive: true },
-      select: { channelType: true, credentialsEnc: true, credentialsKeyId: true, managedBy: true },
+      where: { workspaceId: workspaceIdForQuery() },
+      select: { channelType: true, credentialsEnc: true, credentialsKeyId: true, managedBy: true, isActive: true },
     })
     const withEnvelope = rows.filter((r) => r.credentialsEnc)
     const states = withEnvelope.map((r) => keyStateOf(r.credentialsEnc!))
@@ -303,10 +321,10 @@ export async function runCredentialsStatus(): Promise<string> {
     const appUnreadable = appStates.filter((s) => s === 'unreadable').length
 
     return (
-      `active=${rows.length} withEnvelope=${withEnvelope.length} onKms=${onKms} onEnvKey=${onEnvKey} ` +
+      `active=${rows.filter(row => row.isActive).length} retainedConnections=${rows.length} withEnvelope=${withEnvelope.length} onKms=${onKms} onEnvKey=${onEnvKey} ` +
       `unreadable=${unreadable} noEnvelope=${noEnvelope} ` +
       `appSecrets=${appStates.length} appOnKms=${appOnKms} appOnEnvKey=${appOnEnvKey} appUnreadable=${appUnreadable} ` +
-      `kmsConfigured=${!!process.env.NEXUS_KMS_KEY_ID}`
+      `kmsConfigured=${!!process.env.NEXUS_KMS_KEY_ID} classification=envelope-format connectionsScope=owned-workspace appSecretsScope=application quarantine=not-examined recovery=not-verified`
     )
   })
 }

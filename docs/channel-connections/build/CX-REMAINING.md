@@ -1001,3 +1001,57 @@ FUNCTION documents restricted EXECUTE/trusted search_path for privileged functio
 https://docs.aws.amazon.com/kms/latest/developerguide/rotate-keys.html
 https://www.postgresql.org/docs/17/sql-createfunction.html
 No KMS, provider or production mutation was performed by this audit.
+
+
+## C11f1 — contain unsafe credential maintenance (local)
+
+C11e2 is committed as41393b908. This next slice makes the existing rotation job
+explicitly select/update only connections owned by its current workspace; readable
+shared-account ciphertext is excluded before crypto. Status includes retained inactive
+connections. Reports label their connection/application scopes, classify envelope
+format only, and explicitly mark quarantine unexamined and recovery unverified.
+These fields are not a complete global key inventory or key-retirement approval.
+
+Each replacement must match the preflight mode/key AND its own parsed envelope
+metadata. Changed targets and mid-run KMS fallback are rejected before persistence;
+v2→v1 is also refused when KMS configuration disappears. Existing snapshot CAS fences
+remain. Refused preflight/rotation and failed/contended runs now throw, so the real
+CronRun wrapper records FAILED instead of accepting a failure string as SUCCESS.
+Already-completed safe rows can remain after an incomplete batch; this is reported,
+not rolled back or labelled complete. Application-secret scope remains its existing
+application-wide scope; no global quarantine elevation is added to the tenant job.
+
+Metadata parsing now rejects malformed v1 shape (including v1:x); valid nonce/tag
+shape still does not establish recoverability. Existing valid-envelope status controls
+now use real locally encrypted fixtures. The previous race fixture returned a v1 blob
+labelled as a synthetic KMS result; valid-target checks correctly reject that shape.
+It now uses real AES envelopes through the extracted FakeKms test helper, preserving
+all original writer-race assertions. The app CAS race now counts two contended fields
+because both fields would migrate under the valid KMS target; both originals remain.
+The job unit fixtures also inject FakeKms for fake-alias failures, so those cases cannot
+fall through to a real SDK request. No live KMS operation is used as test evidence.
+
+Evidence under /private/tmp/cx-completion-20260922:
+- c11-f1-maintenance-red.log reproduces6 failures: connection/app fallback, changed
+  target, missing-KMS downgrade, inactive omission and malformed-v1 classification.
+- c11-f1-regressions-reviewed.log:74 regressions pass, including real CronRun SUCCESS
+  and FAILED controls. Prior73-case profile-ON run also passes; explicit workspace
+  fixtures preserve the production precondition rather than relying on legacy mode.
+- c11-f1-writers-first.log:12 realPG/zero skips under production-equivalent permissions.
+  Positive control proves a foreign shared ciphertext is readable through findMany;
+  maintenance then never reencrypts it, while processing the owned credential. All
+  reconnect/refresh/disconnect/app-replacement CAS races remain intact.
+- Six restored mutations killed: connection target, app target, owned selection,
+  incomplete-run failure state, inactive inventory and v1 format validation.
+- Independent review approves this containment scope. Final full API passes11528
+  tests/296skips; typecheck passes; clean12-case realPG repeat passes with zero skips.
+  Evidence: c11-f1-full-api.log, c11-f1-typecheck-final.log and c11-f1-writers-final.log.
+  The next full canonical run now includes265 realPG cases; no production change.
+
+Outstanding: pin the actual outgoing KMS request to a resolved target resource,
+verify every replacement cold against its sealed source, global quarantine inventory
+and narrowly privileged CAS with atomic audit, fresh complete traversal and explicit
+key-retirement approval. The current job's ordinary connection audit remains its
+existing best-effort event path; do not claim new atomic maintenance-audit coverage.
+Same-resource KMS material rotation is transparent; v1 env-key replacement is not
+supported by this maintenance interface. No production credential was touched.

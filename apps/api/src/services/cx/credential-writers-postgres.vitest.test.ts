@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { randomBytes, randomUUID } from 'node:crypto'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
+import { FakeKms, FAKE_KMS_KEY_ID } from '../../test-support/fake-kms.js'
 
 let database: Awaited<ReturnType<typeof concurrentDatabase>>
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_t, key) => (database.client as any)[key] }) }))
@@ -10,7 +11,7 @@ vi.mock('../../utils/cron-observability.js', () => ({ recordCronRun: async (_nam
 vi.mock('../monitoring/alert.service.js', () => ({ alertService: { createAlert: vi.fn() }, AlertType: { CONNECTION_HEALTH: 'CONNECTION_HEALTH' } }))
 const crypto = await import('../../lib/crypto.js')
 const { storeGrant, getAccessToken, revoke, encryptLegacyRow, restorePlaintextRow } = await import('./token.service.js')
-const { runCredentialsRotate } = await import('../../jobs/cx-credentials-rotate.job.js')
+const { runCredentialsRotate, runCredentialsStatus } = await import('../../jobs/cx-credentials-rotate.job.js')
 const OWNER = 'nexus_legacy_workspace'
 const inOwner = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: OWNER, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const grant = (key = randomUUID()) => ({ accessToken: `synthetic-access-${key}`, refreshToken: `synthetic-refresh-${key}`, expiresInSec: 7200, grantedScopes: [], identity: null })
@@ -27,13 +28,14 @@ function barrier() {
   return { entered: new Promise<void>(r => { enter = r }), released: new Promise<void>(r => { release = r }), enter: () => enter(), release: () => release() }
 }
 function pauseReencryption() {
+  vi.stubEnv('NEXUS_KMS_KEY_ID', FAKE_KMS_KEY_ID)
   const gate = barrier(), original = crypto.reencryptCredentials
   vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async blob => {
     const result = await original(blob)
     gate.enter(); await gate.released
-    // A synthetic target-key result exercises the real guarded DB writer without
-    // any AWS call. Ciphertext uses the real local crypto; this is not KMS proof.
-    return { ...result, mode: 'kms', keyId: 'synthetic-target-key' }
+    // Real AES envelope operations through the injected local KMS fixture.
+    // This exercises target validation and the DB writer, not live IAM/KMS.
+    return result
   })
   return gate
 }
@@ -49,6 +51,9 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
   }, 180_000)
   beforeEach(async () => {
     vi.restoreAllMocks()
+    vi.stubEnv('NEXUS_KMS_KEY_ID', '')
+    crypto.__cryptoTest.resetDekCache()
+    crypto.__cryptoTest.setKmsClient(new FakeKms() as never)
     await database.pool.query('DELETE FROM "ChannelConnection"')
     await database.pool.query('DELETE FROM "ChannelApp"')
   })
@@ -60,7 +65,7 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     await gate.entered
     const input = grant('reconnected')
     try { await inOwner(() => storeGrant(id, input, actor, 'reconsent')) } finally { gate.release() }
-    const result = await rotation
+    const result = await rotation.then(() => { throw new Error('Contention must report an incomplete maintenance run') }, error => error.message)
     const row = await stored(id)
     expect(row.grantVersion).toBe(2)
     expect(await crypto.decryptCredentials(row.credentialsEnc!)).toMatchObject({ refreshToken: input.refreshToken })
@@ -74,7 +79,7 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     await gate.entered
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'synthetic-current-access', expires_in: 7200 }), { status: 200 }))
     try { await inOwner(() => getAccessToken(id, { forceRefresh: true })) } finally { gate.release() }
-    const result = await rotation
+    const result = await rotation.then(() => { throw new Error('Contention must report an incomplete maintenance run') }, error => error.message)
     const row = await stored(id)
     expect(row.grantVersion).toBe(1)
     expect(await crypto.decryptCredentials(row.credentialsEnc!)).toMatchObject({ accessToken: 'synthetic-current-access' })
@@ -87,7 +92,7 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     await gate.entered
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 200 }))
     try { await inOwner(() => revoke(id, actor, 'operator')) } finally { gate.release() }
-    const result = await rotation
+    const result = await rotation.then(() => { throw new Error('Contention must report an incomplete maintenance run') }, error => error.message)
     expect(await stored(id)).toMatchObject({ credentialsEnc: null, credentialsKeyId: null, isActive: false, authStatus: 'disconnected' })
     expect(result).toContain('contended=1')
   })
@@ -113,10 +118,10 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     const gate = pauseReencryption(), rotation = inOwner(() => runCredentialsRotate())
     await gate.entered
     try { await database.pool.query('UPDATE "ChannelApp" SET "clientSecretEnc"=$1 WHERE id=$2', [replacement.blob, id]) } finally { gate.release() }
-    const result = await rotation
+    const result = await rotation.then(() => { throw new Error('Contention must report an incomplete maintenance run') }, error => error.message)
     const row = (await database.pool.query('SELECT "clientSecretEnc","signingKeyEnc" FROM "ChannelApp" WHERE id=$1', [id])).rows[0]
     expect(row).toEqual({ clientSecretEnc: replacement.blob, signingKeyEnc: signing.blob })
-    expect(result).toContain('appContended=1')
+    expect(result).toContain('appContended=2')
   })
 
   it('does not encrypt stale plaintext after another writer replaces the legacy tokens', async () => {
@@ -196,4 +201,20 @@ describe.skipIf(!concurrentDatabaseUrl())('credential writer races in real Postg
     expect(await inOwner(() => restorePlaintextRow(id))).toBe(true)
     expect(await stored(id)).toMatchObject({ grantVersion: before.grantVersion, credentialsEnc: before.credentialsEnc, accessToken: credentials.accessToken, refreshToken: credentials.refreshToken })
   })
+
+  it('never decrypts a readable shared-account credential while maintaining owned connections', async () => {
+    const ownedId = await seed(), owned = await stored(ownedId), foreignWorkspace = randomUUID(), foreignId = randomUUID()
+    const cipher = await crypto.encryptCredentials({ refreshToken: 'synthetic-foreign-secret' })
+    await database.pool.query('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Foreign credential owner\',\'test\',$1,now())', [foreignWorkspace])
+    await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","credentialsEnc","credentialsKeyId","updatedAt") VALUES ($1,$2,\'EBAY\',$1,$3,\'env\',now())', [foreignId, foreignWorkspace, cipher.blob])
+    await database.pool.query('INSERT INTO "ChannelAccountGrant" ("connectionId","workspaceId","ownerWorkspaceId",mode,"grantedByUserId","grantedAt") VALUES ($1,$2,$3,\'read\',\'test\',now())', [foreignId, OWNER, foreignWorkspace])
+    expect((await inOwner(() => database.client.channelConnection.findMany({ where: { credentialsEnc: { not: null } } }))).map(row => row.id).sort()).toEqual([ownedId, foreignId].sort())
+    const reencrypt = vi.spyOn(crypto, 'reencryptCredentials')
+    expect(await inOwner(() => runCredentialsRotate())).toContain('connections=1')
+    expect(reencrypt).toHaveBeenCalledWith(owned.credentialsEnc)
+    expect(reencrypt).not.toHaveBeenCalledWith(cipher.blob)
+    expect(await inOwner(() => runCredentialsStatus())).toContain('retainedConnections=1')
+    expect((await database.pool.query('SELECT "credentialsEnc" FROM "ChannelConnection" WHERE id=$1', [foreignId])).rows[0].credentialsEnc).toBe(cipher.blob)
+  })
+
 })

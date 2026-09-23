@@ -27,8 +27,8 @@
  *   v2:<kid>:<base64url(wrappedDek)>.<base64url(iv12)>.<base64url(authTag16)>.<base64url(ciphertext)>
  *
  *   kid        = the KMS KeyId that GenerateDataKey answered with — the
- *                master key that wrapped this blob's data key, version
- *                included (an ARN, `…:key/<uuid>`). A kid is written raw
+ *                key resource that wrapped this blob's data key
+ *                (an ARN, `…:key/<uuid>`). A kid is written raw
  *                when it is made only of [A-Za-z0-9_-/]; otherwise (any
  *                ':' or '.', which every ARN has) it is base64url-encoded
  *                and prefixed `b64.` so the envelope stays parseable: the
@@ -479,7 +479,7 @@ function parseCredentialsJson(plaintext: string): Record<string, unknown> {
 
 // ── Public surface ─────────────────────────────────────────────────────
 
-/** True for any blob this module can decrypt: a v1 or v2 envelope. */
+/** Recognized envelope prefix only; format validation and authenticated decryption remain separate. */
 export function isCredentialsBlob(value: unknown): value is string {
   return typeof value === 'string' && (value.startsWith(`${VERSION}:`) || value.startsWith(V2_PREFIX))
 }
@@ -491,7 +491,14 @@ export function isCredentialsBlob(value: unknown): value is string {
  */
 export function credentialsKeyIdOf(blob: string): { version: 'v1' | 'v2'; keyId: string | null } {
   if (typeof blob !== 'string') throw new CredentialsDecryptError('bad_format', 'Not a credentials blob')
-  if (blob.startsWith(`${VERSION}:`)) return { version: 'v1', keyId: null }
+  if (blob.startsWith(`${VERSION}:`)) {
+    const parts = blob.slice(VERSION.length + 1).split('.')
+    if (parts.length !== 3 || parts.some(part => !/^[A-Za-z0-9_-]*$/.test(part))
+      || Buffer.from(parts[0], 'base64url').length !== IV_BYTES || Buffer.from(parts[1], 'base64url').length !== TAG_BYTES) {
+      throw new CredentialsDecryptError('bad_format', 'Malformed v1 envelope')
+    }
+    return { version: 'v1', keyId: null }
+  }
   if (blob.startsWith(V2_PREFIX)) {
     return { version: 'v2', keyId: decodeKid(parseV2(blob).kid) }
   }
@@ -538,8 +545,8 @@ export async function decryptCredentials(blob: string): Promise<Record<string, u
 /**
  * Decrypt with whatever protected the blob, re-encrypt with the current
  * key. The rotation job walks rows with this; a v1 row becomes v2 once
- * NEXUS_KMS_KEY_ID is set, and a v2 row moves to the current master key
- * version.
+ * NEXUS_KMS_KEY_ID is set, and a v2 row can move to another key resource.
+ * Rotating material within the same KMS resource does not require rewriting rows.
  */
 export async function reencryptCredentials(blob: string): Promise<EncryptCredentialsResult> {
   return encryptCredentials(await decryptCredentials(blob))
