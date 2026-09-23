@@ -6111,3 +6111,33 @@ Since #489 (2026-09-02) the server enforces the sheet's length caps and closed l
 
 If all four hold, the "creates bad data" half of 3.6 is already false at the server, and what is left is the grid:
 whether it shows those reasons per row and puts the cells back.
+
+### Step 3.6 — RESULT, and A-34
+
+**Run:** `cd apps/api && npx tsx ../../docs/product-cheat/tools/paste-validity.mts` — `xavia-knee-slider`'s first child,
+Amazon·IT channel cells, rolled back (the listing re-read afterwards is unchanged), 0 network. Fields picked by the tool:
+`color` (cap 50), `accepted_voltage_frequency` (closed list of 7).
+
+| Prediction | Measured |
+|---|---|
+| (a) over the cap → refused, per-row reason, nothing stored | ✅ 400 — *"Colour takes at most 50 characters"*, row + field named; not stored |
+| (b) off a closed list → refused the same way | ✅ 400 — *"… is not one of the allowed values for Accepted Voltage Frequency"*; not stored |
+| (c) a valid value → stored | ✅ `updated: 1`, stored |
+| (d) valid + invalid in one request → all refused | ❌ **Wrong: per row, not all-or-nothing.** `success: true, updated: 1` with the invalid one in `errors[]`; the valid value IS stored, the invalid one is not |
+
+**So the step's premise is out of date.** *"A corner-drag commits values you could not type … creates bad data today"* —
+the server has refused over-cap and off-list values, per row, since #489 (2026-09-02). The master sheet's save paths read
+those per-row refusals (`app/products/_sheet/useMasterSheet.ts:145-149` one cell, `:242-252` a bulk paste, each refused
+row with its reason) — read, not exercised in a browser.
+
+## A-34 — Step 3.6's premise changed: the server already refuses a bad paste, per row. FOR YOUR APPROVAL.
+
+**Recommendation — one: re-scope Step 3.6 to a browser check, and build only what it finds.** On the local app, on the
+master sheet and on the studio's channel sheet: paste and fill-drag an over-cap value and an off-list value across rows
+that also hold a valid one. Pass = each refused cell goes back to its stored value and shows its own reason, the valid
+cells save. The sheet's own gate (`design-system/grid/editors/writeGate.ts`) stays validity-free: the server is the one
+judge, so the grid cannot drift from it. Nothing else is built unless the check fails.
+
+- **Done when** — the browser check passes on both sheets, recorded with its screenshots. **Cost when** — `flat`.
+- **Gate** — the server arms above become a test (four arms, a mutation removing each refusal). **Rollback** — n/a.
+- 🔴 The check writes real local values on its valid rows; it restores them by value afterwards.
