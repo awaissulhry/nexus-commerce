@@ -6094,3 +6094,20 @@ both callers, their patches diffed — red today on the delete shape (the proof 
 - **Rollback** — revert the commit.
 - Files it would hold (named in the claim row first): `services/amazon/mapping-payload.ts`,
   `services/pim/mapping/prepare-dispatch.ts`, their tests, a new parity test.
+
+---
+
+## Step 3.6 — premise check: PREDICTIONS WRITTEN BEFORE THE RUN (2026-09-23 ~17:00)
+
+The step says *"a corner-drag commits values you could not type … a shipped capability actively creates bad data today"*.
+Since #489 (2026-09-02) the server enforces the sheet's length caps and closed lists (`bulk-edit.service.ts:408-418`,
+`:598-611`, `:683-692`) and returns every refusal with its row and field (`:588`). Measured through the sheet's own write
+(`applyProductBulkEdits`), Amazon·IT channel cells, local catalogue, rolled back:
+
+- (a) a value over the field's cap → **refused**, `updated: 0`, one error naming the row, the field and the cap; nothing stored.
+- (b) a value off a closed list → **refused** the same way; nothing stored.
+- (c) control: a valid value → `updated: 1`, stored.
+- (d) one request with (c) and (a) → **the whole request refused**, the valid value NOT stored (all or nothing).
+
+If all four hold, the "creates bad data" half of 3.6 is already false at the server, and what is left is the grid:
+whether it shows those reasons per row and puts the cells back.
