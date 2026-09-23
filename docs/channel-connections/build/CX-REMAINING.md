@@ -851,3 +851,45 @@ channel call, full-auth integration or production observation. Test server/tab c
 viewport restored. Independent final review approves. Final 28 regressions and web
 production build pass (c11-u2-final-regressions.log, c11-u2-final-build.log); the build
 also completes its TypeScript gate. No production or provider call was performed.
+
+
+## C11e1 — owner-scoped quarantine recovery API (local)
+
+GET /api/cx/connections/:id/ebay-quarantine lists only verified, unresolved revocation
+metadata matching that exact owned account's immutable subject/environment and
+original-owner constraint. It returns eight named metadata fields, never ciphertext,
+body, digest, subject hash or signing key; listing never decrypts. Stable ID cursor
+pagination returns at most50 records (51-row lookahead). An empty result describes
+only matching notices, not all application quarantine or unsupported topics.
+
+Both recovery endpoints retain integrations permission mapping plus current OWNER
+membership/user/workspace checks in the service. Metadata disclosure and adoption
+share fresh authority checks under Workspace/UserProfile locks. Reads recheck the
+account and locked ownership index after waiting; membership revocation or ownership
+transfer cannot disclose another business's notices. Both endpoints are no-store.
+POST /api/cx/connections/:id/ebay-quarantine/:noticeId/adopt delegates the existing
+atomic adoption/audit protocol with exactly those two path IDs. Body-supplied workspace
+or account IDs are ignored. It reports assignment only, never processing completion.
+It does not invoke the processor or make a vendor call.
+
+Review caught an old adoption fast-path bug now exposed by the API: same-seller
+connections A/B could both report success after only A was bound. Resolved adoption
+now also passes the fresh owner lock, reloads the receipt and exact current account,
+and checks workspace, delivery/topic/verification, immutable seller and environment.
+A different target returns identity_conflict; no rebinding occurs. Crypto remains
+outside locks; already-assigned recovery still requires retained decryption access.
+
+Evidence under /private/tmp/cx-completion-20260922/:
+- c11-e1-list-red.log/c11-e1-routes-red.log demonstrate the previously missing surface.
+- c11-e1-idempotency-red.log reproduces all three review findings: sequential A→B,
+  concurrent A/B false success, and owner revocation bypass on a resolved retry.
+- c11-e1-list-reviewed.log:32 realPG cases pass under production-equivalent rights,
+  zero skips. c11-e1-final-postgres.log repeats32 plus9 rollout compatibility cases.
+- c11-e1-routes-final.log:44 route/app regressions pass; private-cache regression was
+  red before the no-store header. API typecheck and ledger ratchet pass; RBAC check
+  recorded separately in c11-e1-rbac.log. New routes use existing permission coverage.
+- Six applied/restored mutations killed: first-owner isolation, metadata projection,
+  page bound, exact target account, owner recheck and private-cache header.
+- Independent source review approves after the resolved-adoption fix. UI recovery,
+  global operational quarantine visibility/key maintenance remain open. Full package
+  hooks will run again before an approved push; no deployment or production write.

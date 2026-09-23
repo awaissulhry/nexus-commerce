@@ -58,7 +58,9 @@ U1 migrates the changed retention card to shared DS controls; real-browser proof
 final typecheck/build and independent review pass (fad6d5f60). U2 fixes Ingress202/queued
 feedback and keyboard focus locally:28 tests,2 killed mutations, actual-browser response
 proof, independent review and final build pass. Quarantine recovery/key
-maintenance is next, followed by remaining channel handlers and operational proof.
+maintenance remain. C11e1 now adds reviewed owner-only metadata/adoption APIs locally:
+32 admission/recovery realPG plus9 rollout cases,44 route regressions and6 killed
+mutations. The UI and key maintenance are next; no production action was taken.
 
 
 ### Approved production release — 2026-09-22

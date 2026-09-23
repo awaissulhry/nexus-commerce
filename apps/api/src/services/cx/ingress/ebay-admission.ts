@@ -47,7 +47,7 @@ async function lockDelivery(tx: Tx, notice: Pick<Notice, 'environment' | 'signat
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`
 }
 
-async function ownerFor(tx: Pick<Tx, '$queryRaw'>, notice: Notice, lock: boolean) {
+async function ownerFor(tx: Pick<Tx, '$queryRaw'>, notice: Pick<Notice, 'signatureOk' | 'topic' | 'userId' | 'environment'>, lock: boolean) {
   if (!notice.signatureOk || notice.topic !== 'AUTHORIZATION_REVOCATION' || !notice.userId) return null
   const rows = lock
     ? await tx.$queryRaw<Array<{ workspaceId: string; status: string }>>`
@@ -214,8 +214,7 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
   throw new EbayAdmissionError('storage_unavailable')
 }
 
-/** Explicit owner adoption is the only automatic-first-assignment exception. No plaintext is returned. */
-export async function adoptEbayQuarantine(id: string, connectionId: string): Promise<{ receiptId: string; workspaceId: string }> {
+async function ownedQuarantineAccount(connectionId: string) {
   const context = requireWorkspace()
   if (!context.actorUserId) throw new EbayAdmissionError('adoption_forbidden')
   const owner = await prisma.workspaceMembership.findFirst({ where: { workspaceId: context.workspaceId, userId: context.actorUserId,
@@ -223,27 +222,68 @@ export async function adoptEbayQuarantine(id: string, connectionId: string): Pro
   const account = await prisma.channelConnection.findFirst({ where: { id: connectionId, workspaceId: context.workspaceId, channelType: 'EBAY', managedBy: 'oauth' },
     select: { externalAccountId: true, connectionMetadata: true } })
   if (!owner || !account?.externalAccountId) throw new EbayAdmissionError('adoption_forbidden')
+  return { context, account }
+}
+
+/** Keep disclosure and adoption behind the same fresh owner authority. */
+async function lockQuarantineOwner(tx: Tx, context: ReturnType<typeof requireWorkspace>) {
+  const active = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Workspace" WHERE id=${context.workspaceId} AND status='active' FOR SHARE`
+  await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id=${context.actorUserId} AND status='active' FOR SHARE`
+  const stillOwner = await tx.workspaceMembership.findFirst({ where: { workspaceId: context.workspaceId, userId: context.actorUserId!,
+    status: 'active', user: { status: 'active' }, roles: { some: { role: { key: 'OWNER' } } } }, select: { id: true } })
+  if (!active.length || !stillOwner) throw new EbayAdmissionError('adoption_forbidden')
+}
+
+/** Matching metadata only. Unknown/unverified/other-business bodies never reach the owner UI. */
+export async function listOwnEbayQuarantine(connectionId: string, options: { after?: string; take?: number } = {}) {
+  const { context } = await ownedQuarantineAccount(connectionId)
+  const take = Number.isSafeInteger(options.take) && options.take! > 0 ? Math.min(options.take!, 50) : 50
+  return withIngressWorkspace(context.workspaceId, () => prisma.$transaction(async tx => {
+    await lockQuarantineOwner(tx, context)
+    const account = await tx.channelConnection.findFirst({ where: { id: connectionId, workspaceId: context.workspaceId, channelType: 'EBAY', managedBy: 'oauth' },
+      select: { externalAccountId: true, connectionMetadata: true } })
+    const environment = (account?.connectionMetadata as { environment?: string } | null)?.environment ?? 'production'
+    if (!account?.externalAccountId || (environment !== 'production' && environment !== 'sandbox')) throw new EbayAdmissionError('adoption_forbidden')
+    const owned = await ownerFor(tx, { environment, userId: account.externalAccountId, signatureOk: true, topic: 'AUTHORIZATION_REVOCATION' }, true)
+    if (owned?.workspaceId !== context.workspaceId || owned.status !== 'active') throw new EbayAdmissionError('adoption_forbidden')
+    const rows = await tx.ebayNoticeQuarantine.findMany({ where: {
+      signatureOk: true, topic: 'AUTHORIZATION_REVOCATION', environment,
+      subjectHash: subjectHash(environment, account.externalAccountId), resolvedReceiptId: null,
+      OR: [{ firstOwnerWorkspaceId: null }, { firstOwnerWorkspaceId: context.workspaceId }],
+      ...(options.after ? { id: { gt: options.after } } : {}),
+    }, orderBy: { id: 'asc' }, take: take + 1, select: {
+      id: true, externalId: true, topic: true, environment: true, receivedAt: true, lastReceivedAt: true, deliveries: true, reason: true,
+    } })
+    const items = rows.slice(0, take)
+    return { items, nextCursor: rows.length > take ? items[items.length - 1].id : null }
+  }, { ...txOptions, isolationLevel: 'ReadCommitted' }))
+}
+
+/** Explicit owner adoption is the only automatic-first-assignment exception. No plaintext is returned. */
+export async function adoptEbayQuarantine(id: string, connectionId: string): Promise<{ receiptId: string; workspaceId: string }> {
+  const { context, account } = await ownedQuarantineAccount(connectionId)
   return withIngressWorkspace(context.workspaceId, async () => {
     const snapshot = await prisma.ebayNoticeQuarantine.findUnique({ where: { id } })
     if (!snapshot?.signatureOk || snapshot.topic !== 'AUTHORIZATION_REVOCATION'
       || (snapshot.firstOwnerWorkspaceId && snapshot.firstOwnerWorkspaceId !== context.workspaceId)
       || snapshot.environment !== ((account.connectionMetadata as { environment?: string } | null)?.environment ?? 'production')
       || snapshot.subjectHash !== subjectHash(snapshot.environment as EbayEnvironment, account.externalAccountId!)) throw new EbayAdmissionError('adoption_forbidden')
-    if (snapshot.resolvedReceiptId && snapshot.resolvedWorkspaceId === context.workspaceId) return { receiptId: snapshot.resolvedReceiptId, workspaceId: context.workspaceId }
     const notice = await open(snapshot)
     return prisma.$transaction(async tx => {
       // Membership/role writers and account assignment serialize through Workspace.
       // Recheck authority after crypto, before either receipt or pointer is changed.
-      const active = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "Workspace" WHERE id=${context.workspaceId} AND status='active' FOR SHARE`
-      await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id=${context.actorUserId} AND status='active' FOR SHARE`
-      const stillOwner = await tx.workspaceMembership.findFirst({ where: { workspaceId: context.workspaceId, userId: context.actorUserId,
-        status: 'active', user: { status: 'active' }, roles: { some: { role: { key: 'OWNER' } } } }, select: { id: true } })
-      if (!active.length || !stillOwner) throw new EbayAdmissionError('adoption_forbidden')
+      await lockQuarantineOwner(tx, context)
       await lockDelivery(tx, notice)
       const current = await tx.ebayNoticeQuarantine.findUniqueOrThrow({ where: { id } })
       if (current.resolvedReceiptId) {
         if (current.resolvedWorkspaceId !== context.workspaceId) throw new EbayAdmissionError('adoption_forbidden')
-        return { receiptId: current.resolvedReceiptId, workspaceId: context.workspaceId }
+        const stored = await existingReceipt(tx, notice, context.workspaceId)
+        const target = await tx.channelConnection.findFirst({ where: { id: connectionId, workspaceId: context.workspaceId,
+          channelType: 'EBAY', managedBy: 'oauth', externalAccountId: notice.userId }, select: { connectionMetadata: true } })
+        const environment = (target?.connectionMetadata as { environment?: string } | null)?.environment ?? 'production'
+        if (!stored || stored.id !== current.resolvedReceiptId || stored.connectionId !== connectionId
+          || !target || environment !== notice.environment || !await sameSubject(tx, stored, notice)) throw new EbayAdmissionError('identity_conflict')
+        return { receiptId: stored.id, workspaceId: context.workspaceId }
       }
       const original = await tx.$queryRaw<Array<{ workspaceId: string }>>`
         SELECT * FROM nexus_ebay_notice_workspace(${notice.environment}, ${notice.externalId})`

@@ -264,6 +264,7 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     const assigned = await transfer(connectionId)
     expect(assigned.assigned).toBe(true)
     await expect(inProfile(OTHER, () => admission.adoptEbayQuarantine(result.quarantineId, assigned.connectionId), 'b-owner')).rejects.toMatchObject({ reason: 'adoption_forbidden' })
+    expect(await inProfile(OTHER, () => admission.listOwnEbayQuarantine(assigned.connectionId), 'b-owner')).toEqual({ items: [], nextCursor: null })
     expect((await quarantine(result.quarantineId)).resolvedReceiptId).toBeNull()
   })
 
@@ -400,5 +401,113 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     await expect(inOwner(() => admission.adoptEbayQuarantine(result.quarantineId, connectionId), 'a-owner')).rejects.toMatchObject({ reason: 'identity_conflict' })
     expect((await quarantine(result.quarantineId)).resolvedReceiptId).toBeNull()
     expect((await database.pool.query('SELECT count(*)::int AS n FROM "WebhookEvent" WHERE "externalId"=$1', [admission.ebayReceiptExternalId('production', body.notification.notificationId)])).rows[0].n).toBe(1)
+  })
+
+  it('lists only matching unresolved metadata, never decrypts it, and removes adopted notices from recovery', async () => {
+    const body = payload(), own = await receive(body), foreignBody = payload()
+    await receive(foreignBody)
+    const connectionId = await seed(body.notification.data.userId)
+    await seed(foreignBody.notification.data.userId, OTHER)
+    const decrypt = vi.spyOn(crypto, 'decryptCredentials')
+    try {
+      const view = await inOwner(() => admission.listOwnEbayQuarantine(connectionId), 'a-owner')
+      expect(view.nextCursor).toBeNull()
+      expect(view.items).toHaveLength(1)
+      expect(view.items[0]).toMatchObject({ id: (own as any).quarantineId, externalId: body.notification.notificationId,
+        topic: 'AUTHORIZATION_REVOCATION', environment: 'production', deliveries: 1, reason: 'owner_unknown' })
+      expect(Object.keys(view.items[0]).sort()).toEqual(['id', 'externalId', 'topic', 'environment', 'receivedAt', 'lastReceivedAt', 'deliveries', 'reason'].sort())
+      expect(decrypt).not.toHaveBeenCalled()
+      expect(JSON.stringify(view)).not.toMatch(/synthetic-private-name|payloadEnc|payloadDigest|subjectHash|verificationKeyId/)
+    } finally { decrypt.mockRestore() }
+    await inOwner(() => admission.adoptEbayQuarantine((own as any).quarantineId, connectionId), 'a-owner')
+    expect(await inOwner(() => admission.listOwnEbayQuarantine(connectionId), 'a-owner')).toEqual({ items: [], nextCursor: null })
+  })
+
+  it('bounds metadata pages to fifty and uses a stable cursor without dropping a receipt', async () => {
+    const userId = randomUUID(), ids = []
+    for (let index = 0; index < 51; index++) {
+      const result = await receive(payload(userId))
+      if (result.kind !== 'quarantined') throw new Error('Expected unassigned receipt')
+      ids.push(result.quarantineId)
+    }
+    const connectionId = await seed(userId)
+    const first = await inOwner(() => admission.listOwnEbayQuarantine(connectionId, { take: 100 }), 'a-owner')
+    expect(first.items.map(row => row.id)).toEqual(ids.sort().slice(0, 50))
+    expect(first.nextCursor).toBe(first.items[49].id)
+    const last = await inOwner(() => admission.listOwnEbayQuarantine(connectionId, { after: first.nextCursor! }), 'a-owner')
+    expect(last.items.map(row => row.id)).toEqual(ids.slice(50))
+    expect(last.nextCursor).toBeNull()
+  })
+
+  it('refuses anonymous, member, foreign-profile and missing-account recovery reads', async () => {
+    const body = payload(); await receive(body)
+    const connectionId = await seed(body.notification.data.userId)
+    for (const actor of [null, 'member', 'b-owner']) {
+      await expect(inOwner(() => admission.listOwnEbayQuarantine(connectionId), actor)).rejects.toMatchObject({ reason: 'adoption_forbidden' })
+    }
+    await expect(inProfile(OTHER, () => admission.listOwnEbayQuarantine(connectionId), 'b-owner')).rejects.toMatchObject({ reason: 'adoption_forbidden' })
+    await expect(inOwner(() => admission.listOwnEbayQuarantine(randomUUID()), 'a-owner')).rejects.toMatchObject({ reason: 'adoption_forbidden' })
+    expect((await inOwner(() => admission.listOwnEbayQuarantine(connectionId), 'a-owner')).items).toHaveLength(1)
+  })
+
+  it('keeps the same provider subject isolated across production and sandbox recovery', async () => {
+    const body = payload(), production = await receive(body), sandbox = await receive(body, 'sandbox')
+    const prodAccount = await seed(body.notification.data.userId), sandboxAccount = await seed(body.notification.data.userId, OTHER, false, 'sandbox')
+    expect((await inOwner(() => admission.listOwnEbayQuarantine(prodAccount), 'a-owner')).items.map(row => row.id)).toEqual([(production as any).quarantineId])
+    expect((await inProfile(OTHER, () => admission.listOwnEbayQuarantine(sandboxAccount), 'b-owner')).items.map(row => row.id)).toEqual([(sandbox as any).quarantineId])
+  })
+
+  it.each(['metadata', 'resolved adoption'])('rechecks owner authority for %s after membership revocation wins its workspace lock', async operation => {
+    const body = payload(), retained = await receive(body)
+    if (retained.kind !== 'quarantined') throw new Error('Expected quarantine')
+    const connectionId = await seed(body.notification.data.userId), blocker = await database.pool.connect()
+    if (operation === 'resolved adoption') await inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, connectionId), 'a-owner')
+    await blocker.query('BEGIN')
+    await blocker.query('SELECT id FROM "Workspace" WHERE id=$1 FOR UPDATE', [OWNER])
+    await blocker.query('UPDATE "WorkspaceMembership" SET status=\'inactive\' WHERE "workspaceId"=$1 AND "userId"=\'a-owner\'', [OWNER])
+    const pid = (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid
+    const reading = Promise.resolve().then(() => inOwner(() => operation === 'metadata'
+      ? admission.listOwnEbayQuarantine(connectionId)
+      : admission.adoptEbayQuarantine(retained.quarantineId, connectionId), 'a-owner'))
+      .then(value => ({ value }), error => ({ error }))
+    let blocked = false
+    try {
+      const deadline = Date.now() + 3_000
+      while (!blocked && Date.now() < deadline) {
+        blocked = (await database.pool.query('SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) AS blocked', [pid])).rows[0].blocked
+        if (!blocked) await new Promise(resolve => setTimeout(resolve, 20))
+      }
+    } finally { await blocker.query('COMMIT'); blocker.release() }
+    const result = await reading
+    await database.pool.query('UPDATE "WorkspaceMembership" SET status=\'active\' WHERE "workspaceId"=$1 AND "userId"=\'a-owner\'', [OWNER])
+    expect(blocked).toBe(true)
+    expect(result).toMatchObject({ error: { reason: 'adoption_forbidden' } })
+  })
+
+  it('refuses idempotent adoption into a different same-seller account and preserves the original binding', async () => {
+    const body = payload(), retained = await receive(body)
+    if (retained.kind !== 'quarantined') throw new Error('Expected quarantine')
+    const first = await seed(body.notification.data.userId, OWNER, false), second = await seed(body.notification.data.userId, OWNER, false)
+    const assigned = await inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, first), 'a-owner')
+    const before = await quarantine(retained.quarantineId)
+    await expect(inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, second), 'a-owner')).rejects.toMatchObject({ reason: 'identity_conflict' })
+    expect(await inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, first), 'a-owner')).toEqual(assigned)
+    expect(await quarantine(retained.quarantineId)).toEqual(before)
+    expect(await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: assigned.receiptId } }))).toMatchObject({ connectionId: first })
+  })
+
+  it('gives concurrent adoption requests for different accounts exactly one truthful success', async () => {
+    const body = payload(), retained = await receive(body)
+    if (retained.kind !== 'quarantined') throw new Error('Expected quarantine')
+    const targets = [await seed(body.notification.data.userId, OWNER, false), await seed(body.notification.data.userId, OWNER, false)]
+    const results = await Promise.allSettled(targets.map(id => inOwner(() => admission.adoptEbayQuarantine(retained.quarantineId, id), 'a-owner')))
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    const index = results.findIndex(result => result.status === 'fulfilled'), success = results[index]
+    if (success.status !== 'fulfilled') throw new Error('Expected one adoption')
+    const failure = results[1 - index]
+    expect(failure).toMatchObject({ status: 'rejected', reason: { reason: 'identity_conflict' } })
+    expect(await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: success.value.receiptId } })))
+      .toMatchObject({ connectionId: targets[index] })
+    expect((await quarantine(retained.quarantineId)).resolvedReceiptId).toBe(success.value.receiptId)
   })
 })
