@@ -8,7 +8,7 @@ let database: Awaited<ReturnType<typeof concurrentDatabase>>
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_t, key) => (database.client as any)[key] }) }))
 vi.mock('./apps.service.js', () => ({ getChannelApp: async () => ({ clientId: 'synthetic-app', clientSecret: 'synthetic-secret' }) }))
 vi.mock('../monitoring/alert.service.js', () => ({ alertService: { createAlert: vi.fn() }, AlertType: { CONNECTION_HEALTH: 'CONNECTION_HEALTH' } }))
-const { storeGrant, getAccessToken } = await import('./token.service.js')
+const { storeGrant, getAccessToken, inspectEbayRefreshGrant } = await import('./token.service.js')
 const { decryptCredentials } = await import('../../lib/crypto.js')
 const OWNER = 'nexus_legacy_workspace', GUEST = randomUUID()
 const inProfile = <T>(workspaceId: string, work: () => Promise<T>) => withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -117,5 +117,39 @@ describe.skipIf(!concurrentDatabaseUrl())('grant generations in real PostgreSQL'
     const before = await stored(id)
     await expect(inProfile(GUEST, () => storeGrant(id, grant(), actor, 'reconsent'))).rejects.toThrow()
     expect(await stored(id)).toEqual(before)
+  })
+
+  it('inspects the real owned grant without mutating it, including an inactive refresh token', async () => {
+    const id = await seed(), input = grant()
+    await inOwner(() => storeGrant(id, input, actor, 'grant'))
+    const before = await stored(id)
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ active: false }), { status: 200 }))
+    expect(await inOwner(() => inspectEbayRefreshGrant(id))).toEqual({ connectionId: id, workspaceId: OWNER, grantVersion: 1, active: false })
+    const call = vi.mocked(fetch).mock.calls.at(-1)!
+    expect(new URLSearchParams(String(call[1]?.body)).get('token')).toBe(input.refreshToken)
+    expect(await stored(id)).toEqual(before)
+  })
+
+  it('retains the inspected generation when a real reconnect commits during the remote read', async () => {
+    const id = await seed(), next = grant()
+    await inOwner(() => storeGrant(id, grant(), actor, 'grant'))
+    vi.mocked(fetch).mockImplementationOnce(async () => {
+      await inOwner(() => storeGrant(id, next, actor, 'reconsent'))
+      return new Response(JSON.stringify({ active: false }), { status: 200 })
+    })
+    expect(await inOwner(() => inspectEbayRefreshGrant(id))).toMatchObject({ grantVersion: 1, active: false })
+    const current = await stored(id)
+    expect(current.grantVersion).toBe(2)
+    expect(await decryptCredentials(current.credentialsEnc!)).toMatchObject({ refreshToken: next.refreshToken })
+  })
+
+  it('refuses lifecycle inspection to a readable publish guest without a channel call', async () => {
+    const id = await seed()
+    await inOwner(() => storeGrant(id, grant(), actor, 'grant'))
+    await database.pool.query('INSERT INTO "ChannelAccountGrant" ("connectionId","workspaceId","ownerWorkspaceId",mode,"grantedByUserId","grantedAt") VALUES ($1,$2,$3,\'publish\',\'test\',now())', [id, GUEST, OWNER])
+    expect(await inProfile(GUEST, () => database.client.channelConnection.findUnique({ where: { id } }))).toMatchObject({ id, workspaceId: OWNER })
+    const before = vi.mocked(fetch).mock.calls.length
+    await expect(inProfile(GUEST, () => inspectEbayRefreshGrant(id))).rejects.toMatchObject({ code: 'account_not_owned' })
+    expect(fetch).toHaveBeenCalledTimes(before)
   })
 })

@@ -42,6 +42,7 @@ import {
 import { alertService, AlertType } from '../monitoring/alert.service.js'
 import { parseTokenResponse, tokenLifetime, TOKEN_REQUEST_TIMEOUT_MS } from './token-response.js'
 import { clearLegacyChannelCredentials } from './legacy-channel-credentials.js'
+import { EbayGrantInspectionError, introspectEbayRefreshToken } from './ebay-grant-introspection.js'
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,44 @@ export async function readRefreshToken(connectionId: string): Promise<string | n
   if (!row || row.isActive === false || ['disconnected', 'revoked', 'needs_reauth'].includes(row.authStatus)) return null
   const creds = await readCredentials(row)
   return creds?.refreshToken ?? null
+}
+
+export interface EbayRefreshGrantEvidence {
+  readonly connectionId: string
+  readonly workspaceId: string
+  readonly grantVersion: number
+  readonly active: boolean
+}
+
+/** Read-only evidence; the domain writer must compare this version under its account lock. */
+export async function inspectEbayRefreshGrant(connectionId: string): Promise<Readonly<EbayRefreshGrantEvidence>> {
+  if (!tokenServiceEnabled()) throw new EbayGrantInspectionError('canonical_service_required')
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
+  if (!row) throw new EbayGrantInspectionError('account_unavailable')
+  // Unlike publishing, lifecycle inspection is never available through a guest share.
+  if (row.workspaceId !== workspaceIdForQuery()) throw new WorkspaceError('account_not_owned', 'This account belongs to another business profile.', 403)
+  if (row.channelType !== 'EBAY' || row.managedBy !== 'oauth' || !row.isActive
+    || ['revoked', 'disconnected'].includes(row.authStatus)
+    || !Number.isSafeInteger(row.grantVersion) || row.grantVersion < 0) {
+    throw new EbayGrantInspectionError('account_unavailable')
+  }
+  let creds: Credentials | null
+  try { creds = await readCredentials(row) }
+  catch { throw new EbayGrantInspectionError('credential_unavailable') }
+  if (typeof creds?.refreshToken !== 'string' || !creds.refreshToken.trim()) throw new EbayGrantInspectionError('credential_missing')
+  const environment = environmentOf(row)
+  let url: string
+  let app: Awaited<ReturnType<typeof getChannelApp>>
+  try {
+    const { spec } = specFor(row)
+    const endpoint = spec.auth.introspectUrl?.({ environment })
+    if (!endpoint) throw new EbayGrantInspectionError('configuration')
+    url = endpoint
+    app = await getChannelApp('EBAY', environment)
+  }
+  catch { throw new EbayGrantInspectionError('configuration') }
+  const active = await introspectEbayRefreshToken({ url, clientId: app.clientId, clientSecret: app.clientSecret, refreshToken: creds.refreshToken })
+  return Object.freeze({ connectionId: row.id, workspaceId: row.workspaceId, grantVersion: row.grantVersion, active })
 }
 
 function specFor(row: Pick<ConnRow, 'channelType'>) {

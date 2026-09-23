@@ -173,3 +173,60 @@ unused legacy `EbayAuthService.saveTokens` has no production callers; current OA
 callbacks go through `storeGrant`. Current-refresh-token introspection and the atomic
 revocation handler are still to be integrated. A local version increase means discard
 stale evidence and re-evaluate, not blindly ignore the incoming notice.
+
+## C11b — current eBay refresh-grant inspection
+
+**Implemented and independently reviewed locally; no production caller or activation.**
+
+The token service can now inspect the exact stored eBay refresh token using the official
+OAuth introspection endpoint. It refuses other businesses (including publish guests),
+other channels, inactive/terminal accounts, environment-managed credentials and the
+legacy token-service mode before making a request. It captures the local grant version
+before the remote read and returns only that version, owning account/profile and the
+boolean activity result. A reconnect during the request does not relabel old evidence
+as belonging to the new grant. The result is immutable and contains no credentials,
+provider identity fields or speculative issuance timestamp.
+
+The OAuth request uses the matching production/sandbox app, Basic authentication and
+`token_type_hint=refresh_token`, with redirects refused, a 20-second request/body
+signal and a 16-KiB streamed response ceiling. Only a valid boolean from HTTP200 is
+evidence. HTTP401 is an app/remote failure, not proof the seller grant was revoked;
+HTTP429 is explicitly typed for later budget-preserving deferral. Decryption,
+configuration, transport and malformed/read/oversize response failures expose static
+messages, never vendor bodies or credential errors. An `active:false` result means the
+token is unusable; it does not identify why. No account state changes in this helper.
+
+Proof: **42 focused tests pass**, including strict owner refusal with a publish-share
+positive fixture, cached-access/current-refresh distinction, malformed credential and
+response rejection, configuration errors, response cancellation, and abort after
+headers. Three new real PostgreSQL controls bring the grant suite to **10 passed /zero
+skips**: actual owned inspection leaves the row unchanged, reconnect preserves its
+newer grant, and a readable publish guest makes zero calls. The canonical runner now
+requires150 cases; the last full runner remains C11a's147, with these three additions
+run separately. The prior118 token/owner/rotation regressions also pass.
+
+Four applied/restored mutations were killed by their intended controls: removed owner
+check, removed canonical-service check, access-token substitution, and accepting error
+HTTP statuses as grant evidence. The initial32-test TDD run failed because this new
+capability did not yet exist; it is not presented as a production-defect reproduction.
+Independent review required stronger configuration/body-failure coverage, now included.
+
+Evidence under `/private/tmp/cx-completion-20260922/`: `c11b-inspection-red.log`,
+`c11b-inspection-reviewed.log`, `c11b-regressions.log`, `c11b-postgres.log`,
+`c11b-owner-mutation.log`, `c11b-canonical-mutation.log`,
+`c11b-refresh-token-mutation.log`, `c11b-http-status-mutation.log`,
+`c11b-typecheck-reviewed.log` (final typecheck passed).
+All transport is synthetic. This is not successful live introspection, a durable
+revocation handler, receipt integration or production enablement. The next slice must
+compare evidence under the owned account lock, atomically commit lifecycle/audit/
+notification/receipt changes, and re-evaluate when the grant changed.
+
+C11c policy amendment from independent review: a current `active:true` result preserves
+the grant but does **not** establish that a signed notice is obsolete. eBay documents
+no notification/introspection propagation deadline. Keep such notices unresolved and
+retry within the bounded attempt budget; exhaustion must be an explicit unresolved
+DLQ with owner warning, never forced revocation or false DONE. Handle already-terminal
+cleanup before requiring introspection. Revocation, strict audit, durable per-owner
+notifications and receipt completion must commit together. Dedupe notices by profile,
+connection, grantVersion, kind and recipient (not unread state alone). Zero active
+owners is an explicit durable audit disposition, not proof notification was delivered.

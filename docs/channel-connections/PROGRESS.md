@@ -33,7 +33,9 @@ review pass. It is not yet wired into receivers. See [CX-REMAINING](build/CX-REM
 C11a adds atomic grant versions and prevents stale key-rotation/backfill/rollback
 writes from replacing newer credentials: 18 real PostgreSQL cases, 118 regressions,
 five killed/restored mutations, typecheck and independent review pass locally.
-Next: current-refresh-grant inspection, stored-payload dispatch and transactional domain handlers. Live-read probe
+C11b adds reviewed owner-only current-refresh-grant inspection (42 focused tests,
+10 real PostgreSQL grant cases); it has no production caller.
+Next: atomic revocation/audit/owner notifications, stored-payload dispatch and transactional domain handlers. Live-read probe
 approval and the Etsy stock policy question are pending; independent local work continues.
 
 ### Approved production release — 2026-09-22
