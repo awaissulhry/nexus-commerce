@@ -5978,8 +5978,10 @@ the queue push and the batch feed do not read `overrideData`, traced — a sheet
 | Sent, not on the sheet | 16 = `purchasable_offer` + `fulfillment_availability` on each of the 8 children — owned by the offer/stock builder; the Amazon sheet shows those fields empty (Review §3a: no Amazon price column) |
 
 **Against the prediction:** *"0 disagreements on resolver-owned attributes"* — ✅ held. *"5–15 roots differ where
-another builder owns the attribute"* — ❌ **wrong, too pessimistic:** 2 per child (offer, stock), 1 on the parent; this
-family carries no content or image values on Amazon·IT, so those owners never showed up. By Part 13 (*"M2's diff is near
+another builder owns the attribute"* — ❌ **wrong, too pessimistic:** 2 per child (offer, stock), 1 on the parent.
+🟠 **Corrected (the M3 run, same day):** this line first said the family carries no content. It does: the 53 same
+attributes include `item_name` on all 9 products (brand 9, condition 9, item_name 9, parentage 9, parent link 8,
+colour 8). It carries no description, bullets or images on Amazon·IT. By Part 13 (*"M2's diff is near
 zero → Phase 3 shrinks"*), this points the good way — 🔴 **on one small family, locally.** It is a number, not yet a
 trend: a fixture pins a dimension, and this one holds no content, no images, 6–7 values a product.
 
@@ -5991,3 +5993,66 @@ trend: a fixture pins a dimension, and this one holds no content, no images, 6�
 - **M3 is still not captured as a payload** (Step 2.3 proved the refusals; the language tag in a built payload is
   unmeasured). The tool is Amazon·IT-only today.
 - **Step 3.2's gate** (15.7: a fixture gate in the push hook + a sampled production metric) is not built.
+
+### Step 3.2 — M3 and a wider M2: predictions WRITTEN BEFORE THE RUN (2026-09-23 ~15:30, Owner: "Continue with whatever is next")
+
+Option (a) of the last report: the jacket families are made buildable **locally, inside the same thrown-away
+transaction**, by the 2.6d fill (`planVariationStoreFill` + the one writer — production already carries it). The tool
+gains `--market` (default IT) and `--fill-axes`.
+
+**Why M3 is a real question here.** A coordinate cannot be *set* to a language (A-22: the market decides). What can be
+measured is the rule R-LX-6: each content entry goes out under its OWN language's tag, and a market language with no
+text is OMITTED — never the source text under the destination's tag.
+
+- **M3 prediction.** On Amazon·IT (`it`) and Amazon·DE (`de`): every `item_name` / `product_description` /
+  `bullet_point` entry carries `language_tag` `it_IT` / `de_DE`, and its text equals the product's (or its parent's)
+  text in THAT language; a product with no text in the market's language has **no** content entry. **0 entries whose
+  text is another language's.** Positive control: at least one product WITH text in the market language shows an entry.
+- **Wider M2 prediction.** On a jacket family after the fill: **0** value disagreements on resolver-owned attributes
+  (as on the knee slider); size and colour **same** (the fill writes the store both read); content: the sheet shows a
+  title for every row, the payload carries it only where the market language has text, so every "shown, not sent"
+  content root is a product with no text in that language — **no other kind of mismatch.**
+
+### Step 3.2 — M3 and the wider M2: RESULTS (2026-09-23 ~16:30)
+
+**Wider M2 — could not measure.** With the 2.6d fill applied inside the transaction, the jacket families still stop at
+real publish guards on the local copy: `GALE-JACKET` (IT, DE) *"4 variants cannot be told apart"* (the fill had nothing
+to do — this is A-26's local-only XS/XXS pair); `WATERPROOF-OVERJACKET-BLACK-MEN` IT *"A saved mapping no longer exists in
+the category schema"*, DE *"An Amazon offer is closed"*. Patching each guard would measure a family that does not exist,
+so this stops here. The M2 number stays **one local family**.
+
+**M3 — measured at the seam the builder calls for content** (`buildAmazonContentAttributes`, `studio-publication-amazon.ts`),
+for **every** local product with an Amazon listing, IT / DE / FR / ES — read only, rolled back, 0 network. Tool:
+`tools/content-language.mts`. Each entry's text is traced to where it is stored: the product's own columns (the primary
+content language, `it`), a product translation, a listing translation, or the listing's own column (no language recorded).
+
+| Market | Listings | Entries | Tag | Text from |
+|---|---|---|---|---|
+| IT | 273 | 1,576 | `it_IT` 1,576 | listing's own column 1,328 · listing column = the Italian product text 248 |
+| DE | 214 | 837 | `de_DE` 837 | listing's own column 812 · 🔴 **listing column = the ITALIAN product text 25** |
+| FR | 115 | 574 | `fr_FR` 574 | listing's own column 574 |
+| ES | 123 | 495 | `es_ES` 495 | listing's own column 495 |
+
+- **Against the prediction:** *"every entry carries the market's tag"* — ✅ 3,482 of 3,482. *"0 entries whose text is another
+  language's"* — ❌ **25 on DE.** *"a product with no text in the market language has no entry"* — ✅ in the resolver's
+  terms (R-LX-6 holds: no entry substitutes the source text for a MISSING language — 0 products refused, 0 without an
+  entry). *"Positive control: at least one entry"* — ✅ every listing has one.
+- 🔴 **The 25 are not the resolver falling back.** They are 25 Amazon·DE listings whose OWN title column (a pin,
+  `followMasterTitle = false`) holds the Italian product title: AIR-MESH-JACKET-MEN 6, REGAL-JACKET 13, VENTRA-JACKET 4,
+  IT-MOSS-JACKET 1, 3K-HP05-BH9I 1; **21 live on Amazon·DE**; 0 has a German translation. The resolver trusts a listing's
+  own column as the market's language — the column records no language — so it sends Italian under `de_DE`. See A-32.
+
+---
+
+## A-32 — 25 Amazon·DE listings carry an Italian title as their own, and a publish would send it as German. FOR YOUR RULING. Nothing built.
+
+**Found by M3 (above), on the LOCAL copy.** Production is not measured: a count there needs a read-only tool and the
+Owner's run.
+
+| # | Option | |
+|---|---|---|
+| **a** | **Count on production first** (read only: non-IT Amazon listings whose own title / description / bullets equal the product's Italian text), then rule on the data — per listing: clear the pin (the title then follows the product; with no German text R-LX-6 omits it, so Amazon keeps its current title) or get a German title. In the same step, make the publish preview **name** such a listing (*"this Amazon·DE title is the Italian text"*) instead of sending it silently | 🟢 **Recommended.** The number decides the size; the preview line stops it growing |
+| b | Build the preview line now, count later | The data question waits |
+
+- **Cost when** — `flat` (one comparison per content entry at publish). **Gate** — an arm with an Italian own title on DE is
+  named; a German own title is not (control). **Rollback** — revert.
