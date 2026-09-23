@@ -7078,3 +7078,170 @@ facts.destination.currency })` (one argument; the comment says why). The parity 
 no currency is refused *"No currency was resolved for the IT market"*. **Gate — 2 mutations, 2 red** (the argument removed → 3 arms
 red; a fixed `EUR` instead of the market's → the no-currency arm red); sha256 restored. Related suites 11 files / 82 tests green;
 `tsc` 0. **Done when** ✅ (in tests; no live eBay publish was run). **Cost when** `flat`. **Rollback** — revert the commit.
+
+## A-42 — Step 4.3 #1, the EditorShell: the step-1 plan. FOR YOUR RULING (two questions, §4). Nothing built.
+
+*Drafted by sub-agent U3 (read only). Builds only after the editor-open gate is back in the hook and green (R-45).*
+
+2026-09-23 ~23:30 UTC. "read" = I opened the line; "inferred" = not opened or not run.
+
+### 1. The design's step 1, and whether it still matches the code
+
+**Step 1, in plain words** (`docs/2026-09-04-cell-editor-shell-design.md:79-80`): build ONE editor component, `EditorShell`.
+It owns where the box sits, its size, how the cell looks while editing, the keys, and the one commit path. It hosts a
+small "body" per column kind. Step 1 ships only the shell plus `TextBody` and `NumberBody`, and uses them in place of
+AG's two inline editors (`agTextCellEditor`, `agNumberCellEditor`). The contract gate's `text` and `number` rows must
+stay green, and the geometry block must stay flush. Steps 2–4 (long text, select, formula) come later.
+
+**Does it still match today's code?**
+- ✅ Never started: no `EditorShell` / `TextBody` / `NumberBody` in any `.ts`/`.tsx` under `apps/web/src` (read, search).
+- ✅ The size rule it relies on already shipped: `editors/editorBox.ts` (read). But `EDITOR_CAPS` has NO `text` or
+  `number` kind (`editorBox.ts:~53-80`: longtext, formula, select, list, measure, axes) — step 1 adds them.
+- ✅ Text and number are still AG inline editors: `openGesture.ts:168-174` (`text: 'inline'`, `number: 'inline'`);
+  studio `master/columns.tsx:488,495,538-539` and `master/channelColumns.tsx:64,101-104` (read).
+- 🟠 The doc says "five editors". Today there are MORE (see §2): list, measure, axes, sale popups were added since.
+- 🟠 "Approved": the claims ledger ordered it (`pes-claims.md:2486-2487`, hub #776, "then steps 2–4") but the doc's own
+  §8 three questions were never answered in a record I could find (read: RESEARCH.md:689 says "Approved";
+  consistency research :89 says "3 questions still open").
+- 🔴 Its own precondition (§7) is unsettled: "a column ticked in Customise does not survive a reload" on master and
+  Amazon·IT. Not re-measured since (the 09-22 review lists it as open, `PLAN-REVIEW-2026-09-22.md:257`). #774 found the
+  channel scope does NOT have the shape; master's note names the cause (grid created while `columnDefs` is `[]`) —
+  inferred still present, not measured.
+
+### 2. "Six files say Enter saves in six ways" — re-counted today
+
+Search: every user-facing string with Enter/⏎/↵ next to save/apply/commit, over `design-system`, `app`, `lib`,
+`components`, plus the i18n catalog. **Positive control:** `ListPanelEditor.tsx:80` (cited by the 09-21 research) is found.
+The i18n catalog holds none of them (read).
+
+**Result: 6 different wordings, in 6 design-system files, plus 1 app file** (the claim holds in substance):
+
+| File:line | Wording |
+|---|---|
+| `grid/editors/AxesPanelEditor.tsx:62` | `Esc discards · ⏎ saves` |
+| `grid/editors/ListPanelEditor.tsx:76` / `:80` | placeholder `(, adds · Enter saves)` / `… · Enter saves · Esc cancels` |
+| `grid/editors/SaleCellEditor.tsx:116` | `Enter applies · Esc discards` |
+| `grid/editors/sheetColumn.ts:159` | `Enter to edit · Enter again to save · …` (the footer hint) |
+| `grid/editors/FormulaComposer.tsx:89`, `FormulaCellEditor.tsx:302` | `Enter to apply` |
+| `app/products/[id]/matrix/MatrixWorkspace.tsx:420` | `Enter saves, Esc cancels.` |
+
+**Every cell editor today, and who owns the keys** (read unless marked):
+
+| Editor (kind) | Mode | Enter | Tab | Esc | Click-away | Keys owned by |
+|---|---|---|---|---|---|---|
+| `agTextCellEditor` (text) | inline | commit + down (`GridSheet.tsx:107`) | commit + right | cancel | commit (`:108`) | AG |
+| `agNumberCellEditor` (number) | inline | same | same | same | same | AG; a letter opens an EMPTY box (design §4, measured 09-04; not re-measured) |
+| `agLargeTextCellEditor` (longtext) | popup | AG's own (inferred) | AG | AG | commit | AG |
+| `SelectPanelEditor` (select, yes/no) | popup `under` | picks + commits (`SelectPanelEditor.tsx:100-101`) | AG | AG popup wrapper (`:29-35`) | AG popup wrapper | AG + the panel's list |
+| `FormulaCellEditor` (`=` on any kind) | popup | save (`FormulaCellEditor.tsx:248`) | accepts a completion when open | cancel (`:246`) | — | **React**, via `suppressFormulaKeys` on the ColDef (`:41-47`) |
+| `ListPanelEditor` (list) | popup | AG commits last reported (`:35`) | AG | AG | AG | AG |
+| `AxesPanelEditor` (axes) | popup | AG | AG | AG | AG | AG; filter input handles its own keys (`:793`, `:910`) |
+| `MeasureEditor` (measure) | popup | AG (`:8`) | AG | AG | AG | AG |
+| `SaleCellEditor` (matrix sale) | popup `under` | AG (`:22`) | AG | AG | AG | AG |
+| Studio-local `StructuredAttributeEditor`, `ImpactProtectorsEditor`, `AttributeShapeEditor` | popup | AG | AG | AG | AG | AG; **outside the design system** (`_studio/sheet/*.tsx`); no `isCancelAfterEnd` (inferred from search) |
+
+So: **12 editor components, 3 key owners, 6 hint wordings.** Only the formula editor takes keys from AG, and the only
+mechanism proven to work is `suppressKeyboardEvent` on the ColDef (memory `reference_ag_popup_editor_owns_keys`).
+
+### 3. Step 1 as an implementation plan
+
+**Scope:** the shell + `TextBody` + `NumberBody`, used by the studio's text and number columns on ALL three scopes at
+once. Everything else keeps its editor (steps 2–4, then list/measure/axes/sale/studio-local).
+
+**Design-system files (all in `apps/web/src/design-system`):**
+- NEW `grid/editors/EditorShell.tsx` — the AG cell editor: anchors with `editorBox`, reports every change through
+  `props.onValueChange` (AG36: a ref `getValue` is never read), never reports on mount, `useGridCellEditor({
+  isCancelAfterEnd: () => !touched })` so an untouched open never writes; hosts a body by kind.
+- NEW `grid/editors/editorBodies.tsx` — `TextBody`, `NumberBody` (DS `Input` primitive, not a raw `<input>`).
+- `grid/editors/editorBox.ts` — add `text` and `number` kinds: the box is exactly the cell's box.
+- `grid/editors/index.ts` — export the shell, the bodies and ONE preset `shellEditor(kind)` + ONE `suppressEditorKeys`
+  (today's `suppressFormulaKeys` widened to `.nds-editor-shell`; the formula rule keeps its own branch).
+- `grid/editors/openGesture.ts` — `EDITOR_MODE_BY_KIND.text/number` from `'inline'` to `'shell'` (the gate reads it).
+- `grid/editors/FormulaCellEditor.tsx:402-412` — the `=` fallback recognises the shell as the scalar editor (today it
+  matches AG's editor NAMES as strings).
+- Catalog: NEW `catalog/EditorShellExample.tsx` + `catalog/index.ts`; `CHANGELOG.md` entry; `.claude/DS-GAPS.md` row
+  ("one cell editor shell — the grid had five editor mechanisms and no single owner of keys/geometry").
+- **Mirror (AGENTS.md):** the same files under `apps/factory/src/design-system/` (today `editorBox.ts`, `openGesture.ts`,
+  `sheet.ts`, `writeGate.ts`, `SelectPanelEditor.tsx` are byte-identical there — read with `cmp`).
+
+**Consumers switched in step 1 (one preset, both builders together — the two builders drift otherwise):**
+`app/products/[id]/edit/_studio/sheet/master/columns.tsx:488-495,538-539` and `…/master/channelColumns.tsx:64,101-104`.
+**Not switched in step 1** (listed, not forgotten): `app/products/_sheet/MasterSheet.tsx:231`,
+`app/products/next/InventoryGrid.tsx:136`, `_studio/variants/channel/projectionColumns.tsx:193`, `grid/editors/matrixColumn.ts:113-119`.
+
+**Pixel declarations (every geometry change, before landing):**
+- Text/number editor box: x, y, width, height = the cell's own (**Δ 0 on all four**, as today's inline editors). If the
+  cell runs past the viewport's right edge, width = the room to the right (never slides; `editorBox` rule).
+- Text starts at the cell's own text x (the caret does not jump): **Δ 0**. Font size and line height = the cell's.
+- The editing outline on the origin cell: the one the popups already use (grid.css rule to be named in the build).
+- Nothing else moves. Footer, header, hint lines: unchanged in step 1 (unless question 2 below is ruled).
+
+**The one keyboard model** (design §4 + `GridSheet.tsx:106-108`, read) — identical on master·DE, AMAZON·IT, EBAY·IT:
+
+| Key | Every kind |
+|---|---|
+| Enter | commits, moves down (long text: Shift+Enter = new line; select: picks the highlighted option) |
+| Tab / Shift+Tab | commits, moves right / left (formula with completions open: accepts the completion) |
+| Esc | cancels, never writes |
+| Typing | replaces the value (number: see question 1) |
+| F2 | edits in place, caret at the end |
+| `=` | opens the formula body (#775, unchanged) |
+| Click-away | commits |
+| Opened, nothing changed | never writes |
+
+**The gate that proves it** (after R-45 puts `scripts/check-editor-open.mjs` back in the hook, green on today's code):
+existing blocks must stay green through the swap — `first`/`early`/`settled` (includes the fill-handle double-click),
+`geometry` (flush), `contract` + `parity` on all three scopes. **New arms** in the same gate: (a) the keyboard table
+above, per kind, per scope, with a write-count per key (Esc = 0 writes, untouched = 0 writes); (b) text/number box
+Δ = 0 against the cell; (c) the caret-x arm. Node tests (apps/web vitest is node-only): the pure parts — `editorBox`
+text/number kinds, the key table function, `suppressEditorKeys`. Mutations: shell reports on mount; `isCancelAfterEnd`
+removed; `suppressEditorKeys` unscoped; one builder left on AG's editor (parity arm must go red).
+
+**Risks:** (1) AG36 proxy — a mount-time report arms a write on every open; (2) inline→popup changes click-away: popups
+count as "inside the grid" for `stopEditingWhenCellsLoseFocus` (`SelectPanelEditor.tsx:39`) — re-prove commit-on-blur;
+(3) the fill handle (`NexusGrid.tsx:277` `fillHandleHit`) — the `first` arm must stay green; (4) paste/undo paths go
+through `writeGate` sources, not the editor — must not change; (5) a React popup per keystroke-open must still open
+within the gate's 250 ms; (6) the Customise-reload instability (§1) makes every verification noisy.
+
+**Files it would hold (claim row):** the DS files above + their `apps/factory` mirrors, the two studio builders,
+`scripts/check-editor-open.mjs` (new arms only — after U2's restore lands), new tests.
+
+**Order:** (0) R-45's editor-open gate back and green; (0b) re-measure the Customise-reload defect on master and
+Amazon·IT (read-only browser check) — fix first if it holds; (1) this step.
+
+### 4. For the Owner, before building (two questions)
+
+1. **Number cells: typing a letter today opens an EMPTY editor, so saving from there clears the value** (design §4;
+   re-measure first). Fix it in step 1 (the number body refuses the letter and keeps the value, like Excel), or ship
+   step 1 as a pure port? — **Recommend: fix it in step 1**; it is a silent data-loss path, and the gate arm is small.
+2. **The hint lines (6 wordings today): one wording everywhere, or none** (Shopify shows none; the ledger once added a
+   hint because "there was no way to know without trying")? — **Recommend: one line, owned by the shell, the same on
+   every kind and scope**; the five per-editor hints are removed as each editor moves into the shell.
+
+## Step 4.0 — BUILT (R-44, R-45). The derived 7:1 baseline on the palette the studio actually paints.
+
+Built by sub-agent U1; re-run by this lane (10/10 script tests; the ratchet passes at today's count and fails one tighter).
+New `scripts/check-nds-contrast.mjs` (+ `scripts/check-nds-contrast.test.mjs`): every colour derived from
+`apps/web/src/design-system/styles/tokens.css` at run time (`:root` and `.dark`, `var()` chains resolved, alpha composited),
+role pairs (text × surface, status text × soft ground, pill fg × bg, inverse × primary, link × surface), two tiers from a
+usage table, `--json`, and a ratchet `--max-failures N --max-aa-failures M` for the hook (Step 4.2). Controls:
+`--nds-text` on `--nds-surface` = **15.48** ✓; an absent token → null, reported, never counted as passing ✓.
+
+| | pairs | below 7:1 (AAA) | below 4.5:1 (AA) |
+|---|---|---|---|
+| light | 45 | **29** | **9** |
+| dark | 45 | **20** | **1** |
+| **total** | **90** | **49** | **10** |
+
+- **The 09-22 review reproduces** on its own 88 pairs: 47 below 7:1, 8 below 4.5:1. 🟠 Its per-theme table put 3 dark pairs under
+  light (its own per-token list gives 28 / 19) — the script agrees with the list.
+- 🔴 **Found — a real defect, AA fails in BOTH themes:** `--nds-amber-text` on `--nds-amber-soft` = **4.39:1**, and the `.dark`
+  block (`tokens.css:450`) redefines **no** amber token (re-read: 0 matches), so dark mode paints the light chip. The studio's
+  images tab uses it (`images.module.css:368` `.check_warn`). Study 02's "~5.2" for that pair is wrong. For the AAA sweep
+  (Step 4.3 #5) — or sooner if you say so.
+- **Draft usage table — for the Owner (below):** everything is body text (7:1) unless ruled; `--nds-text-3` is **to rule**
+  (as a label/UI-only token the counts become **44 / 5**); pills drafted as body (the DS study calls them UI labels).
+- **Gate — 9 mutations, 9 red** (a darkened token in a scratch copy, a `var()` chain unresolved, alpha not composited, the
+  ratchet ignoring growth, …; the real `tokens.css` never edited). Proposed hook line (Step 4.2):
+  `node --test scripts/check-nds-contrast.test.mjs >/dev/null && node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 10`.
+- **Done when** ✅ a number exists (the plan: *"Expect red. That red is the baseline."*). **Cost when** `flat`. **Rollback** — remove the script.
