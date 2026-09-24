@@ -442,6 +442,10 @@ export function formulaCellEditorSelector<TRow>(
         component: choice.use === 'formula' || scalar ? FormulaCellEditor : FormulaAwareEditor,
         popup: true,
         params: {
+          /* 🔴 Explicit, not defaulted: AG merges the COLUMN's `cellEditorParams` under these (`mergeParams`), so a column
+             that also names the plain value editor would otherwise hand this formula editor `formulas: false` and `=`
+             would stop switching (caught by the push gate on 2026-09-24). */
+          formulas: true,
           fallback: editor,
           candidates: p.data ? wiring.candidatesFor(p.data, col.key).filter(c => c.kind !== 'field' || (wiring.colIdOfRef(c.name, col.key) ?? c.name).toLowerCase() !== col.key.toLowerCase()) : [],
           sourceLabel: wiring.sourceLabel?.(col.key),

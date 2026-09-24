@@ -485,9 +485,10 @@ export function buildMasterColumns(
       return {
         ...def,
         ...numericColumn,
-        /* R-63 — the ONE value editor (formulas off) when this sheet has no formula wiring (the Variants page); with
-           wiring the selector below opens the same popup with formulas on. Never AG's inline number editor. */
-        ...scalarValueEditor('number'),
+        /* R-63 — the ONE value editor (formulas off) ONLY when this sheet has no formula wiring (the Variants page). With
+           wiring the selector below decides — and nothing static may sit beside it: AG merges a column's
+           `cellEditorParams` into the selector's, so a static `formulas: false` here turned `=` off (2026-09-24). */
+        ...(opts.formula ? {} : scalarValueEditor('number')),
         /* 🔴 `=` reaches this cell only through the SELECTOR (#775). `agNumberCellEditor` refuses the
            keystroke outright — it accepts digits — so the mode switch can never be typed once that
            editor is mounted. `cellEditorSelector` is resolved BEFORE any editor exists and sees
@@ -537,8 +538,8 @@ export function buildMasterColumns(
        * made the DS Listbox look "incompatible with AG" for a whole ruling (`SelectCellEditor`'s
        * header). This editor is far bigger than its cell: field, autocomplete, hint, preview.
        */
-      /* R-63 — the same ONE value editor as above, formulas off when there is no wiring. */
-      ...scalarValueEditor('text'),
+      /* R-63 — the same ONE value editor as above, and only without wiring, for the same reason. */
+      ...(opts.formula ? {} : scalarValueEditor('text')),
       ...(opts.formula ? formulaSelector(opts.formula, col, { component: 'agTextCellEditor' }) : {}),
       editable,
       cellRenderer: (p: ICellRendererParams<StudioRow>) =>

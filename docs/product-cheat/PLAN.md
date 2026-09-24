@@ -8040,3 +8040,10 @@ trailing empty position committed as a bullet.
 None needed: R-55/R-56 decide the behaviour. Two stated choices he may reverse: (1) the bullets hint reads "Tab next bullet, then
 moves right" instead of R-48's exact line, because the exact line would be false here; (2) typing on the cell opens the editor
 without inserting the character (no silent replacement of bullet 1).
+- ✅ **E1's regression fixed (12:02 UTC, E1 "phase 3"; re-run here: 87 files / 1,126 tests, `tsc` web + factory 0, fork drift clean).** Cause:
+  AG copies a column's own editor params into the formula editor it opens (`mergeParams`); E1's static `formulas: false` on the column
+  turned formulas off, so `=` became text (or a refused letter on number cells) — the number rule itself was right. **Red first:** new
+  arms through AG's own merge (`_mergeDeep`) failed 4× on the committed code (`=` on master `brand`/`basePrice`, eBay text/number); the
+  no-formula column arm passed. **Fix:** the formula editor always receives `formulas: true`; the master builder adds the plain value
+  editor only where the sheet has no formula wiring; the channel builder adds none (its selector decides); factory mirrored. Mutations
+  7/7 red (M16 did not mutate → M16b). The next push must show the 36 keys gone.
