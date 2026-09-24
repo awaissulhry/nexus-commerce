@@ -154,7 +154,35 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 6, 2026-09-24 11:34 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 7, 2026-09-24 11:58 UTC (READ THIS FIRST; everything below is history)
+
+**`origin/pes/phase-0` = `a80a3044e`. Local `pes/phase-0` is ~21 commits ahead, NOT pushed** — the last push was REFUSED by the
+editor-open gate on a real regression (below). `main` = `0a563d6d5` (NOT deployed; the Owner merges).
+
+**The plan's 26 steps:** Phase 0 — 0.1 ✅ 0.4 ✅, 0.2 (its exit — the four gates in the hook — is MET once a push lands green), 0.3
+the Owner's (kept for the end) · Phase 1 5/5 ✅ · Phase 2 7/7 ✅ · Phase 3 6/6 ✅ · Phase 4 — 4.0 ✅ 4.1 ✅ 4.2 ✅ (all four gates in the
+hook), 4.3: #1 editor BUILT (regression being fixed), #2 top bar BUILT, #4 completeness BUILT, **#3 bullets and #5 the AAA sweep NOT
+built** (plans ruled: A-46/R-55/R-56 with BL1's phase-1 file; A-51/R-65/R-66 with AA1's plan).
+
+**Open right now:**
+1. 🔴 **E1's regression (sub-agent E1, "phase 3"):** `=` on a text/number cell opens the value popup instead of the formula editor;
+   the number rule swallows `=`. 36 editor-open keys. Fix → re-run → push.
+2. The browser gates' blind spots: editor-open 20 baselined keys (AMAZON·IT contract rows may now be measurable — the next run shows
+   "gone"); census now fully green (7 gone).
+3. Then: build #3 bullets (BL1 phase 2, plan in the session scratchpad `BL1-phase1.md`, folded nowhere yet — fold it into PLAN.md
+   first) and #5 the AAA sweep (A-51: 11 token edits in `tokens/css-vars.ts` + `colors.ts`, web AND factory, `npm run tokens:gen` +
+   `tokens:gen:factory`, `grid/spec.json:14,19` stripFg, new hover values + a hover check, the hook's contrast ratchet → 0 / 0).
+4. After the Owner's merge: `node docs/product-cheat/tools/prod-run.mjs content-drift` (read only) and the first nights' CronRun lines
+   (content-drift, readiness — A-50 will lower non-Italian readiness % to the true value).
+
+**Session lessons (this handoff):** 🔴 `open(p,'w').write(open(p).read()+x)` EMPTIES the file first — PLAN.md was cut to 101 lines
+three times and repaired from the pushed text (always read into a variable first; `git diff --numstat origin/pes/phase-0 --
+docs/product-cheat/PLAN.md` must show 0 deletions). The browser gates must not change the shared local database (the runner's API
+runs with `NEXUS_AMAZON_ENV_TOKEN=off`). A UI push through the gates takes ~40 min; lanes must not edit files while a push runs.
+Sub-agent lanes (R-44): disjoint files named in `docs/pes-claims.md`; shared DS files (CHANGELOG, DS-GAPS, catalog, barrels) are
+edited only by the main session from the lanes' patches.
+
+### Where this lane stands — handoff 6, 2026-09-24 11:34 UTC (history)
 
 **Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed; the Owner merges).** Since handoff 5 (rulings R-63 … R-64; A-49, A-50):
 - **Step 4.3 #1, #2, #4 BUILT** in three parallel lanes + an integrator: **one text/number editor** on every scope (R-63), a letter never
