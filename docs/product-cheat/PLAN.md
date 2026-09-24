@@ -8404,3 +8404,47 @@ Predictions were written first (this session's scratchpad `gates-predictions.md`
 - **The ratchet fell:** `scripts/browser-gates-baseline.json` re-recorded by hand to what two runs measured (12:32 push, 13:48 by hand): editor-open 20 → **2**
   (the footer notes), census 7 → **0**. Nothing was added.
 - **Step 0.2 CLOSED:** its exit — the four gates in the hook — was met when the 12:04 UTC push landed with every gate green (`8fd499675`).
+
+## A-54 — The eBay read-back "EBAY_APP_ID and EBAY_CERT_ID must be set" errors: NOT missing keys — the pass reads PARENT SKUs. FOR YOUR RULING. Nothing built.
+
+2026-09-24 ~15:20 UTC, read only (code lines opened; production counted in `BEGIN READ ONLY … ROLLBACK`). Seen in the deploy logs, and in the OLD
+deploy's logs at 14:30 UTC (pre-existing): `ebay-readback: per-SKU error … EBAY_APP_ID and EBAY_CERT_ID environment variables must be set`, 6 per sweep.
+
+- **The pass:** `readBackEbayInventory` (`services/ebay-inventory-readback.service.ts:81`) takes every ACTIVE eBay `ChannelListing`, cuts it to
+  200 (`:110-117`), skips shared-membership SKUs inside the loop (`:136`), and GETs the rest from the Inventory API through `EbayService` —
+  an APPLICATION token from `EBAY_APP_ID` / `EBAY_CERT_ID` (`marketplaces/ebay.service.ts:80-86`, client-credentials, `api_scope`).
+- **Production (counted):** 302 active eBay listings = **14 parents + 288 shared children + 0 other**. The 6 errors per sweep are
+  **parent SKUs** (GALE-JACKET ×5 listings, REGAL-JACKET, VENTRA-JACKET; `isParent = true`, 0 shared memberships). A parent has no quantity
+  of its own; its variations are read by the Trading pass (`readBackEbayTradingQuantities` `:383`, the connection's user token `:408-410`, GetItem `:466`).
+- **So:** no listing loses a real read-back today; the errors are false alarms. Setting the two keys in Railway would NOT fix it (a parent SKU
+  has no inventory item, and an application token cannot read the Inventory API). **No production config or data change is needed.**
+- **Also:** the 200 cap is applied BEFORE the shared skip, so a sweep "checks" an arbitrary 200 of 302 rows (194 skipped) — honest only by luck.
+
+**Proposed fix (small, code only):** the pass selects only listings that CAN have an inventory item — not a parent, not a shared member —
+filtered in the query, then capped. Production today: 0 rows → the pass logs `checked 0`, no false error. A non-shared child, if one ever
+appears, is read as today (and its auth question returns then, named, not hidden). Tests: a parent and a shared child are never GET;
+the cap counts only eligible rows; mutations (parent filter removed → red; filter after the cap → red). *Cost when* flat · *Rollback* revert.
+
+| # | Question | Recommendation |
+|---|---|---|
+| Q1 | Build the small fix (A), or leave it (B — nothing is lost; only log noise) | **(A)** — false errors every 30 min bury real ones (the AS.4a lesson, `:100-103`) |
+
+| # | Question | Ruling (2026-09-24 ~15:25 UTC, forty-third set) |
+|---|---|---|
+| **R-67** | A-54 Q1 — the eBay read-back's false errors | ✅ **(A) Build the small fix** (the Owner: "Option A."): parents and shared members never reach the Inventory pass; the cap counts only eligible rows |
+
+## A-54 — BUILT (R-67). The eBay Inventory read-back no longer asks about parents; the cap counts only rows it may read.
+
+`services/ebay-inventory-readback.service.ts` `readBackEbayInventory`: the query takes only non-parent products (`product: { isParent: false }`);
+the shared-member skip runs BEFORE the cap (`eligible`), so `capped` / `batch` count only rows the pass may read. Nothing else changed
+(the eBay call, the event write, the Trading pass). No production config or data change.
+- **Red first** (predictions written before): the new real-database file `ebay-inventory-readback.selection.vitest.test.ts` (PGlite, the REAL
+  pass and query, eBay stubbed) failed 2 of 3 on the old code — the parent SKU was read, and under cap 1 the batch took the parent instead of
+  the one eligible row; the shared arm passed (already skipped). Fixed: 3/3, profiles OFF and ON; with the old pure-helper file 20/20; the
+  Trading read-back, its drift file and the P0.7 account guard 41/41; `tsc` api 0.
+- **Mutations 4/4 red** (parent filter removed · cap on all rows · batch cut from all rows · shared skip dropped), file restored by sha256.
+- **Effect on production after the next deploy:** the Inventory pass selects 0 of today's 302 active eBay listings (14 parents, 288 shared) →
+  `checked 0`, no false error; the 288 are read by the Trading pass as before.
+
+*Done when* — tests ✅; the production log shows no `ebay-readback: per-SKU error … EBAY_APP_ID` after the deploy ⏳. *Cost when* — flat (one
+column in the existing query). *Gate* — the new file (3 arms) + 4 mutations. *Rollback* — revert the commit (code only).

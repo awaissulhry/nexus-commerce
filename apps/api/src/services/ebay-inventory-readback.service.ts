@@ -88,8 +88,10 @@ export async function readBackEbayInventory(
   // potential flood of eBay read calls. Fall back to the default.
   const cap = opts.maxSkus ?? (Number.isFinite(envMax) && envMax > 0 ? envMax : DEFAULT_MAX_SKUS)
 
+  // PLAN A-54 (R-67) — a PARENT product has no quantity of its own (its variations carry it), so it never has an
+  // Inventory-API item. Asking for one logged a false error every sweep (6 on production, 2026-09-24).
   const listings = await prisma.channelListing.findMany({
-    where: { channel: 'EBAY', listingStatus: 'ACTIVE' },
+    where: { channel: 'EBAY', listingStatus: 'ACTIVE', product: { isParent: false } },
     select: {
       id: true,
       productId: true,
@@ -106,23 +108,25 @@ export async function readBackEbayInventory(
     select: { sku: true },
   })
   const sharedSkus = new Set(sharedSkuRows.map((m) => m.sku))
+  // A-54 — the shared skip runs BEFORE the cap, so the cap counts only rows this pass may read (it used to fill with
+  // shared rows: 194 of a 200 batch on production, while the rest of the 302 were never looked at).
+  const eligible = listings.filter((listing) => !(listing.product?.sku && sharedSkus.has(listing.product.sku)))
+  const skippedShared = listings.length - eligible.length
 
-  const capped = listings.length > cap
+  const capped = eligible.length > cap
   if (capped) {
     logger.warn('ebay-readback: active listings exceed cap; truncating', {
-      total: listings.length,
+      total: eligible.length,
       cap,
     })
   }
-  const batch = capped ? listings.slice(0, cap) : listings
+  const batch = capped ? eligible.slice(0, cap) : eligible
 
   const ebay = new EbayService()
   let checked = 0
   let recorded = 0
   let errors = 0
   const now = new Date()
-
-  let skippedShared = 0
 
   for (const listing of batch) {
     const sku = listing.product?.sku
@@ -131,10 +135,6 @@ export async function readBackEbayInventory(
         listingId: listing.id,
         productId: listing.productId,
       })
-      continue
-    }
-    if (sharedSkus.has(sku)) {
-      skippedShared++
       continue
     }
 
