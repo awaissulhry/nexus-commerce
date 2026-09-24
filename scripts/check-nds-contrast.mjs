@@ -17,6 +17,7 @@
  *   status   every `--nds-X-text` that has a `--nds-X-soft`         (X-text on X-soft)
  *   pill     every `--nds-pill-X-fg` that has a `--nds-pill-X-bg`   (fg on bg)
  *   inverse  `--nds-text-inverse` on `--nds-primary`                (button labels)
+ *   hover    `--nds-text-inverse` on `--nds-primary-hover`          (the same label on the hover fill — R-65)
  *
  * ── Two tiers, from a usage table the Owner rules ────────────────────────────────────────────────────────────────────
  *   body  (the default) AAA 7:1 · AA 4.5:1        ui  (large or UI-label text only) AAA 4.5:1 · AA 3:1
@@ -165,6 +166,10 @@ for (const t of TEXT) for (const s of SURFACES) PAIRS.push({ group: 'text', fg: 
 for (const n of NAMES) { const m = n.match(/^--nds-([a-z0-9]+)-text$/); if (m && has(`--nds-${m[1]}-soft`)) PAIRS.push({ group: 'status', fg: n, bg: `--nds-${m[1]}-soft` }) }
 for (const n of NAMES) { const m = n.match(/^--nds-pill-([a-z0-9-]+)-fg$/); if (m && has(`--nds-pill-${m[1]}-bg`)) PAIRS.push({ group: 'pill', fg: n, bg: `--nds-pill-${m[1]}-bg` }) }
 if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'inverse', fg: '--nds-text-inverse', bg: '--nds-primary' })
+// R-65 (A-51 §3): the hover fill carries the same label. Paired whenever a primary exists, so a hover token that is MISSING
+// resolves to null and counts as a failure; a theme with no hover of its own falls back to :root's (dark text on the light
+// fill measured 2.66 before the sweep); a hover lighter than the rest fill (blue-700 under blue-800: 5.98) fails the bar.
+if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'hover', fg: '--nds-text-inverse', bg: '--nds-primary-hover' })
 /** Stated, not measured: a `--nds-*-text` token with no derivable ground. */
 const UNPAIRED = NAMES.filter((n) => /^--nds-[a-z0-9]+-text$/.test(n) && !has(n.replace(/-text$/, '-soft')))
 /** The page ground a translucent background is composited over. */

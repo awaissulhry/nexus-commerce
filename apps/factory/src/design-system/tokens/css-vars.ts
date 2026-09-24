@@ -119,17 +119,21 @@ export const cssVars: ReadonlyArray<CssVar> = [
 
   // ── Tier 2: semantic roles (components consume these) ─────────────
   { section: 'Tier 2: semantic roles', name: '--nds-text', value: 'var(--nds-grey-900)' },
-  { name: '--nds-text-2', value: 'var(--nds-grey-600)' },
-  { name: '--nds-text-3', value: '#7e8796' },
+  { name: '--nds-text-2', value: 'var(--nds-grey-700)' }, // R-49 (A-51): 8.71 worst light ground (was grey-600, 5.22)
+  // R-49 (A-51, 2026-09-24): #48505b — strict 7:1 on all five light surfaces (worst 7.20; #7e8796 was 3.20).
+  // R-66: it now sits close to text-2 in colour; text-3 stays distinct by SIZE and WEIGHT (labels, metadata).
+  { name: '--nds-text-3', value: '#48505b' },
   // 5.01:1 on --nds-surface. --nds-text-3 is 3.10:1 and fails AA as body text; muted is the
   // tier to use for secondary copy. Ported from apps/web 2026-08-25.
-  { name: '--nds-text-muted', value: '#626c7b' },
+  // R-49 (A-51): the muted tier IS text-3 now (7.20 worst light surface; #626c7b was 4.69).
+  { name: '--nds-text-muted', value: 'var(--nds-text-3)' },
   { name: '--nds-text-strong', value: 'var(--nds-grey-700)' },
   { name: '--nds-text-disabled', value: 'var(--nds-grey-400)' },
   { name: '--nds-text-inverse', value: 'var(--nds-white)' },
   // NOT --nds-blue-600: 4.42:1 on the ads console's ground, i.e. AA inside a card and failing
   // the moment the card is removed. #1a60c4 clears AA on every ground. See apps/web's copy.
-  { name: '--nds-text-link', value: '#1a60c4' },
+  // R-65 (A-51): blue-800 — 7.08 on the worst light surface (#1a60c4 was 5.27).
+  { name: '--nds-text-link', value: 'var(--nds-blue-800)' },
   { name: '--nds-tooltip-light-fg', value: 'var(--nds-grey-900)' },
   { name: '--nds-tooltip-light-bg', value: 'var(--nds-white)' },
   { name: '--nds-tooltip-light-border', value: 'var(--nds-grey-150)' },
@@ -173,8 +177,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-rail-chip-active-fg', value: '#1f6fde' },
   { name: '--nds-rail-ft', value: '#aeb6c2' },
 
-  { name: '--nds-primary', value: 'var(--nds-blue-600)' },
-  { name: '--nds-primary-hover', value: 'var(--nds-blue-700)' },
+  // R-65 (A-51): the darker brand blue — as text 7.08, white label on it 8.02 (blue-600 was 4.23 / 4.79).
+  { name: '--nds-primary', value: 'var(--nds-blue-800)' },
+  // R-65 (A-51 §3): NOT blue-700 — #1a60c4 is LIGHTER than the new primary, so a hover would fade the button.
+  // #0f4290: darker than primary; white on it 9.54. Measured by check-nds-contrast's hover pair.
+  { name: '--nds-primary-hover', value: '#0f4290' },
   { name: '--nds-primary-dark', value: 'var(--nds-blue-800)' },
   { name: '--nds-primary-soft', value: 'var(--nds-blue-100)' },
   { name: '--nds-primary-ghost-border', value: 'var(--nds-blue-200)' },
@@ -215,7 +222,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { section: 'FilterChip', name: '--nds-fchip-on-bg', value: 'var(--nds-tonal-bg)' },
   { name: '--nds-fchip-on-border', value: 'var(--nds-tonal-border)' },
   { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
-  { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: 'var(--nds-blue-900)' },
+  { section: 'status pills (tone-named: success/warning/neutral/danger)', name: '--nds-pill-success-fg', value: '#094397' }, // R-49 (A-51): 7.28 on #d2e6fc (blue-900 was 6.37); bg kept
   { name: '--nds-pill-success-bg', value: pill.ok.bg },
   { name: '--nds-pill-warning-fg', value: 'var(--nds-warning-text)' },
   { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
@@ -365,8 +372,8 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-info-soft', value: 'var(--nds-primary-soft)' },
   { name: '--nds-info-text', value: 'var(--nds-text)' },
   { name: '--nds-text', value: '#e7ebf1' },
-  { name: '--nds-text-2', value: '#aab6c2' },
-  { name: '--nds-text-3', value: '#8a94a6' },
+  { name: '--nds-text-2', value: '#c3ccd6' },   // R-49 (A-51): 8.03 worst dark ground (was #aab6c2, 6.32)
+  { name: '--nds-text-3', value: '#b3bac6' },   // R-49 (A-51): 7.24 worst dark surface (was #8a94a6, 4.62)
   { name: '--nds-text-disabled', value: '#5b6b7b' },
   { name: '--nds-text-inverse', value: '#14223a' },
 
@@ -385,14 +392,18 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // Every value here was chosen against its ACTUAL usage, not picked to look right in isolation.
   //
   // --nds-primary is the constrained one: it is a FILL carrying --nds-text-inverse AND is used as
-  // TEXT on --nds-surface, so one value has to clear both. #6d9ee8 gives 5.84 and 5.59.
+  // TEXT on --nds-surface, so one value has to clear both. R-65 (A-51): #98bbf0 gives 8.11 and 7.76
+  // (was #6d9ee8: 5.84 and 5.59, under R-49's 7:1).
   // Deliberately NOT #8ab6f0, which would clear both more comfortably but IS --nds-text-link —
   // reusing it makes "primary" and "link" the same colour in dark and different in light.
-  { name: '--nds-primary', value: '#6d9ee8' },
-  { name: '--nds-primary-soft', value: '#1c2f4d' },      // link on it 6.42
-  { name: '--nds-wash-primary', value: '#182a44' },      // link on it 6.90
+  // R-65 superseded this: light primary and link are both blue-800 now; dark #98bbf0 vs link #9cc2f3.
+  { name: '--nds-primary', value: '#98bbf0' },   // R-65 (A-51): as text 7.20, text-inverse on it 8.11 (was #6d9ee8: 5.19 / 5.84)
+  // R-65 (A-51 §3): dark had NO hover, so buttons hovered to the light #1a60c4 under dark text (2.66:1).
+  { name: '--nds-primary-hover', value: '#b3cdf4' }, // text-inverse on it 9.82
+  { name: '--nds-primary-soft', value: '#1c2f4d' },      // link on it 7.31
+  { name: '--nds-wash-primary', value: '#182a44' },      // link on it 7.86
   { name: '--nds-primary-subtle', value: 'var(--nds-wash-primary)' },
-  { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 6.32
+  { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 8.03
   { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
   { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
   { name: '--nds-danger-text', value: '#f3b7b0' },       // PR.6: >=7.05 across the full declared-ground matrix
@@ -405,8 +416,8 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-prov-inherited-fg', value: '#93c5fd' },
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
-  { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 7.67
-  { name: '--nds-imgup-drag', value: '#1c2f4d' },        // text-link on it 6.42
+  { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 9.74
+  { name: '--nds-imgup-drag', value: '#1c2f4d' },        // text-link on it 7.31
   // The -text tier is DARK by construction (it exists to be read on a light wash), so on a dark
   // wash it is dark-on-dark: success-text measured 1.64:1 on the new --nds-success-soft. In dark
   // the -strong tier is the readable one — this block already chose those values to be AA on the
@@ -422,11 +433,15 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // aliased to -strong (light) above, a warning pill was light-on-light at 1.66:1. These three
   // mirror the tone washes.
   { name: '--nds-pill-warning-bg', value: '#3a2e12' },
+  // R-49 (A-51): the amber chip had NO dark value, so dark painted the LIGHT chip (#9a6700 on #fdf3d3, 4.39).
+  // The existing dark warning pair: #f2bc79 on #3a2e12 = 7.75.
+  { name: '--nds-amber-soft', value: '#3a2e12' },
+  { name: '--nds-amber-text', value: '#f2bc79' },
   // BLUE, not green. This console's success pill is blue — "ok = blue Enabled" is the convention
   // pillTone.ts documents, and the LIGHT value is #d2e6fc with a blue-900 foreground. Mirroring
   // the tone NAME to green would have made the same pill green in dark and blue in light.
   { name: '--nds-pill-success-bg', value: '#1c2f4d' },
-  { name: '--nds-pill-success-fg', value: 'var(--nds-text-link)' },   // 6.42 on it
+  { name: '--nds-pill-success-fg', value: 'var(--nds-text-link)' },   // 7.31 on it
   { name: '--nds-pill-danger-bg', value: '#3a1c1c' },
   // 🔴 These four ALIAS a token that .dark overrides, and must therefore be re-declared HERE.
   // A custom property whose value is `var(X)` resolves in the scope where it is DECLARED, not
@@ -456,7 +471,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { section: 'Dark tone + link roles (AA on the dark canvas)', name: '--nds-success-strong', value: '#6ee7a8' },
   { name: '--nds-warning-strong', value: '#f0b46a' },
   { name: '--nds-danger-strong', value: '#f79289' },
-  { name: '--nds-text-link', value: '#8ab6f0' },
+  { name: '--nds-text-link', value: '#9cc2f3' }, // R-49 (A-51): 7.31 worst dark ground (was #8ab6f0, 6.42)
 
   { section: 'Dark rail palette (app-wide rail only; shells pin light)', name: '--nds-rail-text', value: '#aab6c2' },
   { name: '--nds-rail-text-2', value: '#97a3b1' },

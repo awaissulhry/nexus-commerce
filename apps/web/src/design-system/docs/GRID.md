@@ -67,9 +67,9 @@ No stylesheet outside it may address `.ag-*`, `.nds-ag-*`, `.nds-cell-*` or the 
 | overlays | `skeleton-bg` · `skeleton-shine` · `loading-veil` · `pinned-shadow` | sunken · subtle · surface 60% · `rgb(var(--nds-shadow-rgb) / .08)` |
 
 Resolved in the browser (spec.json): light — ground `#ffffff`, header `#f7f9fb` / `#3a4452`, cell `#1c2530`,
-row rule `#e6e9ee`, header rule `#d8dde4`, hover `#f7f9fb`, selected `#eef5ff`, strip `#eef1f5` / `#5b6573`.
+row rule `#e6e9ee`, header rule `#d8dde4`, hover `#f7f9fb`, selected `#eef5ff`, strip `#eef1f5` / `#3a4452`.
 Dark — ground `#18263b`, header `#1f2c3d` / `#e7ebf1`, cell `#e7ebf1`, rules `#26323f` / `#2f3a4a`,
-hover `#1f2c3d`, selected `#182a44`, strip `#1a2330` / `#aab6c2`.
+hover `#1f2c3d`, selected `#182a44`, strip `#1a2330` / `#c3ccd6`.
 
 AG paints `--ag-cell-horizontal-padding` one pixel under the variable (14 → 13). The token states 14.
 

@@ -20,7 +20,7 @@
 export const palette = {
   white: '#ffffff', // 337×
 
-  /** Brand blue. 600 is THE primary (383×). */
+  /** Brand blue. 800 is THE primary since R-65 (2026-09-24); 600 held that role before (383×). */
   blue: {
     50: '#eef5ff', // 28× selected/hover wash
     100: '#e7f0fd', // 11× soft fill
@@ -69,7 +69,7 @@ export const palette = {
     soft: '#fdf3d3', // status-pill "warn" bg
     600: '#b87503',
     700: '#c2410c',
-    text: '#9a6700', // status-pill "warn" text
+    text: '#6b4800', // status-pill "warn" text — R-49 (A-51): 7.42 on amber.soft (#9a6700 was 4.39)
   },
   /** Manual targeting + Sponsored-Products chip. */
   purple: { bg: '#f3e8ff', 600: '#7400bc', 700: '#6d28d9' },
@@ -85,12 +85,12 @@ export const palette = {
 export const color = {
   // text
   text: palette.grey[900],
-  text2: palette.grey[600],
-  text3: palette.grey[500],
+  text2: palette.grey[700], // = --nds-text-2 (R-49, 2026-09-24)
+  text3: '#48505b', // = --nds-text-3 (R-49; not a ramp step)
   textStrong: palette.grey[700], // control labels / button text (#3a4452)
   textDisabled: palette.grey[400],
   textInverse: palette.white,
-  textLink: palette.blue[600],
+  textLink: palette.blue[800], // = --nds-text-link (R-65)
 
   // surface
   bg: palette.grey[50],
@@ -108,8 +108,8 @@ export const color = {
   railBorder: palette.railBorder,
 
   // primary
-  primary: palette.blue[600],
-  primaryHover: palette.blue[700],
+  primary: palette.blue[800], // = --nds-primary (R-65, the darker brand blue)
+  primaryHover: '#0f4290', // = --nds-primary-hover (R-65: blue-700 is lighter than the new primary)
   primaryDark: palette.blue[800],
   primarySoft: palette.blue[100],
   primaryGhostBorder: palette.blue[200],
