@@ -154,7 +154,31 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 7, 2026-09-24 11:58 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 8, 2026-09-24 13:52 UTC (READ THIS FIRST; everything below is history)
+
+**`main` = `0a563d6d5` (deployed; unchanged). `origin/pes/phase-0` = `8fd499675`** — the 12:04 UTC push LANDED with every gate green (editor-open
+0 new, 18 gone: the 36 `=` keys GONE; census 7 gone). **Step 0.2 CLOSED** by it. The final push of this round carries the commits below.
+
+**The plan's 26 steps:** Phase 0 — 0.1 ✅ 0.2 ✅ 0.4 ✅, 0.3 the Owner's (kept for the end) · Phase 1 5/5 ✅ · Phase 2 7/7 ✅ · Phase 3 6/6 ✅ ·
+Phase 4 — 4.0 ✅ 4.1 ✅ 4.2 ✅ **4.3 ✅ all five** (#1 editor, #2 top bar, #4 completeness earlier; **#3 bullets `80baa4492`, #5 the AAA sweep `975e64882`** now).
+**Built ≠ live:** production runs `main`; everything since 09-23 06:28 UTC (60+ commits) goes live with the Owner's merge.
+
+**This round (rulings unchanged; lanes BL2, AA2, MV1 — disjoint files, R-44):**
+- **#5 AAA sweep** (AA2): web 49/90 → 0/92 below 7:1, factory 56/104 → 0/106; the hook holds both at 0/0; a hover pair measured. Residue named in PLAN.md.
+- **#3 bullets in one cell** (BL2): `SlotListEditor` + one engine column; Bullet 1–10 hidden by default on channel scopes (R-56); 33/33 mutations red.
+  Stated choices for the Owner: each following bullet keeps its own LX.14 acknowledgement; saved layouts keep the ten.
+- **A-53 Motovento "Waiting for the market…"** (MV1 diagnosed, read only): no business created under profiles gets `Marketplace` rows. Plan `9a6efc1da`;
+  **built by a SEPARATE Owner session as `9bb81217e`** (its record: `docs/product-cheat/A-53-motovento.md`). Its data migration `20260924a_a53_market_catalogue_backfill`
+  (Owner ruling: per row, add missing markets only) runs on PRODUCTION with the deploy — Motovento +20.
+- **Browser gates by hand 13:26–13:48 UTC** over all of it: chrome 0 · editor-open 0 new (bullets rows green) · census 0; local database unchanged. Baseline lowered
+  (editor-open 20 → 2, census 7 → 0).
+
+**Next:** the push (running from this handoff) → the Owner merges to `main` → after the merge: `node docs/product-cheat/tools/prod-run.mjs content-drift` (read only)
+and the first nights' CronRun lines (content-drift; readiness — A-50 lowers non-Italian readiness % to the true value); a read-only count of Motovento's
+`Marketplace` rows after the deploy (A-53's migration). The A-53 session waits for this lane's "push landed" message before editing again.
+**Still the Owner's, kept for the end:** 0.3; listing content data (R-34).
+
+### Where this lane stands — handoff 7, 2026-09-24 11:58 UTC (history)
 
 **`origin/pes/phase-0` = `a80a3044e`. Local `pes/phase-0` is ~21 commits ahead, NOT pushed** — the last push was REFUSED by the
 editor-open gate on a real regression (below). `main` = `0a563d6d5` (NOT deployed; the Owner merges).

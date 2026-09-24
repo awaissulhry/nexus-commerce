@@ -8327,3 +8327,80 @@ from the measured data; say if you want either changed.)
   runs for new businesses; the seed route is create-only). Motovento's 20 rows can stay after a revert
   and are harmless. Removing them would bring the dead end back. If removal is ever wanted, delete by
   value (`workspaceId = 'bf0047bf-…'`), only while Motovento has no listings (q3: 0 today).
+
+## Step 4.3 #5 — BUILT (A-51; R-49, R-65, R-66). Every design-system text pair reaches 7:1, both themes, web and factory. `975e64882`
+
+Built by sub-agent AA2 (phase 1 read only, then phase 2); re-run by this lane before committing (every check bare, exit codes read).
+
+| Measured | Before | After |
+|---|---|---|
+| `check-nds-contrast` web (pairs · below 7:1 · below 4.5:1) | 90 · 49 · 10 | **92 · 0 · 0** (the new hover pair included; control 15.48) |
+| the same, factory's own palette | 104 · 56 · 12 | **106 · 0 · 0** |
+| white on light `--nds-primary-hover` · dark text on dark hover | 5.98 (blue-700, LIGHTER than the new primary) · **none in `.dark`** (fell back to the light fill) | **9.54 · 9.82** |
+| positive control: the gate at 0/0 on HEAD's OLD `tokens.css` (this lane) | — | **exit 1** ("a count grew") |
+
+- **Values (A-51 §2 table, as ruled):** light text-2 grey-700 · text-3 #48505b · text-muted = text-3 · link + primary blue-800 #134da3 · primary-hover #0f4290 ·
+  pill-success-fg #094397 · amber.text #6b4800; dark text-2 #c3ccd6 · text-3 #b3bac6 · link #9cc2f3 · primary #98bbf0 · NEW `.dark` primary-hover #b3cdf4 and the
+  amber chip pair #3a2e12 / #f2bc79. Unchanged, stated: `--nds-focus-rgb`, `--nds-info` (#1f6fde).
+- **Found by AA2 and required (A-51 missed them):** the ads-console light pins `app/_shared/shared-shell.css` (the pin guards `check-shell-pin-fresh`, `check-dark-pin-parity`
+  go red otherwise; raw-hex 31 → 33 — four values are not ramp steps; the reason is in `css-hex-baseline.json`); `check-nds-contrast.test.mjs` pinned today's values
+  and went **vacuous at 0/0** (`base - 1` = −1 threw, exit 1 with no JSON) — rewritten, 11 tests; the JS roles in `tokens/colors.ts` (consumers: TokenCatalog swatches,
+  `PerformanceGraph` axis ticks — now 8.16:1, was 3.10) aligned; `DESIGN.md` table, `GRID.md`, grid `spec.json` `stripFg` (#3a4452 / #c3ccd6).
+- **The hook** holds web AND factory at `--max-failures 0 --max-aa-failures 0` (was a 49 / 10 ratchet, web only).
+- **Mutations 11/11 red** (old hex back, the dark amber pair, the dark hover, the light hover back to blue-700, a shell pin, factory text-2, the hover line removed from the
+  checker, `css-vars.ts` edited without the generator, the hex baseline). 🔴 `spec.json` `stripFg` reverted → **no static check sees it**; only the browser
+  `check-grid-chrome` reads it (the run before the push measures it).
+- **Named residue — below 7:1 or unmeasured, NOT changed (not in A-51's pairs):** the rail/top-bar host pins `--nds-primary: var(--nds-blue-600)`
+  (`shared-shell.css:72`, live — the rail's active item white on #1f6fde **4.79**; `:47` a dead copy) · chrome text (`tokens/chrome.ts:62` #aab6c2 **6.39** on the
+  dark-theme chrome, `:63` fg-2 **5.14**, `:102` kbd **5.58**) · `ads-console/amazon.css:31` link pinned to blue-700 (5.98) · `fleet/fleet-pages.css:90-91` text-2 / text-3
+  pinned (5.91 / **3.10**) · `--nds-rail-text`, `--nds-stale-text`, `--nds-wsgrid-text` (no derivable ground) · raw hex in feature code (190 in 39 web files, most under `marketing/`).
+- 🔴 **A vacuous gate found (pre-existing, not fixed):** `scripts/check-dark-alias-scope.mjs:30` looks for `'\n.dark {'`; the generated selector is `.dark, .dark body:has(…)`,
+  so it inspects **0 tokens** and always passes. A working version finds web 0, factory 3 (`--nds-fchip-on-bg/-border/-fg`, factory `css-vars.ts:222-224`, not re-declared in `.dark`).
+- **Brand side effects, accepted by R-65:** light primary = link (#134da3); dark primary vs link 1.07:1; `.nds-readable` primary-dark now equals primary.
+
+*Done when* — web and factory 0 / 0 at the hook ✅; hover measured ✅; `check-grid-chrome` green on the new `stripFg` ⏳ (the browser run). *Cost when* — `flat` (tokens).
+*Gate* — the hook's contrast stage (web + factory, 0/0) + its 11-test file + the two pin guards + the hex ratchet; 11 mutations red. *Rollback* — revert `975e64882`
+(tokens regenerate from `css-vars.ts`; no data).
+
+## Step 4.3 #3 — BUILT (A-52; R-55, R-56). Bullets in ONE cell. `80baa4492`
+
+Built by sub-agent BL2 (phase 1 re-checked A-52 against HEAD after E1's fix; ~20 adjustments, all inside the rulings, listed below); re-run by this lane:
+web 91 files / 1,208 tests (the 4 new files + the editors and sheet folders) · API `bullets-slot-fanout` 5/5 profiles OFF and ON · `tsc` web 0 · factory 0 · fork drift
+no new · api-guard · DS-GAPS append-only · option identity — all green. BL2: whole web suite 386 files / 4,781 passed. **Mutations 33/33 red**, every file sha256-restored.
+
+- **DS (web + factory byte-identical):** `SlotListEditor` (modes `slots` / `list`; composes `OrderedList` + `Textarea`; over-cap marked, never cut; Cancel/Apply),
+  `slotListColumnDef` (the ONE ColDef both builders return: selector cleared, fill handle off, no paste parser, Delete writes nothing, the setter writes only changed
+  positions through each slot's own setter), pure `slotList.ts`, `editorBox` kind `slotlist` (560 × ≤480), `EDITOR_KEY_HINT_FORM`, `grid.css` `.nds-slotlist-*`.
+- **Studio:** the one cell "Bullet points" before Bullet 1 (bullets only, `slot.of === 'bulletPoints'`); its change fans out BEFORE the gate as one dispatch per CHANGED
+  position through the same handler — the writer coalesces them into the row's one request. **R-56** at the landing sites only (All attributes, Languages);
+  `orderedKeys` untouched, so Customise and every export keep Bullet 1–10; "Attributes displayed in the grid" expands the one cell back to `bulletPoints` (A-52 said
+  import/export was untouched — it was not: `visibleFields` dropped unknown keys). Shared bullets move onto the same editor (list mode). The master builder spreads
+  the same engine ColDef (parity); the master ADAPTER is unchanged (the studio master never has slots: `studio-sheet.service.ts` always passes `familyIds`).
+- **Adjusted from A-52 (facts at HEAD):** CSS in `grid/theme/grid.css` (mirrored), not `components.css`; the hint is two literals (the gate reads a literal); `kind: 'text'`
+  + a `slotGroup` fact (no type-file edit); Space does not open an editor (never did) — claim dropped; no API product change (`applyContentBulk` keeps holes, one CAS, per row).
+- **Stated choices (reversible; for the Owner):** (1) each changed bullet that follows shared text keeps its OWN LX.14 acknowledgement ("N edits await a choice"),
+  each accepted edit its own request, a decline reverts only its position — so "one request per row" holds only with no acknowledgement; (2) typing on the cell opens
+  the editor without inserting the letter; (3) Enter on a button inside the editor presses that button, never saves; (4) saved/working layouts keep what they saved
+  (the one cell appears on a fresh landing); (5) Required / Essentials / Missing-required keep `bulletPoints_1`; (6) `AttributeShapeEditor` stays in code, unused by the sheet.
+- **Pixels declared (A-52 §4):** the one cell 240px; the default Amazon sheet ≈ 860px narrower; the popup 560 × ≤480, pinned to the cell.
+
+*Done when* — tests ✅; the editor-open gate's new rows (`slotlist` AMAZON·IT, `bullets` master·DE: `pop:slots`, the key line, Tab → Bullet 2, Esc / untouched 0 writes,
+one edited position → one request, one change) ⏳ the browser run. *Cost when* — `flat`. *Gate* — the 4 new test files + the editor-open gate; 33 mutations red.
+*Rollback* — revert `80baa4492` (client-only; no schema, no data).
+
+### Browser gates by hand before the push (2026-09-24 13:26–13:48 UTC, `npm run gates:browser`, HEAD `9bb81217e` = both builds + A-53)
+
+Predictions were written first (this session's scratchpad `gates-predictions.md`). Result: **every prediction held.**
+- ✅ **grid chrome: 0 keys** — "every scenario matches spec.json at 3 densities × 2 themes × 2 viewports" → the new `stripFg` (#3a4452 / #c3ccd6) is what the grid paints.
+  Step 4.3 #5's last *Done when* ✅.
+- ✅ **editor-open: 0 NEW keys, 18 gone** (the 2 known footer-note blind spots remain). New rows: master·DE `bullets` →
+  `dblclick/enter/f2/type = pop:slots`, `= pop:fx`; AMAZON·IT `slotlist` → all five `pop:slots`. The bullets arms (key line `EDITOR_KEY_HINT_FORM`, focus on
+  "Bullet 1", Esc 0 writes, untouched Enter 0 writes, Tab → "Bullet 2", Tab on the last position commits and moves right, one edited position = ONE request with
+  ONE change — `bulletPoints[10]` on Amazon, the whole list on Shared) ran on both rows and pushed no finding (a failed or unmeasured arm is always a finding).
+  Every text/number row keeps `equals=pop:fx` (the 36-key regression stays gone). Step 4.3 #3's *Done when* ✅.
+- ✅ **control census: 0 keys, 7 gone.**
+- **The local database is unchanged:** a read-only search of 369 columns (every `jsonb` + every `*bullet*` column) for the gate's typed text `ZZGATE-BULLET`
+  → 0 rows (the same query finds 479 rows for a control string).
+- **The ratchet fell:** `scripts/browser-gates-baseline.json` re-recorded by hand to what two runs measured (12:32 push, 13:48 by hand): editor-open 20 → **2**
+  (the footer notes), census 7 → **0**. Nothing was added.
+- **Step 0.2 CLOSED:** its exit — the four gates in the hook — was met when the 12:04 UTC push landed with every gate green (`8fd499675`).
