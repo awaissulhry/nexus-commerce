@@ -1,6 +1,7 @@
 'use client'
 import { scalarColumnDef, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
-import { columnForCategory, columnApplies } from '@nexus/shared/master-sheet'
+import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
+import { columnForCategory, columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 import { EbayPolicyEditor, isEbayPolicyField } from '../EbayPolicyInput'
 import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
@@ -11,6 +12,7 @@ import { parseReferenceOrScalarValue, referenceColumnDef } from '../referenceLab
 import { isReferenceField } from '../referenceOptions'
 import { ReferenceSelectEditor } from '../ReferenceSelectEditor'
 import { orderColumnKeys, rankOfColumn, type ViewContext } from '../views'
+import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
 import { productMediaColumn, PRODUCT_MEDIA_COLUMN, type useProductMediaEditor } from '../../media/productMediaColumn'
 import { shopifyDraftColumn, type useShopifyDraftCell } from '../../shopify/ShopifyDraftCell'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
@@ -182,9 +184,29 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     .map((c, i) => ({ c, r: rankOfColumn(c, rank), i }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map((x) => x.c)
+  const byId = new Map(ordered.map(c => [c.colId, c]))
   return ordered.map(column => {
     if (column.colId === PRODUCT_MEDIA_COLUMN) return productMediaColumn<ChannelSheetRow>(mediaEditor.open, mediaEditor.actions)
     const definition = gridColumns.find(c => c.key === column.colId)
+    /* Step 4.3 #3 (A-52, R-55) — the one bullets cell: the ENGINE's whole ColDef, never spread over the column built
+       above (that one carries this builder's formula SELECTOR, which would beat the editor). Each position writes
+       through that slot column's own setter, so an edit here is exactly a slot typed there. */
+    const slotGroup = (definition as SlotColumnLike | undefined)?.slotGroup
+    if (definition && slotGroup) {
+      const first = gridColumns.find(c => c.key === slotGroup.keys[0])
+      return slotListColumnDef<ChannelSheetRow>(slotGroup, {
+        label: definition.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: definition.width, headerTooltip: definition.helpText,
+        cellOf: (row, key) => row.values?.[key],
+        setSlot: (row, key, value) => {
+          const setter = byId.get(key)?.valueSetter
+          return typeof setter === 'function' ? !!setter({ data: row, newValue: value, oldValue: row.values?.[key]?.value } as never) : false
+        },
+        rowIdOf: (row) => row.rowId,
+        tracker,
+        provenanceOf: (row, key) => classifyProvenance({ ...withMappingRun(row.values?.[key], productLevelOnly), refusedReason: refusedReasonFor(row.rowId, key) }, 'channel'),
+        required: (row) => !!first && columnApplies(first, row) && columnRequiredByAny(first, row),
+      })
+    }
     if (definition?.shopifyField && !shopifySchema) return { ...column, editable: false }
     return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open),
       editable: p => !!p.data?.values[definition.key]?.writable && auth.has('products.edit') && (definition.shopifyField?.id !== 'inventory' || auth.has('inventory.adjust')),

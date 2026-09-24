@@ -48,7 +48,7 @@ export { variationThemeChange, variationThemeWrite, type VariationThemeChange, t
 export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, scalarValueEditor, scalarValueEditorSpec, type FormulaEditorParams, type FormulaWiring } from './FormulaCellEditor'
 // R-47 / R-48 (A-42 step 1, 2026-09-24) — a number cell never loses its value to a stray letter; ONE key line for every editor.
 export { isNumberDraft, numberStart, acceptNumberEdit, numberCommitText, NUMBER_ONLY_MESSAGE, type NumberStart } from './numberEntry'
-export { EDITOR_KEY_HINT } from './editorHint'
+export { EDITOR_KEY_HINT, EDITOR_KEY_HINT_FORM } from './editorHint'
 export { isFormulaDraft, commitValue, coerceTyped, completionToAccept, formulaAvailability, formulaEditorChoice, formulaSaveOutcome, FORMULA_BLOCKED_REASON, FORMULA_STORED_NOT_EVALUATED, type FormulaSaveResponse, type FormulaSaveOutcome, type FormulaAvailability, type FormulaEditorChoice, type CommitKind, exprOf, inStringLiteral, refTokenAt, completionsFor, applyCompletion, unknownRefs, type FormulaCandidate, type RefToken } from './formulaEditing'
 export { tokenizeForDisplay, refsOf, matchBrackets, callAt, type Token, type TokenKind, type CallContext } from './formulaTokens'
 export { assignRefColours, refColoursWrap, colourFor, REF_CYCLE, CYCLE_MEASURED_CONTRAST, type RefColour } from './formulaPalette'
@@ -80,3 +80,9 @@ export { FormulaGuidance, formulaSuggestions, useFormulaPreview } from './formul
 export { matrixColumnDef, type MatrixColumnOptions } from './matrixColumn'
 export { SaleCellEditor, type SaleCellEditorParams } from './SaleCellEditor'
 export { matrixWrite, MATRIX_NOT_A_COLUMN, MATRIX_NO_LISTING, MATRIX_FULFILMENT_INLINE, MATRIX_UNCHANGED, type MatrixWriteColumn, type MatrixWriteDecision } from './sheetWriter'
+
+// Step 4.3 #3 (A-52; R-55, R-56, 2026-09-24) — bullets in ONE cell: the editor (slots / list modes) and its cell, the engine
+// column both sheet builders return, and the pure rules (values with holes, changed positions, the R-55 keys).
+export { SlotListEditor, SlotListValue, slotListMoveFact, slotListSaveState, slotListProvenance, slotListSummary, type SlotListEditorParams, type SlotListSettings, type SlotCellLike, type SlotListValueParams } from './SlotListEditor'
+export { slotListColumnDef, slotListEditable, type SlotListColumnOptions } from './slotListColumn'
+export { SLOT_LIST_PREFIX, SLOT_LIST_EDITOR_CLASS, slotListKey, isSlotListKey, slotListValue, slotListChanges, moveSlot, moveByKey, listModeItems, withTrailingEmpty, listModeCommit, slotListText, bulletsEditorKey, slotPositionOf, suppressSlotListKeys, type SlotGroup, type SlotChange, type BulletsKeyAction, type KeyLike } from './slotList'

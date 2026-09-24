@@ -108,6 +108,7 @@ import {
 } from '@/design-system/patterns'
 
 import { FormulaEditorExample } from './FormulaEditorExample'
+import { SlotListEditorExample } from './SlotListEditorExample'
 import { RecordListExample } from './RecordListExample'
 import { OrderedListExample } from './OrderedListExample'
 import { AsyncListboxExample } from './AsyncListboxExample'
@@ -964,6 +965,7 @@ export function TokenCatalog() {
           <a href="/design/grid-lab?tab=gds">/design/grid-lab → GDS scenarios</a>; the spec is <code>design-system/docs/GRID.md</code>.
         </p>
         <FormulaEditorExample />
+        <SlotListEditorExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />

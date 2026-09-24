@@ -160,7 +160,7 @@ function readContract(markers = 'CONTRACT-TABLE') {
     for (let i = 0; i < gestures.length; i++) {
       /* Strip the provenance mark; it is for the reader, not the assertion. An unknown token FAILS. */
       const token = c[3 + i].replace(/[✓·]/g, '').trim()
-      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:fx|none|none\+say)$/.test(token)) {
+      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:slots|pop:fx|none|none\+say)$/.test(token)) {
         return { rows: null, error: `unknown expectation "${c[3 + i]}" for ${c[0]}/${c[1]}/${gestures[i]}` }
       }
       expect[gestures[i]] = token
@@ -190,6 +190,8 @@ const readConstant = (file, name) => {
 }
 const NUMBER_ONLY_MESSAGE = readConstant('apps/web/src/design-system/grid/editors/numberEntry.ts', 'NUMBER_ONLY_MESSAGE')
 const EDITOR_KEY_HINT = readConstant('apps/web/src/design-system/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT')
+/* R-55 (Step 4.3 #3) — the bullets editor's own key line (Tab moves between bullets there), read the same way. */
+const EDITOR_KEY_HINT_FORM = readConstant('apps/web/src/design-system/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT_FORM')
 
 // The document owns the driving columns and modes for the four scalar editor arms too.
 const scalarContract = readContract()
@@ -228,6 +230,15 @@ const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/sheet/sheetChips.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetSaveStatus.ts',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetRows.ts',
+  /* Step 4.3 #3 (A-52) — the bullets editor, its engine column, the channel builder that returns it, the studio placement
+     and the landing that hides Bullet 1–10 (R-56). `master/channelColumns.tsx` builds every channel editor and was missing. */
+  'apps/web/src/design-system/grid/editors/slotList.ts',
+  'apps/web/src/design-system/grid/editors/SlotListEditor.tsx',
+  'apps/web/src/design-system/grid/editors/slotListColumn.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/master/channelColumns.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/slotListColumns.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/views.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetColumns.ts',
 ]
 /** `HH:MM:SS` — prefixed to every assertion line so a finding can be placed in a time window. */
 const at = () => new Date().toTimeString().slice(0, 8)
@@ -418,6 +429,13 @@ await page.route('**/*', async (r) => {
     expectedHeld.push(record)
     return new Promise(() => {})
   }
+  /* Step 4.3 #3 — the bullets arms' own counted window: every API write inside it is HELD (never completed, so nothing
+     reaches a database) and recorded with its whole body, so an arm can assert "0 writes" and "exactly ONE request carrying
+     exactly ONE change" by counting, not by assuming. Open only while `slotArms` is inside an arm. */
+  if (slotWindow) {
+    slotWindow.push({ ...record, fullBody: req.postData() ?? '' })
+    return new Promise(() => {})
+  }
   armedWrites.push(record)
   return r.abort()
 })
@@ -440,6 +458,9 @@ const shapeOf = () => {
   if (p.querySelector('.ag-large-text-input')) return 'popup:largetext'
   /* AM.1 shapes BEFORE the listbox test: the list editor contains an option list and would read as
      the single select. Markers read from the components (`ListPanelEditor`, `MeasureEditor`). */
+  /* Step 4.3 #3 — the bullets editor (`SlotListEditor`), BEFORE the chip-list test: both edit a list, and only this one
+     has fixed positions and the R-55 keys. Its root never carries `.nds-list-editor` or `.nds-formula-editor`. */
+  if (p.querySelector('.nds-slotlist-editor')) return 'popup:slots'
   if (p.querySelector('.nds-list-editor')) return 'popup:multi'
   if (p.querySelector('.nds-measure-editor')) return 'popup:measure'
   /* MX.G — the Matrix sale editor (`SaleCellEditor`): price + two DS date fields. */
@@ -719,6 +740,10 @@ let contractChecked = 0
 let refusedChecked = 0
 /** Set while a contract `flush` row is being driven: the writer's PATCH is HELD open, never sent. */
 let heldFlush = false
+/** Step 4.3 #3 — set only inside a bullets arm: the writes it caused, each held open (see the route). */
+let slotWindow = null
+let slotArmsChecked = 0
+let slotWritesHeld = 0
 /**
  * 🔴 #780's REFUSED state, produced ON THE WIRE instead of in the database.
  *
@@ -996,6 +1021,116 @@ if (RUN.includes('geometry')) {
  * failure mode this whole suite exists to refuse is the green that came from having nothing to look
  * at (see the `first`/`geometry` blocks, both of which shipped that bug and had it caught).
  */
+/**
+ * Step 4.3 #3 (A-52; R-55, R-56) — the bullets editor's own arms, run once per `slotlist` / `bullets` contract row, after
+ * its gestures and on the same cell. Every API write inside an arm is HELD in `slotWindow` (recorded with its body, never
+ * completed — nothing reaches a database), so each claim is a COUNT:
+ *   · the popup's key line is `EDITOR_KEY_HINT_FORM` (read from source) and focus opens on "Bullet 1";
+ *   · Esc → 0 writes; opened, nothing changed, Enter → 0 writes;
+ *   · `slotlist`: Tab moves to "Bullet 2" and the editor stays open (R-55);
+ *   · one position edited → exactly ONE request carrying exactly ONE change: `slotlist` edits the LAST position and leaves
+ *     with Tab (it must commit and move right — the editor closes and focus leaves the cell), the change addressed to that
+ *     slot (`…bulletPoints[N]`); `bullets` (Shared) edits position 1 and saves with Enter, the change the whole list
+ *     (`bulletPoints`, an array). An LX.8 acknowledgement, if the listing follows shared text, is answered once (as the
+ *     flush arm does) and said.
+ * The edit arm runs LAST: its held request keeps the row's writer busy for the rest of the page.
+ */
+const slotArms = async (scope, row, rowId, target) => {
+  const tag = `slots ${scope.key} · ${row.kind}/${row.state}`
+  const open = async () => {
+    await escape_()
+    if (!(await bringOnScreen(rowId, target))) return `${target} left the DOM`
+    const cell = page.locator(`.ag-row[row-id="${rowId}"] .ag-cell[col-id="${target}"]`).first()
+    const b = await cell.boundingBox({ timeout: 2500 }).catch(() => null)
+    if (!b) return `${target} has no box`
+    await page.mouse.click(b.x + Math.min(b.width * 0.4, 40), b.y + b.height * 0.5)
+    await page.waitForTimeout(40)
+    await page.keyboard.press('Enter')
+    const ok = await page.waitForFunction(() => !!document.querySelector('.ag-popup-editor .nds-slotlist-editor'), null, { timeout: 1500, polling: 'raf' }).then(() => true).catch(() => false)
+    if (!ok) return 'the bullets editor did not open on Enter'
+    await page.waitForTimeout(150)
+    return null
+  }
+  const focused = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? null)
+  const editorOpen = () => page.evaluate(() => !!document.querySelector('.ag-popup-editor .nds-slotlist-editor'))
+  const counted = async (act, settleMs = 1200) => {
+    slotWindow = []
+    try { await act(); await page.waitForTimeout(settleMs); return [...slotWindow] } finally { slotWritesHeld += slotWindow?.length ?? 0; slotWindow = null }
+  }
+  let why = await open()
+  if (why) { failures.push(`${tag}: NOT MEASURED — ${why}`); await escape_(); return }
+  const facts = await page.evaluate(() => {
+    const ed = document.querySelector('.ag-popup-editor .nds-slotlist-editor')
+    return { hint: ed?.querySelector('.nds-editor-keyhint')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+      fields: ed?.querySelectorAll('textarea').length ?? 0, count: Number(ed?.getAttribute('data-slot-count') ?? 0) }
+  })
+  if (!EDITOR_KEY_HINT_FORM) failures.push(`${tag} · hint: NOT MEASURED — EDITOR_KEY_HINT_FORM could not be read from editorHint.ts`)
+  else if (facts.hint !== EDITOR_KEY_HINT_FORM) failures.push(`${tag} · hint: the bullets editor's key line reads ${JSON.stringify(facts.hint)}, expected ${JSON.stringify(EDITOR_KEY_HINT_FORM)}`)
+  const first = await focused()
+  if (first !== 'Bullet 1') failures.push(`${tag} · open: focus is on ${JSON.stringify(first)}, expected "Bullet 1"`)
+  if (!facts.count || facts.fields !== facts.count) failures.push(`${tag} · open: ${facts.fields} fields for ${facts.count} positions`)
+  const esc = await counted(() => page.keyboard.press('Escape'), 700)
+  if (esc.length) failures.push(`${tag} · Esc: ${esc.length} write(s) — Esc cancels and writes nothing. First: ${esc[0].req}`)
+  slotArmsChecked += 2
+  why = await open()
+  if (why) { failures.push(`${tag} · untouched: NOT MEASURED — ${why}`); await escape_(); return }
+  const untouched = await counted(() => page.keyboard.press('Enter'), 900)
+  if (untouched.length) failures.push(`${tag} · untouched Enter: ${untouched.length} write(s) — an editor opened and left unchanged writes nothing. First: ${untouched[0].req}`)
+  slotArmsChecked++
+  if (row.kind === 'slotlist') {
+    why = await open()
+    if (why) { failures.push(`${tag} · Tab: NOT MEASURED — ${why}`); await escape_(); return }
+    const tabbed = await counted(async () => {
+      await page.keyboard.press('Tab')
+      await page.waitForTimeout(150)
+      const next = await focused(), still = await editorOpen()
+      if (next !== 'Bullet 2' || !still) failures.push(`${tag} · Tab: after Tab on Bullet 1 focus is on ${JSON.stringify(next)} and the editor is ${still ? 'open' : 'CLOSED'} — R-55: Tab moves to the next bullet`)
+      await page.keyboard.press('Escape')
+    }, 700)
+    if (tabbed.length) failures.push(`${tag} · Tab: ${tabbed.length} write(s) while moving between bullets`)
+    slotArmsChecked++
+  }
+  why = await open()
+  if (why) { failures.push(`${tag} · edit: NOT MEASURED — ${why}`); await escape_(); return }
+  const positions = facts.count
+  if (row.kind === 'slotlist') for (let i = 1; i < positions; i++) await page.keyboard.press('Tab')
+  const focusAt = await focused()
+  const want = row.kind === 'slotlist' ? `Bullet ${positions}` : 'Bullet 1'
+  if (focusAt !== want) { failures.push(`${tag} · edit: NOT MEASURED — focus is on ${JSON.stringify(focusAt)}, expected ${JSON.stringify(want)}`); await escape_(); return }
+  const typed = `ZZGATE-BULLET-${Date.now() % 100000}`
+  let answered = null
+  let leftCell = null
+  const sent = await counted(async () => {
+    await page.keyboard.type(row.kind === 'slotlist' ? typed : ` ${typed}`, { delay: 5 })
+    const leaveFrom = await page.evaluate(() => document.querySelector('.ag-cell.ag-cell-popup-editing')?.getAttribute('col-id') ?? null)
+    await page.keyboard.press(row.kind === 'slotlist' ? 'Tab' : 'Enter')
+    await page.waitForTimeout(700)
+    leftCell = await page.evaluate(([from]) => ({ from, open: !!document.querySelector('.ag-popup-editor .nds-slotlist-editor'),
+      now: document.activeElement?.closest?.('.ag-cell[col-id]')?.getAttribute('col-id') ?? document.querySelector('.ag-cell-focus[col-id]')?.getAttribute('col-id') ?? null }), [leaveFrom])
+    if (slotWindow && slotWindow.length === 0) {
+      const ack = page.getByRole('button', { name: /^(Edit|Write) the shared / })
+      if (await ack.count()) { answered = (await ack.first().textContent())?.trim() ?? 'the shared choice'; await ack.first().click() }
+    }
+  }, 1500)
+  await escape_()
+  if (answered) console.log(`   ${at()} ·  ${tag}: the listing follows shared text — answered the acknowledgement once ("${answered}") before the write`)
+  if (row.kind === 'slotlist') {
+    if (leftCell?.open) failures.push(`${tag} · Tab on the last bullet: the editor is still open — R-55: Tab past the last bullet commits and moves right`)
+    else if (!leftCell?.now || leftCell.now === target) failures.push(`${tag} · Tab on the last bullet: focus did not move right (focused cell ${JSON.stringify(leftCell?.now)})`)
+  }
+  if (sent.length !== 1) failures.push(`${tag} · edit: ${sent.length} request(s) — one position edited must leave as exactly ONE request${sent[0] ? `. First: ${sent[0].req}` : ''}`)
+  else {
+    let body = null
+    try { body = JSON.parse(sent[0].fullBody) } catch { body = null }
+    const changes = Array.isArray(body?.changes) ? body.changes : null
+    if (!changes) failures.push(`${tag} · edit: the request body could not be read (${sent[0].req})`)
+    else if (changes.length !== 1) failures.push(`${tag} · edit: the request carried ${changes.length} changes (${changes.map((c) => c.field).join(', ')}) — one position edited is ONE change`)
+    else if (row.kind === 'slotlist' && !new RegExp(`bulletPoints\\[${positions}\\]$`).test(String(changes[0].field))) failures.push(`${tag} · edit: the change is addressed to ${JSON.stringify(changes[0].field)}, expected the edited slot …bulletPoints[${positions}] — never the one cell`)
+    else if (row.kind === 'bullets' && (changes[0].field !== 'bulletPoints' || !Array.isArray(changes[0].value))) failures.push(`${tag} · edit: Shared bullets must leave as ONE whole-list change on bulletPoints; got ${JSON.stringify(changes[0].field)} = ${JSON.stringify(changes[0].value).slice(0, 80)}`)
+  }
+  slotArmsChecked++
+}
+
 if (RUN.includes('contract')) {
   const { rows: contractRows, gestures: contractGestures, error: contractError } = readContract()
   console.log(`\n── contract (${CONTRACT_DOC}, asserted line by line on both scopes)`)
@@ -1152,8 +1287,22 @@ if (RUN.includes('contract')) {
         // channelColumns promotes category identifiers to ChannelCategoryEditor.
         // Their wire kind remains text, but their displayed editor is a select.
         const editorKind = c => (scope.key === 'AMAZON·IT' && c.key === 'productType') || (scope.key === 'EBAY·IT' && c.key === 'categoryId') ? 'select' : c.kind
-        const kindMatches = (c) => (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
-        const declared = (scopeCols ?? []).filter((c) => kindMatches(c)
+        /* Step 4.3 #3 (A-52) — two bullets rows. `bullets` is Shared's one LIST column (`bulletPoints`, list mode); it is
+           excluded from the generic `list` row so that row can never substitute it in and read the bullets editor as
+           `pop:multi`. `slotlist` is the channel's ONE cell over its bullet slots: it is client-only (the API contract never
+           serves it), so it is derived here from the contract's own slot columns — one per language — and it is editable
+           on this row only when every one of its slot cells is. */
+        const isBulletList = (c) => String(c.key ?? '').replace(/@.*$/, '') === 'bulletPoints' && c.shape === 'list'
+        const oneCells = row.kind !== 'slotlist' ? [] : [...(scopeCols ?? []).filter((c) => c.slot?.of === 'bulletPoints').reduce((m, c) => {
+          const key = `slots:bulletPoints${c.locale ? `@${c.locale}` : ''}`
+          m.set(key, [...(m.get(key) ?? []), c.key])
+          return m
+        }, new Map()).entries()].map(([key, keys]) => ({ key, label: 'Bullet points', kind: 'slotlist',
+          editable: keys.every((k) => rowFacts?.values?.[k]?.editable !== false && rowFacts?.values?.[k]?.writable !== false) }))
+        const kindMatches = (c) => row.kind === 'slotlist' ? c.kind === 'slotlist'
+          : row.kind === 'bullets' ? isBulletList(c)
+          : (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind && !isBulletList(c) : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
+        const declared = [...(scopeCols ?? []), ...oneCells].filter((c) => kindMatches(c)
           && (row.state === 'locked' ? !editable(c)
             : row.state === 'fxblocked' ? c.formulaWritable === false
             : editable(c)))
@@ -1326,7 +1475,7 @@ if (RUN.includes('contract')) {
             /read-only|cannot be edited|does not apply|per variation|not writable|calculated from.*relationship|is a fact|set with the tick|Amazon-managed|has no listing of its own|not buyable|Guard reads FBA|cannot be changed here|A formula owns this cell/i.test(
               [...document.querySelectorAll('.nds-toasts')].map((n) => n.textContent ?? '').join(' ')))
           const actual = opened
-            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:formula': 'pop:fx' }[shape] ?? shape
+            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:slots': 'pop:slots', 'popup:formula': 'pop:fx' }[shape] ?? shape
             : (said ? 'none+say' : 'none')
           got[g] = actual
           if (actual !== row.expect[g]) {
@@ -1368,6 +1517,7 @@ if (RUN.includes('contract')) {
         heldFlush = false
         contractChecked += contractGestures.length
         console.log(`   ${at()} ${bad ? '❌' : stateProduced ? '✅' : '⚠'} ${row.kind.padEnd(9)} ${(stateProduced ? row.state : `${row.state}(→settled)`).padEnd(10)} ${String(target === row.col ? target : `${target} (for ${row.col})`).padEnd(24)} ${contractGestures.map((g) => `${g}=${got[g]}`).join(' ')}`)
+        if ((row.kind === 'slotlist' || row.kind === 'bullets') && row.state === 'fresh') await slotArms(scope, row, rowId, target)
       }
     }
     await page.setViewportSize({ width: 1600, height: 1000 })
@@ -1768,6 +1918,7 @@ const parts = []
 if (GESTURE_TIMINGS.length) parts.push(`${total} open gestures across ${GESTURE_TIMINGS.length} timing(s) × ${KINDS.length} kinds × ${GESTURES.length} gestures × ${SPOTS.length} hit-points, every one opening an editor within 250ms`)
 if (RUN.includes('geometry')) parts.push(`${geometryMeasured} geometry readings (3 editor kinds × 3 viewport widths, each parked against the right edge)`)
 if (RUN.includes('contract')) parts.push(`${contractChecked} contract assertions read from ${CONTRACT_DOC} across three sheet scopes and the Matrix host`)
+if (RUN.includes('contract')) parts.push(`${slotArmsChecked} bullets-editor arms (key line, Esc and untouched = 0 writes, Tab between bullets, one edit = one request), ${slotWritesHeld} write(s) held open, never completed`)
 if (RUN.includes('parity')) parts.push(`${parityChecked} parity readings equal to master's across the two channel scopes and the Matrix host`)
 if (RUN.includes('refused')) parts.push(`${refusedChecked} refused-cell readings from a stubbed wire (no write, no fixture)`)
 if (!ONLY) writeGateReport('editor-open', 0, [])

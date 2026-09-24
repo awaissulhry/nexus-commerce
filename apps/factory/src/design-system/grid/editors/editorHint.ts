@@ -13,3 +13,11 @@
  * the key), Tab saves the reported value and AG moves right, Esc cancels and never writes.
  */
 export const EDITOR_KEY_HINT = 'Enter saves · Tab saves and moves right · Esc cancels'
+
+/**
+ * R-55 (2026-09-23) — the ONE stated exception to the line above: inside the bullets editor (`SlotListEditor`, a small form
+ * of fixed positions) Tab moves to the next bullet, and only Tab on the LAST bullet saves and moves right. The line above
+ * would be false there, so this editor shows this one. Enter and Esc read exactly as above — a test holds the two parts
+ * equal (`editorHint.vitest.test.ts`). Both stay single-quoted literals: the editor-open gate reads them from this file.
+ */
+export const EDITOR_KEY_HINT_FORM = 'Enter saves · Tab next bullet, then moves right · Esc cancels'

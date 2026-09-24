@@ -1357,6 +1357,28 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   .nds-formula-overlay { display: none; }
 }
 
+/* Step 4.3 #3 (A-52 §4, 2026-09-24) — the bullets editor (`SlotListEditor`) and its one cell. Layout only: the popup is
+   the list editor's surface, the positions scroll inside the body, and the key line keeps the value editor's footer
+   (`.nds-formula-actions`, E1's hint class). The field is the DS Textarea, only released from its 168px paste-box floor so
+   `rows={2}` sizes it. An over-cap position is marked by its counter and `aria-invalid`, never cut. */
+.nds-slotlist-editor {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box;
+  background: var(--nds-surface); color: var(--nds-text);
+  border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md);
+  box-shadow: var(--nds-shadow-pop);
+}
+.nds-slotlist-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--nds-space-8) var(--nds-space-10); }
+.nds-slotlist-body > .nds-ordered-list { gap: var(--nds-space-8); }
+.nds-slotlist-body .nds-ordered-list-item { align-items: flex-start; }
+.nds-slotlist-position { display: grid; gap: var(--nds-space-2); min-width: 0; }
+.nds-slotlist-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); min-width: 0; }
+.nds-slotlist-label { font-size: 12px; font-weight: 600; color: var(--nds-text); }
+.nds-slotlist-count { flex: none; font-size: 11.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.nds-slotlist-count.over { color: var(--nds-danger-text); font-weight: 600; }
+.nds-slotlist-position .nds-textarea { min-height: 0; }
+.nds-slotlist-keys { display: grid; gap: var(--nds-space-2); min-width: 0; }
+.nds-slotlist-cell { gap: var(--nds-space-4); }
+
 /* Shared formula assistance: grid, drawer, and bulk editor. */
 .nds-formula-composer, .nds-formula-guidance { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .nds-formula-composer > *, .nds-formula-guidance > * { flex-shrink: 0; }

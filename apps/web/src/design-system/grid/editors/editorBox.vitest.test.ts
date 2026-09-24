@@ -134,7 +134,8 @@ describe('EDITOR_CAPS', () => {
     /* `axes` added by VT.2 2026-09-13 — this assertion is a SET CLAIM and going stale is its whole
        job: a new popup editor kind must either appear here or be a deliberate omission someone
        argued for. See the note on `EDITOR_CAPS.axes` for why 420 is not a raised `list` cap. */
-    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['axes', 'formula', 'list', 'longtext', 'measure', 'select'])
+    /* `slotlist` added by Step 4.3 #3 (A-52 §4, 2026-09-24) — the bullets editor, its own kind like `axes`. */
+    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['axes', 'formula', 'list', 'longtext', 'measure', 'select', 'slotlist'])
     expect(EDITOR_CAPS.select.width).toBe(320)
     expect(EDITOR_CAPS.axes.width).toBe(420)
     for (const c of Object.values(EDITOR_CAPS)) {

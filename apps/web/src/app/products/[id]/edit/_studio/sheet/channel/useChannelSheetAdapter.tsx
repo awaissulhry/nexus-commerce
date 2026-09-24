@@ -29,6 +29,8 @@ import { sheetEmptyState } from '../sheetGridStates';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
+import { isSlotListKey } from '@/design-system/grid/editors/slotList';
+import { expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
 import { CellSaveTracker, CompletenessPill, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
@@ -141,7 +143,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const surfaceKey = channelSurfaceKey(channel, marketplace);
     const [exportNote, setExportNote] = useState<string | null>(null);
     const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases)) : []), [data]);
-    refusalReason.current = (key, row) => {
+    const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
         const col = data?.columns.find(column => column.key === key);
         if (!col)
             return null;
@@ -150,6 +152,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             return null;
         return cell?.writeBlockedReason || refusalWords(col.label || col.key, { kind: cell?.writable === false ? 'channel-not-writable' : col.editable === false ? 'column-read-only' : 'cell-locked' });
     };
+    /* Step 4.3 #3 — a locked bullets cell says why: the first locked position's own reason. */
+    refusalReason.current = (key, row) => isSlotListKey(key) ? slotListRefusal(key, row, data?.columns ?? [], channelRefusal) : channelRefusal(key, row);
     const { bandWidth, bandWidthRef, bandDerivedRef, revealCell } = useSheetGeometry({ scope: 'channel', rows, getGridApi, gridReady, recordId: record.rowId });
     const dataRef = useRef(data);
     dataRef.current = data;
@@ -342,12 +346,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     };
     const [pendingWrites, setPendingWrites] = useState<PendingContentEdit[]>([]);
     const pendingMasterWrite = pendingWrites[0] ?? null;
-    const setPendingMasterWrite = (next: PendingContentEdit | null) => setPendingWrites(prior => {
-        if (!next)
-            return prior.slice(1);
-        const existing = prior.find(edit => edit.rowId === next.rowId && edit.colId === next.colId);
-        return existing ? prior.map(edit => edit === existing ? { ...next, previous: existing.previous } : edit) : [...prior, next];
-    });
+    /* LX.14 — one queued choice per edited cell (a bullets cell's positions queue one each); the reducer lives in
+       `slotListColumns.ts` unchanged so the bullets arm runs it. */
+    const setPendingMasterWrite = (next: PendingContentEdit | null) => setPendingWrites(prior => queuePendingEdit(prior, next));
     const acknowledgedRef = useRef(false);
     const revertingRef = useRef(false);
     useEffect(() => {
@@ -362,10 +363,22 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         newValue: unknown;
         source?: string;
         oldValue?: unknown;
-    }) => {
+    }): void => {
         const colId = e.colDef.colId;
         if (!e.data || !colId)
             return;
+        /* Step 4.3 #3 (A-52, R-55) — the one bullets cell is not a field: its change leaves as one dispatch per CHANGED
+           position, each through THIS handler under that slot's own column id (gate, acknowledgement, formula check,
+           `writer.set`) — exactly the path a typed slot takes. The writer coalesces them into the row's one request. */
+        const fanOut = slotFanOut(colId, e.oldValue, e.newValue, dataRef.current?.columns ?? []);
+        if (fanOut) {
+            for (const slot of fanOut)
+                onCellValueChanged({ data: e.data, colDef: { colId: slot.colId }, oldValue: slot.oldValue, newValue: e.data.values?.[slot.colId]?.value ?? slot.newValue, source: e.source });
+            const node = getGridApi()?.getRowNode(rowIdOf(e.data));
+            if (node)
+                getGridApi()?.refreshCells({ force: true, rowNodes: [node], columns: [colId] });
+            return;
+        }
         const gate = channelWriteGate({
             colId,
             source: e.source,
@@ -519,7 +532,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const shopifyEditor = useShopifyDraftCell(shopifySchema, getGridApi);
     const mediaEditor = useProductMediaEditor(() => { void refresh(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0); }, data?.scope.locale ?? locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
-    const gridColumns = useMemo(() => withProductMediaColumn(data?.columns ?? []).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never)), [data]);
+    /* Step 4.3 #3 (A-52, R-56) — the one bullets cell joins the grid's columns (the media column's pattern): built, in
+       Customise, in the views; never a server column, never a write field. */
+    const gridColumns = useMemo(() => withSlotListColumns(withProductMediaColumn(data?.columns ?? []).filter((col) => !RESERVED_COLUMN_IDS.includes(col.key as never))), [data]);
     const columnDefs = useMemo(() => buildSheetColumns('channel', {
         data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly,
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth,
@@ -786,9 +801,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     setPendingMasterWrite(null);
                     revertingRef.current = true;
                     try {
-                        const cell = pm.row.values[pm.colId];
-                        pm.row.values = { ...pm.row.values, [pm.colId]: { ...cell, value: pm.previous } };
-                        getGridApi()?.refreshCells({ force: true, columns: [pm.colId] });
+                        revertPendingEdit(pm);
+                        const oneCell = slotListKeyOfSlot(pm.colId, data?.columns ?? []);
+                        getGridApi()?.refreshCells({ force: true, columns: oneCell ? [pm.colId, oneCell] : [pm.colId] });
                         const node = getGridApi()?.getRowNode(pm.rowId);
                         if (node?.rowIndex != null)
                             getGridApi()?.setFocusedCell(node.rowIndex, pm.colId);
@@ -902,7 +917,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             {reloadConfirm.element}</>, afterPreferences: <>
     {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
-    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><ProductTransferDrawer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={sheetColumns.visibleAttributeKeys().flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
+    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><ProductTransferDrawer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}
         {shopifyEditor.element}
     {cellDetails && <Modal open readable size="md" title={cellDetails.title} onClose={closeCellDetails} footer={<><Button size="sm" onClick={closeCellDetails}>Close</Button>

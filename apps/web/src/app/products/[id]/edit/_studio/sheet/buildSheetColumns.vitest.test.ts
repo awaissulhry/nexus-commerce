@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { buildMasterColumns } from './master/columns'
-import { AttributeShapeEditor } from './AttributeShapeInput'
+import { SlotListEditor } from '@/design-system/grid/editors/SlotListEditor'
 import { CellSaveTracker } from '@/design-system/grid'
 import type { SheetColumn } from './master/types'
 import { expect, it } from 'vitest'
@@ -17,7 +17,8 @@ it('groups adjacent languages by field while retaining the actual editor, setter
 it('keeps the bullet-list control and array clear on a qualified master column', () => {
   const column = { key:'bulletPoints@de', writeField:'bulletPoints', group:'Content', defaultVisible:true, label:'Bullet points', shape:'list', kind:'text', storage:'column', scope:'global', requiredBy:[], editable:true } as SheetColumn
   const [definition] = buildMasterColumns({columns:[column],tracker:new CellSaveTracker(),locale:'it'}, {current:[]})
-  expect('cellEditor' in definition && definition.cellEditor).toBe(AttributeShapeEditor)
+  // Step 4.3 #3 (A-52): Shared bullets open the ONE bullets editor (list mode), not the studio-local AttributeShapeEditor.
+  expect('cellEditor' in definition && definition.cellEditor).toBe(SlotListEditor)
   const row = { id:'p', values:{'bulletPoints@de':{value:['One'],contentAddress:{tier:'language',language:'de'}}} }
   expect('valueSetter' in definition && (definition.valueSetter as Function)({data:row,newValue:[]})).toBe(true)
   expect(row.values['bulletPoints@de'].value).toEqual([])
