@@ -156,6 +156,22 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ### Where this lane stands — handoff 8, 2026-09-24 13:52 UTC (READ THIS FIRST; everything below is history)
 
+> **DEPLOYED 2026-09-24 (the Owner: "merge it, and push to main").** `main` = **`60539940f`** (fast-forward from `0a563d6d5`, 64 commits). The
+> first push to `main` was refused by the known AE.4 flake (`claimed: 0`, `sync.vitest.test.ts:419`; the same commit passed it at 14:21); the one
+> retry passed every stage (14:44 UTC). 🔴 The runner scopes the browser gates by `origin/pes/phase-0..HEAD`, so a push of this ref to `main` ran
+> NO browser gate — they had run on this exact commit at 14:21 and 13:48 (a gap to fix: scope by the pushed range).
+> **Railway:** `495a2006` SUCCESS 14:59 UTC — the 3 migrations applied (`20260923a`, `20260923b`, `20260924a` A-53); then `5149a312` (a second
+> deploy of the same source, as on 09-23) SUCCESS 15:03 UTC, "No pending migrations", now live. **Vercel:** the live CSS carries the new tokens
+> (text-3 #48505b / dark #b3bac6, primary-hover #0f4290).
+> **Production reads after (read only, predictions written first — all held):** Motovento `Marketplace` 0 → **20 (19 active)**, `EBAY:IT` VAT 22
+> tax-inclusive; Xavia **20 / 19, every row equal to the 09-24 snapshot** (0 differences). `ChannelDrift`: 219 eBay rows, 0 drifted.
+> `prod-run.mjs content-drift` (dry run): **235 Amazon listings in scope, 235 due** (never checked — its first night is 2026-09-25 03:37 UTC).
+> **Seen, pre-existing (not this deploy):** `ebay-readback: per-SKU error — EBAY_APP_ID and EBAY_CERT_ID environment variables must be set`
+> (logged at 14:30 UTC by the OLD deploy too); `stock-import stuck-job sweep failed on boot: Select a business profile` (on 09-23 too).
+> **Next:** after 04:20 UTC 2026-09-25 read the first nights' lines (`node docs/product-cheat/tools/nightly-lines.cjs`, read only; baseline
+> `records/nightly-before-2026-09-24.txt`, predictions `records/nightly-predictions-2026-09-25.md`): readiness-reconcile both businesses, A-50's drop on non-Italian % (Xavia de 60.4,
+> en 59.4, es 60.6, fr 60.7, nl 70.9, pl/sv/tr 100 before; it 75.7), and content-drift's FIRST run.
+
 **`main` = `0a563d6d5` (deployed; unchanged). `origin/pes/phase-0` = `8fd499675`** — the 12:04 UTC push LANDED with every gate green (editor-open
 0 new, 18 gone: the 36 `=` keys GONE; census 7 gone). **Step 0.2 CLOSED** by it. The final push of this round carries the commits below.
 
