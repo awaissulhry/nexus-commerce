@@ -8448,3 +8448,385 @@ the shared-member skip runs BEFORE the cap (`eligible`), so `capped` / `batch` c
 
 *Done when* — tests ✅; the production log shows no `ebay-readback: per-SKU error … EBAY_APP_ID` after the deploy ⏳. *Cost when* — flat (one
 column in the existing query). *Gate* — the new file (3 arms) + 4 mutations. *Rollback* — revert the commit (code only).
+
+## A-55 — The scope dropdown says "Not set up" for almost every channel: a column DEFAULT read as a measurement (+ two smaller causes). Plan by sub-agent SR1 (read only); the key facts re-read by this lane ✓.
+
+Lane SR1 · 2026-09-24 · re-read by this lane: `StudioBar.tsx:24-25` ✓, `schema.prisma` `isParticipating Boolean @default(false)` ✓, production (read only): every non-Amazon `Marketplace` row `isParticipating=false`, `participationCheckedAt` null, both businesses ✓; only Xavia's 12 Amazon rows were ever checked ✓ · repo at `2f01c58a2` (HEAD = origin/main) · nothing in the repo created, edited or moved.
+Scratch evidence: `sr1/predictions.md` (predictions written before each read, then scored), `sr1/r1.sql r2.sql r4.sql`
+(read-only SQL via `ro.cjs`), `sr1/emu.cjs → emu.out` and `sr1/emu2.cjs → emu2.out` (emulation under the API's
+business role, see §2.4). **read** = I opened the line or ran the query; **inferred** = not run.
+
+---
+
+### 1. Symptom
+
+**As reported:** "In the scope dropdown, it says 'not set up' for almost all the channels."
+
+**As reproduced from code + production data** (emulated — see §2.4 for what that means), product **GALE-JACKET** in
+both businesses:
+
+| Business · product | Scope · market · language | Channel rows in the menu today (read, emulated) |
+|---|---|---|
+| Xavia · `cmokmy3a40078pm0p1fvnu523` | Shared product · **DE** (the default landing) · it | Amazon **Not computed** · eBay **Not set up** · Shopify (no state) |
+| Xavia | Amazon or eBay · DE/ES/FR/UK · that market's language | Amazon **Blocked · 48 %** · eBay **Not set up** · Shopify (no state) |
+| Xavia | Shared / Amazon / eBay · IT · it | Amazon **Blocked · 100 %** · eBay **Not set up** |
+| Xavia | Shopify · GLOBAL · en | Shopify **Not set up** · Amazon, eBay (no state) |
+| Motovento · `cmub55nhk011wmm01zaf6urgx` | any · DE/ES/FR/IT/UK | eBay **Not set up** · Etsy (no state) |
+| Motovento | Etsy · GLOBAL | Etsy **Not set up** |
+| Both | the ~0.5–1 s after choosing ANY channel | **every** channel **Not set up** (note "No market selected.") |
+
+The Shared product row always reads "See each channel" (R-53), so "almost all" is the literal count: every channel
+row that has a state reads "Not set up" (or "Not computed") except Amazon on a channel scope.
+
+What the Owner actually looked at could not be measured exactly — the Railway http log records the path but not
+the query string, so market and scope are unknown (read). What was measured: his GALE-JACKET session (Xavia) made
+`/studio/destination` reads at 15:16:02, 15:16:31 and 15:23:56 UTC, i.e. he was in **channel** scopes, each followed
+by a `GET …/readiness` answering **200** (6 requests since 14:30, 1.2–3.5 s) (read).
+
+---
+
+### 2. Root cause
+
+Three arms, all in the web studio, all **pre-existing** (none introduced by the R-51 dropdown). Arm A is the one the
+Owner reported. Arm B would take its place on the default screen once A is fixed. Arm C is a brief flash.
+
+#### 2.1 Arm A — a column DEFAULT is read as a measurement (the persistent "Not set up")
+
+The chain:
+
+1. `packages/database/prisma/schema.prisma:1987-1995` (read) — `isParticipating Boolean @default(false)`. The
+   comment says it reflects "what SP-API getMarketplaceParticipations actually says". It is an **Amazon**
+   measurement.
+2. `apps/api/src/services/amazon-participations.service.ts:88-126, 137-157` (read) — the only writer. It updates
+   `channel: 'AMAZON'` rows only, and every write sets `participationStatus` and `participationCheckedAt` along
+   with `isParticipating`. eBay, Shopify, Etsy and WooCommerce rows are never written, so they keep the default
+   `false` with `participationCheckedAt = NULL`.
+3. `apps/api/src/routes/marketplaces.routes.ts:224-237` (read) — `GET /marketplaces/grouped` spreads the whole row,
+   so all three fields reach the browser. `_studio/scopes.ts:110-112` (read) keeps all three on `MarketplaceLite`.
+4. **`_studio/StudioBar.tsx:24-25`** (read):
+   ```ts
+   const participation = marketplaces.find(m => m.channel === id && m.code === market)
+   if (participation?.isParticipating === false) return { pct: null, state: 'absent', note: `${id} · ${market} is not participating.` }
+   ```
+   This runs **before** the server's readiness is looked at, and it tests the value alone, never
+   `participationCheckedAt`. `absent` renders as **"Not set up"** (`design-system/grid/renderers/readiness.ts:82`,
+   read). The same test at **`StudioBar.tsx:51`** adds **"(not participating)"** to every such market in the Market
+   list.
+5. Production (read, `r2.sql`), 40 `Marketplace` rows:
+
+   | Business | Rows | `isParticipating` | `participationStatus` / `participationCheckedAt` |
+   |---|---|---|---|
+   | Xavia AMAZON | 12 | 11 true, 1 false (US, `isActive=false`) | all `PARTICIPATING`/`NOT_PARTICIPATING`, checked 2026-09-08 13:15 |
+   | Xavia EBAY DE/ES/FR/IT/UK | 5 | **false** | **NULL / NULL** (last updated 2026-05-08, IT 2026-09-07) |
+   | Xavia ETSY / SHOPIFY / WOOCOMMERCE GLOBAL | 3 | **false** | **NULL / NULL** |
+   | Motovento, all 20 (created 14:59 UTC today by A-53) | 20 | **false** | **NULL / NULL** |
+
+   0 NULLs in `isParticipating` in either business, because the column is NOT NULL.
+6. The server has a real verdict that the client overrides (read, `r2.sql`). Xavia GALE-JACKET, `ReadinessIndex`,
+   account `cmr4aaqb…` (the one active eBay connection):
+   - **EBAY·IT·it**: 21 rows, 1 `blocked` + 20 `ready`, 6 of 6 required filled. The server answers `blocked` at
+     **100 %**.
+   - **EBAY·DE/ES/FR/UK**: `blocked`, pct NULL, "Category metadata is incomplete: EBAY:*".
+   - **SHOPIFY·GLOBAL**: `blocked`, pct NULL, "Category metadata is incomplete: SHOPIFY:*".
+
+   All computed 2026-09-24 02:18 UTC.
+
+**Which of the four cases:** case **(1)**, for every non-Amazon channel in both businesses (eBay, Shopify, Etsy). The
+refresher only ever writes Amazon, so this cannot reach an Amazon row.
+
+The research that motivated the check already stated the rule, and the check left it out.
+`docs/product-sheet/full/PLAN-FULL.md:19815` (read) says: *"Participation is Amazon-only; elsewhere it reads 'not
+measured' … an unrefreshed participation is UNKNOWN, never green."*
+
+#### 2.2 Arm B — the Shared product scores channels in a language their market does not sell (what replaces A on the default screen)
+
+- The Shared scope's language is the shared source language: `locale = … ?? primaryLanguage` = **`it`**
+  (`contracts.tsx:612`, read). Production is `it`: Motovento's only index rows are Shared rows in `it` (read,
+  `r4.sql`).
+- The readiness request sends that locale (`contracts.tsx:399`, read). The server keeps only
+  `r.language === locale` for each channel coordinate (`apps/api/src/services/pim/scope-readiness.service.ts:93`,
+  read). The index for Amazon·DE and eBay·DE exists only in `de`, so the answer is **`notComputed`**, "Readiness has
+  not been computed for this language."
+- The answer is true word by word, but it misleads. That coordinate is computed, in German (Amazon·DE 284 of
+  590 = **48 %**), and it will never be computed in Italian. The server already sends the German verdict in
+  `value.languages` (`scope-readiness.service.ts:96`, read), and StudioBar puts it only in the hover note.
+- Where it shows (read, `emu.out`): Xavia Shared on 10 of 11 Amazon markets (every one except IT), on eBay
+  DE/ES/FR/UK, and on Shopify·GLOBAL. **The Shared product on DE is the screen the studio lands on**
+  (`scopes.ts:188-197`: a two-channel tie broken alphabetically; read and emulated).
+- Once arm A is fixed alone, master·DE would read Amazon **Not computed** · eBay **Not computed**, which is still not
+  the truth. That is why arm B belongs in this fix.
+
+#### 2.3 Arm C — the destination-loading window reads "Not set up" (case 3, transient)
+
+- `contracts.tsx:994` (read) sends the readiness query `market = null` while a channel scope's destination is
+  `loading`/`error`/`idle`. `contracts.tsx:371-374` (read) then answers `unavailable: 'No market selected.'`, and
+  `StudioBar.tsx:35` (read) turns that into `absent` (**"Not set up"**) on **every** channel and on the trigger.
+- It lasts for the `/studio/destination` round trip: 545–1025 ms in the Owner's session (read, Railway). No
+  `/readiness` or `/studio/destination` response of 400 or more was logged on the service since 14:30 UTC (read). As
+  a positive control, the same filter did return 3 × 502 and 1 × 499 from other routes. So the persistent form (a
+  destination error) did not occur.
+- Case **(2)** (`StudioBar.tsx:31`, `byScope[id]` missing, "Choose this channel and account…") never occurs today
+  (emulated). The server returns every active coordinate for the market (`sheet-columns.service.ts:1061-1090`, read),
+  and the client's channel list comes from the same active rows.
+- Case **(4)** (the server's own `absent`) does not occur on any channel shown in either business (read, `r4.sql`,
+  §3). The server's `absent` rows are ETSY/WOOCOMMERCE in Xavia ("No active account for this destination."), and
+  those channels have no account, so the menu does not list them (`scopes.ts:128`). The server's reader-made
+  `absent` ("Choose an account for X · Y.", `family-account.ts:18-19`) needs 0 or ≥2 active connections on one
+  channel. Today every listed channel has exactly 1 (read, `r1.sql`), so it is latent with 0 instances.
+
+#### 2.4 Is it a regression? No — pre-existing since 2026-09-13
+
+- `git blame` (read): `StudioBar.tsx:24-25` came from `3161da57b` (2026-09-13, an ancestor of origin/main).
+- `git show 0a563d6d5:…/StudioBar.tsx` (read) has the identical `scored()`. The old chips rendered the same state
+  word (`0a563d6d5:…/ScopeBar.tsx`, the `nds-scope-state` span; read).
+- So the old chip row showed **"eBay · Not set up"** on every eBay market and **"Shopify · Not set up"** on GLOBAL,
+  exactly as the menu does now.
+- T1's `c84d1450d` moved `scored()` unchanged and only changed how the items render. A-53's `9bb81217e` changed only
+  the no-market reason text (`contracts.tsx:371-374`). C1's `812102e14` changed only `byProduct` in the matrix.
+  None of them touched this path (diffs read).
+- The server lines behind arm B (`scope-readiness.service.ts:92-93` at `0a563d6d5`) and the gate behind arm C
+  (`contracts.tsx:990` at `0a563d6d5`) are the same too (read).
+- **Motovento's** "Not set up" is new today only because its markets are new today. Before A-53 it had no market and
+  the studio showed "Waiting for the market…".
+
+About the emulation: `emu.cjs` runs `BEGIN READ ONLY`, sets the API's role, and calls
+`set_config(workspace, actor)` exactly as `packages/database/workspace-adapter.ts` does. It then reads the same
+tables that `GET /readiness` and the studio loader read (`Marketplace`, `ChannelConnection`, `ReadinessIndex`,
+`ChannelListing`), rolls back, and computes the menu in JS. The JS is transcribed from
+`scope-readiness.service.ts:18-99`, `family-account.ts`, `coordinatesFor`, `scopes.ts` (`deriveScopeOptions`,
+`defaultMarket`), `accountScope.ts`, `StudioBar.tsx:22-43`, `sharedReadiness.ts` and `ScopeBar.tsx` `stateText`.
+It is **not** the live HTTP response: no production route was called.
+
+---
+
+### 3. Blast radius
+
+Counts are read (`r1.sql`, `r4.sql`) unless marked.
+
+| | Xavia Racing | Motovento |
+|---|---|---|
+| Live products / top-level families | 333 / **32** | 22 / **2** |
+| Connected channels in the menu | Amazon, eBay, Shopify | eBay, Etsy (its Amazon rows have no account, so hidden) |
+| **Arm A: always "Not set up"** | **eBay** on all 5 markets × 32 families. The server has a real verdict for **32/32** families on each (160 coordinates). **Shopify** on GLOBAL × 32 (32/32 real). | **eBay** 5 markets × 2 families, **Etsy** GLOBAL × 2. The server has no channel index rows for Motovento yet (its only 21 rows are Shared rows from 02:17 UTC, before its markets existed), so the true word is **"Not computed"**. |
+| Arm A, Market list | every eBay market reads "… (not participating)", and so does GLOBAL on Shopify | same, eBay and Etsy |
+| **Arm B: "Not computed" for a real verdict** | Shared scope: Amazon on 10 of 11 markets, eBay on 4 of 5 markets, Shopify on GLOBAL — for all 32 families | none (nothing computed yet) |
+| **Arm C: ~0.5–1 s "Not set up" on every channel** | every switch to a channel scope | same |
+| Unaffected | Amazon on any channel scope; Amazon and eBay on IT under Shared | — |
+
+Other readers of `isParticipating` do not have the defect (read): `fulfillment/inbound/v2/NewPlanModal.tsx:227`
+covers Amazon FBA only; `channels/mapping/_shared/contracts.ts:151` and `components/dashboard/MarketIngestHealth.tsx`
+only declare the field. In the studio, `StudioBar.tsx:25` and `:51` are the only readers.
+
+---
+
+### 4. The fix
+
+**Principle.** Each word must come from a measurement that exists. For every channel row, the four cases then read:
+
+| Case | Reads (after) |
+|---|---|
+| Real verdict | the server's state and %, in the market's own language when the chosen language is not sold there |
+| Measured not participating (Amazon said so) | **Not set up** + "not participating (checked YYYY-MM-DD)" |
+| Not yet computed / unreadable | **Not computed** + the server's or the transport's own sentence |
+| Still loading | **Checking…** |
+| No listing | the requirements verdict. That is honest about requirements; see Q2 |
+
+"Not set up" can then only come from a stamped participation or from the server's own `absent`.
+
+#### 4.1 Files (web only — no API, no migration, no design-system change, so no `apps/factory` mirror)
+
+1. **NEW `apps/web/src/app/products/[id]/edit/_studio/scopeItems.ts`** (pure `.ts`, so node vitest can import it; the
+   same extraction pattern T1 used for `sharedReadiness.ts`). It moves `StudioBar.tsx:22-43` (`scored` and the
+   channel-item mapping) into `scopeItems(input)` and adds three rules:
+   ```ts
+   /** SR1 — participation is an Amazon SP-API MEASUREMENT (amazon-participations.service.ts); the column defaults to
+    *  false (schema.prisma), so `false` is a fact only once the refresher stamped it. Other channels are never stamped. */
+   export function measuredNonParticipation(row?: Pick<MarketplaceLite, 'isParticipating' | 'participationStatus' | 'participationCheckedAt'>): boolean {
+     return row?.isParticipating === false && row.participationCheckedAt != null && row.participationStatus !== 'UNKNOWN'
+   }
+   export const participationSuffix = (row?: Parameters<typeof measuredNonParticipation>[0]) =>
+     measuredNonParticipation(row) ? ' (not participating)' : ''
+   ```
+   Inside `scored(id)`:
+   - **(A)** Replace the `isParticipating === false` test with `measuredNonParticipation(row)`. The note becomes
+     `` `${id} · ${market} is not participating (checked ${row.participationCheckedAt.slice(0, 10)}).` ``
+   - **(B)** When `id !== MASTER_SCOPE` and `row.languages` is non-empty and does not include `locale`, show
+     `value.languages.find(e => e.language === row.languages[0])`: its `state` and `pct` verbatim from the server,
+     with no mapping. The note is `` `${lang}: ${label} ${pct}. ${languageLabel(locale)} is not sold on ${id} · ${market}, so this is its ${languageLabel(lang)} readiness.` ``.
+     With no such entry the server value stands (`notComputed`, which is then true). Q1 decides which language is shown.
+   - **(C)** When `readiness.status === 'unavailable'`, `scope !== MASTER_SCOPE` and the destination is `loading`,
+     return `'loading'`.
+   - **(2)/(3)** A scope missing from the response, and an `error`/`unavailable` answer, return `state: 'notComputed'`
+     instead of `'absent'`. The note stays verbatim. This is R-LX-9's rule: an unmeasured scope is not an empty one.
+2. **NEW `…/_studio/scopeItems.vitest.test.ts`** (§4.2).
+3. **EDIT `…/_studio/StudioBar.tsx`**:
+   - `useMemo(() => scopeItems({ channels: options.channels, market, marketplaces, readiness, scope, save, locale, discoveryFailed: discovery?.failed === true, destination: destination.status }), [...existing deps, destination.status])`.
+   - Line 51: `m.label + participationSuffix(marketplaces.find(p => p.channel === scope && p.code === m.code))`.
+   - Drop the imports that become unused (`readinessMeta`, `sharedReadiness`).
+   - Nothing else changes, including line 50 and the language control.
+
+`contracts.tsx` (A-53 edited it today) is **not touched**: arm C is solved at the reader. `ScopeBar.tsx`,
+`readiness.ts` (DS) and `scopeMenu.vitest.test.ts` are unchanged, and so is its golden.
+
+#### 4.2 Tests (apps/web vitest, node) — fixtures are written by the real parsers
+
+Every fixture is built the way production builds it:
+- the Marketplace rows go through **`flattenGrouped`** (`scopes.ts`), using a `/grouped` payload whose eBay/Shopify
+  rows are copied from production: `isParticipating: false, participationStatus: null, participationCheckedAt: null`;
+- the readiness goes through **`parseReadinessResponse`** (`readiness.ts`), using a response whose scope values are
+  the emulated production numbers.
+
+Assertions read the words the menu prints, through the DS's own **`scopeMenuOptions(items).map(o => o.trailing)`**.
+
+| # | Arm | Fixture → expected (after) | Red on HEAD logic? (predicted) | Mutation that must turn it red |
+|---|---|---|---|---|
+| T1 | A | Xavia EBAY·IT·it, server `blocked`/100 → eBay `Blocked · 100%` | red (`Not set up`) | M1: predicate back to `isParticipating === false` |
+| T2 | A | Amazon row `false` + `NOT_PARTICIPATING` + checked `2026-09-08T13:15:00Z`, active, server `blocked`/48 → `Not set up`, note contains `not participating` and `2026-09-08` | green (the note date is new, so red on the note) | M2: `measuredNonParticipation` → `false` |
+| T3 | A | Amazon row `false` + status `UNKNOWN` + checked → the server value | red | M3: drop `!== 'UNKNOWN'` |
+| T4 | A | `participationSuffix`: eBay production row → `''`; the T2 row → `' (not participating)'` | red | M4: suffix on raw `isParticipating === false` |
+| T5 | B | Shared, locale `it`, AMAZON·DE row `languages ['de']`, server `notComputed` + `languages:[{de, blocked, 48}]` → `Blocked · 48%`, note names German | red (`Not computed`) | M5: remove the language fallback |
+| T6 | B | Shared, locale `it`, AMAZON·IT `languages ['it']`, server `notComputed` + `languages:[{de, blocked, 48}]` → stays `Not computed` | green | M6: fall back whenever `state === 'notComputed'` |
+| T7 | B | Motovento EBAY·DE `languages ['de']`, locale `it`, server `notComputed`, `languages: []` → `Not computed` | green | M7: fall back to `absent` when no entry |
+| T8 | C | scope EBAY, readiness `unavailable 'No market selected.'`, destination `loading` → every row `Checking…` | red (`Not set up`) | M8: delete the loading branch |
+| T9 | (3) | readiness `error 'Readiness request failed (500).'` → `Not computed`, title carries the sentence | red | M9: back to `'absent'` |
+| T10 | (2) | ready, `byScope` lacks EBAY → `Not computed` | red | M10: back to `'absent'` |
+| T11 | screen | Full menus, production-shaped (see the list after this table) | red (a, b, c, d) | M1 and M5 each turn T11 red |
+
+T11's four menus (expected after the fix; the arrow reads before → after):
+- (a) Xavia Shared·DE: `['See each channel', 'Blocked · 48%', 'Blocked · —', undefined]`, before `['See each channel', 'Not computed', 'Not set up', undefined]`
+- (b) Xavia EBAY·IT: `[…, 'Blocked · 100%', 'Blocked · 100%', undefined]`
+- (c) Xavia SHOPIFY·GLOBAL: `[…, undefined, undefined, 'Blocked · —']`
+- (d) Motovento EBAY·DE: `['See each channel', 'Not computed', undefined]`
+
+No real-database arm: the change is client-only and the API contract is unchanged. The production fact the fix
+depends on (non-Amazon rows are never stamped) is the writer's code (`amazon-participations.service.ts` touches
+`channel: 'AMAZON'` only) and was measured in `r2.sql`. A `formulaDatabase()` arm would only re-prove Prisma's column
+default. Order: land `scopeItems.ts` first as a **verbatim** extraction and run the tests (predicted red: T1, T3, T4,
+T5, T8, T9, T10, T11), then apply A/B/C and confirm all green. Then run M1–M10 and require each to be red.
+
+#### 4.3 Predictions (before building)
+
+- Web vitest (the new file, plus `languageControl`, `readiness`, `scopes`, `marketGate`, `studio-data` and
+  `design-system/patterns/scopeMenu`) will be green. `scopeMenu`'s golden will be byte-identical, since the DS is not
+  touched.
+- Scoped `tsc` for apps/web will report 0 errors (typecheck etiquette: slots of two, private tsbuildinfo).
+- On production after deploy, Xavia GALE-JACKET reads as in §5. The numbers are "at the time of the check" (the
+  nightly reconcile runs about 02:17 UTC and edits recompute), so the check re-reads the index first and predicts
+  from it.
+
+---
+
+### 5. Pixel / UI declarations (before → after)
+
+Menu rows are the ListboxPanel options: leading dot, label, and trailing state text. The trigger face follows the
+same rules. No layout, token or keyboard change. Dot tones come from the DS table in both themes.
+
+- **Xavia · Shared · DE (the landing screen)**
+  - Shared product: `See each channel`, dot **grey → red**. The hover changes from "No channel has a readiness
+    result…" to "Worst channel: Amazon — Blocked."
+  - Amazon: `Not computed` (grey) → `Blocked · 48%` (red). The hover says the Italian Shared language is not sold on
+    Amazon · DE and this is its German readiness.
+  - eBay: `Not set up` (grey) → `Blocked · —` (red), hover "German: Blocked —. …".
+  - Shopify: unchanged (no state; Shopify sells on GLOBAL).
+- **Xavia · Amazon or eBay · DE/ES/FR/UK**: eBay `Not set up` → `Blocked · —` (red). Amazon unchanged.
+- **Xavia · eBay · IT**: the trigger `eBay · Not set up` → `eBay · Blocked · 100%`. The Market list
+  `Germany (not participating)`, `Spain (not participating)`, … → `Germany`, `Spain`, … (5 options).
+- **Xavia · Shopify · GLOBAL**: `Shopify · Not set up` → `Shopify · Blocked · —`. The Market option loses
+  `(not participating)`.
+- **Motovento · any**: eBay and Etsy `Not set up` → `Not computed` (grey, no %). The hover says "Readiness has not
+  been computed for this language." That stays until the index covers Motovento's channels. Inferred: the nightly
+  writer covers each business (it wrote Motovento's Shared rows at 02:17 UTC), so tonight's run should compute
+  eBay/Etsy for its 2 families.
+- **Right after choosing any channel (both businesses)**: every row `Not set up` for about 0.5–1 s → the
+  `Checking…` skeleton (the trigger shimmers), then the verdicts.
+- **A measured non-participating, active Amazon market** (0 rows in production today; US is inactive): stays
+  `Not set up`. The hover now adds "(checked 2026-09-08)", and the Market option keeps `(not participating)`.
+
+---
+
+### 6. Questions for the Owner
+
+1. **Shared product, a market that does not sell the Shared language (Italian) — which verdict should each channel
+   row show?**
+   - (a) The market's own language, e.g. Amazon · DE shows its **German** verdict `Blocked · 48%`, and the hover says
+     so.
+   - (b) Keep `Not computed`, with the German verdict in the hover only.
+
+   **Recommend (a).** "Not computed" suggests nobody has measured it, and it was measured, in German. (b) keeps the
+   word true but leaves the landing screen reading "Not computed" on 2 of 3 channels. Arm A does not depend on this
+   answer.
+2. **A channel · market where the product has no listing** (e.g. GALE-JACKET on eBay · DE) will read its
+   requirements verdict (`Blocked · —`, "Category metadata is incomplete"), not "No listing".
+   - **Recommend: keep that in this fix.** The scope row answers "how far from publishable". "No listing here" is the
+     row vocabulary and the Presence line's job, and the DS header forbids mapping one vocabulary onto the other.
+   - If you want the menu to also *say* there is no listing, that is a separate, server-side item: a `listed: false`
+     fact on the scope, from the listings `readFamilyAccountId` already reads.
+
+---
+
+### 7. Closure fields
+
+- **Done when**
+  - `scopeItems.vitest.test.ts` T1–T11 are green and each of M1–M10 is red.
+  - The existing studio and `scopeMenu` tests stay green, and scoped `tsc` for apps/web reports 0.
+  - After deploy, on production, Xavia GALE-JACKET reads:
+    - eBay · IT: `eBay · Blocked · 100%`, with no "(not participating)" in the Market list;
+    - Shared · DE: Amazon `Blocked · N%` and eBay `Blocked · —` (with the Q1 (a) ruling);
+    - Motovento GALE-JACKET eBay · DE: `Not computed`.
+  - In general: **no channel row reads "Not set up" unless its Marketplace row carries a `participationCheckedAt`,
+    or the server itself answered `absent`**. This is checked by reading the screen, with the index re-read and the
+    numbers predicted first.
+- **Cost when**
+  - Wrong: at worst an Amazon market that SP-API marked as not participating would show its requirements verdict
+    (M2 guards against this; 0 such active rows today). Or a Shared row shows another language's verdict, and the
+    hover names that language.
+  - Not done: every eBay, Shopify and Etsy scope in both businesses keeps saying "Not set up", and every eBay market
+    keeps saying "(not participating)". Examples:
+    - GALE-JACKET's eBay·IT error block (100 % filled but `blocked`) stays hidden behind the wrong word.
+    - 160 Xavia eBay coordinates and 32 Shopify coordinates keep hiding a real verdict.
+    - The landing screen keeps "Not computed" on Amazon.
+- **Gate:**
+  - the new test file plus the related studio tests plus `design-system/patterns/scopeMenu.vitest.test.ts`;
+  - M1–M10 by hand, each asserted red;
+  - scoped `tsc` for apps/web;
+  - the pre-push hook (never `--no-verify`).
+  - No DS file changes, so there is no `apps/factory` mirror, no token and no contrast gate.
+- **Rollback:** revert the one commit (1 edited file, 2 new files). No data, migration, API or cache is involved, and
+  the old behaviour comes back exactly.
+
+---
+
+#### Observations outside this fix (not built, for the hub's list)
+
+- **Shopify on a country market.** The studio offers Shopify with no state on DE/IT/…, because it sells only on
+  GLOBAL (`StudioBar.tsx:40`, `c.markets.includes(market)`). That is unchanged, and it is not part of this report.
+- **Latent server `absent` ("Choose an account for X · Y.").** A channel with 0 or ≥2 active accounts gets it for
+  every family with no attributed listing (`family-account.ts:18-19`). 0 instances today. If a second eBay account is
+  connected, this becomes the next "Not set up" wave. The honest word there would be `notComputed` plus the sentence,
+  and the change would be server-side.
+- **Railway deploy `c98ccdc7`.** It has no commit metadata, was created 15:52 UTC, and went from BUILDING to SUCCESS
+  during this investigation, replacing `ed064795` (= `2f01c58a2`). The API may no longer be exactly `2f01c58a2`. The
+  defect above is in the web code, which I read at `2f01c58a2`.
+
+**Build decision (2026-09-24 ~16:20 UTC):** the Owner asked to *"identify the issue and then fix it"*. The fix only makes each row say what the
+server measured, so this lane builds it and takes BOTH recommendations above as **stated choices, reversible**: (1) on the Shared product a
+market that does not sell Italian shows its own-language verdict (the hover names the language); (2) a channel with no listing keeps its
+requirements verdict. Files (lane SR1, phase 2): NEW `_studio/scopeItems.ts` + `scopeItems.vitest.test.ts`, `_studio/StudioBar.tsx`.
+
+## A-55 — BUILT (the Owner: "identify the issue and then fix it"). Each scope row says only what was measured.
+
+Built by sub-agent SR1 (phase 2); re-run by this lane: the `_studio` folder + `design-system/patterns` 153 files / 2,063 tests green, `tsc` web 0.
+New pure `_studio/scopeItems.ts` (the old `scored()` moved out of `StudioBar.tsx`, +7 −26): participation counts as "no" only when Amazon's
+refresher stamped it (`participationCheckedAt` set, status not `UNKNOWN`) — the same rule drops "(not participating)" from the Market list;
+on the Shared product a market that does not sell the chosen language shows the server's own-language verdict (named in the hover);
+while the destination loads a row reads "Checking…"; a failed read or an unscored scope reads "Not computed" (never "Not set up").
+- **Red first:** the new `scopeItems.vitest.test.ts` (T1–T11, fixtures through the real parsers, production participation fields) ran against
+  a verbatim copy of the old logic: 13 red, 1 green (T6, as predicted); T11 reproduced the production screen `['See each channel','Not computed','Not set up',…]`.
+  Fixed: 14/14. **Mutations 10/10 red** (each paired with its test), file restored by sha256.
+- **What the Owner will see (Xavia):** Shared · DE — Amazon `Not computed` → `Blocked · 48%` ("Shown in German…"), eBay `Not set up` → `Blocked · —`;
+  eBay · IT trigger `Not set up` → `Blocked · 100%`; Shopify · GLOBAL `Not set up` → `Blocked · —`; no "(not participating)" on eBay markets.
+  Motovento eBay / Etsy → `Not computed` until its first nightly readiness. After picking a channel: `Checking…` instead of a flash of "Not set up".
+- **Not measured yet:** the real screen (the next push's browser gates; the census gate reads the scope bar) and the live `/readiness` response.
+
+*Done when* — tests ✅; the browser gates at the push ⏳; the Owner's screen after the deploy ⏳. *Cost when* — flat (pure, per render).
+*Gate* — `scopeItems.vitest.test.ts` (14 arms) + 10 mutations + the census gate. *Rollback* — revert (web only; no API, no data).
