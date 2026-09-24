@@ -36,3 +36,10 @@ if (process.env.NEXUS_WORKSPACES_ENABLED === undefined) {
   // eslint-disable-next-line no-console
   console.log(`[apps/api vitest] business profiles: ${process.env.NEXUS_WORKSPACES_ENABLED === '1' ? 'ON' : 'OFF'} (from the shell)`)
 }
+
+/*
+ * 2026-09-24 — a connected Shopify store's field list is stored as a cache row (`channel-specs/shopify.ts`). Unit tests
+ * mock the store, so the suite keeps that row in memory: no test writes a cache row into the shared local database,
+ * and no row left by an earlier run decides whether a later run finds a store "cached".
+ */
+process.env.NEXUS_SHOPIFY_STORE_SCHEMA_ROWS ??= 'memory'

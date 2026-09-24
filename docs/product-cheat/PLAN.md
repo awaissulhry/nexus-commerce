@@ -5690,3 +5690,3203 @@ eBay. Amazon·IT's own listings say `Nero Neo` / `Crema e Vino` (store vs Amazon
 |---|---|---|
 | **a** | A per-channel value name (the "value-map store" VP.2 already asked for): the store keeps one code per colour, each channel keeps its own label | 🟢 **Recommended**, before the next Amazon publish of AIREON. A feature, not a fix — it needs its own step |
 | b | Revert the 40 AIREON colour fills (`--revert` restores all 78 from the record; a per-SKU revert would need a small script) | Back to no colour on the sheet for AIREON; Amazon unchanged |
+
+---
+
+## OWNER RULING — 2026-09-23 (nineteenth set)
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-27** | A-29 — AIREON's colour: one store, two channel names | ✅ **(a)** A per-channel value name is **its own later step**. 🔴 **Do not publish AIREON to Amazon until that step is built.** Nothing was sent; the 2.6d fill stays |
+
+---
+
+## A-30 — Step 2.7's premise, measured again: the rows exist, the dry run cannot see what is due, and the nightly sweep starves families past its budget. FOR YOUR RULING.
+
+**2026-09-23. Read only: a code trace (lines re-read) and a scratch simulation of the real job. Production NOT read yet —
+the age check needs the Owner's word (see "Not measured" below). Nothing built.**
+
+### What the code says
+
+1. **Where the 9,886 rows came from.** The OLD nightly job (on `main` since `3161da57b`, 2026-09-13) swept **every** root
+   family every night at `17 2 * * *`, on unless `NEXUS_ENABLE_READINESS_RECONCILE=0`
+   (`git show 439d9e3d3:apps/api/src/jobs/readiness-reconcile.job.ts`). Five writers also refresh a family on every edit
+   (`produceReadiness`: `bulk-edit.service.ts:2669`, `master-content.service.ts:157`, `catalog-translate.ts:151`,
+   `catalog-transfer.service.ts:242`, `content-write.ts:88`). Step 2.7's *"Production has 0 rows"* predates that job.
+2. 🔴 **The backfill dry run cannot say what is due.** `runResumableSweep` returns in its dry-run branch **before** it
+   calls `nextBatch` (`resumable-sweep.ts`, `if (dryRun)`), and the job offers no `countOutstanding`, so `planned` is
+   `null`. The printed `9886 → 9886` only says that nothing was written. *"Nothing due"* was **could not measure**, not
+   **measured empty**.
+3. **The deployed nightly (15.1) does recompute under the new rules.** It takes every live root with no
+   `ReadinessIndex` row newer than **20 h** (`dueFamilies`, `readiness-reconcile.job.ts:38-57`) and writes through the
+   deployed `reconcileFamilyReadiness`. With business profiles ON it runs once per active business
+   (`lib/cron/clustered.ts`, the `NEXUS_WORKSPACES_ENABLED` branch). A row the old job wrote at its 02:17 run is more than
+   20 h old at the next tick (02:17 on 2026-09-24, API clock), so **every family is due then**. Production has **34** live
+   roots (32 Xavia Racing + 2 Motovento, [FAMILY-ASSIGNMENT-2026-09-22.md](FAMILY-ASSIGNMENT-2026-09-22.md)): at 2–4 s a
+   family (A-21) that is ~1–2.5 min, inside the 10-min budget. A family edited since the deploy is already recomputed.
+   Edge: a row written by an edit between 06:17 and 06:46 UTC (old code, still < 20 h old) is skipped once and refreshed
+   the night after.
+
+### 🔴 A latent defect in 15.1 — the rotation does not rotate
+
+`dueFamilies` walks roots in **id order**, not by age (its comment says *"oldest work first"*; the code does not do
+that). Past the budget, the next night finds **the same first families** due again (their rows are now > 20 h old) and
+spends the whole budget on them. The rest are **never** computed by the nightly.
+
+Scratch simulation — the real `runReadinessReconcile` + `runResumableSweep`, a mocked database, 3 s per family, the
+cron's own 10-min budget, four nights 24 h apart:
+
+| Catalogue | Every night | Never computed after 4 nights |
+|---|---|---|
+| 500 families | the same 200 (`f000`–`f199`), `stopped: budget` | **300** |
+| 150 families (control) | all 150, `stopped: complete` | 0 |
+
+So the plan's *"a larger catalogue fills on a rotation over several nights"* (Step 2.7 Cost when; 15.1 "Stated, not
+hidden") is **false**. The resume test (`readiness-reconcile.vitest.test.ts`, "stops on the budget…") runs its second
+run at once, while run 1's rows are still fresh: it pins the clock, so the two-night case was never run.
+🟢 **Not live on production today:** 34 roots fit one night. It bites above ~150–300 roots a business.
+
+### Not measured (needs the Owner's word)
+
+A read-only tool, `tools/readiness-age.mjs` (`BEGIN READ ONLY`, Neon host only, `--local` dry run), to print: rows per
+business before / after the deploy; rows per UTC hour; the job's own `CronRun` rows (`readiness-reconcile`: start, end,
+status, summary); roots due now by the job's own predicate; live products with no row. The session's safety check
+refused to create it. It answers *when* the 9,886 rows were computed, and — after 02:17 on 2026-09-24 — whether the first
+new nightly ran to `complete` for both businesses.
+
+### Recommendation — one
+
+**Re-scope Step 2.7 from "a one-shot production write" to "verify the first nightly after the deploy", and fix the two
+defects above before it closes.**
+
+- **No production write by this lane.** D-E is no longer needed: the deployed nightly does the recompute.
+- **Verify (read only, after 02:17 on 2026-09-24):** `CronRun` shows `readiness-reconcile` SUCCESS for both businesses,
+  `stopped: complete`, 0 failed; no live product has a row older than the deploy.
+- **Build (small, one commit, after the ruling):** (1) `dueFamilies` takes the **oldest** first (never-computed, then the
+  oldest `computedAt`), with a two-night arm that is red on today's code; (2) the job offers `countOutstanding` from the
+  same predicate, so the dry run prints a real due count. Mutation-proven as usual.
+- **Done when** — the verify above passes, and both arms are green. **Cost when** — nightly bounded at 10 min; with
+  oldest-first, a catalogue above the budget refreshes every ⌈roots ÷ families-per-night⌉ nights. **Gate** — the two new
+  arms + the existing 16. **Rollback** — revert the commit; the data is derived.
+
+---
+
+## A-31 — GitHub CI is red on the deploy commit, and two of this lane's test files are the cause. FOR YOUR RULING.
+
+**2026-09-23. Found on the post-deploy check. Nothing built.**
+
+- **Vercel:** ✅ `0a563d6d5` is deployed to **Production** and active (GitHub → Deployments, *"Deployed to Production by
+  vercel"*). Railway: SUCCESS 06:46 UTC (handoff 2).
+- 🔴 **GitHub CI #4162 on `0a563d6d5` FAILED** in the step *"Product grid resolver, write contracts and disposable
+  PostgreSQL regressions"* (5 m 49 s). CI #4161 on `main`'s commit before the merge (`439d9e3d3`) passed. The deploy is
+  not blocked by CI (Deploy API #1907 ran), so this is a red signal on `main`, not an outage.
+- **Reproduced here** with CI's settings (that step's command, run from `apps/api`, `DATABASE_URL` at a server that does
+  not exist, as on the CI runner, which has no PostgreSQL): **3 files fail to load**, 181 pass.
+  - `services/pim/price-door-concurrency.vitest.test.ts` (Step 2.2 Gate 2, `1c2efb671`) and
+    `services/pim/price-door-reset.vitest.test.ts` (Step 2.2 part 2, `a55d8da5f`) — **this lane's.** Each builds a real
+    database from `DATABASE_URL` inside its `vi.mock('@nexus/database')` factory, unconditionally:
+    `ECONNREFUSED 127.0.0.1:5432`. Every other `concurrentDatabase()` file skips unless `NEXUS_TEST_CONCURRENT_PG_URL` is
+    set (`describe.skipIf(!concurrentDatabaseUrl())`, e.g. `stock-concurrency.vitest.test.ts:52`) and runs on the push
+    hook's throwaway server (`scripts/run-real-postgres-tests.mjs`). Locally they pass because `DATABASE_URL` is the dev
+    server.
+  - `studio-publication-transports.vitest.test.ts` — **not** a cause: *"Cannot find module '.prisma/client/default'"*
+    while the push hook was regenerating the client at the same moment; alone it passes 21/21.
+- 🟠 CI's own log was not read (the browser tool refused the page read). The step and the reproduction agree.
+
+### Recommendation — one
+
+**Make the two files behave like every other real-server test.** (1) `price-door-reset` tests what a write stores, not a
+race, so it moves to `formulaDatabase()` (the standing rule; three `concurrentDatabase()` files already overflowed the
+local lock table once). (2) `price-door-concurrency` is a race, so it stays on `concurrentDatabase()`, skips unless
+`NEXUS_TEST_CONCURRENT_PG_URL` is set, and gets one line in `scripts/run-real-postgres-tests.mjs` (its expected pass
+count) so the push hook still runs it on every push. One commit.
+
+- **Done when** — the CI step's command, run with CI's settings, reports 0 failed files; the push hook's real-PostgreSQL
+  stage lists the race file with its count; the next CI run on `main` is green in that step.
+- **Gate** — mutations: each arm's guard removed goes red on its new database (the race file on the throwaway server).
+- **Cost when** — `flat`. **Rollback** — revert the commit.
+- 🔴 `scripts/run-real-postgres-tests.mjs` is shared (AE and channel-connections lanes list files there): **one appended
+  entry**, named in the claim row before the edit. The fix reaches CI only when `pes/phase-0` is next merged to `main`
+  — the Owner's merge.
+
+---
+
+## OWNER RULING — 2026-09-23 (twentieth set)
+
+The Owner: *"I'll go with your recommendation. We need to get everything done quickly according to the plan. Proceed
+with your recommendation and continue."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-28** | A-30 — Step 2.7 | ✅ **The recommendation.** 2.7 becomes *verify the first nightly after the deploy* (no production write by this lane; D-E no longer needed). Build: `dueFamilies` oldest first, and the job offers `countOutstanding` so the dry run counts. The read-only age check (`tools/readiness-age.mjs`) is authorised |
+| **R-29** | A-31 — CI red on `0a563d6d5` | ✅ **The recommendation.** `price-door-reset` → `formulaDatabase()`; `price-door-concurrency` skips without `NEXUS_TEST_CONCURRENT_PG_URL` and joins `scripts/run-real-postgres-tests.mjs` |
+
+---
+
+## A-31 — BUILT (R-29). The two price-door test files no longer turn CI red.
+
+| File | Change |
+|---|---|
+| `services/pim/price-door-reset.vitest.test.ts` | On `formulaDatabase()` (PGlite) — it tests what a write stores. Its listings now name their eBay account, as live listings do (see the finding below) |
+| `services/pim/price-door-concurrency.vitest.test.ts` | Still `concurrentDatabase()` (a race). Nothing connects at load; `describe.skipIf(!concurrentDatabaseUrl())`; the database is made in `beforeAll` |
+| `scripts/run-real-postgres-tests.mjs` | One appended suite: *price door race*, **11** expected |
+
+### 🔴 Found while moving it — a second connection inside the price door's transaction (for the P1.3 owner; not built)
+
+A direct `writeChannelPrices` call on a listing with **no** account timed out at 5,000 ms on PGlite. The queue row's
+destination falls to step 4, *"the channel's only account"* (`outbound-destination.ts:90`), which calls
+`listActiveConnections` (`connection-resolver.service.ts:159`) on the **outer** client — outside the transaction it runs
+in. On a pool that is a second connection per price write; on a one-connection database it waits for the transaction
+that waits for it. The sheet path does not hit it (its outer transaction is in context). Harmless on production's pool
+today; recorded for the channel-connections lane (P1.3's `resolveDestinations`), which owns the file.
+
+### Done when — ✅
+
+- CI's step *"Product grid resolver, write contracts and disposable PostgreSQL regressions"*, run here with CI's settings
+  (from `apps/api`, `DATABASE_URL` at a server that does not exist, no `NEXUS_TEST_CONCURRENT_PG_URL`): **183 files pass,
+  1 skipped (the race), 0 failed** — before the fix, 3 failed to load. CI's next step (web grid regressions, never reached
+  on `0a563d6d5`): **233 files pass**.
+- `price-door-reset`: 16/16 with no server and 16/16 with the dev server. `price-door-concurrency`: skipped with no server;
+  **11/11** on a throwaway server through the runner.
+- 🟠 The CI run on `main` itself turns green only after the Owner's next merge of `pes/phase-0` into `main`.
+
+### Gate — ✅ 6 mutations, 6 red (Python harness, per-file backups, sha256 restored every time)
+
+| Mutation | Result |
+|---|---|
+| M1 reset builds a server database at load again | 🔴 RED — the file fails to load (CI shape) |
+| M2 race connects at load again | 🔴 RED — fails to load |
+| M3 race without its skip | 🔴 RED — `beforeAll` has no server |
+| M4 race skipped even on the runner's server | 🔴 RED — runner: *0 passed, 11 skipped (expected 11 passed)* |
+| M5 reset listings with no account (the old fixture) | 🔴 RED — 11 failed (the 5,000 ms timeout) |
+| M6 the door keeps legacy price keys (A-18's defect), on the new database | 🔴 RED — 8 failed: the moved file still catches its defect |
+
+### Cost when — `flat`. Rollback — revert the commit.
+
+---
+
+## A-30 — BUILT (R-28). The nightly readiness sweep rotates, and its dry run counts. Step 2.7 waits only for the verify.
+
+| What | Where |
+|---|---|
+| `dueFamilies` returns EVERY due root, **oldest first** (never computed, then the oldest `computedAt`; a tie keeps the database's id order). One walk: roots 200 a page, each page's newest row per root by `groupBy … _max` on the `productId` index | `jobs/readiness-reconcile.job.ts` |
+| The job offers `countOutstanding` from the same predicate, so `planned` / `remaining` are numbers and the dry run prints *"N of N outstanding"* | same file |
+| New read-only tool: rows per business before / after the deploy, per UTC hour, the job's own `CronRun` rows, roots due now, products with no row since the deploy | `docs/product-cheat/tools/readiness-age.mjs` |
+
+### Done when — the build ✅; Step 2.7 itself ⏳
+
+- ✅ **Two nights, measured on the job itself** (scratch simulation, 500 families at 3 s, the cron's 10-min budget):
+  before — the same 200 every night, **300 never computed**; after — night 1 `f000–f199`, night 2 `f200–f399`, night 3
+  the last 100 then the oldest 100, **0 never computed**, night 4 moves on to the next oldest.
+- ✅ **Two instruments agree on the local catalogue:** `prod-run.mjs backfill --local` (dry run, new code) prints
+  **`42 of 42 outstanding`**; `readiness-age.mjs --local` counts **42** roots due. Before, the dry run printed no count.
+- ⏳ **Step 2.7 closes on the verify (R-28), read only, after the first nightly on production (02:17 on 2026-09-24, API
+  clock):** `CronRun` `readiness-reconcile` SUCCESS for both businesses, `stopped: complete`, 0 failed; no live product
+  without a row since the deploy. The deployed job is still the id-order one until the next merge to `main` — at 34
+  roots it covers the whole catalogue in one night either way. The session's safety check refuses the production run of
+  the tool; the Owner runs it.
+
+### Gate — ✅ 8 tests (6 adapted, 2 new), 5 mutations, 5 red (Python harness, per-file backup, sha256 restored)
+
+| Mutation | Red arms |
+|---|---|
+| A1 id order instead of oldest first (today's defect) | the three-nights arm, the horizon arm |
+| A2 never-computed families last | the three-nights arm, the horizon arm |
+| A3 no count offered to the sweep | the dry-run count arm, the three-nights arm (`planned: 12`) |
+| A4 the horizon ignored (every family due) | 5 arms |
+| A5 a stale family not due (only never-computed) | the three-nights arm, the horizon arm |
+
+Also: the resumable-sweep suite (10) green; `apps/api` `tsc --noEmit`: 0 errors.
+
+### Cost when — nightly still bounded at 10 min; the order costs one walk of every live root per batch (two indexed queries per 200 roots, ~100 at 10,000), against 25 families at 2–4 s each. A catalogue above one night's budget now refreshes every ⌈due ÷ families per night⌉ nights. Rollback — revert the commit; the data is derived.
+
+---
+
+## Step 3.2 — M1 and M2: the trace, and the predictions WRITTEN BEFORE ANY RUN (2026-09-23 ~13:40)
+
+**Status of the four.** **M4 is done** (Step 2.4: 365 → **0** channel-declared columns on a real Shared page, with a
+positive control). **M3 is half done:** Step 2.3 proved the two one-language paths refuse a multi-language market, and
+A-22 traced that the other paths send every language; no payload was captured for a non-default language. **M1 and M2
+were never run.** This section is M1 and M2.
+
+### The trace (read, not run)
+
+| | |
+|---|---|
+| Where an Amazon·IT channel cell is stored | An `attr_*` field with no channel store → `ChannelListing.overrideData[<key>]` (`bulk-edit.service.ts:1413`, `:1959`). Only four Amazon fields have their own store (`channel-specs/amazon.ts:45-73`: title/description/bullets as listing columns; variation theme, brand, condition, list price) |
+| Builders that read it (through `resolveBatch` → `resolve-channel-field.ts`) | the **studio publication** (`studio-publication-amazon.ts:32` `prepareAmazonPublication`, via `applyResolvedMappingToAmazonFeed`) and the **cockpit publish** (`amazon-cockpit-publish.routes.ts`) |
+| Builders that import no resolver and never read `overrideData` | the listing wizard (`listing-wizard/submission.service.ts`, `amazon-publish.adapter.ts`), the queue push (`outbound-sync.service.ts`), the batch feed (`channel-batch/amazon-batch-feed.service.ts`). 🟠 Traced by imports only — a cell typed on the sheet cannot reach them unless another path copies it |
+| The capture seam | `readPublicationFacts(rootId, scope)` + `prepareAmazonPublication(facts)` — builds the JSON listings feed, sends nothing (`sendAmazonPublication` is separate). Seller id and region come from the `ChannelConnection` row, the spec from `CategorySchema`; no network when the schema is cached |
+
+### How it is measured
+
+`docs/product-cheat/tools/payload-capture.mts`, **local catalogue only** (refuses any host but 127.0.0.1), everything
+inside ONE `inDatabaseTransaction` that is **thrown away** at the end (nested writes join it; after-commit effects never
+run), `fetch` stubbed to throw, Redis at a dead port. Product: `1J-EYE5-Y0TW` (GLOVES, 5 children, a live Amazon·IT
+listing on the primary account). AIREON is not used (R-27).
+
+### Predictions (written before the first run)
+
+- **M1.** A distinctive text (`M1-PROBE-…`) typed through the sheet's own write (`applyProductBulkEdits`, `target:
+  'channel'`, Amazon·IT) into one child's free-text Amazon attribute: (1) it lands in that listing's `overrideData`;
+  (2) it appears in the studio publication feed **in that child's message only**, at `attributes.<attribute>[0].value`;
+  (3) the feed built BEFORE the write does not contain it (control); (4) after the rollback, `overrideData` is back to its
+  before-state. 🔴 If (2) fails, Step 2.2's premise (Correction 2) was a trace that an experiment refutes.
+- **M2.** For the same child, sheet vs payload. Prediction: **0** disagreements on attributes the resolver owns (both read
+  the same `resolveBatch` cell); disagreements **only** where another builder owns the attribute — content (`item_name`,
+  `product_description`, `bullet_point`, `generic_keyword`, from the content resolver), offer/price/quantity, images,
+  variation theme — **5–15 roots**. A number outside that range is a finding.
+
+### Step 3.2 — M1 and M2 RESULTS (2026-09-23, local catalogue, one family)
+
+**Run:** `cd apps/api && npx tsx ../../docs/product-cheat/tools/payload-capture.mts --sku xavia-knee-slider --fulfillment FBM --m2`
+— record `records/step-3.2-m1-m2-xavia-knee-slider-2026-09-23.json`. Every run: **rolled back** (the listing re-read
+outside the transaction is unchanged) and **0 network attempts**.
+
+**Three stated preconditions, all inside the thrown-away transaction** (the builder refuses before it reads any attribute
+without them; none touches an attribute): the local Amazon account is `disconnected` → set `connected`; the local cached
+Amazon·IT schemas have expired (the builder then re-fetches from Amazon — the stub caught `api.amazon.com/auth/o2/token`) →
+`expiresAt` moved a day ahead; 9 family products had no fulfilment method → `FBM`.
+
+**Families the builder refused locally** (publish guards, not payload results): `1J-EYE5-Y0TW`, `UD-LVLM-1H8T`,
+`GALE-JACKET`, `IT-MOSS-JACKET`, `WATERPROOF-OVERJACKET-BLACK-MEN`, `3K-HP05-BH9I` — *"N variants cannot be told apart"*
+(the local copy does not carry the 2.6d fill that production has); `AIR-MESH-JACKET-MEN`, `REGAL-JACKET` — *"A saved
+mapping no longer exists in the category schema"* (old local schema copies). **One family built:** `xavia-knee-slider`
+(AUTO_ACCESSORY, parent + 8 children).
+
+#### M1 — ✅ all four predictions held
+
+| Prediction | Measured |
+|---|---|
+| (1) lands in the listing's `overrideData` | `overrideData.part_number` (the sheet's response: `updated: 1`, `versionOf: channelListing`) |
+| (2) in that child's message only, at `attributes.<attr>[0].value` | `xavia-knee-slider-black` only, `attributes.part_number[0].value` = the probe, `marketplace_id: APJ6JRA9NG5V4` (Amazon·IT) |
+| (3) the feed built before the write does not contain it | 0 paths |
+| (4) after the rollback, the listing is as before | yes |
+
+**So an Amazon·IT channel override reaches the studio publication payload.** Correction 2 (a trace) is now an
+experiment. Scope: the studio publication path, measured; the cockpit uses the same two functions, traced; the wizard,
+the queue push and the batch feed do not read `overrideData`, traced — a sheet override cannot reach those three.
+
+#### M2 — the number: **0** value disagreements; 1 value the sheet shows that is never sent
+
+| Over the family (9 products) | |
+|---|---|
+| Sheet values (non-empty, excluding `productType`, which is the message header and matched 9/9) | **62**, in **54** attributes (roots) — the comparison is per attribute |
+| Same in the payload | **53** attributes (incl. the parent's variation theme: sheet cell `theme.code: COLOR`, payload `COLOR` — my first count called it a difference because it read the engine cell object as a plain value) |
+| **Different** | **0** attributes |
+| **Shown on the sheet, not sent** | **1** attribute — the PARENT row shows `child_parent_sku_relationship … child_relationship_type: variation`; the builder drops that attribute for a parent on purpose (a parent has no parent). A display quirk, not a payload defect |
+| Sent, not on the sheet | 16 = `purchasable_offer` + `fulfillment_availability` on each of the 8 children — owned by the offer/stock builder; the Amazon sheet shows those fields empty (Review §3a: no Amazon price column) |
+
+**Against the prediction:** *"0 disagreements on resolver-owned attributes"* — ✅ held. *"5–15 roots differ where
+another builder owns the attribute"* — ❌ **wrong, too pessimistic:** 2 per child (offer, stock), 1 on the parent.
+🟠 **Corrected (the M3 run, same day):** this line first said the family carries no content. It does: the 53 same
+attributes include `item_name` on all 9 products (brand 9, condition 9, item_name 9, parentage 9, parent link 8,
+colour 8). It carries no description, bullets or images on Amazon·IT. By Part 13 (*"M2's diff is near
+zero → Phase 3 shrinks"*), this points the good way — 🔴 **on one small family, locally.** It is a number, not yet a
+trend: a fixture pins a dimension, and this one holds no content, no images, 6–7 values a product.
+
+#### ⬜ Stated, not hidden
+
+- M2 on the families with content, sizes and many attributes (the jackets) needs them to build first: the local copy
+  needs the 2.6d fill and fresh schemas. On production those guards pass, but a production run of this tool is a new
+  production-reading tool — the Owner's word first.
+- **M3 is still not captured as a payload** (Step 2.3 proved the refusals; the language tag in a built payload is
+  unmeasured). The tool is Amazon·IT-only today.
+- **Step 3.2's gate** (15.7: a fixture gate in the push hook + a sampled production metric) is not built.
+
+### Step 3.2 — M3 and a wider M2: predictions WRITTEN BEFORE THE RUN (2026-09-23 ~15:30, Owner: "Continue with whatever is next")
+
+Option (a) of the last report: the jacket families are made buildable **locally, inside the same thrown-away
+transaction**, by the 2.6d fill (`planVariationStoreFill` + the one writer — production already carries it). The tool
+gains `--market` (default IT) and `--fill-axes`.
+
+**Why M3 is a real question here.** A coordinate cannot be *set* to a language (A-22: the market decides). What can be
+measured is the rule R-LX-6: each content entry goes out under its OWN language's tag, and a market language with no
+text is OMITTED — never the source text under the destination's tag.
+
+- **M3 prediction.** On Amazon·IT (`it`) and Amazon·DE (`de`): every `item_name` / `product_description` /
+  `bullet_point` entry carries `language_tag` `it_IT` / `de_DE`, and its text equals the product's (or its parent's)
+  text in THAT language; a product with no text in the market's language has **no** content entry. **0 entries whose
+  text is another language's.** Positive control: at least one product WITH text in the market language shows an entry.
+- **Wider M2 prediction.** On a jacket family after the fill: **0** value disagreements on resolver-owned attributes
+  (as on the knee slider); size and colour **same** (the fill writes the store both read); content: the sheet shows a
+  title for every row, the payload carries it only where the market language has text, so every "shown, not sent"
+  content root is a product with no text in that language — **no other kind of mismatch.**
+
+### Step 3.2 — M3 and the wider M2: RESULTS (2026-09-23 ~16:30)
+
+**Wider M2 — could not measure.** With the 2.6d fill applied inside the transaction, the jacket families still stop at
+real publish guards on the local copy: `GALE-JACKET` (IT, DE) *"4 variants cannot be told apart"* (the fill had nothing
+to do — this is A-26's local-only XS/XXS pair); `WATERPROOF-OVERJACKET-BLACK-MEN` IT *"A saved mapping no longer exists in
+the category schema"*, DE *"An Amazon offer is closed"*. Patching each guard would measure a family that does not exist,
+so this stops here. The M2 number stays **one local family**.
+
+**M3 — measured at the seam the builder calls for content** (`buildAmazonContentAttributes`, `studio-publication-amazon.ts`),
+for **every** local product with an Amazon listing, IT / DE / FR / ES — read only, rolled back, 0 network. Tool:
+`tools/content-language.mts`. Each entry's text is traced to where it is stored: the product's own columns (the primary
+content language, `it`), a product translation, a listing translation, or the listing's own column (no language recorded).
+
+| Market | Listings | Entries | Tag | Text from |
+|---|---|---|---|---|
+| IT | 273 | 1,576 | `it_IT` 1,576 | listing's own column 1,328 · listing column = the Italian product text 248 |
+| DE | 214 | 837 | `de_DE` 837 | listing's own column 812 · 🔴 **listing column = the ITALIAN product text 25** |
+| FR | 115 | 574 | `fr_FR` 574 | listing's own column 574 |
+| ES | 123 | 495 | `es_ES` 495 | listing's own column 495 |
+
+- **Against the prediction:** *"every entry carries the market's tag"* — ✅ 3,482 of 3,482. *"0 entries whose text is another
+  language's"* — ❌ **25 on DE.** *"a product with no text in the market language has no entry"* — ✅ in the resolver's
+  terms (R-LX-6 holds: no entry substitutes the source text for a MISSING language — 0 products refused, 0 without an
+  entry). *"Positive control: at least one entry"* — ✅ every listing has one.
+- 🔴 **The 25 are not the resolver falling back.** They are 25 Amazon·DE listings whose OWN title column (a pin,
+  `followMasterTitle = false`) holds the Italian product title: AIR-MESH-JACKET-MEN 6, REGAL-JACKET 13, VENTRA-JACKET 4,
+  IT-MOSS-JACKET 1, 3K-HP05-BH9I 1; **21 live on Amazon·DE**; 0 has a German translation. The resolver trusts a listing's
+  own column as the market's language — the column records no language — so it sends Italian under `de_DE`. See A-32.
+
+---
+
+## A-32 — 25 Amazon·DE listings carry an Italian title as their own, and a publish would send it as German. FOR YOUR RULING. Nothing built.
+
+**Found by M3 (above), on the LOCAL copy.** Production is not measured: a count there needs a read-only tool and the
+Owner's run.
+
+| # | Option | |
+|---|---|---|
+| **a** | **Count on production first** (read only: non-IT Amazon listings whose own title / description / bullets equal the product's Italian text), then rule on the data — per listing: clear the pin (the title then follows the product; with no German text R-LX-6 omits it, so Amazon keeps its current title) or get a German title. In the same step, make the publish preview **name** such a listing (*"this Amazon·DE title is the Italian text"*) instead of sending it silently | 🟢 **Recommended.** The number decides the size; the preview line stops it growing |
+| b | Build the preview line now, count later | The data question waits |
+
+- **Cost when** — `flat` (one comparison per content entry at publish). **Gate** — an arm with an Italian own title on DE is
+  named; a German own title is not (control). **Rollback** — revert.
+
+---
+
+## A-33 — Step 3.3 assessed: the two Amazon payload builders have ALREADY drifted. Collapse recommended. FOR YOUR APPROVAL.
+
+**2026-09-23. Read: both builders, their callers and git history (lines re-read). Nothing built.**
+
+| | Studio / cockpit builder | Mapping-cascade builder |
+|---|---|---|
+| Where | `services/amazon/mapping-payload.ts:9` `applyResolvedMappingToAmazonFeed` | `services/pim/mapping/prepare-dispatch.ts:11` `prepareMappingDispatch` (Amazon branch `:36-49`) |
+| Live caller | studio publication (`studio-publication-amazon.ts:143`), cockpit publish | the outbound queue, every `FM_CATALOG_CASCADE` row (`outbound-sync.service.ts:742`, patches merged at `:378`) |
+| Serialiser | `attributesFromCells(spec, values)` | the same |
+| Mixed ownership (a root with listing-owned leaves) | refused | refused (other wording) |
+| 🔴 **Clearing an attribute** | `{ op: 'delete', path, value: attributeDeleteValue(spec, root) }` — the schema's selector values (`mapping-payload.ts:50`) | `{ op: 'delete', path }` — **by name alone** (`prepare-dispatch.ts:46-48`) |
+| When it clears | only a root whose value was an override and is now empty, never on a full update | any reviewed root that now resolves to nothing |
+
+🔴 **The drift is in git.** `e0791ea9d` (2026-09-14, the GALE import) changed the studio builder from deleting by name to
+*"clear attributes using schema selector values instead of deleting by name alone"* (its audit README) and added
+`attributeDeleteValue`. The cascade builder was not touched. A mapping-cascade clear of an Amazon attribute still goes out
+by name alone — the shape that fix exists to replace. Not measured against Amazon (Step 3.1 is shut); the audit is the
+evidence that Amazon needs the selectors.
+
+🟠 **To check in the build, not claimed:** whether a content field (`item_name` …) can be selected in the cascade — the studio
+builder takes content from the content resolver with its review gate (`buildAmazonContentAttributes`), the cascade from the
+mapping cell.
+
+### Recommendation — one: collapse, then keep the gate
+
+**One function builds the mapped-attribute patch for both** (the studio builder's rules: the selector delete, the ownership
+refusal), called by `applyResolvedMappingToAmazonFeed` and by the cascade's Amazon branch. Plus Step 3.3's gate: one fixture,
+both callers, their patches diffed — red today on the delete shape (the proof it can fail), green after.
+
+- **Done when** — a cascade clear carries the schema selectors; the gate diffs the two callers on one fixture and is 0; a
+  deliberate divergence in either turns it red.
+- **Cost when** — `flat`. **Gate** — the parity test + mutations (Python harness, per-file backups, hash check).
+- **Rollback** — revert the commit.
+- Files it would hold (named in the claim row first): `services/amazon/mapping-payload.ts`,
+  `services/pim/mapping/prepare-dispatch.ts`, their tests, a new parity test.
+
+---
+
+## Step 3.6 — premise check: PREDICTIONS WRITTEN BEFORE THE RUN (2026-09-23 ~17:00)
+
+The step says *"a corner-drag commits values you could not type … a shipped capability actively creates bad data today"*.
+Since #489 (2026-09-02) the server enforces the sheet's length caps and closed lists (`bulk-edit.service.ts:408-418`,
+`:598-611`, `:683-692`) and returns every refusal with its row and field (`:588`). Measured through the sheet's own write
+(`applyProductBulkEdits`), Amazon·IT channel cells, local catalogue, rolled back:
+
+- (a) a value over the field's cap → **refused**, `updated: 0`, one error naming the row, the field and the cap; nothing stored.
+- (b) a value off a closed list → **refused** the same way; nothing stored.
+- (c) control: a valid value → `updated: 1`, stored.
+- (d) one request with (c) and (a) → **the whole request refused**, the valid value NOT stored (all or nothing).
+
+If all four hold, the "creates bad data" half of 3.6 is already false at the server, and what is left is the grid:
+whether it shows those reasons per row and puts the cells back.
+
+### Step 3.6 — RESULT, and A-34
+
+**Run:** `cd apps/api && npx tsx ../../docs/product-cheat/tools/paste-validity.mts` — `xavia-knee-slider`'s first child,
+Amazon·IT channel cells, rolled back (the listing re-read afterwards is unchanged), 0 network. Fields picked by the tool:
+`color` (cap 50), `accepted_voltage_frequency` (closed list of 7).
+
+| Prediction | Measured |
+|---|---|
+| (a) over the cap → refused, per-row reason, nothing stored | ✅ 400 — *"Colour takes at most 50 characters"*, row + field named; not stored |
+| (b) off a closed list → refused the same way | ✅ 400 — *"… is not one of the allowed values for Accepted Voltage Frequency"*; not stored |
+| (c) a valid value → stored | ✅ `updated: 1`, stored |
+| (d) valid + invalid in one request → all refused | ❌ **Wrong: per row, not all-or-nothing.** `success: true, updated: 1` with the invalid one in `errors[]`; the valid value IS stored, the invalid one is not |
+
+**So the step's premise is out of date.** *"A corner-drag commits values you could not type … creates bad data today"* —
+the server has refused over-cap and off-list values, per row, since #489 (2026-09-02). The master sheet's save paths read
+those per-row refusals (`app/products/_sheet/useMasterSheet.ts:145-149` one cell, `:242-252` a bulk paste, each refused
+row with its reason) — read, not exercised in a browser.
+
+## A-34 — Step 3.6's premise changed: the server already refuses a bad paste, per row. FOR YOUR APPROVAL.
+
+**Recommendation — one: re-scope Step 3.6 to a browser check, and build only what it finds.** On the local app, on the
+master sheet and on the studio's channel sheet: paste and fill-drag an over-cap value and an off-list value across rows
+that also hold a valid one. Pass = each refused cell goes back to its stored value and shows its own reason, the valid
+cells save. The sheet's own gate (`design-system/grid/editors/writeGate.ts`) stays validity-free: the server is the one
+judge, so the grid cannot drift from it. Nothing else is built unless the check fails.
+
+- **Done when** — the browser check passes on both sheets, recorded with its screenshots. **Cost when** — `flat`.
+- **Gate** — the server arms above become a test (four arms, a mutation removing each refusal). **Rollback** — n/a.
+- 🔴 The check writes real local values on its valid rows; it restores them by value afterwards.
+
+---
+
+## OWNER RULING — 2026-09-23 (twenty-first set)
+
+The Owner: *"Perfect. I'll go with your recommendations. Please go ahead."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-30** | A-32 — 25 Amazon·DE listings pin an Italian title | ✅ **(a)** Count on production first (read only, the Owner runs it), then decide per listing; the publish preview names such a listing |
+| **R-31** | A-33 — the two Amazon payload builders drifted | ✅ **(a)** One function for both, plus the parity gate |
+| **R-32** | A-34 — Step 3.6's premise changed | ✅ **(a)** Re-scope 3.6 to a browser check on both sheets; build only what fails |
+
+---
+
+## A-33 — BUILT (R-31). Step 3.3: one serializer for both Amazon payload builders, and the parity gate.
+
+| Where | What |
+|---|---|
+| `services/amazon/mapping-payload.ts` | New `mappedAmazonRoots(spec, catalogue, cells, roots)` (serialises the mapped roots, refuses a root with a listing-owned leaf) and `amazonRootPatch(spec, root, value)` (replace, or a delete **with the schema selectors**). `applyResolvedMappingToAmazonFeed` uses both |
+| `services/pim/mapping/prepare-dispatch.ts` | The cascade's Amazon branch uses the same two. Its own serializer, refusal and name-only delete are gone |
+| new `services/amazon/mapping-parity.vitest.test.ts` | The Step 3.3 gate: one fixture through BOTH callers; the same patch per root is required |
+
+**Behaviour change, stated:** a cascade clear now carries `value: [{ marketplace_id: … }]` (the selectors), and a clear of an
+attribute whose schema declares no selectors is **refused by name** (*"Cannot clear X: the category schema declares no
+attribute selectors."*) — the studio already refused it — instead of going out by name alone. The cascade's refusal of a
+listing-owned leaf now uses the studio's sentence.
+
+### Done when — ✅
+A cascade clear carries the schema selectors (the clear arm) · the gate diffs the two callers on one fixture: 5 arms green
+(a value, a clear, a compound root, a listing-owned leaf, a two-root control) · a divergence in either turns it red (below).
+
+### Gate — ✅ red on the old code, and 6 mutations 6 red (Python harness, per-file backups, sha256 restored)
+
+| Mutation | parity | mapping-payload | prepare-dispatch |
+|---|---|---|---|
+| P1 the cascade file as it was before A-33 — **the "red today" proof** | 🔴 2 (the clear, the refusal) | green | green |
+| P2 the cascade deletes by name alone (one line) | 🔴 1 | green | green |
+| P3 the studio deletes by name alone | 🔴 1 | 🔴 2 | green |
+| P4 the SHARED patch drops the selectors (both agree, wrongly) | 🔴 1 (the clear arm pins the selectors) | 🔴 2 | green |
+| P5 the shared refusal of a listing-owned leaf removed | 🔴 1 | green | green |
+| P6 the cascade serialises only the leaves it selected | 🔴 1 (the compound root) | green | 🔴 1 |
+
+Existing suites: `mapping-payload` 6, `prepare-dispatch` 5, `outbound-sync` — 61 green with the gate's 5 (66). `tsc --noEmit`: 0.
+
+### Cost when — `flat`. Rollback — revert the commit.
+
+🟠 **NOT checked (A-33's open item stays open):** whether the cascade can select a content field (`item_name` …) — the
+studio sends content from the content resolver with its review gate, the cascade from the mapping cell. Neither the gate
+nor this build covers it. Carried to Step 3.5.
+
+---
+
+## A-32 — BUILT (R-30): counted on production; the publish preview names such a listing. The data decision is the Owner's.
+
+### Production count — read only (`tools/foreign-own-text.mjs`, `BEGIN READ ONLY`, rolled back; record `records/a-32-foreign-own-text-production-2026-09-23.txt`)
+
+Run 2026-09-23 under R-30 (the session's safety check allowed this read-only run). Positive control: 1,057 listings visible,
+452 on markets that do not speak Italian. The same tool on the local copy gives the same 25 as Step 3.2's M3.
+
+| Business · market | Listings | Own text = the Italian product text | Live |
+|---|---|---|---|
+| Xavia Racing · Amazon·DE | 214 | **25 — all titles** (0 descriptions, 0 bullets) | **21** |
+| Xavia Racing · Amazon·FR / ES | 115 / 123 | 0 | — |
+
+The 25: AIR-MESH-JACKET-MEN 6 (parent + 5), REGAL-JACKET 13 (parent + 12), VENTRA-JACKET 4 (parent + 3), IT-MOSS-JACKET 1,
+MISANO-JACKET-XS-BLACK 1. Motovento: none.
+
+### The preview line
+
+| Where | What |
+|---|---|
+| new `services/pim/foreign-own-text.ts` | `foreignOwnTextIssues(...)`: a PINNED own title / description / bullets equal to the product's (or parent's) primary-language text, on a market whose languages do not include it. A following listing is not named (R-LX-6 omits the missing language) |
+| `services/pim/studio-publication-plan.ts` | The studio publish preview adds it per product as a **warning**, naming the field: *"This Amazon · DE listing's own title is the Italian text, and it would go out as German. Give it German text, or let it follow the product."* |
+
+### Done when — the build ✅; the data ⏳ (the Owner's, per listing)
+The preview names a DE listing with a pinned Italian title; a German title, an Italian market and a following listing are
+not named (controls). **For the Owner:** the 25 listings — per listing, give it a German title, or let it follow the
+product (the title then follows; with no German product text R-LX-6 omits it, so Amazon keeps the title it has). Nothing
+is written by this build.
+
+### Gate — ✅ 7 arms (6 rule + 1 wiring), 5 mutations 5 red
+
+| Mutation | Red |
+|---|---|
+| F1 the preview does not call the rule | the wiring arm |
+| F2 a following listing is named too | rule + wiring |
+| F3 a market speaking the primary language is checked too | rule + wiring |
+| F4 the parent's text is ignored | rule (the parent arm) |
+| F5 the preview refuses instead of warning | the wiring arm |
+
+`tsc --noEmit`: 0. Related suites (studio publication, plan, database): 34 green.
+
+### Cost when — `flat` (three comparisons per product at preview). Rollback — revert the commit.
+
+### Step 3.6 / A-34 — browser check: PREDICTION WRITTEN BEFORE THE RUN (2026-09-23 ~19:15)
+
+Local app (web :3000 → API :8091, local database; Amazon publish gated, queue workers off). The studio sheet of
+`xavia-knee-slider`, **Shared scope** — the Amazon scope is closed on this machine (*"The Amazon account is
+disconnected"*), eBay is not set up for this family, so the channel half cannot run here.
+Paste a 3-row block into the Status column (children black, blue, green): `ACTIVE`, `BOGUS-STATUS`, `ACTIVE`.
+**Prediction:** rows 1 and 3 send nothing (unchanged — `writeGate`); row 2 is refused by the server and the cell goes back
+to `ACTIVE` with its own reason on screen; the database keeps `ACTIVE` on all three.
+
+### Step 3.6 / A-34 — RESULTS (R-32)
+
+**Browser check — COULD NOT MEASURE, stated with its controls (not a pass):**
+- The **channel scope** cannot open on this machine: the local Amazon account is `disconnected` (*"Reconnect it in Settings →
+  Channels"*) and eBay is not set up for the family. Reconnecting needs credentials — not this session's to do.
+- On the **Shared scope** the automated paste never reached the grid: after pasting `ACTIVE / BOGUS-STATUS / ACTIVE` into
+  Status, and a single valid `A34-CONTROL` into an empty Manufacturer cell, the tab's network log shows **no save request
+  at all** (only notification polls through `localhost:3000/backend/api/…`) and the cells are unchanged. Positive control:
+  the same clipboard and the same `cmd+v` DO paste into the page's search box. So the synthetic key reaches a text field
+  but not the grid's paste handler — the probe measured nothing, in either direction. Nothing was written.
+- **Left for the Owner (one minute, by hand):** in the studio sheet, paste two cells where one is too long / off-list →
+  the bad cell goes back with its reason, the good one saves. Or reconnect the local Amazon account and ask for the
+  channel half.
+
+**Gate — ✅ BUILT:** new `services/products/paste-validity.vitest.test.ts` — the REAL save path (`applyProductBulkEdits`
+→ the real column builder over a cached Amazon·IT schema) on PGlite; what is STORED is asserted.
+
+| Arm | Result |
+|---|---|
+| over the column's cap (5) → refused, per row, not stored | ✅ |
+| off a closed list → refused, per row, not stored | ✅ |
+| control: a valid value → stored | ✅ |
+| a paste across rows → judged per row: the valid row stored, the bad row refused and not stored | ✅ |
+
+| Mutation (Python harness, per-file backups, sha256 restored) | Red |
+|---|---|
+| V1 the length check never refuses (the shape check and the cap check) | the cap arm |
+| V2 the closed list never refuses (both spellings of the check) | the list arm + the per-row arm |
+| V3 all-or-nothing — any refused row refuses the request | the per-row arm |
+
+**Step 3.6 status:** the premise is re-scoped (A-34), the server half is gated; ⏳ the on-screen half (a refused cell goes
+back with its reason) is the Owner's one-minute check. **Cost when** — `flat`. **Rollback** — remove the test.
+
+---
+
+## OWNER RULING — 2026-09-23 (twenty-second set)
+
+The Owner: *"I'll go with your recommendation, and as far as content and making changes is concerned, I'll make changes to
+the listing data, like titles and all, later because I'll still need to work a lot. We need to get other things done, and
+that is what we should be doing last."*
+
+| # | Question | Ruling |
+|---|---|---|
+| **R-33** | What next: Step 3.1's premise check | ✅ **(a)** Check Step 3.1 on production, **read only**: one Amazon read and one eBay read against the real accounts; if both work, write Step 3.4's plan for approval |
+| **R-34** | Listing CONTENT changes (the 25 Amazon·DE titles of A-32, AIREON's per-channel colour name of A-29/R-27, any title/description data work) | ✅ **Deferred to the END of the programme.** The Owner edits listing data himself, later. The build work comes first. The A-32 preview warning stays; nothing is written to listing content by this lane |
+
+---
+
+## Step 3.1 — the premise changed: BOTH DOORS ARE OPEN on production (measured 2026-09-23 under R-33)
+
+**Run:** `npx tsx docs/product-cheat/tools/channel-read-probe.mts --execute-approved` — one listing READ per channel, each with
+the SELLER ACCOUNT's own credentials, production; record `records/step-3.1-channel-read-probe-2026-09-23T13-04-50-794Z.json`.
+A read counts as open only when it returns the thing asked for (Amazon's client turns a 404 into "success" with no ASIN;
+eBay's client fakes success with an empty body outside production unless `NEXUS_EBAY_REAL_API` is set — the probe sets it
+and requires the body).
+
+| Door | Result |
+|---|---|
+| **Amazon SP-API** (account `cmothu9bo…`, OAuth, `connected`) | `getListingsItem` `GALE-JACKET-BLACK-MEN-S` on Amazon·IT → **ASIN `B0BMS5B768` = the stored ASIN**, status `DISCOVERABLE` |
+| **eBay Trading** (account `cmr4aaqb…`, OAuth, `connected`) | `GetItem 256564203510` with the account's user token → **`Success`**, the same ItemID back, `Active`, 473-byte body |
+
+🟠 **First run could not measure** (stated): both calls stopped with *"No ChannelSpec registered"* — the probe had not loaded
+the connector registry the API loads at boot (`index.ts:192`). Added; the second run is the result. No listing was written.
+
+**Step 3.1 — Done when ✅** (one eBay call and one Amazon call succeed against a real account). **Cost when** — `flat`.
+**Rollback** — n/a. **Gate** — the recurring health check is the channel-connections lane's heartbeat
+(`jobs/cx-heartbeat.job.ts`); not re-measured by this lane — stated, not claimed. The doors were opened by that lane's
+P0–P6 work, not by this one.
+
+**This unblocks 1.3 (reversible unpublish), 3.4 (the first live write and read-back) and 3.5 (reconciliation).**
+
+## A-35 — Step 3.4, the first live write and read-back: the plan. FOR YOUR APPROVAL. Nothing sent.
+
+The plan's own rules for it: one field, one coordinate, a fixture product; a probe stays inside the fixture family; a
+transport failure is an UNKNOWN outcome (re-read after a delay); restore **by value**; a zero-change round trip proves
+nothing — the write must change a value.
+
+**Recommendation — one:** write **Amazon·IT backend search terms** (`generic_keyword`) on **one** GALE child
+(`GALE-JACKET-BLACK-MEN-S`, the listing the 3.1 probe read). Backend search terms are not shown to buyers, so the probe
+is invisible on the page; R-34 (content work last) is kept — this is a probe that restores, not a content change.
+1. **Read only first:** save the listing's current `generic_keyword` (`getListingsItem`, `includedData=attributes`), and
+   trace which path writes exactly ONE attribute to ONE listing (the mapping cascade's `mappingAttributePatches`, fixed by
+   A-33, or the queue push) — a whole-family studio publish is too wide for this step.
+2. **Write** a distinctive probe value through that path (predicted and written down first).
+3. **Read back** after a delay, twice (a `000` may still commit); the value must match.
+4. **Restore by value** (the saved one) through the same path; read back again; must match the saved value.
+
+- **Done when** — a value written from Nexus is read back from Amazon and matches, and the restore is read back too.
+- **Cost when** — `flat`. **Gate** — becomes the seed of Step 3.5 (the read-back). **Rollback** — step 4.
+- 🔴 A live write to a real listing: nothing is sent before your word on this amendment, and each production run is yours
+  to authorise.
+
+| # | Question | Ruling (2026-09-23, twenty-third set) |
+|---|---|---|
+| **R-35** | A-35 — Step 3.4, the first live write and read-back | ✅ **The recommendation** (the Owner: *"Please go ahead."*): Amazon·IT backend search terms on `GALE-JACKET-BLACK-MEN-S`, one attribute, read back after a delay, restore by value |
+
+### Step 3.4 — the path, and the PREDICTION written before any write (2026-09-23 ~21:00, R-35)
+
+**The trace (read):** no Nexus path today sends ONE attribute for ONE listing without either a production Nexus data write
+or a whole-family publish: the studio publish is family-wide; the queue CONTENT push sends title, description, bullets and
+search terms together (R-34: titles are not touched); the mapping cascade sends only its selected roots, but needs its value
+stored first (`generic_keyword` → the product's `keywords`, shared by every market) and a queue row the production worker
+sends. **So the probe runs the cascade's own send path without the queue:** `amazonRootPatch` + `buildAmazonListingPatch`
+(`source: FM_CATALOG_CASCADE`) → `listingPublishService.publish` with Amazon's gate (mode, circuit, rate limit, audit) →
+Amazon's own validation preview (`amazonContentRefusal`) → `submitListingPayload`. No Nexus data write, no queue row.
+The sheet → payload half is M1 (measured). Tool: `docs/product-cheat/tools/live-write-probe.mts` (`--read`, `--write
+--preview`, `--write --execute-approved`, `--restore --execute-approved`), each step a separate run.
+
+**Prediction:** `--read` finds `generic_keyword` on `GALE-JACKET-BLACK-MEN-S` (Amazon·IT) and saves it. The preview
+passes Amazon's own check. The write answers `ACCEPTED` with no issues, and within 3 minutes `getListingsItem` shows
+`generic_keyword[0].value` = the probe. The restore puts the saved value back, read back the same way.
+
+## Step 3.4 — CLOSED (2026-09-23, R-35). The first live write and read-back — the claim the programme rests on — holds.
+
+**Amazon·IT, `GALE-JACKET-BLACK-MEN-S` (ASIN `B0BMS5B768`, product type `COAT`), `generic_keyword` (backend search
+terms, not shown to buyers).** Tool `docs/product-cheat/tools/live-write-probe.mts`; every step's record in `records/`.
+
+| Step (UTC) | Result |
+|---|---|
+| 13:25:41 `--read` | saved the live value: one entry, Italian, `it_IT` (`step-3.4-before-2026-09-23T13-25-41-419Z.json`) |
+| 13:25:57 `--write --preview` | ONE patch (`replace /attributes/generic_keyword`, `it_IT`, Amazon·IT); **Amazon's own check passed** |
+| 13:26:31 `--write --execute-approved` | gate `live` → `SUCCESS`; Amazon **`ACCEPTED`, 0 issues**; read back after **15 s** = `nexusprobe132557` ✅ |
+| 13:27:16 `--restore --execute-approved` | the saved value sent back → `ACCEPTED`, 0 issues; read back after **15 s** = the saved value ✅ |
+| 13:29:15 `--read` (a delayed, independent re-read) | **the saved value, exactly** ✅ — the probe was live ~45 s, on a field buyers do not see |
+
+**Against the prediction:** every line held (preview passes; `ACCEPTED`; read back within 3 minutes — in 15 s; restore
+read back the same way).
+
+- **Done when ✅** — a value written from Nexus was read back from Amazon and matched; the restore was read back too.
+- **Cost when** — `flat` (two PATCHes, a handful of reads).
+- **Gate** — the probe's read-back is the seed of Step 3.5 (reconciliation): `live-write-probe.mts --read` is a working
+  channel read of one attribute with its record.
+- **Rollback** — done and verified (the delayed re-read).
+- **What it proves, and what it does not:** Nexus's cascade serializer (`amazonRootPatch`, A-33) and its send path (the
+  publish gate, Amazon's validation preview, `submitListingPayload`) write a real Amazon attribute that reads back. It did
+  not go through the queue and the production worker, and it did not start from a sheet edit on production — the sheet →
+  payload half is M1 (measured locally). Side effects: the gate's attempt audit and the API call log; no Nexus data written.
+
+---
+
+## A-36 — Step 3.5 (reconciliation): the premise is half false — the READS exist, the RECORD and the FILTER do not. FOR YOUR APPROVAL. Nothing built.
+
+**2026-09-23. A read-only survey (a search agent), with three of its claims re-read by this lane (marked ✓).**
+
+| Field | Read back from the channel today | Stored as | Shown |
+|---|---|---|---|
+| Quantity | Amazon (report, daily 04:15), eBay (every 30 min), Shopify (every 6 h) — all ON | `SyncHealthLog` / `ChannelStockEvent` — ✓ **no listing, market or account column** | health / sync-control panels |
+| Price | Amazon, Shopify (same jobs); **eBay: none** | `SyncHealthLog` `CHANNEL_PRICE_READBACK` | **nowhere** — no route or page reads it |
+| Status | eBay "ended" → shared-listing memberships only; Amazon only via import rows / `ListingIssue` | — | — |
+| Images | Amazon/Shopify snapshot sweep (**OFF** by default); eBay readback ON | `ChannelLiveImage` (snapshot, no drift row) | the Images tab's live strip |
+| Content (title, description, bullets, attributes, item specifics) | **on demand only** — Amazon flat-file "verify against live" (title, description, brand, bullets); an eBay route (title only) | nothing | nothing scheduled |
+| Channel-reported problems | Amazon issues on writes, feeds, reads | `ListingIssue`, one row per listing + fingerprint | flat-file chip, preflight panel |
+
+**Two defects found, both small, both re-read:**
+1. ✓ 🔴 **The product list's "Channel drift (has overrides)" filter does not measure channel drift.** `driftCount` counts a
+   product's listings with any `followMaster*=false` (`product-read-cache.service.ts:241-251`) — it never looks at a channel.
+   The label promises something the number does not hold (R4).
+2. ✓ The Amazon quantity read-back deduplicates per **product** only (`amazon-qty-readback.job.ts:187-195`) while its comment
+   says *"per product+marketplace"* — a second market's drift is hidden for 24 h.
+
+### Recommendation — one: 15.2's shape, fed by the reads that already exist, in two slices
+
+- **3.5a (one additive migration — pre-approved class):** a `ChannelDrift` table shaped like `ReadinessIndex`'s coordinate
+  (listing, channel, market, account) with `lastCheckedAt`, `driftCount`, `driftedFields` (capped at 50). ONE writer helper;
+  the EXISTING quantity and price read-backs write through it (no second reader). The product sheet gets a real
+  *"Differs on the channel"* filter reading it; the old filter is renamed to what it counts (*"Has overrides"*); the dedupe
+  gains the market. Files outside this lane (the read-back jobs, the product list) are named in the claim row first.
+- **3.5b (for approval after 3.5a):** content — a bounded, rotating read of Amazon attributes and eBay item specifics
+  through the Step 3.4 read path, on the resumable-sweep helper (15.6) with a daily budget, writing the same table.
+
+- **Done when** (the plan's) — a listing whose channel value differs from ours has a drift row, and the sheet filters to it;
+  a positive control with no difference has none. **Cost when** — a drift refresh never delays a publish job; content reads
+  fit a daily API budget (rotation, as 15.1's A-30 fix). **Gate** — a seeded difference + a no-difference control; the
+  renamed filter's count test. **Rollback** — drop the table; restore the label.
+
+---
+
+## A-37 — Step 1.3 (reversible unpublish): the premise holds, the mechanics are unproven. FOR YOUR APPROVAL. Nothing sent.
+
+**Measured (read, 2026-09-23):** Amazon and eBay still refuse an unpublish (`channel-delist.service.ts:122-125`,
+`AMAZON_UNPUBLISH_NOT_IMPLEMENTED` / `EBAY_UNPUBLISH_NOT_IMPLEMENTED`); "delete" works — Amazon `deleteListingsItem`, eBay
+`EndFixedPriceItem`. The plan's own open item stands: *"Amazon's and eBay's reversible-unpublish mechanics are judgement,
+not verified against their API docs"* (Part 14, #2). I read Amazon's SP-API pages on partial updates and listing workflows
+(2026-09-23): **neither states what removing an offer does to the listing** — a search summary claimed it, the pages do
+not. So the mechanism is not built on a claim.
+
+| Channel | Candidate "stop selling, keep everything" | Reverse | Open question |
+|---|---|---|---|
+| eBay | quantity → 0 with the seller's *out-of-stock control* on (`ReviseInventoryStatus`, already in the codebase) — the item is hidden, the same ItemID stays | quantity back | is out-of-stock control ON for the account (a read: `GetUserPreferences`)? |
+| Amazon, merchant-fulfilled | `fulfillment_availability` quantity → 0 — the SKU, ASIN and offer stay | quantity back | none on paper; still unmeasured |
+| Amazon, FBA | 🔴 **not offered** — Amazon manages FBA stock and this programme never touches FBA quantity (standing rule); the unpublish stays **refused by name** for FBA | — | — |
+
+### Recommendation — one: prove each live on ONE listing, the way Step 3.4 did, then build
+
+1. **Read only:** eBay `GetUserPreferences` (out-of-stock control), and pick one merchant-fulfilled Amazon listing and one eBay
+   listing with stock (not AIREON).
+2. **Live, one listing each, Owner-approved runs:** unpublish by the candidate → read back (not buyable, the same
+   ItemID / SKU / ASIN) → restore the saved quantity → read back again. Each listing is unbuyable for about a minute.
+3. **Only then build:** the two `delistCapability` rows change to the proven path; FBA stays refused by name; the existing
+   refusal tests are inverted with a test for the reversible path (the plan's gate).
+
+- **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without
+  losing its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
+
+---
+
+## Step 3.2 — CLOSED (2026-09-23). The gate (15.7 #1) is built; the sampled production metric (15.7 #2) is carried to Step 3.5b.
+
+**Gate:** new `services/pim/sheet-payload-parity.vitest.test.ts` — one product, one live Amazon·IT listing, a cached
+category schema, three values stored where the sheet stores them; the SHEET (`getStudioSheet`, channel scope) and the
+PAYLOAD (`readPublicationFacts` → `prepareAmazonPublication`, built, never sent) must agree on every attribute the sheet
+shows, and the payload may add only its own builders' roots (offer, stock, content, parentage). A positive control
+(the sheet shows the three values) and a control that the comparison sees a difference.
+
+🟠 **My first version compared against half the builder** (`applyResolvedMappingToAmazonFeed` alone) and failed on all
+three attributes: a listing setting is serialised one level up, by the studio builder, so that payload was empty. Not a
+product defect — a gate measuring the wrong layer. Fixed to call the studio builder itself.
+
+| Mutation (`studio-publication-amazon.ts`, sha256 restored) | Red |
+|---|---|
+| G1 the studio stops serialising listing-owned attributes | 2 of 2 |
+| G2 "Listing settings" treated as another builder's | 2 of 2 |
+| G3 the studio sends a stray attribute no builder owns | the parity arm |
+
+**Step 3.2's four numbers, all with predictions written first:** M1 ✅ (an override reaches the payload) · M2 = **0** value
+disagreements (one local family, now a push-hook gate) · M3 ✅ (3,482 entries carry their market's tag; R-LX-6 holds; the
+25 Amazon·DE Italian titles are A-32, content deferred by R-34) · M4 = **0** (Step 2.4).
+**Closure:** Done when ✅ · Cost when `flat` ✅ · Gate ✅ (above) · Rollback — remove the test. 15.7 #2 (N coordinates a day
+on production) IS Step 3.5b's rotation — carried there (A-36).
+
+| # | Question | Ruling (2026-09-23, twenty-fourth set — the Owner: *"Yes, please go ahead. I'll go with your recommendations."*) |
+|---|---|---|
+| **R-36** | A-36 — Step 3.5 | ✅ **(a)** 3.5a: a `ChannelDrift` table fed by the existing read-backs, a real "differs on the channel" filter, the old filter renamed "Has overrides", the dedupe gains the market. 3.5b (content reads) comes back for approval |
+| **R-37** | A-37 — Step 1.3 | ✅ **(a)** Prove each unpublish mechanism live on one listing (eBay quantity 0 + out-of-stock control; Amazon merchant-fulfilled quantity 0; FBA stays refused), restore, then build |
+
+---
+
+## Step 3.5a — BUILT (A-36, R-36). What the channel holds that differs from us: one table, one writer, a real filter.
+
+| Where | What |
+|---|---|
+| `schema.prisma` + migration `20260923a_channel_drift` (additive: one table; row security emitted by `workspaceModelSql`, the AE.2 pattern) + `model-ownership.json` + `scoped-keys.json` | `ChannelDrift` — one row per listing (`listing_drift` = workspace + listing): `channel`, `marketplace`, `driftCount`, `driftedFields` (capped 50: field, ours, theirs, source, checkedAt), `lastCheckedAt` |
+| new `services/channel-drift.service.ts` | the ONE writer `recordChannelReadback` (a source replaces what it compared: differences stored, matches cleared, another source's entries kept; a checked-and-clean listing keeps its row at 0) + `productIdsWithChannelDrift` (drifted products and their parents) |
+| `jobs/amazon-qty-readback.job.ts` | `amazonDriftRecords` (the report's own skip rules: FBA stock never compared, no price on either side is not a drift, an unreported SKU is not recorded) → the writer, per listing; **both dedupes now per product AND market** (A-36 defect 2) |
+| `services/shopify/quantity-readback.service.ts` | the writer, per listing, before the quantity skips (a paused or unreadable listing's price still counts); a failed drift write never changes a listing's verdict |
+| `services/products/list-products.service.ts` | `channelDrift=true` narrows BOTH list paths (live table and read cache) |
+| web `app/products/ProductsWorkspace.tsx` | the old toggle is renamed **"Has overrides"** (what it counts; its key kept for saved layouts — A-36 defect 1); a new toggle **"Differs on the channel"** |
+
+**Not in 3.5a, stated:** eBay's read-back compares per product across shared SKUs (no listing id at the diff) — its mapping is
+the next slice; content reads are 3.5b (for approval). 🟠 **Local database:** two migrations are pending there — the channel
+lane's `20260922a_cx_etsy_shop_alias` (live on production) and this one; `migrate deploy` applies both. Not applied by this
+lane (another lane's migration on the shared local database). Until then, locally, the new toggle errors and the read-backs
+skip their drift write (best effort). Production gets the table with the next merge to `main` (additive).
+
+### Done when — ✅ (the plan's)
+A listing whose channel value differs from ours has a drift row, and the product list filters to it (the drifted child's
+PARENT row, on both list paths); a positive control with no difference has none (the clean product is not listed).
+
+### Gate — ✅ 13 new arms (writer 4, Amazon 3, Shopify 3, list 3), 10 mutations 10 red (Python harness, per-file backups, sha256 restored)
+
+| Mutation | Red |
+|---|---|
+| D1 a matching field is not cleared | writer arms |
+| D2 a source wipes another source's entries | writer arm |
+| D3 the filter forgets the parent | writer + list arms |
+| D4 the Amazon job stops writing drift | job arm |
+| D5 the quantity dedupe is per product only again | job arm (the fake log REMEMBERS, so a second market is swallowed) |
+| D6 FBA stock is compared | pure arm |
+| D7 Shopify counts an unreadable quantity as compared | Shopify arm |
+| D8 the live list path is not narrowed | list arm |
+| D9 the cache list path is not narrowed | 🟠 **escaped first** — the fixture's cache was empty, so the list never took the cache path. Fixed: the cache is filled by its real writer and the arm REQUIRES `useCache: true`. Then red |
+| D10 the migration loses its table | `check-schema-drift.mjs` |
+
+Also: my first Shopify wiring used `recordChannelReadback(…).catch()`, and the EXISTING Shopify arms caught it — a call that
+did not return a promise threw, and the loop counted the listing "unreadable". Now `try { await … } catch {}`.
+Database gates (table drift, column drift, model ownership, policy parity): all pass. `tsc`: api 0, web 0.
+🟠 **The push hook caught one thing I missed:** a fresh database is built from `prisma/baseline.sql` (Step 0.4), and the
+`@nexus/database` baseline test found the new table missing from it. Regenerated with `generate-baseline.mjs` (+28 lines,
+the table only); the package's tests pass (17/17).
+
+### Cost when — `flat` per read-back row (one read + one write per compared listing, inside jobs that already run). The filter adds one indexed query. Rollback — revert the commit; the migration is additive (drop the table to undo).
+
+### Step 1.3 / A-37 — the read (2026-09-23 14:19–14:21 UTC by the records' own timestamps; first written "~16:20 UTC", which was local time) and the PREDICTIONS written before the live runs (R-37)
+
+**Read (`tools/unpublish-probe.mts --read`, record `records/step-1.3-read-…json`):** eBay's out-of-stock control is **ON**, for
+the account and for item `256564203510` — so quantity 0 hides the item and keeps its ItemID (off, it would END the item,
+and this test would not run). eBay's variation `Quantity` is the lifetime total: remaining = Quantity − sold (the code's own
+rule, `ebay-trading-api.service.ts:540`); BLACK-MEN-S already has 0 remaining, so the test uses **BLACK-MEN-M (13 − 3 = 10)**.
+🔴 Amazon's first candidate (GALE BLACK-MEN-S) holds an **FBA offer beside the merchant one** (`AMAZON_EU` + `DEFAULT`) —
+merchant quantity 0 would not stop it selling, and FBA is never touched; the probe now requires a MERCHANT-ONLY SKU on
+Amazon's own read: **`xracingbxn48`** (ASIN `B0BTCBPVTS`, `DEFAULT` quantity 2, `BUYABLE`).
+
+**Predictions:**
+- **eBay** — `ReviseInventoryStatus` BLACK-MEN-M → 0: `Success`; read back: 0 remaining, the item still `Active`, the same
+  ItemID. Restore → 10 remaining, read back.
+- **Amazon** — `fulfillment_availability` `DEFAULT` → 0 through the Step 3.4 send path: `ACCEPTED`; read back: quantity 0, the
+  same ASIN and SKU, the offer still present (`BUYABLE` may lag). Restore → 2, read back.
+Each listing is unbuyable for about a minute; each run always attempts its restore, even when a read-back fails.
+
+### Step 1.3 / A-37 — RESULTS of the live proof (2026-09-23 14:22–14:25 UTC by the records' own timestamps; first written "~16:22–16:25 UTC", which was local time, R-37)
+
+| Channel | Result (records `records/step-1.3-*-test-…json`) |
+|---|---|
+| **eBay** item `256564203510`, variation `GALE-JACKET-BLACK-MEN-M` | `ReviseInventoryStatus` → 0: `Success`; read back **0 remaining, item `Active`** (read by the same ItemID). Restore → `Success`, **10 remaining**. Re-read a minute later: 13 − 3 = **10**, `Active` ✅ |
+| **Amazon** `xracingbxn48` (ASIN `B0BTCBPVTS`, merchant-only) | `fulfillment_availability DEFAULT` → 0: `ACCEPTED`, 0 issues; read back **quantity 0 in 15 s, same ASIN, offer present** (`BUYABLE` had not updated — Amazon's summary lags, as predicted). Restore → 2: `ACCEPTED`, read back 2. Re-read a minute later: **2, `BUYABLE`** ✅ |
+
+Every prediction held. 🔴 **Stated plainly — found AFTER the Amazon run:** the SCT.6 service header records that an Amazon EU
+merchant quantity is **one shared number per SKU across the EU markets** (*"proved 2026-07-26 twice"*). So the quantity-0 test
+most likely made `xracingbxn48` unbuyable in EVERY EU market it sells in, not only Italy, for about 90 seconds. Restored and
+re-read. No order was lost that the records show; nothing else was touched.
+
+🟠 **Correction to the A-34 browser check (Step 3.6):** its text says the local web talked to an API *"on the local
+database"*. That was INFERRED (the API process ran from `apps/api` with no `DATABASE_URL` of its own, so `apps/api/.env` would
+win), not discriminated — the standing rule is to discriminate, never infer. Nothing was written in that check (no save
+request was sent), so no data is in question; the sentence should read "most likely the local database, not proven".
+
+## A-38 — Step 1.3's Amazon half ALREADY EXISTS (SCT.6 close/reopen); quantity 0 is the wrong Amazon mechanism. FOR YOUR APPROVAL.
+
+**Found reading `services/amazon-market-offer.service.ts` (SCT.6):** per-market Amazon **offer CLOSE / REOPEN** — close deletes
+that marketplace's `purchasable_offer` attribute instance (*"Amazon's documented mechanism … the listing goes Inactive (no
+offer) in that ONE marketplace. SKU record, content, ASIN, REVIEWS, sibling markets and the shared EU quantity are
+untouched"*); reopen replays the offer captured at close time and rejoins the stock pool. FBA is refused fail-closed; pending
+quantity pushes are cancelled; `offerClosedAt` then makes every push refuse (`assertPushAllowed`) and the stock resolver
+answer `CLOSED`. This corrects A-37's sentence that Amazon does not state the mechanism — the codebase records it.
+
+| Channel | Unpublish | Republish |
+|---|---|---|
+| Amazon | **SCT.6 close** (per market; FBA refused by name) | SCT.6 reopen |
+| eBay | `ReviseInventoryStatus` 0 on the listing's SKUs — **proven above**; refused by name when the item's out-of-stock control is off (then 0 would END the item); the listing marked closed so no stock sync pushes the quantity back | quantity back through the normal stock push |
+
+### Recommendation — one
+**Build Step 1.3 on these:** `delistCapability` for `unpublish` becomes the SCT.6 close on Amazon and the proven quantity-0 on
+eBay; FBA and an item without out-of-stock control stay refused by name; the two `*_UNPUBLISH_NOT_IMPLEMENTED` refusal tests
+are inverted with a test per path (the plan's gate). Before the Amazon half is switched on, ONE live SCT.6 close/reopen on one
+merchant-only listing, read back (it has never been measured by this lane). Files named in the claim row first.
+
+- **Done when** (the plan's) — an unpublish on Amazon and on eBay returns success and the listing stops selling without losing
+  its identifiers, proven by a read-back. **Cost when** — `flat`. **Rollback** — restore the refusals.
+
+### A-38 — addendum before the ruling (2026-09-23 ~20:30 UTC, read only, lines re-read)
+
+Two facts in `services/amazon-market-offer.service.ts` that change how "republish" must work. Nothing built, nothing sent.
+
+1. 🔴 **Reopen does not put back the listing's own stock settings.** Close saves them (`offerCloseSnapshot.control`:
+   `followMasterQuantity`, `quantityOverride`, `syncPaused`, `:192`), but reopen never reads them: it FORCES
+   `followMasterQuantity: true`, `quantityOverride: null` (`:310`) and queues a quantity push (`:316`). That is right for
+   SCT.6's own use (rejoin the stock pool). For "unpublish → republish" it is not a reversal: a listing that had its own
+   quantity comes back following the master, and the push sends the master quantity to Amazon (one EU-wide number).
+2. 🟠 **A close with no live offer read replays only a price.** If the live read fails, the snapshot falls back to
+   `our_price` from our column (`:145`); reopen then sends that alone — the shape that wipes an Amazon sale price
+   (the review's §3a trap). The live proof must read the full offer first and refuse to run on the `db` fallback.
+
+**So the live proof and the build, refined (for the ruling):**
+- **Live proof — channel only.** A probe sends the SAME two Amazon calls SCT.6 sends (delete this market's
+  `purchasable_offer` by its selectors; replay the captured offer), on ONE merchant-only listing
+  (`xracingbxn48`, Amazon·IT, as in A-37), with **no production database write**: read (full offer saved) → preview →
+  close → read back (no offer in IT, same ASIN/SKU) → replay → read back (the offer equals the saved one) → delayed re-read.
+  The listing is not buyable in Italy for about a minute; other markets and the shared quantity are not touched.
+- **Build.** Unpublish on Amazon calls the SCT.6 close; republish calls the SCT.6 reopen and then puts back the saved
+  `control` (not "follow"). eBay as A-38's table. Tests per path; the two refusal tests inverted.
+
+| # | Question | Ruling (2026-09-23 ~20:35 UTC, twenty-fifth set) |
+|---|---|---|
+| **R-38** | A-38 — Step 1.3 on SCT.6 (Amazon) + quantity 0 (eBay) | ✅ **Approve, refined** (the addendum above): first ONE live channel-only SCT.6 close + replay on `xracingbxn48` Amazon·IT, no production database write, read back, restored; then build — republish also puts back the saved stock settings |
+
+### Step 1.3 / A-38 — the SCT.6 live proof: PREDICTIONS written before any run (2026-09-23 ~20:45 UTC, R-38)
+
+Tool: `docs/product-cheat/tools/sct6-close-probe.mts` — `--read` · `--preview --record <f>` · `--test --record <f>
+--execute-approved` · `--restore --record <f> --execute-approved` (recovery only). It sends the SAME calls SCT.6 sends
+(`amazonSpApiClient.getListingsItem` for the snapshot, `patchPurchasableOffer` `delete` with the selectors SCT.6 builds,
+`replace` with the verbatim snapshot), through the same client singleton and its write-account guard. **No listing, product
+or queue row is written**; side effects: the API gateway's call log and a token refresh.
+
+- **Read.** `xracingbxn48` on Amazon·IT: ASIN `B0BTCBPVTS`, merchant-only (`DEFAULT` only), ONE `purchasable_offer` instance
+  for `APJ6JRA9NG5V4` (EUR); the Nexus row has `offerClosedAt` null and is not FBA. The Amazon SKU equals the product SKU
+  (SCT.6 patches `product.sku`). Every other Amazon market it is listed on is read too, for the "siblings untouched" check.
+- **Preview.** Amazon's `VALIDATION_PREVIEW` accepts both the delete (by selectors) and the replay (the verbatim snapshot).
+  If either is refused, nothing is sent.
+- **Test.** Close → `ACCEPTED`, 0 issues; within 3 minutes the IT read shows **no `purchasable_offer`**, the same ASIN and
+  SKU, `DEFAULT` quantity unchanged. Replay → `ACCEPTED`; within 3 minutes the IT offer **deep-equals the snapshot**; the
+  quantity is unchanged. Sibling markets: offer and quantity identical before and after.
+- **Delayed re-read** (≥ 1 minute after): the IT offer equals the snapshot; status `BUYABLE` again (it may lag).
+- If the replay fails, the tool retries once; then `--restore` replays the saved offer. The listing is not buyable in Italy
+  for about a minute; the shared EU quantity is not touched.
+
+### Step 1.3 / A-38 — RESULTS of the SCT.6 live proof (2026-09-23 20:33–20:36 UTC, R-38)
+
+Records: `records/step-1.3-sct6-before-2026-09-23T20-33-36-328Z.json` (read), `…-preview-…T20-34-12-831Z.json`,
+`…-test-…T20-34-54-731Z.json`, `…-read-compare-…T20-36-24-612Z.json` (delayed re-read).
+
+| Step (UTC) | Result |
+|---|---|
+| 20:33:36 `--read` | Amazon·IT: ASIN `B0BTCBPVTS`, `DEFAULT` only, quantity 2, ONE offer instance (EUR, `audience: ALL`, `our_price` 399.95, a `discounted_price` whose schedule ended 2023-05-30, `map_price` 330, an `end_at` of 2023-05-30). Nexus row: not closed, FBM. Amazon SKU = product SKU. All six safety checks true |
+| 20:34:12 `--preview` | Amazon's `VALIDATION_PREVIEW` accepted **both** the close (selector `{marketplace_id, currency, audience}`) and the verbatim replay |
+| 20:34:54 `--test` | Fresh read = the saved one. **Close → `ACCEPTED`**; read after 15 s: **no `purchasable_offer`**, same ASIN and SKU, `DEFAULT` 2 unchanged (the summary still said `BUYABLE` — it lags, as in A-37). **Replay → `ACCEPTED`**; read after 15 s: the offer **deep-equals the snapshot**, quantity 2. Germany: offer and quantity identical before and after |
+| 20:36:24 `--read --record` | IT offer equal, quantity equal, `BUYABLE`+`DISCOVERABLE`; DE equal |
+
+**Against the prediction:** every line held. The IT offer was absent for about 30 seconds.
+
+🟢 **A second, older measurement of the END state, found by the read:** this SKU's **Germany** offer was closed by SCT.6 on
+**2026-07-26** (the Nexus row's `offerClosedAt`; the SCT.6 pilot). Amazon·DE today: no `purchasable_offer`, status `[]`
+(neither buyable nor discoverable), `DEFAULT` quantity 2 kept. So a close holds for two months and does not touch the
+shared quantity.
+🟠 Stated, not built on: that DE row has `offerActive: true` beside its `offerClosedAt` — close writes `false`; something set
+it back, or the column came later with a default. The push refusal reads `offerClosedAt`, not `offerActive`. For the build
+to check.
+**Delayed re-reads** (the replay was sent ~20:35:21): 20:36:24 (~1 min), 20:37:56 (~2.5 min), 20:39:04 (~3.7 min) — each: IT offer and quantity equal to the saved read, `BUYABLE`; DE equal. (A "5+ minutes" re-read was announced here; the latest so far is 3.7 minutes — stated as measured.)
+
+### A-38 — second addendum: the build's premise changed. FOR YOUR RULING. Nothing built.
+
+**Read after the live proof (lines re-read):**
+1. 🔴 **`UNPUBLISH_LISTING` has ONE producer: the bulk hard delete** (`enqueueDelistCascade`, `outbound-enqueue.ts:67`, called
+   only from `products-catalog.routes.ts:1836`). The job runs AFTER the local product and its `ChannelListing` rows are
+   deleted (`productId: null`, `channelListingId: null`; the payload carries the coordinate and the seller SKU). So:
+   - there is **no republish from Nexus** in this flow (the UI copy already says *"There is no relist from here"*), and
+     R-38's *"republish puts back the saved stock settings"* has **no place to live**;
+   - SCT.6's `closeMarketOffers` **cannot be called** by the job — it loads the `ChannelListing` row, which is gone.
+     The job can run SCT.6's **channel half** only (the snapshot read + the delete by selectors — what the live proof ran).
+2. 🔴 **The route's orphan guard asks per CHANNEL, not per listing** (`delistCapability(listing.channel, action)`,
+   `products-catalog.routes.ts:1801`). If the Amazon row simply said "removes", an **FBA** listing would pass the guard, the
+   product would be deleted, and the job would then refuse FBA — an orphan, the very thing Step 1.2 stops. The guard needs the
+   listing's fulfilment (known locally) to refuse FBA before the delete.
+3. 🟠 **eBay: an item with its out-of-stock control OFF** is known only by a channel read. Quantity 0 would END it (a new
+   ItemID on relist). The job would have to refuse it — after the product is already deleted: an orphan again.
+4. The channel sheet's offer toggle is a local mark only (*"Wave-1: the outward-facing half does not ship"*,
+   `channelActions.ts`); SCT.6 is reached from the sync-control routes. SCT.6's reopen forcing "follow" is its own design
+   (rejoin the pool); nothing in Step 1.3 calls it.
+
+**Recommendation — one (a):** build Step 1.3 for the flow that exists — *"stop selling, keep the identifiers, then delete
+the local record"*:
+- **Amazon:** one shared function extracted from SCT.6 (the snapshot read + the delete by selectors), called by
+  `closeMarketOffers` AND by the delist adapter — one rule, one owner. The job saves the verbatim offer in its own record, so
+  a person can put it back. The guard refuses **FBA** by name, per listing, before the delete.
+- **eBay:** quantity 0 on every SKU of the ItemID (read from eBay first). The out-of-stock control is read at job time; if
+  it is OFF the job sends nothing and says so by name. To stop that becoming an orphan, the guard also refuses an eBay
+  unpublish unless the ACCOUNT's out-of-stock preference was read ON (a stored read, refreshed when the job runs).
+- The UI copy that says *"Amazon and eBay: the request is refused"* changes to what now happens. The two refusal tests are
+  inverted, a test per path.
+- **Not in (a):** republish (no Nexus path exists); SCT.6's reopen behaviour (another lane's design).
+
+| # | Option | |
+|---|---|---|
+| **a** | The build above | 🟢 **Recommended** — the only flow that sends `UNPUBLISH_LISTING` |
+| b | First build a republish path in Nexus (keep the local record, mark the listing closed) — a new feature, bigger | Changes the hard-delete meaning; not in the plan |
+
+| # | Question | Ruling (2026-09-23 ~20:50 UTC, twenty-sixth set) |
+|---|---|---|
+| **R-39** | A-38 second addendum — the build | ✅ **(a)** Build Step 1.3 for the hard-delete flow: Amazon = SCT.6's channel half as ONE shared function (the offer saved on the job's record; FBA refused per listing before the delete); eBay = quantity 0 on every SKU of the ItemID, refused before the delete unless the out-of-stock control is known ON. No republish. UI copy and the refusal tests follow |
+
+| # | Question | Ruling (2026-09-23 ~21:00 UTC, twenty-seventh set) |
+|---|---|---|
+| **R-40** | Who runs the read-only production tools | ✅ The Owner: *"I want you to do all the running of the commands yourself."* This lane runs `readiness-age.mjs` and `axis-stores.mjs` itself. Live channel writes and production data writes still need the Owner's word per run |
+
+### Step 2.6 post-deploy check / Step 2.7 verify — PREDICTIONS written before the runs (2026-09-23 ~21:00 UTC, R-40)
+
+- **`axis-stores.mjs` now (~15 h after 2.6d, mid-way) and again after 02:17 UTC 2026-09-24:** the legacy `va` sizes stay
+  **35** (the count after 2.6d, 2026-09-23 ~06:05 UTC) or fewer; store colour **301** / size **285**, or more only if
+  new children were created; store vs legacy **0** differ. A legacy count ABOVE 35 means a writer still writes the legacy bag.
+- **`readiness-age.mjs` after the 02:17 UTC nightly (run ~02:35 UTC):** `CronRun` `readiness-reconcile` SUCCESS for both
+  businesses, summary `stopped: complete`, 0 failed; every live root has a row computed after the 06:46 UTC deploy; roots
+  due now = 0. The deployed job is the id-order one (A-30 is not deployed) — at 34 roots it still covers all in one night.
+
+## Step 1.3 — BUILT (R-38, R-39). Hard delete + "stop selling": Amazon closes the market's offer, eBay goes to quantity 0.
+
+Built by sub-agent S1; re-run by this lane (209 API tests across 11 files green, `tsc` api 0 / web 0, web test 33, i18n check).
+
+| Where | What |
+|---|---|
+| `services/amazon-market-offer.service.ts` | New `closeAmazonOfferOnChannel` = SCT.6's channel half (live read → selector → `patchPurchasableOffer` delete). `closeMarketOffers` calls it; its DB writes and DB-price fallback unchanged (SCT.6's 12 arms untouched and green) |
+| `services/channel-delist.service.ts` | `delistCapability(channel, action, facts)` per LISTING. Amazon unpublish: the shared close, no fallback — a failed read = UNKNOWN, nothing sent; any non-`DEFAULT` fulfilment on Amazon's read = refused (FBA never touched); no offer = `NOT_SELLING`, nothing sent; ACCEPTED = SUCCESS with evidence (the verbatim offer, source, product type, submission id). eBay unpublish: GetItem → item out-of-stock control not on = refused; not Active = `NOT_SELLING`; else quantity 0 per SKU (≤ 4 a call; a single item by ItemID), `remainingBefore` kept as evidence. `readEbayOutOfStockPreference`. Evidence → `payload.channelEvidence` + the `CHANNEL_DELIST_OUTCOME` event |
+| `services/delist-error-codes.ts` | 7 new codes (`AMAZON_UNPUBLISH_FBA` / `_READ_FAILED` / `_NO_PRODUCT_TYPE`, `EBAY_UNPUBLISH_OOS_OFF` / `_OOS_UNKNOWN` / `_FAILED` / `_PARTIAL`); the two old `*_NOT_IMPLEMENTED` kept for old queue rows |
+| `routes/products-catalog.routes.ts` | bulk hard delete, `unpublish` only: each eBay account's out-of-stock preference read once, ≤ 5 s, in parallel, BEFORE the transaction (unknown = refused); the guard passes FBA facts + that preference per listing |
+| web `en.json` / `it.json` + `hardDelete.vitest.test.ts` | the copy says what now happens. 🟠 Found: the Italian label still read *"Annulla pubblicazione (consigliato)"* — the "(recommended)" string A-9 said no longer existed (A-9 searched English only). Now *"Interrompi la vendita su ogni canale"*; the English label *"End the listing"* over-stated eBay → *"Stop selling on each channel"*; two stale Italian bodies rewritten to the English meaning |
+
+**Done when** (the plan's) — ✅ the two mechanisms returned success and stopped selling without losing identifiers, **read back
+live**: eBay quantity 0 (A-37, variation SKU), Amazon offer close (A-38, and the pilot's DE close since 2026-07-26). ⬜ Not run
+live: the job end-to-end through the production worker, and eBay's SINGLE-SKU path (ItemID + quantity 0). **Cost when** —
+`flat` per listing (one read + one or two writes); an `unpublish` hard delete with eBay listings waits ≤ 5 s once per account.
+**Gate** — the two refusal tests inverted; 34 new delist arms, 10 new guard arms, 11 channel-half arms; **13 mutations, 13 red**
+(guard forgets FBA · ignores the eBay preference · sends despite FBA stock · evidence not saved · eBay sends with the control off ·
+SCT.6 selector drift · preference read for every action · sends past a failed read · partial failure as success · SCT.6 loses
+its fallback · all SKUs in one call · dry run undetected · one account's preference for all). **Rollback** — revert the commit;
+the refusals return.
+
+🔴 **Residual, stated (not preventable without a per-item channel read inside the delete request):** if an ITEM's own control is
+off while the account's is on, or Amazon shows FBA stock our data does not, the JOB refuses after the product is deleted — that
+listing keeps selling with no product row; the job's outcome names it. ⬜ `delist-cascade.local.vitest.test.ts` edited, not run
+(needs the Docker rehearsal database and rewrites `docs/audits/…/pr2/rehearsal*.json`, which carry another session's changes).
+
+## Step 3.5 — the eBay drift slice BUILT (R-36). The eBay quantity read-back now records drift per LISTING.
+
+Built by sub-agent S2; re-run by this lane (86 tests across 7 files green; S2: 12 + 9 green with business profiles ON, `tsc` 0).
+
+**The trace (read, local counts):** the real eBay quantity read-back is the Trading `GetItem` pass
+(`services/ebay-inventory-readback.service.ts`, every 30 min from `jobs/ebay-readback.job.ts`). It compared per MEMBERSHIP
+(ItemID + SKU) and never named a listing. Local copy: 672 active memberships, 30 ItemIDs, 216 SKUs; **every (ItemID, market) has
+exactly ONE parentless owner listing (30 of 30)**; 176 memberships also have their own child listing on that ItemID; 496 are
+represented only by the ItemID's owner listing — usually an `EBAY_LISTING_SHELL` product.
+
+| Where | What |
+|---|---|
+| `services/ebay-inventory-readback.service.ts` | `tradingEntryVerdict` — ONE per-entry comparison rule, read by the old diff (behaviour unchanged) and by the new pure `tradingDriftRecords`: a difference goes on that product's own listing on that ItemID (`quantity`); else on the ItemID's one owner listing (`quantity:<SKU>`); 0 or 2+ owners → not recorded, counted `driftUnmapped` (never a guess). One `recordChannelReadback` per listing, source `ebay-trading-getitem`, each in `try { await } catch {}` |
+| `jobs/ebay-readback.job.ts` | the summary prints `drift recorded=N unmapped=N` |
+| `services/channel-drift.service.ts` (`productIdsWithChannelDrift`) | 🔴 **found on the way:** the product list HIDES shell products by default (`list-products.service.ts:431-433`, `:557`), so drift on a shell owner (most eBay memberships) would never show in the filter. Now a shell's `quantity:<SKU>` entries also match the products those SKUs name (same business, not deleted) and their parents |
+
+**Done when** (the plan's) — ✅ an eBay listing whose quantity differs has a drift row, and the product list filters to its
+product (also through a shell); a clean listing has a row at 0. **Cost when** — `flat` per compared entry (one query for the
+ItemIDs' listings per pass; one write per listing). **Gate** — 8 + 6 new arms; mutations **15 run, 14 red**: the drift write
+never happens · exact child ignored · ambiguous ItemID guessed · market not matched · owner field drops the SKU · clean listing not
+recorded · a failed drift write escapes · a second "compared" rule; the reader: the shell branch never runs · the named product's
+parent not added · a deleted product matched · every listing's colon fields mapped · the SKU read as the whole field · clean rows read;
+🟠 **one stayed green**: removing the reader's business filter — row security already hides the other business's product, so
+the test cannot see it; the filter stays as a second guard. **Rollback** — revert the commit.
+⬜ Not in the slice, stated: the Inventory-API pass (compares nothing itself); eBay price (no eBay price read-back); the pass
+still reads every account with the primary account's token (MAP.7, not this lane's).
+
+## A-39 slice b1 — BUILT (R-41). Each night, what Amazon holds for a listing's content is compared with what we would send.
+
+Built by sub-agent S4; re-run by this lane (125 tests across 13 drift files green, `packages/database` 17/17, `tsc` api 0; the
+four database gates pass: schema drift, column drift, model ownership, policy parity).
+
+| Where | What |
+|---|---|
+| `schema.prisma` + migration `20260923b_channel_drift_checked_by_source` (additive: one `JSONB NOT NULL DEFAULT '{}'` column) + `baseline.sql` (+1 line, by its script) | `ChannelDrift.checkedBySource` — a clock PER SOURCE (`at`, `outcome`, up to 3 reasons) |
+| `services/channel-drift.service.ts` | the writer keeps the TRUE count; under the 50 cap the FRESH entries are kept; a not-compared read keeps its entries and does not move `lastCheckedAt`. S2's reader untouched |
+| new `services/channel-drift/amazon-content-ours.ts` | "ours" for ONE listing through the builder's own seams: `resolvePublishContent` → the review gate → `buildAmazonContentEntries`; `resolveBatch` (cached schemas only) → `mappedAmazonRoots` + the listing settings. A wiring arm requires ours == the studio payload (`prepareAmazonPublication`) root for root |
+| new `services/channel-drift/amazon-content-compare.ts` | pure compare: content per (attribute, language tag), attributes per leaf we send; trim / collapse spaces / NFC; our language missing = not compared (R-LX-6); theirs absent = drift |
+| new `jobs/content-drift.job.ts` (+ `index.ts` one line, `cron-registry.ts` one entry, `scripts/content-drift-dry-run.ts`, `prod-run.mjs content-drift`) | `03:37` UTC daily, per business; never-checked first, then oldest (20 h horizon); 10-min budget, batch 25, ≥ 1 s between Amazon reads; a 404 / failed read / missing schema / resolver error = not compared with its reason. CronRun line = 15.7 #2: *compared N · drifted M · not compared K (reasons)*. **On with the next deploy; `NEXUS_ENABLE_CONTENT_DRIFT=0` holds it** |
+
+**Done when** — ✅ in tests: a listing whose Amazon title or a sent attribute differs has an `amazon-content` entry and the list
+filters to it; an identical one has a row at 0 with its clock; one that could not be compared says why. ⬜ On production: after
+the merge + migration. **Cost when** — bounded: ≤ 10 min and ≤ 1 Amazon read a second per business per night whatever the
+catalogue; a listing is re-read every ⌈listings ÷ listings-per-night⌉ nights. **Gate** — 28 new arms; **12 mutations, 12 red**
+(language tag ignored ×2 sides · a missing language counted · id-order rotation · a 404 stored clean · the cap hides the count ·
+the cap drops the fresh entries · normalisation removed · pace ignored · not-compared moves `lastCheckedAt` · a second opinion of
+the content · the migration loses its column → `check-column-drift`). **Rollback** — `NEXUS_ENABLE_CONTENT_DRIFT=0`; revert the
+commit; the column is additive (data derived).
+
+⬜ **Not measured, stated:** no production or Amazon read yet; the attribute half is proven on one fixture (3 text/enum roots) —
+compound and multi-instance roots may show compare artefacts on a first run; the resolver's time per listing (so listings per
+night). 🟠 **Correction to A-39's first-run prediction:** for the 21 live DE listings with a pinned Italian title (A-32), "ours"
+IS that Italian text under `de_DE` (the resolver trusts the listing's own column), so they read as drift only if Amazon·DE holds a
+DIFFERENT title. The A-32 preview warning is what names them, not this job. First production check (read only, after the merge):
+`node docs/product-cheat/tools/prod-run.mjs content-drift`.
+
+### Step 2.6 post-deploy check — mid-way RESULT (2026-09-23 21:09 UTC, run by this lane under R-40, read only)
+
+`node docs/product-cheat/tools/axis-stores.mjs` (production, `BEGIN READ ONLY`, role `readOnly: on`): legacy `va` sizes **35**
+(= the post-2.6d count, ✅ not grown), legacy `va` colours **44** (first recorded here); store `vr` colour **301** / size **285**
+(✅ unchanged); `va` vs `vr` **0** differ on both axes; live children 301 (Xavia Racing) + 20 (Motovento). The day-after run
+follows at ~02:35 UTC.
+
+## A-39 — Step 3.5b: read what the channel holds for listing CONTENT, a few hundred listings a night, into `ChannelDrift`. FOR YOUR APPROVAL. Nothing built.
+
+**2026-09-23. Read only: code trace by sub-agent S3 (every line cited was read, unless marked *inferred*). No production read, no network.**
+**Re-read by this lane ✓ (three claims):** the writer keeps old entries first, then caps at 50, and `driftCount` is the capped
+length (`channel-drift.service.ts` `mergeDrift` / `recordChannelReadback`); `item_name`…`generic_keyword` carry a `masterKey`
+(`channel-specs/amazon.ts:46-49`); a 404 read returns `success: true, asin: null` (`amazon-sp-api.client.ts:1281-1288`).
+R-34 is kept: this is **reads only**. Nothing is written to any channel or to any listing's content.
+
+### What the code says
+
+| Piece | What exists | Where |
+|---|---|---|
+| Sweep helper | cursor derived from "still outstanding", wall-clock budget (default 10 min), dry run default, failure cap, `countOutstanding` optional | `services/pim/resumable-sweep.ts:48-121` |
+| A-30 rotation | due = never computed, then oldest first; the count uses the same predicate | `jobs/readiness-reconcile.job.ts:50-96` |
+| Per-business runs | a global cron runs once per active business, each in its own workspace scope | `lib/cron/clustered.ts:142-157` |
+| Drift writer | a source replaces only the fields it compared; matches cleared; other sources kept | `services/channel-drift.service.ts:21-49` |
+| 🔴 Cap | old entries are kept FIRST, then the fresh ones, then `slice(0, 50)`; `driftCount` = the capped length | `channel-drift.service.ts:26`, `:45` |
+| 🔴 One clock | `lastCheckedAt` is ONE per listing, set by ANY source (the daily quantity read-backs set it) | `channel-drift.service.ts:45`; schema `ChannelDrift` |
+| Filter | "Differs on the channel" = any `driftCount > 0`, plus the parent | `channel-drift.service.ts:55-63`, `ProductsWorkspace.tsx:1260-1272` |
+| Screen | 🟠 no web code reads `driftedFields` — the filter finds the PRODUCT, nothing shows WHICH field | repo search: 0 readers |
+| Amazon read | `getListingsItem` with `includedData: ['summaries','attributes']` (the Step 3.4 read). 🔴 A 404 returns `success: true, asin: null` | `tools/live-write-probe.mts` `readAttr`; `clients/amazon-sp-api.client.ts:1281-1288` |
+| Amazon "ours": content | `resolvePublishContent` → `buildAmazonContentEntries` (pure). A market language with no text is OMITTED, never sent as another language (R-LX-6) | `amazon-content-payload.ts:25-56`; `publish-review-gate.ts:45` |
+| Amazon "ours": attributes | `resolveBatch` cells → `mappedAmazonRoots` / `attributesFromCells` (A-33's shared serializer) | `mapping-payload.ts:18-26`; `studio-publication-amazon.ts:127-146` |
+| Full builder | `prepareAmazonPublication` refuses a whole FAMILY on ~15 publish guards (images, fulfilment, closed offer, theme…) | `studio-publication-amazon.ts:35-113` |
+| eBay read | `GetItem` with `IncludeItemSpecifics` exists | `studio-publication-ebay.ts:48-51`; `marketing/ebay-listing-index.service.ts:201` |
+| eBay parsers | 🔴 five hand-written `NameValueList` parsers; three keep only the FIRST `<Value>` (a multi-value aspect loses values) | `ebay-membership-reconcile.service.ts:56`, `ebay-axes-convert.service.ts:64`, `ebay-variation-relabel.service.ts:251` (first only); `ebay-listing-index.service.ts:113` (whole block) |
+| eBay "ours" | the eBay builder is live-mode only (`prepareEbayPublication` throws otherwise) | `studio-publication-ebay.ts:83` |
+| Rate buckets | Amazon: 5/s, burst 10, per account × `GET /listings/2021-08-01/items` — shared with every other listing read of that account; the refill follows Amazon's header. eBay: 10/s, burst 50, ONE bucket for all Trading calls of the account | `gateway/rate.ts:18-24`, `:175-179`; `gateway/channels.ts:156-163` |
+| Daily caps | 🟠 none recorded in code for either channel (no `GetApiAccessRules` read anywhere) | repo search: 0 |
+| Name clash | `jobs/sync-drift-detection.job.ts` compares listing vs MASTER in our own database; it never reads a channel | `:1-45` |
+
+**A-33's open item — answered from the code:** yes, the mapping cascade CAN send a content field. `item_name`, `product_description`,
+`bullet_point` and `generic_keyword` have a `masterKey` (`channel-specs/amazon.ts:46-49`), so they have no source owner
+(`source-definition-plan.ts:61`), and `prepare-dispatch.ts:30` refuses only an owned, erroring or untranslated field. The value then
+comes from the MAPPING cell, not from the content resolver and its review gate. Step 3.4 used exactly this path for `generic_keyword`.
+🟠 Not traced: whether the propagation preview ever OFFERS a content field (the entries come from `apply-mapping.service.ts:192`).
+So two writers can send a title: 3.5b is how a difference between them becomes visible.
+
+### Scope
+
+- **In (slice b1 — Amazon):** `item_name`, `product_description`, `bullet_point`, `generic_keyword` per language tag; every attribute
+  root the studio builder serialises from resolver cells and listing settings.
+- **Out, stated:** price and quantity (3.5a), images (`ChannelLiveImage`), variation theme and parent links (structure), offers, FBA,
+  every attribute we do not send (Amazon holds catalogue data from others — "theirs only" is not drift).
+- **Slice b2 — eBay title + item-level item specifics:** after the eBay drift slice (S2) maps an item to its listings across shared SKUs,
+  and after one read of the app's eBay daily call limit.
+
+### How ours and theirs are compared
+
+- Ours = what the builder WOULD send for that listing (the two seams above), built per listing, never the whole family — so one
+  family's publish guard does not blind the read. Theirs = the listing read. Field names: `item_name[de_DE]`, `color`, ….
+- Content: per (attribute, language tag), the ordered list of values; trim, collapse spaces, Unicode NFC. Our language missing =
+  **not compared** (R-LX-6: Amazon keeps its text; not drift). Ours present, theirs absent = drift (`theirs: null`).
+- Attributes: per root, only the leaves we send; scalars compared as text; key order ignored.
+- 🔴 Could not compare (404 `asin: null`, no schema, resolver error) is recorded as **not compared, with the reason** — never as clean.
+
+### Rotation and budget
+
+- One cron a day per business, 10-minute budget (as A-30), batch 25, paced at **≤ 1 read a second** (20% of the Amazon bucket;
+  live publishing keeps the rest). At most ~600 listings a night per business; the resolver time makes it fewer (*inferred*).
+- Local copy: 725 Amazon listings with content (273 IT + 214 DE + 115 FR + 123 ES, Step 3.2 M3) → one full pass in ~2 nights.
+  Production per-market Amazon counts: only DE/FR/ES known (214/115/123, A-32).
+- Order: never checked, then the oldest content check. 🔴 This needs a per-source clock (`lastCheckedAt` is shared). **One additive
+  column:** `ChannelDrift.checkedBySource Json @default("{}")` — `{ "amazon-content": { at, outcome, reason } }`. It also carries
+  "not compared". Sorted in memory, as `dueFamilies` does.
+- Source name: `amazon-content` (b1), `ebay-content` (b2). The writer change: `driftCount` = the TRUE count; only the stored list is
+  capped at 50, and the row says it was capped.
+- 15.7 #2 (the sampled production metric) = this job's own daily `CronRun` line: compared N, drifted M, not compared K (with reasons).
+
+### What the Owner sees
+
+The existing "Differs on the channel" filter now also finds content differences. 🟠 Not in 3.5b: a screen showing WHICH field and
+both values — proposed as the next step (the data is in `driftedFields`).
+
+### Recommendation — one
+
+**(a) Build slice b1 (Amazon) now, as above; b2 (eBay) after S2's mapping and one read of the eBay daily limit.**
+Alternative (b): b1 and b2 together — needs the eBay item→listing mapping first, so it waits either way.
+
+- **Done when** — a listing whose Amazon title (or a sent attribute) differs from ours has an `amazon-content` drift entry and the
+  product list filters to it; an identical listing has a row at 0; a listing that could not be compared says so.
+- **Cost when** — per business per night: bounded at 10 minutes and ≤ 1 Amazon read a second whatever the catalogue; a listing is
+  re-checked every ⌈listings ÷ ~600⌉ nights (10,000 listings → ~17 nights, stated).
+- **Gate** — arms: a seeded title difference → one entry (ours, theirs); an identical listing → 0 and the clock set; a missing DE
+  text → not compared, no entry; a 404 read → not compared, reason kept; three listings, budget for one a night, three nights →
+  each once, oldest first; 60 differing roots → count 60, stored 50, capped flag; another source's entry survives.
+  Mutations: language tag ignored; a missing language counted as drift; rotation in id order; not-compared stored as clean; the cap
+  hides the count; normalisation removed (a trailing space becomes drift); the pace ignored.
+- **Rollback** — the cron's env switch off; revert the commit; the column is additive (data derived).
+- **Files it would hold** — `packages/database/prisma/schema.prisma` (one column) + a new migration + `baseline.sql`
+  (`generate-baseline.mjs`); `services/channel-drift.service.ts` (true count, clock); new `services/channel-drift/amazon-content-compare.ts`
+  (pure compare); new `jobs/content-drift.job.ts`; `index.ts` (one start line); `jobs/cron-registry.ts` (one entry); new tests.
+
+### Predictions a first run would test
+
+- The dry run's outstanding count = a direct count of Amazon listings with an ASIN, per business (local: 725).
+- The 21 LIVE Amazon·DE listings with a pinned Italian title (A-32) show `item_name[de_DE]` drift — unless Amazon holds the same
+  Italian text (then that is the finding). A positive control on real data.
+- 0 HTTP 429 from the sweep; the account's other listing reads keep their speed (gateway ledger).
+- Not-compared only for 404s, a missing schema, or a resolver error — not for publish guards.
+
+### Not measured
+
+Amazon's real rate for this account (the header sets it); the eBay app's daily call limit; whether Amazon returns descriptions with
+changed HTML or entities (a first run with drift on `product_description` alone would be the tell); the resolver's time per listing;
+production Amazon·IT listing count; whether the propagation preview offers content fields.
+
+| # | Question | Ruling (2026-09-23 ~21:05 UTC, twenty-eighth set) |
+|---|---|---|
+| **R-41** | A-39 — Step 3.5b | ✅ **(a)** Build slice b1 (Amazon content reads) now, with the one additive column and the writer's true count; b2 (eBay) after the eBay drift slice and one read of the eBay daily call limit |
+
+| # | Question | Ruling (2026-09-23 ~22:45 UTC, twenty-ninth set) |
+|---|---|---|
+| **R-42** | One live eBay test of a SINGLE-SKU item (Step 1.3's untested path) | ✅ **Yes** — quantity 0, read back, the old quantity put back, read again; hidden about a minute |
+
+### Step 1.3 single-SKU eBay proof + A-39 b2's eBay call limits — PREDICTIONS written before the runs (2026-09-23 ~22:45 UTC, R-40, R-42)
+
+Tool `docs/product-cheat/tools/ebay-single-probe.mts`. The live step calls the BUILT adapter itself —
+`dispatchChannelDelist` with an in-memory `UNPUBLISH_LISTING` job (no queue row, no Nexus row written) — so it proves the
+code that ships, not a copy. The restore is one `ReviseInventoryStatus` (ItemID + the saved quantity).
+
+- **Read.** Among live eBay·IT listings (not AIREON), at least one ItemID whose `GetItem` has NO variations, is `Active`,
+  has `OutOfStockControl` true and remaining > 0. (If none: "could not run", stated — not a pass.) The account preference
+  reads `ON`. `GetApiAccessRules` answers `Success` with a daily hard limit per call, including `GetItem`.
+- **Test.** The adapter answers `SUCCESS`, `NOT_SELLING`, evidence `remainingBefore = [{ sku: null, remaining: N }]`,
+  `zeroed = [<ItemID>]`. Read back within ~15 s: remaining **0**, still `Active`, the same ItemID. Restore → `Success`; read
+  back: remaining **N**, `Active`. A delayed re-read ≥ 1 minute later: **N**, `Active`.
+
+### Step 1.3 single-SKU eBay proof + eBay call limits — RESULTS (2026-09-23 22:46–22:50 UTC, R-40, R-42)
+
+Records: `records/step-1.3-ebay-single-read-2026-09-23T22-46-26-067Z.json`, `…T22-46-54-007Z.json`, `…T22-47-57-728Z.json`.
+
+- 🔴 **The live test COULD NOT RUN — there is no target, measured.** Production holds **31** live eBay ItemIDs, all eBay·IT
+  (read only, `BEGIN READ ONLY`): 26 parentless non-AIREON ItemIDs — every one read by `GetItem` has variations (8–40); one
+  ItemID linked only to child products (`257584954808`) — 20 GALE variation SKUs; 4 AIREON (R-27, not touched; families).
+  **No single-SKU eBay item exists**, so the adapter's single-item path (ItemID + quantity 0) cannot be proven live today. It
+  stays gated by its unit arms only; it is reached only if a single-SKU item is ever listed. Nothing was sent.
+- The account's out-of-stock preference: `true` (as on 2026-09-23 14:19).
+- 🔴 **`GetApiAccessRules` answers HTTP 410** (retired by eBay). Its replacement, the Developer Analytics API
+  (`/developer/analytics/v1_beta/rate_limit/`, the account's token), answers: **Trading API, 5,000 calls a day for the whole
+  app** (one shared pool: `GetItem`, `ReviseInventoryStatus`, `GetUserPreferences` all show the same `remaining`); at 22:46 UTC
+  **1,070 `GetItem`, 30 `ReviseInventoryStatus`** used since the 07:00 UTC reset, 3,838 left. The 30-minute quantity read-back
+  (31 ItemIDs × 48 runs ≈ 1,500 `GetItem` a day) is the main user. The user-level limit read returned no resources.
+- **For A-39 b2:** one `GetItem` per ItemID carries every variation's specifics, so a nightly eBay content pass over today's
+  catalogue costs **~31 calls** — under 1% of the pool. A budget of ≤ 300 calls a night leaves ~2,000 a day spare.
+
+### Step 3.6 / A-34 — browser check, second attempt: PREDICTION written before the run (2026-09-23 ~22:58 UTC, R-40)
+
+**Why the first attempt measured nothing:** the grid pastes through AG Grid's clipboard module, which reads the clipboard
+(`navigator.clipboard.readText`) on its own key handler; the synthetic `cmd+v` reached a text box (native paste) but the grid
+got no text. **This attempt** stubs ONLY the page's `navigator.clipboard.readText` to return the test text, then presses the
+real key on a focused grid cell — everything after the read (AG's paste pipeline, `processDataFromClipboard`, the write gate,
+the save, the server's judgement, the screen) is the product's own path. Local app: web :3000 → API :8091 started with the
+LOCAL `DATABASE_URL` set explicitly (not inferred), background jobs off; the local database now has every migration.
+
+**Prediction** (studio sheet of `xavia-knee-slider`, Shared scope): (1) paste `ACTIVE / BOGUS-STATUS / ACTIVE` into Status on
+three child rows → one save request; the two unchanged rows send nothing (write gate); `BOGUS-STATUS` is refused by the server
+and the cell goes back to its stored value with the reason on screen; the database keeps the stored value on all three.
+(2) Positive control: paste `A34-CONTROL` into an empty free-text cell → saved (a request and the stored value); then restored
+by value.
+
+### Step 3.6 / A-34 — browser check, second attempt: RESULTS (2026-09-23 22:52–22:55 UTC, R-40)
+
+Local app on the local database (API started with `DATABASE_URL` set to `127.0.0.1:55439` explicitly; its boot log showed ads
+data 15 days stale — the local copy, not production). Hydrated (React on the grid cells). Only `navigator.clipboard.readText`
+was stubbed; every save was recorded by wrapping the page's `fetch` (request body + response).
+
+| Prediction | Measured |
+|---|---|
+| (1) paste `ACTIVE / BOGUS-STATUS / ACTIVE` into Status on black / blue / green → ONE save request; the two unchanged rows send nothing | ✅ ONE `PATCH /products/bulk`, carrying only blue's `status: BOGUS-STATUS` |
+| the server refuses it, per row, with its reason | ✅ 400 `{"errors":[{"id":…blue,"field":"status","error":"Status must be one of ACTIVE, DRAFT, INACTIVE"}]}` |
+| the reason is on screen | ✅ in the cell, in its tooltip, in the header (*"Shared product — Blocked. Status must be one of…"*), footer *"1 refused · 1 cell blocked"*, top *"1 change not saved"* |
+| the cell goes back to its stored value | ❌ **Wrong — it KEEPS the refused text**, marked blocked and "not saved", for the person to correct. The database kept `ACTIVE` (re-read). Honest (nothing claims it saved), but not a revert |
+| (2) positive control: a valid write saves | ✅ black's Manufacturer cleared (`A34-CONTROL` → empty): 200, `updated: 1`, version 2 → 3 — **while the refused cell was still on screen** (one refused cell does not block other saves) |
+| clean-up | pasting `ACTIVE` over the refused cell cleared it (200, `unchanged: 1`, nothing written); the page read *"Saved"*; the database re-read at 22:55:18: every child `ACTIVE`, every manufacturer empty |
+
+🔴 **Correction to the FIRST attempt (A-34 RESULTS above):** its *"no save request at all … Nothing was written"* was **false**. The
+local audit log holds `manufacturer: null → "A34-CONTROL"` on `xavia-knee-slider-black`, a `bulk-patch` from 127.0.0.1 at
+**2026-09-23 12:45:56 UTC** (the first attempt's labels were not UTC) — the control paste DID save; the network read came
+before the write, or missed it. That value stayed in the local database until this check cleared it through the sheet.
+Nothing on production was involved.
+
+**Step 3.6 — CLOSED on its re-scoped premise (A-34):** the server refuses per row (gated, 4 arms, 3 mutations) and the grid shows
+each refusal with its reason, sends only what changed, and does not block other saves — measured. **One behaviour is for the
+Owner to judge, not a defect found:** a refused cell keeps the typed value (marked, not saved) instead of reverting to the
+stored value. *Done when* ✅ (on the re-scoped premise) · *Cost when* `flat` · *Gate* the server arms · *Rollback* n/a.
+
+## A-40 — A-39 slice b2 (eBay content reads): no clean seam for "ours" today. FOR YOUR RULING. Nothing built.
+
+**2026-09-23. Read only: sub-agent S5's trace (it stopped before building, as told); lines cited in its report.**
+
+- "Ours" for an eBay title + item specifics = what `prepareEbayPublication` (`services/pim/studio-publication-ebay.ts`) would send.
+  Its two pure parts (`buildFlatRow`, `buildSharedListingInput`) are fed by ~30 INLINE lines (`:107-164`: the resolved-cell
+  overlay, the title fallback `cells.title ?? listing.title ?? product.name`, the variation-axis step). Calling the pure parts
+  without them gives different values; copying them is a second opinion of the payload (forbidden). Calling the whole builder
+  needs the live publish gate, makes live calls and stops at ~20 publish checks.
+- 🔴 **Shells are not built by the studio at all:** 18 of production's 31 eBay ItemIDs are `EBAY_LISTING_SHELL`; their
+  variations come from `SharedListingMembership` and go out through the flat-file shared-listing push. The flat-file editors
+  and their two route files are no-touch; whether a shell's "ours" can be assembled WITHOUT them is not traced yet.
+
+**Recommendation — one (a):** extract `:107-164` into ONE exported function (e.g. `buildEbayListingInput(facts)`), called by
+`prepareEbayPublication` with behaviour unchanged and a parity arm (the XML's title and item specifics = the function's) — the
+A-33 / SCT.6 pattern. Then b2 compares title + item specifics for the **13 studio-shaped ItemIDs**; a shell is recorded
+*"not compared: shell listing"*, never as clean. The shells come back as their own question after a read-only trace (can their
+"ours" be built from the stored rows and the pure `buildSharedListingInput`, touching no flat-file file?).
+(b) Stop b2 here: eBay content is not compared; Amazon (b1) stays.
+
+- **Done when** — an eBay studio listing whose title or an item specific differs has an `ebay-content` entry; identical → 0 + clock;
+  a shell → not compared, with its reason. **Cost when** — ~13–31 `GetItem` a night (< 1% of the 5,000-a-day pool). **Gate** — the
+  parity arm (red if the extraction changes the payload) + the b2 arms and mutations in S5's directive. **Rollback** — revert.
+- Files it would hold: `services/pim/studio-publication-ebay.ts` (the extraction only), `jobs/content-drift.job.ts` (an eBay pass),
+  new files under `services/channel-drift/`, tests.
+
+| # | Question | Ruling (2026-09-23 ~23:00 UTC, thirtieth set) |
+|---|---|---|
+| **R-43** | A-40 — eBay content reads | ✅ **(a)** Extract the builder's inline `:107-164` into one exported function (behaviour unchanged, parity arm), then build b2 for the studio-shaped ItemIDs; shells recorded "not compared" until their own question |
+
+### A-40 — the shells question, answered (2026-09-23 ~23:05 UTC, read only: sub-agent S6's trace, two claims re-read by this lane ✓)
+
+**Nexus never writes a LIVE shell's title or item specifics.** A shell's push through the flat-file route is a safe no-op once
+the item exists: `pushSharedListings` answers `SKIPPED_EXISTS` → reported as `POOL`, *"no eBay write — pool-managed
+stewardship"* (`routes/ebay-flat-file.routes.ts:2176-2186` ✓, `:2426-2441` ✓). Title and item specifics are sent only once, at
+creation (`buildSharedListingInput` → `AddFixedPriceItem`); later writes touch variations and quantities only. A shell's
+stored rows are assembled only inside the no-touch route (`GET /ebay/flat-file/rows`), and the push takes them from the page.
+
+So comparing a shell's title or item specifics would flag values Nexus never sends — **not drift**. Decision (no ruling needed —
+it narrows scope, touches nothing): shells are recorded **"not compared: Nexus does not write a live shell's title or item
+specifics"**, permanently, not "later". A-40's real scope is the 13 studio-shaped ItemIDs. Traps noted for b2: list values over
+65 characters are split into several values; aspect names fold to Italian on IT; Condition is never sent.
+
+| # | Question | Ruling (2026-09-23 ~23:15 UTC, thirty-first set) |
+|---|---|---|
+| **R-44** | Lanes and Phase 4 | ✅ The Owner: *"We can work in multiple lanes using multiple sub-agents … we need to start with the UI work as well."* Step 0.2's one-lane rule is relaxed to: parallel sub-agent lanes with DISJOINT files, named in the claim row, one session verifies and commits. **Phase 4 starts now in this session** |
+| **R-45** | D-F / Step 4.1 — the four removed browser gates | ✅ **Yes, they come back** (editor-open, control census, grid chrome, the 7:1 contrast gate) — a ratchet, one at a time: write/run → record the red number → fix to green → keep in the hook. No UI implementation before its gate is in |
+
+## A-40 — BUILT (R-43). eBay content reads for the studio-shaped ItemIDs; shells "not compared" for good.
+
+Built by sub-agent S5; re-run by this lane (12 drift files, 66 tests; every studio publication suite, 5 files, 53 tests; `tsc` 0).
+
+| Where | What |
+|---|---|
+| `services/pim/studio-publication-ebay.ts` | NEW exported `buildEbayListingInput(facts, { currency? })` = the builder's old inline `:84-164`. `prepareEbayPublication` keeps its publish gate FIRST, then calls it exactly as before. **Byte-for-byte:** the builder's full XML on the fixture has the same sha256 before and after |
+| new `services/pim/studio-publication-ebay.parity.vitest.test.ts` | the parity gate: the builder's XML title + item specifics = the extracted function's |
+| new `services/channel-drift/ebay-content-ours.ts` / `ebay-content-compare.ts` | "ours" for one ItemID OWNER listing through the extracted function (the market's own currency); a shell → *"shell listing: Nexus does not write a live shell's title or item specifics…"*, no eBay call; a builder refusal / failed read / inactive item → not compared, with its reason. Compare: title; aspect names case-insensitive; values as a SET (trim, spaces, NFC) |
+| `jobs/content-drift.job.ts` (+ `cron-registry.ts`) | the eBay pass runs first in its own 5-minute slice, then Amazon; one `GetItem` per ItemID, ≥ 1 s apart, ≤ 300 a night, per-source clock `ebay-content` |
+
+**Done when** — ✅ in tests (an eBay studio listing whose title or an aspect differs has an `ebay-content` entry; identical → 0 + clock;
+a shell → not compared with its reason). **Cost when** — ≤ 31 `GetItem` a night today (< 1% of the 5,000 pool). **Gate** — 21 new
+arms; **14 mutations, 13 red** — 🟠 one equivalent mutant (M8a: the real eBay spec already puts the title cell on the row through
+the overlay), replaced by M8c on a real value → red. **Rollback** — revert; `NEXUS_ENABLE_CONTENT_DRIFT=0` holds both passes.
+⬜ Not covered: the child-only ItemID `257584954808` (no owner listing, so never read); the dry-run script counts Amazon only.
+
+## A-41 — The studio eBay publication has been REFUSED for every family since 2026-09-21. FOR YOUR RULING. Nothing built.
+
+**Found by S5, measured in tests on the old AND new code:** `4774b48ff` (2026-09-21, the channel lane's P4.4a *"a currency per
+market, from the data"*) made `buildSharedListingInput` refuse a missing currency (`requireCurrency`). The studio's
+`prepareEbayPublication` passes none → *"No currency was resolved for the IT market"* on every family; the publish review
+catches it as an issue, so nothing is sent. **Fix, recommended:** pass the market's own currency
+(`facts.destination.currency`, `workspace-destination.ts:64`) at the publish path — ONE argument — plus an arm: the builder with a
+resolved market publishes its preview; a market with no currency is still refused by name. **Done when** — the studio eBay
+preview builds for a family on eBay·IT (test) and the refusal arm stays red for a market with no currency. **Rollback** — revert.
+🟠 Not measured: whether anyone has tried a studio eBay publish since 09-21 (production logs, read only, if you want the number).
+
+| # | Question | Ruling (2026-09-23 ~23:40 UTC, thirty-second set) |
+|---|---|---|
+| **R-46** | A-41 — the studio eBay publish refused since 09-21 | ✅ **Yes, fix it**: pass the market's own currency at the publish path; a market with no currency stays refused by name |
+
+### A-41 — PREDICTION written before the change (R-46)
+With `prepareEbayPublication` passing `facts.destination.currency`, and the test's currency fill REMOVED (so nothing but the
+builder supplies it): the golden arm (title + item specifics) and the parity arm pass; a fixture whose market has **no**
+currency is refused *"No currency was resolved for the IT market"*. Mutation: the argument removed → the golden and parity
+arms go red (the old P4.4a refusal).
+
+## A-41 — BUILT (R-46). The studio eBay publish passes the market's own currency again.
+
+`services/pim/studio-publication-ebay.ts`: `prepareEbayPublication` → `buildEbayListingInput(facts, { currency:
+facts.destination.currency })` (one argument; the comment says why). The parity test no longer fills a currency for the builder.
+**Against the prediction:** ✅ golden + parity pass with nothing filled; ✅ the XML carries `<Currency>EUR</Currency>`; ✅ a market with
+no currency is refused *"No currency was resolved for the IT market"*. **Gate — 2 mutations, 2 red** (the argument removed → 3 arms
+red; a fixed `EUR` instead of the market's → the no-currency arm red); sha256 restored. Related suites 11 files / 82 tests green;
+`tsc` 0. **Done when** ✅ (in tests; no live eBay publish was run). **Cost when** `flat`. **Rollback** — revert the commit.
+
+## A-42 — Step 4.3 #1, the EditorShell: the step-1 plan. FOR YOUR RULING (two questions, §4). Nothing built.
+
+*Drafted by sub-agent U3 (read only). Builds only after the editor-open gate is back in the hook and green (R-45).*
+
+2026-09-23 ~23:30 UTC. "read" = I opened the line; "inferred" = not opened or not run.
+
+### 1. The design's step 1, and whether it still matches the code
+
+**Step 1, in plain words** (`docs/2026-09-04-cell-editor-shell-design.md:79-80`): build ONE editor component, `EditorShell`.
+It owns where the box sits, its size, how the cell looks while editing, the keys, and the one commit path. It hosts a
+small "body" per column kind. Step 1 ships only the shell plus `TextBody` and `NumberBody`, and uses them in place of
+AG's two inline editors (`agTextCellEditor`, `agNumberCellEditor`). The contract gate's `text` and `number` rows must
+stay green, and the geometry block must stay flush. Steps 2–4 (long text, select, formula) come later.
+
+**Does it still match today's code?**
+- ✅ Never started: no `EditorShell` / `TextBody` / `NumberBody` in any `.ts`/`.tsx` under `apps/web/src` (read, search).
+- ✅ The size rule it relies on already shipped: `editors/editorBox.ts` (read). But `EDITOR_CAPS` has NO `text` or
+  `number` kind (`editorBox.ts:~53-80`: longtext, formula, select, list, measure, axes) — step 1 adds them.
+- ✅ Text and number are still AG inline editors: `openGesture.ts:168-174` (`text: 'inline'`, `number: 'inline'`);
+  studio `master/columns.tsx:488,495,538-539` and `master/channelColumns.tsx:64,101-104` (read).
+- 🟠 The doc says "five editors". Today there are MORE (see §2): list, measure, axes, sale popups were added since.
+- 🟠 "Approved": the claims ledger ordered it (`pes-claims.md:2486-2487`, hub #776, "then steps 2–4") but the doc's own
+  §8 three questions were never answered in a record I could find (read: RESEARCH.md:689 says "Approved";
+  consistency research :89 says "3 questions still open").
+- 🔴 Its own precondition (§7) is unsettled: "a column ticked in Customise does not survive a reload" on master and
+  Amazon·IT. Not re-measured since (the 09-22 review lists it as open, `PLAN-REVIEW-2026-09-22.md:257`). #774 found the
+  channel scope does NOT have the shape; master's note names the cause (grid created while `columnDefs` is `[]`) —
+  inferred still present, not measured.
+
+### 2. "Six files say Enter saves in six ways" — re-counted today
+
+Search: every user-facing string with Enter/⏎/↵ next to save/apply/commit, over `design-system`, `app`, `lib`,
+`components`, plus the i18n catalog. **Positive control:** `ListPanelEditor.tsx:80` (cited by the 09-21 research) is found.
+The i18n catalog holds none of them (read).
+
+**Result: 6 different wordings, in 6 design-system files, plus 1 app file** (the claim holds in substance):
+
+| File:line | Wording |
+|---|---|
+| `grid/editors/AxesPanelEditor.tsx:62` | `Esc discards · ⏎ saves` |
+| `grid/editors/ListPanelEditor.tsx:76` / `:80` | placeholder `(, adds · Enter saves)` / `… · Enter saves · Esc cancels` |
+| `grid/editors/SaleCellEditor.tsx:116` | `Enter applies · Esc discards` |
+| `grid/editors/sheetColumn.ts:159` | `Enter to edit · Enter again to save · …` (the footer hint) |
+| `grid/editors/FormulaComposer.tsx:89`, `FormulaCellEditor.tsx:302` | `Enter to apply` |
+| `app/products/[id]/matrix/MatrixWorkspace.tsx:420` | `Enter saves, Esc cancels.` |
+
+**Every cell editor today, and who owns the keys** (read unless marked):
+
+| Editor (kind) | Mode | Enter | Tab | Esc | Click-away | Keys owned by |
+|---|---|---|---|---|---|---|
+| `agTextCellEditor` (text) | inline | commit + down (`GridSheet.tsx:107`) | commit + right | cancel | commit (`:108`) | AG |
+| `agNumberCellEditor` (number) | inline | same | same | same | same | AG; a letter opens an EMPTY box (design §4, measured 09-04; not re-measured) |
+| `agLargeTextCellEditor` (longtext) | popup | AG's own (inferred) | AG | AG | commit | AG |
+| `SelectPanelEditor` (select, yes/no) | popup `under` | picks + commits (`SelectPanelEditor.tsx:100-101`) | AG | AG popup wrapper (`:29-35`) | AG popup wrapper | AG + the panel's list |
+| `FormulaCellEditor` (`=` on any kind) | popup | save (`FormulaCellEditor.tsx:248`) | accepts a completion when open | cancel (`:246`) | — | **React**, via `suppressFormulaKeys` on the ColDef (`:41-47`) |
+| `ListPanelEditor` (list) | popup | AG commits last reported (`:35`) | AG | AG | AG | AG |
+| `AxesPanelEditor` (axes) | popup | AG | AG | AG | AG | AG; filter input handles its own keys (`:793`, `:910`) |
+| `MeasureEditor` (measure) | popup | AG (`:8`) | AG | AG | AG | AG |
+| `SaleCellEditor` (matrix sale) | popup `under` | AG (`:22`) | AG | AG | AG | AG |
+| Studio-local `StructuredAttributeEditor`, `ImpactProtectorsEditor`, `AttributeShapeEditor` | popup | AG | AG | AG | AG | AG; **outside the design system** (`_studio/sheet/*.tsx`); no `isCancelAfterEnd` (inferred from search) |
+
+So: **12 editor components, 3 key owners, 6 hint wordings.** Only the formula editor takes keys from AG, and the only
+mechanism proven to work is `suppressKeyboardEvent` on the ColDef (memory `reference_ag_popup_editor_owns_keys`).
+
+### 3. Step 1 as an implementation plan
+
+**Scope:** the shell + `TextBody` + `NumberBody`, used by the studio's text and number columns on ALL three scopes at
+once. Everything else keeps its editor (steps 2–4, then list/measure/axes/sale/studio-local).
+
+**Design-system files (all in `apps/web/src/design-system`):**
+- NEW `grid/editors/EditorShell.tsx` — the AG cell editor: anchors with `editorBox`, reports every change through
+  `props.onValueChange` (AG36: a ref `getValue` is never read), never reports on mount, `useGridCellEditor({
+  isCancelAfterEnd: () => !touched })` so an untouched open never writes; hosts a body by kind.
+- NEW `grid/editors/editorBodies.tsx` — `TextBody`, `NumberBody` (DS `Input` primitive, not a raw `<input>`).
+- `grid/editors/editorBox.ts` — add `text` and `number` kinds: the box is exactly the cell's box.
+- `grid/editors/index.ts` — export the shell, the bodies and ONE preset `shellEditor(kind)` + ONE `suppressEditorKeys`
+  (today's `suppressFormulaKeys` widened to `.nds-editor-shell`; the formula rule keeps its own branch).
+- `grid/editors/openGesture.ts` — `EDITOR_MODE_BY_KIND.text/number` from `'inline'` to `'shell'` (the gate reads it).
+- `grid/editors/FormulaCellEditor.tsx:402-412` — the `=` fallback recognises the shell as the scalar editor (today it
+  matches AG's editor NAMES as strings).
+- Catalog: NEW `catalog/EditorShellExample.tsx` + `catalog/index.ts`; `CHANGELOG.md` entry; `.claude/DS-GAPS.md` row
+  ("one cell editor shell — the grid had five editor mechanisms and no single owner of keys/geometry").
+- **Mirror (AGENTS.md):** the same files under `apps/factory/src/design-system/` (today `editorBox.ts`, `openGesture.ts`,
+  `sheet.ts`, `writeGate.ts`, `SelectPanelEditor.tsx` are byte-identical there — read with `cmp`).
+
+**Consumers switched in step 1 (one preset, both builders together — the two builders drift otherwise):**
+`app/products/[id]/edit/_studio/sheet/master/columns.tsx:488-495,538-539` and `…/master/channelColumns.tsx:64,101-104`.
+**Not switched in step 1** (listed, not forgotten): `app/products/_sheet/MasterSheet.tsx:231`,
+`app/products/next/InventoryGrid.tsx:136`, `_studio/variants/channel/projectionColumns.tsx:193`, `grid/editors/matrixColumn.ts:113-119`.
+
+**Pixel declarations (every geometry change, before landing):**
+- Text/number editor box: x, y, width, height = the cell's own (**Δ 0 on all four**, as today's inline editors). If the
+  cell runs past the viewport's right edge, width = the room to the right (never slides; `editorBox` rule).
+- Text starts at the cell's own text x (the caret does not jump): **Δ 0**. Font size and line height = the cell's.
+- The editing outline on the origin cell: the one the popups already use (grid.css rule to be named in the build).
+- Nothing else moves. Footer, header, hint lines: unchanged in step 1 (unless question 2 below is ruled).
+
+**The one keyboard model** (design §4 + `GridSheet.tsx:106-108`, read) — identical on master·DE, AMAZON·IT, EBAY·IT:
+
+| Key | Every kind |
+|---|---|
+| Enter | commits, moves down (long text: Shift+Enter = new line; select: picks the highlighted option) |
+| Tab / Shift+Tab | commits, moves right / left (formula with completions open: accepts the completion) |
+| Esc | cancels, never writes |
+| Typing | replaces the value (number: see question 1) |
+| F2 | edits in place, caret at the end |
+| `=` | opens the formula body (#775, unchanged) |
+| Click-away | commits |
+| Opened, nothing changed | never writes |
+
+**The gate that proves it** (after R-45 puts `scripts/check-editor-open.mjs` back in the hook, green on today's code):
+existing blocks must stay green through the swap — `first`/`early`/`settled` (includes the fill-handle double-click),
+`geometry` (flush), `contract` + `parity` on all three scopes. **New arms** in the same gate: (a) the keyboard table
+above, per kind, per scope, with a write-count per key (Esc = 0 writes, untouched = 0 writes); (b) text/number box
+Δ = 0 against the cell; (c) the caret-x arm. Node tests (apps/web vitest is node-only): the pure parts — `editorBox`
+text/number kinds, the key table function, `suppressEditorKeys`. Mutations: shell reports on mount; `isCancelAfterEnd`
+removed; `suppressEditorKeys` unscoped; one builder left on AG's editor (parity arm must go red).
+
+**Risks:** (1) AG36 proxy — a mount-time report arms a write on every open; (2) inline→popup changes click-away: popups
+count as "inside the grid" for `stopEditingWhenCellsLoseFocus` (`SelectPanelEditor.tsx:39`) — re-prove commit-on-blur;
+(3) the fill handle (`NexusGrid.tsx:277` `fillHandleHit`) — the `first` arm must stay green; (4) paste/undo paths go
+through `writeGate` sources, not the editor — must not change; (5) a React popup per keystroke-open must still open
+within the gate's 250 ms; (6) the Customise-reload instability (§1) makes every verification noisy.
+
+**Files it would hold (claim row):** the DS files above + their `apps/factory` mirrors, the two studio builders,
+`scripts/check-editor-open.mjs` (new arms only — after U2's restore lands), new tests.
+
+**Order:** (0) R-45's editor-open gate back and green; (0b) re-measure the Customise-reload defect on master and
+Amazon·IT (read-only browser check) — fix first if it holds; (1) this step.
+
+### 4. For the Owner, before building (two questions)
+
+1. **Number cells: typing a letter today opens an EMPTY editor, so saving from there clears the value** (design §4;
+   re-measure first). Fix it in step 1 (the number body refuses the letter and keeps the value, like Excel), or ship
+   step 1 as a pure port? — **Recommend: fix it in step 1**; it is a silent data-loss path, and the gate arm is small.
+2. **The hint lines (6 wordings today): one wording everywhere, or none** (Shopify shows none; the ledger once added a
+   hint because "there was no way to know without trying")? — **Recommend: one line, owned by the shell, the same on
+   every kind and scope**; the five per-editor hints are removed as each editor moves into the shell.
+
+## Step 4.0 — BUILT (R-44, R-45). The derived 7:1 baseline on the palette the studio actually paints.
+
+Built by sub-agent U1; re-run by this lane (10/10 script tests; the ratchet passes at today's count and fails one tighter).
+New `scripts/check-nds-contrast.mjs` (+ `scripts/check-nds-contrast.test.mjs`): every colour derived from
+`apps/web/src/design-system/styles/tokens.css` at run time (`:root` and `.dark`, `var()` chains resolved, alpha composited),
+role pairs (text × surface, status text × soft ground, pill fg × bg, inverse × primary, link × surface), two tiers from a
+usage table, `--json`, and a ratchet `--max-failures N --max-aa-failures M` for the hook (Step 4.2). Controls:
+`--nds-text` on `--nds-surface` = **15.48** ✓; an absent token → null, reported, never counted as passing ✓.
+
+| | pairs | below 7:1 (AAA) | below 4.5:1 (AA) |
+|---|---|---|---|
+| light | 45 | **29** | **9** |
+| dark | 45 | **20** | **1** |
+| **total** | **90** | **49** | **10** |
+
+- **The 09-22 review reproduces** on its own 88 pairs: 47 below 7:1, 8 below 4.5:1. 🟠 Its per-theme table put 3 dark pairs under
+  light (its own per-token list gives 28 / 19) — the script agrees with the list.
+- 🔴 **Found — a real defect, AA fails in BOTH themes:** `--nds-amber-text` on `--nds-amber-soft` = **4.39:1**, and the `.dark`
+  block (`tokens.css:450`) redefines **no** amber token (re-read: 0 matches), so dark mode paints the light chip. The studio's
+  images tab uses it (`images.module.css:368` `.check_warn`). Study 02's "~5.2" for that pair is wrong. For the AAA sweep
+  (Step 4.3 #5) — or sooner if you say so.
+- **Draft usage table — for the Owner (below):** everything is body text (7:1) unless ruled; `--nds-text-3` is **to rule**
+  (as a label/UI-only token the counts become **44 / 5**); pills drafted as body (the DS study calls them UI labels).
+- **Gate — 9 mutations, 9 red** (a darkened token in a scratch copy, a `var()` chain unresolved, alpha not composited, the
+  ratchet ignoring growth, …; the real `tokens.css` never edited). Proposed hook line (Step 4.2):
+  `node --test scripts/check-nds-contrast.test.mjs >/dev/null && node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 10`.
+- **Done when** ✅ a number exists (the plan: *"Expect red. That red is the baseline."*). **Cost when** `flat`. **Rollback** — remove the script.
+
+| # | Question | Ruling (2026-09-23 23:29 UTC, thirty-third set) |
+|---|---|---|
+| **R-47** | A-42 Q1 — number cells: a typed letter opens an EMPTY box and a save wipes the value | ✅ **Fix it in step 1**: the number body refuses the letter and keeps the value; a gate arm proves it |
+| **R-48** | A-42 Q2 — the editor hint lines (6 wordings today) | ✅ **One line everywhere**, owned by the shell, the same on every kind and scope; per-editor hints removed as each editor moves in |
+| **R-49** | Step 4.0 usage table — `--nds-text-3` and the pills | ✅ **Strict 7:1** (body tier) for every text token incl. `text-3` and pill text; they darken in the AAA sweep (Step 4.3 #5). The script's `USAGE` keeps them at the body tier (no "to rule" left) |
+
+## A-43 — Step 4.2: the three browser gates cannot run as written; five fixes, a runner, then the hook. ONE QUESTION FOR YOU.
+
+**Measured by sub-agent U2 (2026-09-23 23:20–23:35 UTC, local servers on the local database — discriminated: the process's own
+environment read back `127.0.0.1:55439`; no repo file edited).** Removed by `7bd90cb11` (09-16) on the Owner's decision (~20 min a
+push, servers + a signed-in session).
+
+| Gate | Today | Why (read) |
+|---|---|---|
+| grid chrome | **could not measure** (exit 1) | every page now redirects to `/login` without a user (`lib/workspaces/server.ts:80-95`); the gate never signs in |
+| editor-open | **could not measure** (exit 2) | the sign-in helper waits for `/api/auth/me`; with profiles ON the page calls `/backend/api/auth/me`; its studio URL is unscoped |
+| control census | **could not measure** (exit 2) | the same helper |
+| the safe wrapper (`studio-gate-session.mjs`) | **refuses always on macOS** | `gate-aloneness.mjs:134` `pgrep -f` excludes its own ancestors on macOS unless `-a` — the witness is always 0 |
+
+🔴 **Safety finding:** `check-editor-open.mjs`'s write guard only aborts writes to `http://127.0.0.1:8091/api/…`; today every
+write goes to `<origin>/backend/api/…`, so a fill-down regression's `PATCH /backend/api/products/bulk` would reach the database
+and not be counted. Its header's *"cannot damage the database it is pointed at"* is no longer true. **It must not run before
+its fix.** With the sign-in patched in scratch copies: grid chrome ✅ 12 probes in 20 s; census ✅ 14/14 surfaces in 45 s.
+
+**The build (under R-45):** (1) the editor-open write guard recognises the same-origin proxy — FIRST, with a mutation arm proving a
+`PATCH /backend/api/products/bulk` is aborted and counted; (2) `pgrep -af`; (3) the sign-in helper accepts `/backend/api/auth/me`;
+(4) grid chrome signs in; (5) workspace-scoped URLs. Then a runner `scripts/run-browser-gates.mjs --pre-push`: runs only when the
+pushed commits touch a file the gates' readings depend on (derived from each gate's own build-stamp list); a baseline file of known
+failure keys; fails only on a NEW key. And the 7:1 contrast line (Step 4.0) goes into the hook first — it needs no server.
+
+| # | Question | Ruling (2026-09-23 23:34 UTC, thirty-fourth set) |
+|---|---|---|
+| **R-50** | A-43 — on a UI push, who starts the servers the browser gates need | ✅ **The push starts its own**: the runner starts the API + web on the LOCAL database (set explicitly, host checked), on free ports that never touch a server the Owner is running, runs the gates through the wrapper, stops what it started — before the hook's own builds |
+
+## A-44 — Step 4.3 #2, consolidation (scope, language, filters): the plan. FOR YOUR RULING (two questions). Nothing built.
+
+*Drafted by sub-agent P2 (read only). Builds only after its gates are back in the hook (R-45).*
+
+2026-09-23 ~23:45 UTC. "read" = line opened; "inferred" = not opened or not run; "screenshot" = read off this session's
+1459px screenshot of the studio (master scope), ±5px, not a gate measurement.
+
+### 1. Today's two bars
+
+**Scope row** — `_studio/StudioBar.tsx` (read), mounted by `StudioSubheader.tsx:76`, DS `ScopeBar` (`patterns/ScopeBar.tsx`).
+| Control | Where | Today |
+|---|---|---|
+| "EDITING" + 5 scope chips (Shared product, Amazon, eBay, Shopify, Etsy), each with a readiness pill | `StudioBar.tsx:34-45` | roving tabindex, arrow keys (`ScopeBar.tsx:~140-190`); ~507px (screenshot) |
+| Account `Listbox sm` (only if >1 account), Market `Listbox sm` | `:48-50` | channel scopes only |
+| "Selected listing · Clear" `Button sm ghost` | `:52` | only with a listing |
+| 9 language `FilterChip md` in `role="group"` "Content language" | `:54-58` | ~567px (screenshot). 🔴 **Two modes on one control:** normally SINGLE (`push({locale})`), but when the sheet's **Languages** view is on, `locales` is a list and a click TOGGLES (`contracts.tsx:878-882`, `languages.ts toggleLanguage` — never below 1). A single choice drawn as `aria-pressed` toggles is the wrong role (it is a radio choice) |
+The row wraps rather than clips: `patterns.css:1598-1603` (`flex-wrap: wrap; height: auto`). **Width at 1280 per scope: not measured.**
+
+**Sheet toolbar** — `_studio/sheet/SheetToolbar.tsx` (read): `Custom (74) ▾` = `GridViewsMenu` (`:165-180`); `Required` and
+`Languages` preset chips (`:182-198`); `Filters N` = `GridToolbarFold` (`:224`); `Customise` (`:257`); `⋯`.
+🟢 **The plan's clip claim is already fixed.** "9 chips take 1345.4px of 1200px usable at 1280" was the SHEET toolbar's filter
+chips (amazon·DE). LX.F2 / R-LX-18 folds them into one trigger when the bar overflows, and moves Export/Import into `⋯`;
+measured afterwards: nothing clips at 1280/1440/1728/2048 (`GridToolbarFold.tsx:1-40`, `SheetToolbar.tsx:217-222`). The fold
+is ON OVERFLOW, not "by default" (the Step 4.3 wording) — see Q2.
+
+### 2. The target
+
+- **Language → one dropdown, two modes, in the same slot.** Single mode: DS `Listbox size="sm"` ("Italian · source ▾"),
+  role listbox, one choice. Languages-view mode: DS `MultiSelect` ("Italian +2 ▾"), `aria-multiselectable`, **never below one**
+  (today's `toggleLanguage` rule), `locales.includes(...)` semantics kept, URL `locales=it,de` unchanged.
+- **Scope → stays chips (recommended, Q1)**: 5 items, each carrying its readiness pill, keyboard roving already right. A dropdown
+  would hide every other scope's readiness. If Q1 says "dropdown", a DS `Listbox` cannot draw a pill per option → DS gap.
+- **Filters → unchanged** (R-LX-18's fold-on-overflow) unless Q2 rules "always folded".
+- Nothing else moves. No new tab, no new toast, the ONE Customise dialog untouched.
+
+### 3. Design-system pieces
+
+Used: `Listbox` (`components/Listbox.tsx`, `size` xs/sm/md), `MultiSelect` + `OptionList` (`components/MultiSelect.tsx`,
+`OptionList.tsx`), `ScopeBar`. **Gaps in `MultiSelect`** (add, export, catalog, CHANGELOG, `.claude/DS-GAPS.md`, mirror to
+`apps/factory` — today `MultiSelect.tsx` and `ScopeBar.tsx` are byte-identical there, `cmp` read):
+1. no `size` — `.nds-ms-btn` is `padding 7px 11px` + base font ≈ 32px and `min-width: 160px` (`components.css:848-863`); the
+   census requires **28px** in a bar (`check-control-census.mjs:16-19`) → add `size="sm"` (28px) and `width="auto"`;
+2. no minimum — Select-all can clear everything (`OptionList.tsx:71-105`) → add `minSelected` (the Select-all row respects it);
+3. no trigger label format — only "All" / "N selected" → add `formatLabel(value)` ("Italian +2");
+4. 🔴 no focus management — the popover is portaled to `body` with no focus move on open and no return on close (`:33-66`,
+   read) → a keyboard user's next Tab leaves the page's order. Fix in the DS (it serves every MultiSelect, additively).
+Defaults keep every existing caller byte-identical (the grid's set filter shares `OptionList`).
+
+### 4. Pixel declarations
+
+- Language control: **28px high** (census tier), width = its label + chevron, ≈ 130–150px *(inferred)*, replacing ≈ 567px.
+- Scope row: **one row, 44px (`.nds-scopebar` height), at 1280 and 1440, on master, AMAZON·DE and EBAY·IT** — the build must
+  measure and state each; today it wraps (height auto).
+- Popover: width = the trigger (`width: 'anchor'`), 9 rows; search appears only past `SEARCH_THRESHOLD` 7 → shown for 9
+  languages — keep or pass `searchable={false}` (declare which in the build).
+- Sheet toolbar, grid, drawer: **Δ 0**.
+
+### 5. Keyboard and screen reader
+
+Single: Tab to the trigger · Enter/Space/↓ opens · ↑↓ move · Enter picks · Esc closes, focus back on the trigger.
+Multi: the same, Space toggles an option, the last selected option cannot be unticked (announced "At least one language").
+After a change, one polite announcement: "Content language: German" / "Languages: Italian, German" — through an existing
+live region (`grid/toolbars/GridSheetNote.tsx`, `hosts/GridSheet.tsx` carry `aria-live`) or a DS announcer if their contract
+does not fit (then a gap). The scope chips keep their roving tabindex.
+
+### 6. The gate
+
+**Control census** (R-45 brings it back; `nds-ms-btn` and `nds-listbox-btn` are already on its allow-list, `:102-104`) — its tier
+rule catches a 32px MultiSelect in the bar. **New arms:** the scope row is one line at 1280/1440 on the three coordinates; the
+language control is ONE control (not 9 chips); multi mode is `aria-multiselectable` and choosing two gives `locales=a,b` and
+both languages' columns; the last language cannot be removed; Esc returns focus to the trigger. Node tests: `MultiSelect`
+`minSelected` / `formatLabel` pure parts; `toggleLanguage` already tested (`languages.vitest.test.ts`). Mutations: the size
+prop ignored (census red); `minSelected` ignored; the multi mode rendered as single (the two-language arm red).
+
+### 7. Files it would hold
+
+`_studio/StudioBar.tsx`, `_studio/studio.module.css` (`.languageChips` removed) · DS `components/MultiSelect.tsx`,
+`components/OptionList.tsx`, `styles/components.css` (`.nds-ms.sm`), `catalog/*` example, `CHANGELOG.md`, `.claude/DS-GAPS.md`
+· their `apps/factory/src/design-system/**` mirrors · `scripts/check-control-census.mjs` (new arms only) · new tests.
+
+### 8. Risks
+
+`MultiSelect`/`OptionList` are shared (the grid set filter): additive props only, defaults unchanged, a parity arm. Two
+controls swap in one slot when the Languages view toggles — declare equal heights so the row does not jump. The
+language switch reloads the sheet's columns; the announcement must fire after the new columns land, not before (the
+"read before the write arrived" trap). URL writes keep the existing `push()` (memory: `history.pushState({}, …)` only).
+
+### 9. For the Owner (two questions)
+
+1. **Scope: keep the five chips, or a dropdown too?** Chips show every scope's readiness at a glance and already have the
+   right keyboard model; the saving from the language dropdown alone should fit the row at 1280 (to be measured).
+   — **Recommend: keep the chips; only the language becomes a dropdown.**
+2. **Filters: "folded by default" (the plan's wording) or fold only when the bar is full (R-LX-18, shipped and measured)?**
+   — **Recommend: keep R-LX-18** — at wide screens the counts stay visible; nothing clips at 1280.
+
+## A-45 — Step 4.3 #4, completeness column + hover card + the Shared 100 % chip: the plan. FOR YOUR RULING (two questions, §8). Nothing built.
+
+*Drafted by sub-agent P4 (read only). Builds after Step 2.7 closes and its gates are back (R-45).*
+
+2026-09-23. "read" = I opened the line; "inferred" = not opened or not run. Blocked on Step 2.7's verify (02:35 UTC tonight).
+
+### 1. What readiness data exists today (read)
+
+| Layer | What it holds | Where |
+|---|---|---|
+| `ReadinessIndex` row | per **product × coordinate (channel, market, account, alias) × language**: `pct`, `state` (ready/warn/blocked/absent), `requiredFilled`, `requiredTotal`, `missing` (Json), `note`, `computedAt` | `schema.prisma` model `ReadinessIndex` |
+| its one writer | `reconcileFamilyReadiness` builds the studio sheet per destination and stores one row per product; Shared = coordinate all null, label "Shared product" | `services/pim/readiness-index.service.ts:24-120` |
+| 🔴 `missing[]` | the row's readiness **ISSUES** (validator messages: `field`, `label`, `reason`, `kind`) — NOT the list of required-but-empty fields. That list exists only on the LIVE sheet row (`completeness.required.missing: {key,label}[]`) and is reduced to two counts before storage | `readiness-index.service.ts:~101-104`; `master-completeness.service.ts:15` |
+| the read | `GET /products/:id/readiness` → `getProductReadiness`: scopes (the bar's chips) + `matrix[]` with `byProduct[productId] = {state, pct, note}`; no row = `notComputed` + *"Readiness has not been computed for this language."* (R-LX-9) | `routes/product-studio.routes.ts:496`; `services/pim/scope-readiness.service.ts:18-98` |
+| the studio today | (a) master sheet: one **"Readiness · <coordinate>"** column per channel coordinate in the pressed language, `ScopeReadinessCell`, 170 px, fed by `matrix.byProduct`, "Not computed" when absent; (b) `ready:scope` column in the ROW vocabulary; (c) the Product column's `CompletenessPill` = filled ÷ ALL applicable master attributes (optional included: the 7–10 % seen on the knee slider) | `sheet/master/useMasterSheetAdapter.tsx:66-94, 350-385, 119` |
+| Shared's chip | `summarizeReadinessIndex(shared rows)` → `pct` = Shared's OWN required (≈ 1) → **100 %**; channel requirements show on Shared only as markers (R-10) | `scope-readiness.service.ts:~84`; `StudioBar.tsx:37`; PLAN.md ~4519-4542 |
+
+So the "completeness column per scope" **already exists** as the per-coordinate readiness columns. Item 4 is: make them say
+WHAT is missing, and let a person jump to it — not a new column (Part 8 rule 4 spirit: no second truth).
+
+### 2. The column (a change to the existing coordinate columns, not a new one)
+
+- **Number:** `pct` = required filled ÷ required total for that product at that coordinate and language (the index's own number).
+- **Cell text:** `82 % · 2 missing` (state tone from `readinessMeta(state,'scope')`); `—` + *Not computed* when no row; `—` + the
+  row's `note` when `pct` is null (schema missing, no account); stale is stated: tooltip *"computed 6 h ago"* from `computedAt`.
+- **Shared:** see §4 — no column for Shared (the sheet already excludes it, `useMasterSheetAdapter.tsx:68`).
+- **Writer change (R1, one writer):** `reconcileFamilyReadiness` also stores the row's required-but-empty fields in `missing`
+  as `{ productId, field: key, label, reason: 'Required and empty', kind: 'required' }` (Json — no migration). Without it the
+  card can name issues but not the empty required fields — the whole point. Old rows (no `kind:'required'`) say
+  *"Missing fields not recorded yet — refreshed tonight"* instead of an empty list.
+
+### 3. The card — a DESIGN-SYSTEM GAP (read)
+
+`HoverCard` (`design-system/components/HoverCard.tsx`, mirrored byte-identical in `apps/factory`) takes `text` or string
+`rows` only, opens on mouse only, is `role="tooltip"`, and hides on the trigger's `mouseleave` — a link inside it could never be
+reached by pointer OR keyboard. `Tooltip` is focusable but also `role="tooltip"` (ARIA: no interactive content). 23 call sites use
+`HoverCard` — do not change its meaning.
+**Proposal: a new DS component `DetailPopover`** (a "toggletip"): trigger = a real button (the cell's pill); opens on click,
+Enter/Space, or hover after 350 ms (the warm window from HoverCard); stays open while the pointer is over trigger OR card (a
+hover bridge); `role="dialog"` non-modal with `aria-label` (*"Missing for Amazon · IT, German"*); focus moves to the first
+action on keyboard open, Tab stays inside, **Esc closes and returns focus to the cell**; portaled, positioned by
+`usePopoverPosition` (max width `--nds-popover-max-w`, 320 px; flips above/below). Content: `ReactNode`.
+**Card content:** header `Amazon · IT · German — 82 % (18 of 22 required)`; group 1 *Required and empty (n)*; group 2
+*Other issues (m)* with each reason; each item a button *"Go to GTIN"* → reveals the column (`drawer/revealHost.ts`
+`revealColumn`) and focuses the cell (row, colKey); a hidden column says *"GTIN is hidden — show it"* instead of failing
+silently; max 8 items then *"+ n more"*; footer *"Computed 6 h ago · not publication eligibility"*. All text `--nds-text` (R-49:
+`text-2`/`text-3` fail 7:1 today).
+DS obligations (AGENTS.md): export from `components/index.ts`, catalog example, `CHANGELOG.md`, a `.claude/DS-GAPS.md` row,
+the `apps/factory` mirror.
+
+### 4. Shared's always-100 % chip — options
+
+| # | Option | |
+|---|---|---|
+| **a** | Shared shows **no percentage**: *"See each channel"* + the worst channel state in the pressed market (e.g. *"Amazon · IT blocked"*), and Shared's own errors (validation) as a state without a % | 🟢 recommended — a 100 % that measures one field tells nothing (R4) |
+| b | Keep the % but say what it measures: *"Shared bar: 1 of 1 required"* with a note *"each channel has its own bar"* | honest, still a number nobody acts on |
+
+### 5. Pixel declarations (before landing)
+
+Coordinate column width stays **170 px**; cell text `82 % · 2 missing` measured to fit at the smallest density (else `82 % · 2`).
+Card: width ≤ 320 px, gap 6 px (as HoverCard), rows 28 px, padding `--nds-space-3`; nothing else in the grid moves; the scope bar
+chip for Shared changes text only (same height).
+
+### 6. Gate + arms
+
+API (vitest, PGlite): the writer stores `kind:'required'` entries equal to the live sheet's `completeness.required.missing`
+(parity arm); no row → `notComputed`, never 0 %. Web (node vitest): the pure card-model builder (grouping, cap, stale text, hidden
+column); `DetailPopover` key model as a pure table. Browser (the restored gates, Step 4.2): census gains the card (open, Esc returns
+focus, no invented state); editor-open unaffected. Contrast: `check-nds-contrast.mjs` ratchet unchanged or down. Mutations:
+absence shown as 0 %; a required-empty field dropped by the writer; Shared shows a % under (a); Esc does not return focus; the
+card renders `text-3`.
+
+### 7. Dependency, files, risks
+
+- **Blocked on Step 2.7's verify** (02:35 UTC): if the nightly did not complete, most cells read *Not computed*. The writer change
+  also needs one refresh (the nightly) before the card can list required fields.
+- **Files it would hold:** DS `components/DetailPopover.tsx` (new) + `components/index.ts` + catalog + `CHANGELOG.md` +
+  `.claude/DS-GAPS.md` + `apps/factory` mirror; DS `grid/renderers/cells.tsx` (`ScopeReadinessCell` gains the trigger);
+  `sheet/master/useMasterSheetAdapter.tsx` (columns), `StudioBar.tsx` (Shared chip); API `readiness-index.service.ts` (writer),
+  `readiness-model.ts` + `scope-readiness.service.ts` (types pass-through); tests.
+- **Risks:** three numbers on one row (Product-column overall %, row Readiness, coordinate %) can look contradictory — each must say
+  what it counts; stale rows between nightly runs (other coordinates refresh only nightly); Enter on a non-editable cell must open
+  the card without clashing with the EditorShell key model (A-42); payload size (cap `missing` per row); `revealColumn` when the
+  column is hidden by Customise.
+
+### 8. Two questions for the Owner
+
+1. **Shared's chip:** (a) no % — *"See each channel"* + the worst channel state (recommended), or (b) keep 100 % with a label?
+2. **The Product column's overall % (7–10 % today, all attributes incl. optional):** keep it beside the required-based column with
+   a clear label, or remove it so each row shows one completeness number? **Recommend: keep, relabelled "Filled (all fields)"** —
+   it answers a different question (how rich), not "can this publish".
+
+| # | Question | Ruling (2026-09-23 23:42 UTC, thirty-fifth set) |
+|---|---|---|
+| **R-51** | A-44 Q1 — the scope chips | ✅ **A dropdown for the scope too** (not the recommendation; the Owner's choice). The scope dropdown must still show each channel's state inside it (R4: absence stated — a hidden state is still stated when opened) |
+| **R-52** | A-44 Q2 — the filters | ✅ **Always folded** into one button (not the recommendation; the Owner's choice). The folded button shows the count of active filters |
+| **R-53** | A-45 Q1 — the Shared 100 % chip | ✅ **No % on Shared:** *"See each channel"* + the worst channel state |
+| **R-54** | A-45 Q2 — the Product column's overall % | ✅ **Keep it, relabelled "Filled (all fields)"**, beside the required-fields completeness |
+
+## A-46 — Step 4.3 #3, bullets in one cell: the plan. FOR YOUR RULING (two questions + one defect). Nothing built.
+
+*Drafted by sub-agent P3 (read only). Builds with A-42's EditorShell (`ListBody`), after its gates are back (R-45).*
+
+2026-09-23. "read" = line opened; "inferred" = not opened or not run. Builds only AFTER A-42 (EditorShell step 1) and the
+restored editor-open gate (R-45).
+
+### 1. The premise, re-checked — partly out of date
+- 🟠 **Shared already has ONE bullets cell and no slots.** With a family schema (every studio master scope), bullets are
+  unbounded → one list column `bulletPoints` (`sheet-columns.service.ts:580`, `:1321`), edited by the studio-local
+  `AttributeShapeEditor` popup (`master/columns.tsx:394-395`; `AttributeShapeInput.tsx:46-52`: a Textarea per item, Remove,
+  Add, no reorder, inline pixel styles, OUTSIDE the design system).
+- **The ten slots exist on the CHANNEL scopes** (Amazon `bullet_point` 10 × 700 → `bulletPoints_1…10`,
+  `channel-specs/amazon.ts:48`, `sheet-columns.service.ts:782-800`) and on a master sheet with no family (`MASTER_LIST_FIELDS`
+  max 10, `:349`; the `/products` MasterSheet — not a studio builder, not switched here).
+- So the new cell is for the channel scopes (`master/channelColumns.tsx`), and Shared's cell moves to the SAME editor.
+
+### 2. Storage and every slot-name dependant (search `bulletPoints_` + `slot.of`/`slotKey(`; positive control: `studio-sheet.service.ts:886` found)
+- Store: master `Product.bulletPoints String[]` (+ `localizedContent` per language); channel `ChannelListing.bulletPointsOverride`
+  + `followMasterBulletPoints`; sent as Amazon `bullet_point` per language tag (the content resolver, R-LX-6).
+- Slot keys are LIVE in: the write field `bulletPoints[3]` (`sheet-columns.service.ts:787`; `bulk-edit.service.ts:615-773`,
+  AM.1 read-modify-write, holes kept — the 09-05 ruling); the per-slot cap key (`bulk-edit.service.ts:765-766`); widths
+  (`studio-sheet.service.ts:886`); readiness list grouping (`readiness.service.ts:140-147`); formulas (`cell-formula.service.ts:570`,
+  `formula-storage.ts:25`); cell history (`cell-history.service.ts:136`); `content-bulk-write.ts:33-35`; `information-validation.ts:27-32`;
+  the Languages view (`language-sheet.ts:17-20`, `bulletPoints_3@de`); web `views.ts:33`, the list reset (`useChannelSheetAdapter.tsx:317-320`).
+- 🟠 Correction: the master WORKBOOK exports the LIST, not the slots (`catalog-transfer-export.ts:121,143`,
+  `catalog-workbook-scopes.ts:38,58` skip `c.slot`); the Amazon workbook uses `#N` headers (`catalog-amazon-workbook.ts:12`).
+  "Do not replace the slots" still stands — every line above keys off them.
+- 🔴 Found: the WHOLE-list write paths have no per-item cap — master `bulletPoints` drops blanks and has no length check
+  (`bulk-edit.service.ts:990-1021`); channel `bulletPointsOverride` coerces a list only (`:851-858`). Only the SLOT path checks 700.
+
+### 3. The new cell — a view over the ten slots, written as SLOT writes
+- **Column id `slots:bulletPoints`** — client-only, never a write field (the adapter refuses an unknown field,
+  `useChannelSheetAdapter.tsx:509-511`), so a whole-list write that skips the caps cannot happen by accident.
+- **Built in the engine, once:** new DS `grid/editors/slotListColumn.ts` — given a slot group (same `slot.of`) it returns the
+  column def and a pure `slotListChanges(before, after, slotWriteFields)`. Both studio builders call it whenever a slot group
+  exists (so they cannot drift); no API file changes, so export, readiness, completeness and formulas never see it.
+- **Shows:** `N of 10 · <first bullet>`, the inherited mark when the listing follows the master, the room-left mark of the
+  fullest position (`cells.tsx:334`).
+- **An edit → slot writes:** each changed position i → `{ field: bulletPoints[i], value | null }`, all in ONE request with the
+  row's `expectedVersion` (the one door, `PATCH /products/bulk`). The server's AM.1 path seeds, composes in order, keeps holes and
+  checks 700 per slot. Count cap = the positions (1…max from the channel facts). Per-position cap shown as a counter; the server
+  is the judge (Step 3.6: per-row refusal, the rest saved).
+- **Reorder:** move up/down (buttons + Alt+↑/↓) — rewrites the positions it touches. **Empty positions:** shown, never compacted.
+- **Pinned / following:** following → shows the master's list, marked; an edit pins the whole list (AM.1 seeds the rest, as a
+  slot edit does today); "follow the master again" = the existing list-level reset.
+- **Languages view:** one virtual cell per language slot group (`slots:bulletPoints@de`), built by the same helper.
+
+### 4. The editor and its keys
+- A DS **`ListBody`** for the EditorShell (A-42): fixed positions, DS `Textarea` per position, counter vs cap, move / clear.
+  It replaces `AttributeShapeEditor` for bullets on Shared too — one bullets editor everywhere. Catalogued, changelogged, a
+  `.claude/DS-GAPS.md` row, mirrored in `apps/factory`.
+- Keys = the A-42 model (R-48's one hint line): Enter commits + moves down · Esc cancels, never writes · click-away commits ·
+  opened and untouched = 0 writes · a line break in a bullet is refused (Amazon bullets are one line — inferred from the spec
+  kind, to confirm) · Tab: **Question 1**. AG36: the body reports through `props.onValueChange`; keys taken with the shell's
+  `suppressEditorKeys` (an AG popup owns Enter/Tab/Esc otherwise).
+
+### 5. Pixels, declared before landing
+New column 240 px, immediately before `Bullet 1`, same group. The popup through `editorBox` (new kind `slotlist`): width
+min(560 px, 85 vw), max-height 65 vh, anchored under the cell (today's `AttributeShapeEditor`: 520 px, inline style). The ten
+slot columns keep their 110 px and order; they shift right by 240 px only when the new cell is shown. Nothing else moves.
+
+### 6. The gate
+- Node (apps/web vitest is node-only): `slotListChanges` — all ten round trip; a hole kept; reorder; clear; untouched → 0 changes.
+  Parity: both builders emit the column when a slot group exists, neither when it does not; the colId is never a write field.
+- API (the real save path on PGlite, as `paste-validity.vitest.test.ts`): ten slot changes in one request → the stored list equals,
+  holes kept; one position of 701 chars refused per row, the others stored.
+- Browser (the restored editor-open gate): a `slotlist` row on AMAZON·IT and EBAY·IT — open; Esc = 0 writes; untouched = 0 writes;
+  one position edited = exactly 1 slot write.
+- Mutations: the fan-out sends one whole-list write; a hole compacted; reorder loses a position; one builder without the column;
+  the colId sent as a field; the untouched guard removed.
+
+### 7. Files it would hold
+DS: new `grid/editors/slotListColumn.ts`, new `grid/editors/ListBody.tsx`, `editorBox.ts` (kind), `index.ts`, catalog example +
+index, `CHANGELOG.md`, `.claude/DS-GAPS.md`, and the `apps/factory` mirrors. Studio: `master/channelColumns.tsx`,
+`master/columns.tsx` (Shared → `ListBody`), `channel/useChannelSheetAdapter.tsx` + `master/useMasterSheetAdapter.tsx` (the
+fan-out call), `views.ts` (group). New tests. No API file.
+
+### 8. Risks
+A `valueSetter` that does not mutate `params.data` for the ten slot keys leaves them stale until a refetch · a `=` formula on the
+virtual column must be refused (formulas stay on the slots) · ten writes share one CAS: a version conflict refuses them all ·
+the whole-list paths' missing caps (§2) stay open for other callers — a separate fix · `/products` MasterSheet not switched.
+
+### 9. Two questions for the Owner
+1. **Tab inside the bullets editor:** move between the ten positions (leaving past the last commits and moves right), or the one
+   model's "Tab commits and moves right"? — **Recommend: move between positions**; ten fields are a small form.
+2. **Default view on channel scopes:** show the one cell and hide Bullet 1–10 by default (still in Customise, still used by
+   import/export), or show both? — **Recommend: show the one cell, hide the ten by default.**
+
+| # | Question | Ruling (2026-09-23 23:45 UTC, thirty-sixth set) |
+|---|---|---|
+| **R-55** | A-46 Q1 — Tab inside the bullets editor | ✅ **Moves between the bullet positions**; Tab past the last commits and moves right (a stated exception to R-48's one model, for this small form) |
+| **R-56** | A-46 Q2 — channel scopes' default view | ✅ **The one cell shown, Bullet 1–10 hidden by default** (still in Customise, still used by import/export) |
+| **R-57** | A-46 defect — whole-list bullet saves skip the per-bullet cap | ✅ **Fix it now:** the server checks every bullet on the whole-list paths too and refuses an over-long one per row with its reason |
+
+### Step 4.2 — gate 1 of 4 in the hook: the 7:1 contrast ratchet (2026-09-23 23:50 UTC, R-45)
+`.githooks/pre-push`, right after `check-global-exposure`: the script's own tests, then `check-nds-contrast.mjs --max-failures 49
+--max-aa-failures 10`. `bash -n` clean; the stage passes on today's tokens and fails with the limit one tighter (control). Lower
+both numbers as the AAA sweep (Step 4.3 #5) lands. The three browser gates follow when G1's fixes and runner are in (A-43).
+
+## A-47 — R-57's premise is half false: channel bullet saves ARE capped; the MASTER (Shared) bullets are not, and no master cap exists. FOR YOUR RULING.
+
+**Measured by sub-agent B1 (a probe with a positive control; `bulk-edit.service.ts` unchanged, hash checked).** Every bullets save
+leaves `applyProductBulkEdits` early (`bulk-edit.service.ts:592`, `applyContentBulk`); the two branches P3 named (`:851`, `:990`)
+and the slot cap (`:767`) are never reached by a bullets save (0 hits vs 544 on the control).
+- ✅ **Channel scopes:** an over-cap bullet is refused and not stored; a whole list is refused as a wrong shape.
+- 🔴 **Master (Shared):** a whole list and a single bullet over any channel's cap are both STORED. The master bullets column has no
+  `maxLength`, no channel facts, and no master cap exists anywhere in the code. It is caught only later, when a channel refuses it.
+- 🟠 Also found: content saves (title, description, bullets, keywords) are **all-or-nothing** — one bad bullet blocks the good one
+  in the same request (Step 3.6's per-row result covered `attr_*` only); and the error names the wrong bullet ("Bullet 1" for a
+  bullet-4 save).
+- New `services/products/bullet-list-cap.vitest.test.ts`: 3 channel arms green + 2 arms pinned as expected-to-fail on the master
+  defect (they turn red — i.e. must be flipped — when a master cap lands). Mutations 2/2 red. Related suites 42 green; `tsc` 0.
+
+**Recommendation — one (a):** a master bullet may not exceed the TIGHTEST bullet cap of the channels the product is listed on (from
+the same channel facts the slot path reads), checked at the content edit step (`:~584`), refused with its reason and the right
+bullet number; a product listed nowhere keeps no cap. (b) A fixed 700 — not recommended (a number no channel declared).
+
+| # | Question | Ruling (2026-09-24 00:12 UTC, thirty-seventh set) |
+|---|---|---|
+| **R-58** | A-47 — the master bullet cap | ✅ **(a)** The tightest bullet cap of the channels the product is listed on, checked at the content edit step; the error names the right bullet; a product listed nowhere keeps no cap |
+| **R-59** | A-47 — content saves all-or-nothing | ✅ **Per row**, like attribute cells: good rows save, bad rows are refused with their reason |
+
+## A-47 / R-58 — BUILT: master bullets are capped at the tightest channel cap; errors name the right bullet.
+
+Built by sub-agent B1; re-run by this lane (products / price-door / content suites: 23 files, 235 tests green, 12 skipped as before;
+the two bulk route files: 88 green; `tsc` 0). `services/products/bulk-edit.service.ts`: a master bullet may not exceed the tightest
+bullet cap of the channels where the product OR its children are listed — each channel's cap from its own column rules (that
+rule-building code extracted once, shared by both uses); listed nowhere → no cap; a channel whose cap cannot be read → the save is
+refused (fail closed). Errors name the right position: *"Bullet 2 takes at most 20 characters — the Amazon · IT cap (it has 25)"*.
+New `bullet-list-cap.vitest.test.ts` (11 arms; the two former expected-to-fail master arms are now real arms). **Mutations 6/6
+red** (one — children not counted — first stayed green; a parent/child arm was added, then red).
+*Done when* ✅ · *Cost when* `flat` (one read of the listings' channel facts per content save) · *Rollback* — revert.
+
+🔴 **R-59 NOT built — premise changed.** Three callers treat ANY error from the content path as a whole failure: the translation
+form (`routes/product-translations.routes.ts:147-151`), restore (`routes/products.routes.ts:838-841`), the AI writes
+(`routes/products-ai.routes.ts:319-322`). Per row there would commit some fields and still report "failed", with no audit row.
+**Recommendation:** per row as an OPT-IN used only by the sheet's `PATCH /products/bulk`; the three callers keep all-or-nothing.
+- 🟠 **Stated:** R-45's hook cost was described to the Owner as "a few minutes"; G1 MEASURED ~20–26 minutes for a UI push that runs
+  editor-open (see A-48). Raised with the Owner before the browser gates enter the hook.
+
+| # | Question | Ruling (2026-09-24 ~09:30 UTC, thirty-eighth set) |
+|---|---|---|
+| **R-60** | A-47 / R-59 refined — per-row content saves | ✅ **Sheet only:** per row as an opt-in used by the sheet's `PATCH /products/bulk`; the translation form, restore and the AI writes keep all-or-nothing |
+
+## Step 2.7 — CLOSED (verified 2026-09-24 02:35 UTC, run by this lane under R-40). Step 2.6's day-after check — ✅.
+
+`node docs/product-cheat/tools/readiness-age.mjs` (production, `BEGIN READ ONLY`, `readOnly: on`) — record
+`records/step-2.7-readiness-age-production-2026-09-24T02-35Z.txt`:
+
+| R-28's verify | Measured |
+|---|---|
+| `CronRun` `readiness-reconcile` SUCCESS for both businesses | ✅ Xavia Racing 02:17:02–02:22:58 UTC (356 s) · Motovento 02:17:00–02:17:01 |
+| `stopped: complete`, 0 failed | ✅ *"32 done · 9741 rows · stopped: complete"* · *"2 done · 22 rows · stopped: complete"* |
+| no live product without a row since the deploy | ✅ Xavia Racing 333 live products, **0** without a row since the 06:46 UTC deploy; Motovento 22, **0** |
+| roots due now | **0** in both (34 live roots) |
+
+The run inside the 10-minute budget (356 s for 32 roots) — the deployed job is still the id-order one (A-30 ships with the next
+merge); at 34 roots it covers the catalogue in one night, as predicted. 🟠 Stated: Xavia Racing still holds 145 rows computed on
+2026-09-14 (5 families); every LIVE product has a newer row, so they belong to products that are no longer live.
+**All four closure fields:** *Done when* ✅ (the verify above) · *Cost when* — bounded at 10 min a night; 356 s today · *Gate* — A-30's
+8 arms + 5 mutations, and this verify · *Rollback* — revert A-30; the data is derived.
+
+`node docs/product-cheat/tools/axis-stores.mjs` (production, read only) — record `records/step-2.6-axis-stores-production-2026-09-24T02-35Z.txt`:
+legacy `va` sizes **35**, colours **44** — ✅ **not grown** (= the 21:09 mid-way run and the post-2.6d count); store `vr` 301 / 285;
+`va` vs `vr` **0** differ.
+
+## A-48 — Step 4.2: the three browser gates are fixed and run end to end behind a runner. TWO QUESTIONS FOR YOU. Not in the hook yet.
+
+Built by sub-agent G1 (report: session scratchpad `G1-report.md`; nothing committed yet). 🟠 Method miss stated by G1: predictions were
+not written before its first run; it overwrote `scripts/lib/gate-aloneness.test.mjs` by mistake and restored it byte-identical from git.
+
+| Fix | Where |
+|---|---|
+| 🔴 the editor-open write guard: any non-GET to `/api/…` OR `/backend/api/…`, **on any host**, is aborted and counted (the old rule let a proxied `PATCH /backend/api/products/bulk` reach the database) | new `scripts/lib/gate-write-guard.mjs` (+6 arms), used by editor-open and grid chrome |
+| `pgrep -af` — the safe wrapper refused on every run since 09-13 | `scripts/lib/gate-aloneness.mjs` (+1 arm) |
+| sign-in accepts `/backend/api/auth/me`; grid chrome signs in; workspace-scoped URLs; census itemises every red surface | the gate scripts + `scripts/studio-browser-auth.mjs`, `scripts/studio-gate-session.mjs` |
+| the runner (R-50): path-scoped by each gate's own stamp list; OWN servers on free ports + the LOCAL database (read back from the API process's env; the 28 root-`.env`-only keys blanked); a ratchet vs `scripts/browser-gates-baseline.json`; NOT MEASURED always fails; stops what it started | new `scripts/run-browser-gates.mjs` (+10 arms), `package.json` `gates:browser` |
+
+**Measured end to end (run 2, 2026-09-24 00:53–01:19 UTC, 1,543 s):** servers 8 s · grid chrome ✅ 16 s, 0 writes · editor-open 1,130 s —
+every open gesture ✅ 20/20 kinds with **0 writes armed**, geometry ✅, master contract ✅; **Amazon·IT renders no rows locally** → 18
+NOT MEASURED keys · census 387 s — master ✅, eBay·IT ✅, **Amazon·DE NOT MEASURED** (`studio/destination` → 400, most likely the
+local Amazon account is disconnected — inferred). Baseline = those **25 blind keys**, printed on every run as *"BLIND there
+(baselined, not green)"*. 🟠 Unresolved: U2 saw census 14/14 incl. Amazon·DE with its own older account. Mutations **10 of 11 red**
+(M8 did not mutate — a later SIGKILL still stopped the server; M8b replaced it, red).
+
+🔴 **The cost is ~20–26 minutes for a push that touches the editors or the grid** (editor-open ≈ 19 min). R-50 was chosen on "a few
+minutes" — wrong; this is the measured number. A push that touches none of the watched files: ~1 s.
+🔴 **A decision G1 took, for you to accept or undo:** the disposable local gate user copies the WIDEST role (today ADMIN) with MFA off —
+the only way a gate can open a channel scope (`settings.integrations.manage`). Local only, deleted after each run, API writes aborted.
+Noted, by design: `apps/api/src/env.ts:18-19` loads the root `.env` (production channel credentials) after the cwd `.env`,
+non-overriding — hence "run the API from `apps/api`"; the runner blanks those 28 keys for its own servers.
+
+| # | Question | Ruling (2026-09-24 ~09:45 UTC, thirty-ninth set) |
+|---|---|---|
+| **R-61** | A-48 Q1 — the gate cost, measured (~20–26 min on a UI push) | ✅ **All three browser gates in the push** (path-scoped) |
+| **R-62** | A-48 Q2 — the disposable local gate user copies the widest role (ADMIN), MFA off | ✅ **Accepted** |
+
+## A-47 / R-60 — BUILT: content saves are judged per row on the sheet's `PATCH /products/bulk` only.
+
+Built by sub-agent B1; re-run by this lane (26 files / 328 tests green, 12 skipped as before; `tsc` 0). `bulk-edit.service.ts` — an opt-in
+`contentPerRow`; `pim/content-bulk-write.ts` — with it, only good rows are written and the errors merged; `routes/products.routes.ts` —
+ONE line, `contentPerRow: true`, in the `PATCH /products/bulk` handler. Without the flag nothing changes: restore, the translation form
+and the AI writes keep all-or-nothing. New `content-per-row.vitest.test.ts` (5 arms: the real sheet route stores the good title and
+refuses the over-long bullets; a refused row is not stored; no flag → nothing stored; only the sheet route sets the flag — a source
+read; audit rows only for saved fields). **Mutations 5/5 red.** ⬜ Not tested: a mixed content + `attr_*` request where every `attr_*`
+row is refused; the sheet's on-screen display of a per-row content refusal (the browser half) — not run.
+*Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert.
+
+### Step 4.2 — all four gates in the hook (2026-09-24 09:45 UTC, R-45, R-61)
+`.githooks/pre-push`: after the contrast ratchet, the browser-gate stage (the runner's own tests, then `run-browser-gates.mjs
+--pre-push`); the `.next-gate-*` dirs join the two-hour sweep. `bash -n` clean; a docs-only change → *"no watched file changed —
+not run"*, exit 0 (checked). **Done when** (the plan's: five gates in the hook and green) — the four the plan names are in; green
+against their ratchets; the first push through them is the proof (below, when it lands).
+
+### Step 4.2 — the first push through all four gates: REFUSED once, correctly, on one NEW key (2026-09-24, push started 09:45 UTC, refused before 10:13 UTC)
+
+The browser-gate stage ran every gate (1,544 s): grid chrome ✅ 0 keys · control census ✅ 7 known blind keys, 0 new · **editor-open:
+19 keys, 1 NEW** — `parity EBAY·IT · footerNote: "The eBay account needs reconnecting. Content editing remains available; the channel
+could not be checked." — master reads "Enter to edit · …"`. Cause (read): `presence/connection.ts` `connectionScopePolicy` replaces the
+key hint with the account note when the connection `needsReconnect`; the runner blanks the production-only eBay keys (by design), so
+the local eBay token cannot be refreshed once it expires (it was still valid in G1's run 2 at 01:18 UTC) — an environment state, not a
+code regression. **Classified honestly:** the parity arm now records that footer as *"NOT MEASURED — the channel account needs
+reconnecting here, so the footer shows the account note, not the key hint"* (a blind spot, printed as blind, never green), and that
+key is added to `scripts/browser-gates-baseline.json` (19 editor-open blind keys). The gate did what it exists for: nothing unknown
+passed.
+
+## A-49 — A-42's premise is out of date: the studio's text/number cells already open ONE value popup. Ruled R-63.
+
+Found by sub-agent E1 (phase 1, read only), re-read by this lane ✓: `design-system/grid/editors/FormulaCellEditor.tsx:401-403` swaps
+every plain scalar fallback (`agTextCellEditor`, `agLargeTextCellEditor`, `agNumberCellEditor`) for the formula-aware value popup
+whenever a formula is available — so on the studio sheet text and number already share one popup editor (G1's run measured it on
+master). AG's inline editors survive only on the Variants page (no formula wiring) and grids outside the studio. **R-47 on the live
+editor:** a typed letter REPLACES the number in the popup; the server refuses the save and the database keeps the number — the
+"empty box" of the 09-04 design doc is AG's number editor, still used by the Variants page. Also from T1's phase 1 (read only, to be
+proven in its build): `ListboxPanel` short lists — Enter commits the hidden highlight (row 1), not the option tabbed to.
+R-52's button text: only ONE filter can be active at a time, so it shows `Filters · <active one>` (or `Filters N` when none) — the
+"count of active filters" in R-52's row was this lane's wording, not the Owner's.
+
+| # | Question | Ruling (2026-09-24 10:24 UTC, fortieth set) |
+|---|---|---|
+| **R-63** | A-49 — EditorShell step 1 | ✅ **(A)** Keep the value popup as the ONE text/number editor; add R-47's number rule (a letter never wipes a number) and R-48's one hint line to it; the Variants page moves onto the same editor |
+
+### Step 4.2 — second push: the browser gates GREEN on their ratchet (0 new keys); refused later by 4 API tests — a side effect of the gates, found and fixed (2026-09-24 ~10:14–10:40 UTC)
+
+Browser gates: grid chrome ✅ 0 keys · editor-open ✅ 19 known blind keys, 0 new · census ✅ 7 known blind keys, 0 new (1,542 s).
+Then `apps/api` unit tests: **4 failed in 2 files** (`pim/variation-quality`, `pim/variation-rule-view`): *"ChannelConnection
+cmothu9bo… is not active"*. **Cause (read + measured):** the local env-managed Amazon row was set `isActive: false,
+authStatus: 'disconnected'` at **10:14:02 UTC** — the moment the gate's API booted: with the production-only Amazon keys blanked,
+`index.ts` `seedEnvManagedConnections` rewrites that row as "credentials not configured". The gates changed the shared local
+database, and two local-database tests read it. **Fix:** the runner's API now runs with `NEXUS_AMAZON_ENV_TOKEN=off`
+(`GATE_API_ENV` in `scripts/run-browser-gates.mjs`) — boot then leaves the row untouched, and `useAmazonEnvToken` refuses by name;
+a new runner arm (11/11) and a mutation (the switch removed → red; sha256 restored). **The local row restored** to what boot writes
+when credentials exist (`isActive: true`, `authStatus: 'unknown'`, `lastSyncError: null`; one row, local database only, guarded
+by its prior state) — the two test files then pass (19/19). 🟠 The same boot rewrite ran in G1's run 2 (00:53 UTC), so the row
+was most likely inactive from then on (inferred from the tests passing at the 23:34 push, not read).
+
+## A-50 — Readiness counts an untranslated (fallback) value as FILLED on non-source languages. FOR YOUR RULING. Nothing built.
+
+Found by sub-agent C1 (phase 2, measured on its fixture), re-read by this lane ✓: `services/pim/sheet-rows.service.ts:384`
+(`completenessFor`) treats a value as untranslated only when the cell carries `requestedLocale`; the studio's content cells carry
+`requested` / `language`, never `requestedLocale`. So on Shared·de an Italian-only title is stored as **1 of 1 required filled**, while
+the validator on the same row says the German name is missing. Every readiness % on a non-source language can be too high.
+**Fix, recommended:** read the untranslated state from the fields the cells actually carry (one rule, the same one the validator
+uses), with an arm: an Italian-only title on a German coordinate is NOT filled; a German title is. **Effect on production:**
+readiness % on non-Italian coordinates drops where content is Italian-only — the true state — after the next nightly recompute
+(A-30's rotation; ~6 min for today's catalogue). No data is written except the derived readiness rows.
+
+| # | Question | Ruling (2026-09-24 11:04 UTC, forty-first set) |
+|---|---|---|
+| **R-64** | A-50 — readiness counts a fallback as filled | ✅ **Fix it**: one untranslated rule shared with the validator; the derived readiness rows correct themselves at the next nightly |
+
+### 🔴 A PLAN.md loss, found and repaired (2026-09-24 ~11:10 UTC)
+
+Three of this lane's edits (the A-44, A-45 and A-46 fold-ins, 2026-09-23 ~23:36–23:45 UTC) used
+`open(p,'w').write(open(p).read() + …)` — Python opens the file for WRITING (truncating it) BEFORE it reads it, so each left
+PLAN.md holding only the new section. Commits `c5ee525b2` … `60140000a` carried a 101–258-line PLAN.md; **none was pushed**
+(`origin/pes/phase-0` = `a80a3044e`, 7,253 lines). **Repaired:** the pushed `a80a3044e` text + the lost sections rebuilt in order —
+A-43 and R-50 (from this session's own commands), A-44 and A-45 (from the sub-agents' plan files, the same fold), R-51…R-54 (from
+this session's commands) — + everything written since (A-46 onward). Checked: every section once, in order; against `a80a3044e`
+**494 lines added, 0 removed**. PROGRESS.md and pes-claims.md were never edited that way (read-then-write) — unaffected.
+
+## Step 4.3 #1, #2, #4 — BUILT (R-63 / R-47 / R-48 · R-51…R-53 · R-54 / A-45), in three parallel lanes, joined by an integrator
+
+Built by sub-agents E1, T1, C1 (each on disjoint files, R-44), joined by I1 (the shared files from each lane's patches). **Re-run by this
+lane before committing:** `tsc` apps/web 0 · apps/factory 0 · DS fork drift ✓ (no new drift) · DS-GAPS append-only ✓ · contrast ratchet
+held (49 / 10). **I1 ran every non-browser stage of the push hook:** apps/web 4,692 tests · apps/api 11,540 tests · both builds · the
+security suite · the real-PostgreSQL suites · `tsc` web/api/factory 0 — all green EXCEPT the profiles-ON ratchet (below).
+
+| Lane | What | Measured |
+|---|---|---|
+| **E1 — one text/number editor (R-63)** | the formula-aware value popup is THE text/number editor on every scope, formulas off where none is allowed (both studio builders, formula-refused columns, the Variants page, `textEditor()`); `openGesture.ts` declares text/number `popup`. **R-47:** new pure `numberEntry.ts` — a letter never replaces a number: the editor opens on the stored value, refuses the letter, says *"Numbers only — the value was kept."*; `12,5` → `12.5`. **R-48:** new `editorHint.ts` — ONE line *"Enter saves · Tab saves and moves right · Esc cancels"* (replaces "Enter to apply"). Two new editor-open arms (hint, number-letter) read both texts from source | 34 new tests; 150 files / 1,964 wider tests green; **10/10 mutations red** (a first run was VACUOUS — wrong test paths, vitest found no tests; caught with a green no-mutation control, re-run for real); factory byte-identical |
+| **T1 — the top bar (R-51, R-52, R-53)** | the scope is ONE 28px dropdown, each channel's dot / state / % inside it, an unavailable channel with its reason; filters ALWAYS folded (`Filters N` / `Filters · <active one>` — one filter can be active at a time); Shared shows *"See each channel"* + the worst state, never a %; ONE language control — single choice, multi-select in the Languages view, never below one language, URL unchanged (and an order bug found: the saved order must follow the listed order or the view stays pending); `MultiSelect` 28px size / minimum / custom label / focus handling (all 10 users). 🔴 **`ListboxPanel` short lists committed row 1 on Enter, not the option tabbed to — PROVEN by two failing tests on the old code, fixed** (the highlight starts on the selected row and follows focus; Enter never picks a disabled option) | 38 new tests; web 379 files / 4,664 green; **15/15 mutations red**; the chip form byte-identical to the original (a committed test compares the markup) |
+| **C1 — completeness (A-45, R-54)** | the one readiness writer flags each required-and-empty field `requiredEmpty` (one field, one entry; flagged = total − filled on every stored row, real-database arm); new DS `DetailPopover` + `cellDetailKeys` — the "Readiness · <coordinate>" pill opens a card: empty required fields first, then other issues, *"Go to"* / *"Customise"* per field; old rows say *"not recorded yet"*; *"not computed"* never shows 0 %; **R-54** "Filled (all fields)" on the sheet, Variants and Matrix; pill text Δ 0 | API 6 new + 13 related files (142); web 178 files (2,251); **15/15 mutations red**; `tsc` 0 ×3; factory byte-identical |
+
+**I1's two by-intent applications:** T1's census arms count only on pages that HAVE a scope bar (as written they failed every page
+without one); T1's two barrel export lines were required (the api-guard check failed without them). I1 also fixed C1's
+`readiness-required-missing` test setup for profiles ON (C1's code unchanged; 6/6 ON and OFF).
+⬜ **Nothing here is browser-measured yet** — the new editor-open arms, the census scope/language arms, the 28px heights, focus moves,
+`DetailPopover`'s live focus and *"Go to"*: the browser gates at the next push are their first measurement.
+🔴 **Blocking the push (not these lanes):** B1's committed `content-per-row` C5 arm fails with profiles ON (every content row refused
+*"Could not load the sheet label and requirements"*); B1 is proving whether it is the fixture or a product defect.
+- ✅ **The push blocker, resolved — the FIXTURE, not the product (B1, evidence):** with profiles ON the test's bare Fastify app had no
+  business context inside the handler (`getSheetColumns` called 0 times; the route logged *"Attribute write contract unavailable ::
+  Select a business profile."*); production runs every handler inside the request's business through the global hook
+  (`lib/workspace-hook.ts`, installed at `index.ts:68`). The test now registers a `preHandler` of the same shape; ON → 2 calls inside
+  the business (master IT 25 columns, channel IT 8) and C5 green. Re-run here: 5/5 ON, 5/5 OFF. Mutation: a hook that enters no
+  business → C5 red ON. Limit, stated: the hook stands in for sign-in + membership; it proves the handler under a business, not the
+  sign-in path.
+
+## A-50 — BUILT (R-64). Readiness no longer counts a source-language fallback as filled.
+
+Built by sub-agent R1; re-run by this lane (the new file 7/7 ON and OFF; with the `sheet-rows` suites 14/14; `tsc` 0).
+`services/pim/sheet-rows.service.ts` `completenessFor` → a small `untranslated(cell)`: the LEGACY pair (`requestedLocale` /
+`effectiveLocale`) first, exactly as before (the master sheet is unchanged), else the studio's pair (`language` / `requested`) through
+the SAME `translationMissing` the validator applies (`readiness.service.ts:212`). New `readiness-untranslated.vitest.test.ts` incl. a
+real-database arm through the one writer: Shared·de now counts the Italian-only title as EMPTY and agrees with the validator; C1's
+flagged = total − filled still holds. **Mutations 3/3 red.** R1: related suites 108/108 OFF; ON only `studio-sheet-language-issue`
+fails (4 tests) — the same on the old code, already on the known-failing list; the profiles-ON ratchet: nothing new, nothing worse.
+**Effect on production:** after the merge, the next nightly recompute lowers readiness % where a non-Italian coordinate holds only
+Italian text — the true number. *Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert; the rows are derived.
+
+## A-51 — Step 4.3 #5, the AAA sweep: the palette to reach 7:1 everywhere. FOR YOUR RULING (two questions). Nothing built.
+
+*Drafted by sub-agent AA1 (read only; every ratio measured with `check-nds-contrast.mjs --tokens <scratch copy>`; the real tokens never edited).*
+
+2026-09-24. Rule R-49: strict 7:1 for ALL text (text-3 and pill text included), light AND dark. Instrument: `scripts/check-nds-contrast.mjs`.
+Scratch copies: `scratchpad/tokens-aa1.css` (web), `scratchpad/tokens-aa1-factory.css` (factory); solver `scratchpad/aa1_solve.py`
+(hue + HSL saturation kept, the smallest lightness move that clears ≥ 7.05 on EVERY ground the token is paired with).
+
+### 1. Result of the scratch run (the whole proposal applied)
+
+| Palette | Today (pairs · below 7:1 · below 4.5:1) | With the proposal |
+|---|---|---|
+| web `tokens.css` | 90 · **49** · **10** | 90 · **0** · **0** (controls ✓ 15.48; 0 unresolved) |
+| factory `tokens.css` (same values for these tokens + 14 own pairs) | 104 · 56 · 12 | 104 · **0** · **0** |
+| `check-grid-swatch-contrast.mjs --tokens-css <web scratch>` | ✓ | ✓ every cycle hue clears 3:1 on all 5 row grounds (light) |
+
+### 2. The changes — per token (worst ratio over every ground it is paired with)
+
+| Theme | Token | Today → proposed | Worst before → after | Grounds it must clear |
+|---|---|---|---|---|
+| light | `--nds-text-2` | `var(--nds-grey-600)` #5b6573 → **`var(--nds-grey-700)` #3a4452** (a ramp step) | 5.22 → **8.71** | bg, surface, raised, sunken, hover; pill-neutral-bg (= grey-100) |
+| light | `--nds-text-3` | #7e8796 → **#48505b** | 3.20 → **7.20** | the five surfaces |
+| light | `--nds-text-muted` | #626c7b → **`var(--nds-text-3)`** (#48505b) | 4.69 → **7.20** | the five surfaces |
+| light | `--nds-text-link` | #1a60c4 → **`var(--nds-blue-800)` #134da3** (ramp) | 5.27 → **7.08** | the five surfaces |
+| light | `--nds-primary` | `var(--nds-blue-600)` #1f6fde → **`var(--nds-blue-800)` #134da3** | as text 4.23 → **7.08**; white label on it 4.79 → **8.02** | five surfaces + `--nds-text-inverse` on it |
+| light | `--nds-pill-success-fg` | `var(--nds-blue-900)` #0a4ba8 → **#094397** (bg kept — a paler bg would vanish on the blue-50 selected row) | 6.37 → **7.28** | `--nds-pill-success-bg` #d2e6fc |
+| light | `--nds-amber-text` (palette `amber.text`) | #9a6700 → **#6b4800** | 4.39 → **7.42** | `--nds-amber-soft` #fdf3d3 |
+| dark | `--nds-text-2` (→ `text-muted`, `pill-neutral-fg` follow by alias) | #aab6c2 → **#c3ccd6** | 6.32 → **8.03** | five surfaces + pill-neutral-bg #26323f |
+| dark | `--nds-text-3` | #8a94a6 → **#b3bac6** | 4.62 → **7.24** | five surfaces |
+| dark | `--nds-text-link` (→ `pill-success-fg` follows) | #8ab6f0 → **#9cc2f3** | 6.42 → **7.31** | five surfaces + pill-success-bg #1c2f4d |
+| dark | `--nds-primary` | #6d9ee8 → **#98bbf0** | as text 5.19 → **7.20**; `text-inverse` on it 5.84 → **8.11** | five surfaces + text-inverse on it |
+| dark | `--nds-amber-soft` / `--nds-amber-text` | NOT DEFINED in `.dark` (dark paints the light chip, 4.39) → **#3a2e12 / #f2bc79** (the existing dark warning pair) | 4.39 → **7.75** | each other |
+
+### 3. Found on the way — NOT measured by the ratchet, must ship with the sweep
+
+- 🔴 **Hover inverts:** `--nds-primary-hover: var(--nds-blue-700)` (#1a60c4, `tokens.css:91`) is LIGHTER than the proposed primary
+  (#134da3). Proposed light hover **#0f4290** (white on it 9.54). And `.dark` defines no primary-hover, so dark buttons hover to
+  #1a60c4 with dark text `#14223a` on it = **2.66:1** TODAY (measured; pre-existing, not in the ratchet). Proposed dark `--nds-primary-hover` **#b3cdf4**
+  (text-inverse on it 9.82). The checker has no hover/pressed pairs — a gap to add (one role: text-inverse on primary-hover).
+- **Grid chrome spec pins today's text-2:** `design-system/grid/spec.json:14` `"stripFg": "#5b6573"`, `:19` `"stripFg": "#aab6c2"`
+  → must become #3a4452 / #c3ccd6 in the SAME change, or `check-grid-chrome` goes red (a declared spec update, not a hidden one).
+- `--nds-focus-rgb: 31 111 222` (= old #1f6fde, 12 % alpha ring): decorative; align to 19 77 163 or leave — stated either way.
+- **Not measured at all (residue, named):** `--nds-rail-text`, `--nds-stale-text`, `--nds-wsgrid-text` (the script: "no derivable
+  ground"); `--nds-rail-text-2` is a hard-coded #5b6573 (`css-vars.ts:105`) outside the pairs; the legacy `globals.css` palette
+  (`check-contrast.mjs`) is out of scope.
+
+### 4. Where each token is really defined (never edit the generated `tokens.css`)
+
+`styles/tokens.css` is GENERATED (header: *"Source: tokens/css-vars.ts (+ tokens/colors.ts). Regenerate: `npm run tokens:gen`"*).
+- web `tokens/css-vars.ts`: text-2 `:140`, text-3 `:147`, text-link `:156`, primary `:171`, text-muted `:238`, pill-success-fg `:314`,
+  the dark block (text-2 `:558`, text-3/-link/-primary beside it); ADD dark `--nds-amber-soft`, `--nds-amber-text`,
+  `--nds-primary-hover`; the light `--nds-primary-hover`. `tokens/colors.ts:72` `amber.text` → #6b4800.
+- factory: its OWN `apps/factory/src/design-system/tokens/css-vars.ts` + `colors.ts` (they differ from web's: `colors.ts` line 83,
+  `css-vars.ts` line 7) — the same values, then `npm run tokens:gen:factory`; the hook's "factory tokens.css drift" check proves it.
+- Then `npm run tokens:gen` (web) and the checks: `tokens:check`, `tokens:check:factory`, `check-token-resolution`, `token-guard`.
+
+### 5. The ratchet — exact steps
+
+1. The sweep commit sets the hook line to `--max-failures 0 --max-aa-failures 0` (web) — from 49 / 10.
+2. Add the factory palette to the same stage: `node scripts/check-nds-contrast.mjs --tokens apps/factory/src/design-system/styles/tokens.css --max-failures 0 --max-aa-failures 0`.
+3. Add the hover role to the script (text-inverse on primary-hover) so the inversion above can never return unmeasured.
+Mutations for the gate: one token restored to its old hex → red at 0/0; the dark amber pair removed → red.
+
+### 6. What visibly changes (before → after)
+
+| | Light | Dark |
+|---|---|---|
+| secondary text (`text-2`) | #5b6573 → #3a4452 (darker) | #aab6c2 → #c3ccd6 (lighter) |
+| tertiary + muted (`text-3`, `text-muted`) | #7e8796 / #626c7b → #48505b (much darker) | #8a94a6 → #b3bac6 (lighter) |
+| links | #1a60c4 → #134da3 | #8ab6f0 → #9cc2f3 |
+| primary buttons, selected tab, brand blue | #1f6fde → #134da3 (clearly darker brand blue) | #6d9ee8 → #98bbf0 (paler) |
+| success pill text | #0a4ba8 → #094397 (barely) | follows the link |
+| amber warning chip (studio images tab) | #9a6700 → #6b4800 text (brown) | a real dark chip: #3a2e12 bg, #f2bc79 text (today the light chip) |
+
+🟠 **The hierarchy compresses** (the cost of strict 7:1): light text #1c2530 · text-2 #3a4452 · text-3 #48505b — text-2 and text-3 sit close;
+text-3 stays distinguishable mainly by SIZE and weight (its DS role: labels/metadata). The same in dark (#e7ebf1 · #c3ccd6 · #b3bac6).
+
+### 7. Risks
+
+- The brand blue darkens on 383 primary uses (the `blue-600` usage count in `colors.ts`); screenshots and any test that pins
+  `#1f6fde` change — search `1f6fde` / `31 111 222` before landing (the grid spec above is one).
+- `--nds-info` stays `blue-600` (not in the pairs) — it will no longer match the primary blue; decide with Q1.
+- A generated token edited without the generator is a silent no-op (memory: radius restated in css-vars.ts) — regenerate both apps.
+- An alias frozen on a descendant (memory) — unchanged by this sweep (the legacy `--text-*` aliases are declared once, at `:root`).
+
+### 8. For the Owner (two questions)
+
+1. **Approve the darker brand blue** (#1f6fde → #134da3 light; #6d9ee8 → #98bbf0 dark) — required for white button labels at 7:1
+   (today 4.79), not only for blue text. — **Recommend: approve**; it is the one change strict AAA forces on the brand. (Alternative:
+   exempt button labels ≥ 14px bold as "large text" at 4.5:1 — WCAG allows it, but R-49 ruled strict for all text.)
+2. **Accept the compressed grey hierarchy** (text-2 and text-3 close in both themes). — **Recommend: accept**; the DS already uses
+   size/weight for text-3's role, and 7:1 leaves no room for a lighter tertiary grey.
+
+| # | Question | Ruling (2026-09-24 11:41 UTC, forty-second set) |
+|---|---|---|
+| **R-65** | A-51 Q1 — the darker brand blue | ✅ **Approved:** light `--nds-primary` / links → `#134da3` (blue-800), dark → the paler proposed values; hover colours fixed with them (a new hover check) |
+| **R-66** | A-51 Q2 — secondary and tertiary text close in colour | ✅ **Accepted:** strict 7:1 for all text; text-3 stays distinct by size and weight (its DS role: labels, metadata) |
+
+### The first browser measurement of the new UI (push, 2026-09-24 11:34–~12:10 UTC): REFUSED — a real regression caught
+
+- ✅ grid chrome 0 keys · ✅ **control census: 0 failure keys, 7 GONE** — the Amazon·DE surfaces are now measured and green (the
+  runner's `NEXUS_AMAZON_ENV_TOKEN=off` left the local Amazon row active, so the Amazon scopes render) · T1's and C1's census arms green.
+- 🔴 **editor-open: 37 NEW keys.** **36 are a REAL regression in E1's `6d1a6c080`:** pressing `=` on a text (`brand`) or number
+  (`basePrice`) cell on master opens the VALUE popup instead of the formula editor (#775), and on number cells the new number rule
+  answers "Numbers only — the value was kept." — it swallows `=`. Sent back to E1 (prove red first, then fix).
+- **1 is an environment note, classified:** AMAZON·IT now renders rows, and its footer shows its connection note (*"Connection health
+  could not be established from this report."*). The footer rule now finds ANY channel availability note by its element
+  (`GridSheetNote kind="provenance"`), not by eBay's words, and records NOT MEASURED; the baseline's eBay-specific key is replaced by
+  one generic key per scope (EBAY·IT, AMAZON·IT). (11:57 UTC)
+
+## A-52 — Step 4.3 #3, bullets in one cell: re-planned onto R-63's one editor (BL1, phase 1, read only). Builds next. Nothing built.
+
+*Drafted by sub-agent BL1. Two stated choices within R-55: the hint reads "Enter saves · Tab next bullet, then moves right · Esc cancels"; a typed letter opens the editor without writing that letter into bullet 1.*
+
+2026-09-24. Re-plan of A-46 (P3) onto what exists after R-63. "read" = line opened; "inferred" = not run.
+Rulings applied: R-55 (Tab moves between positions; past the last it commits and moves right), R-56 (channel scopes show the one
+cell; Bullet 1–10 hidden by default, still in Customise and import/export), R-48 (one hint line), R-58/R-60 (server caps, per-row
+content saves — no API product change needed).
+
+### 1. What exists today (read)
+- **Channel scopes** (Amazon `bullet_point` 10 × 700): ten SLOT columns `bulletPoints_1…10`, `writeField: bulletPoints[i]`,
+  `slot: { of, index, max, label }`, `shape: 'scalar'`, slot 1 carries the requirement (`api …/sheet-columns.service.ts:780-798`).
+  Built by `master/channelColumns.tsx` (`buildChannelColumns`), entered through `buildSheetColumns('channel')`.
+- **Shared (master)**: ONE unbounded list column `bulletPoints`, editor = the studio-local `AttributeShapeEditor`
+  (`master/columns.tsx:394-395`; `AttributeShapeInput.tsx:46-52`: Textarea per item, Remove, Add, no reorder, inline 520px style,
+  OUTSIDE the DS). `AttributeShapeInput` is also the drawer's control — it stays.
+- **Writes**: the channel adapter's `onCellValueChanged` (`channel/useChannelSheetAdapter.tsx:357`) → gate → formulas → `writer.set`
+  (`:432`). `SheetWriter` coalesces cells per ROW into ONE request with the row's version (`grid/editors/sheetWriter.ts` header,
+  `set` `:~592`, flush window). A synthetic dispatch through the same handler already exists (`:783`).
+- **Client-only column precedent**: `withProductMediaColumn(columns)` inserts a column the server never serves
+  (`media/productMediaColumn.tsx:16-22`) and both builders override its ColDef in their final map (`channelColumns.tsx:~170`).
+- **Keys**: AG popup editors own Enter/Tab/Esc unless the ColDef's `suppressKeyboardEvent` takes them — the proven mechanism is
+  `suppressFormulaKeys` (`FormulaCellEditor.tsx:49`). E1's one line: `EDITOR_KEY_HINT` (`editorHint.ts`).
+- **Reorder control**: DS `OrderedList` (`components/OrderedList.tsx`) — pointer drag + labelled up/down buttons + live
+  announcement. It keys rows by the item STRING, so positions must be stable IDs (`p1…p10`), not bullet texts (duplicates/holes).
+- **Landing**: the sheet lands on ALL columns (`grid/views/landing.ts`, Owner 09-04); studio feeds `orderedKeys` =
+  `orderColumnKeys(columns)` (`useSheetColumns.ts:81, 216`) and "All attributes" = `allColumnsPreset(orderColumnKeys(...))`
+  (`views.ts:333`). R-56 is a newer, narrower Owner ruling for these ten columns only.
+- **Languages view**: channel slots become `bulletPoints_3@de` (`locale`, `groupKey: language:bulletPoints_3`) (`api …/language-sheet.ts:~20`).
+
+### 2. The design (one DS editor, two modes; one virtual column; writes through the same door)
+- **Virtual column `slots:<of>`** (per language: `slots:<of>@<locale>`), client-only, NEVER a write field — inserted by
+  `withSlotListColumns(columns)` right before the group's first slot (the media-column pattern), carrying `{ key, label:
+  'Bullet points', group, width: 240, kind: 'slotlist', slotGroup: { of, max, keys[], maxLength }, locale?, groupKey? }`.
+- **One ColDef from the engine** `slotListColumnDef(group, …)` spread by BOTH builders' final map (they cannot drift):
+  valueGetter = the ten slot values (array of `max`, holes as `''`); renderer = `N of 10 · <first bullet>` + the inherited mark
+  when every non-empty slot is inherited + a refused mark if any slot is refused; editable iff EVERY slot cell is editable and
+  writable (else locked, `none+say`); `equals` = array equality; no `formulaCellEditorSelector` (formulas stay on the slots).
+- **Editor `SlotListEditor`** (DS), mode `slots` (fixed `max` positions, holes shown, never compacted) or mode `list` (Shared:
+  the items + ONE trailing empty position while under `max`; blanks dropped on commit, as the server already does). Composes
+  DS `OrderedList` (ids `p1…pN`, `renderItem` = label + DS `Textarea` + counter) — no new reorder code. Reports every change via
+  `props.onValueChange` (AG36); never on mount; `isCancelAfterEnd: () => !touched`. Shows the key line (below).
+- **Writes (slot mode)**: the adapter's `onCellValueChanged` for a `slots:` colId computes `slotListChanges(before, after)` and,
+  for each CHANGED position only, applies the slot column's own set semantics to `row.values[slotKey]` and dispatches the same
+  handler for that slot colId (gate, formula check, `writer.set` — exactly the path a typed slot takes). `SheetWriter` coalesces
+  them into ONE `PATCH /products/bulk` per row with the row's `expectedVersion`; each change `{ field: bulletPoints[i], value |
+  null, contentAddress }` from the slot cell. Server: AM.1 seed/compose/keep holes, 700 per slot, R-60 per-row refusal (a bad
+  position refused, the rest stored). **List mode (Shared)**: unchanged whole-list `bulletPoints` write; R-58 caps it server-side.
+- **R-56**: `slotKeysHiddenByDefault(columns)` = every slot key whose group has a one-cell → excluded from "All attributes"
+  (`views.ts`) and from the landing's `orderedKeys` (`useSheetColumns.ts`); still in the Customise specs (tickable) and in every
+  import/export path (untouched — they read the server's columns, not the view). A saved view keeps what it saved.
+
+### 3. The keyboard (R-55; the one model otherwise)
+| Key | In the bullets editor |
+|---|---|
+| Enter / F2 / double-click / Space on the cell | opens; focus on position 1, caret at the end |
+| typing a character on the cell | opens WITHOUT inserting it (typing never replaces bullet 1's text) |
+| Tab / Shift+Tab | next / previous position (taken from AG by `suppressSlotListKeys`) |
+| Tab on the LAST position · Shift+Tab on the FIRST | NOT taken → AG commits and moves right / left |
+| Alt+↑ / Alt+↓ | moves the focused bullet up / down; live announcement "Bullet 3, position 2 of 10" (keyboard parity with the drag + buttons) |
+| Enter (in a position) | saves (AG's popup commit); a line break is never inserted; Shift+Enter does nothing (taken, prevented) |
+| Esc | cancels, 0 writes |
+| click-away | commits |
+| opened, nothing changed | 0 writes (`isCancelAfterEnd`, and `equals`) |
+| `=` on the cell | opens the same editor (no formula on the virtual column; formulas remain per slot) |
+
+**Hint line:** R-48's `EDITOR_KEY_HINT` says "Tab saves and moves right", which is FALSE inside this editor (R-55). Honest UI wins:
+`editorHint.ts` gains `EDITOR_KEY_HINT_FORM = 'Enter saves · Tab next bullet, then moves right · Esc cancels'`, built from the
+same parts so Enter/Esc cannot drift; a field fact line under it: `Alt+↑↓ moves a bullet`. (Stated; reversible.)
+
+### 4. Pixel declarations (before landing)
+- Channel sheet: the one cell 240px at Bullet 1's rank (same group); the ten keep 110px and their order but are HIDDEN by default
+  → the default Amazon sheet is **860px narrower** (−1,100 + 240). Customise → tick Bullet N shows it at its old place.
+- Cell text 13px/ellipsis, the inherited/refused marks as `CascadeCell` draws them (Δ 0 to other cells).
+- Popup: `editorBox` new kind `slotlist` `{ width: 560, height: 480, preferred: 560, preferredHeight: 400 }` — top-left pinned to
+  the cell, never slides, internal scroll. Shared's bullets popup was an inline `min(520px, 85vw)` → now 560 (Δ +40px, declared).
+- Position row: DS `OrderedList` row (28px controls), label `Bullet N` 12px, DS `Textarea` rows 2 (≈56px), counter `123 / 700`
+  11.5px right-aligned. The counter uses `--nds-text-2` (an existing below-7:1 pair — no new pair; the contrast ratchet counts
+  tokens, so it holds at 49/10; the AAA sweep fixes the token). An over-cap position is marked, NEVER truncated (the server judges).
+- Hint + fact lines: the value editor's hint class (E1), same size and spacing.
+
+### 5. Files (phase 2 would hold)
+DS web + factory mirror (grid/editors are mirrored byte-identical today):
+- NEW `design-system/grid/editors/slotList.ts` — pure: `slotGroups`, `slotListValue`, `slotListChanges`, `slotListKey`,
+  `bulletsEditorKey(event, position, count)`, `suppressSlotListKeys`.
+- NEW `design-system/grid/editors/SlotListEditor.tsx` — the popup editor (modes `slots` / `list`), composes `OrderedList`.
+- NEW `design-system/grid/editors/slotListColumn.ts` — `slotListColumnDef`.
+- `design-system/grid/editors/editorBox.ts` — kind `slotlist`. `editorHint.ts` — `EDITOR_KEY_HINT_FORM`.
+  `grid/editors/index.ts` — exports.
+- NEW `design-system/catalog/SlotListEditorExample.tsx`. CSS in `styles/components.css` (web + factory): `.nds-slotlist-*`.
+Studio:
+- NEW `_studio/sheet/slotListColumns.ts` — `withSlotListColumns`, `slotKeysHiddenByDefault`.
+- `_studio/sheet/master/channelColumns.tsx`, `_studio/sheet/master/columns.tsx` — the final-map override (both); master: Shared's
+  `bulletPoints` → `SlotListEditor` mode `list` (replaces `AttributeShapeEditor` for bullets only).
+- `_studio/sheet/channel/useChannelSheetAdapter.tsx`, `_studio/sheet/master/useMasterSheetAdapter.tsx` — `withSlotListColumns` on
+  the grid columns + the fan-out branch in `onCellValueChanged`.
+- `_studio/sheet/views.ts` ("All attributes" minus the hidden slots), `_studio/sheet/useSheetColumns.ts` (landing `orderedKeys`).
+- `scripts/check-editor-open.mjs` — vocabulary `pop:slots`, detection `.nds-slotlist-editor` → `popup:slots`, the regex, kind
+  match `slotlist` (driving colId `slots:*`), new arms (below). `docs/2026-09-03-cell-editing-contract.md` — vocabulary + rows.
+API: NEW `apps/api/src/services/products/bullets-slot-fanout.vitest.test.ts` (real route + the workspace hook, B1's pattern). No API
+product file.
+**For the main session (text in the phase-2 report):** `design-system/CHANGELOG.md` (web + factory) entry "SlotListEditor + the
+one bullets cell"; `.claude/DS-GAPS.md` row "the grid had no bounded-list editor with fixed positions and keyboard reorder; bullets
+used a studio-local editor"; `catalog/index.ts` + `TokenCatalog.tsx`/`catalog/README.md` lines; `components/index.ts` — none
+(`OrderedList` already exported).
+
+### 6. PREDICTIONS (written before any run)
+- Node (web, DS) `slotList.vitest.test.ts`: all ten round-trip; a hole kept (`''` → `null` only for a CHANGED cleared position);
+  reorder rewrites exactly the moved span; untouched → 0 changes; list mode trims blanks and respects `max`; `bulletsEditorKey`:
+  Tab on 1..9 → next, Tab on 10 → `ag` (not taken), Shift+Tab on 1 → `ag`, Alt+↑ on 1 → none; `suppressSlotListKeys` only inside
+  `.nds-slotlist-editor`. ≈ 18 arms, all green.
+- Node (studio) `slotListColumns.vitest.test.ts`: inserted before the first slot; one per language group; idempotent; none without a
+  slot group; the colId never equals a write field; hidden-by-default = the ten, and only when the one-cell exists. ≈ 8 arms.
+- Builder parity (node): both builders emit the identical `slots:bulletPoints` ColDef shape for a slot-group fixture, neither
+  without one. ≈ 3 arms. The existing builder / adapter / views / landing suites stay green.
+- API `bullets-slot-fanout`: ten slot changes in ONE request → the stored list equals, holes kept; position 4 at 701 chars →
+  refused per row, the other nine stored; a stale `expectedVersion` → all refused (one CAS). ON and OFF. ≈ 4 arms.
+- `tsc` web 0 · factory 0; DS fork drift ✓; DS-GAPS append-only ✓; contrast ratchet held 49 / 10.
+- **Browser (the next push's editor-open gate — first measurement):** master Shared `bulletPoints` → `pop:slots` on all four gestures,
+  Esc 0 writes, untouched 0 writes, one position edited → exactly 1 whole-list write. **AMAZON·IT `slots:bulletPoints`** → today
+  BLIND (the scope rendered no rows locally — 18 baselined keys); `60140000a` stopped the gate flipping the local Amazon row, so
+  it MAY render now — if it does: `pop:slots`, Tab→next, Tab on 10 → moves right and saves, one position edited → exactly 1 slot
+  change in 1 request. If still blind: stated, never green.
+
+### 7. Mutations (Python harness, per-file backups, sha256 restored)
+The fan-out sends one whole-list write (field `bulletPoints`) · a hole compacted · reorder loses a position · untouched guard removed
+(isCancelAfterEnd) · Tab taken on the last position (traps focus) · one builder without the column · the virtual colId sent as a
+field · the ten hidden from Customise too (not only the landing) · the over-cap text truncated instead of marked · the list-mode
+trailing empty position committed as a bullet.
+
+### 8. Owner question
+None needed: R-55/R-56 decide the behaviour. Two stated choices he may reverse: (1) the bullets hint reads "Tab next bullet, then
+moves right" instead of R-48's exact line, because the exact line would be false here; (2) typing on the cell opens the editor
+without inserting the character (no silent replacement of bullet 1).
+- ✅ **E1's regression fixed (12:02 UTC, E1 "phase 3"; re-run here: 87 files / 1,126 tests, `tsc` web + factory 0, fork drift clean).** Cause:
+  AG copies a column's own editor params into the formula editor it opens (`mergeParams`); E1's static `formulas: false` on the column
+  turned formulas off, so `=` became text (or a refused letter on number cells) — the number rule itself was right. **Red first:** new
+  arms through AG's own merge (`_mergeDeep`) failed 4× on the committed code (`=` on master `brand`/`basePrice`, eBay text/number); the
+  no-formula column arm passed. **Fix:** the formula editor always receives `formulas: true`; the master builder adds the plain value
+  editor only where the sheet has no formula wiring; the channel builder adds none (its selector decides); factory mirrored. Mutations
+  7/7 red (M16 did not mutate → M16b). The next push must show the 36 keys gone.
+
+## A-53 — Motovento: the edit studio says "Waiting for the market…" forever. FOR YOUR RULING (one question, §7). Nothing built.
+
+Drafted by sub-agent MV1 (read only), 2026-09-24; the key code lines re-read by this lane ✓ (`workspace.service.ts` create writes no market; `scopes.ts` `defaultMarket` → null on no markets; the seed route `upsert … update`; `/marketplaces/grouped` returns only `_meta` on none). Scratch: `mv1/` in this session's scratchpad. Read-only: no repo file touched; production read with `SELECT` only inside
+`BEGIN READ ONLY … ROLLBACK`, `TZ=UTC`, host checked `*.neon.tech` (probe scripts:
+`mv1/ro.cjs`, `mv1/rls.cjs`; queries `mv1/q1.sql … q5.sql`). Railway: one read of the HTTP log.
+**read** = I opened the line or ran the query. **inferred** = not run.
+
+---
+
+### 1. Symptom
+
+**As reported:** on business **Motovento**, opening any product in the edit studio shows only
+*"Waiting for the market…"*, and it never changes. Screenshot: product `GALE-JACKET`, Draft, Parent;
+scope chip **"Shared product · Not set up"**; one language chip **"Italian · source"**.
+
+**As reproduced from code and data (read):**
+- The product in the screenshot is Motovento's copy: `cmub55nhk011wmm01zaf6urgx`, `DRAFT`,
+  `isParent=true`, business `bf0047bf-…`. (Xavia's `GALE-JACKET` is `ACTIVE`, a different row.) — q2
+- Motovento has **0** `Marketplace` rows. Xavia has 20 (19 active). — q1, q5
+- Emulating the API's own read (role `nexus_workspace_runtime` + `set_config` exactly as
+  `packages/database/workspace-adapter.ts:18-27`, then the route's query): **as Motovento → 0 markets,
+  2 connections (eBay, Etsy), 0 listings. As Xavia → 19 markets.** — `mv1/rls.cjs`
+- The screenshot shows the code on `main` (`0a563d6d5`), not HEAD: `main`'s `StudioBar.tsx:37` gives the
+  Shared chip `scored(MASTER_SCOPE)` → "Not set up", and `:55` draws languages as chips. HEAD shows
+  "See each channel" and a dropdown (R-51…R-53). (read: `git show 0a563d6d5:…/StudioBar.tsx`)
+- **The defect is identical on `main` and HEAD.** `git diff origin/main HEAD` is empty for
+  `contracts.tsx`, `scopes.ts`, `studio-data.ts`, `StudioLoader.tsx`, `StudioClient.tsx`,
+  `ProductSheetTab.tsx`, `MatrixTab.tsx`, `FamilyVariants.tsx`, `marketplaces.routes.ts`,
+  `workspace-hook.ts`. (read)
+
+### 2. Root cause
+
+**A business created after profiles went ON gets no `Marketplace` rows, and the studio cannot pick
+a market without one. The page then shows a "waiting" line for a state that can never change.**
+
+The chain (all read unless marked):
+
+1. `studio-data.ts:73` reads `GET /api/marketplaces/grouped` once, before the studio mounts
+   (`StudioLoader.tsx:55` shows the skeleton until it returns).
+2. The browser sends the chosen business in `x-nexus-workspace-id` (`lib/auth/install-fetch.ts:45-46`).
+   The API checks membership and runs the handler inside that business
+   (`apps/api/src/lib/workspace-hook.ts:97-103`). The route is not public: `listings.view`
+   (`permissions-manifest.ts:426`).
+3. The route runs `prisma.marketplace.findMany({ where: { isActive: true } })`
+   (`routes/marketplaces.routes.ts:251-266`). `Marketplace` is per business
+   (`schema.prisma:1961`, unique `(workspaceId, channel, code)` `:2008`) and RLS keeps only the
+   current business's rows (policy `nexus_workspace_isolation`, read from `pg_policies`). For
+   Motovento this returns **nothing**, so the response is only
+   `{ _meta: { primaryLanguage: 'it' } }` (`:264`).
+4. Why Motovento has none: business creation writes the profile, membership, account settings,
+   warehouse and stock location — **no markets** (`services/workspace.service.ts:117-157`,
+   `:139-147`). Nothing else writes `Marketplace` rows except the manual `POST /api/marketplaces/seed`
+   (`marketplaces.routes.ts:164`, no caller in `apps/web`), two scripts and old migrations. Xavia's rows
+   predate profiles and were moved to `nexus_legacy_workspace`. Motovento was created
+   2026-09-16 12:45 UTC. (q1)
+5. The browser gets `marketplaces = []` and `primaryLanguage = 'it'` (`studio-data.ts:89-91`), so
+   `marketplacesFailed` stays false (**the read succeeded**; it was just empty).
+6. `deriveScopeOptions([], 'it')` → no channels, **no markets**, locales `['it']`
+   (`scopes.ts:120-155`). The single "Italian · source" chip in the screenshot is this.
+7. `defaultMarket` → `null` when there are no markets (`scopes.ts:191`). `market = null`
+   (`contracts.tsx:577-580`). The "remember last market" effect only restores a market that exists
+   (`contracts.tsx:827`), so it does nothing.
+8. On the Shared scope `locale = primaryLanguage = 'it'` (`contracts.tsx:610`). So `!market` is true, and
+   `ProductSheetTab.tsx:43`, `MatrixTab.tsx:21`, `FamilyVariants.tsx:93` render "Waiting for the market…".
+9. Nothing can change it later: the market list is read once. The only re-read is the discovery retry
+   (`StudioClient.tsx:47-55`), and its only button is in the sheet footer
+   (`SheetFooterNote.tsx:87`) — inside the sheet that never mounts. On the Shared scope the bar has
+   no market picker (`StudioBar.tsx:49`: the market `Listbox` is inside `scope !== MASTER_SCOPE`).
+10. The chip: readiness with no market → `'No market selected.'` (`contracts.tsx:370-371`) → state
+    `absent` → "Not set up" (`design-system/grid/renderers/readiness.ts:82`). The hover says "No market
+    selected", but there is nothing to select.
+
+**Proof the request was answered, not refused:** a refused or failed read leaves `primaryLanguage`
+`null` (`studio-data.ts:86-91`), and then no language chip would be drawn. The screenshot shows
+"Italian · source", so the read returned 200 with `_meta`. (read from code and the screenshot) Railway
+HTTP log: `GET /api/marketplaces/grouped` returned **200** at 11:53:19 and 11:53:26 UTC today. The log
+does not name the business, so "these are the Owner's two opens" is **inferred**.
+
+### 3. Blast radius
+
+| Who | Measured | Effect |
+|---|---|---|
+| **Motovento** (`bf0047bf-…`) | 0 markets; 22 products (2 top-level: `GALE-JACKET` parent + 20 variations, `NEW-20260917-AEJN` on its own); eBay `motovento` + Etsy connected; 0 listings (q2, q3) | **Every product** in the studio: **Sheet, Matrix, Variants** are dead ends (read: the three branches). The eBay and Etsy chips are missing from the bar, because channels come from market rows (`scopes.ts:125-133`). |
+| **Xavia Racing** | 19 active markets (q5) | Not affected by the missing rows. A product with no listings still gets a market, because the market comes from the business's market table, not from the product (`contracts.tsx:577-580`, `scopes.ts:188-197`). No Xavia top-level product lacks listings today (q5: 0), so this is read from code, not seen in data. |
+| **Any business, when the market read fails** | Code: a non-2xx, timeout or transport failure on `/marketplaces/grouped` → `marketplaces = []` (`studio-data.ts:86-92`) → the same forever-"waiting" state, and the retry button is out of reach (step 9). HTTP log for the window the tool served: 3 requests, **all 200** — no case seen. | The same dead end for **any** business on a failed read. Step 1 below covers it. |
+| **Every future business** | `workspace.service.ts:117-157` writes no markets | Every new business starts in Motovento's state. |
+| Beyond the studio (**inferred**, not measured) | 69 API files read `Marketplace` (`grep -l`); e.g. `marketLanguages()` refuses with `market_languages_unconfigured` when there is no row (`services/pim/market-languages.ts:27`) | Language, currency, VAT and listing paths for Motovento are likely refused or empty too. The same seed (step 2) should fix them all. Not part of this fix. Follow-up F1 measures it. |
+
+### 4. The fix plan
+
+The smallest fix that removes the dead end for every business, in three steps. Step 1 (web) stops
+the page from pretending. Step 2 (API) gives every business its markets. Step 3 sets up Motovento's
+markets once (see Q1).
+
+#### Step 1 — one honest "no market" state in place of the three "waiting" lines (web)
+
+- **New `_studio/marketGate.ts`** (pure): `marketGate({ market, locale, marketCount, discoveryFailed })`
+  → `'ready' | 'failed' | 'none'`.
+  - `market && locale` → `ready`.
+  - Else `discoveryFailed` → `failed`.
+  - Else `marketCount === 0` → `none`.
+  - Else → `failed`: markets exist but none resolved, which should not happen, so offer a re-read
+    rather than a wait.
+- **New `_studio/NoMarketState.tsx`**: built from DS `EmptyState` (`design-system/components/EmptyState.tsx:3-22`)
+  and `Button`. No new DS component, no feature CSS beyond layout, `--nds-*` tokens only. The builder
+  reads `DESIGN.md` and `EmptyState.tsx` first (AGENTS.md).
+  - `failed` → title *"Markets could not be loaded"*. Description *"Nexus could not read this
+    business's markets, so the product sheet has no market to open in."* Action **Try again** →
+    `useStudioDiscovery().retry` (exists: `StudioClient.tsx:47-55`), showing *"Retrying…"* while it runs.
+  - `none` → title *"This business has no markets yet"*. Description *"The product sheet opens in a
+    market, and none are set up for this business. Setting up adds the standard Amazon, eBay, Shopify,
+    WooCommerce and Etsy markets. Only channels you have connected appear in the scope bar."*
+    - With `channels.sync` (`usePermission`, `AuthProvider.tsx:135`): action **Set up markets** →
+      `POST /api/marketplaces/seed` (step 2b), then `discovery.retry()`. It shows *"Setting up…"* while
+      it runs. A refusal shows the server's sentence in the description, via `StudioReadError`
+      (`studio-read.ts:24-39`), and the button stays.
+    - Without that permission there is no button, and the description ends *"Ask an owner of this
+      business to set up markets."*
+- **Replace** `ProductSheetTab.tsx:43`, `MatrixTab.tsx:21`, `FamilyVariants.tsx:93` with
+  `<NoMarketState />` whenever `marketGate(…) !== 'ready'`. Fix the comment at `FamilyVariants.tsx:91-92`:
+  the frame has already answered by the time a tab mounts.
+- **The hover:** `contracts.tsx:370-371` gives the gate's sentence (*"No market is set up for this
+  business."* / *"Markets could not be loaded."*), not *"No market selected."*
+- No `apps/factory` mirror: no shared DS file changes. (AGENTS.md mirror rule, read)
+
+**Tests (apps/web, node vitest):**
+- `marketGate.vitest.test.ts`, four cases: ready / failed read / zero markets / markets present but
+  unresolved.
+- `NoMarketState.vitest.test.ts`, using `renderToStaticMarkup` (precedent:
+  `presence/discovery-render.vitest.test.ts`). It checks each state's title, its button, the
+  button-free no-permission form, and the refusal sentence.
+- A pure `setUpMarkets(fetch, retry)` case: on 2xx it calls `retry` once; on 403 it returns the
+  server's sentence and does not call `retry`.
+- A source-scan case: the three tab files do not contain "Waiting for the market". It needs a
+  positive control that finds the string in a synthetic line.
+
+**Mutations that must turn red:**
+1. The gate returns `ready` when `market` is null.
+2. `failed` and `none` swapped.
+3. One "Waiting for the market…" branch put back in `MatrixTab.tsx`.
+4. `retry` not called after a successful set-up.
+5. The **Set up markets** button shown without `channels.sync`.
+
+#### Step 2 — every business gets its markets (API)
+
+- **2a. One catalogue, one file.** A new `apps/api/src/services/pim/market-catalogue.ts` (pure, no
+  Prisma import) holds the reference columns of the **20 rows Xavia carries in production today**
+  (q4): `channel, code, name, marketplaceId, region, currency, language, languages, domainUrl,
+  vatRate, taxInclusive, isActive`.
+  - That means BE (`nl, fr`), IE, TR, and US **inactive**, as on Xavia.
+  - It leaves out the per-business state: `isParticipating`, `participationStatus`,
+    `participationCheckedAt`, `fbaProgram`, `schemaMapping`.
+  - `routes/marketplaces.routes.ts:66-86` and `packages/database/scripts/seed-marketplaces.ts:21-48`
+    import it rather than keeping their own copies.
+  - The route's copy has **no VAT**. Seeding from it would write `vatRate NULL / taxInclusive false`
+    for EU markets, which is the exact underpricing `scripts/seed-marketplace-vat.mjs:2-8` records
+    (19–25 %). (read)
+  - Move the `ALLOWED` seed entry in `apps/api/scripts/check-market-currency.mjs` (its `requires`
+    SE→SEK, PL→PLN) to the new file.
+- **2b. `POST /api/marketplaces/seed` becomes create-only.** It uses `createMany({ data: catalogue,
+  skipDuplicates: true })` inside the request's business and returns `{ created, total }`. It never
+  rewrites a business's existing rows. Today's `upsert … update` (`:168-172`) rewrites name, id,
+  domain, region and currency.
+- **2c. Business creation seeds the catalogue.** In `workspace.service.ts` `create()`, in the same
+  transaction and after `accountSettings` (`:144`), write `tx.marketplace.createMany({ data: catalogue })`.
+  The row's `workspaceId` default comes from the transaction's business (`schema.prisma:1961`), the same way the warehouse row gets its own today (`schema.prisma:9051`). That this works for `createMany` is **inferred**; the real-database arm proves it. If
+  seeding fails, the business is not created.
+
+**Tests (apps/api):**
+- Unit, `market-catalogue.vitest.test.ts`:
+  - `(channel, code)` is unique.
+  - Every row has a non-empty `languages`.
+  - Every EU Amazon and eBay row has `taxInclusive=true` and a `vatRate`.
+  - SE→SEK, PL→PLN, TR→TRY.
+  - It equals the 20-row reference snapshot captured by q4, with the snapshot kept as the fixture.
+- **Real database (`formulaDatabase()`, profiles ON and OFF), extending `services/workspace.vitest.test.ts`:**
+  - `service.create(user, details())` → inside the new business, `marketplace.findMany({ isActive:
+    true })` = **19**, and `EBAY:IT` has `vatRate 22, taxInclusive true`.
+  - The other business's count is unchanged (isolation).
+  - Replaying the same `creationKey` adds no rows.
+- **Real database, the route (Fastify inject with the workspace hook, as the C5 precedent in
+  PLAN.md A-47 does):**
+  - The **reproduction arm is written first and must match production**: under a business with 0
+    rows, `GET /marketplaces/grouped` → only `_meta`.
+  - Then `POST /marketplaces/seed` → `created 20`. A second call → `created 0`. A row changed
+    beforehand (e.g. `languages`) is unchanged afterwards.
+  - Then `GET` → EBAY and AMAZON groups present.
+
+**Mutations that must turn red:**
+1. Remove the `createMany` from `create()`.
+2. Seed from a list without VAT.
+3. Put back `upsert … update` in the seed route (the "unchanged row" arm).
+4. Seed outside the creation transaction, or under another business (the isolation arm).
+5. Drop PL from the catalogue (the currency gate and the unit arm).
+
+**Gates:** `check-market-currency.mjs` (moved entry) and `scripts/check-market-languages.mjs`. The
+catalogue is an array of objects, not a map, and the route's identical array is not in
+`market-languages-baseline.json` today, so the guard is expected not to flag it. (**inferred**: run it)
+
+#### Step 3 — Motovento's markets, once (Q1 decides how)
+
+- **Recommended:** after the deploy, the Owner opens any Motovento product and presses **Set up
+  markets** (step 1). One idempotent production write, made by the Owner, through the tested path.
+- **Alternative:** an idempotent data migration that inserts the catalogue for every active business
+  with **zero** `Marketplace` rows (`… WHERE NOT EXISTS …` plus `ON CONFLICT DO NOTHING`); today that
+  is only Motovento (q5). A data backfill inside a migration needs your word
+  (feedback_additive_migrations_preapproved). Its test applies the SQL on `formulaDatabase()` with one
+  business that has part of the set and one with none: only the empty one gains rows, and a re-run
+  changes nothing. **Mutation:** drop `NOT EXISTS` → the partial business gains rows → red.
+
+#### Follow-ups (not in this fix)
+
+- **F1:** measure the other Motovento surfaces that read `Marketplace` (69 API files) after step 3, in
+  one read-only pass.
+- **F2:** the landing market is a tie broken alphabetically (`scopes.ts:194-196`). With only eBay
+  connected, Motovento would land on **DE**, not IT, unless the browser remembers a market. The
+  remembered market is per browser, not per business (`lastMarket.ts:19`). Preferring the business's
+  country (`AccountSettings.country = IT`, q3) is a separate ruling.
+- **F3:** the "Retry channel availability" button lives only in the sheet footer. Step 1 covers the
+  no-market case. Any other failed-read case still depends on the sheet being mounted.
+
+### 5. Pixel / UI declarations (written against HEAD)
+
+| Where | Before | After |
+|---|---|---|
+| Sheet / Matrix / Variants body, Motovento, before step 3 | Top-left muted line *"Waiting for the market…"*, nothing else, forever | DS `EmptyState` centred in the tab body: icon, *"This business has no markets yet"*, the two-sentence description, one **Set up markets** button (sm). Without `channels.sync`: no button, and the line *"Ask an owner…"*. |
+| Same, a failed market read (any business) | The same forever line | *"Markets could not be loaded"* + **Try again**, which shows *"Retrying…"* while running |
+| Shared chip hover | *"No market selected."* | *"No market is set up for this business."* / *"Markets could not be loaded."* The chip text is unchanged (HEAD: R-53 "See each channel"). |
+| After **Set up markets** succeeds | — | The same page, no reload: the bar gains **eBay** and **Etsy**, and the Sheet opens on the `GALE-JACKET` family (1 parent + 20 variations) |
+| Xavia, any product | Sheet opens | Unchanged, byte for byte: the gate returns `ready` |
+
+### 6. Predictions (written before any build)
+
+- **Reproduction arm** (route, 0-row business): body has no channel key, only `_meta.primaryLanguage = 'it'`.
+  Green on today's code. This is the arm that ties the test to production (it matches `rls.cjs`).
+- `workspace.vitest` new arm: **red** on today's code (0 rows), **green** after 2c (19 active, 20 total).
+- Seed-route arms: on today's code the "unchanged row" arm is **red** (upsert rewrites) and the VAT arm is
+  **red** (the route's list has no VAT). Both green after 2a/2b.
+- Web: `marketGate` and `NoMarketState` arms are new; the source-scan arm is **red** on today's code (3 hits).
+- **Browser, after deploy, before step 3 (Motovento):** the empty state with **Set up markets**. After
+  pressing it, `POST /api/marketplaces/seed` → 200 `{ created: 20, total: 20 }`, then
+  `GET /marketplaces/grouped` → 200 with `AMAZON`, `EBAY`, `ETSY`, `SHOPIFY`, `WOOCOMMERCE` groups. The
+  bar shows Shared + eBay + Etsy. The landing market is the remembered one if the browser has one,
+  otherwise **DE** (F2). The Sheet shows the `GALE-JACKET` family.
+- **Production read after step 3:** Motovento `Marketplace` = 20 rows (19 active), `EBAY:IT vatRate 22.00
+  taxInclusive true`. Xavia still 20, every column unchanged (compare q4 before/after).
+
+### 7. Questions for the Owner
+
+1. **How should Motovento get its markets: your one click on "Set up markets" after the deploy, or a
+   data migration that runs with the deploy?** *Recommendation: the click.* It is one tested, idempotent
+   write that you make yourself, through the same path any business would use, and no data write runs
+   inside a migration. Choose the migration if you want Motovento fixed with no action at all.
+
+(The catalogue is Xavia's 20 production rows, and new businesses are seeded at creation. Both follow
+from the measured data; say if you want either changed.)
+
+### 8. Closure
+
+- **Done when:**
+  - The three dead ends are gone from source (source-scan arm).
+  - Every new business has its 20 market rows (real-database arm).
+  - The seed route is create-only with VAT (real-database arms).
+  - Motovento has 20 rows (production read), and its studio opens the `GALE-JACKET` sheet in the browser.
+  - Xavia's rows are unchanged (q4 before/after).
+- **Cost when:** `flat`. There are 20 rows per business, written once at creation (one `createMany`
+  in a transaction that already writes 7 rows). The gate is O(1) per render. No new request on any
+  page load; set-up is one POST, only when the operator presses it.
+- **Gate:** the pre-push hook:
+  - `tsc` for web, api and factory.
+  - apps/web and apps/api vitest, including the new arms.
+  - The real-PostgreSQL suites, profiles ON and OFF.
+  - `check-market-currency.mjs` and `check-market-languages.mjs`.
+  - The profiles-ON ratchet.
+  - The browser gates, whose first real measurement of the new state comes at the push.
+- **Rollback:** revert the commits. The code is additive, and Xavia is untouched (creation seeding only
+  runs for new businesses; the seed route is create-only). Motovento's 20 rows can stay after a revert
+  and are harmless. Removing them would bring the dead end back. If removal is ever wanted, delete by
+  value (`workspaceId = 'bf0047bf-…'`), only while Motovento has no listings (q3: 0 today).
+
+## Step 4.3 #5 — BUILT (A-51; R-49, R-65, R-66). Every design-system text pair reaches 7:1, both themes, web and factory. `975e64882`
+
+Built by sub-agent AA2 (phase 1 read only, then phase 2); re-run by this lane before committing (every check bare, exit codes read).
+
+| Measured | Before | After |
+|---|---|---|
+| `check-nds-contrast` web (pairs · below 7:1 · below 4.5:1) | 90 · 49 · 10 | **92 · 0 · 0** (the new hover pair included; control 15.48) |
+| the same, factory's own palette | 104 · 56 · 12 | **106 · 0 · 0** |
+| white on light `--nds-primary-hover` · dark text on dark hover | 5.98 (blue-700, LIGHTER than the new primary) · **none in `.dark`** (fell back to the light fill) | **9.54 · 9.82** |
+| positive control: the gate at 0/0 on HEAD's OLD `tokens.css` (this lane) | — | **exit 1** ("a count grew") |
+
+- **Values (A-51 §2 table, as ruled):** light text-2 grey-700 · text-3 #48505b · text-muted = text-3 · link + primary blue-800 #134da3 · primary-hover #0f4290 ·
+  pill-success-fg #094397 · amber.text #6b4800; dark text-2 #c3ccd6 · text-3 #b3bac6 · link #9cc2f3 · primary #98bbf0 · NEW `.dark` primary-hover #b3cdf4 and the
+  amber chip pair #3a2e12 / #f2bc79. Unchanged, stated: `--nds-focus-rgb`, `--nds-info` (#1f6fde).
+- **Found by AA2 and required (A-51 missed them):** the ads-console light pins `app/_shared/shared-shell.css` (the pin guards `check-shell-pin-fresh`, `check-dark-pin-parity`
+  go red otherwise; raw-hex 31 → 33 — four values are not ramp steps; the reason is in `css-hex-baseline.json`); `check-nds-contrast.test.mjs` pinned today's values
+  and went **vacuous at 0/0** (`base - 1` = −1 threw, exit 1 with no JSON) — rewritten, 11 tests; the JS roles in `tokens/colors.ts` (consumers: TokenCatalog swatches,
+  `PerformanceGraph` axis ticks — now 8.16:1, was 3.10) aligned; `DESIGN.md` table, `GRID.md`, grid `spec.json` `stripFg` (#3a4452 / #c3ccd6).
+- **The hook** holds web AND factory at `--max-failures 0 --max-aa-failures 0` (was a 49 / 10 ratchet, web only).
+- **Mutations 11/11 red** (old hex back, the dark amber pair, the dark hover, the light hover back to blue-700, a shell pin, factory text-2, the hover line removed from the
+  checker, `css-vars.ts` edited without the generator, the hex baseline). 🔴 `spec.json` `stripFg` reverted → **no static check sees it**; only the browser
+  `check-grid-chrome` reads it (the run before the push measures it).
+- **Named residue — below 7:1 or unmeasured, NOT changed (not in A-51's pairs):** the rail/top-bar host pins `--nds-primary: var(--nds-blue-600)`
+  (`shared-shell.css:72`, live — the rail's active item white on #1f6fde **4.79**; `:47` a dead copy) · chrome text (`tokens/chrome.ts:62` #aab6c2 **6.39** on the
+  dark-theme chrome, `:63` fg-2 **5.14**, `:102` kbd **5.58**) · `ads-console/amazon.css:31` link pinned to blue-700 (5.98) · `fleet/fleet-pages.css:90-91` text-2 / text-3
+  pinned (5.91 / **3.10**) · `--nds-rail-text`, `--nds-stale-text`, `--nds-wsgrid-text` (no derivable ground) · raw hex in feature code (190 in 39 web files, most under `marketing/`).
+- 🔴 **A vacuous gate found (pre-existing, not fixed):** `scripts/check-dark-alias-scope.mjs:30` looks for `'\n.dark {'`; the generated selector is `.dark, .dark body:has(…)`,
+  so it inspects **0 tokens** and always passes. A working version finds web 0, factory 3 (`--nds-fchip-on-bg/-border/-fg`, factory `css-vars.ts:222-224`, not re-declared in `.dark`).
+- **Brand side effects, accepted by R-65:** light primary = link (#134da3); dark primary vs link 1.07:1; `.nds-readable` primary-dark now equals primary.
+
+*Done when* — web and factory 0 / 0 at the hook ✅; hover measured ✅; `check-grid-chrome` green on the new `stripFg` ⏳ (the browser run). *Cost when* — `flat` (tokens).
+*Gate* — the hook's contrast stage (web + factory, 0/0) + its 11-test file + the two pin guards + the hex ratchet; 11 mutations red. *Rollback* — revert `975e64882`
+(tokens regenerate from `css-vars.ts`; no data).
+
+## Step 4.3 #3 — BUILT (A-52; R-55, R-56). Bullets in ONE cell. `80baa4492`
+
+Built by sub-agent BL2 (phase 1 re-checked A-52 against HEAD after E1's fix; ~20 adjustments, all inside the rulings, listed below); re-run by this lane:
+web 91 files / 1,208 tests (the 4 new files + the editors and sheet folders) · API `bullets-slot-fanout` 5/5 profiles OFF and ON · `tsc` web 0 · factory 0 · fork drift
+no new · api-guard · DS-GAPS append-only · option identity — all green. BL2: whole web suite 386 files / 4,781 passed. **Mutations 33/33 red**, every file sha256-restored.
+
+- **DS (web + factory byte-identical):** `SlotListEditor` (modes `slots` / `list`; composes `OrderedList` + `Textarea`; over-cap marked, never cut; Cancel/Apply),
+  `slotListColumnDef` (the ONE ColDef both builders return: selector cleared, fill handle off, no paste parser, Delete writes nothing, the setter writes only changed
+  positions through each slot's own setter), pure `slotList.ts`, `editorBox` kind `slotlist` (560 × ≤480), `EDITOR_KEY_HINT_FORM`, `grid.css` `.nds-slotlist-*`.
+- **Studio:** the one cell "Bullet points" before Bullet 1 (bullets only, `slot.of === 'bulletPoints'`); its change fans out BEFORE the gate as one dispatch per CHANGED
+  position through the same handler — the writer coalesces them into the row's one request. **R-56** at the landing sites only (All attributes, Languages);
+  `orderedKeys` untouched, so Customise and every export keep Bullet 1–10; "Attributes displayed in the grid" expands the one cell back to `bulletPoints` (A-52 said
+  import/export was untouched — it was not: `visibleFields` dropped unknown keys). Shared bullets move onto the same editor (list mode). The master builder spreads
+  the same engine ColDef (parity); the master ADAPTER is unchanged (the studio master never has slots: `studio-sheet.service.ts` always passes `familyIds`).
+- **Adjusted from A-52 (facts at HEAD):** CSS in `grid/theme/grid.css` (mirrored), not `components.css`; the hint is two literals (the gate reads a literal); `kind: 'text'`
+  + a `slotGroup` fact (no type-file edit); Space does not open an editor (never did) — claim dropped; no API product change (`applyContentBulk` keeps holes, one CAS, per row).
+- **Stated choices (reversible; for the Owner):** (1) each changed bullet that follows shared text keeps its OWN LX.14 acknowledgement ("N edits await a choice"),
+  each accepted edit its own request, a decline reverts only its position — so "one request per row" holds only with no acknowledgement; (2) typing on the cell opens
+  the editor without inserting the letter; (3) Enter on a button inside the editor presses that button, never saves; (4) saved/working layouts keep what they saved
+  (the one cell appears on a fresh landing); (5) Required / Essentials / Missing-required keep `bulletPoints_1`; (6) `AttributeShapeEditor` stays in code, unused by the sheet.
+- **Pixels declared (A-52 §4):** the one cell 240px; the default Amazon sheet ≈ 860px narrower; the popup 560 × ≤480, pinned to the cell.
+
+*Done when* — tests ✅; the editor-open gate's new rows (`slotlist` AMAZON·IT, `bullets` master·DE: `pop:slots`, the key line, Tab → Bullet 2, Esc / untouched 0 writes,
+one edited position → one request, one change) ⏳ the browser run. *Cost when* — `flat`. *Gate* — the 4 new test files + the editor-open gate; 33 mutations red.
+*Rollback* — revert `80baa4492` (client-only; no schema, no data).
+
+### Browser gates by hand before the push (2026-09-24 13:26–13:48 UTC, `npm run gates:browser`, HEAD `9bb81217e` = both builds + A-53)
+
+Predictions were written first (this session's scratchpad `gates-predictions.md`). Result: **every prediction held.**
+- ✅ **grid chrome: 0 keys** — "every scenario matches spec.json at 3 densities × 2 themes × 2 viewports" → the new `stripFg` (#3a4452 / #c3ccd6) is what the grid paints.
+  Step 4.3 #5's last *Done when* ✅.
+- ✅ **editor-open: 0 NEW keys, 18 gone** (the 2 known footer-note blind spots remain). New rows: master·DE `bullets` →
+  `dblclick/enter/f2/type = pop:slots`, `= pop:fx`; AMAZON·IT `slotlist` → all five `pop:slots`. The bullets arms (key line `EDITOR_KEY_HINT_FORM`, focus on
+  "Bullet 1", Esc 0 writes, untouched Enter 0 writes, Tab → "Bullet 2", Tab on the last position commits and moves right, one edited position = ONE request with
+  ONE change — `bulletPoints[10]` on Amazon, the whole list on Shared) ran on both rows and pushed no finding (a failed or unmeasured arm is always a finding).
+  Every text/number row keeps `equals=pop:fx` (the 36-key regression stays gone). Step 4.3 #3's *Done when* ✅.
+- ✅ **control census: 0 keys, 7 gone.**
+- **The local database is unchanged:** a read-only search of 369 columns (every `jsonb` + every `*bullet*` column) for the gate's typed text `ZZGATE-BULLET`
+  → 0 rows (the same query finds 479 rows for a control string).
+- **The ratchet fell:** `scripts/browser-gates-baseline.json` re-recorded by hand to what two runs measured (12:32 push, 13:48 by hand): editor-open 20 → **2**
+  (the footer notes), census 7 → **0**. Nothing was added.
+- **Step 0.2 CLOSED:** its exit — the four gates in the hook — was met when the 12:04 UTC push landed with every gate green (`8fd499675`).
+
+## A-54 — The eBay read-back "EBAY_APP_ID and EBAY_CERT_ID must be set" errors: NOT missing keys — the pass reads PARENT SKUs. FOR YOUR RULING. Nothing built.
+
+2026-09-24 ~15:20 UTC, read only (code lines opened; production counted in `BEGIN READ ONLY … ROLLBACK`). Seen in the deploy logs, and in the OLD
+deploy's logs at 14:30 UTC (pre-existing): `ebay-readback: per-SKU error … EBAY_APP_ID and EBAY_CERT_ID environment variables must be set`, 6 per sweep.
+
+- **The pass:** `readBackEbayInventory` (`services/ebay-inventory-readback.service.ts:81`) takes every ACTIVE eBay `ChannelListing`, cuts it to
+  200 (`:110-117`), skips shared-membership SKUs inside the loop (`:136`), and GETs the rest from the Inventory API through `EbayService` —
+  an APPLICATION token from `EBAY_APP_ID` / `EBAY_CERT_ID` (`marketplaces/ebay.service.ts:80-86`, client-credentials, `api_scope`).
+- **Production (counted):** 302 active eBay listings = **14 parents + 288 shared children + 0 other**. The 6 errors per sweep are
+  **parent SKUs** (GALE-JACKET ×5 listings, REGAL-JACKET, VENTRA-JACKET; `isParent = true`, 0 shared memberships). A parent has no quantity
+  of its own; its variations are read by the Trading pass (`readBackEbayTradingQuantities` `:383`, the connection's user token `:408-410`, GetItem `:466`).
+- **So:** no listing loses a real read-back today; the errors are false alarms. Setting the two keys in Railway would NOT fix it (a parent SKU
+  has no inventory item, and an application token cannot read the Inventory API). **No production config or data change is needed.**
+- **Also:** the 200 cap is applied BEFORE the shared skip, so a sweep "checks" an arbitrary 200 of 302 rows (194 skipped) — honest only by luck.
+
+**Proposed fix (small, code only):** the pass selects only listings that CAN have an inventory item — not a parent, not a shared member —
+filtered in the query, then capped. Production today: 0 rows → the pass logs `checked 0`, no false error. A non-shared child, if one ever
+appears, is read as today (and its auth question returns then, named, not hidden). Tests: a parent and a shared child are never GET;
+the cap counts only eligible rows; mutations (parent filter removed → red; filter after the cap → red). *Cost when* flat · *Rollback* revert.
+
+| # | Question | Recommendation |
+|---|---|---|
+| Q1 | Build the small fix (A), or leave it (B — nothing is lost; only log noise) | **(A)** — false errors every 30 min bury real ones (the AS.4a lesson, `:100-103`) |
+
+| # | Question | Ruling (2026-09-24 ~15:25 UTC, forty-third set) |
+|---|---|---|
+| **R-67** | A-54 Q1 — the eBay read-back's false errors | ✅ **(A) Build the small fix** (the Owner: "Option A."): parents and shared members never reach the Inventory pass; the cap counts only eligible rows |
+
+## A-54 — BUILT (R-67). The eBay Inventory read-back no longer asks about parents; the cap counts only rows it may read.
+
+`services/ebay-inventory-readback.service.ts` `readBackEbayInventory`: the query takes only non-parent products (`product: { isParent: false }`);
+the shared-member skip runs BEFORE the cap (`eligible`), so `capped` / `batch` count only rows the pass may read. Nothing else changed
+(the eBay call, the event write, the Trading pass). No production config or data change.
+- **Red first** (predictions written before): the new real-database file `ebay-inventory-readback.selection.vitest.test.ts` (PGlite, the REAL
+  pass and query, eBay stubbed) failed 2 of 3 on the old code — the parent SKU was read, and under cap 1 the batch took the parent instead of
+  the one eligible row; the shared arm passed (already skipped). Fixed: 3/3, profiles OFF and ON; with the old pure-helper file 20/20; the
+  Trading read-back, its drift file and the P0.7 account guard 41/41; `tsc` api 0.
+- **Mutations 4/4 red** (parent filter removed · cap on all rows · batch cut from all rows · shared skip dropped), file restored by sha256.
+- **Effect on production after the next deploy:** the Inventory pass selects 0 of today's 302 active eBay listings (14 parents, 288 shared) →
+  `checked 0`, no false error; the 288 are read by the Trading pass as before.
+
+*Done when* — tests ✅; the production log shows no `ebay-readback: per-SKU error … EBAY_APP_ID` after the deploy ⏳. *Cost when* — flat (one
+column in the existing query). *Gate* — the new file (3 arms) + 4 mutations. *Rollback* — revert the commit (code only).
+
+## A-55 — The scope dropdown says "Not set up" for almost every channel: a column DEFAULT read as a measurement (+ two smaller causes). Plan by sub-agent SR1 (read only); the key facts re-read by this lane ✓.
+
+Lane SR1 · 2026-09-24 · re-read by this lane: `StudioBar.tsx:24-25` ✓, `schema.prisma` `isParticipating Boolean @default(false)` ✓, production (read only): every non-Amazon `Marketplace` row `isParticipating=false`, `participationCheckedAt` null, both businesses ✓; only Xavia's 12 Amazon rows were ever checked ✓ · repo at `2f01c58a2` (HEAD = origin/main) · nothing in the repo created, edited or moved.
+Scratch evidence: `sr1/predictions.md` (predictions written before each read, then scored), `sr1/r1.sql r2.sql r4.sql`
+(read-only SQL via `ro.cjs`), `sr1/emu.cjs → emu.out` and `sr1/emu2.cjs → emu2.out` (emulation under the API's
+business role, see §2.4). **read** = I opened the line or ran the query; **inferred** = not run.
+
+---
+
+### 1. Symptom
+
+**As reported:** "In the scope dropdown, it says 'not set up' for almost all the channels."
+
+**As reproduced from code + production data** (emulated — see §2.4 for what that means), product **GALE-JACKET** in
+both businesses:
+
+| Business · product | Scope · market · language | Channel rows in the menu today (read, emulated) |
+|---|---|---|
+| Xavia · `cmokmy3a40078pm0p1fvnu523` | Shared product · **DE** (the default landing) · it | Amazon **Not computed** · eBay **Not set up** · Shopify (no state) |
+| Xavia | Amazon or eBay · DE/ES/FR/UK · that market's language | Amazon **Blocked · 48 %** · eBay **Not set up** · Shopify (no state) |
+| Xavia | Shared / Amazon / eBay · IT · it | Amazon **Blocked · 100 %** · eBay **Not set up** |
+| Xavia | Shopify · GLOBAL · en | Shopify **Not set up** · Amazon, eBay (no state) |
+| Motovento · `cmub55nhk011wmm01zaf6urgx` | any · DE/ES/FR/IT/UK | eBay **Not set up** · Etsy (no state) |
+| Motovento | Etsy · GLOBAL | Etsy **Not set up** |
+| Both | the ~0.5–1 s after choosing ANY channel | **every** channel **Not set up** (note "No market selected.") |
+
+The Shared product row always reads "See each channel" (R-53), so "almost all" is the literal count: every channel
+row that has a state reads "Not set up" (or "Not computed") except Amazon on a channel scope.
+
+What the Owner actually looked at could not be measured exactly — the Railway http log records the path but not
+the query string, so market and scope are unknown (read). What was measured: his GALE-JACKET session (Xavia) made
+`/studio/destination` reads at 15:16:02, 15:16:31 and 15:23:56 UTC, i.e. he was in **channel** scopes, each followed
+by a `GET …/readiness` answering **200** (6 requests since 14:30, 1.2–3.5 s) (read).
+
+---
+
+### 2. Root cause
+
+Three arms, all in the web studio, all **pre-existing** (none introduced by the R-51 dropdown). Arm A is the one the
+Owner reported. Arm B would take its place on the default screen once A is fixed. Arm C is a brief flash.
+
+#### 2.1 Arm A — a column DEFAULT is read as a measurement (the persistent "Not set up")
+
+The chain:
+
+1. `packages/database/prisma/schema.prisma:1987-1995` (read) — `isParticipating Boolean @default(false)`. The
+   comment says it reflects "what SP-API getMarketplaceParticipations actually says". It is an **Amazon**
+   measurement.
+2. `apps/api/src/services/amazon-participations.service.ts:88-126, 137-157` (read) — the only writer. It updates
+   `channel: 'AMAZON'` rows only, and every write sets `participationStatus` and `participationCheckedAt` along
+   with `isParticipating`. eBay, Shopify, Etsy and WooCommerce rows are never written, so they keep the default
+   `false` with `participationCheckedAt = NULL`.
+3. `apps/api/src/routes/marketplaces.routes.ts:224-237` (read) — `GET /marketplaces/grouped` spreads the whole row,
+   so all three fields reach the browser. `_studio/scopes.ts:110-112` (read) keeps all three on `MarketplaceLite`.
+4. **`_studio/StudioBar.tsx:24-25`** (read):
+   ```ts
+   const participation = marketplaces.find(m => m.channel === id && m.code === market)
+   if (participation?.isParticipating === false) return { pct: null, state: 'absent', note: `${id} · ${market} is not participating.` }
+   ```
+   This runs **before** the server's readiness is looked at, and it tests the value alone, never
+   `participationCheckedAt`. `absent` renders as **"Not set up"** (`design-system/grid/renderers/readiness.ts:82`,
+   read). The same test at **`StudioBar.tsx:51`** adds **"(not participating)"** to every such market in the Market
+   list.
+5. Production (read, `r2.sql`), 40 `Marketplace` rows:
+
+   | Business | Rows | `isParticipating` | `participationStatus` / `participationCheckedAt` |
+   |---|---|---|---|
+   | Xavia AMAZON | 12 | 11 true, 1 false (US, `isActive=false`) | all `PARTICIPATING`/`NOT_PARTICIPATING`, checked 2026-09-08 13:15 |
+   | Xavia EBAY DE/ES/FR/IT/UK | 5 | **false** | **NULL / NULL** (last updated 2026-05-08, IT 2026-09-07) |
+   | Xavia ETSY / SHOPIFY / WOOCOMMERCE GLOBAL | 3 | **false** | **NULL / NULL** |
+   | Motovento, all 20 (created 14:59 UTC today by A-53) | 20 | **false** | **NULL / NULL** |
+
+   0 NULLs in `isParticipating` in either business, because the column is NOT NULL.
+6. The server has a real verdict that the client overrides (read, `r2.sql`). Xavia GALE-JACKET, `ReadinessIndex`,
+   account `cmr4aaqb…` (the one active eBay connection):
+   - **EBAY·IT·it**: 21 rows, 1 `blocked` + 20 `ready`, 6 of 6 required filled. The server answers `blocked` at
+     **100 %**.
+   - **EBAY·DE/ES/FR/UK**: `blocked`, pct NULL, "Category metadata is incomplete: EBAY:*".
+   - **SHOPIFY·GLOBAL**: `blocked`, pct NULL, "Category metadata is incomplete: SHOPIFY:*".
+
+   All computed 2026-09-24 02:18 UTC.
+
+**Which of the four cases:** case **(1)**, for every non-Amazon channel in both businesses (eBay, Shopify, Etsy). The
+refresher only ever writes Amazon, so this cannot reach an Amazon row.
+
+The research that motivated the check already stated the rule, and the check left it out.
+`docs/product-sheet/full/PLAN-FULL.md:19815` (read) says: *"Participation is Amazon-only; elsewhere it reads 'not
+measured' … an unrefreshed participation is UNKNOWN, never green."*
+
+#### 2.2 Arm B — the Shared product scores channels in a language their market does not sell (what replaces A on the default screen)
+
+- The Shared scope's language is the shared source language: `locale = … ?? primaryLanguage` = **`it`**
+  (`contracts.tsx:612`, read). Production is `it`: Motovento's only index rows are Shared rows in `it` (read,
+  `r4.sql`).
+- The readiness request sends that locale (`contracts.tsx:399`, read). The server keeps only
+  `r.language === locale` for each channel coordinate (`apps/api/src/services/pim/scope-readiness.service.ts:93`,
+  read). The index for Amazon·DE and eBay·DE exists only in `de`, so the answer is **`notComputed`**, "Readiness has
+  not been computed for this language."
+- The answer is true word by word, but it misleads. That coordinate is computed, in German (Amazon·DE 284 of
+  590 = **48 %**), and it will never be computed in Italian. The server already sends the German verdict in
+  `value.languages` (`scope-readiness.service.ts:96`, read), and StudioBar puts it only in the hover note.
+- Where it shows (read, `emu.out`): Xavia Shared on 10 of 11 Amazon markets (every one except IT), on eBay
+  DE/ES/FR/UK, and on Shopify·GLOBAL. **The Shared product on DE is the screen the studio lands on**
+  (`scopes.ts:188-197`: a two-channel tie broken alphabetically; read and emulated).
+- Once arm A is fixed alone, master·DE would read Amazon **Not computed** · eBay **Not computed**, which is still not
+  the truth. That is why arm B belongs in this fix.
+
+#### 2.3 Arm C — the destination-loading window reads "Not set up" (case 3, transient)
+
+- `contracts.tsx:994` (read) sends the readiness query `market = null` while a channel scope's destination is
+  `loading`/`error`/`idle`. `contracts.tsx:371-374` (read) then answers `unavailable: 'No market selected.'`, and
+  `StudioBar.tsx:35` (read) turns that into `absent` (**"Not set up"**) on **every** channel and on the trigger.
+- It lasts for the `/studio/destination` round trip: 545–1025 ms in the Owner's session (read, Railway). No
+  `/readiness` or `/studio/destination` response of 400 or more was logged on the service since 14:30 UTC (read). As
+  a positive control, the same filter did return 3 × 502 and 1 × 499 from other routes. So the persistent form (a
+  destination error) did not occur.
+- Case **(2)** (`StudioBar.tsx:31`, `byScope[id]` missing, "Choose this channel and account…") never occurs today
+  (emulated). The server returns every active coordinate for the market (`sheet-columns.service.ts:1061-1090`, read),
+  and the client's channel list comes from the same active rows.
+- Case **(4)** (the server's own `absent`) does not occur on any channel shown in either business (read, `r4.sql`,
+  §3). The server's `absent` rows are ETSY/WOOCOMMERCE in Xavia ("No active account for this destination."), and
+  those channels have no account, so the menu does not list them (`scopes.ts:128`). The server's reader-made
+  `absent` ("Choose an account for X · Y.", `family-account.ts:18-19`) needs 0 or ≥2 active connections on one
+  channel. Today every listed channel has exactly 1 (read, `r1.sql`), so it is latent with 0 instances.
+
+#### 2.4 Is it a regression? No — pre-existing since 2026-09-13
+
+- `git blame` (read): `StudioBar.tsx:24-25` came from `3161da57b` (2026-09-13, an ancestor of origin/main).
+- `git show 0a563d6d5:…/StudioBar.tsx` (read) has the identical `scored()`. The old chips rendered the same state
+  word (`0a563d6d5:…/ScopeBar.tsx`, the `nds-scope-state` span; read).
+- So the old chip row showed **"eBay · Not set up"** on every eBay market and **"Shopify · Not set up"** on GLOBAL,
+  exactly as the menu does now.
+- T1's `c84d1450d` moved `scored()` unchanged and only changed how the items render. A-53's `9bb81217e` changed only
+  the no-market reason text (`contracts.tsx:371-374`). C1's `812102e14` changed only `byProduct` in the matrix.
+  None of them touched this path (diffs read).
+- The server lines behind arm B (`scope-readiness.service.ts:92-93` at `0a563d6d5`) and the gate behind arm C
+  (`contracts.tsx:990` at `0a563d6d5`) are the same too (read).
+- **Motovento's** "Not set up" is new today only because its markets are new today. Before A-53 it had no market and
+  the studio showed "Waiting for the market…".
+
+About the emulation: `emu.cjs` runs `BEGIN READ ONLY`, sets the API's role, and calls
+`set_config(workspace, actor)` exactly as `packages/database/workspace-adapter.ts` does. It then reads the same
+tables that `GET /readiness` and the studio loader read (`Marketplace`, `ChannelConnection`, `ReadinessIndex`,
+`ChannelListing`), rolls back, and computes the menu in JS. The JS is transcribed from
+`scope-readiness.service.ts:18-99`, `family-account.ts`, `coordinatesFor`, `scopes.ts` (`deriveScopeOptions`,
+`defaultMarket`), `accountScope.ts`, `StudioBar.tsx:22-43`, `sharedReadiness.ts` and `ScopeBar.tsx` `stateText`.
+It is **not** the live HTTP response: no production route was called.
+
+---
+
+### 3. Blast radius
+
+Counts are read (`r1.sql`, `r4.sql`) unless marked.
+
+| | Xavia Racing | Motovento |
+|---|---|---|
+| Live products / top-level families | 333 / **32** | 22 / **2** |
+| Connected channels in the menu | Amazon, eBay, Shopify | eBay, Etsy (its Amazon rows have no account, so hidden) |
+| **Arm A: always "Not set up"** | **eBay** on all 5 markets × 32 families. The server has a real verdict for **32/32** families on each (160 coordinates). **Shopify** on GLOBAL × 32 (32/32 real). | **eBay** 5 markets × 2 families, **Etsy** GLOBAL × 2. The server has no channel index rows for Motovento yet (its only 21 rows are Shared rows from 02:17 UTC, before its markets existed), so the true word is **"Not computed"**. |
+| Arm A, Market list | every eBay market reads "… (not participating)", and so does GLOBAL on Shopify | same, eBay and Etsy |
+| **Arm B: "Not computed" for a real verdict** | Shared scope: Amazon on 10 of 11 markets, eBay on 4 of 5 markets, Shopify on GLOBAL — for all 32 families | none (nothing computed yet) |
+| **Arm C: ~0.5–1 s "Not set up" on every channel** | every switch to a channel scope | same |
+| Unaffected | Amazon on any channel scope; Amazon and eBay on IT under Shared | — |
+
+Other readers of `isParticipating` do not have the defect (read): `fulfillment/inbound/v2/NewPlanModal.tsx:227`
+covers Amazon FBA only; `channels/mapping/_shared/contracts.ts:151` and `components/dashboard/MarketIngestHealth.tsx`
+only declare the field. In the studio, `StudioBar.tsx:25` and `:51` are the only readers.
+
+---
+
+### 4. The fix
+
+**Principle.** Each word must come from a measurement that exists. For every channel row, the four cases then read:
+
+| Case | Reads (after) |
+|---|---|
+| Real verdict | the server's state and %, in the market's own language when the chosen language is not sold there |
+| Measured not participating (Amazon said so) | **Not set up** + "not participating (checked YYYY-MM-DD)" |
+| Not yet computed / unreadable | **Not computed** + the server's or the transport's own sentence |
+| Still loading | **Checking…** |
+| No listing | the requirements verdict. That is honest about requirements; see Q2 |
+
+"Not set up" can then only come from a stamped participation or from the server's own `absent`.
+
+#### 4.1 Files (web only — no API, no migration, no design-system change, so no `apps/factory` mirror)
+
+1. **NEW `apps/web/src/app/products/[id]/edit/_studio/scopeItems.ts`** (pure `.ts`, so node vitest can import it; the
+   same extraction pattern T1 used for `sharedReadiness.ts`). It moves `StudioBar.tsx:22-43` (`scored` and the
+   channel-item mapping) into `scopeItems(input)` and adds three rules:
+   ```ts
+   /** SR1 — participation is an Amazon SP-API MEASUREMENT (amazon-participations.service.ts); the column defaults to
+    *  false (schema.prisma), so `false` is a fact only once the refresher stamped it. Other channels are never stamped. */
+   export function measuredNonParticipation(row?: Pick<MarketplaceLite, 'isParticipating' | 'participationStatus' | 'participationCheckedAt'>): boolean {
+     return row?.isParticipating === false && row.participationCheckedAt != null && row.participationStatus !== 'UNKNOWN'
+   }
+   export const participationSuffix = (row?: Parameters<typeof measuredNonParticipation>[0]) =>
+     measuredNonParticipation(row) ? ' (not participating)' : ''
+   ```
+   Inside `scored(id)`:
+   - **(A)** Replace the `isParticipating === false` test with `measuredNonParticipation(row)`. The note becomes
+     `` `${id} · ${market} is not participating (checked ${row.participationCheckedAt.slice(0, 10)}).` ``
+   - **(B)** When `id !== MASTER_SCOPE` and `row.languages` is non-empty and does not include `locale`, show
+     `value.languages.find(e => e.language === row.languages[0])`: its `state` and `pct` verbatim from the server,
+     with no mapping. The note is `` `${lang}: ${label} ${pct}. ${languageLabel(locale)} is not sold on ${id} · ${market}, so this is its ${languageLabel(lang)} readiness.` ``.
+     With no such entry the server value stands (`notComputed`, which is then true). Q1 decides which language is shown.
+   - **(C)** When `readiness.status === 'unavailable'`, `scope !== MASTER_SCOPE` and the destination is `loading`,
+     return `'loading'`.
+   - **(2)/(3)** A scope missing from the response, and an `error`/`unavailable` answer, return `state: 'notComputed'`
+     instead of `'absent'`. The note stays verbatim. This is R-LX-9's rule: an unmeasured scope is not an empty one.
+2. **NEW `…/_studio/scopeItems.vitest.test.ts`** (§4.2).
+3. **EDIT `…/_studio/StudioBar.tsx`**:
+   - `useMemo(() => scopeItems({ channels: options.channels, market, marketplaces, readiness, scope, save, locale, discoveryFailed: discovery?.failed === true, destination: destination.status }), [...existing deps, destination.status])`.
+   - Line 51: `m.label + participationSuffix(marketplaces.find(p => p.channel === scope && p.code === m.code))`.
+   - Drop the imports that become unused (`readinessMeta`, `sharedReadiness`).
+   - Nothing else changes, including line 50 and the language control.
+
+`contracts.tsx` (A-53 edited it today) is **not touched**: arm C is solved at the reader. `ScopeBar.tsx`,
+`readiness.ts` (DS) and `scopeMenu.vitest.test.ts` are unchanged, and so is its golden.
+
+#### 4.2 Tests (apps/web vitest, node) — fixtures are written by the real parsers
+
+Every fixture is built the way production builds it:
+- the Marketplace rows go through **`flattenGrouped`** (`scopes.ts`), using a `/grouped` payload whose eBay/Shopify
+  rows are copied from production: `isParticipating: false, participationStatus: null, participationCheckedAt: null`;
+- the readiness goes through **`parseReadinessResponse`** (`readiness.ts`), using a response whose scope values are
+  the emulated production numbers.
+
+Assertions read the words the menu prints, through the DS's own **`scopeMenuOptions(items).map(o => o.trailing)`**.
+
+| # | Arm | Fixture → expected (after) | Red on HEAD logic? (predicted) | Mutation that must turn it red |
+|---|---|---|---|---|
+| T1 | A | Xavia EBAY·IT·it, server `blocked`/100 → eBay `Blocked · 100%` | red (`Not set up`) | M1: predicate back to `isParticipating === false` |
+| T2 | A | Amazon row `false` + `NOT_PARTICIPATING` + checked `2026-09-08T13:15:00Z`, active, server `blocked`/48 → `Not set up`, note contains `not participating` and `2026-09-08` | green (the note date is new, so red on the note) | M2: `measuredNonParticipation` → `false` |
+| T3 | A | Amazon row `false` + status `UNKNOWN` + checked → the server value | red | M3: drop `!== 'UNKNOWN'` |
+| T4 | A | `participationSuffix`: eBay production row → `''`; the T2 row → `' (not participating)'` | red | M4: suffix on raw `isParticipating === false` |
+| T5 | B | Shared, locale `it`, AMAZON·DE row `languages ['de']`, server `notComputed` + `languages:[{de, blocked, 48}]` → `Blocked · 48%`, note names German | red (`Not computed`) | M5: remove the language fallback |
+| T6 | B | Shared, locale `it`, AMAZON·IT `languages ['it']`, server `notComputed` + `languages:[{de, blocked, 48}]` → stays `Not computed` | green | M6: fall back whenever `state === 'notComputed'` |
+| T7 | B | Motovento EBAY·DE `languages ['de']`, locale `it`, server `notComputed`, `languages: []` → `Not computed` | green | M7: fall back to `absent` when no entry |
+| T8 | C | scope EBAY, readiness `unavailable 'No market selected.'`, destination `loading` → every row `Checking…` | red (`Not set up`) | M8: delete the loading branch |
+| T9 | (3) | readiness `error 'Readiness request failed (500).'` → `Not computed`, title carries the sentence | red | M9: back to `'absent'` |
+| T10 | (2) | ready, `byScope` lacks EBAY → `Not computed` | red | M10: back to `'absent'` |
+| T11 | screen | Full menus, production-shaped (see the list after this table) | red (a, b, c, d) | M1 and M5 each turn T11 red |
+
+T11's four menus (expected after the fix; the arrow reads before → after):
+- (a) Xavia Shared·DE: `['See each channel', 'Blocked · 48%', 'Blocked · —', undefined]`, before `['See each channel', 'Not computed', 'Not set up', undefined]`
+- (b) Xavia EBAY·IT: `[…, 'Blocked · 100%', 'Blocked · 100%', undefined]`
+- (c) Xavia SHOPIFY·GLOBAL: `[…, undefined, undefined, 'Blocked · —']`
+- (d) Motovento EBAY·DE: `['See each channel', 'Not computed', undefined]`
+
+No real-database arm: the change is client-only and the API contract is unchanged. The production fact the fix
+depends on (non-Amazon rows are never stamped) is the writer's code (`amazon-participations.service.ts` touches
+`channel: 'AMAZON'` only) and was measured in `r2.sql`. A `formulaDatabase()` arm would only re-prove Prisma's column
+default. Order: land `scopeItems.ts` first as a **verbatim** extraction and run the tests (predicted red: T1, T3, T4,
+T5, T8, T9, T10, T11), then apply A/B/C and confirm all green. Then run M1–M10 and require each to be red.
+
+#### 4.3 Predictions (before building)
+
+- Web vitest (the new file, plus `languageControl`, `readiness`, `scopes`, `marketGate`, `studio-data` and
+  `design-system/patterns/scopeMenu`) will be green. `scopeMenu`'s golden will be byte-identical, since the DS is not
+  touched.
+- Scoped `tsc` for apps/web will report 0 errors (typecheck etiquette: slots of two, private tsbuildinfo).
+- On production after deploy, Xavia GALE-JACKET reads as in §5. The numbers are "at the time of the check" (the
+  nightly reconcile runs about 02:17 UTC and edits recompute), so the check re-reads the index first and predicts
+  from it.
+
+---
+
+### 5. Pixel / UI declarations (before → after)
+
+Menu rows are the ListboxPanel options: leading dot, label, and trailing state text. The trigger face follows the
+same rules. No layout, token or keyboard change. Dot tones come from the DS table in both themes.
+
+- **Xavia · Shared · DE (the landing screen)**
+  - Shared product: `See each channel`, dot **grey → red**. The hover changes from "No channel has a readiness
+    result…" to "Worst channel: Amazon — Blocked."
+  - Amazon: `Not computed` (grey) → `Blocked · 48%` (red). The hover says the Italian Shared language is not sold on
+    Amazon · DE and this is its German readiness.
+  - eBay: `Not set up` (grey) → `Blocked · —` (red), hover "German: Blocked —. …".
+  - Shopify: unchanged (no state; Shopify sells on GLOBAL).
+- **Xavia · Amazon or eBay · DE/ES/FR/UK**: eBay `Not set up` → `Blocked · —` (red). Amazon unchanged.
+- **Xavia · eBay · IT**: the trigger `eBay · Not set up` → `eBay · Blocked · 100%`. The Market list
+  `Germany (not participating)`, `Spain (not participating)`, … → `Germany`, `Spain`, … (5 options).
+- **Xavia · Shopify · GLOBAL**: `Shopify · Not set up` → `Shopify · Blocked · —`. The Market option loses
+  `(not participating)`.
+- **Motovento · any**: eBay and Etsy `Not set up` → `Not computed` (grey, no %). The hover says "Readiness has not
+  been computed for this language." That stays until the index covers Motovento's channels. Inferred: the nightly
+  writer covers each business (it wrote Motovento's Shared rows at 02:17 UTC), so tonight's run should compute
+  eBay/Etsy for its 2 families.
+- **Right after choosing any channel (both businesses)**: every row `Not set up` for about 0.5–1 s → the
+  `Checking…` skeleton (the trigger shimmers), then the verdicts.
+- **A measured non-participating, active Amazon market** (0 rows in production today; US is inactive): stays
+  `Not set up`. The hover now adds "(checked 2026-09-08)", and the Market option keeps `(not participating)`.
+
+---
+
+### 6. Questions for the Owner
+
+1. **Shared product, a market that does not sell the Shared language (Italian) — which verdict should each channel
+   row show?**
+   - (a) The market's own language, e.g. Amazon · DE shows its **German** verdict `Blocked · 48%`, and the hover says
+     so.
+   - (b) Keep `Not computed`, with the German verdict in the hover only.
+
+   **Recommend (a).** "Not computed" suggests nobody has measured it, and it was measured, in German. (b) keeps the
+   word true but leaves the landing screen reading "Not computed" on 2 of 3 channels. Arm A does not depend on this
+   answer.
+2. **A channel · market where the product has no listing** (e.g. GALE-JACKET on eBay · DE) will read its
+   requirements verdict (`Blocked · —`, "Category metadata is incomplete"), not "No listing".
+   - **Recommend: keep that in this fix.** The scope row answers "how far from publishable". "No listing here" is the
+     row vocabulary and the Presence line's job, and the DS header forbids mapping one vocabulary onto the other.
+   - If you want the menu to also *say* there is no listing, that is a separate, server-side item: a `listed: false`
+     fact on the scope, from the listings `readFamilyAccountId` already reads.
+
+---
+
+### 7. Closure fields
+
+- **Done when**
+  - `scopeItems.vitest.test.ts` T1–T11 are green and each of M1–M10 is red.
+  - The existing studio and `scopeMenu` tests stay green, and scoped `tsc` for apps/web reports 0.
+  - After deploy, on production, Xavia GALE-JACKET reads:
+    - eBay · IT: `eBay · Blocked · 100%`, with no "(not participating)" in the Market list;
+    - Shared · DE: Amazon `Blocked · N%` and eBay `Blocked · —` (with the Q1 (a) ruling);
+    - Motovento GALE-JACKET eBay · DE: `Not computed`.
+  - In general: **no channel row reads "Not set up" unless its Marketplace row carries a `participationCheckedAt`,
+    or the server itself answered `absent`**. This is checked by reading the screen, with the index re-read and the
+    numbers predicted first.
+- **Cost when**
+  - Wrong: at worst an Amazon market that SP-API marked as not participating would show its requirements verdict
+    (M2 guards against this; 0 such active rows today). Or a Shared row shows another language's verdict, and the
+    hover names that language.
+  - Not done: every eBay, Shopify and Etsy scope in both businesses keeps saying "Not set up", and every eBay market
+    keeps saying "(not participating)". Examples:
+    - GALE-JACKET's eBay·IT error block (100 % filled but `blocked`) stays hidden behind the wrong word.
+    - 160 Xavia eBay coordinates and 32 Shopify coordinates keep hiding a real verdict.
+    - The landing screen keeps "Not computed" on Amazon.
+- **Gate:**
+  - the new test file plus the related studio tests plus `design-system/patterns/scopeMenu.vitest.test.ts`;
+  - M1–M10 by hand, each asserted red;
+  - scoped `tsc` for apps/web;
+  - the pre-push hook (never `--no-verify`).
+  - No DS file changes, so there is no `apps/factory` mirror, no token and no contrast gate.
+- **Rollback:** revert the one commit (1 edited file, 2 new files). No data, migration, API or cache is involved, and
+  the old behaviour comes back exactly.
+
+---
+
+#### Observations outside this fix (not built, for the hub's list)
+
+- **Shopify on a country market.** The studio offers Shopify with no state on DE/IT/…, because it sells only on
+  GLOBAL (`StudioBar.tsx:40`, `c.markets.includes(market)`). That is unchanged, and it is not part of this report.
+- **Latent server `absent` ("Choose an account for X · Y.").** A channel with 0 or ≥2 active accounts gets it for
+  every family with no attributed listing (`family-account.ts:18-19`). 0 instances today. If a second eBay account is
+  connected, this becomes the next "Not set up" wave. The honest word there would be `notComputed` plus the sentence,
+  and the change would be server-side.
+- **Railway deploy `c98ccdc7`.** It has no commit metadata, was created 15:52 UTC, and went from BUILDING to SUCCESS
+  during this investigation, replacing `ed064795` (= `2f01c58a2`). The API may no longer be exactly `2f01c58a2`. The
+  defect above is in the web code, which I read at `2f01c58a2`.
+
+**Build decision (2026-09-24 ~16:20 UTC):** the Owner asked to *"identify the issue and then fix it"*. The fix only makes each row say what the
+server measured, so this lane builds it and takes BOTH recommendations above as **stated choices, reversible**: (1) on the Shared product a
+market that does not sell Italian shows its own-language verdict (the hover names the language); (2) a channel with no listing keeps its
+requirements verdict. Files (lane SR1, phase 2): NEW `_studio/scopeItems.ts` + `scopeItems.vitest.test.ts`, `_studio/StudioBar.tsx`.
+
+## A-55 — BUILT (the Owner: "identify the issue and then fix it"). Each scope row says only what was measured.
+
+Built by sub-agent SR1 (phase 2); re-run by this lane: the `_studio` folder + `design-system/patterns` 153 files / 2,063 tests green, `tsc` web 0.
+New pure `_studio/scopeItems.ts` (the old `scored()` moved out of `StudioBar.tsx`, +7 −26): participation counts as "no" only when Amazon's
+refresher stamped it (`participationCheckedAt` set, status not `UNKNOWN`) — the same rule drops "(not participating)" from the Market list;
+on the Shared product a market that does not sell the chosen language shows the server's own-language verdict (named in the hover);
+while the destination loads a row reads "Checking…"; a failed read or an unscored scope reads "Not computed" (never "Not set up").
+- **Red first:** the new `scopeItems.vitest.test.ts` (T1–T11, fixtures through the real parsers, production participation fields) ran against
+  a verbatim copy of the old logic: 13 red, 1 green (T6, as predicted); T11 reproduced the production screen `['See each channel','Not computed','Not set up',…]`.
+  Fixed: 14/14. **Mutations 10/10 red** (each paired with its test), file restored by sha256.
+- **What the Owner will see (Xavia):** Shared · DE — Amazon `Not computed` → `Blocked · 48%` ("Shown in German…"), eBay `Not set up` → `Blocked · —`;
+  eBay · IT trigger `Not set up` → `Blocked · 100%`; Shopify · GLOBAL `Not set up` → `Blocked · —`; no "(not participating)" on eBay markets.
+  Motovento eBay / Etsy → `Not computed` until its first nightly readiness. After picking a channel: `Checking…` instead of a flash of "Not set up".
+- **Not measured yet:** the real screen (the next push's browser gates; the census gate reads the scope bar) and the live `/readiness` response.
+
+*Done when* — tests ✅; the browser gates at the push ⏳; the Owner's screen after the deploy ⏳. *Cost when* — flat (pure, per render).
+*Gate* — `scopeItems.vitest.test.ts` (14 arms) + 10 mutations + the census gate. *Rollback* — revert (web only; no API, no data).
+
+### A-54 / A-55 — deployed, measured (2026-09-24, the Owner: "push to main" twice)
+
+- **A-54 live:** `main` = `2f01c58a2` (15:48 UTC; Railway `c98ccdc7` live 16:05). The 16:30 UTC sweep on the new code:
+  `ebay-readback: sweep complete {checked: 0, recorded: 0, errors: 0, skippedShared: 288}` — exactly the prediction (0 eligible of 302; the 14
+  parents never selected); **no** `EBAY_APP_ID` per-SKU error. A-54's *Done when* ✅.
+- **A-55 pushed to `main`** = `aad45e7e0` (16:48 UTC). Its first branch push (16:22) was REFUSED by the census gate: 7 NEW keys, every
+  Amazon·DE surface "400 Bad Request". **Cause, attributed (read + confirmed by the session that did it):** at **16:03:45 UTC** another
+  session (`nexus-commerce-7c`, Shopify metafields) booted a local API from its worktree WITHOUT `NEXUS_AMAZON_ENV_TOKEN=off`, and
+  `index.ts` `seedEnvManagedConnections` rewrote the local env Amazon row (`cmothu9bo…`) to `isActive: false, authStatus: 'disconnected'`,
+  `lastSyncError: "Amazon credentials not configured…"` — the same rewrite as 10:14 UTC (A-49's finding). The only local row changed in
+  16:02:30–16:05 (a read of every `createdAt`/`updatedAt` column). **Restored** at ~16:33 UTC exactly as at 10:40 (`isActive: true`,
+  `authStatus: 'unknown'`, `lastSyncError: null`; one row, local database only, guarded by its prior state). The re-push's census: **0 keys**.
+  Not baselined — it was an environment change, not a blind spot, and the cause is gone.
+- 🔴 **The same trap will return** whenever any session boots a local API without the switch. A durable fix (the boot seed never rewrites
+  an env row when the Amazon keys are merely blank — or the local `.env` carries `NEXUS_AMAZON_ENV_TOKEN=off`) is an open item for the Owner.
+- **The known AE.4 flake** (`assortment/sync.vitest.test.ts:419`, `claimed: 0`) refused 2 of the day's 9 pushes (14:36, 15:30); each retry
+  passed. Not this lane's file (the shared-stock lane's); it slows every push — an open item.
+- **Live screen check (2026-09-24 17:00–17:05 UTC, the Owner's own Chrome, a new tab, nothing clicked but the scope trigger and Esc):**
+  Motovento GALE-JACKET (`/w/bf0047bf…/products/cmub55nhk…/edit/studio`) — **the studio opens** (21 rows, market IT; A-53 live ✅); the scope
+  menu reads Shared "See each channel" · **eBay "Not computed"** (was "Not set up") · Etsy no state on IT (Etsy is GLOBAL only).
+  Xavia GALE-JACKET (`/w/nexus_legacy_workspace/…/cmokmy3a4…`, market IT) — **Amazon "Blocked · 100%"**, **eBay "Blocked · 100%"** (accessible
+  names: "IT: 630 of 630 required values filled…"), Shared dot red (the worst channel); Shopify no state on IT. A-55's *Done when* ✅ on screen.
+  🟠 The menu's trailing text is cut to **"Blocked · 10…"** at the menu's width — the number reads wrong until hovered (a DS `ScopeBar`
+  menu-width item for the Owner; not built).
+
+## The night's jobs, run NOW (2026-09-24 18:25–19:34 UTC, the Owner: "do everything right now") — measured
+
+Predictions first (this session's scratchpad `now/predictions.md`). Records: `records/nightly-before-2026-09-24.txt` → `records/nightly-after-run-now-2026-09-24.txt`.
+- **A local `--apply` recompute FAILED on production** (`0 done · 10 failed`, Xavia; Motovento `1 done · 1 failed`): every family's Serializable
+  transaction outlived Prisma's timeout over the network (`Transaction not found`); all rolled back (Xavia 9,886 rows unchanged). Not predicted.
+  → the run moved to the server: `runReadinessReconcileNow()` (0 h horizon; the cron keeps 20 h) in `CRON_REGISTRY` — `1b6541e3a`, pushed with
+  the merge of `origin/main` (both refs in one hook run: every gate green, 0 new keys); Railway `f4c57230` live 19:26 UTC.
+- **readiness-reconcile, Sync Logs run** (the Owner's signed-in page, `POST …/cron/readiness-reconcile/trigger`, 202): Xavia `32 done · 9741 rows ·
+  stopped: complete · 372s` SUCCESS; Motovento `2 done · 638 rows · complete · 12s` SUCCESS (22 → 638: its new markets' coordinates).
+  **A-50 on production:** Italian **75.7 % → 75.7 %** (5,068 / 10,995, unchanged, as predicted); de 60.4 → **9.9 %**, en 59.4 → **4.2 %**, es 60.6 →
+  **8.3 %**, fr 60.7 → **8.4 %**, nl 70.9 → **4.7 %**, pl / sv / tr 100 → **0 %** (required filled de 3,217 → 2,472 · en 3,420 → 2,145 · pl 634 → 301).
+  The direction was predicted; the size was not — nearly all non-Italian readiness was an Italian fallback counted as filled.
+- **content-drift, Sync Logs run** (202, 18:39:59 → 18:50:00 UTC, SUCCESS): Amazon `compared 147 · drifted 45`, `88 of 235 outstanding · stopped:
+  budget` (the next run continues); eBay `compared 0 · not compared 14` — 8 "this listing uses the eBay Inventory model" (known limit), 2 shells
+  (by design), 🔴 **4 `the eBay builder refused: categoryIds.map is not a function`** — a real defect in the eBay payload builder (the same builder
+  the studio's eBay publish uses). Not investigated yet — for the Owner.
+- The scheduled nightly tonight: readiness finds nothing due (computed 19:34); content-drift at 03:37 continues the 88.
+
+## A-56 — The eBay studio builder crashed on every Trading listing with a category: "categoryIds.map is not a function". BUILT (the Owner: "option A").
+
+**Found** by content-drift's first run (2026-09-24 18:50 UTC): 4 eBay listings `not compared — the eBay builder refused: categoryIds.map is not a function`
+— all GALE-JACKET, eBay·IT, Trading (no offer id), category 177104 (read only). **Cause (read):** `studio-publication-ebay.ts:114`
+`loadEbaySpec(scope.marketplace, category)` passed ONE category string where `loadEbaySpec(marketplace, categoryIds: string[])` (`channel-specs/index.ts:117`)
+maps a list. `resolved` arrives untyped, so `tsc` never saw it; the builder's test stub ignored its argument, so every test stayed green. Both lines date
+from `f212c2348` / `3161da57b` (2026-09-12/13): **the studio eBay publish of every Trading listing that reaches its category has crashed here since then**
+(the 8 "Inventory model" and 2 shell listings are refused before this line; A-41's currency refusal sat in front of it until 09-23).
+**Fix:** `[category]`, and `category` typed `string | null | undefined` so the type check refuses the old call (TS2345, proven). The parity test's stub now
+reads its argument as the real function does (`categoryIds.map(String)`). **Red first:** on the old line the stub reproduced production exactly — 4 of 5
+arms `TypeError: categoryIds.map is not a function`; fixed 5/5; with the drift, transports and eBay content-drift files 7 files / 56 tests; fresh `tsc` 0.
+**Mutations 2/2 red** (the bug back with a cast → tests red; without a cast → tests red AND `tsc` red), file restored by sha256.
+**Effect after deploy:** the nightly eBay content read compares those 4 listings; a studio eBay publish of a Trading listing goes past this line to its next
+checks. Nothing publishes by itself (R-34: listing content work stays the Owner's, last).
+*Done when* — tests ✅; after deploy, the next content-drift run shows those 4 compared (or refused for a NAMED reason) ⏳. *Cost when* — flat.
+*Gate* — the parity file's honest stub + the type. *Rollback* — revert (code only).

@@ -1,17 +1,20 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn() }))
+const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: async () => ({ displayName: 'Selected account', authStatus: 'connected' }) }))
 vi.mock('./variation-excluded.js', () => ({ readExcludedListingIds: m.excluded }))
 vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: m.resolve }))
-vi.mock('./market-languages.js', () => ({ marketLanguages: async () => ['it', 'en'] }))
+vi.mock('./market-languages.js', () => ({ marketLanguages: m.languages }))
+// A-32 — the primary content language is pinned here, whatever a local .env says.
+vi.mock('./content-locale.js', async (importOriginal) => ({ ...(await importOriginal<object>()), PRIMARY_CONTENT_LOCALE: 'it' }))
 vi.mock('./publish-review-gate.js', () => ({ resolvePublishContent: async () => [], publishContentIssues: () => [], requireReviewedContent: () => false }))
 import { readPublicationFacts, publicationScope, publicationDigest } from './studio-publication-plan.js'
 import { permissionForRoute } from '../../lib/auth/permissions-manifest.js'
 const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b', listingId: 'alias-parent' }
 beforeEach(() => {
   vi.clearAllMocks(); m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
+  m.languages.mockResolvedValue(['it', 'en'])
   m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent' }, { id: 'excluded', sku: 'EXCLUDED', parentId: 'parent' }, { id: 'parent', sku: 'PARENT', isParent: true }])
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
   m.excluded.mockResolvedValue(new Set(['listing-excluded']))
@@ -54,4 +57,19 @@ it('requires publish permission for every publication route, independently of pr
   for (const [method, path] of [['POST', '/api/products/:id/studio-publication/preview'], ['POST', '/api/products/:id/studio-publication/:reviewId/submit'], ['GET', '/api/products/:id/studio-publication/:reviewId']]) {
     expect(permissionForRoute(method, path)).toBe('products.publish')
   }
+})
+
+it('🔴 A-32 (R-30): a DE listing whose pinned own title is the Italian product text is named, as a warning', async () => {
+  m.languages.mockResolvedValue(['de'])
+  m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent', name: 'Giacca Italiana' }, { id: 'parent', sku: 'PARENT', isParent: true, name: 'Giacca Italiana' }])
+  // The child pins its own title; the parent's listing follows the product (control: not named).
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', title: 'Giacca Italiana', followMasterTitle: true },
+    { id: 'listing-child', productId: 'child', title: 'Giacca Italiana', followMasterTitle: false }])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('child', { ...scope, marketplace: 'DE' })
+  expect(facts.issues).toContainEqual(expect.objectContaining({ sku: 'CHILD', field: 'title', severity: 'warning' }))
+  expect(facts.issues.filter(i => i.sku === 'PARENT')).toEqual([])
+  // Control: the same data on a market that speaks Italian names nothing.
+  m.languages.mockResolvedValue(['it'])
+  expect((await readPublicationFacts('child', scope)).issues.filter(i => i.field === 'title')).toEqual([])
 })

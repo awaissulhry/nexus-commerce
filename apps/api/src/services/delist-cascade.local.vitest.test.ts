@@ -54,6 +54,11 @@ it.skipIf(process.env.PR2_LOCAL_REHEARSAL !== '1')('LOCAL Docker: committed casc
   m.resolve.mockImplementation(async ({ accountId }) => accounts.find(row => row.id === accountId) ?? null)
   m.add.mockResolvedValue({ enqueued: false })
   const deletes = vi.spyOn(amazonSpApiClient, 'deleteListingsItem')
+  // PLAN Step 1.3 — an Amazon unpublish now reads the listing first; this fixture answers with FBA
+  // stock, so the arm is refused by name and nothing is sent (no live channel in this rehearsal).
+  const reads = vi.spyOn(amazonSpApiClient, 'getListingsItem').mockResolvedValue({ success: true, sku: marker, asin: null, status: null,
+    rawResponse: { attributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] } } } as any)
+  const closes = vi.spyOn(amazonSpApiClient, 'patchPurchasableOffer')
   const app = Fastify()
   app.addHook('onRequest', async request => {
     request.__sessionLoaded = true
@@ -107,7 +112,7 @@ it.skipIf(process.env.PR2_LOCAL_REHEARSAL !== '1')('LOCAL Docker: committed casc
       }
       const result = await processOutboundSyncJob({ id: `bull-${row.id}`, attemptsMade: 0, data: { queueId: row.id, syncType: 'QUANTITY_UPDATE', targetChannel: 'WOOCOMMERCE' } } as any)
       expect(result.status).toBe(arm === 'cancel' ? 'CANCELLED' : arm === 'unpublish' ? 'FAILED' : 'UNKNOWN')
-      expect(m.outbound).not.toHaveBeenCalled(); expect(deletes).not.toHaveBeenCalled()
+      expect(m.outbound).not.toHaveBeenCalled(); expect(deletes).not.toHaveBeenCalled(); expect(closes).not.toHaveBeenCalled()
       if (arm === 'cancel' || arm === 'unpublish') expect(m.end).not.toHaveBeenCalled()
       table.push({ arm, queueId: row.id, workerStatus: result.status, syntheticFetchCalls: m.fixtureFetch.mock.calls.length, outboundCalls: m.outbound.mock.calls.length, deleteListingsItemCalls: deletes.mock.calls.length })
     }
@@ -118,7 +123,7 @@ it.skipIf(process.env.PR2_LOCAL_REHEARSAL !== '1')('LOCAL Docker: committed casc
       Object.assign(entry, { syncStatus: row.syncStatus, outcome: payload.delistOutcome ?? 'NOT_SENT', fact: payload.channelFact ?? 'UNKNOWN', errorCode: row.errorCode, holdUntil: row.holdUntil?.toISOString() ?? null })
       if (entry.arm === 'transport') { expect(payload.delistOutcome).toBe('UNKNOWN'); expect(row.syncStatus).toBe('PENDING'); expect(row.holdUntil!.getTime()).toBeGreaterThan(Date.now()); expect(row.errorCode).toBe('DELIST_TRANSPORT_UNKNOWN') }
       if (entry.arm === 'access') { expect(payload.delistOutcome).toBe('UNKNOWN'); expect(payload.channelFact).toBe('REFUSED'); expect(row.syncStatus).toBe('SKIPPED') }
-      if (entry.arm === 'unpublish') expect(row.errorCode).toBe('AMAZON_UNPUBLISH_NOT_IMPLEMENTED')
+      if (entry.arm === 'unpublish') expect(row.errorCode).toBe('AMAZON_UNPUBLISH_FBA')
       if (entry.arm === 'cancel') expect(row.syncStatus).toBe('CANCELLED')
     }
     const attempted = table.find(entry => entry.arm === 'transport')!
@@ -154,6 +159,6 @@ it.skipIf(process.env.PR2_LOCAL_REHEARSAL !== '1')('LOCAL Docker: committed casc
     expect(m.outbound).not.toHaveBeenCalled()
     console.log('CLEANUP READ +8s', JSON.stringify(cleanup))
     await writeFile('../../docs/audits/2026-09-13-presence/pr2/rehearsal-cleanup.json', JSON.stringify({ at: new Date().toISOString(), database: `${target.host}${target.pathname}`, marker, cleanup, galeVersion: gale.version }, null, 2))
-    await app.close(); deletes.mockRestore(); await prisma.$disconnect()
+    await app.close(); deletes.mockRestore(); reads.mockRestore(); closes.mockRestore(); await prisma.$disconnect()
   }
 }, 90_000)

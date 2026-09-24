@@ -7,7 +7,13 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * DELETE_LISTING (best-effort remove from the channel catalog). Both
  * are enqueued by the /products bulk-hard-delete cascade (D.1).
  *
- * Amazon and eBay unpublish refuse until a reversible implementation exists.
+ * PLAN Step 1.3 (R-39) — unpublish = "stop selling, keep the identifiers":
+ *   Amazon: SCT.6's per-market offer close (the channel half in
+ *   amazon-market-offer.service.ts); FBA is refused by name. The closed offer is
+ *   saved on the job's record (payload.channelEvidence) so a person can put it back.
+ *   eBay: quantity 0 on every SKU of the ItemID, only with the item's
+ *   out-of-stock control ON (off, 0 would END the ItemID).
+ *   There is no republish from Nexus: this flow deletes the local record.
  * Shopify delist refuses both actions until the account-bound adapter lands.
  * No adapter may perform a more destructive action than the caller requested.
  *
@@ -28,7 +34,11 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { prisma } from '@nexus/database'
-import { endFixedPriceItem, siteIdForMarket } from './ebay-trading-api.service.js'
+import {
+  buildReviseInventoryStatusBatchXml, callTradingApi, endFixedPriceItem, escapeXml, parseGetItemQuantities,
+  REVISE_INVENTORY_STATUS_MAX_ENTRIES, siteIdForMarket,
+} from './ebay-trading-api.service.js'
+import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { DELIST_OPERATOR_COPY, type DelistErrorCode } from './delist-error-codes.js'
@@ -58,6 +68,8 @@ export interface ChannelDelistResult {
   retryable?: boolean
   dryRun?: boolean
   submissionId?: string
+  /** What the channel held before the change — saved on the job's record (payload.channelEvidence). */
+  evidence?: Record<string, unknown>
 }
 
 const AMAZON_MARKETPLACE_IDS: Record<string, string> = {
@@ -114,15 +126,38 @@ export async function dispatchChannelDelist(
  * `removes: false` means "this listing keeps selling after the action". It never means the action
  * errored — that is decided per attempt, further down.
  */
+export type EbayOutOfStockControl = 'ON' | 'OFF' | 'UNKNOWN'
+
+/**
+ * PLAN Step 1.3 (R-39) — the facts one listing brings to the table. Unpublish depends on them;
+ * delete does not.
+ */
+export interface DelistListingFacts {
+  /** The listing as `isFbaCoordinate` reads it (fulfillmentMethod, platformAttributes, product). */
+  amazonListing?: Parameters<typeof isFbaCoordinate>[0]
+  /** Positive FBA evidence: an active FBA offer, or FBA stock the channel reported. */
+  amazonFbaEvidence?: Parameters<typeof isFbaCoordinate>[2]
+  /** eBay's out-of-stock control: the account preference (route) or the item's own (adapter). */
+  ebayOutOfStockControl?: EbayOutOfStockControl
+}
+
 export function delistCapability(
   channel: string,
   action: ChannelAction,
+  facts: DelistListingFacts = {},
 ): { removes: true } | { removes: false; errorCode: DelistErrorCode } {
   switch (channel) {
     case 'AMAZON':
-      return action === 'unpublish' ? { removes: false, errorCode: 'AMAZON_UNPUBLISH_NOT_IMPLEMENTED' } : { removes: true }
+      if (action === 'delete') return { removes: true }
+      // Unpublish = SCT.6 close. Nexus never closes an FBA offer, so an FBA listing keeps selling.
+      return isFbaCoordinate(facts.amazonListing, facts.amazonListing?.product, facts.amazonFbaEvidence)
+        ? { removes: false, errorCode: 'AMAZON_UNPUBLISH_FBA' }
+        : { removes: true }
     case 'EBAY':
-      return action === 'unpublish' ? { removes: false, errorCode: 'EBAY_UNPUBLISH_NOT_IMPLEMENTED' } : { removes: true }
+      if (action === 'delete') return { removes: true }
+      // Unpublish = quantity 0, which only HIDES the item while the out-of-stock control is on.
+      if (facts.ebayOutOfStockControl === 'ON') return { removes: true }
+      return { removes: false, errorCode: facts.ebayOutOfStockControl === 'OFF' ? 'EBAY_UNPUBLISH_OOS_OFF' : 'EBAY_UNPUBLISH_OOS_UNKNOWN' }
     case 'SHOPIFY':
       return { removes: false, errorCode: 'SHOPIFY_DELIST_NOT_IMPLEMENTED' }
     default:
@@ -149,7 +184,9 @@ async function delistAmazon(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  const amazonCapability = delistCapability('AMAZON', action)
+  // The payload's own fulfilment first (captured before the delete); the live read decides again below.
+  const payloadListing = { fulfillmentMethod: typeof job.payload?.fulfillmentMethod === 'string' ? job.payload.fulfillmentMethod : null }
+  const amazonCapability = delistCapability('AMAZON', action, { amazonListing: payloadListing })
   if (amazonCapability.removes === false) return delistRefusal(amazonCapability.errorCode)
   if (!job.targetRegion) return delistRefusal('AMAZON_DELIST_NO_REGION')
   const marketplaceId = resolveAmazonMarketplaceId(job.targetRegion)
@@ -166,6 +203,8 @@ async function delistAmazon(
   }
   if (!sellerId) return delistRefusal('AMAZON_DELIST_NO_SELLER')
 
+  if (action === 'unpublish') return unpublishAmazon({ sellerId, sku, marketplaceId, payloadListing })
+
   try {
     const r = await amazonSpApiClient.deleteListingsItem({
       sellerId,
@@ -176,6 +215,48 @@ async function delistAmazon(
     return { success: true, outcome: r.dryRun ? 'NOT_SENT' : 'SUCCESS', submissionId: r.submissionId, dryRun: r.dryRun }
   } catch (e: unknown) {
     return unknownDelist('DELIST_TRANSPORT_UNKNOWN', e)
+  }
+}
+
+/**
+ * PLAN Step 1.3 (R-39) — close THIS marketplace's offer through SCT.6's channel half. Nothing is
+ * sent when the read fails (FBA cannot be ruled out), when Amazon reports any non-merchant
+ * fulfilment channel (FBA stock — never touched), or when there is no offer to close.
+ */
+async function unpublishAmazon(input: {
+  sellerId: string
+  sku: string
+  marketplaceId: string
+  payloadListing: { fulfillmentMethod: string | null }
+}): Promise<ChannelDelistResult> {
+  const { closeAmazonOfferOnChannel } = await import('./amazon-market-offer.service.js')
+  let attempt: Awaited<ReturnType<typeof closeAmazonOfferOnChannel>>
+  try {
+    attempt = await closeAmazonOfferOnChannel({
+      sellerId: input.sellerId, sku: input.sku, marketplaceId: input.marketplaceId, productType: '',
+      refuse: (live) => {
+        const fbaStock = live.fulfillmentChannels.some((code) => code !== 'DEFAULT')
+        const capability = delistCapability('AMAZON', 'unpublish', { amazonListing: input.payloadListing, amazonFbaEvidence: { hasActiveFbaOffer: fbaStock } })
+        return capability.removes ? null : `Amazon reports fulfilment channels: ${live.fulfillmentChannels.join(', ') || 'none'}.`
+      },
+    })
+  } catch (e: unknown) {
+    return unknownDelist('DELIST_TRANSPORT_UNKNOWN', e)
+  }
+  const seen = { sku: input.sku, marketplaceId: input.marketplaceId, fulfillmentChannels: attempt.live.fulfillmentChannels }
+  switch (attempt.notSent) {
+    case 'LIVE_READ_FAILED': return unknownDelist('AMAZON_UNPUBLISH_READ_FAILED', attempt.detail ?? 'read failed')
+    case 'REFUSED': return delistRefusal('AMAZON_UNPUBLISH_FBA', attempt.detail)
+    case 'NO_PRODUCT_TYPE': return delistRefusal('AMAZON_UNPUBLISH_NO_PRODUCT_TYPE')
+    case 'NO_LIVE_OFFER':
+      // Nothing to close: this marketplace has no offer, so the SKU is not selling here.
+      return { success: true, outcome: 'SUCCESS', channelFact: 'NOT_SELLING', evidence: { ...seen, offerSnapshot: [], note: 'No offer in this marketplace; nothing was sent.' } }
+  }
+  const res = attempt.res!
+  if (!res.success) return unknownDelist('AMAZON_DELIST_UNVERIFIED', res.error ?? 'No acknowledgement received')
+  return {
+    success: true, outcome: res.dryRun ? 'NOT_SENT' : 'SUCCESS', submissionId: res.submissionId, dryRun: res.dryRun,
+    evidence: { ...seen, offerSnapshot: attempt.snapshot, snapshotSource: attempt.snapshotSource, productType: attempt.productType, submissionId: res.submissionId ?? null },
   }
 }
 
@@ -216,8 +297,11 @@ async function delistEbay(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  const ebayCapability = delistCapability('EBAY', action)
-  if (ebayCapability.removes === false) return delistRefusal(ebayCapability.errorCode)
+  // Unpublish is decided on the ITEM's own out-of-stock control, read below (unpublishEbay).
+  if (action === 'delete') {
+    const ebayCapability = delistCapability('EBAY', action)
+    if (ebayCapability.removes === false) return delistRefusal(ebayCapability.errorCode)
+  }
   const itemId = job.externalListingId
   if (!itemId) return delistRefusal('EBAY_DELIST_NO_ITEMID')
 
@@ -245,6 +329,8 @@ async function delistEbay(
     return delistRefusal('EBAY_DELIST_AUTH_ERROR', err instanceof Error ? err.message : String(err))
   }
 
+  if (action === 'unpublish') return unpublishEbay(itemId, { oauthToken, siteId, connectionId: accountId, market: job.targetRegion })
+
   try {
     const ack = await endFixedPriceItem({ itemId }, { oauthToken, siteId, connectionId: accountId })
     const dryRun = ack.itemId?.startsWith('DRYRUN-') === true
@@ -269,6 +355,134 @@ async function delistEbay(
       }
     }
     return unknownDelist('DELIST_TRANSPORT_UNKNOWN', err)
+  }
+}
+
+// ── PLAN Step 1.3 (R-39) — eBay unpublish: quantity 0 under the out-of-stock control ──────────
+
+/** GetItem in the shape proven live on 2026-09-23 (docs/product-cheat/tools/unpublish-probe.mts). */
+function buildUnpublishGetItemXml(itemId: string): string {
+  return `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><OutputSelector>Item.ItemID,Item.Quantity,Item.SellingStatus.QuantitySold,Item.SellingStatus.ListingStatus,Item.Variations.Variation.SKU,Item.Variations.Variation.Quantity,Item.Variations.Variation.SellingStatus.QuantitySold,Item.OutOfStockControl</OutputSelector></GetItemRequest>`
+}
+
+/** A single-SKU item: ItemID + Quantity, no SKU (eBay requires a SKU only for variations). */
+function buildUnpublishSingleItemXml(itemId: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <InventoryStatus>
+    <ItemID>${escapeXml(itemId)}</ItemID>
+    <Quantity>0</Quantity>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>`
+}
+
+/** 'true' → ON, 'false' → OFF, absent or anything else → UNKNOWN. */
+export function parseOutOfStockControl(raw: string, tag: 'OutOfStockControl' | 'OutOfStockControlPreference'): EbayOutOfStockControl {
+  const value = new RegExp(`<${tag}>\\s*([^<]*?)\\s*</${tag}>`, 'i').exec(raw ?? '')?.[1]?.toLowerCase()
+  return value === 'true' ? 'ON' : value === 'false' ? 'OFF' : 'UNKNOWN'
+}
+
+const ACK_OK = new Set(['Success', 'Warning'])
+const isGateRefusal = (err: unknown) => (err as { name?: string; code?: string } | null)?.name === 'EbayWriteRefusedError'
+  || (err as { code?: string } | null)?.code === 'EBAY_WRITE_REFUSED'
+
+async function unpublishEbay(
+  itemId: string,
+  ctx: { oauthToken: string; siteId: string; connectionId: string; market: string },
+): Promise<ChannelDelistResult> {
+  // 1 — read the item: its out-of-stock control, its status, what each SKU has left.
+  let raw: string
+  try {
+    const read = await callTradingApi('GetItem', buildUnpublishGetItemXml(itemId), ctx)
+    if (read.itemId?.startsWith('DRYRUN-')) return { success: true, outcome: 'NOT_SENT', dryRun: true }
+    raw = read.raw ?? ''
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (COULD_NOT_ASK.some(pattern => pattern.test(message))) return unknownDelist('EBAY_DELIST_COULD_NOT_ASK', err, false)
+    return unknownDelist('DELIST_TRANSPORT_UNKNOWN', err)
+  }
+  const outOfStockControl = parseOutOfStockControl(raw, 'OutOfStockControl')
+  const capability = delistCapability('EBAY', 'unpublish', { ebayOutOfStockControl: outOfStockControl })
+  if (capability.removes === false) return delistRefusal(capability.errorCode)
+  const item = parseGetItemQuantities(raw)
+  if (!item.listingStatus) return unknownDelist('EBAY_DELIST_UNVERIFIED', 'GetItem named no listing status; nothing was sent.')
+  const remainingBefore = item.variations.length
+    ? item.variations.map(v => ({ sku: v.sku, remaining: v.available }))
+    : [{ sku: null as string | null, remaining: item.itemAvailable }]
+  const evidence = { itemId, outOfStockControl, listingStatus: item.listingStatus, remainingBefore }
+  if (item.listingStatus !== 'Active') return { success: true, outcome: 'SUCCESS', channelFact: 'NOT_SELLING', evidence: { ...evidence, note: 'The item is not active; nothing was sent.' } }
+  if (!item.variations.length && item.itemAvailable === null) return unknownDelist('EBAY_DELIST_UNVERIFIED', 'GetItem named no quantity; nothing was sent.')
+  const selling = remainingBefore.filter(entry => (entry.remaining ?? 0) > 0)
+  if (!selling.length) return { success: true, outcome: 'SUCCESS', channelFact: 'NOT_SELLING', evidence: { ...evidence, note: 'Every quantity is already 0; nothing was sent.' } }
+
+  // 2 — quantity 0: every variation SKU with stock (≤4 per call), or the ItemID of a single item.
+  const calls: string[][] = []
+  if (item.variations.length) {
+    const skus = selling.map(entry => entry.sku as string)
+    for (let i = 0; i < skus.length; i += REVISE_INVENTORY_STATUS_MAX_ENTRIES) calls.push(skus.slice(i, i + REVISE_INVENTORY_STATUS_MAX_ENTRIES))
+  } else calls.push([])
+  const zeroed: string[] = []
+  const failures: string[] = []
+  for (const chunk of calls) {
+    const xml = chunk.length
+      ? buildReviseInventoryStatusBatchXml({ itemId, entries: chunk.map(sku => ({ sku, quantity: 0 })) })
+      : buildUnpublishSingleItemXml(itemId)
+    try {
+      const res = await callTradingApi('ReviseInventoryStatus', xml, ctx)
+      if (res.itemId?.startsWith('DRYRUN-')) return { success: true, outcome: 'NOT_SENT', dryRun: true }
+      if (ACK_OK.has(res.ack)) zeroed.push(...(chunk.length ? chunk : [itemId]))
+      else failures.push(`Acknowledgement: ${res.ack}`)
+    } catch (err: unknown) {
+      if (isGateRefusal(err) && zeroed.length === 0 && failures.length === 0) return { success: true, outcome: 'NOT_SENT', dryRun: true }
+      const message = err instanceof Error ? err.message : String(err)
+      // A received Failure is a failure; anything else is a lost answer — the outcome is unknown.
+      if (!/^eBay \w+ Failure:/i.test(message)) {
+        return { ...unknownDelist('DELIST_TRANSPORT_UNKNOWN', err), evidence: { ...evidence, zeroed } }
+      }
+      failures.push(message)
+    }
+  }
+  if (!failures.length) return { success: true, outcome: 'SUCCESS', channelFact: 'NOT_SELLING', evidence: { ...evidence, zeroed } }
+  const errorCode: DelistErrorCode = zeroed.length ? 'EBAY_UNPUBLISH_PARTIAL' : 'EBAY_UNPUBLISH_FAILED'
+  return {
+    success: false, outcome: 'FAILURE', retryable: true, errorCode,
+    error: `${DELIST_OPERATOR_COPY[errorCode]} ${failures.slice(0, 2).join(' | ')}`,
+    evidence: { ...evidence, zeroed },
+  }
+}
+
+/**
+ * PLAN Step 1.3 (R-39) — the ACCOUNT's out-of-stock preference, read by the hard-delete route
+ * BEFORE its transaction, so an eBay unpublish that could END an ItemID is refused while the
+ * product still exists. Bounded; any failure, timeout or dry run is UNKNOWN (fail closed).
+ */
+export async function readEbayOutOfStockPreference(
+  accountId: string,
+  market: string,
+  timeoutMs = 5_000,
+): Promise<EbayOutOfStockControl> {
+  const ask = async (): Promise<EbayOutOfStockControl> => {
+    const connection = await tryResolveConnection({ accountId })
+    if (!connection || connection.channelType !== 'EBAY') return 'UNKNOWN'
+    const oauthToken = await ebayAuthService.getValidToken(connection.id)
+    const res = await callTradingApi(
+      'GetUserPreferences',
+      '<?xml version="1.0" encoding="utf-8"?><GetUserPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ShowOutOfStockControlPreference>true</ShowOutOfStockControlPreference></GetUserPreferencesRequest>',
+      { oauthToken, siteId: siteIdForMarket(market), connectionId: accountId, market },
+    )
+    if (res.itemId?.startsWith('DRYRUN-')) return 'UNKNOWN'
+    return parseOutOfStockControl(res.raw ?? '', 'OutOfStockControlPreference')
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      ask(),
+      new Promise<EbayOutOfStockControl>(resolve => { timer = setTimeout(() => resolve('UNKNOWN'), timeoutMs) }),
+    ])
+  } catch {
+    return 'UNKNOWN'
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 
@@ -309,6 +523,8 @@ export async function applyDelistResultToQueue(
           ...(row.payload as Record<string, unknown>),
           delistOutcome: outcome,
           channelFact: result.channelFact ?? 'UNKNOWN',
+          // PLAN Step 1.3 — what the channel held before (e.g. the closed Amazon offer), for a hand restore.
+          ...(result.evidence ? { channelEvidence: result.evidence as never } : {}),
         },
       },
     })
@@ -325,6 +541,7 @@ export async function applyDelistResultToQueue(
         coordinates: payload.coordinates ?? null,
         delistOutcome: outcome, channelFact: result.channelFact ?? 'UNKNOWN',
         errorCode: result.errorCode ?? null, error: result.error ?? null,
+        channelEvidence: (result.evidence ?? null) as never,
       },
       metadata: { source: 'SYSTEM', userId: payload.actor ?? null },
     } })

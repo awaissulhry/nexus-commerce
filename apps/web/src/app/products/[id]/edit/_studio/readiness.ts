@@ -73,7 +73,12 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
     if (!raw || typeof raw !== 'object' || typeof raw.coordinateKey !== 'string' || typeof raw.language !== 'string' || typeof raw.label !== 'string') return []
     if (!['channel', 'market', 'accountId', 'aliasId'].every(key => raw[key] === null || typeof raw[key] === 'string')) return []
     const score = parseReadinessResponse({ scopes: [{ ...raw, id: 'entry' }] }).entry
-    const missing = Array.isArray(raw.missing) ? raw.missing.filter((m: Record<string, unknown>) => m && ['productId','field','label','reason'].every(key => typeof m[key] === 'string')) : []
+    // A-45 — `kind` survives only as a string, `requiredEmpty` only as a literal `true`: a flag that arrives as
+    // "yes" or 1 is a contract change, and reading it as true would name a field "empty" that nobody measured.
+    const missing = Array.isArray(raw.missing) ? raw.missing
+      .filter((m: Record<string, unknown>) => m && ['productId','field','label','reason'].every(key => typeof m[key] === 'string'))
+      .map((m: Record<string, unknown>) => ({ productId: m.productId as string, field: m.field as string, label: m.label as string, reason: m.reason as string,
+        ...(typeof m.kind === 'string' ? { kind: m.kind } : {}), ...(m.requiredEmpty === true ? { requiredEmpty: true as const } : {}) })) : []
     /**
      * LX.FIN (R-LX-22) — the per-product verdicts, parsed with the SAME strictness as the chip above and
      * for the same reason: these become a CELL in every row of the master sheet's per-coordinate readiness
@@ -89,7 +94,13 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
         const v = value as Record<string, unknown>
         if (typeof v.state !== 'string' || !SCOPE_STATES.has(v.state)) continue
         const pct = typeof v.pct === 'number' && Number.isFinite(v.pct) ? v.pct : null
-        byProduct[productId] = { pct, state: v.state as ScopeReadiness['state'], ...(typeof v.note === 'string' ? { note: v.note } : {}) }
+        // A-45 — the product's own required counts only when BOTH are finite numbers (a half-count would put a
+        // number on the card nobody measured), and its age only as a string.
+        const req = v.required as { filled?: unknown; total?: unknown } | undefined
+        const required = req && typeof req.filled === 'number' && Number.isFinite(req.filled) && typeof req.total === 'number' && Number.isFinite(req.total)
+          ? { filled: req.filled, total: req.total } : undefined
+        byProduct[productId] = { pct, state: v.state as ScopeReadiness['state'], ...(typeof v.note === 'string' ? { note: v.note } : {}),
+          ...(required ? { required } : {}), ...(typeof v.computedAt === 'string' ? { computedAt: v.computedAt } : {}) }
       }
     }
     return [{ ...score, coordinateKey: raw.coordinateKey, channel: raw.channel, market: raw.market, accountId: raw.accountId, aliasId: raw.aliasId,

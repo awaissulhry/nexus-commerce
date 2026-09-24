@@ -34,6 +34,13 @@ export async function inDatabaseReadTransaction<T>(client: PrismaClient, work: (
   }, { isolationLevel: 'RepeatableRead', maxWait: 5_000, timeout: 20_000 })
 }
 
+/** Work that must never join the caller's transaction: a cache row written while a read-only sheet
+ * snapshot is open would fail, and a failure would roll the caller back. The business context is
+ * a separate store and stays in force. */
+export function outsideDatabaseTransaction<T>(work: () => Promise<T>): Promise<T> {
+  return context.exit(work)
+}
+
 /** Fastify injection starts a new async resource; carry only an internal context handle. */
 export function captureDatabaseContext() {
   const captured = context.getStore()

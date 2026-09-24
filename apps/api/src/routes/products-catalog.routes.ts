@@ -1716,6 +1716,25 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const actor = userIdFor(request)
 
+      // 🔴 PLAN Step 1.3 (R-39) — an eBay unpublish sets quantity 0, which only HIDES the item while
+      // the seller's out-of-stock control is on; off, it would END the ItemID. The guard below must
+      // know which before it deletes anything, so the preference is read here — once per account,
+      // bounded, BEFORE the transaction (a network call never holds it open). Unknown = refused.
+      const ebayOutOfStock = new Map<string, import('../services/channel-delist.service.js').EbayOutOfStockControl>()
+      if (channelAction === 'unpublish') {
+        const { whereDelistTargets } = await import('../services/outbound-enqueue.js')
+        const { readEbayOutOfStockPreference } = await import('../services/channel-delist.service.js')
+        const ebayTargets = (await prisma.channelListing.findMany({
+          where: { ...whereDelistTargets(productIds), channel: 'EBAY' },
+          select: { channel: true, channelConnectionId: true, marketplace: true, region: true },
+        })).filter((row) => row.channel === 'EBAY' && row.channelConnectionId)
+        const markets = new Map<string, string>()
+        for (const row of ebayTargets) if (!markets.has(row.channelConnectionId!)) markets.set(row.channelConnectionId!, row.marketplace ?? row.region ?? '')
+        await Promise.all([...markets].map(async ([accountId, market]) => {
+          ebayOutOfStock.set(accountId, await readEbayOutOfStockPreference(accountId, market))
+        }))
+      }
+
       // RT.2 — delist rows created inside the tx; instant-lane jobs fired
       // post-commit (see below).
       const delistFireEntries: Array<{ id: string; productId: string | null; syncType: string; holdUntil?: Date | null }> = []
@@ -1789,7 +1808,14 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         const delistTargets = eligibleIds.length > 0
           ? await tx.channelListing.findMany({
               where: whereDelistTargets(eligibleIds),
-              select: { productId: true, channel: true, marketplace: true, region: true, externalListingId: true },
+              select: {
+                productId: true, channel: true, marketplace: true, region: true, externalListingId: true,
+                // PLAN Step 1.3 — the facts an unpublish depends on: FBA (as isFbaCoordinate reads it)
+                // and the eBay account whose out-of-stock preference was read above.
+                channelConnectionId: true, fulfillmentMethod: true, platformAttributes: true,
+                product: { select: { fulfillmentMethod: true } },
+                offers: { select: { fulfillmentMethod: true, isActive: true } },
+              },
             })
           : []
 
@@ -1798,7 +1824,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         for (const listing of delistTargets) {
           if (!sellingRisk(listing)) continue
           // 'none' sends nothing at all, so no channel can remove anything.
-          const capability = channelAction === 'none' ? null : delistCapability(listing.channel, channelAction)
+          const capability = channelAction === 'none' ? null : delistCapability(listing.channel, channelAction, {
+            amazonListing: listing,
+            amazonFbaEvidence: { hasActiveFbaOffer: (listing.offers ?? []).some((o) => o.isActive !== false && String(o.fulfillmentMethod ?? '').toUpperCase() === 'FBA') },
+            ebayOutOfStockControl: listing.channelConnectionId ? ebayOutOfStock.get(listing.channelConnectionId) ?? 'UNKNOWN' : 'UNKNOWN',
+          })
           if (capability?.removes === true) continue
           if (!listing.productId) continue
           orphanWould.push({

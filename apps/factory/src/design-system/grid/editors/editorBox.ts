@@ -77,6 +77,12 @@ export const EDITOR_CAPS = {
    * measurement and widening it would move three other editors that were sized on their own content.
    */
   axes: { width: 420, height: 420, preferred: 420, preferredHeight: 320 },
+  /**
+   * Step 4.3 #3 (A-52 §4, 2026-09-24) — the bullets editor: ten positions, each a label, a 2-row field and a counter, with
+   * the key line under them. 560 is long text's reading measure (a bullet is up to 700 characters); the height caps at 480
+   * and the positions scroll inside. A SEPARATE kind for the reason `axes` is: widening `list` would move the chip-list panel.
+   */
+  slotlist: { width: 560, height: 480, preferred: 560, preferredHeight: 400 },
 } as const
 
 export type EditorKind = keyof typeof EDITOR_CAPS

@@ -1,0 +1,96 @@
+{
+ "at": "2026-09-23T14:20:46.880Z",
+ "ebay": {
+  "account": "cmr4aaqb00025nz016k18rup9",
+  "itemId": "256564203510",
+  "productSku": "GALE-JACKET-BLACK-MEN-S",
+  "preferenceAck": "Success",
+  "outOfStockControlPreference": "true",
+  "itemOutOfStockControl": "true",
+  "itemAck": "Success",
+  "listingStatus": "Active",
+  "itemQuantity": "378",
+  "variations": [
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-S",
+    "quantity": 4,
+    "sold": 4
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-M",
+    "quantity": 13,
+    "sold": 3
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-L",
+    "quantity": 38,
+    "sold": 4
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-XL",
+    "quantity": 13,
+    "sold": 6
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-XXL",
+    "quantity": 18,
+    "sold": 3
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-3XL",
+    "quantity": 15,
+    "sold": 2
+   },
+   {
+    "sku": "GALE-JACKET-BLACK-MEN-4XL",
+    "quantity": 5,
+    "sold": 0
+   },
+   {
+    "sku": "GALE-JACKET-YELLOW-MEN-S",
+    "quantity": 24,
+    "sold": 0
+   },
+   {
+    "sku": "GALE-JACKET-YELLOW-MEN-M",
+    "quantity": 19,
+    "sold": 1
+   },
+   {
+    "sku": "GALE-JACKET-YELLOW-MEN-L",
+    "quantity": 30,
+    "sold": 1
+   },
+   {
+    "sku": "GALE-JACKET-YELLOW-MEN-XL",
+    "quantity": 27,
+    "sold": 0
+   },
+   {
+    "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+    "quantity": 11,
+    "sold": 0
+   }
+  ],
+  "variationCount": 20
+ },
+ "amazon": {
+  "sku": "xracingbxn48",
+  "asin": "B0BTCBPVTS",
+  "storedAsin": "B0BTCBPVTS",
+  "status": [
+   "BUYABLE",
+   "DISCOVERABLE"
+  ],
+  "ourQuantity": 2,
+  "fulfillmentAvailability": [
+   {
+    "fulfillment_channel_code": "DEFAULT",
+    "quantity": 2
+   }
+  ],
+  "productType": "APPAREL",
+  "accountId": "cmothu9bo0000nz01asw6wx8j",
+  "candidatesRead": 2
+ }
+}

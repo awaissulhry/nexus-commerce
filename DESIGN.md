@@ -94,14 +94,16 @@ through a tier-2 role.
 |---|---|
 | text | `--nds-text` `--nds-text-2` `--nds-text-muted` `--nds-text-3` `--nds-text-strong` `--nds-text-disabled` `--nds-text-inverse` `--nds-text-link` |
 
-**🔴 The text ramp is not uniformly AA.** Measured on white, 2026-08-25:
+**Text is strict 7:1 in both themes (R-49; the AAA sweep, 2026-09-24).** Each value's WORST ground, measured by
+`scripts/check-nds-contrast.mjs` over bg, surface, raised, sunken and hover; the push gate holds every pair at 7:1:
 
-| token | value | on white | use for |
-|---|---|---:|---|
-| `--nds-text` | `#1c2530` | 15.48 ✓ | anything |
-| `--nds-text-2` | `#5b6573` | 5.91 ✓ | anything |
-| `--nds-text-muted` | `#667080` | **5.01 ✓** | the smallest text you still expect people to read |
-| `--nds-text-3` | `#8a93a1` | **3.10 ✗** | **icons and ≥24px only** — it FAILS AA below 18.66px |
+| token | light | worst light | dark | worst dark | use for |
+|---|---|---:|---|---:|---|
+| `--nds-text` | `#1c2530` | 13.66 ✓ | `#e7ebf1` | 11.81 ✓ | anything |
+| `--nds-text-2` | `#3a4452` | 8.71 ✓ | `#c3ccd6` | 8.70 ✓ | anything |
+| `--nds-text-muted` | `#48505b` (= text-3) | 7.20 ✓ | `#c3ccd6` (= text-2) | 8.70 ✓ | the smallest text you still expect people to read |
+| `--nds-text-3` | `#48505b` | 7.20 ✓ | `#b3bac6` | 7.24 ✓ | labels and metadata — close to text-2 in colour, so it is set apart by size and weight (R-66) |
+| `--nds-text-link` | `#134da3` | 7.08 ✓ | `#9cc2f3` | 7.69 ✓ | links (the same blue as `--nds-primary` in light, R-65) |
 
 `--nds-text-3` was being used at 9–12.5px by 18 design-system components, so every consumer shipped
 sub-AA secondary text. Those now use `--nds-text-muted`. The uses that remain are icons, where

@@ -1,0 +1,80 @@
+target host: ep-purple-river-altf6t3y-pooler.c-3.eu-central-1.aws.neon.tech db: /neondb (production, read only)
+SUMMARY {"role":{"user":"neondb_owner","rolbypassrls":true},"readOnly":"on","workspaces":[{"id":"nexus_legacy_workspace","name":"Xavia Racing"},{"id":"bf0047bf-e1d9-48d0-8cc6-20e94bb734dd","name":"Motovento"}],"children":[{"ws":"bf0047bf-e1d9-48d0-8cc6-20e94bb734dd","live_children":20,"parents":1},{"ws":"nexus_legacy_workspace","live_children":301,"parents":14}],"productVariation":[],"junk":[]}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"DE","axis":"color","children":119}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"DE","axis":"size","children":105}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"ES","axis":"color","children":60}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"ES","axis":"size","children":18}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"FR","axis":"color","children":74}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"FR","axis":"size","children":32}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"IT","axis":"color","children":256}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"az","market":"IT","axis":"size","children":232}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"eb","market":"IT","axis":"color","children":216}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"eb","market":"IT","axis":"size","children":200}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"va","market":"","axis":"color","children":44}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"va","market":"","axis":"size","children":35}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"vr","market":"","axis":"color","children":301}
+COVERAGE {"ws":"nexus_legacy_workspace","store":"vr","market":"","axis":"size","children":285}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"ca","key":"size","n":1}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Color","n":28}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Size","n":19}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Colore","n":16}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Taglia","n":16}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Body Type","n":12}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"va","key":"Style Name","n":9}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Color","n":245}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Size","n":229}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Colore","n":56}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Taglia","n":56}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Fit Type","n":49}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Team Name","n":21}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Athlete","n":21}
+SPELLINGS {"ws":"nexus_legacy_workspace","store":"vr","key":"Style Name","n":9}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"DE","axis":"color","other_only":99,"same":6,"differ":14,"sample":["GALE-JACKET-BLACK-MEN-XXS: va=nero vs schwarz","AIRMESH-JACKET-BLACK-MEN-XXL: va=nero vs schwarz","AIRMESH-JACKET-BLACK-MEN-M: va=nero vs schwarz","AIRMESH-JACKET-BLACK-MEN-S: va=nero vs schwarz"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"DE","axis":"size","other_only":88,"same":17,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"ES","axis":"color","other_only":48,"same":0,"differ":12,"sample":["AIRMESH-JACKET-YELLOW-MEN-S: va=giallo vs amarillo","AIRMESH-JACKET-BLACK-MEN-S: va=nero vs negro","AIRMESH-JACKET-BLACK-MEN-3XL: va=nero vs negro","AIRMESH-JACKET-BLACK-MEN-XL: va=nero vs negro"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"ES","axis":"size","other_only":18,"same":0,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"FR","axis":"color","other_only":62,"same":0,"differ":12,"sample":["AIRMESH-JACKET-YELLOW-MEN-3XL: va=giallo vs jaune","AIRMESH-JACKET-BLACK-MEN-XXL: va=nero vs noir","AIRMESH-JACKET-YELLOW-MEN-L: va=giallo vs jaune","AIRMESH-JACKET-BLACK-MEN-L: va=nero vs noir"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"FR","axis":"size","other_only":32,"same":0,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"IT","axis":"color","other_only":228,"same":28,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"az","market":"IT","axis":"size","other_only":213,"same":19,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"eb","market":"IT","axis":"color","other_only":178,"same":37,"differ":1,"sample":["normal-knee-slider-orange: va=arancia vs arancione"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"eb","market":"IT","axis":"size","other_only":170,"same":30,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"vr","market":"","axis":"color","other_only":257,"same":44,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"va","store":"vr","market":"","axis":"size","other_only":250,"same":35,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"DE","axis":"color","other_only":0,"same":22,"differ":97,"sample":["MISANO-JACKET-4XL-BLACK: vr=nero vs schwarz","MISANO-JACKET-S-BROWN: vr=marrone vs braun","AIREON-JACKET-CREMA-E-VINO-MEN-XXL: vr=crema e vino | giacca vs crema e vino","GALE-JACKET-YELLOW-MEN-3XL: vr=giallo vs gelb"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"DE","axis":"size","other_only":0,"same":91,"differ":14,"sample":["YK-29A3-CH9D: vr=54 vs xxl (brust: 106-110cm | taille: 92-96cm)","MISANO-JACKET-S-BROWN: vr=46 vs s (brust: 90-94cm | taille: 76-80cm)","MISANO-JACKET-XS-BROWN: vr=44 vs xs (brust: 86-90cm | taille: 72-76cm)","MISANO-JACKET-XXL-BROWN: vr=54 vs xxl (brust: 106-110cm | taille: 92-96cm)"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"ES","axis":"color","other_only":0,"same":0,"differ":60,"sample":["AIRMESH-JACKET-YELLOW-MEN-3XL: vr=giallo vs amarillo","AIRMESH-JACKET-BLACK-MEN-S: vr=nero vs negro","AIREON-JACKET-NERO-NEO-MEN-M: vr=nero neo | giacca vs nero neo","GALE-JACKET-BLACK-MEN-XL: vr=nero vs negro"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"ES","axis":"size","other_only":0,"same":18,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"FR","axis":"color","other_only":0,"same":0,"differ":74,"sample":["AIRMESH-JACKET-BLACK-MEN-M: vr=nero vs noir","GALE-JACKET-YELLOW-MEN-4XL: vr=giallo vs jaune","MOSS-JACKET-YELLOW-MEN-M: vr=grigio vs gris","YK-29A3-CH9D: vr=nero vs noir"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"FR","axis":"size","other_only":0,"same":18,"differ":14,"sample":["MISANO-JACKET-4XL-BLACK: vr=58 vs 4xl","MISANO-JACKET-XL-BROWN: vr=52 vs xl","SQ-75VQ-OZ1Q: vr=48 vs m","SQ-0SRL-MWT1: vr=52 vs xl"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"IT","axis":"color","other_only":0,"same":216,"differ":40,"sample":["AIREON-JACKET-NERO-NEO-MEN-5XL: vr=nero neo | giacca vs nero neo","AIREON-JACKET-NERO-NEO-MEN-XXS: vr=nero neo | giacca vs nero neo","AIREON-PANT-CREMA-E-VINO-MEN-XL: vr=crema e vino | pantaloni vs crema e vino","AIREON-PANT-NERO-NEO-MEN-XXL: vr=nero neo | pantaloni vs nero neo"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"az","market":"IT","axis":"size","other_only":0,"same":232,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"eb","market":"IT","axis":"color","other_only":0,"same":174,"differ":42,"sample":["VENTRA-JACKET-XS-YELLOW-MEN: vr=grigio scuro-giallo-nero | uomo vs giallo | uomo","VENTRA-JACKET-3XL-RED-MEN: vr=grigio-rosso-nero | uomo vs rosso | uomo","VENTRA-JACKET-S-RED-WOMEN: vr=grigio-rosso-nero | donna vs rosso | donna","VENTRA-JACKET-5XL-RED-WOMEN: vr=grigio-rosso-nero | donna vs rosso | donna"]}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"eb","market":"IT","axis":"size","other_only":0,"same":200,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"va","market":"","axis":"color","other_only":0,"same":44,"differ":0,"sample":null}
+AGREEMENT {"ws":"nexus_legacy_workspace","base":"vr","store":"va","market":"","axis":"size","other_only":0,"same":35,"differ":0,"sample":null}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"az+eb+vr","children":149}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"az+vr","children":79}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"eb+vr","children":29}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"az+eb+va+vr","children":22}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"eb+va+vr","children":16}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"color","stores":"az+va+vr","children":6}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"az+eb+vr","children":133}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"az+vr","children":80}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"eb+vr","children":37}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"eb+va+vr","children":16}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"az+eb+va+vr","children":14}
+ONLYHERE {"ws":"nexus_legacy_workspace","axis":"size","stores":"az+va+vr","children":5}
+COLLISIONS {"ws":"nexus_legacy_workspace","store":"az","market":"DE","groups":5,"children":34,"groups_with_both_axes":0,"sample":["VENTRA-JACKET xl/∅ x4","VENTRA-JACKET xxl/∅ x2","AIREON ∅/nero neo x12","AIREON ∅/crema e vino x12","VENTRA-JACKET s/∅ x4"]}
+COLLISIONS {"ws":"nexus_legacy_workspace","store":"az","market":"ES","groups":7,"children":42,"groups_with_both_axes":0,"sample":["AIRMESH-JACKET ∅/negro x6","IT-MOSS-JACKET ∅/negro x6","IT-MOSS-JACKET ∅/gris x6","WATERPROOF-OVERJACKET-BLACK-MEN ∅/negro x6","AIREON ∅/nero neo x6","AIREON ∅/crema e vino x6"]}
+COLLISIONS {"ws":"nexus_legacy_workspace","store":"az","market":"FR","groups":7,"children":42,"groups_with_both_axes":0,"sample":["AIREON ∅/nero neo x6","WATERPROOF-OVERJACKET-BLACK-MEN ∅/noir x6","IT-MOSS-JACKET ∅/gris x6","IT-MOSS-JACKET ∅/noir x6","AIRMESH-JACKET ∅/jaune x6","AIRMESH-JACKET ∅/noir x6"]}
+COLLISIONS {"ws":"nexus_legacy_workspace","store":"az","market":"IT","groups":22,"children":48,"groups_with_both_axes":20,"sample":["AIREON xxs/nero neo x2","AIRMESH-JACKET ∅/giallo x4","AIREON 3xl/crema e vino x2","AIREON 3xl/nero neo x2","AIREON 4xl/crema e vino x2","AIREON 4xl/nero neo x2"]}
+DECLARED {"ws":"nexus_legacy_workspace","parents_with_axes":9,"children":202,"children_without_va":151,"children_without_vr":0}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"listing _axisValueOrder","key":"__dim1__","n":2}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"listing _axisValueOrder","key":"__dim0__","n":2}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"listing _variationAxes","key":"Taglia","n":2}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"listing _variationAxes","key":"Colore","n":2}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"variationAxes","key":"Colore","n":242}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"variationAxes","key":"Taglia","n":217}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"variationAxes","key":"Size","n":1}
+AXISNAMES {"ws":"nexus_legacy_workspace","src":"variationAxes","key":"Color","n":1}

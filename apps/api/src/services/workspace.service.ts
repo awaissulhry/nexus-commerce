@@ -3,6 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 import { BUSINESS_COUNTRIES } from '@nexus/shared/business-profile'
 import { expandPermissions, isValidPermission, FEATURES } from '@nexus/shared/permissions'
 import { WorkspaceError, withWorkspace, type WorkspaceContext } from '../lib/workspace-context.js'
+import { marketCatalogueRows } from './pim/market-catalogue.js'
 
 const membershipSelect = {
   id: true, status: true, version: true, userId: true, createdAt: true,
@@ -142,6 +143,10 @@ export function createWorkspaceService(db: PrismaClient) {
         })
         await tx.workspaceMembership.create({ data: { workspaceId, userId, roles: { create: { roleId: owner.id } } } })
         await tx.accountSettings.create({ data: { workspaceId, businessName: input.name, country: input.country, currency: input.currency, timezone: input.timezone } })
+        // A-53: the business's markets, in the same transaction — a business without them has nowhere to sell
+        // and a product studio that waits forever. `workspaceId` comes from the transaction's business, as the
+        // warehouse's does below.
+        await tx.marketplace.createMany({ data: marketCatalogueRows() })
         const warehouse = await tx.warehouse.create({ data: { code: `${input.country}-MAIN`, name: 'Main warehouse', country: input.country, isDefault: true, kind: 'PRIMARY' } })
         await tx.stockLocation.create({ data: { code: warehouse.code, name: warehouse.name, type: 'WAREHOUSE', warehouseId: warehouse.id } })
         await tx.workspaceAudit.create({ data: { workspaceId, actorUserId: userId, action: 'workspace.created' } })

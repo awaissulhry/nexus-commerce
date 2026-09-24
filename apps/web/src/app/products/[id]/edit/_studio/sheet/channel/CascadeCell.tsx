@@ -6,7 +6,7 @@ import { CellAction } from '@/design-system/components'
 import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 
 import type { CellSaveTracker, ICellRendererParams } from '@/design-system/grid'
-import { CellSaveReason, EmptyValue, LongTextCell, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
+import { CellSaveReason, EmptyValue, LongTextCell, MetafieldValue, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { hasValue } from './provenance'
@@ -41,6 +41,9 @@ export interface CascadeCellParams {
   /** Inspecting a source never changes its value. Pin/reset are labelled actions in the details. */
   onDetails: (row: ChannelSheetRow, column: SheetColumn) => void
 }
+
+/** A stored Shopify value as its wire text: JSON for lists and structured values. */
+const storedText = (value: unknown): string | null => value == null ? null : typeof value === 'object' ? JSON.stringify(value) : String(value)
 
 export const CascadeCell = memo(function CascadeCell(
   p: ICellRendererParams<ChannelSheetRow> & CascadeCellParams,
@@ -96,7 +99,11 @@ export const CascadeCell = memo(function CascadeCell(
             the dropdown that set it. Falls back to the raw value for every column that has no
             formatter, which is most of them. */}
         {present ? (
-          p.formattedPreview ? String(p.valueFormatted ?? p.value ?? '') : column.shape === 'list' || column.shape === 'measure' ? (
+          /* 2026-09-24 — a store metafield is drawn by its TYPE (a file as a picture, a colour as a swatch, a
+             reference as its name), the same rules for every store's fields. Native Shopify fields keep their text. */
+          p.formattedPreview && column.shopifyField?.definition ? (
+            <MetafieldValue type={column.shopifyField.type} raw={storedText(p.value ?? cell?.value)} labels={column.optionLabels} images={column.referenceImages} />
+          ) : p.formattedPreview ? String(p.valueFormatted ?? p.value ?? '') : column.shape === 'list' || column.shape === 'measure' ? (
             /* AM.1 §A.3 — the engine's cell for the shape, the same one master's `withMark` wraps. */
             <ShapeValue shape={column.shape} value={p.value ?? cell?.value} optionLabels={column.optionLabels} />
           ) : column.kind === 'longtext' ? (

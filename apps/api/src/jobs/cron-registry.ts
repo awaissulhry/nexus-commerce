@@ -406,6 +406,20 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const { runShopifyQtyReadback } = await import('./shopify-qty-readback.job.js')
     return runShopifyQtyReadback()
   },
+  // A-39 (R-41) — Step 3.5b's Amazon content read. On-demand run ONLY: the job is SCHEDULED in index.ts
+  // (startContentDriftCron). A manual run reads Amazon (≤ 1 read a second) and writes ChannelDrift, as the nightly does.
+  'content-drift': async () => {
+    // A-39 b2 (R-43) — the eBay pass first (its own slice), then Amazon: the same run as the nightly.
+    const { runNightlyContentDrift } = await import('./content-drift.job.js')
+    return (await runNightlyContentDrift()).line
+  },
+  // 2026-09-24 — the readiness reconcile, on demand ONLY (the nightly is scheduled in index.ts at 02:17). A manual run
+  // recomputes EVERY family of the request's business now (not only rows older than 20 h), with the nightly's writer
+  // and budget; a failed family fails the run, as the cron does.
+  'readiness-reconcile': async () => {
+    const { runReadinessReconcileNow } = await import('./readiness-reconcile.job.js')
+    return runReadinessReconcileNow()
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {

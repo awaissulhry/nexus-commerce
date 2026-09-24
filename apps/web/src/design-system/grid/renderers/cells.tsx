@@ -18,6 +18,7 @@ import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 
 import { Button, InfoTip, Pill, TagGlyph, type Tone } from '../../primitives'
 import { CoverageSummary, Menu, Thumbnail, type CoverageChannel, type MenuItemDef } from '../../components'
+import { DetailPopover } from '../../components/DetailPopover'
 import { emptyValueA11y } from './emptyValue'
 import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } from './format'
 import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
@@ -455,11 +456,29 @@ export interface ScopeReadinessValue {
   note?: string
 }
 
-export const ScopeReadinessCell = memo(function ScopeReadinessCell(p: ICellRendererParams) {
+/**
+ * A-45 (Step 4.3 #4) — optional DETAIL for a readiness cell: when the column passes `detail` and it returns
+ * content, the pill becomes the trigger of a `DetailPopover` (a card that can hold actions — "Go to <field>").
+ * Without these params the cell renders exactly as before, for every other caller.
+ */
+export interface ScopeReadinessCellParams {
+  detail?: (value: ScopeReadinessValue | null, params: ICellRendererParams) => ((api: { close: (options?: { returnFocus?: boolean }) => void }) => ReactNode) | null
+  /** The trigger's and the panel's accessible names. Required with `detail`. */
+  detailLabels?: (value: ScopeReadinessValue | null, params: ICellRendererParams) => { trigger: string; panel: string }
+}
+
+export const ScopeReadinessCell = memo(function ScopeReadinessCell(p: ICellRendererParams & ScopeReadinessCellParams) {
   const v = p.value as ScopeReadinessValue | null | undefined
   const meta = readinessMeta(v?.state ?? 'notComputed', 'scope')
   const pct = v && typeof v.pct === 'number' && Number.isFinite(v.pct) ? `${v.pct}%` : null
   const pill = <Pill tone={meta.tone} size="sm">{pct ? `${meta.label} · ${pct}` : meta.label}</Pill>
+  const content = p.detail && p.detailLabels ? p.detail(v ?? null, p) : null
+  if (content && p.detailLabels) {
+    const labels = p.detailLabels(v ?? null, p)
+    // Esc returns focus to the CELL through AG, so the grid's own focus model resumes where it was.
+    const focusCell = () => { if (p.node?.rowIndex != null) p.api?.setFocusedCell(p.node.rowIndex, p.column!) }
+    return <DetailPopover trigger={pill} triggerLabel={labels.trigger} label={labels.panel} returnFocus={focusCell}>{content}</DetailPopover>
+  }
   const tip = v?.note ?? meta.hint
   return tip ? <InfoTip tip={tip}>{pill}</InfoTip> : pill
 })

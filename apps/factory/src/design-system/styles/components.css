@@ -3064,3 +3064,56 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-datetimefield { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
 .nds-datetimefield > .nds-datefield { width: auto; flex: 1 1 150px; min-width: 150px; }
 .nds-datetimefield-zone { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+
+/* ── Step 4.3 #2 (T1, R-51/R-52/R-53) — the studio top bar ──────────────────────────────────────
+   MultiSelect on the 28px bar tier, with the SAME numbers as `.nds-listbox.sm` (it stands beside
+   one). `auto` drops the 160px minimum so a short label ("Italian +2") does not leave dead space. */
+.nds-ms.sm .nds-ms-btn {
+  height: var(--nds-control-h-sm);
+  padding: 0 9px;
+  line-height: 1.1;
+  font-size: var(--nds-font-size-sm-plus);
+}
+.nds-ms.sm .nds-ms-btn svg { width: 13px; height: 13px; }
+.nds-ms.auto .nds-ms-btn { min-width: 0; }
+
+/* A HELD panel option (ListboxPanel `heldReason`): reachable and announced, never chosen. Full text
+   colour like a held ScopeBar chip — a greyed label would fail contrast and hide the reason. */
+.nds-combo-pop button.held { cursor: default; }
+.nds-combo-pop button.held .nds-listbox-trailing { font-style: italic; }
+
+/* ScopeBar variant="menu": one trigger in the chip's own box (`.nds-scope`, 28px), the coordinate
+   controls pinned right as the chip track's `flex: 1` used to do. */
+.nds-scopebar.is-menu .nds-scopebar-right { margin-left: auto; }
+.nds-scope-menu { position: relative; display: inline-flex; min-width: 0; }
+.nds-scope.nds-scope-trigger { max-width: 360px; min-width: 0; }
+.nds-scope-trigger .nds-scope-face { display: inline-flex; align-items: center; gap: 7px; min-width: 0; overflow: hidden; }
+.nds-scope-trigger .nds-scope-label { overflow: hidden; text-overflow: ellipsis; }
+.nds-scope-trigger .chev { flex: none; color: var(--nds-text-2); }
+.nds-scope-menu-pop { min-width: 260px; }
+
+/* GridToolbarFold `activeLabel` — a folded filter that is ON reads as pressed, like its chip. */
+.nds-btn.nds-toolbar-fold-trigger.is-active {
+  background: var(--nds-fchip-on-bg);
+  border-color: var(--nds-fchip-on-border);
+  color: var(--nds-fchip-on-fg);
+}
+.nds-toolbar-fold-active { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* A-45 (2026-09-24) — DetailPopover: a toggletip that can hold actions (components/DetailPopover.tsx). The trigger wraps an
+   existing pill with no box of its own (Δ 0); the panel is placed by usePopoverPosition (position: fixed, inline). Text is
+   --nds-text-strong / --nds-text only (R-49: text-2 and text-3 fail 7:1 today). */
+.nds-detailpop-trigger { all: unset; display: inline-flex; align-items: center; cursor: pointer; border-radius: var(--nds-radius-sm); }
+.nds-detailpop-trigger:focus-visible { outline: 2px solid var(--nds-focus-ring); outline-offset: -2px; }
+.nds-detailpop { z-index: var(--nds-z-popover); min-width: 240px; max-width: var(--nds-popover-max-w); background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); box-shadow: var(--nds-shadow-pop); padding: 12px;
+  color: var(--nds-text-strong); font-size: var(--nds-font-size-sm-plus); line-height: 1.5; }
+.nds-detailpop:focus-visible { outline: 2px solid var(--nds-focus-ring); outline-offset: 2px; }
+.nds-detailpop-h { font-weight: 600; margin-bottom: 8px; }
+.nds-detailpop-gh { font-weight: 600; margin: 8px 0 4px; }
+.nds-detailpop-list { list-style: none; margin: 0; padding: 0; }
+.nds-detailpop-item { min-height: 28px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.nds-detailpop-what { display: flex; flex-direction: column; min-width: 0; }
+.nds-detailpop-reason, .nds-detailpop-note, .nds-detailpop-foot { color: var(--nds-text); }
+.nds-detailpop-note { margin: 8px 0 0; }
+.nds-detailpop-foot { margin-top: 10px; font-size: var(--nds-font-size-xs); }

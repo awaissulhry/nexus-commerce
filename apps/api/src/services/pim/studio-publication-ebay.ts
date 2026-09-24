@@ -78,9 +78,18 @@ async function liveItem(itemId: string, accountId: string, market: string) {
   return publicationDigest(fields.map(key => stable.match(new RegExp(`<${key}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${key}>`))?.[0] ?? ''))
 }
 
-export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+/**
+ * PLAN R-43 (A-39 slice b2) — the listing input this builder sends, extracted from `prepareEbayPublication` with its
+ * behaviour unchanged: every refusal from the ItemID checks to the shared input, and the title / item specifics / variations
+ * it computes. No publish gate, no media gallery, no description render, no live call — so a READER (the nightly eBay content
+ * read, `channel-drift/ebay-content-ours.ts`) takes "ours" from the builder itself, never from a second copy of it.
+ *
+ * `currency`: the market's own (`facts.destination.currency`). Both the publish path and a reader pass it; since P4.4a
+ * (`4774b48ff`) `buildSharedListingInput` refuses a missing one by name (A-41, R-46). It feeds only the input's `currency`
+ * field, never its title or item specifics.
+ */
+export async function buildEbayListingInput(facts: PublicationFacts, options: { currency?: string } = {}) {
   const { scope, parent, products, listings } = facts
-  if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
   const ids = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id))]
   if (ids.length > 1) throw new Error('These products belong to different eBay listings. Choose one listing alias before publishing.')
   const itemId = ids[0] ?? null
@@ -100,9 +109,11 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
     const listing = listings.find(l => l.productId === product.id)
     if (listing?.fulfillmentMethod === 'FBA') throw new Error('This eBay listing uses Amazon fulfillment. Its fulfillment publication workflow is required.')
     const resolved = facts.resolved[0]?.products.find(r => r.productId === product.id)
-    const category = resolved?.category.channelCategoryId
+    // A-56 — typed on purpose: `resolved` arrives untyped, so the one category string went into `loadEbaySpec(…, categoryIds: string[])`
+    // unchecked, and every Trading listing that reached here failed with "categoryIds.map is not a function" (since 2026-09-13).
+    const category: string | null | undefined = resolved?.category.channelCategoryId
     if (!resolved || !category) throw new Error(`${product.sku}: choose an eBay category in Information.`)
-    const spec = await loadEbaySpec(scope.marketplace, category)
+    const spec = await loadEbaySpec(scope.marketplace, [category])
     if (spec.absent) throw new Error(`${product.sku}: the eBay category schema is unavailable.`)
     const effective: Record<string, any> = { ...listing, region: scope.marketplace, platformAttributes: { ...object(listing?.platformAttributes), categoryId: category }, flatFileSnapshot: null }
     for (const field of spec.fields) {
@@ -161,7 +172,14 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
       row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value
     }
   }
-  const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder)
+  const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency)
+  return { shared, itemId, parentListing, settings, galleries, variants }
+}
+
+export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+  const { scope, parent, products } = facts
+  if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
+  const { shared, itemId, parentListing, settings, galleries, variants } = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')

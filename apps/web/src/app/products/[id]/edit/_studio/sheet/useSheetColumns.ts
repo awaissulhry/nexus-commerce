@@ -15,6 +15,7 @@ import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { columnLanguages, languageProjectionReady, LANGUAGES_VIEW_ID } from './languages'
 import { alwaysColumnsFor, orderColumnKeys, sheetViews, structuralColumnKeys, type ViewContext } from './views'
+import { defaultViewKeys } from './slotListColumns'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 
 /** Widths and sort remain lightweight browser preferences. Complete layouts are saved explicitly. */
@@ -79,6 +80,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const scopeRef = useRef(layoutSurface)
   scopeRef.current = layoutSurface
   const orderedKeys = useMemo(() => orderColumnKeys(columns, viewCtx), [columns, viewCtx])
+  /* R-56 (Step 4.3 #3) — what the sheet LANDS on: every column minus the slots a one-cell shows. Only the landing sites
+     read this; `orderedKeys` stays every column (Customise, saved views and "export all" keep Bullet 1–10). */
+  const landingKeys = useMemo(() => defaultViewKeys(orderedKeys, columns), [orderedKeys, columns])
   const attributeKeys = useMemo(() => new Set(orderedKeys), [orderedKeys])
   const addressable = useMemo(() => [identityColumn, ...orderedKeys], [identityColumn, orderedKeys])
   const addressableSet = useMemo(() => new Set(addressable), [addressable])
@@ -230,19 +234,19 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       gridState.markActive(dv.id)
     } else {
       const languagePreset = languageView?.selected ? views.presets.find(preset => preset.id === LANGUAGES_VIEW_ID) : null
-      activate(languagePreset ? { kind: 'preset', id: languagePreset.id, label: languagePreset.label } : { kind: 'all' }, columnsViewPayload(languagePreset?.columns ?? orderedKeys), false)
+      activate(languagePreset ? { kind: 'preset', id: languagePreset.id, label: languagePreset.label } : { kind: 'all' }, columnsViewPayload(languagePreset?.columns ?? landingKeys), false)
       gridState.markActive(null)
     }
     setLandedScope(layoutSurface)
     setLandedGrid(api)
-  }, [recoveryState, landedScope, activeChip, applyToGrid, landed, apiRef, gridReady, orderedKeys, gridState, loadState, layoutSurface, alwaysColumns, activate, specs, setChip, applySaved, attributeKeys])
+  }, [recoveryState, landedScope, activeChip, applyToGrid, landed, apiRef, gridReady, orderedKeys, landingKeys, gridState, loadState, layoutSurface, alwaysColumns, activate, specs, setChip, applySaved, attributeKeys])
 
   const keySignature = JSON.stringify(orderedKeys)
   const lastSignature = useRef(keySignature)
   useEffect(() => {
     if (!landed || lastSignature.current === keySignature) return
     lastSignature.current = keySignature
-    if (active.kind === 'all') { activate(active, columnsViewPayload(orderedKeys), false); return }
+    if (active.kind === 'all') { activate(active, columnsViewPayload(landingKeys), false); return }
     if (active.kind === 'preset') {
       const preset = views.presets.find((p) => p.id === active.id)
       if (preset) applyPreset(preset)
@@ -250,7 +254,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     }
     const payload = layoutRef.current
     if (payload) activate(active.kind === 'saved' ? { ...active, missing: payload.columns.filter((k) => !attributeKeys.has(k)) } : { kind: 'custom', count: visibleLayoutKeys(payload, specs).length }, payload)
-  }, [landed, keySignature, active, activate, orderedKeys, views.presets, applyPreset, attributeKeys, specs])
+  }, [landed, keySignature, active, activate, orderedKeys, landingKeys, views.presets, applyPreset, attributeKeys, specs])
 
   useEffect(() => {
     if (!landed || !gridState.loaded || active.kind !== 'saved') return
@@ -338,12 +342,12 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const record = await fetchLayout()
     await gridState.refresh()
     if (scopeRef.current !== layoutSurface) throw new Error('The sheet scope changed. Reopen Customise in the current scope.')
-    const payload = record?.filters ?? columnsViewPayload(orderedKeys)
+    const payload = record?.filters ?? columnsViewPayload(landingKeys)
     activate({ kind: 'custom', count: visibleLayoutKeys(payload, specs).length }, payload)
     gridState.markActive(null)
     setChip?.(payload.chip ?? null)
     return preferencesFromLayout(payload, specs)
-  }, [fetchLayout, gridState, layoutSurface, orderedKeys, activate, specs, setChip])
+  }, [fetchLayout, gridState, layoutSurface, landingKeys, activate, specs, setChip])
 
   const describeView = useCallback((view: SavedGridView<TPage>) => {
     if (!isColumnsViewPayload(view.payload)) return view.payload ? { note: 'Saved in an older format — open it to convert' } : { note: 'Holds no columns' }

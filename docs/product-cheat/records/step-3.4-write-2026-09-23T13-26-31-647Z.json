@@ -1,0 +1,54 @@
+{
+ "at": "2026-09-23T13:26:31.647Z",
+ "mode": "write",
+ "execute": true,
+ "payload": {
+  "productType": "COAT",
+  "patches": [
+   {
+    "op": "replace",
+    "path": "/attributes/generic_keyword",
+    "value": [
+     {
+      "value": "nexusprobe132557",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+     }
+    ]
+   }
+  ]
+ },
+ "probe": "nexusprobe132557",
+ "submit": {
+  "success": true,
+  "status": "ACCEPTED",
+  "error": null,
+  "dryRun": false,
+  "issues": []
+ },
+ "publish": {
+  "success": true,
+  "status": "SUCCESS",
+  "mode": "live",
+  "message": "Product GALE-JACKET-BLACK-MEN-S synced to AMAZON",
+  "error": null
+ },
+ "readBack": {
+  "want": "nexusprobe132557",
+  "matched": true,
+  "reads": [
+   {
+    "afterSeconds": 15,
+    "value": [
+     {
+      "value": "nexusprobe132557",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+     }
+    ],
+    "error": null
+   }
+  ]
+ },
+ "record": "docs/product-cheat/records/step-3.4-before-2026-09-23T13-25-41-419Z.json"
+}

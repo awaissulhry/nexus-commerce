@@ -1013,6 +1013,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => runFormulaWrite(request.headers['x-nexus-formula-write'], async () => {
     try {
       return await applyProductBulkEdits(request.body ?? { changes: [] }, {
+        contentPerRow: true, // R-60 — the sheet reads per-row errors; content rows are judged per row here only
         ifMatch: request.headers['if-match'], formulaWriteToken: request.headers['x-nexus-formula-write'],
         formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
         userId: (request as { authUser?: { id?: string } }).authUser?.id, ip: request.ip, logger: request.log,

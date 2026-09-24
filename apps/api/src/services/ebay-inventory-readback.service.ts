@@ -27,6 +27,7 @@ import { policyFor, loadChannelPolicies } from './sync-control-policy.service.js
 import { resolveMembershipIntended } from './sync-control-core.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { recordChannelReadback, type DriftField } from './channel-drift.service.js'
 
 const DEFAULT_MAX_SKUS = 200
 const DEFAULT_MAX_TRADING_ITEMS = 50
@@ -87,8 +88,10 @@ export async function readBackEbayInventory(
   // potential flood of eBay read calls. Fall back to the default.
   const cap = opts.maxSkus ?? (Number.isFinite(envMax) && envMax > 0 ? envMax : DEFAULT_MAX_SKUS)
 
+  // PLAN A-54 (R-67) — a PARENT product has no quantity of its own (its variations carry it), so it never has an
+  // Inventory-API item. Asking for one logged a false error every sweep (6 on production, 2026-09-24).
   const listings = await prisma.channelListing.findMany({
-    where: { channel: 'EBAY', listingStatus: 'ACTIVE' },
+    where: { channel: 'EBAY', listingStatus: 'ACTIVE', product: { isParent: false } },
     select: {
       id: true,
       productId: true,
@@ -105,23 +108,25 @@ export async function readBackEbayInventory(
     select: { sku: true },
   })
   const sharedSkus = new Set(sharedSkuRows.map((m) => m.sku))
+  // A-54 — the shared skip runs BEFORE the cap, so the cap counts only rows this pass may read (it used to fill with
+  // shared rows: 194 of a 200 batch on production, while the rest of the 302 were never looked at).
+  const eligible = listings.filter((listing) => !(listing.product?.sku && sharedSkus.has(listing.product.sku)))
+  const skippedShared = listings.length - eligible.length
 
-  const capped = listings.length > cap
+  const capped = eligible.length > cap
   if (capped) {
     logger.warn('ebay-readback: active listings exceed cap; truncating', {
-      total: listings.length,
+      total: eligible.length,
       cap,
     })
   }
-  const batch = capped ? listings.slice(0, cap) : listings
+  const batch = capped ? eligible.slice(0, cap) : eligible
 
   const ebay = new EbayService()
   let checked = 0
   let recorded = 0
   let errors = 0
   const now = new Date()
-
-  let skippedShared = 0
 
   for (const listing of batch) {
     const sku = listing.product?.sku
@@ -130,10 +135,6 @@ export async function readBackEbayInventory(
         listingId: listing.id,
         productId: listing.productId,
       })
-      continue
-    }
-    if (sharedSkus.has(sku)) {
-      skippedShared++
       continue
     }
 
@@ -243,34 +244,99 @@ export function diffTradingReadback(
   intendedByProduct: Map<string, number>,
   opts: { now?: number; settleMs?: number } = {},
 ): TradingMismatch[] {
-  const now = opts.now ?? Date.now()
-  const settleMs = opts.settleMs ?? 90_000
   const out: TradingMismatch[] = []
   for (const e of entries) {
-    if (!e.productId) continue
-    const observed = observedByItemSku.get(obsKey(e.itemId, e.sku))
-    if (observed === undefined) continue
-    let intended: number
-    if (e.pinnedQuantity != null) {
-      intended = e.pinnedQuantity
-    } else {
-      const intendedBase = intendedByProduct.get(e.productId)
-      if (intendedBase === undefined) continue
-      intended = Math.max(0, intendedBase - Math.max(0, e.stockBuffer ?? 0))
-    }
-    if (e.lastPushedAt && now - e.lastPushedAt.getTime() < settleMs) continue
-    if (observed !== intended) {
+    const v = tradingEntryVerdict(e, observedByItemSku, intendedByProduct, opts)
+    if (v && v.observed !== v.intended) {
       out.push({
         sku: e.sku,
         itemId: e.itemId,
         marketplace: e.marketplace,
-        productId: e.productId,
-        ebayQty: observed,
-        intendedQty: intended,
+        productId: e.productId as string,
+        ebayQty: v.observed,
+        intendedQty: v.intended,
       })
     }
   }
   return out
+}
+
+/** The ONE comparison rule for a membership entry — `diffTradingReadback` and the drift records (A-36) both read it,
+ *  so "compared" cannot mean two things. `null` = not compared this run: no product, no observation, intent unknown
+ *  (uncounted / paused), or pushed inside the settle window. */
+export function tradingEntryVerdict(
+  e: TradingReadbackEntry,
+  observedByItemSku: Map<string, number>,
+  intendedByProduct: Map<string, number>,
+  opts: { now?: number; settleMs?: number } = {},
+): { observed: number; intended: number } | null {
+  const now = opts.now ?? Date.now()
+  const settleMs = opts.settleMs ?? 90_000
+  if (!e.productId) return null
+  const observed = observedByItemSku.get(obsKey(e.itemId, e.sku))
+  if (observed === undefined) return null
+  let intended: number
+  if (e.pinnedQuantity != null) {
+    intended = e.pinnedQuantity
+  } else {
+    const intendedBase = intendedByProduct.get(e.productId)
+    if (intendedBase === undefined) return null
+    intended = Math.max(0, intendedBase - Math.max(0, e.stockBuffer ?? 0))
+  }
+  if (e.lastPushedAt && now - e.lastPushedAt.getTime() < settleMs) return null
+  return { observed, intended }
+}
+
+/** An eBay listing row as the drift mapping needs it. */
+export interface TradingListingRow {
+  id: string
+  productId: string
+  marketplace: string
+  externalListingId: string | null
+  product: { parentId: string | null } | null
+}
+
+export interface TradingDriftRecord {
+  channelListingId: string
+  marketplace: string
+  compared: string[]
+  differing: DriftField[]
+}
+
+/**
+ * PLAN Step 3.5 (A-36, R-36) — the eBay slice: where one (ItemID, SKU) reading lands, per LISTING.
+ *
+ * A membership is not a listing. It lands on (1) the eBay listing of THAT product on THAT ItemID when Nexus holds one
+ * (field `quantity`), else (2) the ItemID's own listing — its ONE parentless owner row, a shell or the family parent —
+ * with the SKU in the field (`quantity:<SKU>`: one listing holds many variants). No owner, or two, is ambiguous: the
+ * entry is counted as unmapped, never guessed. Measured on the local copy: every ItemID has exactly one owner (30/30).
+ * A SKU on two ItemIDs lands on both listings; each ItemID is its own listing.
+ */
+export function tradingDriftRecords(
+  entries: TradingReadbackEntry[],
+  observedByItemSku: Map<string, number>,
+  intendedByProduct: Map<string, number>,
+  rows: TradingListingRow[],
+  opts: { now?: number; settleMs?: number } = {},
+): { records: TradingDriftRecord[]; unmapped: number } {
+  const byListing = new Map<string, TradingDriftRecord>()
+  let unmapped = 0
+  for (const e of entries) {
+    const v = tradingEntryVerdict(e, observedByItemSku, intendedByProduct, opts)
+    if (!v) continue
+    const onItem = rows.filter((r) => r.externalListingId === e.itemId && r.marketplace === e.marketplace)
+    const exact = onItem.filter((r) => r.productId === e.productId)
+    const owners = onItem.filter((r) => !r.product?.parentId)
+    const target = exact.length === 1 ? { row: exact[0], field: 'quantity' }
+      : exact.length === 0 && owners.length === 1 ? { row: owners[0], field: `quantity:${e.sku}` }
+      : null
+    if (!target) { unmapped++; continue }
+    const rec = byListing.get(target.row.id) ?? { channelListingId: target.row.id, marketplace: target.row.marketplace, compared: [], differing: [] }
+    if (!rec.compared.includes(target.field)) rec.compared.push(target.field)
+    if (v.observed !== v.intended) rec.differing.push({ field: target.field, ours: v.intended, theirs: v.observed })
+    byListing.set(target.row.id, rec)
+  }
+  return { records: [...byListing.values()], unmapped }
 }
 
 export interface TradingReadBackResult {
@@ -284,6 +350,10 @@ export interface TradingReadBackResult {
   endedMemberships: number
   errors: number
   capped: boolean
+  /** A-36 — listings recorded in ChannelDrift this run (clean ones included, at 0). */
+  driftRecorded: number
+  /** A-36 — compared entries whose ItemID names no single listing here: counted, never guessed. */
+  driftUnmapped: number
 }
 
 /**
@@ -321,6 +391,8 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     endedMemberships: 0,
     errors: 0,
     capped: false,
+    driftRecorded: 0,
+    driftUnmapped: 0,
   }
 
   const memberships = await prisma.sharedListingMembership.findMany({
@@ -430,8 +502,31 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   }
 
   result.skusChecked = checkedEntries.filter((e) => observedByItemSku.has(obsKey(e.itemId, e.sku))).length
-  const diffs = diffTradingReadback(checkedEntries, observedByItemSku, intendedByProduct)
+  // One clock for the diff and the drift records, so both see the same settle window.
+  const comparedAt = Date.now()
+  const diffs = diffTradingReadback(checkedEntries, observedByItemSku, intendedByProduct, { now: comparedAt })
   result.mismatches = diffs.length
+
+  // A-36 (Step 3.5, the eBay slice) — per LISTING, through the one writer. Best effort, and never this run's verdict:
+  // a failed drift write must not change a mismatch, a log or a heal below.
+  try {
+    const itemIds = [...new Set(checkedEntries.map((e) => e.itemId))]
+    const rows = itemIds.length === 0 ? [] : await prisma.channelListing.findMany({
+      where: { channel: 'EBAY', externalListingId: { in: itemIds }, product: { deletedAt: null } },
+      select: { id: true, productId: true, marketplace: true, externalListingId: true, product: { select: { parentId: true } } },
+    })
+    const drift = tradingDriftRecords(checkedEntries, observedByItemSku, intendedByProduct, rows, { now: comparedAt })
+    result.driftUnmapped = drift.unmapped
+    for (const rec of drift.records) {
+      try {
+        await recordChannelReadback({ channelListingId: rec.channelListingId, channel: 'EBAY', marketplace: rec.marketplace,
+          source: 'ebay-trading-getitem', compared: rec.compared, differing: rec.differing, checkedAt: new Date(comparedAt) })
+        result.driftRecorded++
+      } catch { /* observability best-effort */ }
+    }
+  } catch (err) {
+    logger.warn('ebay-trading-readback: drift records skipped', { error: err instanceof Error ? err.message : String(err) })
+  }
 
   // Heal penetration (owner-approved 2026-07-20): the corrective fan-out's
   // no-op drop keys on membership.lastQtyPushed — when that stamp is wrong

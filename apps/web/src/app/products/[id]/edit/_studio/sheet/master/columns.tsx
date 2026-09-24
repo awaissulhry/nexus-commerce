@@ -15,8 +15,11 @@
  */
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { ImpactProtectorsEditor, protectorSummary } from '../ImpactProtectorsInput'
-import { AttributeShapeEditor } from '../AttributeShapeInput'
-import { formulaAvailability, formulaCellEditorSelector, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
+import { SlotListEditor, type SlotListEditorParams } from '@/design-system/grid/editors/SlotListEditor'
+import { slotListColumnDef } from '@/design-system/grid/editors/slotListColumn'
+import { suppressSlotListKeys } from '@/design-system/grid/editors/slotList'
+import { SLOT_LIST_FIELDS, type SlotColumnLike } from '../slotListColumns'
+import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
 import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, SELECT_CELL_CLASS, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
@@ -133,6 +136,18 @@ const formulaSelector = (
   col: SheetColumn,
   fallback: { component: unknown; params?: Record<string, unknown>; popup?: boolean },
 ) => formulaCellEditorSelector<StudioRow>(wiring, col, fallback, (r) => r.id)
+
+/**
+ * Step 4.3 #3 (A-52, R-55) — Shared bullets open the ONE bullets editor, in `list` mode (the items + one trailing empty
+ * position; blanks dropped on commit). Its settings travel NAMESPACED (`slotList`): AG merges a column's own
+ * `cellEditorParams` under a formula selector's params (the 2026-09-24 `formulas:false` regression), so nothing here may
+ * carry a key the formula editor reads.
+ */
+const bulletListParams = (col: SheetColumn): Pick<SlotListEditorParams, 'slotList'> => ({
+  slotList: { mode: 'list', max: col.cardinality?.max ?? null, maxLength: col.maxLength ?? null, itemLabel: SLOT_LIST_FIELDS.bulletPoints.itemLabel, label: col.label },
+})
+/** Both editors' keys on one column: the formula editor's Enter/Esc and the bullets editor's Tab/Alt+↑↓/Enter. */
+const suppressBulletKeys: typeof suppressFormulaKeys = (p) => suppressFormulaKeys(p) || suppressSlotListKeys(p)
 
 export function buildMasterColumns(
   opts: BuildColumnsOptions,
@@ -348,6 +363,27 @@ export function buildMasterColumns(
       },
     }
 
+    /* Step 4.3 #3 (A-52) — a one-cell over a slot group: the ENGINE's whole ColDef, the same one the channel builder
+       returns (builder parity). The studio's Shared scope serves bullets as one list, so this branch is reached only by a
+       caller that passes a slotted column set; it exists so the two builders cannot drift. */
+    const slotGroup = (col as SlotColumnLike).slotGroup
+    if (slotGroup) {
+      const first = columns.find((c) => c.key === slotGroup.keys[0])
+      return slotListColumnDef<StudioRow>(slotGroup, {
+        label: col.label, itemLabel: SLOT_LIST_FIELDS[slotGroup.of]?.itemLabel, width: col.width, headerTooltip: col.helpText,
+        cellOf: (row, key) => cellOf(row, key),
+        setSlot: (row, key, value) => {
+          const slotColumn = columns.find((c) => c.key === key)
+          const setter = slotColumn ? build(slotColumn).valueSetter : undefined
+          return typeof setter === 'function' ? !!setter({ data: row, newValue: value } as never) : false
+        },
+        rowIdOf: (row) => row.id,
+        tracker,
+        provenanceOf: (row, key) => provOf(row, key, draftFor?.(row.id, key) ?? null, !!opts.formula?.exprFor(row.id, key), opts.formula?.errorFor?.(row.id, key)),
+        required: (row) => !!first && applies(row, first) && requiredHere(row, first),
+      })
+    }
+
     /**
      * 🔴 VT.2 — the `Variation theme` column, from the ENGINE, spread by BOTH builders.
      *
@@ -391,8 +427,8 @@ export function buildMasterColumns(
         ...def,
         ...(col.shape === 'measure' ? numericColumn : {}),
         ...shapeColumnDef<StudioRow>(col, (d) => cellOf(d, col.key)?.value),
-        ...(languageColumn(col.key).fieldKey === 'bulletPoints' ? { cellEditor: AttributeShapeEditor, cellEditorPopup: true, cellEditorParams: { attributeColumn: col } } : {}),
-        ...(opts.formula ? formulaSelector(opts.formula, col, languageColumn(col.key).fieldKey === 'bulletPoints' ? { component: AttributeShapeEditor, popup: true, params: { attributeColumn: col } } : shapeEditorSpec(col)!) : {}),
+        ...(languageColumn(col.key).fieldKey === 'bulletPoints' ? { cellEditor: SlotListEditor, cellEditorPopup: true, cellEditorParams: bulletListParams(col), suppressKeyboardEvent: suppressBulletKeys } : {}),
+        ...(opts.formula ? formulaSelector(opts.formula, col, languageColumn(col.key).fieldKey === 'bulletPoints' ? { component: SlotListEditor, popup: true, params: bulletListParams(col) } : shapeEditorSpec(col)!) : {}),
         editable,
         cellClass: (p) => [...(col.shape === 'measure' ? numericColumn.cellClass : ['nds-ag-cell']), cellIsEditable(col, p.data) ? 'nds-cell-is-editable' : 'nds-cell-is-locked'].join(' '),
         cellRenderer: (p: ICellRendererParams<StudioRow>) =>
@@ -485,7 +521,10 @@ export function buildMasterColumns(
       return {
         ...def,
         ...numericColumn,
-        cellEditor: 'agNumberCellEditor', cellEditorParams: SHEET_NUMBER_EDITOR_PARAMS,
+        /* R-63 — the ONE value editor (formulas off) ONLY when this sheet has no formula wiring (the Variants page). With
+           wiring the selector below decides — and nothing static may sit beside it: AG merges a column's
+           `cellEditorParams` into the selector's, so a static `formulas: false` here turned `=` off (2026-09-24). */
+        ...(opts.formula ? {} : scalarValueEditor('number')),
         /* 🔴 `=` reaches this cell only through the SELECTOR (#775). `agNumberCellEditor` refuses the
            keystroke outright — it accepts digits — so the mode switch can never be typed once that
            editor is mounted. `cellEditorSelector` is resolved BEFORE any editor exists and sees
@@ -535,7 +574,8 @@ export function buildMasterColumns(
        * made the DS Listbox look "incompatible with AG" for a whole ruling (`SelectCellEditor`'s
        * header). This editor is far bigger than its cell: field, autocomplete, hint, preview.
        */
-      cellEditor: 'agTextCellEditor',
+      /* R-63 — the same ONE value editor as above, and only without wiring, for the same reason. */
+      ...(opts.formula ? {} : scalarValueEditor('text')),
       ...(opts.formula ? formulaSelector(opts.formula, col, { component: 'agTextCellEditor' }) : {}),
       editable,
       cellRenderer: (p: ICellRendererParams<StudioRow>) =>

@@ -6224,5 +6224,25 @@
         ]
       }
     ]
+  },
+  "ChannelDrift": {
+    "scalar": {},
+    "compound": {
+      "listing_drift": [
+        "channelListingId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

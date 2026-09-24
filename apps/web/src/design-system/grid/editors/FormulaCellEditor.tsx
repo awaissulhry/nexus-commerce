@@ -9,10 +9,12 @@ import { Button, Input, Textarea } from '../../primitives'
 import { ListboxPanel, type ListboxOption } from '../../components'
 import { editorBox, roomToRightOf } from './editorBox'
 import {
-  commitValue, completionToAccept,
+  coerceTyped, commitValue, completionToAccept,
   exprOf, formulaAvailability, formulaEditorChoice, insertFieldReference, isFormulaDraft, unknownRefs,
   type Applied, type CommitKind, type FormulaCandidate,
 } from './formulaEditing'
+import { EDITOR_KEY_HINT } from './editorHint'
+import { acceptNumberEdit, NUMBER_ONLY_MESSAGE, numberCommitText, numberStart } from './numberEntry'
 import { assignRefColours, colourFor } from './formulaPalette'
 import { errorMarkAt, functionHint, previewLine, unknownRefNames, type FormulaFunctionDoc, type FormulaPreviewResponse } from './formulaPreview'
 import { callAt, refsOf, tokenizeForDisplay, type Token } from './formulaTokens'
@@ -31,6 +33,12 @@ export interface FormulaEditorParams extends ICellEditorParams {
   initialText?: string
   sourceLabel?: string
   replaceFormula?: (value: unknown) => Promise<{ ok: boolean; error?: string }>
+  /**
+   * R-63 — `false` makes this the plain VALUE editor with formulas OFF: `=` is text, no preview, no suggestions. It is
+   * the ONE text/number editor wherever no formula is available (a sheet built without formula wiring — the Variants
+   * page — or a column/row the formula writer refuses), so text and number open the same editor on every surface.
+   */
+  formulas?: boolean
 }
 
 export function FormulaGlyph({ title = 'Formula' }: { title?: string }) {
@@ -49,15 +57,26 @@ export function suppressFormulaKeys({ event, editing }: { event: KeyboardEvent; 
 export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(function FormulaCellEditor(props, _ref) {
   const { candidates, preview, functions = [], formulaExpr, colIdOfRef, commitKind = 'text', multiline = false,
     value, initialValue, eventKey, node, column, onValueChange } = props
+  const formulasOn = props.formulas !== false
   // AG's reactive value changes as we type. Neither the initial selection nor cancel may chase it.
-  const initial = useRef(props.initialText ?? (eventKey?.length === 1 ? eventKey : formulaExpr ? `=${formulaExpr}` : value == null ? '' : String(value))).current
+  /* R-47 — a NUMBER cell opens through `numberStart`: a start key that cannot begin a number is refused and the stored
+     value is kept (untouched, so it never writes). Every other kind keeps "typing replaces". */
+  const start = useRef((() => {
+    const stored = formulaExpr ? `=${formulaExpr}` : value == null ? '' : String(value)
+    if (props.initialText !== undefined) return { text: props.initialText, touched: true, refused: false }
+    if (commitKind === 'number') return numberStart({ eventKey, stored, allowFormula: formulasOn })
+    return eventKey?.length === 1 ? { text: eventKey, touched: true, refused: false } : { text: stored, touched: false, refused: false }
+  })()).current
+  const initial = start.text
   const original = useRef(initialValue !== undefined ? initialValue : value).current
   const [text, setText] = useState(initial)
   const [caret, setCaret] = useState(initial.length)
-  const touched = useRef(props.initialText !== undefined || eventKey?.length === 1)
+  const textRef = useRef(initial)
+  const touched = useRef(start.touched)
+  const [numberMessage, setNumberMessage] = useState(start.refused ? NUMBER_ONLY_MESSAGE : '')
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
-  const formula = isFormulaDraft(text)
+  const formula = formulasOn && isFormulaDraft(text)
   const expr = exprOf(text)
   const offset = text.length - expr.length
   const tokens = useMemo(() => formula ? tokenizeForDisplay(expr) : [], [formula, expr])
@@ -69,10 +88,25 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   useEffect(() => () => { editRevision.current += 1 }, [])
 
   const report = useCallback((draft: string) => {
-    if (isFormulaDraft(draft) && !exprOf(draft).trim()) onValueChange?.(original)
-    else onValueChange?.(commitValue(draft, original == null ? '' : String(original), commitKind))
-  }, [original, commitKind, onValueChange])
+    const typed = commitKind === 'number' ? numberCommitText(draft) : draft
+    if (!formulasOn) onValueChange?.(coerceTyped(typed, commitKind))
+    else if (isFormulaDraft(draft) && !exprOf(draft).trim()) onValueChange?.(original)
+    else onValueChange?.(commitValue(typed, original == null ? '' : String(original), commitKind))
+  }, [original, commitKind, formulasOn, onValueChange])
   const change = useCallback((next: Applied) => {
+    /* R-47 — on a number cell every edit (a keystroke, a paste, a deletion) is judged whole; one that would make the
+       text not a number is refused, the text stays, and the caret goes back to where the edit began. */
+    if (commitKind === 'number') {
+      const prev = textRef.current
+      if (acceptNumberEdit(prev, next.text, formulasOn).refused) {
+        setNumberMessage(NUMBER_ONLY_MESSAGE)
+        const at = Math.max(0, Math.min(prev.length, next.caret - (next.text.length - prev.length)))
+        requestAnimationFrame(() => { inputRef.current?.setSelectionRange(at, at) })
+        return
+      }
+    }
+    setNumberMessage('')
+    textRef.current = next.text
     touched.current = true
     editRevision.current += 1
     setSubmitting(false)
@@ -83,7 +117,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     report(next.text)
   }, [report])
   useEffect(() => { if (touched.current) report(initial) }, [])
-  useGridCellEditor({ isCancelAfterEnd: () => !touched.current || (isFormulaDraft(text) && !exprOf(text).trim()) })
+  useGridCellEditor({ isCancelAfterEnd: () => !touched.current || (formula && !exprOf(text).trim()) })
 
   const focusAt = useCallback((position: number) => {
     requestAnimationFrame(() => {
@@ -219,7 +253,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
       const revision = editRevision.current
       setSubmitting(true)
       try {
-        const removed = await props.replaceFormula(commitValue(text, original == null ? '' : String(original), commitKind))
+        const removed = await props.replaceFormula(commitValue(commitKind === 'number' ? numberCommitText(text) : text, original == null ? '' : String(original), commitKind))
         if (revision !== editRevision.current) return
         if (!removed.ok) { setPickMessage(removed.error ?? 'Could not replace this formula.'); return }
         props.api.stopEditing(true)
@@ -254,9 +288,13 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   const box = editorBox({ cellWidth: cellRect?.width ?? column.getActualWidth(), cellHeight: cellRect?.height ?? 0,
     roomToRight: cellRect ? roomToRightOf(cellRect.left, window.innerWidth) : window.innerWidth,
     kind: multiline && !formula ? 'longtext' : 'formula' })
+  /* The field's own help. With formulas off there is no `=` to explain; long text keeps its Shift+Enter fact. */
+  const help = formula ? <>Click a field in this row, or start typing.</>
+    : formulasOn ? <>Start with <code>=</code> to calculate or combine fields.{multiline && ' Shift+Enter adds a line.'}</>
+    : multiline ? <>Shift+Enter adds a line.</> : null
   const inputProps = {
     value: text, spellCheck: !formula, 'aria-label': formula ? 'Formula' : 'Cell value',
-    'aria-describedby': `${id}-help ${id}-preview`,
+    'aria-describedby': help ? `${id}-help ${id}-preview` : `${id}-preview`,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change({ text: e.target.value, caret: e.target.selectionStart ?? e.target.value.length }),
     onSelect: (e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0),
   }
@@ -275,10 +313,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
             className={formula ? `nds-formula-input${metrics ? ' highlighted' : ''}` : undefined}
             leadingIcon={formula ? <FormulaGlyph /> : undefined} onScroll={syncScroll} />}
       </div>
-      <div id={`${id}-help`} className="nds-formula-help">
-        {formula ? <>Click a field in this row, or start typing.</> :
-          <>Start with <code>=</code> to calculate or combine fields.{multiline && ' Shift+Enter adds a line.'}</>}
-      </div>
+      {help && <div id={`${id}-help`} className="nds-formula-help">{help}</div>}
       {formula && <FormulaGuidance text={text} sourceLabel={response?.sourceLabel ?? props.sourceLabel} disabled={submitting} allowText={commitKind !== 'number'}
         onInteractionChange={setAssisting} onChange={next => { change(next); focusAt(next.caret) }} />}
       {open && <ListboxPanel ariaLabel="Formula suggestions" options={options} query={token?.query ?? ''} autoFocus={false} onCommit={applyChosen}
@@ -291,6 +326,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
       </code><span className="nds-formula-hint-sum">{hint.summary}</span></div>}
       <div id={`${id}-preview`} role="status" aria-live="polite" aria-atomic="true">
         {!formula && pickMessage && <div className="nds-formula-preview bad">{pickMessage}</div>}
+        {!formula && numberMessage && <div className="nds-formula-preview bad">{numberMessage}</div>}
         {formula && <div className={`nds-formula-preview${line.kind === 'error' ? ' bad' : ''}`}>
           {pickMessage || (line.kind === 'idle' ? 'Result will appear here' :
             line.kind === 'checking' ? 'Checking formula…' : line.kind === 'error' ? line.message :
@@ -299,7 +335,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
       </div>
       {response?.retryable && <Button size="xs" disabled={submitting} onClick={retry}>Retry preview</Button>}
       </div>
-      <div className="nds-formula-actions"><span>Enter to apply</span>
+      <div className="nds-formula-actions"><span className="nds-editor-keyhint">{EDITOR_KEY_HINT}</span>
         <Button size="sm" onClick={cancel}>Cancel</Button><Button size="sm" variant="primary" disabled={submitting || (formula && !expr.trim())} onClick={save}>{submitting ? 'Checking…' : 'Apply'}</Button>
       </div>
     </div>
@@ -398,12 +434,18 @@ export function formulaCellEditorSelector<TRow>(
       const editor = typeof fallback === 'function' ? fallback(p.data) : fallback
       const available = rowWritable !== false && formulaAvailability({ formulaWritable: col.formulaWritable, hasStoredFormula: !!stored }).kind === 'available'
       const choice = formulaEditorChoice({ eventKey: p.eventKey, storedExpr: stored, formulaWritable: col.formulaWritable, rowWritable })
-      if (!available) return editor
+      /* R-63 — no formula here: text and number still open the ONE value editor (formulas off), never AG's inline ones. */
+      if (!available) return editor.component === 'agTextCellEditor' ? scalarValueEditorSpec('text')
+        : editor.component === 'agNumberCellEditor' ? scalarValueEditorSpec('number') : editor
       const scalar = typeof editor.component === 'string' && ['agTextCellEditor', 'agLargeTextCellEditor', 'agNumberCellEditor'].includes(editor.component)
       return {
         component: choice.use === 'formula' || scalar ? FormulaCellEditor : FormulaAwareEditor,
         popup: true,
         params: {
+          /* 🔴 Explicit, not defaulted: AG merges the COLUMN's `cellEditorParams` under these (`mergeParams`), so a column
+             that also names the plain value editor would otherwise hand this formula editor `formulas: false` and `=`
+             would stop switching (caught by the push gate on 2026-09-24). */
+          formulas: true,
           fallback: editor,
           candidates: p.data ? wiring.candidatesFor(p.data, col.key).filter(c => c.kind !== 'field' || (wiring.colIdOfRef(c.name, col.key) ?? c.name).toLowerCase() !== col.key.toLowerCase()) : [],
           sourceLabel: wiring.sourceLabel?.(col.key),
@@ -416,6 +458,28 @@ export function formulaCellEditorSelector<TRow>(
       }
     },
   }
+}
+
+/** Never called: with `formulas: false` the value editor asks for no preview. Stated rather than left `undefined`. */
+const NO_PREVIEW = async (): Promise<FormulaPreviewResponse> => ({ ok: false, error: 'Formulas are not available in this cell.' })
+
+/**
+ * R-63 (A-42 step 1, 2026-09-24) — THE ONE TEXT/NUMBER EDITOR as an editor spec, formulas OFF: the value popup every
+ * studio sheet already opens for text and number, without the `=` switch. Used by the selector when no formula is
+ * available, and by `scalarValueEditor` for a sheet built without formula wiring (the Variants page).
+ */
+export function scalarValueEditorSpec(kind: 'text' | 'number') {
+  return { component: FormulaCellEditor, popup: true, params: { formulas: false, commitKind: kind, candidates: [], preview: NO_PREVIEW } }
+}
+
+/**
+ * The same editor as ColDef fields, for a builder with no formula wiring. `cellEditorPopup` is REQUIRED (an editor
+ * that renders outside the cell without it is torn down when focus leaves the grid root), and `suppressKeyboardEvent`
+ * gives Enter/Esc to the editor, as on every studio column.
+ */
+export function scalarValueEditor(kind: 'text' | 'number') {
+  const spec = scalarValueEditorSpec(kind)
+  return { cellEditor: spec.component, cellEditorPopup: true, cellEditorParams: spec.params, suppressKeyboardEvent: suppressFormulaKeys }
 }
 
 function FormulaUnavailableEditor(props: { message: string; retry?: () => void; api: { stopEditing: (cancel?: boolean) => void } }) {

@@ -25,6 +25,9 @@ const mocks = vi.hoisted(() => {
     deleteProducts: vi.fn(),
     deleteCache: vi.fn(),
     enqueue: vi.fn(),
+    // PLAN Step 1.3 — the eBay account's out-of-stock preference, and the order it is read in
+    pref: vi.fn(),
+    order: [] as string[],
   }
 })
 
@@ -57,8 +60,14 @@ vi.mock('../db.js', () => {
     fBAShipmentItem: { deleteMany: async () => ({ count: 0 }) },
     listingWizard: { deleteMany: async () => ({ count: 0 }) },
   }
-  return { default: { ...tx, $transaction: async (work: (db: unknown) => unknown) => work(tx) } }
+  return { default: { ...tx, $transaction: async (work: (db: unknown) => unknown) => { mocks.order.push('transaction'); return work(tx) } } }
 })
+
+// Step 1.3 — the preference read is stubbed at its own seam; the capability table stays real.
+vi.mock('../services/channel-delist.service.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../services/channel-delist.service.js')>()),
+  readEbayOutOfStockPreference: async (...args: unknown[]) => { mocks.order.push('preference'); return mocks.pref(...args) },
+}))
 
 const { default: productsCatalogRoutes } = await import('./products-catalog.routes.js')
 
@@ -88,6 +97,8 @@ beforeEach(() => {
   mocks.deleteProducts.mockResolvedValue({ count: 1 })
   mocks.deleteCache.mockResolvedValue({ count: 1 })
   mocks.enqueue.mockResolvedValue({ entries: [], channelCascadeEnqueued: 0, channelSkipped: [] })
+  mocks.pref.mockResolvedValue('UNKNOWN') // fail closed unless an arm says otherwise
+  mocks.order.length = 0
 })
 
 const live = (over: Record<string, unknown> = {}) => ({
@@ -110,13 +121,14 @@ it('REFUSES the default action: nothing is sent, so the listing keeps selling', 
   expect(mocks.deleteProducts).not.toHaveBeenCalled()
 })
 
+const FBA = { fulfillmentMethod: 'FBA' }
 it.each([
-  ['AMAZON', 'unpublish', 'reversible unpublish'],
-  ['EBAY', 'unpublish', 'eBay unpublish is unavailable'],
-  ['SHOPIFY', 'delete', 'Shopify delist is unavailable'],
-  ['WOOCOMMERCE', 'delete', 'no delist adapter'],
-] as const)('REFUSES %s + %s, naming why it would stay live', async (channel, action, phrase) => {
-  mocks.listings.mockResolvedValue([live({ channel })])
+  ['AMAZON', 'unpublish', 'fulfilled by Amazon (FBA)', FBA],
+  ['EBAY', 'unpublish', 'out-of-stock control could not be read', {}],
+  ['SHOPIFY', 'delete', 'Shopify delist is unavailable', {}],
+  ['WOOCOMMERCE', 'delete', 'no delist adapter', {}],
+] as const)('REFUSES %s + %s, naming why it would stay live', async (channel, action, phrase, over) => {
+  mocks.listings.mockResolvedValue([live({ channel, channelConnectionId: 'ebay-account', ...over })])
   const body = (await del(action)).json()
   expect(body.refused).toBe(1)
   expect(body.purged).toBe(0)
@@ -125,7 +137,7 @@ it.each([
 })
 
 it('names EVERY coordinate that would stay live, not just the first', async () => {
-  mocks.listings.mockResolvedValue([live(), live({ channel: 'EBAY', marketplace: 'DE', externalListingId: '1234' })])
+  mocks.listings.mockResolvedValue([live(FBA), live({ channel: 'EBAY', marketplace: 'DE', externalListingId: '1234', channelConnectionId: 'ebay-account' })])
   const body = (await del('unpublish')).json()
   expect(body.outcomes[0].reasons).toHaveLength(2)
   expect(body.outcomes[0].reasons.join(' ')).toContain('B0LIVE')
@@ -142,7 +154,7 @@ it('a refused product keeps its bin row AND its audit trail stays honest', async
 })
 
 it('a refused product is never enqueued for a channel delist', async () => {
-  mocks.listings.mockResolvedValue([live()])
+  mocks.listings.mockResolvedValue([live(FBA)])
   await del('unpublish')
   expect(mocks.enqueue).not.toHaveBeenCalled()
 })
@@ -186,4 +198,71 @@ it('a mixed batch reports BOTH sides — the refusal does not lose the other row
   expect(body.outcomes.find((o: { outcome: string }) => o.outcome === 'refused').productId).toBe('p-1')
   // The clean rows are deleted; the refused one is not.
   expect(mocks.deleteProducts).toHaveBeenCalledWith({ where: { id: { in: ['p-2', 'p-3'] } } })
+})
+
+// ── PLAN Step 1.3 (R-39): unpublish now stops selling — the guard lifts per listing ─────────────
+it('positive control — Amazon + unpublish of a merchant listing: deleted and enqueued (was refused before Step 1.3)', async () => {
+  mocks.listings.mockResolvedValue([live({ fulfillmentMethod: 'FBM' })])
+  const body = (await del('unpublish')).json()
+  expect(body.purged).toBe(1)
+  expect(body.refused).toBe(0)
+  expect(mocks.enqueue).toHaveBeenCalledWith(expect.anything(), ['p-1'], 'unpublish', 'operator')
+})
+
+it.each([
+  ['the product', { fulfillmentMethod: 'FBM', product: { fulfillmentMethod: 'FBA' } }],
+  ['the attributes', { platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] } }],
+  ['an active FBA offer', { fulfillmentMethod: 'FBM', offers: [{ fulfillmentMethod: 'FBM', isActive: true }, { fulfillmentMethod: 'FBA', isActive: true }] }],
+] as const)('REFUSES Amazon + unpublish when %s says FBA — before anything is deleted', async (_label, over) => {
+  mocks.listings.mockResolvedValue([live(over)])
+  const body = (await del('unpublish')).json()
+  expect(body.refused).toBe(1)
+  expect(body.outcomes[0].reasons[0]).toContain('FBA')
+  expect(mocks.deleteProducts).not.toHaveBeenCalled()
+  expect(mocks.enqueue).not.toHaveBeenCalled()
+})
+
+it('positive control — an INACTIVE FBA offer is not FBA evidence', async () => {
+  mocks.listings.mockResolvedValue([live({ fulfillmentMethod: 'FBM', offers: [{ fulfillmentMethod: 'FBA', isActive: false }] })])
+  expect((await del('unpublish')).json().purged).toBe(1)
+})
+
+it('eBay + unpublish with the account preference ON: deleted and enqueued; the read ran BEFORE the transaction', async () => {
+  mocks.pref.mockResolvedValue('ON')
+  mocks.listings.mockResolvedValue([live({ channel: 'EBAY', marketplace: 'DE', externalListingId: '1234', channelConnectionId: 'ebay-account' })])
+  const body = (await del('unpublish')).json()
+  expect(body.purged).toBe(1)
+  expect(body.refused).toBe(0)
+  expect(mocks.enqueue).toHaveBeenCalled()
+  expect(mocks.pref).toHaveBeenCalledExactlyOnceWith('ebay-account', 'DE')
+  expect(mocks.order).toEqual(['preference', 'transaction'])
+})
+
+it('eBay + unpublish with the preference OFF: refused, naming it, nothing deleted', async () => {
+  mocks.pref.mockResolvedValue('OFF')
+  mocks.listings.mockResolvedValue([live({ channel: 'EBAY', externalListingId: '1234', channelConnectionId: 'ebay-account' })])
+  const body = (await del('unpublish')).json()
+  expect(body.refused).toBe(1)
+  expect(body.outcomes[0].reasons[0]).toContain('out-of-stock control is off')
+  expect(mocks.deleteProducts).not.toHaveBeenCalled()
+})
+
+it('two eBay listings on one account → ONE preference read; another account\'s ON does not lift this one', async () => {
+  mocks.pref.mockImplementation(async (account: string) => account === 'ebay-on' ? 'ON' : 'UNKNOWN')
+  mocks.listings.mockResolvedValue([
+    live({ channel: 'EBAY', externalListingId: '1', channelConnectionId: 'ebay-on' }),
+    live({ channel: 'EBAY', externalListingId: '2', channelConnectionId: 'ebay-on' }),
+    live({ channel: 'EBAY', externalListingId: '3', channelConnectionId: 'ebay-unknown' }),
+  ])
+  const body = (await del('unpublish')).json()
+  expect(mocks.pref).toHaveBeenCalledTimes(2)
+  expect(body.refused).toBe(1)
+  expect(body.outcomes[0].reasons).toHaveLength(1)
+  expect(body.outcomes[0].reasons[0]).toContain(' 3 ')
+})
+
+it.each(['none', 'delete'] as const)('%s never asks eBay for the preference', async action => {
+  mocks.listings.mockResolvedValue([live({ channel: 'EBAY', externalListingId: '1234', channelConnectionId: 'ebay-account' })])
+  await del(action)
+  expect(mocks.pref).not.toHaveBeenCalled()
 })

@@ -52,6 +52,7 @@ import {
 import { useAuth } from '@/lib/auth/AuthProvider'
 
 import { useRegisterViewChip, useSaveReporter, useStudioScope, useViewChips } from '../../contracts'
+import { NoMarketState } from '../../NoMarketState'
 import { SHEET_STATE_OVERLAYS, sheetEmptyState } from '../../sheet/sheetGridStates'
 import { SheetLoadError } from '../../sheet/SheetLoadError'
 import { useVariantTransfer } from '../../import/VariantTransfer'
@@ -88,9 +89,10 @@ export function FamilyVariants() {
   const productId = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : ''
 
   if (!productId) return <div style={{ padding: 24 }}>No product in the route.</div>
-  /* The frame resolves both from the marketplace table; before it answers there is no coordinate to
-     read, and a family fetched against a guessed market would show another catalogue's listings. */
-  if (!market || !locale) return <div style={{ padding: 24 }} className="nds-cell-muted">Waiting for the market…</div>
+  /* The frame resolves both from the marketplace table and has ANSWERED by the time a tab mounts (A-53): no market
+     here means the business has none or the read failed, never "not yet". A family fetched against a guessed market
+     would show another catalogue's listings, so there is no fallback — the state says which case it is. */
+  if (!market || !locale) return <NoMarketState />
   return <FamilyVariantsSurface key={`${productId}:${market}:${locale}`} productId={productId} market={market} locale={locale} />
 }
 

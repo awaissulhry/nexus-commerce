@@ -29,16 +29,24 @@ const APPLY = argv.includes('--apply')
 const BUDGET_S = Number(flag('budget') ?? 600)
 const BATCH = Number(flag('batch') ?? 25)
 const WORKSPACE = flag('workspace') ?? LEGACY_WORKSPACE_ID
+// `--due-after-hours N` — recompute families whose readiness is older than N hours (default: the job's own 20 h).
+// 0 recomputes every family now (2026-09-24: the Owner asked to run the night's reconcile the same evening).
+const DUE_AFTER_HOURS = flag('due-after-hours')
+const dueAfterMs = DUE_AFTER_HOURS === undefined ? undefined : Number(DUE_AFTER_HOURS) * 3_600_000
+if (dueAfterMs !== undefined && !(Number.isFinite(dueAfterMs) && dueAfterMs >= 0)) {
+  console.error(`[backfill] REFUSE: --due-after-hours must be a number ≥ 0, got ${DUE_AFTER_HOURS}`)
+  process.exit(2)
+}
 
 async function main() {
   const [{ d: database }] = (await prisma.$queryRawUnsafe(`select current_database()::text as d`)) as Array<{ d: string }>
   const host = new URL(process.env.DATABASE_URL ?? 'postgres://unknown/').hostname
   console.log(`[backfill] host ${host} · database ${database} · business ${WORKSPACE}`)
-  console.log(`[backfill] ${APPLY ? `APPLY, budget ${BUDGET_S}s, batch ${BATCH}` : 'DRY RUN — nothing will be written'}`)
+  console.log(`[backfill] ${APPLY ? `APPLY, budget ${BUDGET_S}s, batch ${BATCH}` : 'DRY RUN — nothing will be written'} · due after ${dueAfterMs === undefined ? '20 h (default)' : `${DUE_AFTER_HOURS} h`}`)
 
   await withWorkspace({ workspaceId: WORKSPACE, actorUserId: null, membershipId: null, roleKeys: [] }, async () => {
     const before = await prisma.readinessIndex.count()
-    const report = await runReadinessReconcile({ dryRun: !APPLY, budgetMs: BUDGET_S * 1000, batchSize: BATCH })
+    const report = await runReadinessReconcile({ dryRun: !APPLY, budgetMs: BUDGET_S * 1000, batchSize: BATCH, ...(dueAfterMs === undefined ? {} : { dueAfterMs }) })
     const after = await prisma.readinessIndex.count()
     console.log(`[backfill] ${describeSweep(report)}`)
     console.log(`[backfill] ReadinessIndex rows: ${before} → ${after}`)

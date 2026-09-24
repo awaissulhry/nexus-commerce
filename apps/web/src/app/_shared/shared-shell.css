@@ -157,7 +157,7 @@
      not here, and check any pin here still matches the DS's light value before trusting it: a
      ramp reference goes stale the moment a role diverges from its ramp. */
   --nds-text: var(--nds-grey-900);
-  --nds-text-2: var(--nds-grey-600);
+  --nds-text-2: var(--nds-grey-700);
   /* --nds-text-3 is pinned in the consolidated block at the END of this file, not here.
      It used to read `var(--nds-grey-500)` (#8a93a1) — but --nds-text-3 is the ICON tier and was
      darkened to #7e8796 to clear its 3:1 floor on tinted grounds (#8a93a1 is 2.74 on grey-100,
@@ -444,6 +444,8 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    without any component needing to know about themes. */
 body:has(.h10-shell),
 .h10-shell {
+  --nds-amber-soft: #fdf3d3;
+  --nds-amber-text: #6b4800;
   --nds-bg: var(--nds-grey-50);
   --nds-border: var(--nds-grey-200);
   --nds-border-strong: var(--nds-grey-300);
@@ -467,10 +469,11 @@ body:has(.h10-shell),
   --nds-pill-neutral-bg: var(--nds-grey-100);
   --nds-pill-neutral-fg: var(--nds-text-2);
   --nds-pill-success-bg: #d2e6fc;
-  --nds-pill-success-fg: var(--nds-blue-900);
+  --nds-pill-success-fg: #094397;
   --nds-pill-warning-bg: var(--nds-amber-soft);
   --nds-pill-warning-fg: var(--nds-warning-text);
-  --nds-primary: var(--nds-blue-600);
+  --nds-primary: var(--nds-blue-800);
+  --nds-primary-hover: #0f4290;
   --nds-primary-soft: var(--nds-blue-100);
   --nds-rail-bg: var(--nds-rail-surface);
   --nds-rail-border: var(--nds-rail-line);
@@ -496,12 +499,12 @@ body:has(.h10-shell),
   --nds-targeting-auto: var(--nds-blue-800);
   --nds-targeting-manual: var(--nds-purple-600);
   --nds-text: var(--nds-grey-900);
-  --nds-text-2: var(--nds-grey-600);
-  --nds-text-3: #7e8796;
+  --nds-text-2: var(--nds-grey-700);
+  --nds-text-3: #48505b;
   --nds-text-disabled: var(--nds-grey-400);
   --nds-text-inverse: var(--nds-white);
-  --nds-text-link: #1a60c4;
-  --nds-text-muted: #626c7b;
+  --nds-text-link: var(--nds-blue-800);
+  --nds-text-muted: var(--nds-text-3);
   --nds-text-strong: var(--nds-grey-700);
   --nds-warning-soft: #fff6e8;
   --nds-warning-strong: var(--nds-amber-700);

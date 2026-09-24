@@ -1,4 +1,5 @@
 import { startReadinessReconcileCron } from './jobs/readiness-reconcile.job.js'
+import { startContentDriftCron } from './jobs/content-drift.job.js'
 import { visitActiveWorkspaces } from './lib/workspace-sweep.js'
 import { legacyIngress } from './lib/workspace-ingress.js'
 import "./db.js"; // ensure dotenv loads before anything else
@@ -1025,6 +1026,8 @@ async function start() {
       // → "import didn't apply"). Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
       startReadCacheReconcileCron();
       startReadinessReconcileCron();
+      // A-39 (R-41) — Step 3.5b: nightly, rotating Amazon content read → ChannelDrift (NEXUS_ENABLE_CONTENT_DRIFT=0 to disable).
+      startContentDriftCron();
 
       // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
       // QUEUED BulkActionJob rows that never got POST /:id/process'd

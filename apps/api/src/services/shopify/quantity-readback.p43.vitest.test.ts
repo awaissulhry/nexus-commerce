@@ -70,7 +70,7 @@ const m = vi.hoisted(() => {
     outbound,
     findMany: vi.fn(), findFirst: vi.fn(), logConflict: vi.fn(),
     createOutboundRow: vi.fn(), shopifyAdmin: vi.fn(), readShopifyAvailable: vi.fn(),
-    loadSyncLedgers: vi.fn(), loadChannelPolicies: vi.fn(),
+    loadSyncLedgers: vi.fn(), loadChannelPolicies: vi.fn(), recordDrift: vi.fn(),
   }
 })
 vi.mock('../../db.js', () => ({ default: { channelListing: { findMany: m.findMany }, syncHealthLog: { findFirst: m.findFirst } } }))
@@ -78,6 +78,8 @@ vi.mock('../outbound-rows.js', () => ({ createOutboundRow: m.createOutboundRow }
 vi.mock('../sync-health.service.js', () => ({ syncHealthService: { logConflict: m.logConflict } }))
 vi.mock('./admin-client.js', () => ({ shopifyAdmin: m.shopifyAdmin }))
 vi.mock('./listing-write.service.js', () => ({ readShopifyAvailable: m.readShopifyAvailable }))
+// A-36 (Step 3.5a) — the one ChannelDrift writer, observed.
+vi.mock('../channel-drift.service.js', () => ({ recordChannelReadback: m.recordDrift }))
 vi.mock('../stock-pool/sync-ledgers.js', async (orig) => ({
   ...(await orig<typeof import('../stock-pool/sync-ledgers.js')>()),
   loadSyncLedgers: m.loadSyncLedgers,
@@ -295,5 +297,43 @@ describe('P4.4e: the Shopify read-back also diffs the price', () => {
     const r = await readBackShopifyQuantities()
     expect(r.priceMismatches).toHaveLength(1)
     expect(r.priceLogged).toBe(0)
+  })
+})
+
+// ── C. A-36 (Step 3.5a) — every compared listing reaches ChannelDrift ─────────
+describe('A-36 readBackShopifyQuantities → ChannelDrift', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    m.loadChannelPolicies.mockResolvedValue(new Map())
+    m.shopifyAdmin.mockResolvedValue({ graphql: vi.fn(), domain: 'shop.myshopify.com' })
+    m.findFirst.mockResolvedValue(null)
+    m.logConflict.mockResolvedValue(undefined)
+    m.createOutboundRow.mockResolvedValue({ id: 'q-1' })
+    m.recordDrift.mockResolvedValue({ driftCount: 0 })
+    m.loadSyncLedgers.mockResolvedValue(ledgerFor(5))
+  })
+  const onePage = (rows: unknown[]) => { m.findMany.mockResolvedValueOnce(rows).mockResolvedValue([]) }
+  const recorded = () => m.recordDrift.mock.calls.map(c => c[0])
+
+  it('🔴 a drifted listing is recorded with our quantity and Shopify\'s', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 2, price: 49.9, locationId: 'L', variantId: 'v1' })
+    await readBackShopifyQuantities()
+    expect(recorded()).toEqual([{ channelListingId: 'cl-1', channel: 'SHOPIFY', marketplace: 'GLOBAL', source: 'shopify-inventory-level',
+      compared: ['quantity', 'price'], differing: [{ field: 'quantity', ours: 5, theirs: 2 }] }])
+  })
+
+  it('🔴 a matching listing is recorded as compared and clean — that is what clears an old drift', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: 5, price: 49.9, locationId: 'L', variantId: 'v1' })
+    await readBackShopifyQuantities()
+    expect(recorded()).toEqual([expect.objectContaining({ channelListingId: 'cl-1', compared: ['quantity', 'price'], differing: [] })])
+  })
+
+  it('🔴 an unreadable quantity is NOT compared — only the price, which Shopify did answer', async () => {
+    onePage([listing()])
+    m.readShopifyAvailable.mockResolvedValue({ available: null, price: 55, locationId: null, variantId: 'v1' })
+    await readBackShopifyQuantities()
+    expect(recorded()).toEqual([expect.objectContaining({ compared: ['price'], differing: [{ field: 'price', ours: 49.9, theirs: 55 }] })])
   })
 })

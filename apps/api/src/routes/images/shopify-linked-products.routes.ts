@@ -1,5 +1,5 @@
 import { saveShopifySheetCells, shopifySheetChangesSchema } from '../../services/shopify/channel-sheet.service.js'
-import { invalidateShopifyMappingSchema, readShopifyMappingSchema } from '../../services/pim/channel-specs/shopify.js'
+import { invalidateShopifyMappingSchema, readShopifyDisplaySchema, readShopifyMappingSchema } from '../../services/pim/channel-specs/shopify.js'
 import { hasPermission, resolvePermissions } from '../../lib/auth/rbac.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
@@ -89,8 +89,13 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
           return await discoverLinkedFamily(graphql, input.sourceId ? [input.sourceId] : workspace.suggestedProductIds, input.relationship ?? workspace.draft.relationship)
         }
         if (suffix === '/schema') {
-          if (query.refreshConstraints === '1') invalidateShopifyMappingSchema(destination.accountId)
-          return await readShopifyMappingSchema(destination.accountId, true)
+          // An explicit refresh waits for Shopify. The page's own polling gets the last known list at once and a
+          // refresh behind it; a cold read measured 34 s (2026-09-24), past the web proxy's limit.
+          if (query.refreshConstraints === '1') {
+            invalidateShopifyMappingSchema(destination.accountId)
+            return await readShopifyMappingSchema(destination.accountId, true)
+          }
+          return await readShopifyDisplaySchema(destination.accountId)
         }
         if (suffix === '/owner') return await readLinkedOwner(graphql, query.ownerId ?? '')
         if (suffix === '/references') return await searchLinkedReferences(graphql, { type: query.type ?? '', query: query.query, cursor: query.cursor, metaobjectType: query.metaobjectType })

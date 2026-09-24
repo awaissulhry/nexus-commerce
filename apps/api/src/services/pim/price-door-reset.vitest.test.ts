@@ -2,10 +2,11 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ db: null as any }))
 vi.mock('@nexus/database', async () => {
-  // R-VT-12 has verified this URL. The helper creates its own database, never uses the catalogue.
-  process.env.NEXUS_TEST_CONCURRENT_PG_URL = process.env.DATABASE_URL
-  const { concurrentDatabase } = await import('../../test-support/concurrent-database.js')
-  state.db = await concurrentDatabase()
+  // A-31 (R-29) — real PostgreSQL in-process (PGlite). These arms test what a write STORES, not a race, so they need no
+  // server: the old `concurrentDatabase()` built a database from `DATABASE_URL` at load, and CI has no server there, so
+  // this file failed to load on every CI run of `main`.
+  const { formulaDatabase } = await import('../../test-support/formula-database.js')
+  state.db = await formulaDatabase()
   return { default: state.db.client }
 })
 vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => undefined) }))
@@ -27,13 +28,19 @@ import { fireOutboundJobs } from '../outbound-enqueue.js'
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID,
   actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
+let account = ''
 beforeAll(() => scoped(async () => {
   await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'DE', name: 'Germany', currency: 'EUR', region: 'EU', language: 'de', languages: ['de'] } })
+  account = (await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'price-door-reset', isActive: true } })).id
 }))
 
 async function seed(id: string, following: boolean) {
   const product = await prisma.product.create({ data: { id, sku: id, name: id, basePrice: 10 } })
-  const listing = await prisma.channelListing.create({ data: { productId: id, channel: 'EBAY',
+  // A-31 — the listing names its account, as a live listing does. The queue row's destination is then the listing's
+  // (`outbound-destination.ts` step 2, read through the transaction). A listing with NO account falls to step 4, which
+  // reads the channel's accounts through the OUTER client — a second connection that the one-connection PGlite cannot
+  // give inside a transaction, so the door's direct arms timed out at 5,000 ms (recorded in A-31 for the P1.3 owner).
+  const listing = await prisma.channelListing.create({ data: { productId: id, channel: 'EBAY', channelConnectionId: account,
     channelMarket: 'EBAY_DE', marketplace: 'DE', region: 'EU',
     price: following ? null : 25, priceOverride: following ? null : 25, followMasterPrice: following,
     overrideData: { price: 99, ebay_price: 98, unrelated: 'keep' } } })
@@ -156,7 +163,7 @@ it('a later failure rolls back price, cleanup, event and queue, and dispatches n
 // The displayed number cannot decide price equality: a pinned value can hide a stale legacy key.
 it('a same-value attr_price set is a door no-op when clean, and an applied cleanup when dirty', () => scoped(async () => {
   const product = await prisma.product.create({ data: { sku: 'sheet-same-clean', name: 'Same value', basePrice: 10 } })
-  const clean = await prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', channelMarket: 'EBAY_DE',
+  const clean = await prisma.channelListing.create({ data: { productId: product.id, channel: 'EBAY', channelConnectionId: account, channelMarket: 'EBAY_DE',
     marketplace: 'DE', region: 'EU', price: 25, priceOverride: 25, followMasterPrice: false } })
   const repeat = await sheetWrite(product.id, 'attr_price', 25, clean.version)
   expect(repeat).toMatchObject({ updated: 0, unchanged: 1, currentVersion: clean.version, versionOf: 'channelListing' })

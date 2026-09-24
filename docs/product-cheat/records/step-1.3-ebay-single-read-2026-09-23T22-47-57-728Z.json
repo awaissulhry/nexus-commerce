@@ -1,0 +1,177 @@
+{
+ "at": "2026-09-23T22:47:57.727Z",
+ "mode": "read",
+ "execute": false,
+ "preference": {
+  "ack": "Success",
+  "outOfStockControlPreference": "true"
+ },
+ "callLimits": {
+  "user": {
+   "http": 200,
+   "errors": null,
+   "resources": []
+  },
+  "app": {
+   "http": 200,
+   "errors": null,
+   "resources": [
+    {
+     "api": "TradingAPI",
+     "name": "GetItem",
+     "rates": [
+      {
+       "count": 1100,
+       "limit": 5000,
+       "remaining": 3808,
+       "reset": "2026-09-24T07:00:00.000Z",
+       "timeWindow": 86400
+      }
+     ]
+    },
+    {
+     "api": "TradingAPI",
+     "name": "ReviseInventoryStatus",
+     "rates": [
+      {
+       "count": 30,
+       "limit": 5000,
+       "remaining": 3808,
+       "reset": "2026-09-24T07:00:00.000Z",
+       "timeWindow": 86400
+      }
+     ]
+    },
+    {
+     "api": "TradingAPI",
+     "name": "GetUserPreferences",
+     "rates": [
+      {
+       "count": 1,
+       "limit": 5000,
+       "remaining": 3808,
+       "reset": "2026-09-24T07:00:00.000Z",
+       "timeWindow": 86400
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "uniqueItemIds": 26,
+ "candidatesRead": [
+  {
+   "sku": "GALE-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "256566102729",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 20,
+   "remaining": null
+  },
+  {
+   "sku": "GALE-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "256566103703",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 20,
+   "remaining": null
+  },
+  {
+   "sku": "GALE-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "256564203510",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 20,
+   "remaining": null
+  },
+  {
+   "sku": "GALE-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "256566101420",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 20,
+   "remaining": null
+  },
+  {
+   "sku": "IT-MOSS-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "257628770248",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 30,
+   "remaining": null
+  },
+  {
+   "sku": "AIRMESH-JACKET",
+   "type": "COAT",
+   "itemId": "257611257473",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 20,
+   "remaining": null
+  },
+  {
+   "sku": "VENTRA-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "257629891728",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 40,
+   "remaining": null
+  },
+  {
+   "sku": "xavia-knee-slider",
+   "type": "AUTO_ACCESSORY",
+   "itemId": "256550369887",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 8,
+   "remaining": null
+  },
+  {
+   "sku": "normal-knee-slider",
+   "type": "AUTO_ACCESSORY",
+   "itemId": "257630525745",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 8,
+   "remaining": null
+  },
+  {
+   "sku": "REGAL-JACKET",
+   "type": "OUTERWEAR",
+   "itemId": "257629988500",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 40,
+   "remaining": null
+  },
+  {
+   "sku": "WATERPROOF-OVERJACKET-BLACK-MEN",
+   "type": "OUTERWEAR",
+   "itemId": "257608449467",
+   "ack": "Success",
+   "listingStatus": "Active",
+   "outOfStockControl": "true",
+   "variations": 10,
+   "remaining": null
+  }
+ ],
+ "candidate": {
+  "none": "no single-SKU Active item with stock and out-of-stock control on among those read"
+ }
+}

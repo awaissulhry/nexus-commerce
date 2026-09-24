@@ -126,6 +126,8 @@ export interface ProductListQuery {
   hasBrand?: string
   hasGtin?: string
   driftOnly?: string
+  /** A-36 (Step 3.5a) — only products whose listing holds a different value ON THE CHANNEL (`ChannelDrift`). */
+  channelDrift?: string
   includeCoverage?: string
   includeTags?: string
   // Lazy-load children of this parent. Pass the parent's ID
@@ -460,6 +462,10 @@ export async function resolveProductsScope(q: ProductListQuery) {
       where.channelListings = missingClause.channelListings
     }
   }
+  // A-36 (Step 3.5a) — "Differs on the channel": the products (and their parents) with a drifted listing. An id list,
+  // like the tag filter, and pushed into AND so it narrows whatever `where.id` already says.
+  const channelDriftIds = q.channelDrift === 'true' ? await (await import('../channel-drift.service.js')).productIdsWithChannelDrift() : null
+  if (channelDriftIds) where.AND = [...(where.AND ?? []), { id: { in: channelDriftIds } }]
   if (tagIdList.length > 0) {
     // Filter products that have AT LEAST ONE of the selected tags
     where.id = {
@@ -567,8 +573,10 @@ export async function resolveProductsScope(q: ProductListQuery) {
     if (q.hasBrand === 'false') cacheWhere.hasBrand = false
     if (q.hasGtin === 'true') cacheWhere.hasGtin = true
     if (q.hasGtin === 'false') cacheWhere.hasGtin = false
-    // IN.4 — drift filter (any channel override active)
+    // IN.4 — the OVERRIDES filter (any listing with a field that does not follow the master). A-36: this counts
+    // overrides, never the channel — the "differs on the channel" filter is `channelDrift` below.
     if (q.driftOnly === 'true') cacheWhere.driftCount = { gt: 0 }
+    if (channelDriftIds) cacheWhere.AND = [...(cacheWhere.AND ?? []), { id: { in: channelDriftIds } }]
     // Price bounds apply to the cache exactly as to the table; stock is the roll-up (below).
     if (priceMin !== undefined || priceMax !== undefined) {
       cacheWhere.basePrice = { ...(priceMin !== undefined ? { gte: priceMin } : {}), ...(priceMax !== undefined ? { lte: priceMax } : {}) }

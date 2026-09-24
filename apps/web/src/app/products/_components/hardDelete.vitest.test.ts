@@ -45,10 +45,10 @@ describe('W0 deletion copy describes PR.2 no-escalation adapters', () => {
     expect(messages["products.hardDelete.preflightError"]).toBe("The check failed: {error}. Permanent deletion is blocked.")
   })
   it("products.hardDelete.channelAction.unpublish.label", () => {
-    expect(messages["products.hardDelete.channelAction.unpublish.label"]).toBe("End the listing on each channel")
+    expect(messages["products.hardDelete.channelAction.unpublish.label"]).toBe("Stop selling on each channel")
   })
   it("products.hardDelete.channelAction.unpublish.body", () => {
-    expect(messages["products.hardDelete.channelAction.unpublish.body"]).toBe("Nexus asks each channel to stop selling, then deletes the local record either way. Amazon and eBay: the request is refused; the listing is not ended. Shopify: the request returns a visible failure; the store keeps selling it. WooCommerce and Etsy: nothing is sent. There is no relist from here.")
+    expect(messages["products.hardDelete.channelAction.unpublish.body"]).toBe("Nexus asks each channel to stop selling, then deletes the local record. Amazon: the offer in that market is closed; the ASIN, SKU and reviews are kept; an FBA offer is refused. eBay: the quantity is set to 0 under the out-of-stock control, so the same ItemID stays; refused when that control is off or cannot be read. Shopify: the request returns a visible failure; the store keeps selling it. WooCommerce and Etsy: nothing is sent. There is no relist from here.")
   })
   it("products.hardDelete.channelAction.delete.label", () => {
     expect(messages["products.hardDelete.channelAction.delete.label"]).toBe("Remove the listing from each channel")
@@ -60,10 +60,10 @@ describe('W0 deletion copy describes PR.2 no-escalation adapters', () => {
     expect(messages["products.hardDelete.channelAction.none.body"]).toBe("The local product record and its dependent records are permanently deleted. Nothing is sent to any channel. Channel listings may keep selling. There is no undo for the local deletion.")
   })
   it("products.hardDelete.channelAction.note", () => {
-    expect(messages["products.hardDelete.channelAction.note"]).toBe("Amazon and eBay refuse the first option; the second asks them to delete the seller offer or end the listing. Shopify returns a visible failure for either option. WooCommerce and Etsy receive nothing. The local record is deleted either way.")
+    expect(messages["products.hardDelete.channelAction.note"]).toBe("The first option: Amazon closes the offer in that market and eBay sets the quantity to 0; an FBA offer, or an eBay item whose out-of-stock control is off or unknown, is refused. The second asks them to delete the seller offer or end the listing. Shopify returns a visible failure for either option. WooCommerce and Etsy receive nothing. A product whose listing would keep selling is not deleted.")
   })
   it("products.hardDelete.submit.unpublish", () => {
-    expect(messages["products.hardDelete.submit.unpublish"]).toBe("Delete locally and end on channel")
+    expect(messages["products.hardDelete.submit.unpublish"]).toBe("Delete locally and stop selling on channel")
   })
   it("products.hardDelete.submit.delete", () => {
     expect(messages["products.hardDelete.submit.delete"]).toBe("Delete locally and remove from channel")

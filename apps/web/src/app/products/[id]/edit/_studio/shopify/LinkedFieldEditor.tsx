@@ -47,7 +47,7 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
   const supportedReference = ['product_reference', 'variant_reference', 'collection_reference', 'page_reference', 'article_reference', 'file_reference', 'metaobject_reference', 'mixed_reference', 'customer_reference', 'company_reference', 'order_reference', 'disclosure_reference', 'product_taxonomy_value_reference'].includes(type)
   let control
   if (reference && !invalidList) control = <div className={styles.stack}>
-    {values.length > 0 && <OrderedList label={`${def.name} references`} items={values} disabled={locked || !list} draggable={false} itemLabel={id => names.find(n => n.id === id)?.label ?? 'Referenced item'} onChange={next => onChange(JSON.stringify(next))} renderItem={id => {
+    {values.length > 0 && <OrderedList label={`${def.name} references`} items={values} disabled={locked || !list} draggable keyboardGrip itemLabel={id => names.find(n => n.id === id)?.label ?? 'Referenced item'} onChange={next => onChange(JSON.stringify(next))} renderItem={id => {
       const item = names.find(n => n.id === id)
       return <span className={styles.reference}>{item?.image && <img src={item.image} alt="" loading="lazy" />}<span>{item?.available === false ? 'Referenced entry is unavailable' : item?.label ?? (nameError ? 'Reference preview unavailable' : 'Loading reference…')}{item?.handle && <small>/{item.handle}</small>}</span>
         {id.includes('/Metaobject/') && onOpenEntry && <Button size="xs" disabled={disabled} onClick={() => onOpenEntry(id)}>Edit entry</Button>}
@@ -70,7 +70,7 @@ export function LinkedFieldEditor({ path, definition: def, value, disabled, sche
     }
     const listItems = items
     control = listItems ? <div className={styles.stack}>
-      <OrderedList label={`${def.name} values`} items={listItems.map((_, i) => String(i))} draggable={false} disabled={locked} itemLabel={id => `Value ${Number(id) + 1}`}
+      <OrderedList label={`${def.name} values`} items={listItems.map((_, i) => String(i))} draggable keyboardGrip disabled={locked} itemLabel={id => `Value ${Number(id) + 1}`}
         onChange={ids => onChange(shopifyJson.stringify(ids.map(id => listItems[Number(id)])))} renderItem={id => {
           const i = Number(id), item = listItems[i]
           const raw = typeof item === 'object' ? shopifyJson.stringify(item) : String(item)

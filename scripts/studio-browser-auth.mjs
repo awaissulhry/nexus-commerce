@@ -28,12 +28,20 @@ export async function authenticatedStudioPage(browser, { base, viewport, colorSc
   page.on('requestfailed', onFailed)
   // AuthProvider also mints CSRF during hydration. Finish that request before
   // starting sign-in, otherwise two fresh tokens can race on the same cookie.
-  const bootAuth = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/me', { timeout: 15000 })
+  // 🔴 A-43 (2026-09-23): with business profiles ON the page calls its API through its OWN origin —
+  // `<origin>/backend/api/auth/me` (`apps/web/src/lib/backend-url.ts`). Matching the pathname EXACTLY
+  // `/api/auth/me` timed out on every gate (editor-open, census exit 2). Either spelling is the boot.
+  const bootAuth = page.waitForResponse(response => /^(\/backend)?\/api\/auth\/me$/.test(new URL(response.url()).pathname), { timeout: 15000 })
   // Start on a stable public route: / redirects to the dashboard, whose signed-out
   // redirect can otherwise abort sign-in or the gate's first studio navigation.
-  await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' })
-  await bootAuth
-  const api = process.env.STUDIO_API_BASE ?? 'http://localhost:8091'
+  // `base` may carry a workspace path (`…/w/<id>`); sign-in lives on the ORIGIN.
+  const origin = new URL(base).origin
+  await page.goto(`${origin}/login`, { waitUntil: 'domcontentloaded' })
+  const boot = await bootAuth
+  // The API base is DERIVED from the boot request the page itself made, never guessed: the page proxy
+  // (`<origin>/backend`) or a direct API host. `STUDIO_API_BASE` still wins when set.
+  const booted = new URL(boot.url())
+  const api = process.env.STUDIO_API_BASE ?? (booted.pathname.startsWith('/backend/') ? `${booted.origin}/backend` : booted.origin)
   if (process.env.STUDIO_TEST_EMAIL && process.env.STUDIO_TEST_PASSWORD) {
     // Use the browser's normal cookie/CORS path, including secure localhost cookies.
     // APIRequestContext does not apply Chromium's localhost secure-context exception.

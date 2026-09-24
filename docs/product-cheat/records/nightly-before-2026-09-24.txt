@@ -1,0 +1,22 @@
+--- CronRun, newest first
+2026-09-24T02:17:02Z → 2026-09-24T02:22:58Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: readiness-reconcile: 32 done · 9741 rows · stopped: complete · 356s
+2026-09-24T02:17:00Z → 2026-09-24T02:17:01Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: readiness-reconcile: 2 done · 22 rows · stopped: complete · 2s
+2026-09-23T02:17:01Z → 2026-09-23T02:23:09Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: Reconciled 32 families, 9741 readiness rows.
+2026-09-23T02:17:00Z → 2026-09-23T02:17:00Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: Reconciled 2 families, 22 readiness rows.
+2026-09-22T02:17:01Z → 2026-09-22T02:22:54Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: Reconciled 32 families, 9741 readiness rows.
+2026-09-22T02:17:00Z → 2026-09-22T02:17:01Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: Reconciled 2 families, 22 readiness rows.
+2026-09-21T02:17:01Z → 2026-09-21T02:22:23Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: Reconciled 32 families, 9741 readiness rows.
+2026-09-21T02:17:00Z → 2026-09-21T02:17:00Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: Reconciled 1 families, 1 readiness rows.
+--- ReadinessIndex rows computed since the deploy: { n: 0, newest: null }
+--- ChannelDrift rows by source: [{"channel":"EBAY","rows":219,"drifted":0,"amazon_content_checked":0}]
+--- ReadinessIndex by business and language (A-50 lowers non-Italian % after the first nightly on the new code)
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd it: rows 22 · avg null% · required 0/0 · newest 2026-09-24T02:17:01Z
+nexus_legacy_workspace de: rows 1014 · avg 60.4% · required 3217/10181 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace en: rows 2366 · avg 59.4% · required 3420/10456 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace es: rows 1014 · avg 60.6% · required 3015/9785 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace fr: rows 1352 · avg 60.7% · required 3317/10123 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace it: rows 1098 · avg 75.7% · required 5068/10995 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace nl: rows 1014 · avg 70.9% · required 1677/5286 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace pl: rows 676 · avg 100% · required 634/676 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace sv: rows 676 · avg 100% · required 634/676 · newest 2026-09-24T02:22:50Z
+nexus_legacy_workspace tr: rows 676 · avg 100% · required 634/676 · newest 2026-09-24T02:22:50Z

@@ -15,7 +15,7 @@ import { cachedSchemasOnly } from './cached-schema-context.js'
  */
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
-import { getSheetColumns, type SheetColumnSet } from './sheet-columns.service.js'
+import { getSheetColumns, lacksShopifyStoreFields, type SheetColumnSet } from './sheet-columns.service.js'
 
 const cache = new TtlCache<Promise<SheetColumnSet>>({ ttlMs: 5 * 60_000, maxEntries: 128 })
 
@@ -68,7 +68,11 @@ export function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumn
   const hit = cache.get(key)
   if (hit) return hit
 
-  const built = getSheetColumns(input).catch((err) => {
+  const built: Promise<SheetColumnSet> = getSheetColumns(input).then((set) => {
+    // A Shopify set built before the store's field list was available is served once, never kept.
+    if (lacksShopifyStoreFields(set) && cache.get(key) === built) cache.delete(key)
+    return set
+  }, (err) => {
     cache.delete(key)
     throw err
   })

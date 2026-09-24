@@ -51,8 +51,15 @@ import type { ListboxOption } from './Listbox'
  */
 export const LISTBOX_SEARCH_THRESHOLD = 8
 
+/**
+ * A panel option may be HELD: reachable and announced, never committed (Step 4.3 #2). The scope menu
+ * uses it for a channel the operator cannot open yet — the same rule as a held ScopeBar chip, whose
+ * refusal must stay readable. `disabled` would take it out of the keyboard's reach instead.
+ */
+export type ListboxPanelOption = ListboxOption & { heldReason?: string }
+
 export interface ListboxPanelProps {
-  options: ListboxOption[]
+  options: ListboxPanelOption[]
   /** the currently selected value; highlighted and scrolled into view on mount */
   value?: string
   /** the operator chose an option */
@@ -121,10 +128,15 @@ export function ListboxPanel({
   activeIndex, onActiveIndexChange, onMatchesChange, idPrefix, ariaLabel, optionTabIndex,
 }: ListboxPanelProps) {
   const [ownQuery, setOwnQuery] = useState('')
-  const [ownActive, setOwnActive] = useState(0)
+  /**
+   * `null` until the operator moves: the highlight then IS the selected row (Step 4.3 #2, T1). It
+   * used to start at 0 while the panel's Enter commits `matches[active]` — so opening a short list
+   * on "Bravo" and pressing Enter committed "Alpha", a hidden row 1 (proved by
+   * `listboxPanelKeys.vitest.test.ts` before this fix).
+   */
+  const [ownActive, setOwnActive] = useState<number | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const controlled = activeIndex !== undefined
-  const active = controlled ? activeIndex : ownActive
   /**
    * One place that both moves the panel's own index and tells a controlled owner.
    *
@@ -134,13 +146,13 @@ export function ListboxPanel({
    * function existed. The callback cannot go inside the updater instead: StrictMode double-invokes
    * updaters, and a listener that fires twice per press is worse than the bug it replaces.
    */
-  const activeRef = useRef(active)
-  activeRef.current = active
+  const activeRef = useRef(0)
   const moveActive = (next: (current: number) => number) => {
     const n = next(activeRef.current)
     activeRef.current = n
     if (!controlled) setOwnActive(n)
     onActiveIndexChange?.(n)
+    return n
   }
 
   // An externally supplied query means the caller owns the input, so the panel renders none.
@@ -157,11 +169,21 @@ export function ListboxPanel({
   const matches = grouped?.flat ?? ranked
   const hasOwnEmpty = options.some((o) => o.value === '')
   const showClear = emptyLabel != null && !hasOwnEmpty
+  const selectedIndex = Math.max(0, matches.findIndex((o) => o.value === value))
+  const active = controlled ? activeIndex : ownActive ?? selectedIndex
+  activeRef.current = active
+  const heldReason = (o: ListboxOption) => (o as ListboxPanelOption).heldReason
 
   // An external query changes the list under the cursor; an active index into the old list is a
   // highlight on the wrong row. A CONTROLLED owner resets its own index — doing it here as well
   // would fight it, and the panel does not own that number.
-  useEffect(() => { if (!controlled) setOwnActive(0) }, [query, controlled])
+  // Not on mount: the highlight starts on the selected row (above) and a mount reset would undo it.
+  const lastQuery = useRef(query)
+  useEffect(() => {
+    if (lastQuery.current === query) return
+    lastQuery.current = query
+    if (!controlled) setOwnActive(0)
+  }, [query, controlled])
 
   /**
    * Hand the caller the list it must index into. Keyed on the VALUES, not the array identity, which
@@ -218,9 +240,13 @@ export function ListboxPanel({
   const renderOption = (o: ListboxOption, i: number) => (
     <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
       id={idPrefix ? `${idPrefix}-o${i}` : undefined} tabIndex={optionTabIndex}
-      className={[o.value === value ? 'on' : '', (filtering || controlled) && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined}
-      title={o.title ?? o.label}
-      onClick={() => onCommit(o.value)}>
+      className={[o.value === value ? 'on' : '', (filtering || controlled) && i === active ? 'active' : '', heldReason(o) ? 'held' : ''].filter(Boolean).join(' ') || undefined}
+      title={heldReason(o) ?? o.title ?? o.label}
+      aria-disabled={heldReason(o) ? true : undefined}
+      aria-description={heldReason(o)}
+      // Tab (or a click) onto an option makes it the one Enter commits. A controlled owner keeps its index.
+      onFocus={controlled ? undefined : () => { if (activeRef.current !== i) moveActive(() => i) }}
+      onClick={() => { if (!heldReason(o)) onCommit(o.value) }}>
       {o.leading != null && <span className="nds-listbox-lead">{o.leading}</span>}
       {o.trailing != null ? <><span className="nds-listbox-label">{o.label}</span><span className="nds-listbox-trailing">{o.trailing}</span></> : o.label}
     </button>
@@ -241,9 +267,16 @@ export function ListboxPanel({
       tabIndex={-1}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.preventDefault(); onCancel() }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); moveActive((i) => Math.min(i + 1, matches.length - 1)) }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive((i) => Math.max(i - 1, 0)) }
-        else if (e.key === 'Enter') { const m = matches[active]; if (m) { e.preventDefault(); onCommit(m.value) } }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const n = moveActive((i) => e.key === 'ArrowDown' ? Math.min(i + 1, matches.length - 1) : Math.max(i - 1, 0))
+          // A short uncontrolled list draws no `.active` row, so the focus ring IS the highlight: move it.
+          if (!filtering && !controlled) hostRef.current?.querySelectorAll<HTMLElement>('button[role="option"]')[n + (showClear ? 1 : 0)]?.focus()
+        }
+        else if (e.key === 'Enter') {
+          const m = matches[active]
+          if (m) { e.preventDefault(); if (!m.disabled && !heldReason(m)) onCommit(m.value) }
+        }
       }}
     >
       {ownsSearch && (

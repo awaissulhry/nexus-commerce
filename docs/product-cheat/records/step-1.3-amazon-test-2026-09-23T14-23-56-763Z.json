@@ -1,0 +1,104 @@
+{
+ "at": "2026-09-23T14:23:18.007Z",
+ "before": {
+  "asin": "B0BTCBPVTS",
+  "status": [
+   "BUYABLE",
+   "DISCOVERABLE"
+  ],
+  "codes": [
+   "DEFAULT"
+  ],
+  "quantity": 2,
+  "offer": "present"
+ },
+ "unpublish": {
+  "payload": {
+   "productType": "APPAREL",
+   "patches": [
+    {
+     "op": "replace",
+     "path": "/attributes/fulfillment_availability",
+     "value": [
+      {
+       "fulfillment_channel_code": "DEFAULT",
+       "quantity": 0
+      }
+     ]
+    }
+   ]
+  },
+  "submit": {
+   "success": true,
+   "status": "ACCEPTED",
+   "error": null,
+   "dryRun": false,
+   "issues": []
+  },
+  "publish": {
+   "success": true,
+   "status": "SUCCESS",
+   "mode": "live"
+  }
+ },
+ "afterUnpublish": [
+  {
+   "afterSeconds": 15,
+   "asin": "B0BTCBPVTS",
+   "status": [
+    "DISCOVERABLE",
+    "BUYABLE"
+   ],
+   "codes": [
+    "DEFAULT"
+   ],
+   "quantity": 0,
+   "offer": "present"
+  }
+ ],
+ "restore": {
+  "payload": {
+   "productType": "APPAREL",
+   "patches": [
+    {
+     "op": "replace",
+     "path": "/attributes/fulfillment_availability",
+     "value": [
+      {
+       "fulfillment_channel_code": "DEFAULT",
+       "quantity": 2
+      }
+     ]
+    }
+   ]
+  },
+  "submit": {
+   "success": true,
+   "status": "ACCEPTED",
+   "error": null,
+   "dryRun": false,
+   "issues": []
+  },
+  "publish": {
+   "success": true,
+   "status": "SUCCESS",
+   "mode": "live"
+  }
+ },
+ "afterRestore": [
+  {
+   "afterSeconds": 15,
+   "asin": "B0BTCBPVTS",
+   "status": [
+    "BUYABLE",
+    "DISCOVERABLE"
+   ],
+   "codes": [
+    "DEFAULT"
+   ],
+   "quantity": 2,
+   "offer": "present"
+  }
+ ],
+ "restored": true
+}

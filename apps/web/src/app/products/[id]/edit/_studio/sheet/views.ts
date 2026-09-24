@@ -53,6 +53,7 @@ import { allColumnsPreset, type GridViewPreset } from '@/design-system/grid/view
 
 import { LANGUAGES_VIEW_ID } from './languages'
 import { flaggedColumnKeys } from './flaggedColumns'
+import { defaultViewKeys, slotListViewNote } from './slotListColumns'
 import type { SheetColumn } from './master/types'
 
 /**
@@ -330,8 +331,13 @@ export function sheetViews(
   ctx: ViewContext,
   serverViews?: Array<{ id: string; label: string; columnKeys: string[] }>,
 ): SheetViewsResult {
-  const all = allColumnsPreset(orderColumnKeys(columns, ctx))
-  const languages: GridViewPreset = { id: LANGUAGES_VIEW_ID, label: 'Languages', description: 'Compare shared content languages side by side, grouped by field', columns: columns.filter(column => column.localizable || !!column.locale).map(column => column.key) }
+  /* R-56 (Step 4.3 #3) — where bullets show as one cell, Bullet 1–10 are hidden by default: not in "All attributes", not
+     in the Languages set, still in Customise and in every import/export. The description then says so rather than claim
+     "every column". Required keeps Bullet 1 — the requirement lives on position 1. */
+  const note = slotListViewNote(columns)
+  const allKeys = defaultViewKeys(orderColumnKeys(columns, ctx), columns)
+  const all = note ? { ...allColumnsPreset(allKeys), description: note } : allColumnsPreset(allKeys)
+  const languages: GridViewPreset = { id: LANGUAGES_VIEW_ID, label: 'Languages', description: 'Compare shared content languages side by side, grouped by field', columns: defaultViewKeys(columns.filter(column => column.localizable || !!column.locale).map(column => column.key), columns) }
 
   if (serverViews && serverViews.length > 0) {
     return {

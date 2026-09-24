@@ -444,6 +444,7 @@
     "MarketplaceTaxonomyNode",
     "ChannelListingTranslation",
     "ReadinessIndex",
+    "ChannelDrift",
     "SellerReferenceLabel",
     "Assortment",
     "AssortmentMember",

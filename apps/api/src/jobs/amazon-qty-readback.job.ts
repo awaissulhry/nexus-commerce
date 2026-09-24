@@ -21,6 +21,7 @@
 
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { priceDrift, priceDriftMessage, priceHealEnabled, type PriceDrift } from '../services/price-readback.service.js'
+import { recordChannelReadback, type DriftField } from '../services/channel-drift.service.js'
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
@@ -119,6 +120,44 @@ export function diffPriceReadback(
   return out
 }
 
+/**
+ * PLAN Step 3.5a (A-36) — the same comparison, as one record per LISTING for `ChannelDrift`.
+ *
+ * A listing is only recorded when the report answered for it (its SKU is in the report), and a field only when both
+ * sides have it — the exact skip rules of `diffReadback` (FBA stock is Amazon's; no intended quantity) and of
+ * `priceDrift` (no price on either side is not a drift). So `compared` lists what was really compared, a matching field
+ * is cleared, and a listing the report did not mention keeps whatever it had.
+ */
+export function amazonDriftRecords(
+  amazonRows: Array<{ sku: string; quantity: number; price?: number | null; fulfillmentChannel?: string | null }>,
+  ourRows: Array<{ sku: string; quantity: number | null; price: number | null; channelListingId: string }>,
+  qtyDiffs: readonly ReadbackMismatch[],
+  priceDiffs: readonly PriceReadbackMismatch[],
+): Array<{ channelListingId: string; compared: string[]; differing: DriftField[] }> {
+  const bySku = new Map(amazonRows.map((a) => [a.sku, a]))
+  const qty = new Map(qtyDiffs.map((d) => [d.channelListingId, d]))
+  const price = new Map(priceDiffs.map((d) => [d.channelListingId, d]))
+  const out: Array<{ channelListingId: string; compared: string[]; differing: DriftField[] }> = []
+  for (const r of ourRows) {
+    const a = bySku.get(r.sku)
+    if (!a) continue
+    const compared: string[] = []
+    const differing: DriftField[] = []
+    if (!(a.fulfillmentChannel && /^amazon/i.test(a.fulfillmentChannel)) && r.quantity != null) {
+      compared.push('quantity')
+      const d = qty.get(r.channelListingId)
+      if (d) differing.push({ field: 'quantity', ours: d.intendedQty, theirs: d.amazonQty })
+    }
+    if (r.price != null && Number.isFinite(r.price) && a.price != null && Number.isFinite(a.price)) {
+      compared.push('price')
+      const d = price.get(r.channelListingId)
+      if (d) differing.push({ field: 'price', ours: d.drift.intendedPrice, theirs: d.drift.channelPrice })
+    }
+    if (compared.length) out.push({ channelListingId: r.channelListingId, compared, differing })
+  }
+  return out
+}
+
 export async function runAmazonQtyReadback(): Promise<string> {
   const { AmazonService } = await import('../services/marketplaces/amazon.service.js')
   const amazon = new AmazonService()
@@ -127,6 +166,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
   let compared = 0
 
   let priceCompared = 0, priceMismatches = 0, priceLogged = 0
+  let driftRecorded = 0
   let mismatches = 0
   let healed = 0
   let logged = 0
@@ -192,6 +232,8 @@ export async function runAmazonQtyReadback(): Promise<string> {
             productId: d.productId,
             channel: 'AMAZON',
             conflictType: 'CHANNEL_QTY_READBACK',
+            // A-36 — per product AND market, as the comment above always said: a second market's drift is its own.
+            conflictData: { path: ['remote', 'marketplace'], equals: d.marketplace },
             resolutionStatus: 'UNRESOLVED',
             createdAt: { gte: new Date(Date.now() - 24 * 3600e3) },
           },
@@ -245,6 +287,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
             productId: d.productId,
             channel: 'AMAZON',
             conflictType: 'CHANNEL_PRICE_READBACK',
+            conflictData: { path: ['remote', 'marketplace'], equals: d.marketplace },
             resolutionStatus: 'UNRESOLVED',
             createdAt: { gte: new Date(Date.now() - 24 * 3600e3) },
           },
@@ -265,6 +308,15 @@ export async function runAmazonQtyReadback(): Promise<string> {
       // 🔴 No heal. A price correction is a money write made by a machine on a
       // schedule; the Owner has not ruled on it. `priceHealEnabled()` names the
       // switch for the day that ruling exists.
+    }
+
+    // A-36 — one ChannelDrift record per listing the report answered for (differences stored, matches cleared).
+    for (const rec of amazonDriftRecords(catalog, mine, diffs, priceDiffs)) {
+      try {
+        await recordChannelReadback({ channelListingId: rec.channelListingId, channel: 'AMAZON', marketplace: mp,
+          source: 'amazon-merchant-listings-report', compared: rec.compared, differing: rec.differing })
+        driftRecorded++
+      } catch { /* observability best-effort: a failed drift write never stops the read-back */ }
     }
   }
 
@@ -296,6 +348,7 @@ export async function runAmazonQtyReadback(): Promise<string> {
   // it: a clean quantity run with drifted prices must not read as a clean run.
   const summary = `compared=${compared} mismatches=${mismatches} logged=${logged} healEnqueued=${healed} resolved=${resolved}`
     + ` | price: compared=${priceCompared} mismatches=${priceMismatches} logged=${priceLogged}${priceHealEnabled() ? '' : ' (heal off)'}`
+    + ` | drift: recorded=${driftRecorded}`
     + ` [${marketSummaries.join(' ')}]`
   logger.info(`[${JOB_NAME}] ${summary}`)
   return summary

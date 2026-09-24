@@ -76,6 +76,111 @@ function offerInstancesFor(attrs: Record<string, unknown> | null | undefined, ma
   return po.filter((x) => x && (x.marketplace_id === marketplaceId || po.length === 1))
 }
 
+type OfferPatchResult = Awaited<ReturnType<typeof amazonSpApiClient.patchPurchasableOffer>>
+
+/** What the live read saw, handed to a caller's `refuse` check before anything is sent. */
+export interface AmazonOfferLiveRead {
+  /** 'failed' = the read threw or answered success:false — nothing about the listing is known. */
+  read: 'ok' | 'failed'
+  offers: Array<Record<string, unknown>>
+  /** fulfillment_availability[].fulfillment_channel_code, e.g. DEFAULT (merchant) or AMAZON_EU (FBA). */
+  fulfillmentChannels: string[]
+  error?: string
+}
+
+export interface AmazonOfferCloseAttempt {
+  sent: boolean
+  /** Why nothing was sent (sent=false). */
+  notSent?: 'LIVE_READ_FAILED' | 'NO_LIVE_OFFER' | 'NO_PRODUCT_TYPE' | 'REFUSED'
+  detail?: string
+  /** The patch answer (sent=true). */
+  res?: OfferPatchResult
+  /** The verbatim purchasable_offer the close removes — what a reopen replays. */
+  snapshot: Array<Record<string, unknown>>
+  snapshotSource: 'live' | 'db'
+  productType: string
+  live: AmazonOfferLiveRead
+}
+
+/**
+ * PLAN Step 1.3 (R-39) — SCT.6's CHANNEL half, one owner for both callers: `closeMarketOffers`
+ * (the per-market close, which then records the closure on its row) and the hard-delete
+ * unpublish (`channel-delist.service.ts`, which runs after the row is gone).
+ *
+ * 1. a live read (the verbatim purchasable_offer + the fulfilment channels);
+ * 2. the caller's `refuse` check — a reason sends nothing;
+ * 3. the close: delete THIS marketplace's offer instance by its selectors
+ *    ({marketplace_id, currency?, audience?}) — proved live 2026-09-23 (A-38 results).
+ *
+ * `dbFallback` is SCT.6's own rule: with no usable live offer it still closes, snapshotting our
+ * price (snapshotSource 'db'). Without it, a failed read or a missing offer sends nothing.
+ */
+export async function closeAmazonOfferOnChannel(input: {
+  sellerId: string
+  sku: string
+  marketplaceId: string
+  /** The stored product type; the live read's own type wins when it names one. */
+  productType: string
+  dbFallback?: { price: unknown }
+  refuse?: (live: AmazonOfferLiveRead) => string | null
+}): Promise<AmazonOfferCloseAttempt> {
+  const { sellerId, sku, marketplaceId } = input
+  let productType = String(input.productType ?? '').toUpperCase()
+  const live: AmazonOfferLiveRead = { read: 'ok', offers: [], fulfillmentChannels: [] }
+  try {
+    const answer = await amazonSpApiClient.getListingsItem({
+      sellerId, sku, marketplaceId, includedData: ['attributes', 'summaries'],
+    } as never)
+    const raw = (answer as { rawResponse?: { attributes?: Record<string, unknown>; summaries?: Array<{ productType?: string }> } }).rawResponse
+    if ((answer as { success?: boolean }).success === false) {
+      live.read = 'failed'
+      live.error = (answer as { error?: string }).error ?? 'the listing read answered success:false'
+    }
+    live.offers = offerInstancesFor(raw?.attributes, marketplaceId)
+    const fa = (raw?.attributes as { fulfillment_availability?: Array<{ fulfillment_channel_code?: unknown }> } | undefined)?.fulfillment_availability
+    live.fulfillmentChannels = Array.isArray(fa) ? fa.map((f) => String(f?.fulfillment_channel_code ?? '').toUpperCase()) : []
+    const liveType = raw?.summaries?.[0]?.productType
+    if (liveType) productType = String(liveType).toUpperCase()
+  } catch (snapErr) {
+    live.read = 'failed'
+    live.error = snapErr instanceof Error ? snapErr.message : String(snapErr)
+    logger.warn('market-offer close: live snapshot read failed', { sku, marketplaceId, error: live.error, dbFallback: !!input.dbFallback })
+  }
+
+  let snapshotSource: 'live' | 'db' = 'live'
+  let offerValue = live.offers
+  const notSent = (reason: NonNullable<AmazonOfferCloseAttempt['notSent']>, detail?: string): AmazonOfferCloseAttempt =>
+    ({ sent: false, notSent: reason, detail, snapshot: offerValue, snapshotSource, productType, live })
+  if (!input.dbFallback) {
+    if (live.read === 'failed') return notSent('LIVE_READ_FAILED', live.error)
+    const refusal = input.refuse?.(live) ?? null
+    if (refusal) return notSent('REFUSED', refusal)
+    if (offerValue.length === 0) return notSent('NO_LIVE_OFFER')
+  } else if (offerValue.length === 0) {
+    // Diagnostic (SCT.6 pilot found 'db' fallback on a healthy listing):
+    // record WHAT the live read returned so snapshot fidelity is provable.
+    logger.warn('market-offer close: no live purchasable_offer instance — using DB price snapshot', { sku, marketplaceId })
+    snapshotSource = 'db'
+    offerValue = [{
+      marketplace_id: marketplaceId,
+      currency: 'EUR',
+      our_price: [{ schedule: [{ value_with_tax: input.dbFallback.price ?? 0 }] }],
+    }]
+  }
+  if (!productType) return notSent('NO_PRODUCT_TYPE', 'no productType resolvable — cannot patch')
+
+  // The close patch (delete THIS marketplace's offer instance).
+  const selector = offerValue.map((x) => ({
+    marketplace_id: marketplaceId,
+    ...(x.currency ? { currency: x.currency } : {}),
+    ...(x.audience ? { audience: x.audience } : {}),
+  }))
+  const res = await amazonSpApiClient.patchPurchasableOffer({
+    sellerId, sku, marketplaceId, productType, op: 'delete', value: selector,
+  })
+  return { sent: true, res, snapshot: offerValue, snapshotSource, productType, live }
+}
+
 export async function closeMarketOffers(opts: {
   targets: MarketOfferTarget[]
   actor: string
@@ -120,51 +225,22 @@ export async function closeMarketOffers(opts: {
         continue
       }
 
-      // 1 — live snapshot BEFORE closing (verbatim purchasable_offer).
-      let snapshotSource: 'live' | 'db' = 'live'
-      let offerValue: Array<Record<string, unknown>> = []
-      let productType =
-        String((cl.platformAttributes as { productType?: string } | null)?.productType ?? cl.product?.productType ?? '').toUpperCase()
-      try {
-        const live = await amazonSpApiClient.getListingsItem({
-          sellerId: seller, sku, marketplaceId, includedData: ['attributes', 'summaries'],
-        } as never)
-        const raw = (live as { rawResponse?: { attributes?: Record<string, unknown>; summaries?: Array<{ productType?: string }> } }).rawResponse
-        offerValue = offerInstancesFor(raw?.attributes, marketplaceId)
-        const liveType = raw?.summaries?.[0]?.productType
-        if (liveType) productType = String(liveType).toUpperCase()
-      } catch (snapErr) {
-        logger.warn('market-offer close: live snapshot read failed (DB fallback)', {
-          sku, marketplaceId, error: snapErr instanceof Error ? snapErr.message : String(snapErr),
-        })
-      }
-      if (offerValue.length === 0) {
-        // Diagnostic (SCT.6 pilot found 'db' fallback on a healthy listing):
-        // record WHAT the live read returned so snapshot fidelity is provable.
-        logger.warn('market-offer close: no live purchasable_offer instance — using DB price snapshot', { sku, marketplaceId })
-        snapshotSource = 'db'
-        offerValue = [{
-          marketplace_id: marketplaceId,
-          currency: 'EUR',
-          our_price: [{ schedule: [{ value_with_tax: cl.price ?? 0 }] }],
-        }]
-      }
-      if (!productType) {
-        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: 'no productType resolvable — cannot patch' })
+      // 1 + 2 — live snapshot BEFORE closing (verbatim purchasable_offer), then the close patch
+      // (delete THIS marketplace's offer instance). The channel half is shared with the
+      // hard-delete unpublish (PLAN Step 1.3); SCT.6 keeps its DB-price fallback.
+      const attempt = await closeAmazonOfferOnChannel({
+        sellerId: seller, sku, marketplaceId,
+        productType: String((cl.platformAttributes as { productType?: string } | null)?.productType ?? cl.product?.productType ?? ''),
+        dbFallback: { price: cl.price },
+      })
+      const { snapshot: offerValue, snapshotSource, productType } = attempt
+      if (!attempt.sent || !attempt.res) {
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: attempt.detail ?? 'no productType resolvable — cannot patch' })
         result.failed++
         processed++
         continue
       }
-
-      // 2 — the close patch (delete THIS marketplace's offer instance).
-      const selector = offerValue.map((x) => ({
-        marketplace_id: marketplaceId,
-        ...(x.currency ? { currency: x.currency } : {}),
-        ...(x.audience ? { audience: x.audience } : {}),
-      }))
-      const res = await amazonSpApiClient.patchPurchasableOffer({
-        sellerId: seller, sku, marketplaceId, productType, op: 'delete', value: selector,
-      })
+      const res = attempt.res
       if (!res.success) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: res.error })
         result.failed++

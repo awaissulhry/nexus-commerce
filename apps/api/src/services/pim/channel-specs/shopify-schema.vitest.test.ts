@@ -3,7 +3,8 @@ import { withWorkspace } from '../../../lib/workspace-context.js'
 const mocks = vi.hoisted(() => ({ admin: vi.fn(), read: vi.fn(), invalidateConstraints: vi.fn() }))
 vi.mock('../../shopify/admin-client.js', () => ({ shopifyAdmin: mocks.admin }))
 vi.mock('../../shopify/linked-products-gateway.js', () => ({ readLinkedStoreSchema: mocks.read, invalidateShopifyDefinitionConstraints: mocks.invalidateConstraints }))
-import { invalidateShopifyMappingSchema, readShopifyMappingSchema, loadShopifyProductSpec } from './shopify.js'
+import { forgetShopifyMappingSchemasInProcess, invalidateShopifyMappingSchema, readShopifyMappingSchema, loadShopifyProductSpec } from './shopify.js'
+import { withCachedSchemas } from '../cached-schema-context.js'
 const schema = (revision: string) => ({ revision, definitions: [], metaobjectDefinitions: [], types: [], locales: [] })
 const scoped = <T>(id: string, work: () => T) => withWorkspace({ workspaceId: id, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 beforeEach(() => { vi.clearAllMocks(); for (const id of ['a', 'b']) invalidateShopifyMappingSchema(id); mocks.admin.mockImplementation(async id => ({ graphql: id })); mocks.read.mockImplementation(async id => schema(id)) })
@@ -30,6 +31,25 @@ describe('Shopify mapping schema lifecycle', () => {
     expect((await readShopifyMappingSchema('a')).revision).toBe('new')
     finish(schema('old')); await old
     expect((await readShopifyMappingSchema('a')).revision).toBe('new')
+  })
+  // 2026-09-24 — the Shopify sheet lost every store metafield: its cache-only read found an empty process memory.
+  it('serves the stored copy to a cache-only read after a restart, and never starts provider work there', async () => {
+    await readShopifyMappingSchema('a')
+    forgetShopifyMappingSchemasInProcess()
+    expect((await withCachedSchemas(() => readShopifyMappingSchema('a'))).revision).toBe('a')
+    expect(mocks.read).toHaveBeenCalledTimes(1)
+    await expect(withCachedSchemas(() => readShopifyMappingSchema('never-read'))).rejects.toThrow('not cached')
+    expect(mocks.read).toHaveBeenCalledTimes(1)
+  })
+  it('keeps the last good copy while a new read runs, and after it fails', async () => {
+    await readShopifyMappingSchema('a')
+    invalidateShopifyMappingSchema('a')
+    let fail!: (error: Error) => void
+    mocks.read.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
+    const next = readShopifyMappingSchema('a', true)
+    expect((await withCachedSchemas(() => readShopifyMappingSchema('a'))).revision).toBe('a')
+    fail(new Error('Shopify unavailable')); await expect(next).rejects.toThrow('Shopify unavailable')
+    expect((await withCachedSchemas(() => readShopifyMappingSchema('a'))).revision).toBe('a')
   })
   it('propagates errors and recovers instead of caching an empty catalogue', async () => {
     mocks.read.mockRejectedValueOnce(new Error('Shopify unavailable'))

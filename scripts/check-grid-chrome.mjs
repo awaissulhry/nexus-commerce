@@ -23,8 +23,28 @@
  */
 import { readFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
+import { authenticatedStudioPage } from './studio-browser-auth.mjs'
+import { writeGateReport } from './lib/gate-report.mjs'
+import { isApiWrite } from './lib/gate-write-guard.mjs'
 
 const BASE = process.env.GDS_BASE ?? 'http://localhost:3000'
+/* A-43 (2026-09-23): every page, `/design/*` included, now redirects to `/login` without a user (the root layout's
+   `requireWebPage()`, `apps/web/src/lib/workspaces/server.ts`), so this gate SIGNS IN through the shared helper — a
+   run without a user rendered no scenario and read as "the page itself is broken". Under `studio-gate-session.mjs`
+   the lab opens in the session user's workspace (`STUDIO_WORKSPACE`); `BASE` stays the origin. */
+const WORKSPACE = (process.env.STUDIO_WORKSPACE ?? '').trim()
+const PAGE_BASE = WORKSPACE ? `${BASE}/w/${encodeURIComponent(WORKSPACE)}` : BASE
+/** Every file whose change can invalidate this reading — read by `scripts/run-browser-gates.mjs` to decide whether a push
+ *  must run this gate. A path ending `/` covers everything under it. */
+const STAMP_FILES = [
+  'apps/web/src/design-system/grid/',
+  'apps/web/src/design-system/styles/',
+  'apps/web/src/design-system/tokens/',
+  'apps/web/src/app/design/grid-lab/',
+  'scripts/check-grid-chrome.mjs',
+  'scripts/studio-browser-auth.mjs',
+  'scripts/lib/gate-write-guard.mjs',
+]
 const STRICT = process.argv.includes('--strict')
 const spec = JSON.parse(readFileSync('apps/web/src/design-system/grid/spec.json', 'utf8'))
 
@@ -56,7 +76,17 @@ const check = (where, what, got, want) => {
 }
 
 const browser = await chromium.launch()
-const page = await browser.newPage()
+const page = await authenticatedStudioPage(browser, { base: BASE, viewport: { width: VIEWPORTS[0].w, height: VIEWPORTS[0].h } })
+  .catch(async (error) => { await browser.close(); console.error(`❌ grid chrome conformance: could not sign in — NOT MEASURED. ${error.message}`); process.exit(2) })
+/* A-43: this gate now runs SIGNED IN, so it gets the same write guard as the open-gesture gate — it LOOKS, never writes.
+   Every non-GET to an API path (`/api/…` or the page proxy `/backend/api/…`, any host) is aborted and counted. */
+const armedWrites = []
+await page.route('**/*', (route) => {
+  const req = route.request()
+  if (!isApiWrite(req.method(), req.url())) return route.continue()
+  armedWrites.push(`${req.method()} ${new URL(req.url()).pathname}`)
+  return route.abort()
+})
 let probes = 0
 /** Set when the page is reachable but `__gdsProbe` never appears — reported after the browser closes. */
 let probeMissing = null
@@ -71,7 +101,7 @@ try {
     // `domcontentloaded` plus the EXPLICIT wait below is strictly better anyway: the real
     // readiness signal is "the probe exists and the scenarios have rendered rows", which is
     // asserted directly instead of inferred from network quiet.
-    await page.goto(`${BASE}/design/grid-lab?tab=gds`, { waitUntil: 'domcontentloaded' })
+    await page.goto(`${PAGE_BASE}/design/grid-lab?tab=gds`, { waitUntil: 'domcontentloaded' })
     // Two waits, not one. Combined, a missing probe and an unrendered grid produced the same
     // 60s TimeoutError, and since #519 guarded `__gdsProbe` behind `NODE_ENV !== 'production'`
     // the most likely cause of a missing probe is that GDS_BASE points at a production build —
@@ -142,10 +172,14 @@ if (probeMissing === 'norender') {
   process.exit(1)
 }
 
+/* The lab is frozen fixtures: an attempted API write while measuring it is a finding, never ignored. */
+for (const w of armedWrites) failures.push(`an API write was attempted (aborted): ${w}`)
 if (failures.length) {
   console.error(`\n❌ grid chrome conformance: ${failures.length} mismatch(es) across ${probes} probes:\n`)
   for (const f of failures.slice(0, 60)) console.error(`   ${f}`)
   if (failures.length > 60) console.error(`   … ${failures.length - 60} more`)
+  writeGateReport('grid-chrome', 1, failures)
   process.exit(1)
 }
+writeGateReport('grid-chrome', 0, [])
 console.log(`✓ grid chrome conformance: every scenario matches spec.json at 3 densities × 2 themes × 2 viewports (${probes} probes)`)

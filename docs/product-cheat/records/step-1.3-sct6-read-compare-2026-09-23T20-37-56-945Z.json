@@ -1,0 +1,140 @@
+{
+ "at": "2026-09-23T20:37:56.945Z",
+ "mode": "read",
+ "execute": false,
+ "db": [
+  {
+   "market": "DE",
+   "fulfillmentMethod": "FBM",
+   "offerClosedAt": "2026-07-26T21:32:23.635Z",
+   "offerActive": true,
+   "followMasterQuantity": true,
+   "quantityOverride": null,
+   "syncPaused": false,
+   "quantity": 2,
+   "price": null,
+   "offerSkus": [],
+   "productSku": "xracingbxn48",
+   "account": "cmothu9bo0000nz01asw6wx8j"
+  },
+  {
+   "market": "IT",
+   "fulfillmentMethod": "FBM",
+   "offerClosedAt": null,
+   "offerActive": true,
+   "followMasterQuantity": true,
+   "quantityOverride": null,
+   "syncPaused": false,
+   "quantity": 2,
+   "price": "399.95",
+   "offerSkus": [],
+   "productSku": "xracingbxn48",
+   "account": "cmothu9bo0000nz01asw6wx8j"
+  }
+ ],
+ "live": {
+  "DE": {
+   "market": "DE",
+   "marketplaceId": "A1PA6795UKMFR9",
+   "success": true,
+   "asin": "B0BTCBPVTS",
+   "status": [],
+   "productType": "APPAREL",
+   "fulfillment": [
+    {
+     "code": "DEFAULT",
+     "quantity": 2
+    }
+   ],
+   "offers": [],
+   "offerRawCount": 0,
+   "error": null
+  },
+  "IT": {
+   "market": "IT",
+   "marketplaceId": "APJ6JRA9NG5V4",
+   "success": true,
+   "asin": "B0BTCBPVTS",
+   "status": [
+    "BUYABLE",
+    "DISCOVERABLE"
+   ],
+   "productType": "APPAREL",
+   "fulfillment": [
+    {
+     "code": "DEFAULT",
+     "quantity": 2
+    }
+   ],
+   "offers": [
+    {
+     "currency": "EUR",
+     "end_at": {
+      "value": "2023-05-30"
+     },
+     "audience": "ALL",
+     "map_price": [
+      {
+       "schedule": [
+        {
+         "value_with_tax": 330
+        }
+       ]
+      }
+     ],
+     "discounted_price": [
+      {
+       "schedule": [
+        {
+         "value_with_tax": 349.94,
+         "end_at": "2023-05-30T00:00:00.000+02:00",
+         "start_at": "2023-03-30T00:00:00.000+02:00"
+        }
+       ]
+      }
+     ],
+     "our_price": [
+      {
+       "schedule": [
+        {
+         "value_with_tax": 399.95
+        }
+       ]
+      }
+     ],
+     "marketplace_id": "APJ6JRA9NG5V4"
+    }
+   ],
+   "offerRawCount": 1,
+   "error": null
+  }
+ },
+ "checks": {
+  "asin": true,
+  "merchantOnly": true,
+  "oneItOffer": true,
+  "notClosedInNexus": true,
+  "notFba": true,
+  "amazonSkuIsProductSku": true
+ },
+ "compare": {
+  "DE": {
+   "offerEqual": true,
+   "fulfillmentEqual": true,
+   "statusBefore": [],
+   "statusNow": []
+  },
+  "IT": {
+   "offerEqual": true,
+   "fulfillmentEqual": true,
+   "statusBefore": [
+    "BUYABLE",
+    "DISCOVERABLE"
+   ],
+   "statusNow": [
+    "BUYABLE",
+    "DISCOVERABLE"
+   ]
+  }
+ }
+}

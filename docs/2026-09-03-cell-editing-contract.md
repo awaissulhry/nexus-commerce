@@ -28,6 +28,7 @@ every column kind × every state, and what the sheet must do. `scripts/check-edi
 | `pop:multi` | the chip-list editor for a `shape: list` cell — the DS option list (closed list) or chip input (free text) in AG's popup (AM.1 §A.3 row 3) |
 | `pop:measure` | the value + unit editor for a `shape: measure` cell (AM.1 §A.3 row 4) |
 | `pop:sale` | the Matrix sale editor — price + start + end in AG's popup (`SaleCellEditor`, MX.G) |
+| `pop:slots` | the bullets editor — a form of positions in AG's popup (`SlotListEditor`, Step 4.3 #3): a channel's fixed slots shown as ONE cell, or Shared bullets in list mode |
 
 ## The states
 
@@ -70,6 +71,8 @@ saying otherwise would claim coverage this build cannot give.
 | text | fxblocked | amazonAsin | none+say ✓ | none+say ✓ | none+say ✓ | none+say ✓ | none+say ✓ |
 | list | fresh | supplier_declared_dg_hz_regulation | pop:multi ✓ | pop:multi ✓ | pop:multi ✓ | pop:multi ✓ | pop:fx ✓ |
 | measure | fresh | item_weight | pop:measure ✓ | pop:measure ✓ | pop:measure ✓ | pop:measure ✓ | pop:fx ✓ |
+| slotlist | fresh | slots:bulletPoints | pop:slots · | pop:slots · | pop:slots · | pop:slots · | pop:slots · |
+| bullets | fresh | bulletPoints | pop:slots · | pop:slots · | pop:slots · | pop:slots · | pop:fx · |
 
 <!-- CONTRACT-TABLE-END -->
 
@@ -96,6 +99,22 @@ drives a named column only while it still satisfies the row on that scope; other
 For the `list` and `measure` rows, `kind` is the column's SHAPE (AM.1), not its wire kind — the gate resolves
 them by `shape`, and a scalar row never resolves to a shaped column of the same wire kind. Neither shaped
 column is in a landing view, so the gate reveals one through Customise, as it does for `locked`.
+
+**Step 4.3 #3 (A-52; R-55, R-56, 2026-09-24) — the two bullets rows.** `slotlist` is a channel's ONE bullets cell
+(`slots:bulletPoints`), a client-only view over the ten slot columns: the API contract never serves it, so the gate derives
+it from the contract's own `slot.of === 'bulletPoints'` columns (one per language) and treats it as editable on a row only
+when every slot cell is. It has no formula selector, so `=` opens the same editor. Bullet 1–10 are hidden by default and
+stay in Customise. `bullets` is Shared's one bullets LIST column (`bulletPoints`) in list mode; `=` there is still the
+formula editor (the column is formula-writable on master). The generic `list` row never resolves to `bulletPoints`. A scope
+that serves neither records n/a. After each row's gestures the gate runs the bullets arms on the same cell — the key line
+(`EDITOR_KEY_HINT_FORM`), Esc and an untouched Enter write nothing, Tab moves to Bullet 2 (`slotlist`), and one position
+edited leaves as exactly ONE request carrying ONE change (the slot on a channel, left with Tab on the last bullet; the whole
+list on Shared) — every write inside them held open, never completed. The `·` marks are declared, first measured by the
+next browser run.
+
+R-47 (2026-09-24): on a `number` row the `type` gesture (key `a`) still opens `pop:value`, and the field keeps the stored value —
+the letter is refused with "Numbers only — the value was kept." (asserted by the gate's `number-letter` arm). R-63: the Variants
+page opens `pop:value` for text/number too (formulas off).
 
 ## The Matrix table (MX.G, 2026-09-13) — driven on the Matrix host, `?tab=matrix` on GALE, master scope
 

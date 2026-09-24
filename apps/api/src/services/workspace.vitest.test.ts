@@ -53,6 +53,33 @@ describe('business profile boundaries with PostgreSQL', () => {
     expect(locations[0]).toMatchObject({ code: 'IT-MAIN', type: 'WAREHOUSE', warehouse: { isDefault: true, country: 'IT' } })
   })
 
+  // A-53 — a business created under profiles got NO markets, and its product studio waited forever.
+  it('creates the business with its 20 catalogue markets, in its own scope, once — with profiles ON and OFF', async () => {
+    for (const flag of ['1', '0']) {
+      vi.stubEnv('NEXUS_WORKSPACES_ENABLED', flag)
+      try {
+        const user = await person()
+        const input = details()
+        const a = await service.create(user.id, input)
+        const b = await service.create(user.id, details())
+        const ca = (await service.membership(user.id, a.id)).context, cb = (await service.membership(user.id, b.id)).context
+        const markets = await withWorkspace(ca, () => database.client.marketplace.findMany())
+        expect(markets, `profiles ${flag}`).toHaveLength(20)
+        expect(markets.every(m => m.workspaceId === a.id)).toBe(true)
+        expect(await withWorkspace(ca, () => database.client.marketplace.count({ where: { isActive: true } }))).toBe(19)
+        const ebayIt = markets.find(m => m.channel === 'EBAY' && m.code === 'IT')
+        expect(ebayIt).toMatchObject({ taxInclusive: true, languages: ['it'], currency: 'EUR' })
+        expect(Number(ebayIt?.vatRate)).toBe(22)
+        // Isolation: the second business has its own 20, and neither sees the other's.
+        expect(await withWorkspace(cb, () => database.client.marketplace.count())).toBe(20)
+        expect(await withWorkspace(cb, () => database.client.marketplace.findUnique({ where: { id: markets[0].id } }))).toBeNull()
+        // A replayed creation request adds no second set.
+        expect((await service.create(user.id, input)).id).toBe(a.id)
+        expect(await withWorkspace(ca, () => database.client.marketplace.count())).toBe(20)
+      } finally { vi.unstubAllEnvs() }
+    }
+  })
+
   it('creates an independent default warehouse for the new business’s country', async () => {
     const user = await person()
     const a = await service.create(user.id, details())
