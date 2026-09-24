@@ -165,8 +165,9 @@ hook), 4.3: #1 editor BUILT (regression being fixed), #2 top bar BUILT, #4 compl
 built** (plans ruled: A-46/R-55/R-56 with BL1's phase-1 file; A-51/R-65/R-66 with AA1's plan).
 
 **Open right now:**
-1. 🔴 **E1's regression (sub-agent E1, "phase 3"):** `=` on a text/number cell opens the value popup instead of the formula editor;
-   the number rule swallows `=`. 36 editor-open keys. Fix → re-run → push.
+1. ✅ **E1's regression FIXED** (`48bdcfb68`; the test's AG import moved behind an engine seam, `a9bae2b62`). 🔴 **A push was
+   started at 12:03 UTC 2026-09-24 by the old session** — the new session checks `git fetch` + `origin/pes/phase-0`; if it is still
+   `a80a3044e` and no push is running, push again. That push must show the 36 `=` keys GONE.
 2. The browser gates' blind spots: editor-open 20 baselined keys (AMAZON·IT contract rows may now be measurable — the next run shows
    "gone"); census now fully green (7 gone).
 3. Then: build #3 bullets (BL1 phase 2, plan folded into PLAN.md as **A-52**) and #5 the AAA sweep (A-51: 11 token edits in `tokens/css-vars.ts` + `colors.ts`, web AND factory, `npm run tokens:gen` +
