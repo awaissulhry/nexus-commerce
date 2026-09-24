@@ -156,6 +156,18 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ### Where this lane stands — handoff 8, 2026-09-24 13:52 UTC (READ THIS FIRST; everything below is history)
 
+> **Evening update 2026-09-24 ~17:50 UTC.** `main` = **`d27817a2d`** (live). On it since the 15:00 deploy: **A-54** (`2f01c58a2`, the eBay Inventory
+> read-back skips parents — the 16:30 sweep `checked 0, errors 0, skippedShared 288`, the false `EBAY_APP_ID` errors gone), **A-55** (`aad45e7e0`,
+> the scope menu says "Not set up" only when proven — seen on the live screen: Xavia GALE-JACKET IT Amazon/eBay "Blocked · 100%", Motovento eBay
+> "Not computed"; Motovento's studio opens, A-53 live), and **another session's Shopify metafields fix** (`6aa6ff638` + `d27817a2d`, pushed by
+> `nexus-commerce-7c` in order with this lane). 🔴 **`pes/phase-0` does NOT contain those two Shopify commits** — merge `origin/main` into it
+> before new work (a dry `git merge-tree` showed no conflicts at 17:50 UTC).
+> **Open items for the Owner (none started):** the local-API boot that turns the local Amazon row off (twice today — census red at 16:22);
+> the AE.4 flake (2 of 9 pushes); the scope menu cuts "Blocked · 100%" to "Blocked · 10…"; a push of a ref to `main` runs no browser gate;
+> the AAA residue (rail 4.79, chrome text); `check-dark-alias-scope` checks nothing; bullets' per-bullet acknowledgements (stated choice).
+> **Scheduled (session-only):** 04:22 UTC 2026-09-25 — `node docs/product-cheat/tools/nightly-lines.cjs` (read only) against
+> `records/nightly-before-2026-09-24.txt` and `records/nightly-predictions-2026-09-25.md`. If this session is gone, the next one runs it.
+
 > **DEPLOYED 2026-09-24 (the Owner: "merge it, and push to main").** `main` = **`60539940f`** (fast-forward from `0a563d6d5`, 64 commits). The
 > first push to `main` was refused by the known AE.4 flake (`claimed: 0`, `sync.vitest.test.ts:419`; the same commit passed it at 14:21); the one
 > retry passed every stage (14:44 UTC). 🔴 The runner scopes the browser gates by `origin/pes/phase-0..HEAD`, so a push of this ref to `main` ran
