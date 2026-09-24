@@ -279,21 +279,23 @@ describe('Amazon workbook automatic mapping', () => {
     expect(Object.fromEntries(result.rows.map(r => [r.field, r.value]))).toEqual({ productType: 'COAT', item_name: 'Giacca', bullet_point: ['Primo', 'Secondo'], country_of_origin: 'PK', batteries_required: false, item_package_weight: { value: 1.6, unit: 'kilograms' } })
     expect(result.rows.every(r => r.row === 17 && r.accountId === 'amazon-a' && r.marketplace === 'IT' && r.entity !== 'Products')).toBe(true)
   })
-  it('blocks marketplace and language mismatches and delete actions', () => {
+  it('blocks marketplace mismatches; a language the market lacks refuses its text per column; a delete with no listing ends nothing', () => {
     expect(() => mapAmazonWorkbook(amazon(), new Map(), { accountId: 'a', marketplace: 'DE', language: 'de' })).toThrow('belongs to Amazon IT')
-    expect(() => mapAmazonWorkbook(amazon(), new Map(), { accountId: 'a', marketplace: 'IT', language: 'de' })).toThrow('language')
+    // CFI (R-CFI-1) — never a whole-file refusal for a language: the Italian text is refused per column.
+    const other = mapAmazonWorkbook(amazon(), new Map([['COAT', spec]]), { accountId: 'a', marketplace: 'IT', language: 'de' })
+    expect(other.warnings.join(' ')).toContain('does not carry')
     const p = amazon(); p.rows[0].__action = 'delete'; expect(map(p).rows).toEqual([])
   })
   it('surfaces every populated unknown field and refuses a measure with no unit', () => {
     const p = amazon(); p.headers.push('unknown#1.value'); p.rows[0]['unknown#1.value'] = 'evidence'; p.rows[0][h('item_package_weight', 1, 'unit')] = ''
-    expect(map(p).issues.map(i => i.field)).toEqual(['unknown#1.value', 'item_package_weight'])
+    // CFI — an attribute the product type does not have is explained (Amazon keeps none), not refused.
+    expect(map(p).issues.map(i => i.field)).toEqual(['item_package_weight'])
+    expect(map(p).exclusions.find(e => e.field === 'unknown#1.value')?.message).toContain('Not an attribute of Amazon COAT')
   })
-  it('makes existing-listing read-only fields visible as exclusions, while allowing them for new listings', () => {
+  it('imports a field read-only on an existing listing as the channel\'s own value (CFI, origin channel-file)', () => {
     const copy = structuredClone(spec); copy.fields.find(f => f.key === 'country_of_origin')!.editable = false
     const result = mapAmazonWorkbook(amazon(), new Map([['COAT', copy]]), { accountId: 'a', marketplace: 'IT', language: 'it', existingListingSkus: new Set(['00001234']) })
-    expect(result.rows.some(r => r.field === 'country_of_origin')).toBe(false)
-    expect(result.exclusions.some(e => e.message.includes('read-only') && e.message.includes('Pakistan'))).toBe(true)
-    expect(mapAmazonWorkbook(amazon(), new Map([['COAT', copy]]), { accountId: 'a', marketplace: 'IT', language: 'it' }).rows.some(r => r.field === 'country_of_origin')).toBe(true)
+    expect(result.rows).toContainEqual(expect.objectContaining({ field: 'country_of_origin', value: 'PK', origin: 'channel-file' }))
   })
   it('reuses the native reader with full split dictionaries and physical row gaps', async () => {
     const p = amazon(), b = new ExcelJS.Workbook(), s = b.addWorksheet('Modello')

@@ -13,7 +13,13 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     // business. Without the store an apply failed with "Cannot read properties of
     // undefined (reading 'findMany')" and the job read PARTIAL. Empty = nothing shared
     // here, which is this fixture's world: one business, two of its own accounts.
-    'channelAccountGrant'].map(k => [k, new Map()]))
+    'channelAccountGrant',
+    // CFI (R-CFI-1) — the price door's audit + timeline, the channel's last read, and the offer SKUs a listing carries.
+    'channelListingOverride', 'priceChangeEvent', 'channelDrift', 'offer'].map(k => [k, new Map()]))
+  /** CFI — which raw-SQL columns this fixture database carries (sale window, PR presence), and every raw statement run. */
+  // The sale window lives in raw columns Prisma never returns (`sale-window.ts`), so it is kept APART from the listing row:
+  // a listing snapshot must not see it, exactly as against PostgreSQL.
+  const raw = { saleWindowColumns: true, presenceColumns: true, statements: [] as { sql: string; values: unknown[] }[], saleWindows: new Map<string, { start: string | null; end: string | null }>() }
   const queries: { model: string; method: string; args: Row; returned: number }[] = []
   const failures = new Map<string, Error>()
   let sequence = 0, undo: (() => void)[] | null = null
@@ -123,6 +129,29 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
       async deleteMany(args: Row) { const rows = find(args); for (const r of rows) { changed(model, r.id); data[model].delete(r.id) } return { count: rows.length } },
     }
   }
+  // CFI — the narrow raw SQL of `sale-window.ts` and `recordChannelDeletion`, answered from the same rows.
+  db.$queryRawUnsafe = async (sql: string, ...values: unknown[]) => {
+    raw.statements.push({ sql, values })
+    if (sql.includes('information_schema.columns') && sql.includes('salePriceStart')) return [{ n: raw.saleWindowColumns ? 2 : 0 }]
+    if (sql.includes('information_schema.columns') && sql.includes('presenceIntent')) return [{ n: raw.presenceColumns ? 3 : 0 }]
+    if (sql.includes('to_char("salePriceStart"')) return (values[0] as string[]).flatMap(id => data.channelListing.has(id) ? [{ id, start: raw.saleWindows.get(id)?.start ?? null, end: raw.saleWindows.get(id)?.end ?? null }] : [])
+    throw new Error(`Unsupported fixture raw query: ${sql}`)
+  }
+  db.$executeRawUnsafe = async (sql: string, ...values: unknown[]) => {
+    raw.statements.push({ sql, values })
+    const row = data.channelListing.get(values[0] as string)
+    if (!row) return 0
+    if (sql.includes('"salePriceStart" = $2')) {
+      const previous = raw.saleWindows.get(row.id)
+      if (undo) undo.push(() => { if (previous) raw.saleWindows.set(row.id, previous); else raw.saleWindows.delete(row.id) })
+      raw.saleWindows.set(row.id, { start: values[1] as string | null, end: values[2] as string | null })
+      return 1
+    }
+    changed('channelListing', row.id)
+    if (sql.includes('"presenceIntent" = \'ENDED\'')) data.channelListing.set(row.id, { ...row, presenceIntent: 'ENDED', presenceIntentBy: values[1], presenceIntentReason: values[2], channelFact: 'ABSENT', channelFactVia: 'channel-file-import', endedBy: values[1], endedReason: 'channel-file-delete' })
+    else throw new Error(`Unsupported fixture raw statement: ${sql}`)
+    return 1
+  }
   let tail = Promise.resolve()
   db.$transaction = async (fn: (tx: Row) => Promise<any>) => {
     const previous = tail
@@ -145,7 +174,7 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
       }
     }
   }
-  return { db, data, queries, failures, seed, get queryCount() { return queryCount } }
+  return { db, data, queries, failures, seed, raw, get queryCount() { return queryCount } }
 }
 export const fixtureColumns = ['name', 'description', 'basePrice', 'totalStock'].map(key => ({ key, writeField: key, label: key, group: 'Shared', kind: ['basePrice', 'totalStock'].includes(key) ? 'number' : 'text', storage: 'column', scope: 'global', shape: 'scalar', requiredBy: [], editable: true, defaultVisible: true }))
 export const fixtureFields = [

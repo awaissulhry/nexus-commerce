@@ -54,6 +54,15 @@ export type PriceWriteUnguardedReason =
   /** `PATCH /channel-pricing`: the client does not send a version yet. Narrowed when it does. */
   | 'legacy-channel-pricing'
 
+/**
+ * CFI-6 (R-CFI-1 Q2, BUILD.md D2) — the reasons a price may be RECORDED without being sent. A closed set, like
+ * `PriceWriteUnguardedReason`: the price came FROM the channel (its own file), so the channel already holds it.
+ * Same column writes, compare-and-set, `ChannelListingOverride` audit and `PriceChangeEvent` timeline — but no
+ * `PRICE_UPDATE` row, no cancel of pending rows, no fire, and the listing's sync state is left alone (nothing is waiting).
+ * A listing with a PENDING `PRICE_UPDATE` is refused: an operator's unsent price change is never silently overtaken.
+ */
+export type PriceWriteRecordOnlyReason = 'channel-file-import'
+
 interface PriceWriteFields {
   listingId: string
   /** `undefined` = untouched; a number sets it here; `null` clears it back to the master price. */
@@ -135,9 +144,15 @@ export async function writeChannelPrices(input: {
   source: PriceChangeSourceLiteral
   /** The timeline sentence prefix, e.g. `bulk-override SET_FIXED 89.99`; the service appends what changed. */
   reason?: string
+  /** CFI-6 — record the channel's own price; nothing is sent (see `PriceWriteRecordOnlyReason`). */
+  recordOnly?: PriceWriteRecordOnlyReason
+  /** Run inside the caller's open transaction (every read and write), instead of one transaction per listing. */
+  tx?: Prisma.TransactionClient
 }): Promise<PriceWriteResult> {
   const result: PriceWriteResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0 }
   if (input.targets.length === 0) return result
+  const db = (input.tx ?? prisma) as typeof prisma
+  const inTransaction = <T,>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> => input.tx ? work(input.tx) : prisma.$transaction(work)
   const ids = [...new Set(input.targets.map((t) => t.listingId))]
   /**
    * 🔴 PLAN 15.5 (a) — this was one `where: { id: { in: ids } }` with no limit. A 5,000-row price
@@ -149,12 +164,12 @@ export async function writeChannelPrices(input: {
   const chunks: string[][] = []
   for (let i = 0; i < ids.length; i += READ_CHUNK) chunks.push(ids.slice(i, i + READ_CHUNK))
   const [listingChunks, windowChunks, hasWindow] = await Promise.all([
-    Promise.all(chunks.map((chunk) => prisma.channelListing.findMany({
+    Promise.all(chunks.map((chunk) => db.channelListing.findMany({
       where: { id: { in: chunk } },
       select: LISTING_SELECT,
     }))),
-    Promise.all(chunks.map((chunk) => readSaleWindows(prisma as never, chunk))),
-    saleWindowColumnsExist(prisma as never),
+    Promise.all(chunks.map((chunk) => readSaleWindows(db as never, chunk))),
+    saleWindowColumnsExist(db as never),
   ])
   const listings = listingChunks.flat()
   // 🔴 A MAP, not an object. `Object.assign` type-checks here and merges NOTHING — every sale
@@ -163,7 +178,7 @@ export async function writeChannelPrices(input: {
   const windows = new Map(windowChunks.flatMap((part) => [...part]))
   const byId = new Map(listings.map((l) => [l.id, l]))
   const marketKeys = [...new Set(listings.map((l) => `${l.channel}|${l.marketplace}`))]
-  const marketplaces = await prisma.marketplace.findMany({ where: { OR: marketKeys.map((k) => ({ channel: k.split('|')[0], code: k.split('|')[1] })) }, select: { channel: true, code: true, currency: true } })
+  const marketplaces = await db.marketplace.findMany({ where: { OR: marketKeys.map((k) => ({ channel: k.split('|')[0], code: k.split('|')[1] })) }, select: { channel: true, code: true, currency: true } })
   const currencyOf = new Map(marketplaces.map((m) => [`${m.channel}|${m.code}`, m.currency]))
   const queued: Array<{ id: string; productId: string | null; syncType: string; holdUntil: Date | null }> = []
 
@@ -217,9 +232,14 @@ export async function writeChannelPrices(input: {
       if (priceChanges) sentences.push(nextPrice == null ? `price cleared (was ${money(currentPrice, currency)}) — follows the base price` : `price ${money(currentPrice, currency)} → ${money(nextPrice, currency)}`)
       if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
       const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
+      if (input.recordOnly && await db.outboundSyncQueue.count({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' } })) {
+        push({ ...base, outcome: 'refused', reason: `A price change is waiting to be sent to ${l.channel}. Send or cancel it before importing the channel's price.`, version: l.version })
+        continue targets
+      }
 
-      const written = await prisma.$transaction(async (tx) => {
-        const data: Prisma.ChannelListingUpdateManyMutationInput = { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
+      const written = await inTransaction(async (tx) => {
+        // A recorded channel price leaves the sync state alone: nothing is queued, so nothing is pending.
+        const data: Prisma.ChannelListingUpdateManyMutationInput = input.recordOnly ? { version: { increment: 1 } } : { syncStatus: 'PENDING', lastSyncStatus: 'PENDING', version: { increment: 1 } }
         if (priceChanges) {
           if (nextPrice == null) Object.assign(data, { price: null, priceOverride: null, followMasterPrice: true, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
           else Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
@@ -240,7 +260,7 @@ export async function writeChannelPrices(input: {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })
         }
         let queueId: string | null = null
-        if (VALID_SYNC_TARGETS.has(l.channel)) {
+        if (!input.recordOnly && VALID_SYNC_TARGETS.has(l.channel)) {
           await tx.outboundSyncQueue.updateMany({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, data: { syncStatus: 'CANCELLED' } })
           const holdUntil = new Date(Date.now() + PRICE_HOLD_MS)
           const row = await createOutboundRow(tx, {
@@ -261,11 +281,11 @@ export async function writeChannelPrices(input: {
         return { version: l.version + 1, queueId }
       })
       if (!written) {
-        const fresh = await prisma.channelListing.findUnique({ where: { id: l.id }, select: LISTING_SELECT })
+        const fresh = await db.channelListing.findUnique({ where: { id: l.id }, select: LISTING_SELECT })
         // A-17 — lost the compare-and-set to a write in the gap. Retry once, only if the price is still
         // the one the caller saw; the re-read row (and its sale window) is what the second attempt uses.
         if (attempt === 0 && fresh && priceAsSeen(t, fresh)) {
-          const window = (await readSaleWindows(prisma as never, [fresh.id])).get(fresh.id)
+          const window = (await readSaleWindows(db as never, [fresh.id])).get(fresh.id)
           if (window) windows.set(fresh.id, window); else windows.delete(fresh.id)
           current = fresh
           retried = true
@@ -281,6 +301,6 @@ export async function writeChannelPrices(input: {
   // Post-commit: the instant lane honours each row's own holdUntil; the drain cron is the fallback (never hangs).
   if (queued.length) await afterDatabaseCommit(`channel-prices:${queued.map(row => row.id).join(',')}`,
     () => fireOutboundJobs(queued, { source: 'CHANNEL_PRICE_WRITE' }))
-  logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
+  logger.info('channel-price-write: applied', { actor: input.actor, source: input.source, ...(input.recordOnly ? { recordOnly: input.recordOnly } : {}), applied: result.applied, refused: result.refused, noop: result.noop, conflict: result.conflict })
   return result
 }

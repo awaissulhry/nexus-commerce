@@ -1,10 +1,10 @@
 import { inDatabaseTransaction } from '../../lib/database-context.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { Prisma } from '@prisma/client'
-import type { TransferRow, TransferIssue, TransferMode, TransferCell, ProductTransferBoundary } from '@nexus/shared/catalog-transfer'
+import type { TransferRow, TransferIssue, TransferMode, TransferCell, ProductTransferBoundary, TransferChannelRead } from '@nexus/shared/catalog-transfer'
 import { transferTargetKey } from '@nexus/shared/catalog-transfer'
 import prisma from '../../db.js'
-import { buildTransferPlan, fingerprint, transferContracts, type TransferTarget } from './catalog-transfer-plan.js'
+import { buildTransferPlan, fingerprint, targetWriteFingerprint, transferContracts, type TransferTarget } from './catalog-transfer-plan.js'
 import { applyTransferTarget, loadTransferContext, safeSnapshot, TransferConflict } from './catalog-transfer.service.js'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { clearSheetColumnCache } from './sheet-columns.service.js'
@@ -19,11 +19,25 @@ export const TRANSFER_JOB_KIND = 'catalog-transfer-v2'
 const LEASE_MS = 60_000
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 const productKey = (sku: string) => JSON.stringify(['Products', sku])
-type Counts = { productsCreated: number; listingsCreated: number; changed: number; unchanged: number; refused: number; excluded: number; productsAffected: number; listingsAffected: number; newOverrides: number; preservedOverrides: number }
-const emptyCounts = (): Counts => ({ productsCreated: 0, listingsCreated: 0, changed: 0, unchanged: 0, refused: 0, excluded: 0, productsAffected: 0, listingsAffected: 0, newOverrides: 0, preservedOverrides: 0 })
+/**
+ * CFI (R-CFI-1) additive counts: `alreadyEmpty` — full-update blanks whose Nexus value was already empty (nothing to clear);
+ * `clearUnchecked` — ones whose current value could not be read (left alone, the review warns); `cleared`, `ended`,
+ * `pricesRecorded` — the channel file's clears, deletes and record-only prices that will be applied.
+ */
+type Counts = { productsCreated: number; listingsCreated: number; changed: number; unchanged: number; refused: number; excluded: number; productsAffected: number; listingsAffected: number; newOverrides: number; preservedOverrides: number
+  alreadyEmpty: number; clearUnchecked: number; cleared: number; ended: number; pricesRecorded: number }
+const emptyCounts = (): Counts => ({ productsCreated: 0, listingsCreated: 0, changed: 0, unchanged: 0, refused: 0, excluded: 0, productsAffected: 0, listingsAffected: 0, newOverrides: 0, preservedOverrides: 0,
+  alreadyEmpty: 0, clearUnchecked: 0, cleared: 0, ended: 0, pricesRecorded: 0 })
+/** CFI-4 — an identity the file suggests that the Owner must confirm before its rows can apply. */
+export interface TransferLinkProposal { fileSku: string; proposedSku: string; reason: string }
+/** CFI-3 — a channel-file delete: confirmed (a presence row that will end the listing) or waiting for confirmation (an issue). */
+/** `fileSku` is the SKU as the file writes it (the web ticks deletes by it; readers match only the file SKU); `sku` is the Nexus product. */
+export interface TransferDeleteSummary { sku: string; fileSku: string; channel: string; marketplace: string; accountId: string; evidence?: string; confirmed: boolean }
+/** CFI-8 (BUILD.md D7) — what the channel last reported for a listing cell, from `ChannelDrift`. */
+export type ChannelRead = TransferChannelRead
 interface JobPayload {
   outcomeVersion?: 1
-  receipt?: { saved: number; unchanged: number; failed: number; excluded: number; unprocessed: number }
+  receipt?: { saved: number; unchanged: number; failed: number; excluded: number; unprocessed: number; skipped?: number }
   kind: typeof TRANSFER_JOB_KIND; mode: TransferMode; market: string; inputHash: string; previewExpiresAt: string
   mapping?: SourceMapping; source?: { presetId?: string; presetVersion?: string; scheduleId?: string; url?: string; autoApply?: boolean }
   /** A first copy of another business's shared products: its market is the OWNER's, so this business
@@ -32,6 +46,10 @@ interface JobPayload {
   counts: Counts; warnings: string[]; unmappedColumns: string[]; reviewToken?: string
   recoveryAttempts?: number
   boundary?: ProductTransferBoundary
+  links?: TransferLinkProposal[]
+  deletes?: TransferDeleteSummary[]
+  /** CFI-7 (D6) — the Owner applied only the ready records of an INVALID review; the refused ones were skipped. */
+  readyOnly?: boolean
 }
 interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null }
 interface RecordPayload {
@@ -56,6 +74,7 @@ export function transferJobStatus(loaded: NonNullable<Awaited<ReturnType<typeof 
     counts: payload.counts, receipt: payload.receipt, hasChangeFilter: payload.outcomeVersion === 1, warnings: payload.warnings, unmappedColumns: payload.unmappedColumns,
     policy: payload.mapping?.policy ?? { shared: 'replace', overrides: 'replace' }, source: payload.source,
     reviewToken: payload.reviewToken, expiresAt: payload.previewExpiresAt, filename: job.uploadFilename, boundary: payload.boundary,
+    links: payload.links ?? [], deletes: payload.deletes ?? [], readyOnly: payload.readyOnly === true,
     error: Array.isArray(job.errors) ? (job.errors[0] as { message?: string })?.message : undefined,
     completedAt: job.completedAt?.toISOString() ?? null }
 }
@@ -66,6 +85,8 @@ export async function stageTransferJob(input: {
   warnings?: string[]
   mode: TransferMode; market: string; filename: string; userId: string | null; mapping?: SourceMapping
   source?: JobPayload['source']; parentJobId?: string; scheduleClaimVersion?: Date; boundary?: ProductTransferBoundary; sharedCopy?: boolean
+  /** CFI-4 — identity proposals from a channel-file reader (ParsedInput.links), shown for confirmation. */
+  links?: TransferLinkProposal[]
 }) {
   if (input.boundary) {
     if (input.mode !== 'update') throw new Error('Product-editor imports update existing records only')
@@ -94,8 +115,18 @@ export async function stageTransferJob(input: {
   for (const issue of input.issues) records.push([`issue:${records.length}`, { rows: [], issues: [issue] }])
   for (const exclusion of input.exclusions ?? []) records.push([`excluded:${records.length}`, { rows: [], exclusions: [exclusion] }])
   const expiresAt = new Date(Date.now() + 24 * 60 * 60_000)
+  // CFI-3 — every channel-file delete the review must show: confirmed presence rows, and the readers' unconfirmed ones (issues on `presence`).
+  const deletes: TransferDeleteSummary[] = [
+    ...input.rows.filter(r => r.origin === 'channel-file' && r.entity === 'Listings' && r.field === 'presence' && r.action === 'SET')
+      .map(r => ({ sku: r.sku, fileSku: r.fileSku ?? r.sku, channel: r.channel, marketplace: r.marketplace, accountId: r.accountId, confirmed: true })),
+    ...input.issues.filter(i => i.field === 'presence').map(i => {
+      const at = i as TransferIssue & Partial<Pick<TransferRow, 'channel' | 'marketplace' | 'accountId' | 'fileSku'>>
+      return { sku: i.sku, fileSku: at.fileSku ?? i.sku, channel: at.channel ?? '', marketplace: at.marketplace ?? '', accountId: at.accountId ?? '', evidence: i.message, confirmed: false }
+    }),
+  ]
   const payload: JobPayload = { kind: TRANSFER_JOB_KIND, outcomeVersion: 1, mode: input.mode, market: input.market, mapping: input.mapping, source: input.source, sharedCopy: input.sharedCopy,
-    boundary: input.boundary, inputHash: fingerprint([input.rows, input.issues, input.exclusions, input.mapping, input.source, input.boundary]), previewExpiresAt: expiresAt.toISOString(), counts: emptyCounts(), warnings: input.warnings ?? [], unmappedColumns: input.unmappedColumns ?? [] }
+    boundary: input.boundary, inputHash: fingerprint([input.rows, input.issues, input.exclusions, input.mapping, input.source, input.boundary]), previewExpiresAt: expiresAt.toISOString(), counts: emptyCounts(), warnings: input.warnings ?? [], unmappedColumns: input.unmappedColumns ?? [],
+    ...(input.links?.length ? { links: input.links } : {}), ...(deletes.length ? { deletes } : {}) }
   const job = await prisma.$transaction(async tx => {
     const history = await tx.importJob.create({ data: { jobName: input.filename, source: input.source?.url ? 'url' : 'upload', sourceUrl: input.source?.url, filename: input.filename,
       fileKind: input.filename.split('.').pop() ?? 'csv', targetEntity: TRANSFER_JOB_KIND, columnMapping: json(input.mapping ?? {}),
@@ -152,8 +183,11 @@ export async function runTransferJob(id: string) {
         if (dependencyKeys.length) declarations.push(...await prisma.importJobRow.findMany({ where: { jobId: id, targetId: { in: dependencyKeys } }, take: TRANSFER_BATCH }))
         const plan = context ? await buildTransferPlan([...rows, ...supplement], payload.mode, context, contracts, payload.mapping?.policy, { sharedCopy: payload.sharedCopy === true }) : { targets: [], issues: [], warnings: [], exclusions: [] }
         if (context && payload.boundary) await enrichTransferEffects(id, plan, context, contracts, payload.market)
+        await attachChannelReads(plan.targets.filter(t => batch.some(b => b.targetId === t.key)))
         const preserved = await preservedTransferOverrides(id, plan.targets.filter(t => batch.some(b => b.targetId === t.key)), contracts)
-        const nextCounts = { ...payload.counts }
+        const nextCounts = { ...emptyCounts(), ...payload.counts }
+        nextCounts.alreadyEmpty += plan.stats?.alreadyEmpty ?? 0
+        nextCounts.clearUnchecked += plan.stats?.clearUnchecked ?? 0
         const updates: { id: string; record: RecordPayload; status: string }[] = []
         for (const item of batch) {
           const record = item.parsedValues as unknown as RecordPayload
@@ -174,6 +208,11 @@ export async function runTransferJob(id: string) {
               nextCounts[cell.verdict]++
               if (!shared && cell.entity === 'Overrides' && cell.beforeState === 'inherited' && cell.afterState === 'stored' && cell.verdict === 'changed') nextCounts.newOverrides++
               if (!shared && cell.entity === 'Overrides' && cell.beforeState === 'stored' && cell.verdict === 'unchanged') nextCounts.preservedOverrides++
+              if (cell.verdict === 'changed' && cell.origin === 'channel-file') {
+                if (cell.clearIfPresent) nextCounts.cleared++
+                if (cell.entity === 'Listings' && cell.field === 'presence') nextCounts.ended++
+                if (cell.entity === 'Overrides' && (cell.field === 'price' || cell.field === 'sale')) nextCounts.pricesRecorded++
+              }
             }
           }
           nextCounts.preservedOverrides += exclusions.filter(e => e.identity?.entity === 'Overrides').length
@@ -208,6 +247,13 @@ export async function runTransferJob(id: string) {
         const reference = referenceRows.length ? await loadTransferContext(referenceRows) : undefined
         for (const item of batch) {
           const record = item.parsedValues as unknown as RecordPayload
+          // CFI-7 (D6) — a ready-only apply skips every record the review refused; its status and issues stay as reviewed.
+          if (item.status === 'INVALID') {
+            const skipped = await prisma.bulkOperation.updateMany({ where: { id, status: 'RUNNING', processed }, data: { processed: item.rowIndex, expiresAt: new Date(Date.now() + LEASE_MS) } })
+            if (!skipped.count) return
+            processed = item.rowIndex
+            continue
+          }
           try {
             await inDatabaseTransaction(prisma, async () => {
               const tx = prisma
@@ -232,7 +278,7 @@ export async function runTransferJob(id: string) {
                 const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false, declaredProductSkus, sharedCopy: payload.sharedCopy === true })
                 const current = check.targets[0]
                 if (current?.create && current.identity.entity === 'Products' && record.declaredParent) current.patch.isParent = true
-                if (!current || check.issues.length || current.contractHash !== target.contractHash || fingerprint([current.patch, current.contentWrites]) !== fingerprint([target.patch, target.contentWrites])) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')
+                if (!current || check.issues.length || current.contractHash !== target.contractHash || targetWriteFingerprint(current) !== targetWriteFingerprint(target)) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')
                 // A parent saved earlier in this same run is an authorized dependency.
                 // Compare the child's own snapshot unchanged, with that verified parent
                 // projection; otherwise its newly hydrated parent would look like a race.
@@ -273,7 +319,9 @@ export async function runTransferJob(id: string) {
     } else {
       const failed = await prisma.importJobRow.count({ where: { jobId: id, status: 'FAILED' } })
       const success = await prisma.importJobRow.count({ where: { jobId: id, status: 'SUCCESS' } })
-      const status = failed ? 'PARTIAL' : 'COMPLETED'
+      // CFI-7 — records a ready-only apply skipped keep their INVALID review status; the job did not apply everything.
+      const skipped = payload.readyOnly ? await prisma.importJobRow.count({ where: { jobId: id, status: 'INVALID' } }) : 0
+      const status = failed || skipped ? 'PARTIAL' : 'COMPLETED'
       if (payload.outcomeVersion === 1) payload.receipt = await transferReceipt(id, job.total ?? 0)
       await prisma.$transaction(async tx => {
         const claim = await tx.bulkOperation.updateMany({ where: { id, status: 'RUNNING', processed }, data: { status, changes: json(payload), completedAt: new Date(), expiresAt: null } })
@@ -314,31 +362,68 @@ async function jobProductSkus(jobId: string) {
   return skus
 }
 async function transferReceipt(jobId: string, total: number) {
-  const [saved, unchanged, failed, excluded] = await Promise.all([
+  const [saved, unchanged, failed, excluded, skipped] = await Promise.all([
     prisma.importJobRow.count({ where: { jobId, status: 'SUCCESS', parsedValues: { path: ['changed'], equals: true } } }),
     prisma.importJobRow.count({ where: { jobId, status: 'SUCCESS', parsedValues: { path: ['changed'], equals: false } } }),
     prisma.importJobRow.count({ where: { jobId, status: 'FAILED' } }),
     prisma.importJobRow.count({ where: { jobId, status: 'EXCLUDED' } }),
+    // CFI-7 — refused records of a ready-only apply (0 otherwise: a QUEUED review holds none).
+    prisma.importJobRow.count({ where: { jobId, status: 'INVALID' } }),
   ])
-  return { saved, unchanged, failed, excluded, unprocessed: Math.max(0, total - saved - unchanged - failed - excluded) }
+  // `skipped` only when a ready-only apply skipped something, so every existing receipt keeps its exact shape.
+  return { saved, unchanged, failed, excluded, unprocessed: Math.max(0, total - saved - unchanged - failed - excluded - skipped), ...(skipped ? { skipped } : {}) }
+}
+
+/**
+ * CFI-8 (BUILD.md D7) — attach to each listing cell what the channel last reported, from `ChannelDrift`: ONE query per
+ * preview batch. Only differing fields are stored there, so a field with no entry says "no difference recorded at the
+ * last compared read" — never "the channel holds this value", because a field Nexus does not send is not compared.
+ * Keys: an Amazon attribute root (`material`), content `item_name[de_DE]`, eBay `title` / `aspect:<name>`.
+ */
+async function attachChannelReads(targets: TransferTarget[]) {
+  const listings = targets.filter(t => t.identity.entity !== 'Products' && t.before?.id)
+  if (!listings.length) return
+  const drifts = await prisma.channelDrift.findMany({ where: { channelListingId: { in: listings.map(t => String(t.before!.id)) } }, select: { channelListingId: true, driftedFields: true, checkedBySource: true } })
+  const byListing = new Map(drifts.map(d => [d.channelListingId, d]))
+  for (const target of listings) {
+    const drift = byListing.get(String(target.before!.id))
+    if (!drift) continue
+    const entries = (Array.isArray(drift.driftedFields) ? drift.driftedFields : []) as { field: string; ours: unknown; theirs: unknown; source: string; checkedAt: string }[]
+    const clocks = Object.entries((drift.checkedBySource && typeof drift.checkedBySource === 'object' ? drift.checkedBySource : {}) as Record<string, { at?: string; outcome?: string }>)
+      .filter(([, clock]) => clock?.outcome === 'compared' && typeof clock.at === 'string').sort(([, a], [, b]) => String(b.at).localeCompare(String(a.at)))
+    for (const cell of target.cells) {
+      const root = cell.field.split('__')[0]
+      const hit = entries.find(e => e.field === cell.field || e.field === root || e.field.startsWith(`${root}[`) || e.field === `aspect:${cell.label ?? cell.field}`)
+      const read: ChannelRead | null = hit ? { differs: true, value: hit.theirs, ours: hit.ours, readAt: hit.checkedAt, source: hit.source }
+        : clocks.length ? { differs: false, readAt: String(clocks[0][1].at), source: clocks[0][0] } : null
+      if (read) cell.channelRead = read
+    }
+  }
 }
 function transientFailure(error: unknown) {
   const code = (error as { code?: string })?.code ?? ''
   return code.startsWith('P1') || ['P2034', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code)
 }
 
-export async function applyTransferJob(id: string, userId: string | null, reviewToken: string) {
+/**
+ * CFI-7 (D6) — `readyOnly: true` also accepts an INVALID review: its refused records are skipped (their status stays
+ * INVALID, counted `skipped` in the receipt) and the ready ones apply as usual. Without it an INVALID review still refuses.
+ */
+export async function applyTransferJob(id: string, userId: string | null, reviewToken: string, options: { readyOnly?: boolean } = {}) {
   const loaded = await readTransferJob(id, userId)
   if (!loaded) return null
   if (!reviewToken || loaded.payload.reviewToken !== reviewToken) throw new TransferConflict('Supply the token from the completed review')
   if (['RUNNING', 'COMPLETED', 'PARTIAL'].includes(loaded.job.status)) return transferJobStatus(loaded)
-  if (loaded.job.status !== 'QUEUED' || Date.parse(loaded.payload.previewExpiresAt) <= Date.now()) throw new TransferConflict('This review is invalid or expired; preview the source again')
+  const readyOnly = options.readyOnly === true && loaded.job.status === 'INVALID'
+  if (!(loaded.job.status === 'QUEUED' || readyOnly) || Date.parse(loaded.payload.previewExpiresAt) <= Date.now()) throw new TransferConflict('This review is invalid or expired; preview the source again')
+  if (readyOnly && !await prisma.importJobRow.count({ where: { jobId: id, status: 'REVIEWED' } })) throw new TransferConflict('Nothing in this review is ready to apply. Correct the refused rows and preview the file again.')
   if (loaded.payload.boundary) await checkProductTransferBoundary(loaded.payload.boundary)
   if (loaded.payload.source?.presetId) {
     const preset = await prisma.scheduledImport.findFirst({ where: { id: loaded.payload.source.presetId, createdBy: userId } })
     if (!preset || fingerprint([preset.columnMapping, preset.sourceUrl]) !== loaded.payload.source.presetVersion) throw new TransferConflict('Source mapping or policy changed since preview')
   }
-  const claimed = await prisma.bulkOperation.updateMany({ where: { id, userId, status: 'QUEUED', expiresAt: { gt: new Date() } }, data: { status: 'RUNNING', processed: 0, expiresAt: new Date(Date.now() + LEASE_MS) } })
+  const claimed = await prisma.bulkOperation.updateMany({ where: { id, userId, status: loaded.job.status, expiresAt: { gt: new Date() } }, data: { status: 'RUNNING', processed: 0, expiresAt: new Date(Date.now() + LEASE_MS),
+    ...(readyOnly ? { changes: json({ ...loaded.payload, readyOnly: true }) } : {}) } })
   if (claimed.count) void runTransferJob(id).catch(() => {})
   return { ...transferJobStatus(loaded), state: 'RUNNING', processed: 0 }
 }

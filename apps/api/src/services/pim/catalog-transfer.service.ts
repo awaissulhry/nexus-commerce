@@ -7,7 +7,8 @@ import { productReadCacheService } from '../product-read-cache.service.js'
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { transferTargetKey, type TransferMode, type TransferPreview, type TransferRow, type TransferIssue } from '@nexus/shared/catalog-transfer'
-import { buildTransferPlan, fingerprint, transferContracts, type TransferContext, type TransferProduct, type TransferTarget, type TransferPlan } from './catalog-transfer-plan.js'
+import { buildTransferPlan, fingerprint, targetWriteFingerprint, transferContracts, type TransferContext, type TransferProduct, type TransferTarget, type TransferPlan } from './catalog-transfer-plan.js'
+import { readSaleWindows } from './sale-window.js'
 import { clearSheetColumnCache } from './sheet-columns.service.js'
 import { clearFieldCatalogueCache } from './mapping/field-catalogue.service.js'
 import { productRoleOf } from '@nexus/shared/master-sheet'
@@ -116,7 +117,20 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
   }
   const productIds = products.map(p => p.id)
   const formulas = await db.cellFormula.findMany({ where: { OR: [{ productId: { in: productIds } }, { product: { parentId: { in: productIds } } }] }, select: { productId: true, scope: true, channel: true, marketplace: true, locale: true, fieldKey: true, dependsOn: true, product: { select: { parentId: true } } } })
-  return { products: productMap, listings: listingMap, families, categories, accounts, markets, aliases, categoryDefaults, formulas, relationshipBlockedProducts, parentsWithChildren: new Set(products.filter(p => p._count?.children > 0).map(p => p.id)) }
+  // CFI-4/6 — only a channel file's price/sale and seller-SKU rows need these, so an operator file reads nothing more.
+  const listingIds = listings.map(l => l.id)
+  const pricing = listingIds.length > 0 && rows.some(r => r.origin === 'channel-file' && r.entity === 'Overrides' && (r.field === 'price' || r.field === 'sale'))
+  const identity = listingIds.length > 0 && rows.some(r => r.origin === 'channel-file' && r.entity === 'Listings' && (r.field === 'sellerSku' || r.field === 'presence'))
+  const [pendingPrices, saleWindows, offers] = await Promise.all([
+    pricing ? db.outboundSyncQueue.findMany({ where: { channelListingId: { in: listingIds }, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, select: { channelListingId: true } }) : Promise.resolve([]),
+    pricing ? readSaleWindows(db as never, listingIds) : Promise.resolve(new Map<string, { start: string | null; end: string | null }>()),
+    identity ? db.offer.findMany({ where: { channelListingId: { in: listingIds }, isActive: true }, select: { channelListingId: true, sku: true } }) : Promise.resolve([]),
+  ])
+  const offerSkus = new Map<string, string[]>()
+  for (const offer of offers) offerSkus.set(offer.channelListingId, [...offerSkus.get(offer.channelListingId) ?? [], offer.sku])
+  return { products: productMap, listings: listingMap, families, categories, accounts, markets, aliases, categoryDefaults, formulas, relationshipBlockedProducts, parentsWithChildren: new Set(products.filter(p => p._count?.children > 0).map(p => p.id)),
+    ...(pricing ? { pendingPriceListings: new Set(pendingPrices.map(p => p.channelListingId).filter((id): id is string => !!id)), saleWindows } : {}),
+    ...(identity ? { offerSkus } : {}) }
 }
 
 function payloadOf(value: unknown): Payload | null {
@@ -166,6 +180,39 @@ export function catalogTransferStatus(loaded: NonNullable<Awaited<ReturnType<typ
 
 export class TransferConflict extends Error { statusCode = 409 }
 
+let presenceColumnsKnown: boolean | null = null
+/** The PR presence columns are raw-SQL columns (`20260913180000_pr_presence`), not in the Prisma model. Cached per process. */
+async function presenceColumnsExist(db: Pick<Prisma.TransactionClient, '$queryRawUnsafe'>): Promise<boolean> {
+  if (presenceColumnsKnown !== null) return presenceColumnsKnown
+  const rows = await db.$queryRawUnsafe<Array<{ n: number | bigint }>>(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'ChannelListing' AND column_name IN ('presenceIntent', 'channelFact', 'endedAt')`)
+  presenceColumnsKnown = Number(rows[0]?.n ?? 0) === 3
+  return presenceColumnsKnown
+}
+/** For tests: forget the cached answer. */
+export function resetPresenceColumnCache(): void { presenceColumnsKnown = null }
+
+/**
+ * CFI-3 (Q1 delete, BUILD.md D1) — the ONE writer for "the channel deleted this listing", with NOTHING sent.
+ *
+ * `removeAmazonListing` sends a delete and hard-deletes the row; `applyDeletes` is an operator's typed confirmation.
+ * Neither records a CHANNEL fact. This does: the listing is ended (not published, offer inactive), the presence columns
+ * say who stated it and why (`channelFact = 'ABSENT'`, via `channel-file-import`), and every PENDING outbound row of this
+ * listing is cancelled — a push to a listing the channel no longer holds would recreate or fail it. The cancelled rows are
+ * returned so the caller's audit names them. Compare-and-set on the version the caller verified in this transaction.
+ */
+export async function recordChannelDeletion(tx: Prisma.TransactionClient, listing: { id: string; version: number }, input: { userId: string | null; jobId: string }) {
+  const ended = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: { listingStatus: 'ENDED', isPublished: false, offerActive: false, version: { increment: 1 } } })
+  if (ended.count !== 1) throw new TransferConflict('Listing changed during apply; preview this listing again')
+  if (await presenceColumnsExist(tx)) {
+    await tx.$executeRawUnsafe(`UPDATE "ChannelListing" SET "presenceIntent" = 'ENDED', "presenceIntentAt" = now(), "presenceIntentBy" = $2, "presenceIntentReason" = $3,
+      "channelFact" = 'ABSENT', "channelFactAt" = now(), "channelFactVia" = 'channel-file-import', "endedAt" = now(), "endedBy" = $2, "endedReason" = 'channel-file-delete' WHERE "id" = $1`,
+    listing.id, input.userId ?? 'catalog-transfer', `Deleted on the channel (channel file import, job ${input.jobId})`)
+  }
+  const pending = await tx.outboundSyncQueue.findMany({ where: { channelListingId: listing.id, syncStatus: 'PENDING' }, select: { id: true, syncType: true } })
+  if (pending.length) await tx.outboundSyncQueue.updateMany({ where: { id: { in: pending.map(row => row.id) } }, data: { syncStatus: 'CANCELLED' } })
+  return { version: listing.version + 1, cancelled: pending }
+}
+
 const running = new Set<string>()
 const LEASE_MS = 60_000
 
@@ -187,6 +234,7 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
   const id = target.identity
   const product = await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: id.sku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
   let entityId: string
+  const channelFacts: { ended?: Awaited<ReturnType<typeof recordChannelDeletion>>; price?: { outcome: string; version: number } } = {}
   if (id.entity === 'Products') {
     if (fingerprint(safeSnapshot(product)) !== fingerprint(target.before)) throw new TransferConflict('Product changed since preview; preview this SKU again')
     const data = { ...target.patch }
@@ -224,11 +272,15 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
     const matches = await tx.channelListing.findMany({ where: { productId: product.id, channel: id.channel, marketplace: id.marketplace, channelConnectionId: id.accountId, aliasKey: id.aliasKey }, include: { translations: true } })
     // LX.F2 R-LX-21 — `listingConflictSnapshot` on BOTH sides (the reason is on its definition).
     if (matches.length > 1 || fingerprint(listingConflictSnapshot(matches[0] ?? null)) !== fingerprint(listingConflictSnapshot(target.before as Record<string, unknown> | null))) throw new TransferConflict('Listing changed since preview; preview this listing again')
+    let listingVersion: number
     if (matches[0]) {
       const listing = matches[0]
       const result = Object.keys(target.patch).length ? await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, updatedAt: listing.updatedAt }, data: { ...target.patch, version: { increment: 1 } } as Prisma.ChannelListingUpdateManyMutationInput }) : { count: 1 }
       if (!result.count) throw new TransferConflict('Listing changed during apply; preview this listing again')
       entityId = listing.id
+      // CFI-6 — the REVIEWED version, +1 only for our own patch in this transaction. The snapshot check above strips the version
+      // (a job's own cascade may move it), so the fresh `listing.version` would let a change since review through unseen.
+      listingVersion = Number((target.before as { version?: number } | null)?.version ?? listing.version) + (Object.keys(target.patch).length ? 1 : 0)
     } else {
       const listing = await tx.channelListing.create({ data: {
         productId: product.id, channel: id.channel, marketplace: id.marketplace, region: id.marketplace,
@@ -236,6 +288,20 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
         listingStatus: 'DRAFT', isPublished: false, ...target.patch,
       } as Prisma.ChannelListingUncheckedCreateInput })
       entityId = listing.id
+      listingVersion = Number(listing.version ?? 0)
+    }
+    // CFI-3 / CFI-6 — the channel file's own facts, written right after the listing write in THIS transaction, before any
+    // content write can move the version. The version is the one this transaction verified (the snapshot fingerprint
+    // above) plus our own bump — never a fresh read standing in for a reviewed one.
+    if (target.presence) channelFacts.ended = await recordChannelDeletion(tx, { id: entityId, version: listingVersion }, { userId, jobId })
+    if (target.priceWrite) {
+      const { writeChannelPrices } = await import('./channel-price-write.service.js')
+      const { price, sale, expectedPrice } = target.priceWrite
+      const written = await writeChannelPrices({ tx, recordOnly: 'channel-file-import', actor: userId ?? 'catalog-transfer', source: 'CHANNEL_FILE_IMPORT', reason: `Channel file import (job ${jobId})`,
+        targets: [{ listingId: entityId, expectedVersion: channelFacts.ended?.version ?? listingVersion, expectedPrice, ...(price !== undefined ? { price } : {}), ...(sale ? { sale } : {}) }] })
+      const outcome = written.results[0]
+      if (!outcome || !['applied', 'noop'].includes(outcome.outcome)) throw new TransferConflict(outcome?.reason ?? 'The channel price could not be recorded')
+      channelFacts.price = { outcome: outcome.outcome, version: outcome.version }
     }
   }
   for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed' })
@@ -244,7 +310,9 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
   await tx.auditLog.create({ data: { userId, entityType: id.entity === 'Products' ? 'Product' : 'ChannelListing', entityId, action: target.create ? 'create' : 'update',
     before: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.before, state: c.beforeState }))) as Prisma.InputJsonValue,
     after: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.after, state: c.afterState }))) as Prisma.InputJsonValue,
-    metadata: { source: 'catalog-transfer', jobId, channel: id.channel, accountId: id.accountId, marketplace: id.marketplace, aliasKey: id.aliasKey },
+    metadata: { source: 'catalog-transfer', jobId, channel: id.channel, accountId: id.accountId, marketplace: id.marketplace, aliasKey: id.aliasKey,
+      ...(channelFacts.ended ? { channelFact: 'ABSENT', presence: 'ENDED', cancelledOutbound: channelFacts.ended.cancelled } : {}),
+      ...(channelFacts.price ? { channelPrice: { recordOnly: true, ...channelFacts.price } } : {}) },
   } })
 }
 
@@ -270,7 +338,7 @@ async function runCatalogTransfer(jobId: string) {
         const current = checked.targets[0]
         // A newly imported parent can make a formerly missing parent available; the stored patch
         // still names its SKU. All field requirements and write shapes must remain identical.
-        if (!current || current.contractHash !== target.contractHash || fingerprint([current.patch, current.contentWrites]) !== fingerprint([target.patch, target.contentWrites])) throw new TransferConflict(checked.issues[0]?.message ?? 'Attribute requirements or reference choices changed since preview; upload the file again')
+        if (!current || current.contractHash !== target.contractHash || targetWriteFingerprint(current) !== targetWriteFingerprint(target)) throw new TransferConflict(checked.issues[0]?.message ?? 'Attribute requirements or reference choices changed since preview; upload the file again')
         await inDatabaseTransaction(prisma, async () => {
           const tx = prisma
           const checkpoint = await tx.bulkOperation.updateMany({ where: { id: jobId, status: 'RUNNING', processed: index }, data: { processed: index + 1, expiresAt: new Date(Date.now() + LEASE_MS) } })

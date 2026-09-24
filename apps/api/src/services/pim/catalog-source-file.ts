@@ -47,6 +47,10 @@ export async function readSourceFile(buffer: Buffer, filename: string): Promise<
     }
   } else if (/\.xlsx$/i.test(filename)) {
     await checkWorkbookSize(buffer)
+    // 🔴 CFI-1 — an Amazon template never reaches ExcelJS (> 8 min on the main thread, 2026-09-24). The Title-Case
+    // Amazon attribute sheet IS a plain one-sheet table, so it stays mappable here.
+    const { sniffWorkbook, amazonTemplateWrongDoor } = await import('./channel-file-sniff.js')
+    if ((await sniffWorkbook(buffer)).kind === 'amazon-template') throw new Error(amazonTemplateWrongDoor(filename))
     // Workbook parsing is bounded by both compressed and expanded archive sizes above.
     // ExcelJS 4.4's streaming reader can expose unresolved shared-string references when
     // worksheet entries precede workbook metadata. Its document reader preserves the values.

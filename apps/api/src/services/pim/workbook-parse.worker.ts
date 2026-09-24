@@ -25,7 +25,9 @@ import { checkWorkbookSize } from './catalog-source-file.js'
 import { readCatalogWorkbook, type EditingWorkbookBaseline } from './catalog-workbook.js'
 import { readTransferFile, readTransferWorkbook, TRANSFER_MAX_FILE_BYTES } from './catalog-transfer-file.js'
 import { readEbayWorkbook } from './catalog-ebay-workbook.js'
-import type { HostMessage, WorkerMessage, PartOutcome } from './workbook-parse-protocol.js'
+import { detectAmazonTemplate } from '../amazon/template-workbook.js'
+import { sniffWorkbook, amazonAttributeSheetDoor } from './channel-file-sniff.js'
+import type { HostMessage, WorkerMessage, PartOutcome, PartOptions } from './workbook-parse-protocol.js'
 
 const port = parentPort
 if (!port) throw new Error('workbook-parse.worker must be started as a worker thread')
@@ -43,12 +45,13 @@ function ask<T>(message: Omit<Extract<WorkerMessage, { type: 'ask' }>, 'type' | 
   })
 }
 
-async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: number): Promise<PartOutcome> {
+async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: number, options: PartOptions = {}): Promise<PartOutcome> {
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) {
     throw new Error(`${filename}: each workbook must be non-empty and at most 10 MB`)
   }
-  if (!/\.xlsx$/i.test(filename)) return { kind: 'transfer', parsed: await readTransferFile(buffer, filename), expandedBytes: 0 }
+  // CFI-1 — `.xlsm` is Amazon's own template format; it is a workbook like `.xlsx`, never a CSV.
+  if (!/\.xls[xm]$/i.test(filename)) return { kind: 'transfer', parsed: await readTransferFile(buffer, filename, { blankPolicy: options.blankPolicy }), expandedBytes: 0 }
 
   // Measured before anything is materialised: the guard that follows can only refuse what
   // it has already let ExcelJS build, so the cheap zip-header read has to come first.
@@ -56,6 +59,19 @@ async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: n
   if (expandedBytes > batchBudgetBytes) {
     throw new Error('The workbook batch expands beyond 128 MB. Reduce the selected products, destinations or attributes.')
   }
+
+  /*
+   * 🔴 CFI-1 — say what the file IS before ExcelJS sees it. ExcelJS never finishes Amazon's templates (their
+   * megabyte of valid-value names; a GALE template was still loading after 8 min 41 s, 2026-09-24), so an Amazon
+   * template is read by the zip walker and nothing else, whatever the file is called.
+   */
+  const sniff = await sniffWorkbook(buffer)
+  if (sniff.kind === 'amazon-template') {
+    const parsed = await detectAmazonTemplate(buffer, { strict: true })
+    if (!parsed) throw new Error(`${filename} carries Amazon's template marker on sheet "${sniff.sheet}", but no row of attribute keys was found. Download the template again from Seller Central.`)
+    return { kind: 'amazon', parsed, expandedBytes }
+  }
+  if (sniff.kind === 'amazon-attribute-sheet') throw new Error(amazonAttributeSheetDoor(filename, sniff.sheet))
 
   const book = new ExcelJS.Workbook()
   await book.xlsx.load(buffer as never)
@@ -68,11 +84,15 @@ async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: n
     return { kind: 'editing', parsed, expandedBytes }
   }
 
-  const wide = readCatalogWorkbook(book)
+  const wide = readCatalogWorkbook(book, undefined, { blankPolicy: options.blankPolicy })
   if (wide) return { kind: 'wide', parsed: wide, expandedBytes }
 
-  const table = readEbayWorkbook(book)
+  // The filename is the only market hint a family-named eBay sheet carries (`XAVIA-eBay-IT-AIREON.xlsx`).
+  const table = readEbayWorkbook(book, { filename, market: options.market })
   if (table) return { kind: 'ebay', table, expandedBytes }
+  // The sniff recognises an eBay workbook by its headers under ANY sheet name; say so rather than
+  // answering "Unknown worksheet" for a sheet named after the family.
+  if (sniff.kind === 'ebay-workbook') throw new Error(`${filename}: sheet "${sniff.sheet}" is an eBay workbook (SKU, Parent/Child, Parent SKU, Category ID), but this reader could not open its layout. Keep one eBay sheet with its header row intact.`)
 
   /*
    * 🔴 The loaded book, not the bytes. `readEditorPart` used to fall through to
@@ -80,7 +100,7 @@ async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: n
    * `xlsx.load` over the same upload a SECOND time while the first workbook was still
    * referenced — doubling the peak for exactly the files that reach the deepest branch.
    */
-  return { kind: 'transfer', parsed: await readTransferWorkbook(book), expandedBytes }
+  return { kind: 'transfer', parsed: await readTransferWorkbook(book, { blankPolicy: options.blankPolicy }), expandedBytes }
 }
 
 port.on('message', (message: HostMessage) => {
@@ -94,7 +114,7 @@ port.on('message', (message: HostMessage) => {
   }
   if (message.type !== 'part') return
   const started = performance.now()
-  readPart(message.bytes, message.filename, message.batchBudgetBytes).then(
+  readPart(message.bytes, message.filename, message.batchBudgetBytes, message.options).then(
     outcome => port.postMessage({ type: 'part-done', partId: message.partId, outcome, elapsedMs: performance.now() - started } as WorkerMessage),
     (error: unknown) => port.postMessage({
       type: 'part-failed', partId: message.partId, elapsedMs: performance.now() - started,
