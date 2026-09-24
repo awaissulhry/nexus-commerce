@@ -81,4 +81,14 @@ describe('coordinateReadinessColumns', () => {
     expect(coordinateReadinessColumns([entry()], 'it')[0].computedAt).toBe('2026-09-13T09:00:00.000Z')
     expect(coordinateReadinessColumns([entry({ computedAt: null })], 'it')[0].computedAt).toBeNull()
   })
+
+  it('A-45: each product\'s card entries are its OWN — a sibling\'s fields never appear on its row', () => {
+    const [column] = coordinateReadinessColumns([{ ...entry(), missing: [
+      { productId: 'parent', field: 'gtin', label: 'GTIN', reason: 'Required and empty', requiredEmpty: true },
+      { productId: 'child', field: 'color', label: 'Colour', reason: 'Colour is not allowed', kind: 'attribute-unbound' },
+    ] }], 'it')
+    expect(column.missingByProduct.parent).toEqual([{ field: 'gtin', label: 'GTIN', reason: 'Required and empty', requiredEmpty: true }])
+    expect(column.missingByProduct.child).toEqual([{ field: 'color', label: 'Colour', reason: 'Colour is not allowed', kind: 'attribute-unbound' }])
+    expect(column.missingByProduct.other).toBeUndefined()
+  })
 })

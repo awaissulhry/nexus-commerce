@@ -4,6 +4,7 @@ import { CompletenessPill, IdentityBand, ProvenanceMark } from '@/design-system/
 import { ProductRoleChip } from '../sheet/ProductRoleChip'
 import type { MenuItemDef } from '@/design-system/components'
 import type { RowReadinessState } from '@/design-system/grid/renderers/readiness'
+import { filledAllFieldsTip } from '../sheet/master/readinessDetail'
 
 /** One identity composition for the shared family and every channel projection. */
 export function VariantIdentity({ sku, isParent, parentId, childCount, image, inherited, axes, suspect = [], pct, readiness, completenessTip, menuItems }: {
@@ -20,7 +21,7 @@ export function VariantIdentity({ sku, isParent, parentId, childCount, image, in
     sku={sku}
     secondary={<>{secondary}{suspect.length > 0 && <span className="nds-cell-warning" aria-label="Shared axis values need review"> ⚠</span>}</>}
     secondaryTitle={suspect.map(entry => entry.reason).join(' ') || secondary}
-    trailing={<CompletenessPill pct={pct} state={readiness} tip={completenessTip ?? `${pct}% — filled ÷ applicable master attributes`} />}
+    trailing={<CompletenessPill pct={pct} state={readiness} tip={completenessTip ?? filledAllFieldsTip(pct)} />}
     menuItems={menuItems}
     menuLabel={`Actions for ${sku}`}
   />

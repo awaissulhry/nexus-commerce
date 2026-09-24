@@ -184,7 +184,12 @@ export interface ReadinessMatrixEntry extends ScopeReadiness {
   aliasId: string | null
   language: string
   label: string
-  missing: Array<{ productId: string; field: string; label: string; reason: string }>
+  /**
+   * `kind` = the issue vocabulary (a fact, never the sentence). `requiredEmpty` (A-45) = this field is required
+   * here and empty — from the set behind the row's required counts. A row written before the flag existed has
+   * fewer flagged entries than `required.total − required.filled`; a reader says "not recorded yet".
+   */
+  missing: Array<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }>
   computedAt: string | null
   /**
    * LX.FIN (R-LX-22 / design §8 LX.15) — this coordinate's verdict per PRODUCT in the family, in the
@@ -194,7 +199,7 @@ export interface ReadinessMatrixEntry extends ScopeReadiness {
    * its cell says `Not computed` — never a score and never `Not set up` (R-LX-9's distinction, one column
    * over). So `{}` is a legitimate value and an absent key is a real answer, not a gap.
    */
-  byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string }>
+  byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; computedAt?: string | null }>
 }
 
 export interface ScopeReadinessResponse {

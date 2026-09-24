@@ -9,7 +9,7 @@ import { marketLanguages } from './market-languages.js'
 import { coordinatesFor, VARIATION_THEME_KEY } from './sheet-columns.service.js'
 // VT.1b — the provenance mapper and the cell type live with the resolver; this file only reads them.
 import { variationSourceFor, type VariationThemeCell } from './variation-rules.service.js'
-import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, type ReadinessCoordinate } from './readiness-model.js'
+import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, type ReadinessCoordinate } from './readiness-model.js'
 
 type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
@@ -103,8 +103,9 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         // with `LIKE '%; showing % fallback.'` and `/; showing .+ fallback\.$/`,
         // which disagree on an empty language segment and both go false the day
         // the wording changes. They read this key now.
-        const missing = row.readiness.issues.map(issue => ({ productId: row.id, field: issue.key,
-          label: issue.label, reason: issue.message, ...(issue.kind ? { kind: issue.kind } : {}) }))
+        // A-45 (Step 4.3 #4) — the same entries, plus every required-and-empty field FLAGGED (`requiredEmpty`),
+        // from the set behind `requiredFilled/requiredTotal`, so the completeness card can name them.
+        const missing = readinessMissingEntries(row)
         // VT.1b (VT.4's request) — the variation-rule PROVENANCE for this coordinate, from the cell the sheet already
         // computed. It is the one thing `missing[].kind` cannot express: a CORRECT mapping raises no readiness item, so
         // `derived` / `rule` / `overridden` are invisible to the filter without a column. `unset` and `collides` stay in
@@ -115,7 +116,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         )
         rows.push({ productId: row.id, ...c, coordinateKey: readinessCoordinateKey(c), language, label: row.aliasId ? `${label} · ${sheet.aliases.find(a => a.id === row.aliasId)?.label ?? 'Listing customization'}` : label,
           pct: summary.pct, state: summary.state, requiredFilled: summary.required.filled, requiredTotal: summary.required.total,
-          missing, note: summary.note, mappingRules: summary.mappingRules, variationSource,
+          missing: missing as unknown as Prisma.InputJsonValue, note: summary.note, mappingRules: summary.mappingRules, variationSource,
           ...sortProjection(row.id, language), computedAt })
       }
     }

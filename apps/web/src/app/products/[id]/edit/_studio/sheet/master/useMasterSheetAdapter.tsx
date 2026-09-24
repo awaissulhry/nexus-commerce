@@ -23,6 +23,11 @@ import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
 import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, CompletenessPill, ProvenanceMark, ReadinessCell, ScopeReadinessCell, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions, type ReadinessValue, type ScopeReadinessValue, type ScopeReadinessState, type ValueGetterParams } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
+import { cellDetailKeys } from '@/design-system/grid/cellDetail';
+import { readinessMeta } from '@/design-system/grid';
+import type { ScopeReadinessCellParams } from '@/design-system/grid/renderers/cells';
+import { readinessDetailModel, readinessDetailTriggerLabel, filledAllFieldsTip, type ColumnPresence, type DetailEntry } from './readinessDetail';
+import { ReadinessDetailCard } from './ReadinessDetailCard';
 import { useStudioScope, useSaveReporter, useStudioRecord, useScopeReadiness, useViewChips, viewChipHasCell } from '../../contracts';
 import { type RecordWriteRequest, type RecordWriteResult, type SheetRow as DrawerSheetRow } from '../../drawer';
 import { AiDraftReview, useAiDraftLayer } from '../../ai';
@@ -74,11 +79,13 @@ export interface CoordinateReadinessColumn {
   label: string
   language: string
   computedAt: string | null
-  byProduct: Readonly<Record<string, { state: ScopeReadinessState; pct: number | null; note?: string }>>
+  byProduct: Readonly<Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; computedAt?: string | null }>>
+  /** A-45 — each product's OWN entries (issues + flagged required-empty fields), for its completeness card. */
+  missingByProduct: Readonly<Record<string, DetailEntry[]>>
 }
 
 export function coordinateReadinessColumns(
-  matrix: ReadonlyArray<{ channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; coordinateKey: string; language: string; label: string; computedAt: string | null; byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string }> }> | undefined,
+  matrix: ReadonlyArray<{ channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; coordinateKey: string; language: string; label: string; computedAt: string | null; byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; computedAt?: string | null }>; missing?: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }> }> | undefined,
   language: string | null | undefined,
 ): CoordinateReadinessColumn[] {
   if (!matrix?.length || !language) return []
@@ -91,7 +98,17 @@ export function coordinateReadinessColumns(
       language: entry.language,
       computedAt: entry.computedAt,
       byProduct: entry.byProduct ?? {},
+      missingByProduct: groupMissingByProduct(entry.missing),
     }))
+}
+
+/** A-45 — a coordinate's `missing[]` split by product, so a row's card never shows a sibling's fields. */
+function groupMissingByProduct(missing: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }> | undefined): Record<string, DetailEntry[]> {
+  const out: Record<string, DetailEntry[]> = {}
+  for (const m of missing ?? []) {
+    ;(out[m.productId] ??= []).push({ field: m.field, label: m.label, reason: m.reason, ...(m.kind ? { kind: m.kind } : {}), ...(m.requiredEmpty ? { requiredEmpty: true as const } : {}) })
+  }
+  return out
 }
 
 export interface MasterSheetProps {
@@ -116,7 +133,7 @@ function ProductCell(p: ICellRendererParams<StudioRow> & {
     const expander = parent && d.childCount > 0 ? (<ExpandButton expanded={expanded} onToggle={() => p.node.setExpanded(!expanded)} labels={['Expand children', 'Collapse children']}/>) : (<ExpandSlot />);
     const role = <ProductRoleChip product={d}/>;
     const line = p.secondaryRef ? identitySecondary(d, p.secondaryRef.current) : d.name;
-    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`} trailing={<CompletenessPill pct={d.completeness.overall.pct} tip={`${d.completeness.overall.pct}% — filled ÷ applicable master attributes`}/>}/>);
+    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`} trailing={<CompletenessPill pct={d.completeness.overall.pct} tip={filledAllFieldsTip(d.completeness.overall.pct)}/>}/>);
 }
 interface SheetPageState {
     search: string;
@@ -325,6 +342,28 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
     const attributeColumns = useMemo(() => (sheet ? buildSheetColumns('master', { columns: schemaColumns.filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
+    /* A-45 (Step 4.3 #4) — what the completeness card's actions call. Read through refs: the column set is
+       built before `openCustomise` exists in this render, and a card is opened long after either is current. */
+    const presenceRef = useRef<(field: string) => ColumnPresence>(() => 'absent');
+    const goToFieldRef = useRef<(productId: string, field: string) => void>(() => undefined);
+    const customiseRef = useRef<() => void>(() => undefined);
+    presenceRef.current = (field) => {
+        const col = getGridApi()?.getColumn(field);
+        return !col ? 'absent' : col.isVisible() ? 'visible' : 'hidden';
+    };
+    goToFieldRef.current = (productId, field) => {
+        const api = getGridApi();
+        const node = api?.getRowNode(productId);
+        if (!api || !node) return;
+        // A child row sits under its parent in the tree: open the family first, or there is no row to focus.
+        if (node.parent && node.parent.level >= 0 && !node.parent.expanded) node.parent.setExpanded(true);
+        revealCell(field, 'reveal');
+        requestAnimationFrame(() => {
+            if (node.rowIndex == null) return;
+            api.ensureIndexVisible(node.rowIndex);
+            api.setFocusedCell(node.rowIndex, field);
+        });
+    };
     const readinessColumns = useMemo<ColDef<StudioRow>[]>(() => {
         const toValue = (r: RowReadiness | undefined): ReadinessValue | null => r ? { state: r.state, issues: r.issues.map((i) => i.message), ref: r.ref } : null;
         const rowValue = (row: StudioRow | undefined): ReadinessValue | null => {
@@ -370,6 +409,30 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                 valueGetter: (p: ValueGetterParams<StudioRow>): ScopeReadinessValue | null => (p.data ? c.byProduct[p.data.id] ?? { state: 'notComputed', pct: null } : null),
                 valueFormatter: (p) => { const v = p.value as ScopeReadinessValue | null; return v ? `${v.state}${v.pct === null ? '' : ` · ${v.pct}%`}` : ''; },
                 cellRenderer: ScopeReadinessCell,
+                /* A-45 (Step 4.3 #4) — the pill opens this product's completeness card: what is required and
+                   empty here, the other issues, and a way to reach each field. Enter / Space on the locked cell
+                   opens it (`cellDetailKeys`); Esc returns focus to the cell. */
+                suppressKeyboardEvent: cellDetailKeys,
+                cellRendererParams: {
+                    detailLabels: (_v: ScopeReadinessValue | null, p: ICellRendererParams) => {
+                        const value = p.data ? c.byProduct[(p.data as StudioRow).id] ?? null : null;
+                        return {
+                            trigger: readinessDetailTriggerLabel(c.label, languageLabel(c.language), value, readinessMeta(value?.state ?? 'notComputed', 'scope').label),
+                            panel: `Completeness for ${c.label}, ${languageLabel(c.language)}`,
+                        };
+                    },
+                    detail: (_v: ScopeReadinessValue | null, p: ICellRendererParams) => {
+                        const row = p.data as StudioRow | undefined;
+                        if (!row) return null;
+                        const model = readinessDetailModel({
+                            coordinateLabel: c.label, languageLabel: languageLabel(c.language),
+                            value: c.byProduct[row.id] ?? null, entries: c.missingByProduct[row.id] ?? [],
+                            presence: (field) => presenceRef.current(field), now: Date.now(),
+                        });
+                        return ({ close }: { close: (options?: { returnFocus?: boolean }) => void }) => <ReadinessDetailCard model={model} close={close}
+                            onGoTo={(field) => goToFieldRef.current(row.id, field)} onCustomise={() => customiseRef.current()} />;
+                    },
+                } satisfies ScopeReadinessCellParams,
             }));
         }
         if (!sheet)
@@ -480,6 +543,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onCollectVariation: setNewVariation,
     });
     const { preferences, columnDialog, openCustomise } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    customiseRef.current = openCustomise;
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();

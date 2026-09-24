@@ -68,7 +68,8 @@ export async function getProductReadiness(input: { productId: string; market: st
   const perProduct = (group: ReadinessIndex[], c: ReadinessCoordinate, language: string, label: string) =>
     Object.fromEntries([...new Set(group.map(row => row.productId))].map(productId => {
       const one = summarizeReadinessIndex(group.filter(row => row.productId === productId), c, language, label)
-      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}) }]
+      // A-45 — the product's own required counts and age, so its completeness card can say "18 of 22" and "computed 6 h ago".
+      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}), required: one.required, computedAt: one.computedAt }]
     }))
   const matrix = [...groups.values()].map(group => ({
     ...summarizeReadinessIndex(group, group[0], group[0].language, group[0].label),

@@ -75,7 +75,49 @@ export function readinessFromSheet(sheet: StudioSheet, mappingRules: number | nu
 }
 
 
-export interface MissingReadinessField { productId: string; field: string; label: string; reason: string }
+export interface MissingReadinessField {
+  productId: string
+  field: string
+  label: string
+  reason: string
+  /** The issue vocabulary (LX.F P2-14 / VT.1b) — unchanged; readers match it, never the sentence. */
+  kind?: string
+  /**
+   * A-45 (Step 4.3 #4) — this field is REQUIRED here and EMPTY: a member of the row's
+   * `completeness.required.missing`, the same set behind `requiredFilled` / `requiredTotal`. A flag, not a
+   * `kind`, because one field is one entry (LX.F P1-4): a required untranslated field is already
+   * `kind: 'language-fallback'` and must not become a second row. Per index row, the flagged count
+   * equals `requiredTotal − requiredFilled`; a row written before this flag existed has fewer, and a
+   * reader says so ("not recorded yet") instead of listing a guess.
+   */
+  requiredEmpty?: true
+}
+
+/** The fallback reason for a required field no validator named (e.g. rule-required, conditional). */
+export const REQUIRED_EMPTY_REASON = 'Required and empty'
+
+/**
+ * A-45 (Step 4.3 #4) — one sheet row's `ReadinessIndex.missing[]`: its readiness issues, as before, with
+ * every required-and-empty field FLAGGED. An issue already on that field is flagged in place (one field,
+ * one entry); a required-empty field no validator named gets one entry of its own. Pure.
+ */
+export function readinessMissingEntries(row: Pick<StudioSheet['rows'][number], 'id' | 'readiness' | 'completeness'>): MissingReadinessField[] {
+  const empty = new Map((row.completeness?.required?.missing ?? []).map(m => [m.key, m.label]))
+  const entries: MissingReadinessField[] = row.readiness.issues.map(issue => ({ productId: row.id, field: issue.key,
+    label: issue.label, reason: issue.message, ...(issue.kind ? { kind: issue.kind } : {}) }))
+  const flagged = new Set<string>()
+  for (const entry of entries) {
+    if (!empty.has(entry.field) || flagged.has(entry.field)) continue
+    entry.requiredEmpty = true
+    flagged.add(entry.field)
+  }
+  for (const [field, label] of empty) {
+    if (flagged.has(field)) continue
+    entries.push({ productId: row.id, field, label, reason: REQUIRED_EMPTY_REASON, requiredEmpty: true })
+    flagged.add(field)
+  }
+  return entries
+}
 export interface ReadinessCoordinate { channel: string | null; market: string | null; accountId: string | null; aliasId: string | null }
 export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinate {
   language: string
@@ -105,7 +147,7 @@ export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinat
    * `Not computed` — the R-LX-9 rule one column over: absent is not empty, and a missing key must never read as
    * a score. An empty object is therefore a legitimate value (nothing computed for this coordinate at all).
    */
-  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string }>
+  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string; required: { filled: number; total: number }; computedAt: string | null }>
 }
 
 export function readinessCoordinateKey(c: ReadinessCoordinate): string {

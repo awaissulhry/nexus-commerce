@@ -202,3 +202,37 @@ it('byProduct is an empty object, never undefined, when the server sends nothing
   expect(parseReadinessMatrix({ matrix: [{ ...base, byProduct: value }] })[0].byProduct).toEqual({})
  }
 })
+
+/**
+ * A-45 (Step 4.3 #4) — the completeness card reads `requiredEmpty`, `kind` and each product's own counts from
+ * the matrix. The same strictness as the chip: a flag or a count that is not exactly the contract is DROPPED,
+ * never coerced — reading "yes" as true would name a field empty that nobody measured.
+ */
+describe('A-45 — the matrix carries the required-empty flag and each product\'s own counts', () => {
+  const raw = (over: Record<string, unknown> = {}) => ({ matrix: [{
+    coordinateKey: '["AMAZON","IT",null,null]', channel: 'AMAZON', market: 'IT', accountId: null, aliasId: null, language: 'de', label: 'Amazon · IT',
+    pct: 82, state: 'blocked', required: { filled: 18, total: 22 }, computedAt: '2026-09-24T06:00:00.000Z',
+    missing: [
+      { productId: 'p', field: 'gtin', label: 'GTIN', reason: 'Required and empty', requiredEmpty: true },
+      { productId: 'p', field: 'name', label: 'Title', reason: 'de content is missing', kind: 'language-fallback', requiredEmpty: 'yes' },
+      { productId: 'p', field: 'x', label: 'X', reason: 'r', kind: 7 },
+    ],
+    byProduct: { p: { state: 'blocked', pct: 82, required: { filled: 18, total: 22 }, computedAt: '2026-09-24T06:00:00.000Z' }, half: { state: 'warn', pct: 50, required: { filled: 1 } } },
+    ...over,
+  }] })
+  it('keeps requiredEmpty only when it is exactly true, and kind only as a string', () => {
+    const [entry] = parseReadinessMatrix(raw())
+    expect(entry.missing).toEqual([
+      { productId: 'p', field: 'gtin', label: 'GTIN', reason: 'Required and empty', requiredEmpty: true },
+      { productId: 'p', field: 'name', label: 'Title', reason: 'de content is missing', kind: 'language-fallback' },
+      { productId: 'p', field: 'x', label: 'X', reason: 'r' },
+    ])
+  })
+  it('a product\'s own counts only when both are finite; its age only as a string', () => {
+    const [entry] = parseReadinessMatrix(raw())
+    expect(entry.byProduct!.p).toEqual({ state: 'blocked', pct: 82, required: { filled: 18, total: 22 }, computedAt: '2026-09-24T06:00:00.000Z' })
+    expect(entry.byProduct!.half.required).toBeUndefined()
+    expect(entry.byProduct!.half.computedAt).toBeUndefined()
+  })
+})
+
