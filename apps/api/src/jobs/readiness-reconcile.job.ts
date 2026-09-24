@@ -77,8 +77,10 @@ async function dueFamilies(dueBefore: Date): Promise<string[]> {
  * "DRY RUN, nothing written" and a row total, which read as "nothing due" on production when it had measured nothing.
  * The count is the work's own predicate (`dueFamilies`), so the two cannot disagree.
  */
-export async function runReadinessReconcile(options: { dryRun?: boolean; budgetMs?: number; batchSize?: number; now?: () => number } = {}): Promise<SweepReport> {
-  const dueBefore = new Date(Date.now() - DUE_AFTER_MS)
+export async function runReadinessReconcile(options: { dryRun?: boolean; budgetMs?: number; batchSize?: number; now?: () => number; dueAfterMs?: number } = {}): Promise<SweepReport> {
+  // `dueAfterMs` — a HAND-RUN's horizon (the backfill script's `--due-after-hours`, e.g. 0 to recompute the same evening).
+  // The cron passes none and keeps 20 h. Fixed at the start, so a family this run finishes is never taken twice.
+  const dueBefore = new Date(Date.now() - (options.dueAfterMs ?? DUE_AFTER_MS))
   return runResumableSweep({
     name: 'readiness-reconcile',
     budgetMs: options.budgetMs ?? NIGHTLY_BUDGET_MS,
@@ -93,6 +95,18 @@ export async function runReadinessReconcile(options: { dryRun?: boolean; budgetM
     // deterministically in a unit test, and a budget test that never crosses it proves nothing.
     ...(options.now ? { now: options.now } : {}),
   })
+}
+
+/**
+ * 2026-09-24 — the ON-DEMAND run (`CRON_REGISTRY`, the Sync Logs "Run"): every family of the REQUEST's business, NOW —
+ * not only those older than the nightly's 20 h. An operator who presses Run wants today's rules applied today (the
+ * Owner asked the same evening a readiness fix deployed). Same writer, same budget, same failure signal as the cron.
+ */
+export async function runReadinessReconcileNow(): Promise<string> {
+  const report = await runReadinessReconcile({ dueAfterMs: 0 })
+  const line = describeSweep(report)
+  if (report.failed > 0) throw new Error(line)
+  return line
 }
 
 export function startReadinessReconcileCron() {

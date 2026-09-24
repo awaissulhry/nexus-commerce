@@ -4,7 +4,7 @@ vi.mock('../db.js', () => ({ default: { product: { findMany: mock.products }, re
 vi.mock('../lib/cron/clustered.js', () => ({ default: { schedule: mock.schedule } }))
 vi.mock('../utils/cron-observability.js', () => ({ recordCronRun: async (_name: string, work: () => Promise<unknown>) => work() }))
 vi.mock('../services/pim/readiness-index.service.js', () => ({ reconcileFamilyReadiness: mock.reconcile }))
-import { runReadinessReconcile, startReadinessReconcileCron } from './readiness-reconcile.job.js'
+import { runReadinessReconcile, runReadinessReconcileNow, startReadinessReconcileCron } from './readiness-reconcile.job.js'
 import { describeSweep } from '../services/pim/resumable-sweep.js'
 
 /**
@@ -150,4 +150,43 @@ it('🔴 the dry run COUNTS what is due and computes nothing', async () => {
   expect(report).toMatchObject({ applied: false, stoppedBecause: 'dry-run', planned: 3, remaining: 3, processed: 0 })
   expect(mock.reconcile).not.toHaveBeenCalled()
   expect(describeSweep(report)).toContain('3 of 3 outstanding')
+})
+
+/**
+ * 2026-09-24 — the Owner asked to run the night's reconcile NOW, the same evening. Rows computed at 02:17 UTC are not due
+ * until ~22:17 UTC under the 20 h horizon, so a hand-run needs its own horizon. The CRON passes none and keeps 20 h.
+ */
+it('🔴 a hand-run can shorten the horizon: 0 h takes a family computed an hour ago; the default still skips it', async () => {
+  const hour = 3_600_000
+  catalogue(['a', 'b'], new Map([['a', Date.now() - hour], ['b', Date.now() - hour]]))
+  mock.reconcile.mockResolvedValue(1)
+  await runReadinessReconcile()
+  expect(mock.reconcile).not.toHaveBeenCalled()
+  await runReadinessReconcile({ dueAfterMs: 0 })
+  expect(mock.reconcile.mock.calls.map(c => c[0])).toEqual(['a', 'b'])
+})
+
+// A finished family is stamped NOW, so it sorts after every family still due, and the sweep stops at what it planned at
+// the start: 0 h cannot loop. (Measured: re-reading the horizon per batch changes nothing here — an equivalent mutant.)
+it('🔴 the on-demand run (Sync Logs "Run") recomputes a family computed an hour ago, and fails loudly like the cron', async () => {
+  const hour = 3_600_000
+  catalogue(['a', 'b'], new Map([['a', Date.now() - hour], ['b', Date.now() - hour]]))
+  mock.reconcile.mockResolvedValueOnce(4).mockRejectedValueOnce(new Error('serialization failure'))
+  const error = await runReadinessReconcileNow().then(() => null, (e: Error) => e)
+  expect(mock.reconcile.mock.calls.map(c => c[0])).toEqual(['a', 'b'])
+  expect(error?.message).toMatch(/1 failed/)
+  mock.reconcile.mockReset()
+  catalogue(['c'], new Map([['c', Date.now() - hour]]))
+  mock.reconcile.mockResolvedValue(2)
+  expect(await runReadinessReconcileNow()).toContain('1 done')
+})
+
+it('🔴 with the horizon at 0 every family is done exactly once and the run ends complete', async () => {
+  const roots = ['a', 'b', 'c', 'd', 'e', 'f']
+  const { computed } = catalogue(roots, new Map(roots.map(id => [id, Date.now() - 3_600_000])))
+  mock.reconcile.mockImplementation(stamping(computed, 1_000))
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const report = await runReadinessReconcile({ dueAfterMs: 0, batchSize: 2 })
+  expect(mock.reconcile.mock.calls.map(c => c[0])).toEqual(roots)
+  expect(report).toMatchObject({ processed: 6, stoppedBecause: 'complete' })
 })

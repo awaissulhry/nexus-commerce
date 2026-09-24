@@ -413,6 +413,13 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const { runNightlyContentDrift } = await import('./content-drift.job.js')
     return (await runNightlyContentDrift()).line
   },
+  // 2026-09-24 — the readiness reconcile, on demand ONLY (the nightly is scheduled in index.ts at 02:17). A manual run
+  // recomputes EVERY family of the request's business now (not only rows older than 20 h), with the nightly's writer
+  // and budget; a failed family fails the run, as the cron does.
+  'readiness-reconcile': async () => {
+    const { runReadinessReconcileNow } = await import('./readiness-reconcile.job.js')
+    return runReadinessReconcileNow()
+  },
 }
 
 export function isKnownCron(jobName: string): boolean {
