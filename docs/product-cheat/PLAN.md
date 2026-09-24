@@ -8830,3 +8830,28 @@ while the destination loads a row reads "Checking…"; a failed read or an unsco
 
 *Done when* — tests ✅; the browser gates at the push ⏳; the Owner's screen after the deploy ⏳. *Cost when* — flat (pure, per render).
 *Gate* — `scopeItems.vitest.test.ts` (14 arms) + 10 mutations + the census gate. *Rollback* — revert (web only; no API, no data).
+
+### A-54 / A-55 — deployed, measured (2026-09-24, the Owner: "push to main" twice)
+
+- **A-54 live:** `main` = `2f01c58a2` (15:48 UTC; Railway `c98ccdc7` live 16:05). The 16:30 UTC sweep on the new code:
+  `ebay-readback: sweep complete {checked: 0, recorded: 0, errors: 0, skippedShared: 288}` — exactly the prediction (0 eligible of 302; the 14
+  parents never selected); **no** `EBAY_APP_ID` per-SKU error. A-54's *Done when* ✅.
+- **A-55 pushed to `main`** = `aad45e7e0` (16:48 UTC). Its first branch push (16:22) was REFUSED by the census gate: 7 NEW keys, every
+  Amazon·DE surface "400 Bad Request". **Cause, attributed (read + confirmed by the session that did it):** at **16:03:45 UTC** another
+  session (`nexus-commerce-7c`, Shopify metafields) booted a local API from its worktree WITHOUT `NEXUS_AMAZON_ENV_TOKEN=off`, and
+  `index.ts` `seedEnvManagedConnections` rewrote the local env Amazon row (`cmothu9bo…`) to `isActive: false, authStatus: 'disconnected'`,
+  `lastSyncError: "Amazon credentials not configured…"` — the same rewrite as 10:14 UTC (A-49's finding). The only local row changed in
+  16:02:30–16:05 (a read of every `createdAt`/`updatedAt` column). **Restored** at ~16:33 UTC exactly as at 10:40 (`isActive: true`,
+  `authStatus: 'unknown'`, `lastSyncError: null`; one row, local database only, guarded by its prior state). The re-push's census: **0 keys**.
+  Not baselined — it was an environment change, not a blind spot, and the cause is gone.
+- 🔴 **The same trap will return** whenever any session boots a local API without the switch. A durable fix (the boot seed never rewrites
+  an env row when the Amazon keys are merely blank — or the local `.env` carries `NEXUS_AMAZON_ENV_TOKEN=off`) is an open item for the Owner.
+- **The known AE.4 flake** (`assortment/sync.vitest.test.ts:419`, `claimed: 0`) refused 2 of the day's 9 pushes (14:36, 15:30); each retry
+  passed. Not this lane's file (the shared-stock lane's); it slows every push — an open item.
+- **Live screen check (2026-09-24 17:00–17:05 UTC, the Owner's own Chrome, a new tab, nothing clicked but the scope trigger and Esc):**
+  Motovento GALE-JACKET (`/w/bf0047bf…/products/cmub55nhk…/edit/studio`) — **the studio opens** (21 rows, market IT; A-53 live ✅); the scope
+  menu reads Shared "See each channel" · **eBay "Not computed"** (was "Not set up") · Etsy no state on IT (Etsy is GLOBAL only).
+  Xavia GALE-JACKET (`/w/nexus_legacy_workspace/…/cmokmy3a4…`, market IT) — **Amazon "Blocked · 100%"**, **eBay "Blocked · 100%"** (accessible
+  names: "IT: 630 of 630 required values filled…"), Shared dot red (the worst channel); Shopify no state on IT. A-55's *Done when* ✅ on screen.
+  🟠 The menu's trailing text is cut to **"Blocked · 10…"** at the menu's width — the number reads wrong until hovered (a DS `ScopeBar`
+  menu-width item for the Owner; not built).
