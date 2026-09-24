@@ -90,6 +90,7 @@ export { resolveLanding, arrangementColumnState, allColumns, type Landing, type 
 export { useGridState, readLastUsed, writeLastUsed, clearLastUsed, lastUsedKey, pickGridState, LAST_USED_SCHEMA, gridViewPayload, type GridStateApi, type GridStateKey, type LastUsedState, type UseGridStateOptions } from './hooks/useGridState'
 export { compareSortValues, compareForAgGrid, type SortDir, type SortValue } from './sortValues'
 export * from './renderers'
+export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from './cellDetail'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
   stockColumn, lockedColumn, holdColumn, actionsColumn, type GridSelectionOptions, type ActionsColumnOptions,

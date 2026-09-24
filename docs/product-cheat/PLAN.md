@@ -7755,3 +7755,24 @@ PLAN.md holding only the new section. Commits `c5ee525b2` … `60140000a` carrie
 A-43 and R-50 (from this session's own commands), A-44 and A-45 (from the sub-agents' plan files, the same fold), R-51…R-54 (from
 this session's commands) — + everything written since (A-46 onward). Checked: every section once, in order; against `a80a3044e`
 **494 lines added, 0 removed**. PROGRESS.md and pes-claims.md were never edited that way (read-then-write) — unaffected.
+
+## Step 4.3 #1, #2, #4 — BUILT (R-63 / R-47 / R-48 · R-51…R-53 · R-54 / A-45), in three parallel lanes, joined by an integrator
+
+Built by sub-agents E1, T1, C1 (each on disjoint files, R-44), joined by I1 (the shared files from each lane's patches). **Re-run by this
+lane before committing:** `tsc` apps/web 0 · apps/factory 0 · DS fork drift ✓ (no new drift) · DS-GAPS append-only ✓ · contrast ratchet
+held (49 / 10). **I1 ran every non-browser stage of the push hook:** apps/web 4,692 tests · apps/api 11,540 tests · both builds · the
+security suite · the real-PostgreSQL suites · `tsc` web/api/factory 0 — all green EXCEPT the profiles-ON ratchet (below).
+
+| Lane | What | Measured |
+|---|---|---|
+| **E1 — one text/number editor (R-63)** | the formula-aware value popup is THE text/number editor on every scope, formulas off where none is allowed (both studio builders, formula-refused columns, the Variants page, `textEditor()`); `openGesture.ts` declares text/number `popup`. **R-47:** new pure `numberEntry.ts` — a letter never replaces a number: the editor opens on the stored value, refuses the letter, says *"Numbers only — the value was kept."*; `12,5` → `12.5`. **R-48:** new `editorHint.ts` — ONE line *"Enter saves · Tab saves and moves right · Esc cancels"* (replaces "Enter to apply"). Two new editor-open arms (hint, number-letter) read both texts from source | 34 new tests; 150 files / 1,964 wider tests green; **10/10 mutations red** (a first run was VACUOUS — wrong test paths, vitest found no tests; caught with a green no-mutation control, re-run for real); factory byte-identical |
+| **T1 — the top bar (R-51, R-52, R-53)** | the scope is ONE 28px dropdown, each channel's dot / state / % inside it, an unavailable channel with its reason; filters ALWAYS folded (`Filters N` / `Filters · <active one>` — one filter can be active at a time); Shared shows *"See each channel"* + the worst state, never a %; ONE language control — single choice, multi-select in the Languages view, never below one language, URL unchanged (and an order bug found: the saved order must follow the listed order or the view stays pending); `MultiSelect` 28px size / minimum / custom label / focus handling (all 10 users). 🔴 **`ListboxPanel` short lists committed row 1 on Enter, not the option tabbed to — PROVEN by two failing tests on the old code, fixed** (the highlight starts on the selected row and follows focus; Enter never picks a disabled option) | 38 new tests; web 379 files / 4,664 green; **15/15 mutations red**; the chip form byte-identical to the original (a committed test compares the markup) |
+| **C1 — completeness (A-45, R-54)** | the one readiness writer flags each required-and-empty field `requiredEmpty` (one field, one entry; flagged = total − filled on every stored row, real-database arm); new DS `DetailPopover` + `cellDetailKeys` — the "Readiness · <coordinate>" pill opens a card: empty required fields first, then other issues, *"Go to"* / *"Customise"* per field; old rows say *"not recorded yet"*; *"not computed"* never shows 0 %; **R-54** "Filled (all fields)" on the sheet, Variants and Matrix; pill text Δ 0 | API 6 new + 13 related files (142); web 178 files (2,251); **15/15 mutations red**; `tsc` 0 ×3; factory byte-identical |
+
+**I1's two by-intent applications:** T1's census arms count only on pages that HAVE a scope bar (as written they failed every page
+without one); T1's two barrel export lines were required (the api-guard check failed without them). I1 also fixed C1's
+`readiness-required-missing` test setup for profiles ON (C1's code unchanged; 6/6 ON and OFF).
+⬜ **Nothing here is browser-measured yet** — the new editor-open arms, the census scope/language arms, the 28px heights, focus moves,
+`DetailPopover`'s live focus and *"Go to"*: the browser gates at the next push are their first measurement.
+🔴 **Blocking the push (not these lanes):** B1's committed `content-per-row` C5 arm fails with profiles ON (every content row refused
+*"Could not load the sheet label and requirements"*); B1 is proving whether it is the fixture or a product defect.

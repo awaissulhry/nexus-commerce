@@ -14,6 +14,7 @@
 import { PresenceExample } from './PresenceExample'
 import { ScrollingTabsExample } from './ScrollingTabsExample'
 import { DateTimeFieldExample } from './DateTimeFieldExample'
+import { DetailPopoverExample } from './DetailPopoverExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
@@ -804,6 +805,9 @@ export function TokenCatalog() {
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Date and time</div>
           <DateTimeFieldExample />
 
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Detail popover</div>
+          <DetailPopoverExample />
+
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Progress</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
           <ProgressBar value={64} />
@@ -1066,6 +1070,19 @@ export function TokenCatalog() {
             onAdd={() => {}}
             addLabel="Add a listing alias"
             right={<Button size="sm">IT · Italy</Button>}
+          />
+        </DSCard>
+        <DSCard elevated>
+          <ScopeBar variant="menu" label="Editing" active={scope} onChange={setScope}
+            items={[
+              { id: 'master', label: 'Shared product', readiness: { pct: null, state: 'blocked', summary: 'See each channel', note: 'Worst channel: eBay — Blocked.' } },
+              { id: 'AMAZON', label: 'Amazon', readiness: { pct: 92, state: 'warn' } },
+              { id: 'EBAY', label: 'eBay', readiness: { pct: 71, state: 'blocked', note: 'Missing: EAN, country of origin.' } },
+              { id: 'ETSY', label: 'Etsy', disabled: true, disabledReason: 'Etsy is not configured for this market.' },
+            ]}
+            right={<MultiSelect size="sm" width="auto" minSelected={1} ariaLabel="Content languages" value={['it', 'de']} onChange={() => {}}
+              options={[{ value: 'it', label: 'Italian' }, { value: 'de', label: 'German' }, { value: 'fr', label: 'French' }]}
+              formatLabel={(v) => (v.length > 1 ? `Italian +${v.length - 1}` : 'Italian')} />}
           />
         </DSCard>
 
