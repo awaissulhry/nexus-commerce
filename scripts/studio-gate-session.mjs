@@ -175,12 +175,22 @@ try {
     assert.ok(role, `No role "${roleFlag}" on this database`)
     assert.equal(role.requireMfa, false, `Role "${roleFlag}" requires MFA — the gate cannot sign in as it`)
   } else {
-    /* DERIVED: the widest non-MFA role's own permissions, plus every `pages.*` any role carries —
-       which is what adds the `pages.settings` OPS_MANAGER lacks. No hand-written list. */
-    const rows = (await client.query('SELECT key,permissions,"requireMfa" FROM "Role"')).rows
+    /* DERIVED: the widest role's own permissions (see A-43 below), plus every `pages.*` any role carries —
+       which is what added the `pages.settings` OPS_MANAGER lacks. No hand-written list. */
+    /* 🔴 A-43 (2026-09-24): NEVER derive from a disposable role of this wrapper. A run that died before its `finally` left
+       `VT_GATE_f029cb50` (09-13, 103 permissions, still held by one leftover user) on the local database, and it became
+       "the widest non-MFA role" — so every later gate user inherited a 09-13 permission snapshot, 32 permissions short
+       of ADMIN's today. Only real roles define what a gate user may see. */
+    const rows = (await client.query(`SELECT key,permissions,"requireMfa" FROM "Role" WHERE id NOT LIKE 'vtgate_role_%' AND key NOT LIKE 'VT_GATE_%'`)).rows
     const listOf = (r) => (Array.isArray(r.permissions) ? r.permissions : (r.permissions?.list ?? []))
-    const widestOpen = rows.filter((r) => !r.requireMfa).sort((a, b) => listOf(b).length - listOf(a).length)[0]
-    assert.ok(widestOpen, 'No role on this database can sign in without MFA')
+    /* 🔴 A-43 (2026-09-24): the WIDEST role, MFA or not — its LIST, never its MFA flag (the disposable role is created with
+       MFA off). Measured: the studio's channel scopes call `GET /api/connections`, which the manifest maps to
+       `settings.integrations.manage` (`permissions-manifest.ts:163`), and NO non-MFA role carries it — so every
+       Amazon/eBay surface answered 403 and read NOT MEASURED in all three gates (367 × 403 in one census run). A gate
+       user must see what an operator who uses those scopes sees. Still derived, still disposable, local only; every gate
+       that runs under this wrapper aborts API writes (`scripts/lib/gate-write-guard.mjs`, census's own route guard). */
+    const widestOpen = rows.sort((a, b) => listOf(b).length - listOf(a).length)[0]
+    assert.ok(widestOpen, 'No role on this database to derive a gate role from')
     const pages = [...new Set(rows.flatMap(listOf).filter((p) => typeof p === 'string' && p.startsWith('pages.')))]
     const permissions = [...new Set([...listOf(widestOpen), ...pages])]
     assert.ok(permissions.includes('pages.settings'), 'Derived gate permissions still lack pages.settings')
@@ -235,10 +245,16 @@ try {
   /* A stale storage state would silently win over the credentials above and the gate would measure
      somebody else's session — the "wrong instrument, confident reading" shape. */
   for (const key of ['STUDIO_STORAGE_STATE', 'CENSUS_STORAGE_STATE']) delete env[key]
-  env.STUDIO_API_BASE ??= 'http://localhost:8091'
+  /* A-43 (2026-09-23): business profiles are ON (`apps/web/.env.local`), so the page reaches its API through its OWN
+     origin (`<origin>/backend`) and every studio page lives under `/w/<workspace>`. The gates get the workspace this
+     disposable user belongs to, and the API base is the page's proxy. `STUDIO_API_BASE` is no longer defaulted here:
+     `studio-browser-auth.mjs` derives it from the boot request the page itself makes (a hardcoded :8091 made the
+     sign-in POST cross-port, which Chrome's local-network policy refuses). A caller may still set any of these. */
+  env.STUDIO_WORKSPACE ??= workspace.workspaceId
   env.EDITOR_BASE ??= 'http://localhost:3000'
-  env.EDITOR_API ??= 'http://localhost:8091'
+  env.EDITOR_API ??= `${env.EDITOR_BASE}/backend`
   env.CENSUS_BASE ??= 'http://localhost:3000'
+  env.GDS_BASE ??= env.EDITOR_BASE
 
   console.log(`studio-gate-session: running \`${command.join(' ')}\``)
   const child = spawn(command[0], command.slice(1), { cwd: ROOT.pathname, env, stdio: ['ignore', 'pipe', 'pipe'] })

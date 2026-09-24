@@ -129,9 +129,13 @@ export function releaseGateLock(lockPath) {
  * as a pass. Counted from `pgrep -f`'s own lines instead, which is portable, and the assertion below is
  * `>= 1` rather than `!== 0` so neither `null` nor `0` can slip through.
  */
-export function gateProcessWitness() {
+export function gateProcessWitness(pattern = 'node scripts/') {
+  /* 🔴 `-a` (A-43, 2026-09-23). macOS `pgrep` EXCLUDES ITSELF AND ALL ITS ANCESTORS unless given `-a`
+     (`man pgrep`), and every caller of this function is itself a `node scripts/…` process — so without
+     `-a` the witness could never count its own caller: it read 0 from inside the wrapper and the wrapper
+     refused on every run since 09-13 ("pgrep cannot see this process"). `-a` includes the ancestors. */
   try {
-    const out = execFileSync('pgrep', ['-f', 'node scripts/'], { encoding: 'utf8' })
+    const out = execFileSync('pgrep', ['-af', pattern], { encoding: 'utf8' })
     return out.split('\n').filter((l) => /^\d+$/.test(l.trim())).length
   } catch (error) {
     /* pgrep exits 1 with no output when nothing matches — which, from inside a `node scripts/…`
@@ -143,4 +147,11 @@ export function gateProcessWitness() {
 /** `ps` in the one shape every function here expects. */
 export function readPs() {
   return execFileSync('ps', ['-Ao', 'pid=,ppid=,args='], { encoding: 'utf8' })
+}
+
+/* `node scripts/lib/gate-aloneness.mjs --witness <token>` — the selftest's probe (gate-aloneness.test.mjs): a process
+   whose own argv carries `<token>` asks the witness to count processes matching it. With `-a` it counts ITSELF (≥ 1);
+   without `-a` macOS hides it (0). */
+if (process.argv[2] === '--witness' && import.meta.url === new URL(process.argv[1], 'file://' + process.cwd() + '/').href) {
+  console.log(JSON.stringify({ witness: gateProcessWitness(`gate-aloneness.mjs --witness ${process.argv[3]}`) }))
 }

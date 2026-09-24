@@ -28,8 +28,9 @@
  *  · **NEGATIVE CONTROL, once per run.** A double-click on a HEADER cell must open nothing. If the
  *    detector reports an editor there, the detector is broken and every green above it is vacuous —
  *    so that inverts the whole run. A check that cannot fail is not passing.
- *  · **WRITE CONTROL.** Every non-GET to the API is aborted at the network layer (the two formula
- *    READ endpoints excepted) and counted. The gate therefore cannot damage the database it is
+ *  · **WRITE CONTROL.** Every non-GET to an API path — `/api/…` or the page proxy `/backend/api/…`, on
+ *    any host (A-43) — is aborted at the network layer (the two formula READ endpoints excepted) and
+ *    counted. The gate therefore cannot damage the database it is
  *    pointed at, and a re-appearance of the fill-down is a hard failure rather than 20 silent rows.
  *    ONE exemption, added 2026-09-16: the `PATCH /api/saved-views` the gate's OWN column reveal
  *    performs, and only inside the window that reveal opens. Without it the gate aborted its own
@@ -67,6 +68,8 @@
  *    height, footer, number alignment, required-cell wording and identity header, none by decision.
  */
 import { authenticatedStudioPage } from './studio-browser-auth.mjs'
+import { hostKey, apiKeyOf, expectedApiKey, isApiWrite, isPreferenceWrite } from './lib/gate-write-guard.mjs'
+import { writeGateReport } from './lib/gate-report.mjs'
 import { chromium } from '@playwright/test'
 import { execSync } from 'node:child_process'
 import { statSync, readFileSync } from 'node:fs'
@@ -78,7 +81,12 @@ const API = process.env.EDITOR_API ?? 'http://127.0.0.1:8091'
 const PRODUCT = process.env.EDITOR_PRODUCT ?? 'cmokmy3a40078pm0p1fvnu523'
 const MARKET = process.env.EDITOR_MARKET ?? 'DE'
 const LOCALE = process.env.EDITOR_LOCALE ?? 'de'
-const STUDIO = `${BASE}/products/${PRODUCT}/edit/studio?market=${MARKET}&locale=${LOCALE}`
+/* A-43 (2026-09-23): with business profiles ON an unscoped `/products/…` redirects to the profile picker, so the studio
+   pages are opened under `/w/<workspace>`. `STUDIO_WORKSPACE` is exported by `studio-gate-session.mjs` (the workspace its
+   disposable user belongs to); `BASE` stays the ORIGIN — the page host the wire control compares against. */
+const WORKSPACE = (process.env.STUDIO_WORKSPACE ?? process.env.EDITOR_WORKSPACE ?? '').trim()
+const PAGE_BASE = WORKSPACE ? `${BASE}/w/${encodeURIComponent(WORKSPACE)}` : BASE
+const STUDIO = `${PAGE_BASE}/products/${PRODUCT}/edit/studio?market=${MARKET}&locale=${LOCALE}`
 const STRICT = process.argv.includes('--strict')
 const REPS = Number(process.env.EDITOR_REPS ?? 20)
 const ROWS_MS = Number(process.env.EDITOR_ROWS_MS ?? 60000)
@@ -190,6 +198,7 @@ const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx',
   'scripts/check-editor-open.mjs',
   'scripts/studio-browser-auth.mjs',
+  'scripts/lib/gate-write-guard.mjs',
   'apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx',
   'apps/web/src/design-system/components/SourceIndicator.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx',
@@ -313,9 +322,13 @@ if (ONLY) {
 const browser = await chromium.launch()
 const page = await authenticatedStudioPage(browser, { base: BASE, viewport: { width: 1600, height: 1000 } }).catch(async error => { await browser.close(); console.error(error.message); process.exit(2) })
 
-const LOOPBACK = new Set(['localhost','127.0.0.1','::1','[::1]','0.0.0.0'])
-const hostKey = (u) => { try { const x = new URL(u); return `${LOOPBACK.has(x.hostname) ? 'loopback' : x.hostname}:${x.port}` } catch { return null } }
-const expectedApi = hostKey(API)
+/* A-43 (2026-09-23) — `hostKey`, `isApiWrite`, `isPreferenceWrite` live in `scripts/lib/gate-write-guard.mjs` with their own
+   arms (`node --test scripts/lib/gate-write-guard.test.mjs`). `expectedApi` is `loopback:<port>/backend` when the page
+   reaches its API through its own origin (profiles ON), `loopback:8091` for a direct API. */
+const expectedApi = expectedApiKey(API)
+const pageHost = hostKey(BASE)
+/** The backend a request reached, for the wire control. A page-origin `/api/…` (the dev stub rewrite) is the same proxy. */
+const backendKeyOf = (u) => { const k = apiKeyOf(u); return k && k === pageHost && expectedApi === `${pageHost}/backend` ? expectedApi : k }
 const apiHosts = new Set()
 let inFlight = 'load'
 const armedWrites = []
@@ -328,19 +341,14 @@ const armedWrites = []
  * break the overlay the gate is running inside. A gate that damages the page it is measuring is
  * measuring a page nobody else has.
  *
- * So: a WRITE is a non-GET to the API host under `/api/`. Everything else — dev tooling, telemetry,
- * anything on the web origin — passes through untouched and uncounted.
+ * So: a WRITE is a non-GET whose PATH is an API path. Everything else — dev tooling, telemetry, page
+ * paths, server actions — passes through untouched and uncounted.
+ *
+ * 🔴 A-43 (2026-09-23): the path is `/api/…` OR the page's own proxy `/backend/api/…`, on ANY host. The
+ * rule used to require the API HOST as well, and with business profiles ON every write goes to
+ * `<origin>/backend/api/…` — so a fill-down `PATCH /backend/api/products/bulk` would have reached the
+ * database uncounted. The rule and its arms live in `scripts/lib/gate-write-guard.mjs`.
  */
-const isApiWrite = (method, url) => {
-  if (method === 'GET' || method === 'OPTIONS' || method === 'HEAD') return false
-  if (hostKey(url) !== expectedApi) return false
-  let path
-  try { path = new URL(url).pathname } catch { return false }
-  if (!path.startsWith('/api/')) return false
-  /* The two formula endpoints are POST-shaped READS the sheet needs to paint its ƒ marks. */
-  if (/^\/api\/pim\/formulas\/(batch|preview)$/.test(path)) return false
-  return true
-}
 /**
  * 🔴 A GATE MAY NOT ABORT ITS OWN SETUP.
  *
@@ -362,11 +370,13 @@ const isApiWrite = (method, url) => {
 const revealSaves = []
 let revealAttempts = 0
 let revealing = null
-const isPreferenceWrite = (u) => { try { return /^\/api\/saved-views(\/|$)/.test(new URL(u).pathname) } catch { return false } }
 await page.route('**/*', async (r) => {
   const req = r.request(), m = req.method(), u = req.url()
   const h = hostKey(u)
-  if (h && h !== hostKey(BASE) && !/cloudinary|media-amazon|fonts\./.test(u)) apiHosts.add(h)
+  if (h && h !== pageHost && !/cloudinary|media-amazon|fonts\./.test(u)) apiHosts.add(h)
+  /* A-43: a call through the page's own proxy never leaves the page host, so it is attributed by its API path. */
+  const backend = backendKeyOf(u)
+  if (backend) apiHosts.add(backend)
   /* 🔴 THE STUB IS TESTED FIRST, and the order is the bug it fixes. The formula batch is
      deliberately classified as a READ, so `!isApiWrite` returns early — a stub placed below that
      line is DEAD CODE. Mine was, and it served 0× while the arm reported the sheet had rendered
@@ -993,8 +1003,8 @@ if (RUN.includes('contract')) {
     if (!matrixContract.rows) failures.push(`contract MATRIX: NOT MEASURED — ${matrixContract.error}`)
     const SCOPES_TO_RUN = [
       { key: 'master', url: STUDIO, apiQ: `scope=master&market=${MARKET}&locale=${LOCALE}`, rows: contractRows },
-      { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it`, apiQ: 'scope=channel&channel=AMAZON&market=IT&locale=it', rows: contractRows },
-      { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it`, apiQ: 'scope=channel&channel=EBAY&market=IT&locale=it', rows: contractRows },
+      { key: 'AMAZON·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it`, apiQ: 'scope=channel&channel=AMAZON&market=IT&locale=it', rows: contractRows },
+      { key: 'EBAY·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it`, apiQ: 'scope=channel&channel=EBAY&market=IT&locale=it', rows: contractRows },
       { key: 'MATRIX', url: `${STUDIO}&tab=matrix`, apiQ: null, matrix: true, rows: matrixContract.rows ?? [] },
     ]
     /**
@@ -1028,12 +1038,22 @@ if (RUN.includes('contract')) {
       /* `locked` / `fxblocked` need a column that is not in the landing view. Reveal it ONCE per
          scope through the one Customise dialog, exactly as an operator would. */
       let revealed = false
+      /* A-43 (2026-09-23): a scope that renders NO rows once is not re-waited for every contract row. Measured on the
+         local copy: AMAZON·IT never renders (its account is disconnected there), and 16 rows × the rows wait kept one
+         run silent for 48 minutes. Every remaining row is still reported NOT MEASURED — by name, never skipped. */
+      let scopeBlind = null
       for (const row of scope.rows) {
         const needsReveal = !scope.matrix && (row.state === 'locked' || row.state === 'fxblocked')
         inFlight = `contract/${scope.key}/${row.kind}/${row.state}`
+        if (scopeBlind) { failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — ${scopeBlind}`); continue }
         await page.goto(scope.url, { waitUntil: 'domcontentloaded' })
         const ready = await page.waitForFunction(() => document.querySelectorAll('.ag-row[row-id]').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
-        if (!ready) { failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — no rows rendered`); continue }
+        if (!ready) {
+          scopeBlind = `the scope rendered no rows on its first row (not re-waited)`
+          console.log(`   ·  ${scope.key}: NOT MEASURED — no rows rendered within ${ROWS_MS}ms; the scope's other ${scope.rows.length - 1} row(s) are reported NOT MEASURED without re-waiting`)
+          failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — no rows rendered`)
+          continue
+        }
         let rowId = await page.evaluate(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') ?? document.querySelector('.ag-row[row-id]')?.getAttribute('row-id'))
         /* The three timing states, produced rather than waited for. */
         /* 🔴 `batch` is a 400ms sample of the FORMULA BATCH window, but the column model needs
@@ -1320,8 +1340,8 @@ if (RUN.includes('refused')) {
   const REASON = '"maybe" is not an allowed value for Are batteries included? — choose one of: No, Sì'
   for (const sc of [
     { key: 'master', url: STUDIO },
-    { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it` },
-    { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it` },
+    { key: 'AMAZON·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it` },
+    { key: 'EBAY·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it` },
   ]) {
     inFlight = `refused/${sc.key}`
     /* Loaded once WITHOUT the stub to learn the row id, then again with it — the stub is keyed on a
@@ -1491,8 +1511,8 @@ if (RUN.includes('parity')) {
   console.log(`\n── parity (master·DE, AMAZON·IT, EBAY·IT, MATRIX — one chrome, one footer, one cell)`)
   const PARITY_SCOPES = [
     { key: 'master', url: STUDIO },
-    { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it` },
-    { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it` },
+    { key: 'AMAZON·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it` },
+    { key: 'EBAY·IT', url: `${PAGE_BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it` },
     /* MX.G — the Matrix host: the same `GridSheet` substrate, so the same chrome, footer and cell readings
        must hold. Declared here 2026-09-13 before the page was on screen; MX.F's `--strict` run measures it. */
     { key: 'MATRIX', url: `${STUDIO}&tab=matrix` },
@@ -1685,6 +1705,8 @@ if (failures.length) {
   console.error(`\n❌ OPEN-GESTURE GATE FAILED — ${failures.length} finding(s):`)
   for (const f of failures) console.error(`   · ${f}`)
   if (failures.length > 30) console.error(`   … and ${failures.length - 30} more`)
+  /* A focused run is not the gate (see the banner) — it never reports to the runner. */
+  if (!ONLY) writeGateReport('editor-open', 1, failures)
   process.exit(1)
 }
 const total = results.reduce((a, r) => a + r.n, 0)
@@ -1694,4 +1716,5 @@ if (RUN.includes('geometry')) parts.push(`${geometryMeasured} geometry readings 
 if (RUN.includes('contract')) parts.push(`${contractChecked} contract assertions read from ${CONTRACT_DOC} across three sheet scopes and the Matrix host`)
 if (RUN.includes('parity')) parts.push(`${parityChecked} parity readings equal to master's across the two channel scopes and the Matrix host`)
 if (RUN.includes('refused')) parts.push(`${refusedChecked} refused-cell readings from a stubbed wire (no write, no fixture)`)
+if (!ONLY) writeGateReport('editor-open', 0, [])
 console.log(`\n✅ ${ONLY ? 'FOCUSED BLOCK PASSED (not the full gate)' : 'OPEN-GESTURE GATE PASSED'} — ${parts.join('; ')}. ${armedWrites.length} API writes armed, ${expectedHeld.length} expected saves held open, negative control held.`)

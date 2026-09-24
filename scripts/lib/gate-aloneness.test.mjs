@@ -98,3 +98,16 @@ test('acquireGateLock refuses a live holder and names it; reclaims a dead one; r
   assert.match(releaseGateLock(lock), /held by pid 12345/)
   assert.equal(existsSync(lock), true)
 })
+
+/* 🔴 A-43 (2026-09-23): macOS `pgrep` hides itself AND ITS ANCESTORS unless `-a`, so the wrapper's witness could
+   never count the wrapper and it refused on every run since 09-13. A probe whose argv carries a unique token asks
+   the REAL witness to count it: with `-a` it sees itself (≥ 1); without `-a` it reads 0 — red. */
+test('the witness sees the process that asks (the wrapper can count itself)', async () => {
+  const { execFileSync } = await import('node:child_process')
+  const { randomBytes } = await import('node:crypto')
+  const token = `selftest-${randomBytes(6).toString('hex')}`
+  const out = execFileSync(process.execPath, ['scripts/lib/gate-aloneness.mjs', '--witness', token], { encoding: 'utf8' })
+  const { witness } = JSON.parse(out.trim().split('\n').pop())
+  assert.equal(typeof witness, 'number', `the witness errored (${witness}) — not measured`)
+  assert.ok(witness >= 1, `witness ${witness}: pgrep cannot see the asking process`)
+})

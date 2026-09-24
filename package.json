@@ -20,6 +20,7 @@
     "tokens:gen:factory": "tsx apps/factory/src/design-system/tools/generate-tokens-css.ts",
     "tokens:check:factory": "tsx apps/factory/src/design-system/tools/generate-tokens-css.ts --check",
     "grid:conformance": "node scripts/check-grid-chrome.mjs",
+    "gates:browser": "node scripts/run-browser-gates.mjs --all",
     "grid:parity": "node scripts/check-workspace-parity.mjs",
     "layout:v2": "node scripts/check-layout-v2.mjs",
     "grid:modules": "node scripts/check-grid-modules.mjs",

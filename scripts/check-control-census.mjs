@@ -49,6 +49,7 @@
  * (refused), not 0 — "I looked at no surfaces" must never read as "every surface passed".
  */
 import { authenticatedStudioPage } from './studio-browser-auth.mjs'
+import { writeGateReport } from './lib/gate-report.mjs'
 import { assertVariantsSelection } from './studio-variants-selection.mjs'
 import { chromium } from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -146,7 +147,23 @@ const PANEL_TIERS = new Set([24, 26, 28, 30])
 
 const ONLY = (process.env.CENSUS_ONLY ?? '').trim()
 
-const STUDIO = `${BASE}/products/${PRODUCT}/edit/studio`
+/* A-43 (2026-09-23): with business profiles ON an unscoped `/products/…` redirects to the profile picker; under
+   `studio-gate-session.mjs` the surfaces open in the session user's workspace (`STUDIO_WORKSPACE`). */
+const WORKSPACE = (process.env.STUDIO_WORKSPACE ?? '').trim()
+const PAGE_BASE = WORKSPACE ? `${BASE}/w/${encodeURIComponent(WORKSPACE)}` : BASE
+const STUDIO = `${PAGE_BASE}/products/${PRODUCT}/edit/studio`
+/** Every file whose change can invalidate this reading — read by `scripts/run-browser-gates.mjs` to decide whether a push
+ *  must run this gate. A path ending `/` covers everything under it. */
+const STAMP_FILES = [
+  'apps/web/src/app/products/[id]/edit/_studio/',
+  'apps/web/src/design-system/components/',
+  'apps/web/src/design-system/primitives/',
+  'apps/web/src/design-system/patterns/',
+  'apps/web/src/design-system/styles/',
+  'scripts/check-control-census.mjs',
+  'scripts/studio-browser-auth.mjs',
+  'scripts/studio-variants-selection.mjs',
+]
 const ALL_SURFACES = [
   { key: 'master · sheet', url: STUDIO, kind: 'sheet' },
   { key: 'amazon·DE · sheet', url: `${STUDIO}?scope=AMAZON&market=DE&locale=de`, kind: 'sheet' },
@@ -496,10 +513,14 @@ page.on('console', (m) => {
 let exit = 0
 let drawerUrl = null
 const summary = []
+/** Every itemised failure, for the runner's report (`scripts/lib/gate-report.mjs`). */
+const gateFailures = []
+/** A surface-level red line: shown in the summary AND itemised for the report — a NOT MEASURED surface is a failure. */
+const red = (line) => { summary.push(line); gateFailures.push(line.replace(/^✗ /, '')) }
 for (const s of SURFACES) {
   let url = s.url
   if (s.kind === 'drawer') {
-    if (!drawerUrl) { summary.push(`✗ ${s.key}: no row id captured from the sheet — NOT MEASURED`); exit = 1; continue }
+    if (!drawerUrl) { red(`✗ ${s.key}: no row id captured from the sheet — NOT MEASURED`); exit = 1; continue }
     url = drawerUrl
   }
   thrown = []; failedRequests = []; consoleErrors = []
@@ -566,7 +587,7 @@ for (const s of SURFACES) {
         : consoleErrors.length
           ? `no throw and no failed request, but ${consoleErrors.length} console error(s), first: ${consoleErrors[0].slice(0, 160)}`
           : `did not render within ${ROWS_MS} ms, with nothing thrown, no failed request and no console error — a slow load, or the surface is not built yet`
-    summary.push(`✗ ${s.key}: NOT MEASURED — ${why}`)
+    red(`✗ ${s.key}: NOT MEASURED — ${why}`)
     exit = 1
     continue
   }
@@ -579,7 +600,7 @@ for (const s of SURFACES) {
     if (familyRead) {
       const family = await familyRead
       if (!family.ok) {
-        summary.push(`✗ ${s.key}: family read failed — NOT MEASURED`); exit = 1; continue
+        red(`✗ ${s.key}: family read failed — NOT MEASURED`); exit = 1; continue
       }
       if (family.body.axes?.length) {
         await page.getByRole('button', { name: s.open.label }).waitFor({ state: 'visible', timeout: ROWS_MS })
@@ -612,18 +633,18 @@ for (const s of SURFACES) {
       return { ok: true }
     }, src)
     if (!found.ok && found.why === 'refused') {
-      summary.push(`✗ ${s.key}: the control matching ${s.open.label} REFUSED the press (${found.how}) — NOT MEASURED, and this is NOT evidence the surface is unbuilt. It says: "${found.reason}".`)
+      red(`✗ ${s.key}: the control matching ${s.open.label} REFUSED the press (${found.how}) — NOT MEASURED, and this is NOT evidence the surface is unbuilt. It says: "${found.reason}".`)
       exit = 1
       continue
     }
     if (!found.ok) {
-      summary.push(`✗ ${s.key}: no control matching ${s.open.label} on the page — NOT MEASURED. Buttons seen: ${found.saw.join(' · ') || '(none)'}`)
+      red(`✗ ${s.key}: no control matching ${s.open.label} on the page — NOT MEASURED. Buttons seen: ${found.saw.join(' · ') || '(none)'}`)
       exit = 1
       continue
     }
     const opened = await page.waitForFunction((sel) => !!document.querySelector(sel), s.open.witness, { timeout: 15000 }).then(() => true).catch(() => false)
     if (!opened) {
-      summary.push(`✗ ${s.key}: pressed ${s.open.label} but \`${s.open.witness}\` never appeared within 15000 ms — NOT MEASURED`)
+      red(`✗ ${s.key}: pressed ${s.open.label} but \`${s.open.witness}\` never appeared within 15000 ms — NOT MEASURED`)
       exit = 1
       continue
     }
@@ -639,16 +660,16 @@ for (const s of SURFACES) {
   const { fails, seen } = judge(s, c)
   if (s.kind === 'sheet' && s.key.includes('variants')) fails.push(...await assertVariantsSelection(page))
   const n = c.controls.length
-  if (n === 0) { summary.push(`✗ ${s.key}: 0 controls seen — vacuous, NOT MEASURED`); exit = 1; continue }
+  if (n === 0) { red(`✗ ${s.key}: 0 controls seen — vacuous, NOT MEASURED`); exit = 1; continue }
   summary.push(`${fails.length ? '✗' : '✓'} ${s.key}: ${n} controls, ${seen.size} signatures, fab ${c.fab ? 'PRESENT' : 'absent'}${fails.length ? `, ${fails.length} fail(s)` : ''}`)
   for (const [sig, cnt] of [...seen].sort()) console.log(`   ${String(cnt).padStart(3)} × ${sig}`)
-  for (const f of fails) { console.log(`   ✗ ${f}`); exit = 1 }
+  for (const f of fails) { console.log(`   ✗ ${f}`); exit = 1; gateFailures.push(`${s.key}: ${f}`) }
   if (s.kind === 'sheet') {
     for (const width of [320, 375, 640, 768, 1024, 1280, 1440, 1728, 2048]) {
       await page.setViewportSize({ width, height: 906 })
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
       const clipped = await page.evaluate(toolbarLayoutInPage)
-      for (const failure of clipped) { console.log(`   ✗ ${s.key} at ${width}px: ${failure}`); exit = 1 }
+      for (const failure of clipped) { console.log(`   ✗ ${s.key} at ${width}px: ${failure}`); exit = 1; gateFailures.push(`${s.key} at ${width}px: ${failure}`) }
     }
     await page.setViewportSize({ width: 1440, height: 900 })
   }
@@ -658,4 +679,6 @@ await browser.close()
 console.log('')
 for (const l of summary) console.log(l)
 console.log(exit ? '❌ control census: RED' : '✅ control census: green — every studio control is a DS control on its tier')
+/* A run that looked at only some surfaces (`CENSUS_ONLY`) is not the gate — it never reports to the runner. */
+if (!ONLY) writeGateReport('control-census', exit ? 1 : 0, exit && gateFailures.length === 0 ? ['census RED with no itemised failure'] : gateFailures)
 process.exit(exit)

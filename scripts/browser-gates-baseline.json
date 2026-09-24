@@ -1,0 +1,35 @@
+{
+  "gates": {
+    "grid-chrome": [],
+    "editor-open": [
+      "contract AMAZON·IT · text/fresh: NOT MEASURED — no rows rendered",
+      "contract AMAZON·IT · text/batch: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · text/flush: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · longtext/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · longtext/batch: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · longtext/flush: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · number/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · number/batch: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · number/flush: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · select/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · select/batch: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · select/flush: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · text/locked: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · text/fxblocked: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · list/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "contract AMAZON·IT · measure/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
+      "refused AMAZON·IT: NOT MEASURED — no rows rendered",
+      "parity AMAZON·IT: NOT MEASURED — no rows rendered"
+    ],
+    "control-census": [
+      "amazon·DE · sheet: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",
+      "amazon·DE · errors: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",
+      "amazon·DE · analytics: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",
+      "amazon·DE · activity: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",
+      "amazon·DE · images: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",
+      "amazon·DE · drawer: no row id captured from the sheet — NOT MEASURED",
+      "amazon·DE · matrix: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)"
+    ]
+  },
+  "recordedAt": "2026-09-24T01:18:49.620Z"
+}
