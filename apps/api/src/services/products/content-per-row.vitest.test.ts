@@ -103,6 +103,14 @@ it('C5 the sheet route itself (PATCH /products/bulk, real handler): the mixed re
   const Fastify = (await import('fastify')).default
   const { default: productsRoutes } = await import('../../routes/products.routes.js')
   const app = Fastify()
+  // What production has and this bare app lacked (B1d): the global workspace preHandler (`lib/workspace-hook.ts`
+  // `createWorkspaceHook`) enters the request's business with `withWorkspace(scope, done)` — the CALLBACK form, so the whole
+  // handler runs inside it — and does nothing when profiles are OFF. Without it, under profiles ON the handler had no
+  // business: the contract load threw "Select a business profile." and every content row was refused.
+  app.addHook('preHandler', (_request, _reply, done) => {
+    if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') { done(); return }
+    withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, done)
+  })
   await app.register(productsRoutes)
   await app.ready()
   try {

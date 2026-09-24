@@ -7776,3 +7776,10 @@ without one); T1's two barrel export lines were required (the api-guard check fa
 `DetailPopover`'s live focus and *"Go to"*: the browser gates at the next push are their first measurement.
 🔴 **Blocking the push (not these lanes):** B1's committed `content-per-row` C5 arm fails with profiles ON (every content row refused
 *"Could not load the sheet label and requirements"*); B1 is proving whether it is the fixture or a product defect.
+- ✅ **The push blocker, resolved — the FIXTURE, not the product (B1, evidence):** with profiles ON the test's bare Fastify app had no
+  business context inside the handler (`getSheetColumns` called 0 times; the route logged *"Attribute write contract unavailable ::
+  Select a business profile."*); production runs every handler inside the request's business through the global hook
+  (`lib/workspace-hook.ts`, installed at `index.ts:68`). The test now registers a `preHandler` of the same shape; ON → 2 calls inside
+  the business (master IT 25 columns, channel IT 8) and C5 green. Re-run here: 5/5 ON, 5/5 OFF. Mutation: a hook that enters no
+  business → C5 red ON. Limit, stated: the hook stands in for sign-in + membership; it proves the handler under a business, not the
+  sign-in path.
