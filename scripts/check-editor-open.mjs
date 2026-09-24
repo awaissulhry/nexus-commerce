@@ -1594,6 +1594,9 @@ if (RUN.includes('parity')) {
         floatingFilterRow: !!document.querySelector('.ag-floating-filter'),
         /* The footer minus its row count — the hint, the `?`, whatever occupies the note slot. */
         footerNote: footer ? footer.replace(/^\d+ rows?\s*/, '') : null,
+        /* The channel's availability / connection note (SheetFooterNote → GridSheetNote kind="provenance") — when it occupies the
+           slot, the key hint is not on screen. Read for the footer rule below; never compared as a reading of its own. */
+        presenceNote: availabilityNote ? (availabilityNote.getAttribute('title') || availabilityNote.textContent || '').replace(/\s+/g, ' ').trim() || 'present' : null,
         availabilityFooter: availabilityReason ? {
           reason: availabilityReason,
           announced: availabilityNote?.getAttribute('aria-live') === 'polite' && availabilityNote?.getAttribute('title') === availabilityReason,
@@ -1709,16 +1712,18 @@ if (RUN.includes('parity')) {
       if (key === 'master') continue
       for (const k of Object.keys(ref)) {
         if (k === 'availabilityFooter') continue // state evidence, not a shared geometry reading
+        if (k === 'presenceNote') continue // the note is evidence for the footer rule, not a shared reading
         if (key === 'MATRIX' && ['variationTheme', 'footerNote'].includes(k)) continue // asserted against the Matrix design above
         // Presence policy replaces keyboard hints with the selected disabled scope's
         // explanation. Require that exact accessible reason in the shared status
         // primitive; arbitrary footer differences still fail the comparison.
-        // A channel whose account NEEDS RECONNECTING stays editable but shows the account note in the footer instead of the
-        // key hint (`presence/connection.ts` connectionScopePolicy). The hint is then not on screen, so its parity cannot be
-        // read: NOT MEASURED (a blind spot, baselined), never green and never a false defect. Seen 2026-09-24 on EBAY·IT: the
-        // runner blanks the production-only eBay keys, so the local eBay token cannot be refreshed once it expires.
-        if (k === 'footerNote' && typeof r.footerNote === 'string' && /account needs reconnecting\. Content editing remains available/.test(r.footerNote)) {
-          failures.push(`parity ${key} · footerNote: NOT MEASURED — the channel account needs reconnecting here, so the footer shows the account note, not the key hint`)
+        // A channel whose availability / connection note occupies the footer (`presence/connection.ts` connectionScopePolicy:
+        // "needs reconnecting", a health refusal such as "Connection health could not be established from this report.") stays
+        // editable, but the key hint is not on screen, so its parity cannot be read: NOT MEASURED (a blind spot, baselined), never
+        // green and never a false defect. The note is found by its element (GridSheetNote kind="provenance"), not by its words —
+        // 2026-09-24: EBAY·IT showed "needs reconnecting", then AMAZON·IT "Connection health could not be established".
+        if (k === 'footerNote' && r.presenceNote && !r.availabilityFooter) {
+          failures.push(`parity ${key} · footerNote: NOT MEASURED — the channel's availability note occupies the footer, so the key hint is not shown`)
           continue
         }
         if (k === 'footerNote' && r.availabilityFooter) {

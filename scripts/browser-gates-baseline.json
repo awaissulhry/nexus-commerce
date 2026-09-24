@@ -20,7 +20,8 @@
       "contract AMAZON·IT · measure/fresh: NOT MEASURED — the scope rendered no rows on its first row (not re-waited)",
       "refused AMAZON·IT: NOT MEASURED — no rows rendered",
       "parity AMAZON·IT: NOT MEASURED — no rows rendered",
-      "parity EBAY·IT · footerNote: NOT MEASURED — the channel account needs reconnecting here, so the footer shows the account note, not the key hint"
+      "parity EBAY·IT · footerNote: NOT MEASURED — the channel's availability note occupies the footer, so the key hint is not shown",
+      "parity AMAZON·IT · footerNote: NOT MEASURED — the channel's availability note occupies the footer, so the key hint is not shown"
     ],
     "control-census": [
       "amazon·DE · sheet: NOT MEASURED — the page did not throw; # REQUEST(S) FAILED, first: Failed to load resource: the server responded with a status of # (Bad Request) — the surface is not broken, its data did not arrive (a browser gate session is `anon`)",

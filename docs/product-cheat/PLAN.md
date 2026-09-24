@@ -7795,3 +7795,113 @@ flagged = total − filled still holds. **Mutations 3/3 red.** R1: related suite
 fails (4 tests) — the same on the old code, already on the known-failing list; the profiles-ON ratchet: nothing new, nothing worse.
 **Effect on production:** after the merge, the next nightly recompute lowers readiness % where a non-Italian coordinate holds only
 Italian text — the true number. *Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert; the rows are derived.
+
+## A-51 — Step 4.3 #5, the AAA sweep: the palette to reach 7:1 everywhere. FOR YOUR RULING (two questions). Nothing built.
+
+*Drafted by sub-agent AA1 (read only; every ratio measured with `check-nds-contrast.mjs --tokens <scratch copy>`; the real tokens never edited).*
+
+2026-09-24. Rule R-49: strict 7:1 for ALL text (text-3 and pill text included), light AND dark. Instrument: `scripts/check-nds-contrast.mjs`.
+Scratch copies: `scratchpad/tokens-aa1.css` (web), `scratchpad/tokens-aa1-factory.css` (factory); solver `scratchpad/aa1_solve.py`
+(hue + HSL saturation kept, the smallest lightness move that clears ≥ 7.05 on EVERY ground the token is paired with).
+
+### 1. Result of the scratch run (the whole proposal applied)
+
+| Palette | Today (pairs · below 7:1 · below 4.5:1) | With the proposal |
+|---|---|---|
+| web `tokens.css` | 90 · **49** · **10** | 90 · **0** · **0** (controls ✓ 15.48; 0 unresolved) |
+| factory `tokens.css` (same values for these tokens + 14 own pairs) | 104 · 56 · 12 | 104 · **0** · **0** |
+| `check-grid-swatch-contrast.mjs --tokens-css <web scratch>` | ✓ | ✓ every cycle hue clears 3:1 on all 5 row grounds (light) |
+
+### 2. The changes — per token (worst ratio over every ground it is paired with)
+
+| Theme | Token | Today → proposed | Worst before → after | Grounds it must clear |
+|---|---|---|---|---|
+| light | `--nds-text-2` | `var(--nds-grey-600)` #5b6573 → **`var(--nds-grey-700)` #3a4452** (a ramp step) | 5.22 → **8.71** | bg, surface, raised, sunken, hover; pill-neutral-bg (= grey-100) |
+| light | `--nds-text-3` | #7e8796 → **#48505b** | 3.20 → **7.20** | the five surfaces |
+| light | `--nds-text-muted` | #626c7b → **`var(--nds-text-3)`** (#48505b) | 4.69 → **7.20** | the five surfaces |
+| light | `--nds-text-link` | #1a60c4 → **`var(--nds-blue-800)` #134da3** (ramp) | 5.27 → **7.08** | the five surfaces |
+| light | `--nds-primary` | `var(--nds-blue-600)` #1f6fde → **`var(--nds-blue-800)` #134da3** | as text 4.23 → **7.08**; white label on it 4.79 → **8.02** | five surfaces + `--nds-text-inverse` on it |
+| light | `--nds-pill-success-fg` | `var(--nds-blue-900)` #0a4ba8 → **#094397** (bg kept — a paler bg would vanish on the blue-50 selected row) | 6.37 → **7.28** | `--nds-pill-success-bg` #d2e6fc |
+| light | `--nds-amber-text` (palette `amber.text`) | #9a6700 → **#6b4800** | 4.39 → **7.42** | `--nds-amber-soft` #fdf3d3 |
+| dark | `--nds-text-2` (→ `text-muted`, `pill-neutral-fg` follow by alias) | #aab6c2 → **#c3ccd6** | 6.32 → **8.03** | five surfaces + pill-neutral-bg #26323f |
+| dark | `--nds-text-3` | #8a94a6 → **#b3bac6** | 4.62 → **7.24** | five surfaces |
+| dark | `--nds-text-link` (→ `pill-success-fg` follows) | #8ab6f0 → **#9cc2f3** | 6.42 → **7.31** | five surfaces + pill-success-bg #1c2f4d |
+| dark | `--nds-primary` | #6d9ee8 → **#98bbf0** | as text 5.19 → **7.20**; `text-inverse` on it 5.84 → **8.11** | five surfaces + text-inverse on it |
+| dark | `--nds-amber-soft` / `--nds-amber-text` | NOT DEFINED in `.dark` (dark paints the light chip, 4.39) → **#3a2e12 / #f2bc79** (the existing dark warning pair) | 4.39 → **7.75** | each other |
+
+### 3. Found on the way — NOT measured by the ratchet, must ship with the sweep
+
+- 🔴 **Hover inverts:** `--nds-primary-hover: var(--nds-blue-700)` (#1a60c4, `tokens.css:91`) is LIGHTER than the proposed primary
+  (#134da3). Proposed light hover **#0f4290** (white on it 9.54). And `.dark` defines no primary-hover, so dark buttons hover to
+  #1a60c4 with dark text `#14223a` on it = **2.66:1** TODAY (measured; pre-existing, not in the ratchet). Proposed dark `--nds-primary-hover` **#b3cdf4**
+  (text-inverse on it 9.82). The checker has no hover/pressed pairs — a gap to add (one role: text-inverse on primary-hover).
+- **Grid chrome spec pins today's text-2:** `design-system/grid/spec.json:14` `"stripFg": "#5b6573"`, `:19` `"stripFg": "#aab6c2"`
+  → must become #3a4452 / #c3ccd6 in the SAME change, or `check-grid-chrome` goes red (a declared spec update, not a hidden one).
+- `--nds-focus-rgb: 31 111 222` (= old #1f6fde, 12 % alpha ring): decorative; align to 19 77 163 or leave — stated either way.
+- **Not measured at all (residue, named):** `--nds-rail-text`, `--nds-stale-text`, `--nds-wsgrid-text` (the script: "no derivable
+  ground"); `--nds-rail-text-2` is a hard-coded #5b6573 (`css-vars.ts:105`) outside the pairs; the legacy `globals.css` palette
+  (`check-contrast.mjs`) is out of scope.
+
+### 4. Where each token is really defined (never edit the generated `tokens.css`)
+
+`styles/tokens.css` is GENERATED (header: *"Source: tokens/css-vars.ts (+ tokens/colors.ts). Regenerate: `npm run tokens:gen`"*).
+- web `tokens/css-vars.ts`: text-2 `:140`, text-3 `:147`, text-link `:156`, primary `:171`, text-muted `:238`, pill-success-fg `:314`,
+  the dark block (text-2 `:558`, text-3/-link/-primary beside it); ADD dark `--nds-amber-soft`, `--nds-amber-text`,
+  `--nds-primary-hover`; the light `--nds-primary-hover`. `tokens/colors.ts:72` `amber.text` → #6b4800.
+- factory: its OWN `apps/factory/src/design-system/tokens/css-vars.ts` + `colors.ts` (they differ from web's: `colors.ts` line 83,
+  `css-vars.ts` line 7) — the same values, then `npm run tokens:gen:factory`; the hook's "factory tokens.css drift" check proves it.
+- Then `npm run tokens:gen` (web) and the checks: `tokens:check`, `tokens:check:factory`, `check-token-resolution`, `token-guard`.
+
+### 5. The ratchet — exact steps
+
+1. The sweep commit sets the hook line to `--max-failures 0 --max-aa-failures 0` (web) — from 49 / 10.
+2. Add the factory palette to the same stage: `node scripts/check-nds-contrast.mjs --tokens apps/factory/src/design-system/styles/tokens.css --max-failures 0 --max-aa-failures 0`.
+3. Add the hover role to the script (text-inverse on primary-hover) so the inversion above can never return unmeasured.
+Mutations for the gate: one token restored to its old hex → red at 0/0; the dark amber pair removed → red.
+
+### 6. What visibly changes (before → after)
+
+| | Light | Dark |
+|---|---|---|
+| secondary text (`text-2`) | #5b6573 → #3a4452 (darker) | #aab6c2 → #c3ccd6 (lighter) |
+| tertiary + muted (`text-3`, `text-muted`) | #7e8796 / #626c7b → #48505b (much darker) | #8a94a6 → #b3bac6 (lighter) |
+| links | #1a60c4 → #134da3 | #8ab6f0 → #9cc2f3 |
+| primary buttons, selected tab, brand blue | #1f6fde → #134da3 (clearly darker brand blue) | #6d9ee8 → #98bbf0 (paler) |
+| success pill text | #0a4ba8 → #094397 (barely) | follows the link |
+| amber warning chip (studio images tab) | #9a6700 → #6b4800 text (brown) | a real dark chip: #3a2e12 bg, #f2bc79 text (today the light chip) |
+
+🟠 **The hierarchy compresses** (the cost of strict 7:1): light text #1c2530 · text-2 #3a4452 · text-3 #48505b — text-2 and text-3 sit close;
+text-3 stays distinguishable mainly by SIZE and weight (its DS role: labels/metadata). The same in dark (#e7ebf1 · #c3ccd6 · #b3bac6).
+
+### 7. Risks
+
+- The brand blue darkens on 383 primary uses (the `blue-600` usage count in `colors.ts`); screenshots and any test that pins
+  `#1f6fde` change — search `1f6fde` / `31 111 222` before landing (the grid spec above is one).
+- `--nds-info` stays `blue-600` (not in the pairs) — it will no longer match the primary blue; decide with Q1.
+- A generated token edited without the generator is a silent no-op (memory: radius restated in css-vars.ts) — regenerate both apps.
+- An alias frozen on a descendant (memory) — unchanged by this sweep (the legacy `--text-*` aliases are declared once, at `:root`).
+
+### 8. For the Owner (two questions)
+
+1. **Approve the darker brand blue** (#1f6fde → #134da3 light; #6d9ee8 → #98bbf0 dark) — required for white button labels at 7:1
+   (today 4.79), not only for blue text. — **Recommend: approve**; it is the one change strict AAA forces on the brand. (Alternative:
+   exempt button labels ≥ 14px bold as "large text" at 4.5:1 — WCAG allows it, but R-49 ruled strict for all text.)
+2. **Accept the compressed grey hierarchy** (text-2 and text-3 close in both themes). — **Recommend: accept**; the DS already uses
+   size/weight for text-3's role, and 7:1 leaves no room for a lighter tertiary grey.
+
+| # | Question | Ruling (2026-09-24 11:41 UTC, forty-second set) |
+|---|---|---|
+| **R-65** | A-51 Q1 — the darker brand blue | ✅ **Approved:** light `--nds-primary` / links → `#134da3` (blue-800), dark → the paler proposed values; hover colours fixed with them (a new hover check) |
+| **R-66** | A-51 Q2 — secondary and tertiary text close in colour | ✅ **Accepted:** strict 7:1 for all text; text-3 stays distinct by size and weight (its DS role: labels, metadata) |
+
+### The first browser measurement of the new UI (push, 2026-09-24 11:34–~12:10 UTC): REFUSED — a real regression caught
+
+- ✅ grid chrome 0 keys · ✅ **control census: 0 failure keys, 7 GONE** — the Amazon·DE surfaces are now measured and green (the
+  runner's `NEXUS_AMAZON_ENV_TOKEN=off` left the local Amazon row active, so the Amazon scopes render) · T1's and C1's census arms green.
+- 🔴 **editor-open: 37 NEW keys.** **36 are a REAL regression in E1's `6d1a6c080`:** pressing `=` on a text (`brand`) or number
+  (`basePrice`) cell on master opens the VALUE popup instead of the formula editor (#775), and on number cells the new number rule
+  answers "Numbers only — the value was kept." — it swallows `=`. Sent back to E1 (prove red first, then fix).
+- **1 is an environment note, classified:** AMAZON·IT now renders rows, and its footer shows its connection note (*"Connection health
+  could not be established from this report."*). The footer rule now finds ANY channel availability note by its element
+  (`GridSheetNote kind="provenance"`), not by eBay's words, and records NOT MEASURED; the baseline's eBay-specific key is replaced by
+  one generic key per scope (EBAY·IT, AMAZON·IT). (11:57 UTC)
