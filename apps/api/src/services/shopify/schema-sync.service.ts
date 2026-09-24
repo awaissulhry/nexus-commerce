@@ -3,6 +3,7 @@ import { invalidateShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { shopifyAdmin } from './admin-client.js'
+import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { collectShopifyPages } from './linked-products-gateway.js'
 import { resolveConnection } from '../connection-resolver.service.js'
 import { getChannelApp } from '../cx/apps.service.js'
@@ -16,6 +17,9 @@ const route = '/webhooks/shopify/attributes/:workspaceId/:accountId'
 
 /** Register only this account's schema notifications; never modify another subscription. */
 export async function ensureShopifySchemaSubscriptions(accountId: string): Promise<{ live: boolean; reason?: string }> {
+  // A subscription is a Shopify write. While Shopify writes are off it can only fail (a 502 on every Shopify page
+  // load, measured 2026-09-24); the store's field list is still refreshed by the page's periodic read.
+  if (getShopifyPublishMode() !== 'live') return { live: false, reason: 'Live field updates start when Shopify publishing is on. Store fields are refreshed while this page is open.' }
   // 🔴 2026-09-21 — one accessor for all three readers; see public-api-origin.ts.
   const resolved = publicApiOrigin()
   if ('error' in resolved) return { live: false, reason: `${resolved.error} Shopify live notifications need it.` }

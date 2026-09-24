@@ -73,6 +73,9 @@ export { CellSaveReason } from './cells'
 // AM.1 (2026-09-05) — the list and measure shapes, as pure rules both builders and both renderers call.
 export { asList, asMeasure, isMeasure, isEmptyShape, isShaped, formatList, formatMeasure, listSummary, unitSymbol, shapeTooltipLine, shapeValidation, LIST_SEPARATOR, type CellShape, type MeasureValue, type ShapeColumnLike } from './shapeFormat'
 export { ListChipValue, MeasureCellValue, ShapeValue } from './shapeCells'
+// 2026-09-24 — a store field drawn by its type (Shopify's metafield type vocabulary): the rules and the renderer.
+export { metafieldDisplay, referenceKindOf, isReferenceType, METAFIELD_INVALID_TEXT, type MetafieldDisplay, type MetafieldDisplayOptions, type MetafieldReference, type MetafieldReferenceKind } from './metafieldDisplay'
+export { MetafieldValue, type MetafieldValueProps } from './MetafieldValue'
 // MX.G (2026-09-13) — the eight Matrix cell kinds: the rules (pure, tested) and the renderers that draw them.
 export {
   MATRIX_CELL_COPY, MATRIX_CELL_CLASSES, MATRIX_FILLABLE_KINDS, MATRIX_DASH, MATRIX_OVERSOLD_SENTENCE,

@@ -49,8 +49,10 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     const kind = ['number_integer', 'number_decimal', 'money'].includes(baseType) ? 'number'
       : baseType === 'boolean' ? 'boolean' : ['date', 'date_time'].includes(baseType) ? 'date'
       : ['multi_line_text_field', 'rich_text_field', 'json'].includes(baseType) ? 'longtext' : 'text'
-    const group = { key: info.group.toLowerCase().replace(/ /g, '_'), label: info.group, channelLabel: null,
-      order: ['General', 'Publishing', 'Pricing', 'Inventory', 'Shipping', 'SEO', 'Metafields', 'Category Metafields'].indexOf(info.group) }
+    // Shopify's admin keeps product, variant and category metafields apart; the sheet groups them the same way.
+    const groupLabel = !info.definition ? info.group : info.group === 'Category Metafields' ? 'Category metafields' : info.owner === 'PRODUCTVARIANT' ? 'Variant metafields' : 'Product metafields'
+    const group = { key: groupLabel.toLowerCase().replace(/ /g, '_'), label: groupLabel, channelLabel: null,
+      order: ['General', 'Publishing', 'Pricing', 'Inventory', 'Shipping', 'SEO', 'Product metafields', 'Variant metafields', 'Category metafields'].indexOf(groupLabel) }
     const entry = field(key, info.label, 'content', {
       attribute: info.id, kind, group, shopifyField: info,
       shape: info.cardinality, cardinality: { min: 0, max: info.cardinality === 'list' ? null : 1 },

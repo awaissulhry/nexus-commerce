@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const build = vi.hoisted(() => vi.fn())
-vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: build }))
+vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: build, lacksShopifyStoreFields: (set: { schemaMissing?: string[] }) => !!set.schemaMissing?.includes('SHOPIFY:*') }))
 vi.mock('../../lib/workspace-context.js', () => ({ workspaceIdForQuery: () => 'workspace' }))
 vi.mock('../../lib/workspace-cache.js', () => ({ WorkspaceCache: Map }))
 import { clearStudioColumnCache, getStudioColumns } from './studio-columns.js'
@@ -20,5 +20,13 @@ it('evicts a failed account build for retry', async () => {
   build.mockRejectedValueOnce(new Error('temporary')).mockResolvedValue({})
   await expect(getStudioColumns(input)).rejects.toThrow('temporary')
   await expect(getStudioColumns(input)).resolves.toEqual({})
+  expect(build).toHaveBeenCalledTimes(2)
+})
+it('serves a Shopify set built without the store fields once and never keeps it (2026-09-24)', async () => {
+  const input = { accountId: 'store', market: 'GLOBAL', productTypes: [], onlyChannels: ['SHOPIFY'] }
+  build.mockResolvedValueOnce({ schemaMissing: ['SHOPIFY:*'] }).mockResolvedValue({ schemaMissing: [] })
+  await expect(getStudioColumns(input)).resolves.toEqual({ schemaMissing: ['SHOPIFY:*'] })
+  await expect(getStudioColumns(input)).resolves.toEqual({ schemaMissing: [] })
+  await getStudioColumns(input)
   expect(build).toHaveBeenCalledTimes(2)
 })
