@@ -191,6 +191,120 @@ export class ProductBulkError extends Error {
   }
 }
 
+type SheetColumnRow = Map<string, import('../pim/sheet-columns.service.js').SheetColumn>
+
+/**
+ * One CHANNEL coordinate's column contract, per row — the columns the sheet shows on that scope, with each row's category
+ * and editability applied. The ONE builder for it: the request's own channel scope reads it, and so does the master bullet
+ * cap (R-58), which asks every coordinate a product is listed on. A second copy would be two answers to "what does this
+ * channel allow".
+ */
+async function channelRowContract(
+  ctx: { channel: SheetChannel; marketplace: string; locale?: string; accountId: string | null; aliasKey?: string },
+  ids: string[],
+  owners: Array<{ id: string; parentId: string | null; isParent: boolean; productType: string | null }>,
+) {
+  const { getSheetColumns } = await import('../pim/sheet-columns.service.js')
+  const { productCategoryContext } = await import('../pim/product-category-context.js')
+  const { columnForCategory, columnApplies } = await import('@nexus/shared/master-sheet')
+  const productTypes = [...new Set(owners.map((r) => r.productType).filter((v): v is string => !!v))]
+  const context = await productCategoryContext(ids, ctx.channel, ctx.marketplace, ctx.accountId)
+  const channelSet = await getSheetColumns({
+    locale: ctx.locale,
+    accountId: context.connectionId,
+    market: ctx.marketplace, productTypes: ctx.channel === 'AMAZON' ? context.categories : productTypes,
+    ebayCategoryIds: ctx.channel === 'EBAY' ? context.categories : [], includeEmptyChannels: true,
+    etsyCategoryIds: ctx.channel === 'ETSY' ? context.categories : [],
+    onlyChannels: [ctx.channel], scopeKind: 'channel',
+  })
+  const label = channelSet.coordinates.find((c) => c.channel === ctx.channel)?.label
+  const rows = new Map<string, SheetColumnRow>()
+  const categories = new Map<string, string | null>()
+  for (const id of ids) {
+    const aliasKey = ctx.aliasKey ?? ''
+    const category = context.byRow.get(`${id}:${aliasKey}`)?.channelCategoryId ?? context.defaults[id]?.channelCategoryId ?? null
+    categories.set(id, category)
+    const row: SheetColumnRow = new Map()
+    for (const header of channelSet.columns) {
+      const col = label ? columnForCategory(header, label, category) : header
+      const owner = owners.find(p => p.id === id)
+      const shopifyApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !owner?.parentId : !owner?.isParent)
+      row.set(col.key, { ...col, editable: col.editable && shopifyApplies && columnApplies(col, { isParent: !!owner?.isParent, productType: category }) })
+      if (col.slot && !row.has(col.slot.of)) row.set(col.slot.of, { ...col, key: col.slot.of, slot: undefined, shape: 'list', cardinality: { min: 0, max: col.channels?.[label!]?.cardinality?.max ?? col.slot.max } })
+    }
+    rows.set(id, row)
+  }
+  return { channelSet, label, rows, categories }
+}
+
+/**
+ * R-58 (A-47) — a MASTER bullet may not be longer than the TIGHTEST bullet cap of the channels the product (or a child that
+ * inherits it) is listed on. The caps are read from each listed coordinate's own column contract (`channelRowContract`, the
+ * same facts the channel sheet and its slot writes use) — never a number kept here. A product listed nowhere has no cap.
+ * A coordinate whose facts cannot be read refuses the bullet by name (fail closed): "tightest" is unknown without it.
+ * Returns one refusal per over-cap bullet change, naming the bullet's own number.
+ */
+async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBulkChangeError[]> {
+  const bulletEdits = edits.filter(edit => contentField(edit.column.slot?.of ?? edit.column.key) === 'bulletPoints')
+  if (!bulletEdits.length) return []
+  const editIds = [...new Set(bulletEdits.map(edit => edit.change.id))]
+  const children = await prisma.product.findMany({ where: { parentId: { in: editIds }, deletedAt: null }, select: { id: true, parentId: true } })
+  const familyOf = new Map<string, string[]>(editIds.map(id => [id, [id, ...children.filter(c => c.parentId === id).map(c => c.id)]]))
+  const productIds = [...new Set([...familyOf.values()].flat())]
+  const listings = await prisma.channelListing.findMany({ where: { productId: { in: productIds } },
+    select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
+  const owners = await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, parentId: true, isParent: true, productType: true } })
+  const SHEET_CHANNELS = new Set<string>(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
+  const coordinates = new Map<string, { ctx: { channel: SheetChannel; marketplace: string; accountId: string | null; aliasKey: string }; ids: string[] }>()
+  for (const listing of listings) {
+    if (!SHEET_CHANNELS.has(listing.channel) || !listing.marketplace) continue
+    const key = [listing.channel, listing.marketplace, listing.channelConnectionId ?? '', listing.aliasKey ?? ''].join('|')
+    const entry = coordinates.get(key) ?? { ctx: { channel: listing.channel as SheetChannel, marketplace: listing.marketplace, accountId: listing.channelConnectionId ?? null, aliasKey: listing.aliasKey ?? '' }, ids: [] }
+    if (!entry.ids.includes(listing.productId)) entry.ids.push(listing.productId)
+    coordinates.set(key, entry)
+  }
+  // productId → every (cap, where) a listed coordinate declares for its bullets; or the coordinate that could not be read.
+  const capsOf = new Map<string, Array<{ cap: number; where: string }>>()
+  const unreadable = new Map<string, string>()
+  for (const { ctx, ids } of coordinates.values()) {
+    const where = `${ctx.channel} · ${ctx.marketplace}`
+    try {
+      const { rows, label } = await channelRowContract(ctx, ids, owners)
+      for (const id of ids) {
+        const caps = [...(rows.get(id)?.values() ?? [])]
+          .filter(c => contentField(c.slot?.of ?? c.key) === 'bulletPoints' && typeof c.maxLength === 'number')
+          .map(c => c.maxLength as number)
+        if (caps.length) capsOf.set(id, [...(capsOf.get(id) ?? []), { cap: Math.min(...caps), where: label ?? where }])
+      }
+    } catch {
+      for (const id of ids) if (!unreadable.has(id)) unreadable.set(id, where)
+    }
+  }
+  const refusals: ProductBulkChangeError[] = []
+  for (const { change, column } of bulletEdits) {
+    const family = familyOf.get(change.id) ?? [change.id]
+    const blind = family.map(id => unreadable.get(id)).find(Boolean)
+    const slotAddress = parseSlotField(change.field)
+    let items: Array<{ n: number; text: string }>
+    if (slotAddress) items = typeof change.value === 'string' ? [{ n: slotAddress.index, text: change.value.trim() }] : []
+    else {
+      const list = coerceForShape({ ...column, maxLength: undefined, maxBytes: undefined, validation: undefined }, change.value)
+      items = list.ok && Array.isArray(list.value) ? list.value.map((text, i) => ({ n: i + 1, text: typeof text === 'string' ? text : String(text ?? '') })) : []
+    }
+    if (!items.some(item => item.text.length > 0)) continue
+    if (blind) {
+      refusals.push({ id: change.id, field: change.field, error: `Could not read the bullet limit for ${blind}. Reload before saving bullets.` })
+      continue
+    }
+    const all = family.flatMap(id => capsOf.get(id) ?? [])
+    if (!all.length) continue // listed nowhere that declares bullets: no cap
+    const tightest = all.reduce((a, b) => (b.cap < a.cap ? b : a))
+    const over = items.find(item => item.text.length > tightest.cap)
+    if (over) refusals.push({ id: change.id, field: change.field, error: `Bullet ${over.n} takes at most ${tightest.cap} characters — the ${tightest.where} cap (it has ${over.text.length})` })
+  }
+  return refusals
+}
+
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
 export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
   // Bind mutation promises before constructing them, including facts and formula cascades.
@@ -485,31 +599,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (ptRows.length > 0) {
         const { getSheetColumns } = await import('../pim/sheet-columns.service.js')
         if (primaryContext) {
-          const { productCategoryContext } = await import('../pim/product-category-context.js')
-          const { columnForCategory, columnApplies } = await import('@nexus/shared/master-sheet')
-          const context = await productCategoryContext(changeIds, primaryContext.channel, primaryContext.marketplace, connFor.get(primaryContext.channel) ?? null)
-          const channelSet = await getSheetColumns({
-            locale: primaryContext.locale,
-            accountId: context.connectionId,
-            market: primaryContext.marketplace, productTypes: primaryContext.channel === 'AMAZON' ? context.categories : productTypes,
-            ebayCategoryIds: primaryContext.channel === 'EBAY' ? context.categories : [], includeEmptyChannels: true,
-            etsyCategoryIds: primaryContext.channel === 'ETSY' ? context.categories : [],
-            onlyChannels: [primaryContext.channel], scopeKind: 'channel',
-          })
-          const label = channelSet.coordinates.find((c) => c.channel === primaryContext.channel)?.label
+          const { channelSet, label, rows, categories } = await channelRowContract({ channel: primaryContext.channel, marketplace: primaryContext.marketplace,
+            locale: primaryContext.locale, accountId: connFor.get(primaryContext.channel) ?? null, aliasKey: (primaryContext as { aliasKey?: string }).aliasKey }, changeIds, ptRows)
           for (const id of changeIds) {
-            const aliasKey = (primaryContext as { aliasKey?: string }).aliasKey ?? ''
-            const category = context.byRow.get(`${id}:${aliasKey}`)?.channelCategoryId ?? context.defaults[id]?.channelCategoryId ?? null
-            rowCategoryById.set(id, category)
-            const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
-            for (const header of channelSet.columns) {
-              const col = label ? columnForCategory(header, label, category) : header
-              const owner = ptRows.find(p => p.id === id)
-              const shopifyApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !owner?.parentId : !owner?.isParent)
-              row.set(col.key, { ...col, editable: col.editable && shopifyApplies && columnApplies(col, { isParent: !!owner?.isParent, productType: category }) })
-              if (col.slot && !row.has(col.slot.of)) row.set(col.slot.of, { ...col, key: col.slot.of, slot: undefined, shape: 'list', cardinality: { min: 0, max: col.channels?.[label!]?.cardinality?.max ?? col.slot.max } })
-            }
-            rowContract.set(id, row)
+            rowCategoryById.set(id, categories.get(id) ?? null)
+            rowContract.set(id, rows.get(id)!)
           }
           for (const col of channelSet.columns) {
             channelColumnKeys.add(col.key)
@@ -560,7 +654,12 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const base = parseSlotField(change.field)?.base ?? change.field
     const key = contentField(CHANNEL_FIELD_MAP[base] === 'bulletPointsOverride' ? 'bulletPoints' : CHANNEL_FIELD_MAP[base] ?? base.replace(/^attr_/, ''))
     const contract = (primaryContext ? rowContract : masterRowContract).get(change.id)
-    const col = [...(contract?.values() ?? [])].find(col => col.writeField === change.field || col.key === base || contentField(col.slot?.of ?? col.key) === key)
+    const columns = [...(contract?.values() ?? [])]
+    // R-58 — a SLOT write takes ITS slot's column (label, cap), not the first column of its group: `bulletPoints[4]`
+    // was judged and named as "Bullet 1". Anything else keeps the order below.
+    const slotAddress = parseSlotField(change.field)
+    const col = (slotAddress ? columns.find(col => col.slot?.index === slotAddress.index && contentField(col.slot.of) === key) : undefined)
+      ?? columns.find(col => col.writeField === change.field || col.key === base || contentField(col.slot?.of ?? col.key) === key)
     // LX.F F-LX-1 — the ContentAddress gate belongs to LOCALIZABLE changes only.
     // It used to run for EVERY change, before this predicate, so a price, a
     // quantity or a factual attribute sent without an address was refused with
@@ -584,6 +683,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (!col) errors.push({ id: change.id, field: change.field, error: `Could not load the sheet label and requirements for ${change.field}. Reload before saving.` })
       else contentEdits.push({ change, column: col })
     }
+  }
+  if (contentEdits.length && !primaryContext) {
+    for (const refusal of await masterBulletCapRefusals(contentEdits)) errors.push(refusal)
   }
   if (errors.length) return { success: false, updated: 0, errors }
   if (contentEdits.length) {

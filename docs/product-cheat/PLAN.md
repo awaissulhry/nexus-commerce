@@ -99,3 +99,42 @@ the whole-list paths' missing caps (§2) stay open for other callers — a separ
 `.githooks/pre-push`, right after `check-global-exposure`: the script's own tests, then `check-nds-contrast.mjs --max-failures 49
 --max-aa-failures 10`. `bash -n` clean; the stage passes on today's tokens and fails with the limit one tighter (control). Lower
 both numbers as the AAA sweep (Step 4.3 #5) lands. The three browser gates follow when G1's fixes and runner are in (A-43).
+
+## A-47 — R-57's premise is half false: channel bullet saves ARE capped; the MASTER (Shared) bullets are not, and no master cap exists. FOR YOUR RULING.
+
+**Measured by sub-agent B1 (a probe with a positive control; `bulk-edit.service.ts` unchanged, hash checked).** Every bullets save
+leaves `applyProductBulkEdits` early (`bulk-edit.service.ts:592`, `applyContentBulk`); the two branches P3 named (`:851`, `:990`)
+and the slot cap (`:767`) are never reached by a bullets save (0 hits vs 544 on the control).
+- ✅ **Channel scopes:** an over-cap bullet is refused and not stored; a whole list is refused as a wrong shape.
+- 🔴 **Master (Shared):** a whole list and a single bullet over any channel's cap are both STORED. The master bullets column has no
+  `maxLength`, no channel facts, and no master cap exists anywhere in the code. It is caught only later, when a channel refuses it.
+- 🟠 Also found: content saves (title, description, bullets, keywords) are **all-or-nothing** — one bad bullet blocks the good one
+  in the same request (Step 3.6's per-row result covered `attr_*` only); and the error names the wrong bullet ("Bullet 1" for a
+  bullet-4 save).
+- New `services/products/bullet-list-cap.vitest.test.ts`: 3 channel arms green + 2 arms pinned as expected-to-fail on the master
+  defect (they turn red — i.e. must be flipped — when a master cap lands). Mutations 2/2 red. Related suites 42 green; `tsc` 0.
+
+**Recommendation — one (a):** a master bullet may not exceed the TIGHTEST bullet cap of the channels the product is listed on (from
+the same channel facts the slot path reads), checked at the content edit step (`:~584`), refused with its reason and the right
+bullet number; a product listed nowhere keeps no cap. (b) A fixed 700 — not recommended (a number no channel declared).
+
+| # | Question | Ruling (2026-09-24 00:12 UTC, thirty-seventh set) |
+|---|---|---|
+| **R-58** | A-47 — the master bullet cap | ✅ **(a)** The tightest bullet cap of the channels the product is listed on, checked at the content edit step; the error names the right bullet; a product listed nowhere keeps no cap |
+| **R-59** | A-47 — content saves all-or-nothing | ✅ **Per row**, like attribute cells: good rows save, bad rows are refused with their reason |
+
+## A-47 / R-58 — BUILT: master bullets are capped at the tightest channel cap; errors name the right bullet.
+
+Built by sub-agent B1; re-run by this lane (products / price-door / content suites: 23 files, 235 tests green, 12 skipped as before;
+the two bulk route files: 88 green; `tsc` 0). `services/products/bulk-edit.service.ts`: a master bullet may not exceed the tightest
+bullet cap of the channels where the product OR its children are listed — each channel's cap from its own column rules (that
+rule-building code extracted once, shared by both uses); listed nowhere → no cap; a channel whose cap cannot be read → the save is
+refused (fail closed). Errors name the right position: *"Bullet 2 takes at most 20 characters — the Amazon · IT cap (it has 25)"*.
+New `bullet-list-cap.vitest.test.ts` (11 arms; the two former expected-to-fail master arms are now real arms). **Mutations 6/6
+red** (one — children not counted — first stayed green; a parent/child arm was added, then red).
+*Done when* ✅ · *Cost when* `flat` (one read of the listings' channel facts per content save) · *Rollback* — revert.
+
+🔴 **R-59 NOT built — premise changed.** Three callers treat ANY error from the content path as a whole failure: the translation
+form (`routes/product-translations.routes.ts:147-151`), restore (`routes/products.routes.ts:838-841`), the AI writes
+(`routes/products-ai.routes.ts:319-322`). Per row there would commit some fields and still report "failed", with no audit row.
+**Recommendation:** per row as an OPT-IN used only by the sheet's `PATCH /products/bulk`; the three callers keep all-or-nothing.
