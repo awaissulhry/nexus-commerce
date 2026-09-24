@@ -156,6 +156,11 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ### Where this lane stands — handoff 8, 2026-09-24 13:52 UTC (READ THIS FIRST; everything below is history)
 
+> **Night jobs run NOW (2026-09-24 19:35 UTC, the Owner's word).** `main` = `pes/phase-0` = **`1b6541e3a`** (merged `origin/main`; readiness gains a
+> Sync Logs "run now"). Readiness recomputed on the server for both businesses (SUCCESS): A-50 live — Xavia Italian 75.7 % unchanged, every other
+> language down to its true value (de 9.9 %, en 4.2 %, fr 8.4 %, pl/sv/tr 0 %); Motovento 638 rows. Content-drift SUCCESS: Amazon 147 compared,
+> 45 differ, 88 left for the next run; 🔴 eBay 4 listings hit `categoryIds.map is not a function` in the eBay builder (open, for the Owner).
+> The 04:22 UTC scheduled read still checks the first AUTOMATIC content-drift run (03:37). Details: PLAN.md "The night's jobs, run NOW".
 > **Evening update 2026-09-24 ~17:50 UTC.** `main` = **`d27817a2d`** (live). On it since the 15:00 deploy: **A-54** (`2f01c58a2`, the eBay Inventory
 > read-back skips parents — the 16:30 sweep `checked 0, errors 0, skippedShared 288`, the false `EBAY_APP_ID` errors gone), **A-55** (`aad45e7e0`,
 > the scope menu says "Not set up" only when proven — seen on the live screen: Xavia GALE-JACKET IT Amazon/eBay "Blocked · 100%", Motovento eBay

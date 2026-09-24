@@ -8855,3 +8855,21 @@ while the destination loads a row reads "Checking…"; a failed read or an unsco
   names: "IT: 630 of 630 required values filled…"), Shared dot red (the worst channel); Shopify no state on IT. A-55's *Done when* ✅ on screen.
   🟠 The menu's trailing text is cut to **"Blocked · 10…"** at the menu's width — the number reads wrong until hovered (a DS `ScopeBar`
   menu-width item for the Owner; not built).
+
+## The night's jobs, run NOW (2026-09-24 18:25–19:34 UTC, the Owner: "do everything right now") — measured
+
+Predictions first (this session's scratchpad `now/predictions.md`). Records: `records/nightly-before-2026-09-24.txt` → `records/nightly-after-run-now-2026-09-24.txt`.
+- **A local `--apply` recompute FAILED on production** (`0 done · 10 failed`, Xavia; Motovento `1 done · 1 failed`): every family's Serializable
+  transaction outlived Prisma's timeout over the network (`Transaction not found`); all rolled back (Xavia 9,886 rows unchanged). Not predicted.
+  → the run moved to the server: `runReadinessReconcileNow()` (0 h horizon; the cron keeps 20 h) in `CRON_REGISTRY` — `1b6541e3a`, pushed with
+  the merge of `origin/main` (both refs in one hook run: every gate green, 0 new keys); Railway `f4c57230` live 19:26 UTC.
+- **readiness-reconcile, Sync Logs run** (the Owner's signed-in page, `POST …/cron/readiness-reconcile/trigger`, 202): Xavia `32 done · 9741 rows ·
+  stopped: complete · 372s` SUCCESS; Motovento `2 done · 638 rows · complete · 12s` SUCCESS (22 → 638: its new markets' coordinates).
+  **A-50 on production:** Italian **75.7 % → 75.7 %** (5,068 / 10,995, unchanged, as predicted); de 60.4 → **9.9 %**, en 59.4 → **4.2 %**, es 60.6 →
+  **8.3 %**, fr 60.7 → **8.4 %**, nl 70.9 → **4.7 %**, pl / sv / tr 100 → **0 %** (required filled de 3,217 → 2,472 · en 3,420 → 2,145 · pl 634 → 301).
+  The direction was predicted; the size was not — nearly all non-Italian readiness was an Italian fallback counted as filled.
+- **content-drift, Sync Logs run** (202, 18:39:59 → 18:50:00 UTC, SUCCESS): Amazon `compared 147 · drifted 45`, `88 of 235 outstanding · stopped:
+  budget` (the next run continues); eBay `compared 0 · not compared 14` — 8 "this listing uses the eBay Inventory model" (known limit), 2 shells
+  (by design), 🔴 **4 `the eBay builder refused: categoryIds.map is not a function`** — a real defect in the eBay payload builder (the same builder
+  the studio's eBay publish uses). Not investigated yet — for the Owner.
+- The scheduled nightly tonight: readiness finds nothing due (computed 19:34); content-drift at 03:37 continues the 88.

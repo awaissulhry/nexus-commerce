@@ -1,0 +1,30 @@
+--- CronRun, newest first
+2026-09-24T19:28:00Z → 2026-09-24T19:28:12Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: readiness-reconcile: 2 done · 638 rows · 0 of 2 outstanding · stopped: complete · 12s
+2026-09-24T19:27:52Z → 2026-09-24T19:34:04Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: readiness-reconcile: 32 done · 9741 rows · 0 of 32 outstanding · stopped: complete · 372s
+2026-09-24T18:39:59Z → 2026-09-24T18:50:00Z content-drift SUCCESS ws=nexus_legacy_workspace :: amazon-content: compared 147 · drifted 45 · not compared 0 · content-drift: 147 done · 147 rows · 88 of 235 outstanding · stopped: budget · 558s || ebay-content: compared 0 · drifted 0 · not compared 14 (the eBay builder
+2026-09-24T02:17:02Z → 2026-09-24T02:22:58Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: readiness-reconcile: 32 done · 9741 rows · stopped: complete · 356s
+2026-09-24T02:17:00Z → 2026-09-24T02:17:01Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: readiness-reconcile: 2 done · 22 rows · stopped: complete · 2s
+2026-09-23T02:17:01Z → 2026-09-23T02:23:09Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: Reconciled 32 families, 9741 readiness rows.
+2026-09-23T02:17:00Z → 2026-09-23T02:17:00Z readiness-reconcile SUCCESS ws=bf0047bf-e1d9-48d0-8cc6-20e94bb734dd :: Reconciled 2 families, 22 readiness rows.
+2026-09-22T02:17:01Z → 2026-09-22T02:22:54Z readiness-reconcile SUCCESS ws=nexus_legacy_workspace :: Reconciled 32 families, 9741 readiness rows.
+--- ReadinessIndex rows computed since the deploy: { n: 10379, newest: '2026-09-24T19:33:54Z' }
+--- ChannelDrift rows by source: [{"channel":"AMAZON","rows":147,"drifted":45,"amazon_content_checked":147},{"channel":"EBAY","rows":231,"drifted":0,"amazon_content_checked":0}]
+--- ReadinessIndex by business and language (A-50 lowers non-Italian % after the first nightly on the new code)
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd de: rows 66 · avg 0% · required 44/132 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd en: rows 154 · avg 0% · required 88/308 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd es: rows 66 · avg 0% · required 44/132 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd fr: rows 88 · avg 0% · required 44/132 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd it: rows 66 · avg 100% · required 88/132 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd nl: rows 66 · avg 0% · required 0/22 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd pl: rows 44 · avg 0% · required 0/22 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd sv: rows 44 · avg 0% · required 0/22 · newest 2026-09-24T19:28:08Z
+bf0047bf-e1d9-48d0-8cc6-20e94bb734dd tr: rows 44 · avg 0% · required 0/22 · newest 2026-09-24T19:28:08Z
+nexus_legacy_workspace de: rows 1014 · avg 9.9% · required 2472/10181 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace en: rows 2366 · avg 4.2% · required 2145/10456 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace es: rows 1014 · avg 8.3% · required 2196/9785 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace fr: rows 1352 · avg 8.4% · required 2490/10123 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace it: rows 1098 · avg 75.7% · required 5068/10995 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace nl: rows 1014 · avg 4.7% · required 1177/5286 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace pl: rows 676 · avg 0% · required 301/676 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace sv: rows 676 · avg 0% · required 301/676 · newest 2026-09-24T19:33:54Z
+nexus_legacy_workspace tr: rows 676 · avg 0% · required 301/676 · newest 2026-09-24T19:33:54Z
