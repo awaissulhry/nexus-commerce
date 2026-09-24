@@ -27,11 +27,13 @@ const ROOT = new URL('../src/', import.meta.url).pathname
 const ALLOWED = [
   { file: 'services/pim/market-currency.ts', why: 'the accessor itself' },
   {
-    file: 'routes/marketplaces.routes.ts',
-    why: 'the SEED list that WRITES Marketplace rows — it is the authority\'s source, not a reader of it',
+    // A-53: the seed list moved out of `routes/marketplaces.routes.ts` into the one catalogue that every
+    // Marketplace writer reads (business creation, the create-only seed route, the backfill migration).
+    file: 'services/pim/market-catalogue.ts',
+    why: 'the SEED catalogue that WRITES Marketplace rows — it is the authority\'s source, not a reader of it',
     // The reason is checked, not just asserted: the seed must actually carry the
     // non-euro markets, or it is not the authority it claims to be.
-    requires: (text) => /code: 'SE'[^\n]*currency: 'SEK'/.test(text) && /code: 'PL'[^\n]*currency: 'PLN'/.test(text),
+    requires: (text) => /code: 'SE'[^\n]*currency: 'SEK'/.test(text) && /code: 'PL'[^\n]*currency: 'PLN'/.test(text) && /code: 'TR'[^\n]*currency: 'TRY'/.test(text),
   },
   {
     file: 'services/ai/listing-content.service.ts',

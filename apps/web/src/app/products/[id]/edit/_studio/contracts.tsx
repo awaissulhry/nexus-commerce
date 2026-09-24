@@ -48,6 +48,7 @@ import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
 import { parseReadinessResponse, parseReadinessMatrix } from './readiness'
 import { isViewChipVisible } from './viewChips'
+import { marketGate, marketGateReason } from './marketGate'
 import {
   channelServesMarket,
   defaultLocaleFor,
@@ -362,13 +363,14 @@ export function useScopeReadiness(): ScopeReadinessQuery {
   return useContext(ReadinessCtx)
 }
 
-function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null): ScopeReadinessQuery {
+function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null): ScopeReadinessQuery {
   const [query, setQuery] = useState<ScopeReadinessQuery>({ status: 'loading' })
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
 
   useEffect(() => {
     if (!market) {
-      setQuery({ status: 'unavailable', reason: 'No market selected.' })
+      // A-53: when the business has no market (or the read failed) say THAT — "selected" offered a choice that did not exist.
+      setQuery({ status: 'unavailable', reason: noMarketReason ?? 'No market selected.' })
       return
     }
     let cancelled = false
@@ -482,7 +484,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
     }
     // `nonce` is the live-refresh signal: bumping it re-runs this effect, which is how a
     // `listing.updated` event turns into a fresh readiness read.
-  }, [productId, market, nonce, channel, accountId, listingId, locale, queryCoordinate])
+  }, [productId, market, nonce, channel, accountId, listingId, locale, queryCoordinate, noMarketReason])
 
   return query.status === 'ready' && query.coordinate !== queryCoordinate ? { status: 'loading' } : query
 }
@@ -987,7 +989,9 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   const save = useSaveMachine(JSON.stringify([product.id, scope, market, locale, accountId, listingId]))
   useInFlightGuard(save.state, save.publication.publicationBlocker, canChangeEditor)
   const liveNonce = useLiveRefresh(product.id)
-  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale)
+  // Only the resolved market being ABSENT has a gate reason; a scope error or an unready destination keeps "No market selected."
+  const noMarketReason = market ? null : marketGateReason(marketGate({ market, locale, marketCount: baseOptions.markets.length, discoveryFailed: marketplacesFailed === true }))
+  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason)
 
   return (
     <ProductCtx.Provider value={product}>

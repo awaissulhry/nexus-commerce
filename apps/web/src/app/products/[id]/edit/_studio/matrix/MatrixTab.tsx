@@ -10,6 +10,7 @@
 import { useParams } from 'next/navigation'
 
 import { useStudioScope } from '../contracts'
+import { NoMarketState } from '../NoMarketState'
 
 import { MatrixSurface } from './MatrixSurface'
 
@@ -18,6 +19,7 @@ export function MatrixTab() {
   const { market, locale } = useStudioScope()
   const productId = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : ''
   if (!productId) return <div style={{ padding: 'var(--nds-space-24)' }}>No product in the route.</div>
-  if (!market || !locale) return <div style={{ padding: 'var(--nds-space-24)' }} className="nds-cell-muted">Waiting for the market…</div>
+  // A-53: the frame has answered by now; no market means none exists or the read failed — say which.
+  if (!market || !locale) return <NoMarketState />
   return <MatrixSurface key={productId} productId={productId} />
 }

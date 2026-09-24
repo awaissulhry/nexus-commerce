@@ -8,6 +8,7 @@ import { Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { useLiveShopifySchema } from '../shopify/useLiveShopifySchema'
 import { useStudioProduct, useStudioScope } from '../contracts'
+import { NoMarketState } from '../NoMarketState'
 
 import { ProductSheet } from './ProductSheet'
 import type { ChannelScopeChannel } from './channel/types'
@@ -40,7 +41,8 @@ export function ProductSheetTab({ productId: override, shopifySchema }: ProductS
 
   if (scope === 'master') {
     if (!productId) return <div style={{ padding: 'var(--nds-space-24)' }}>No product in the route.</div>
-    if (!market || !locale) return <div style={{ padding: 'var(--nds-space-24)' }} className="nds-cell-muted">Waiting for the market…</div>
+    // A-53: the frame has answered by now; no market means none exists or the read failed — say which.
+    if (!market || !locale) return <NoMarketState />
     return <ProductSheet scope="master" productId={productId} market={market} locale={locale} />
   }
   if (!coordinate) return null
