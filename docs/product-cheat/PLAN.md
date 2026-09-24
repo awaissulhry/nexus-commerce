@@ -7783,3 +7783,15 @@ without one); T1's two barrel export lines were required (the api-guard check fa
   the business (master IT 25 columns, channel IT 8) and C5 green. Re-run here: 5/5 ON, 5/5 OFF. Mutation: a hook that enters no
   business → C5 red ON. Limit, stated: the hook stands in for sign-in + membership; it proves the handler under a business, not the
   sign-in path.
+
+## A-50 — BUILT (R-64). Readiness no longer counts a source-language fallback as filled.
+
+Built by sub-agent R1; re-run by this lane (the new file 7/7 ON and OFF; with the `sheet-rows` suites 14/14; `tsc` 0).
+`services/pim/sheet-rows.service.ts` `completenessFor` → a small `untranslated(cell)`: the LEGACY pair (`requestedLocale` /
+`effectiveLocale`) first, exactly as before (the master sheet is unchanged), else the studio's pair (`language` / `requested`) through
+the SAME `translationMissing` the validator applies (`readiness.service.ts:212`). New `readiness-untranslated.vitest.test.ts` incl. a
+real-database arm through the one writer: Shared·de now counts the Italian-only title as EMPTY and agrees with the validator; C1's
+flagged = total − filled still holds. **Mutations 3/3 red.** R1: related suites 108/108 OFF; ON only `studio-sheet-language-issue`
+fails (4 tests) — the same on the old code, already on the known-failing list; the profiles-ON ratchet: nothing new, nothing worse.
+**Effect on production:** after the merge, the next nightly recompute lowers readiness % where a non-Italian coordinate holds only
+Italian text — the true number. *Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert; the rows are derived.

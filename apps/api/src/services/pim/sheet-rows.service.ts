@@ -381,8 +381,21 @@ export function completenessFor(columns: SheetColumn[], row: { isParent: boolean
     source: 'schema',
   }))
   const flat: Record<string, unknown> = {}
-  for (const c of applicable) flat[c.key] = values[c.key]?.requestedLocale && translationMissing({ language: values[c.key].effectiveLocale }, values[c.key].requestedLocale!) ? null : values[c.key]?.value
+  for (const c of applicable) flat[c.key] = untranslated(values[c.key]) ? null : values[c.key]?.value
   return computeMasterCompleteness(asMaster, flat)
+}
+
+/**
+ * A-50 (R-64) — is this cell a source-language FALLBACK in the language being asked for? The same rule the validator applies
+ * on the same row (`translationMissing`, `readiness.service.ts:212`; the studio feeds it `cell.language` vs the request locale,
+ * `studio-sheet.service.ts:1544`). The master sheet's cells carry the LEGACY pair (`requestedLocale` / `effectiveLocale`) — read
+ * first, exactly as before. The studio's cells carry only the §3 pair (`StudioCellValue` omits the legacy four), so reading the
+ * legacy pair alone let an Italian-only title count as FILLED on a German coordinate while the validator said it was missing.
+ */
+function untranslated(cell: SheetCellValue | undefined): boolean {
+  if (!cell) return false
+  if (cell.requestedLocale !== undefined) return !!cell.requestedLocale && translationMissing({ language: cell.effectiveLocale }, cell.requestedLocale)
+  return !!cell.language && !!cell.requested && translationMissing({ language: cell.language }, cell.requested)
 }
 
 // ────────────────────────────────────────────────────────────────────
