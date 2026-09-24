@@ -4,15 +4,19 @@ Written by the R-11 product-sheet lane at the Owner's request. Facts below were 
 
 ## 1. The goal (the Owner's words, summarised)
 
-The Owner listed GALE (and other families) on Amazon with **Amazon's own Excel category template**, and on eBay with **our own
-eBay Excel workbook**. He wants Nexus to **import these files as they are — no re-formatting by hand — through the import system
-AND the product sheet**, so that Nexus holds exactly what the channels hold. Then he can keep Nexus the same as Amazon and eBay.
+The Owner lists his products on Amazon with **Amazon's own Excel category templates**, and on eBay with **our own eBay Excel
+workbook**. He wants Nexus to **import these files as they are — no re-formatting by hand — through the import system AND the product
+sheet**, so that Nexus holds exactly what the channels hold, and he can keep Nexus the same as Amazon and eBay.
+🔴 **The goal is GENERAL support, not one product:** *"The goal is not only for the jacket. The goal is that it supports these files so that
+I can import all of the other products as well."* Every family, every product type, every market, every template version he uses (the
+test corpus in §2b). GALE is only the first sample. The import must be driven by the file's own keys and the category schema, never by
+per-family code.
 "AAA quality": zero data loss, an honest preview before any write, every value traceable, the design system and 7:1 contrast.
 
 Scope: **IMPORT first** (file → Nexus). Exporting back in the same native shape is a later step; it partly exists already (see §4).
 Importing writes to the Nexus database only. **It never publishes to a channel.**
 
-## 2. The files (measured, read only — do not edit them; copy them into your scratchpad to work)
+## 2. The first sample — GALE (measured, read only — never edit the Owner's files; copy them into your scratchpad to work)
 
 | File | Shape |
 |---|---|
@@ -30,6 +34,26 @@ row 2 = instruction; row 3 = group headers (`Identità dell'offerta`, `Variazion
 **rows 7–27 = data** (GALE-JACKET parent, product type `COAT`, action "Crea o sostituisci", + 20 children). Match columns by the
 ROW-5 KEY, never by position or by the localized label. 🔴 `exceljs` HANGS on these .xlsm files (measured: >7 min, killed) — the repo
 reads them with its own jszip/XML reader (`services/amazon/template-workbook.ts`). Parse on the worker thread (see §5, 09-16).
+
+## 2b. The whole test corpus — `/Users/awais/Desktop/2026/LISTNGS/` (89 spreadsheets; a quick read-only classification, 2026-09-24)
+
+Families: JACKETS (AIR MESH, AIREON, Gale, Misano, Moss, REGAL, VENTRA, WATERPROOF), SUITS (XAVIA X AAA), ACCESSORIES (SLIDERS); the
+folders GLOVES, PANTS, PROTECTOR, MX hold no spreadsheets. Formats found (the quick classifier read shared strings only — ~33 files it
+called "other" are most likely the same new template with inline strings; measure them properly):
+
+| Format | Found | What to know |
+|---|---|---|
+| **Amazon NEW Custom Listings Template** (A1 `settings=feedType=…`; keys in **row 5**; data from row 7) | ≥ 30 | Data sheet named per language (`Modello`/`Vorlage`/`Modèle`/`Plantilla`/`Template`); 274–352 keys; **`::record_action` varies per file: full "Crea o sostituisci" (create/replace), PARTIAL update "Modifica (aggiornamento parziale)" / "Bearbeiten (Teilaktualisierung)" / "Modifier (mise à jour partielle)" / "Editar (actualización parcial)" — a blank cell there means NO CHANGE, never "clear" — and DELETE "Löschen" (`Gale/Amazon/DE/GALE DE NEW TEMPLATE.xlsm`)**; several product types in one file (AIREON IT: COAT + PANTS); one file carries TWO languages (`en_GB` + `it_IT`); blank templates exist (`_BLANK TEMPLATES (per language)`) |
+| **Amazon OLD flat file** (A1 `TemplateType=fptcustom…`; keys in **row 3**) | 12 | the classic 2019-era format (e.g. `Gale Jacket IT.xlsm`, `AIREON GLOBAL.xlsm`, `Misano/AMAZON/LISTING/IT.xlsx`); 175–366 keys |
+| **Our eBay workbook** (one sheet `ebay_<market>`, 79 columns, header row 1) | 10 | 8 jacket families + 2 slider files; one row per product per listing (GALE IT: 5 listings × 21 = 105 rows) |
+| **Per-family eBay workbooks at the root** (`XAVIA-eBay-IT-<FAMILY>.xlsx`, one sheet named by the family) | 6 | shape NOT measured — find out what they are |
+| `Gale/Amazon/IT/amazon_OUTERWEAR_IT(.filled).xlsx` | 2 | shape NOT measured |
+
+Also: skip Excel lock files (`~$…xlsm`); folders named `OLD - previous versions & backup` are history, and the `… - FINAL (upload this)`
+folders hold the latest file per market — the IMPORTER must never guess which file is current: the Owner picks the file, the preview
+shows what it would change. A file may be OLDER than what is live on the channel (later Seller Central / eBay edits): Nexus already reads
+what the channel holds (`ChannelDrift`, the nightly content read A-39/A-40) — use it to show "file vs Nexus vs channel" and to prove
+after an import that Nexus now matches the channel.
 
 ## 3. How to work (this programme's rules — they bind)
 
@@ -137,13 +161,19 @@ reads them with its own jszip/XML reader (`services/amazon/template-workbook.ts`
 ## 6. The first step (measure only — no code change, no production write)
 
 1. Read the ★ documents. Write `docs/channel-file-import/PLAN.md` §0 "What exists" in 20 lines, citing file:line.
-2. Copy the five files into your scratchpad. On the LOCAL database only, run the EXISTING import paths on each file exactly as the
-   Owner would (the product-sheet drawer on the GALE family, and `/products/catalog-transfer`), through their preview/inspect endpoints.
-   Predictions written first.
-3. Produce a **coverage table per file**: every row-5 key (Amazon) / header (eBay) → mapped to which Nexus field and scope (Shared,
-   channel·market·language) / ignored with a reason / refused / wrongly mapped. Count: imported, preserved-but-not-editable, lost.
-   Then a **value round trip**: import → export → compare every cell; list every difference.
-4. From the gaps, write the plan as an amendment for the Owner ("FOR YOUR RULING"): the smallest set of changes that makes all four Amazon
-   markets and the eBay workbook import AS IS, with zero loss, a truthful preview (what changes, per field, per product, before any write),
-   and the language of each market stored in its own language (not as Shared Italian). At most two questions, each with a recommendation.
-   Nothing is built before the Owner rules.
+2. **Classify the whole corpus (§2b) properly** (a read-only script in your scratchpad, jszip/XML — never `exceljs` on the .xlsm): per file the
+   format, data sheet, key row, markets and languages, product types, record actions, row count. Save the table in `records/`.
+3. Pick a **representative sample per format × record action × market × product type** (e.g. GALE IT/DE/FR/ES new full, a partial-update
+   file, the delete file, AIREON COAT+PANTS, the two-language file, one old flat file, two eBay workbooks, one root `XAVIA-eBay-IT-*` file).
+   Copy them into your scratchpad. On the LOCAL database only, run the EXISTING import paths on each exactly as the Owner would (the
+   product-sheet drawer, and `/products/catalog-transfer`), through their preview/inspect endpoints. Predictions written first.
+4. Produce a **coverage table per format**: every key/header → which Nexus field and scope (Shared, channel·market·language) / ignored
+   with a reason / refused / wrongly mapped; counts imported · preserved-not-editable · lost; how a blank cell is treated (partial update =
+   no change); what happens to parent/child, variation theme, ASIN/EAN/GTIN exemption, images, price (🔴 every price write goes through the
+   ONE price door, `writeChannelPrices`, `expectedVersion` required — PLAN.md Part 2), quantity (EU = one number; FBA never). Then a **value
+   round trip** per sample: import → export → compare every cell; list every difference.
+5. From the gaps, write the plan as an amendment for the Owner ("FOR YOUR RULING"): the smallest GENERIC set of changes that makes every
+   format in the corpus import AS IS, for any family, with zero loss, a truthful preview (what changes, per field, per product, before any
+   write — and where the channel differs, shown), each market's language stored in its own language (never as Shared Italian), record
+   actions honoured, and a proof run over the whole corpus (every file: parsed, previewed, 0 unexplained losses). At most two questions,
+   each with a recommendation. Nothing is built before the Owner rules.
