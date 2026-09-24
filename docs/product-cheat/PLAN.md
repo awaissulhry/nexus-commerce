@@ -7905,3 +7905,138 @@ text-3 stays distinguishable mainly by SIZE and weight (its DS role: labels/meta
   could not be established from this report."*). The footer rule now finds ANY channel availability note by its element
   (`GridSheetNote kind="provenance"`), not by eBay's words, and records NOT MEASURED; the baseline's eBay-specific key is replaced by
   one generic key per scope (EBAY·IT, AMAZON·IT). (11:57 UTC)
+
+## A-52 — Step 4.3 #3, bullets in one cell: re-planned onto R-63's one editor (BL1, phase 1, read only). Builds next. Nothing built.
+
+*Drafted by sub-agent BL1. Two stated choices within R-55: the hint reads "Enter saves · Tab next bullet, then moves right · Esc cancels"; a typed letter opens the editor without writing that letter into bullet 1.*
+
+2026-09-24. Re-plan of A-46 (P3) onto what exists after R-63. "read" = line opened; "inferred" = not run.
+Rulings applied: R-55 (Tab moves between positions; past the last it commits and moves right), R-56 (channel scopes show the one
+cell; Bullet 1–10 hidden by default, still in Customise and import/export), R-48 (one hint line), R-58/R-60 (server caps, per-row
+content saves — no API product change needed).
+
+### 1. What exists today (read)
+- **Channel scopes** (Amazon `bullet_point` 10 × 700): ten SLOT columns `bulletPoints_1…10`, `writeField: bulletPoints[i]`,
+  `slot: { of, index, max, label }`, `shape: 'scalar'`, slot 1 carries the requirement (`api …/sheet-columns.service.ts:780-798`).
+  Built by `master/channelColumns.tsx` (`buildChannelColumns`), entered through `buildSheetColumns('channel')`.
+- **Shared (master)**: ONE unbounded list column `bulletPoints`, editor = the studio-local `AttributeShapeEditor`
+  (`master/columns.tsx:394-395`; `AttributeShapeInput.tsx:46-52`: Textarea per item, Remove, Add, no reorder, inline 520px style,
+  OUTSIDE the DS). `AttributeShapeInput` is also the drawer's control — it stays.
+- **Writes**: the channel adapter's `onCellValueChanged` (`channel/useChannelSheetAdapter.tsx:357`) → gate → formulas → `writer.set`
+  (`:432`). `SheetWriter` coalesces cells per ROW into ONE request with the row's version (`grid/editors/sheetWriter.ts` header,
+  `set` `:~592`, flush window). A synthetic dispatch through the same handler already exists (`:783`).
+- **Client-only column precedent**: `withProductMediaColumn(columns)` inserts a column the server never serves
+  (`media/productMediaColumn.tsx:16-22`) and both builders override its ColDef in their final map (`channelColumns.tsx:~170`).
+- **Keys**: AG popup editors own Enter/Tab/Esc unless the ColDef's `suppressKeyboardEvent` takes them — the proven mechanism is
+  `suppressFormulaKeys` (`FormulaCellEditor.tsx:49`). E1's one line: `EDITOR_KEY_HINT` (`editorHint.ts`).
+- **Reorder control**: DS `OrderedList` (`components/OrderedList.tsx`) — pointer drag + labelled up/down buttons + live
+  announcement. It keys rows by the item STRING, so positions must be stable IDs (`p1…p10`), not bullet texts (duplicates/holes).
+- **Landing**: the sheet lands on ALL columns (`grid/views/landing.ts`, Owner 09-04); studio feeds `orderedKeys` =
+  `orderColumnKeys(columns)` (`useSheetColumns.ts:81, 216`) and "All attributes" = `allColumnsPreset(orderColumnKeys(...))`
+  (`views.ts:333`). R-56 is a newer, narrower Owner ruling for these ten columns only.
+- **Languages view**: channel slots become `bulletPoints_3@de` (`locale`, `groupKey: language:bulletPoints_3`) (`api …/language-sheet.ts:~20`).
+
+### 2. The design (one DS editor, two modes; one virtual column; writes through the same door)
+- **Virtual column `slots:<of>`** (per language: `slots:<of>@<locale>`), client-only, NEVER a write field — inserted by
+  `withSlotListColumns(columns)` right before the group's first slot (the media-column pattern), carrying `{ key, label:
+  'Bullet points', group, width: 240, kind: 'slotlist', slotGroup: { of, max, keys[], maxLength }, locale?, groupKey? }`.
+- **One ColDef from the engine** `slotListColumnDef(group, …)` spread by BOTH builders' final map (they cannot drift):
+  valueGetter = the ten slot values (array of `max`, holes as `''`); renderer = `N of 10 · <first bullet>` + the inherited mark
+  when every non-empty slot is inherited + a refused mark if any slot is refused; editable iff EVERY slot cell is editable and
+  writable (else locked, `none+say`); `equals` = array equality; no `formulaCellEditorSelector` (formulas stay on the slots).
+- **Editor `SlotListEditor`** (DS), mode `slots` (fixed `max` positions, holes shown, never compacted) or mode `list` (Shared:
+  the items + ONE trailing empty position while under `max`; blanks dropped on commit, as the server already does). Composes
+  DS `OrderedList` (ids `p1…pN`, `renderItem` = label + DS `Textarea` + counter) — no new reorder code. Reports every change via
+  `props.onValueChange` (AG36); never on mount; `isCancelAfterEnd: () => !touched`. Shows the key line (below).
+- **Writes (slot mode)**: the adapter's `onCellValueChanged` for a `slots:` colId computes `slotListChanges(before, after)` and,
+  for each CHANGED position only, applies the slot column's own set semantics to `row.values[slotKey]` and dispatches the same
+  handler for that slot colId (gate, formula check, `writer.set` — exactly the path a typed slot takes). `SheetWriter` coalesces
+  them into ONE `PATCH /products/bulk` per row with the row's `expectedVersion`; each change `{ field: bulletPoints[i], value |
+  null, contentAddress }` from the slot cell. Server: AM.1 seed/compose/keep holes, 700 per slot, R-60 per-row refusal (a bad
+  position refused, the rest stored). **List mode (Shared)**: unchanged whole-list `bulletPoints` write; R-58 caps it server-side.
+- **R-56**: `slotKeysHiddenByDefault(columns)` = every slot key whose group has a one-cell → excluded from "All attributes"
+  (`views.ts`) and from the landing's `orderedKeys` (`useSheetColumns.ts`); still in the Customise specs (tickable) and in every
+  import/export path (untouched — they read the server's columns, not the view). A saved view keeps what it saved.
+
+### 3. The keyboard (R-55; the one model otherwise)
+| Key | In the bullets editor |
+|---|---|
+| Enter / F2 / double-click / Space on the cell | opens; focus on position 1, caret at the end |
+| typing a character on the cell | opens WITHOUT inserting it (typing never replaces bullet 1's text) |
+| Tab / Shift+Tab | next / previous position (taken from AG by `suppressSlotListKeys`) |
+| Tab on the LAST position · Shift+Tab on the FIRST | NOT taken → AG commits and moves right / left |
+| Alt+↑ / Alt+↓ | moves the focused bullet up / down; live announcement "Bullet 3, position 2 of 10" (keyboard parity with the drag + buttons) |
+| Enter (in a position) | saves (AG's popup commit); a line break is never inserted; Shift+Enter does nothing (taken, prevented) |
+| Esc | cancels, 0 writes |
+| click-away | commits |
+| opened, nothing changed | 0 writes (`isCancelAfterEnd`, and `equals`) |
+| `=` on the cell | opens the same editor (no formula on the virtual column; formulas remain per slot) |
+
+**Hint line:** R-48's `EDITOR_KEY_HINT` says "Tab saves and moves right", which is FALSE inside this editor (R-55). Honest UI wins:
+`editorHint.ts` gains `EDITOR_KEY_HINT_FORM = 'Enter saves · Tab next bullet, then moves right · Esc cancels'`, built from the
+same parts so Enter/Esc cannot drift; a field fact line under it: `Alt+↑↓ moves a bullet`. (Stated; reversible.)
+
+### 4. Pixel declarations (before landing)
+- Channel sheet: the one cell 240px at Bullet 1's rank (same group); the ten keep 110px and their order but are HIDDEN by default
+  → the default Amazon sheet is **860px narrower** (−1,100 + 240). Customise → tick Bullet N shows it at its old place.
+- Cell text 13px/ellipsis, the inherited/refused marks as `CascadeCell` draws them (Δ 0 to other cells).
+- Popup: `editorBox` new kind `slotlist` `{ width: 560, height: 480, preferred: 560, preferredHeight: 400 }` — top-left pinned to
+  the cell, never slides, internal scroll. Shared's bullets popup was an inline `min(520px, 85vw)` → now 560 (Δ +40px, declared).
+- Position row: DS `OrderedList` row (28px controls), label `Bullet N` 12px, DS `Textarea` rows 2 (≈56px), counter `123 / 700`
+  11.5px right-aligned. The counter uses `--nds-text-2` (an existing below-7:1 pair — no new pair; the contrast ratchet counts
+  tokens, so it holds at 49/10; the AAA sweep fixes the token). An over-cap position is marked, NEVER truncated (the server judges).
+- Hint + fact lines: the value editor's hint class (E1), same size and spacing.
+
+### 5. Files (phase 2 would hold)
+DS web + factory mirror (grid/editors are mirrored byte-identical today):
+- NEW `design-system/grid/editors/slotList.ts` — pure: `slotGroups`, `slotListValue`, `slotListChanges`, `slotListKey`,
+  `bulletsEditorKey(event, position, count)`, `suppressSlotListKeys`.
+- NEW `design-system/grid/editors/SlotListEditor.tsx` — the popup editor (modes `slots` / `list`), composes `OrderedList`.
+- NEW `design-system/grid/editors/slotListColumn.ts` — `slotListColumnDef`.
+- `design-system/grid/editors/editorBox.ts` — kind `slotlist`. `editorHint.ts` — `EDITOR_KEY_HINT_FORM`.
+  `grid/editors/index.ts` — exports.
+- NEW `design-system/catalog/SlotListEditorExample.tsx`. CSS in `styles/components.css` (web + factory): `.nds-slotlist-*`.
+Studio:
+- NEW `_studio/sheet/slotListColumns.ts` — `withSlotListColumns`, `slotKeysHiddenByDefault`.
+- `_studio/sheet/master/channelColumns.tsx`, `_studio/sheet/master/columns.tsx` — the final-map override (both); master: Shared's
+  `bulletPoints` → `SlotListEditor` mode `list` (replaces `AttributeShapeEditor` for bullets only).
+- `_studio/sheet/channel/useChannelSheetAdapter.tsx`, `_studio/sheet/master/useMasterSheetAdapter.tsx` — `withSlotListColumns` on
+  the grid columns + the fan-out branch in `onCellValueChanged`.
+- `_studio/sheet/views.ts` ("All attributes" minus the hidden slots), `_studio/sheet/useSheetColumns.ts` (landing `orderedKeys`).
+- `scripts/check-editor-open.mjs` — vocabulary `pop:slots`, detection `.nds-slotlist-editor` → `popup:slots`, the regex, kind
+  match `slotlist` (driving colId `slots:*`), new arms (below). `docs/2026-09-03-cell-editing-contract.md` — vocabulary + rows.
+API: NEW `apps/api/src/services/products/bullets-slot-fanout.vitest.test.ts` (real route + the workspace hook, B1's pattern). No API
+product file.
+**For the main session (text in the phase-2 report):** `design-system/CHANGELOG.md` (web + factory) entry "SlotListEditor + the
+one bullets cell"; `.claude/DS-GAPS.md` row "the grid had no bounded-list editor with fixed positions and keyboard reorder; bullets
+used a studio-local editor"; `catalog/index.ts` + `TokenCatalog.tsx`/`catalog/README.md` lines; `components/index.ts` — none
+(`OrderedList` already exported).
+
+### 6. PREDICTIONS (written before any run)
+- Node (web, DS) `slotList.vitest.test.ts`: all ten round-trip; a hole kept (`''` → `null` only for a CHANGED cleared position);
+  reorder rewrites exactly the moved span; untouched → 0 changes; list mode trims blanks and respects `max`; `bulletsEditorKey`:
+  Tab on 1..9 → next, Tab on 10 → `ag` (not taken), Shift+Tab on 1 → `ag`, Alt+↑ on 1 → none; `suppressSlotListKeys` only inside
+  `.nds-slotlist-editor`. ≈ 18 arms, all green.
+- Node (studio) `slotListColumns.vitest.test.ts`: inserted before the first slot; one per language group; idempotent; none without a
+  slot group; the colId never equals a write field; hidden-by-default = the ten, and only when the one-cell exists. ≈ 8 arms.
+- Builder parity (node): both builders emit the identical `slots:bulletPoints` ColDef shape for a slot-group fixture, neither
+  without one. ≈ 3 arms. The existing builder / adapter / views / landing suites stay green.
+- API `bullets-slot-fanout`: ten slot changes in ONE request → the stored list equals, holes kept; position 4 at 701 chars →
+  refused per row, the other nine stored; a stale `expectedVersion` → all refused (one CAS). ON and OFF. ≈ 4 arms.
+- `tsc` web 0 · factory 0; DS fork drift ✓; DS-GAPS append-only ✓; contrast ratchet held 49 / 10.
+- **Browser (the next push's editor-open gate — first measurement):** master Shared `bulletPoints` → `pop:slots` on all four gestures,
+  Esc 0 writes, untouched 0 writes, one position edited → exactly 1 whole-list write. **AMAZON·IT `slots:bulletPoints`** → today
+  BLIND (the scope rendered no rows locally — 18 baselined keys); `60140000a` stopped the gate flipping the local Amazon row, so
+  it MAY render now — if it does: `pop:slots`, Tab→next, Tab on 10 → moves right and saves, one position edited → exactly 1 slot
+  change in 1 request. If still blind: stated, never green.
+
+### 7. Mutations (Python harness, per-file backups, sha256 restored)
+The fan-out sends one whole-list write (field `bulletPoints`) · a hole compacted · reorder loses a position · untouched guard removed
+(isCancelAfterEnd) · Tab taken on the last position (traps focus) · one builder without the column · the virtual colId sent as a
+field · the ten hidden from Customise too (not only the landing) · the over-cap text truncated instead of marked · the list-mode
+trailing empty position committed as a bullet.
+
+### 8. Owner question
+None needed: R-55/R-56 decide the behaviour. Two stated choices he may reverse: (1) the bullets hint reads "Tab next bullet, then
+moves right" instead of R-48's exact line, because the exact line would be false here; (2) typing on the cell opens the editor
+without inserting the character (no silent replacement of bullet 1).
