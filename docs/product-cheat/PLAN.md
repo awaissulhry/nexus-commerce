@@ -8873,3 +8873,20 @@ Predictions first (this session's scratchpad `now/predictions.md`). Records: `re
   (by design), 🔴 **4 `the eBay builder refused: categoryIds.map is not a function`** — a real defect in the eBay payload builder (the same builder
   the studio's eBay publish uses). Not investigated yet — for the Owner.
 - The scheduled nightly tonight: readiness finds nothing due (computed 19:34); content-drift at 03:37 continues the 88.
+
+## A-56 — The eBay studio builder crashed on every Trading listing with a category: "categoryIds.map is not a function". BUILT (the Owner: "option A").
+
+**Found** by content-drift's first run (2026-09-24 18:50 UTC): 4 eBay listings `not compared — the eBay builder refused: categoryIds.map is not a function`
+— all GALE-JACKET, eBay·IT, Trading (no offer id), category 177104 (read only). **Cause (read):** `studio-publication-ebay.ts:114`
+`loadEbaySpec(scope.marketplace, category)` passed ONE category string where `loadEbaySpec(marketplace, categoryIds: string[])` (`channel-specs/index.ts:117`)
+maps a list. `resolved` arrives untyped, so `tsc` never saw it; the builder's test stub ignored its argument, so every test stayed green. Both lines date
+from `f212c2348` / `3161da57b` (2026-09-12/13): **the studio eBay publish of every Trading listing that reaches its category has crashed here since then**
+(the 8 "Inventory model" and 2 shell listings are refused before this line; A-41's currency refusal sat in front of it until 09-23).
+**Fix:** `[category]`, and `category` typed `string | null | undefined` so the type check refuses the old call (TS2345, proven). The parity test's stub now
+reads its argument as the real function does (`categoryIds.map(String)`). **Red first:** on the old line the stub reproduced production exactly — 4 of 5
+arms `TypeError: categoryIds.map is not a function`; fixed 5/5; with the drift, transports and eBay content-drift files 7 files / 56 tests; fresh `tsc` 0.
+**Mutations 2/2 red** (the bug back with a cast → tests red; without a cast → tests red AND `tsc` red), file restored by sha256.
+**Effect after deploy:** the nightly eBay content read compares those 4 listings; a studio eBay publish of a Trading listing goes past this line to its next
+checks. Nothing publishes by itself (R-34: listing content work stays the Owner's, last).
+*Done when* — tests ✅; after deploy, the next content-drift run shows those 4 compared (or refused for a NAMED reason) ⏳. *Cost when* — flat.
+*Gate* — the parity file's honest stub + the type. *Rollback* — revert (code only).

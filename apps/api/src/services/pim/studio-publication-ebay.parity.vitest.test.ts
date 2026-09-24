@@ -21,9 +21,12 @@ vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptio
 vi.mock('./studio-publication-media.js', () => ({ publicationImages: () => ['https://img.example/fam-1.jpg'] }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: async () => { throw new Error('not in this fixture') } }))
 vi.mock('../stock-pool/sync-ledgers.js', () => ({ loadSyncLedgers: async () => new Map() }))
+// A-56 (2026-09-24) — the stub reads its argument the way the REAL `loadEbaySpec(marketplace, categoryIds: string[])` does
+// (`categoryIds.map(String)`). The old stub ignored it, so the builder passed ONE category string for months and every
+// test stayed green while production refused 4 GALE-JACKET eBay listings with "categoryIds.map is not a function".
 vi.mock('./channel-specs/index.js', async original => ({
   ...(await original<typeof import('./channel-specs/index.js')>()),
-  loadEbaySpec: async () => ({ absent: false, fields: [
+  loadEbaySpec: async (_marketplace: string, categoryIds: string[]) => (categoryIds.map(String), { absent: false, fields: [
     { key: 'title', channelStore: { kind: 'listingColumn', column: 'title' } },
     { key: 'aspect_Marca', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Marca'] } },
   ] }),
