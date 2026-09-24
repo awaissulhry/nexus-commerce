@@ -154,7 +154,25 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 5, 2026-09-24 09:45 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 6, 2026-09-24 ~11:40 UTC (READ THIS FIRST; everything below is history)
+
+**Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed; the Owner merges).** Since handoff 5 (rulings R-63 … R-64; A-49, A-50):
+- **Step 4.3 #1, #2, #4 BUILT** in three parallel lanes + an integrator: **one text/number editor** on every scope (R-63), a letter never
+  wipes a number (R-47), one hint line (R-48) · **the top bar**: scope + language dropdowns, filters always folded, Shared "See each
+  channel" (R-51…R-53), and a `ListboxPanel` Enter bug proven + fixed · **completeness**: the readiness card names the empty required
+  fields with "Go to", "Filled (all fields)" (A-45, R-54). Non-browser push stages all green (web 4,692 · api 11,540 · builds · tsc 0).
+- **A-50 fixed (R-64):** a source-language fallback no longer counts as filled on another language — production readiness % will
+  drop to the true value after the next nightly once merged.
+- **Gates:** the runner no longer rewrites the local Amazon env connection (`NEXUS_AMAZON_ENV_TOKEN=off`); an eBay "needs
+  reconnecting" footer is a blind spot, not a defect. 🔴 A PLAN.md truncation (a Python `open(p,'w')` before read) was found and
+  repaired from the pushed text — see "A PLAN.md loss, found and repaired".
+- **Not yet browser-measured:** the new editor/top-bar/card UI — the next push's browser gates are its first measurement.
+
+**Next:** the push (all gates) · Step 4.3 #3 bullets in one cell (A-46, R-55/R-56; needs E1's editor — now in) · #5 the AAA sweep
+(lower the contrast ratchet; the amber chip first) · after the merge: `prod-run.mjs content-drift` (read only) + the first nights'
+CronRun lines. Still the Owner's, for the end: 0.3; listing content data (R-34).
+
+### Where this lane stands — handoff 5, 2026-09-24 09:45 UTC (history)
 
 **Times are UTC (`date -u`). Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed). The Owner merges.** The next merge ships
 three additive migrations (`20260923a`, `20260923b` — and the channel lane's `20260922a` is already on production).
