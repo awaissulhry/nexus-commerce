@@ -149,11 +149,23 @@ export interface GridToolbarFoldProps {
    * never hides how many filters exist. Omit for a group that has nothing to count.
    */
   count?: number
+  /**
+   * `'overflow'` (default) folds only when the bar is full — R-LX-18, unchanged. `'always'` keeps
+   * the group folded at every width (Step 4.3 #2, R-52): one trigger, the same children in its panel.
+   * An EMPTY group (`count === 0`) still never becomes a trigger, in either mode.
+   */
+  mode?: 'overflow' | 'always'
+  /**
+   * The label of the ACTIVE control in the group, when one is (R-52: the filters are single-select,
+   * so "how many are active" would only ever read 0 or 1). Shown ON the trigger instead of the count —
+   * `Filters · Missing images` — and styled as pressed, so a folded filter never hides that it is on.
+   */
+  activeLabel?: string
   /** The controls. Rendered inline when they fit and inside the panel when they do not — same nodes. */
   children: ReactNode
 }
 
-export function GridToolbarFold({ label, count, children }: GridToolbarFoldProps) {
+export function GridToolbarFold({ label, count, mode = 'overflow', activeLabel, children }: GridToolbarFoldProps) {
   const host = useRef<HTMLSpanElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -168,7 +180,7 @@ export function GridToolbarFold({ label, count, children }: GridToolbarFoldProps
    * empty group still produced a `Filters 0` button. `count === 0` is the group saying it is empty.
    */
   const foldable = count !== 0
-  const folded = foldable && neededWidth !== null
+  const folded = foldable && (mode === 'always' || neededWidth !== null)
 
   const measure = useCallback(() => {
     const el = host.current
@@ -219,14 +231,16 @@ export function GridToolbarFold({ label, count, children }: GridToolbarFoldProps
       <button
         type="button"
         ref={trigger}
-        className="nds-btn sm nds-toolbar-fold-trigger"
+        className={['nds-btn sm nds-toolbar-fold-trigger', activeLabel ? 'is-active' : ''].filter(Boolean).join(' ')}
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         {label}
-        {count !== undefined && <span className="nds-toolbar-fold-count">{count}</span>}
+        {activeLabel
+          ? <span className="nds-toolbar-fold-active">· {activeLabel}</span>
+          : count !== undefined && <span className="nds-toolbar-fold-count">{count}</span>}
         <ChevronDown size={11} />
       </button>
       {/* Kept MOUNTED and hidden, so a chip's own state survives closing the panel. */}

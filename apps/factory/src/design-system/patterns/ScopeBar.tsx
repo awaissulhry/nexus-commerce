@@ -1,8 +1,12 @@
 'use client'
 
-import { useCallback, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { Plus } from 'lucide-react'
+import { useCallback, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronDown, Plus } from 'lucide-react'
 import { InfoTip } from '../primitives/InfoTip'
+import { ListboxPanel, type ListboxPanelOption } from '../components/ListboxPanel'
+import { useClickAway } from '../components/useClickAway'
+import { usePopoverPosition } from '../components/usePopoverPosition'
 
 /*
  * The scope vocabulary and its tone/label table are PES.2's, and there is exactly one of each
@@ -13,7 +17,7 @@ import { InfoTip } from '../primitives/InfoTip'
  * Imported by its deep path on purpose: the module is pure (it imports nothing), so this costs no
  * bundle, whereas the `design-system/grid` barrel would pull the whole AG engine into a chip row.
  */
-import { readinessMeta, type ScopeReadinessState } from '../grid/renderers/readiness'
+import { readinessMeta, SCOPE_READINESS_STATES, type ScopeReadinessState } from '../grid/renderers/readiness'
 
 export type { ScopeReadinessState }
 
@@ -36,6 +40,22 @@ export interface ScopeBarReadiness {
   state: ScopeReadinessState
   /** The source's own sentence. Shown on hover; never reworded by the bar. */
   note?: string
+  /**
+   * A SENTENCE shown instead of the state word and the percentage (Step 4.3 #2, R-53) — for a scope
+   * whose own number would mislead, e.g. the Shared product: "See each channel". The dot keeps the
+   * `state`'s tone. Omit and the chip renders exactly as before.
+   */
+  summary?: string
+}
+
+/**
+ * The worst of several scope states — the first of `SCOPE_READINESS_STATES` (declared in severity
+ * order, most attention first) that is present. `absent` ("nothing set up") is not a verdict and is
+ * ignored; `null` when no state carries one. One rule, read from the shared table, never restated.
+ */
+export function worstScopeState(states: readonly ScopeReadinessState[]): ScopeReadinessState | null {
+  const present = new Set<ScopeReadinessState>(states.filter((s) => s !== 'absent'))
+  return SCOPE_READINESS_STATES.find((s) => present.has(s)) ?? null
 }
 
 export interface ScopeBarItem {
@@ -88,6 +108,13 @@ export interface ScopeBarProps {
    */
   right?: ReactNode
   className?: string
+  /**
+   * `'chips'` (default) — the radiogroup of chips, unchanged. `'menu'` (Step 4.3 #2, R-51) — ONE 28px
+   * trigger showing the active scope exactly as its chip would, and a listbox of every scope that
+   * still carries each one's dot, state word and percentage (and a held scope's reason). The states
+   * move behind a click; they are never dropped.
+   */
+  variant?: 'chips' | 'menu'
 }
 
 function pctLabel(r: ScopeBarReadiness): string {
@@ -104,7 +131,7 @@ function chipTitle(item: ScopeBarItem): string | undefined {
   // repeats them — it carries the part that does not fit: the sentence explaining the verdict. The
   // percentage stays in the title regardless of `showPercent`, so a chip that dropped the number
   // for width still has it on hover rather than losing it outright.
-  const head = r.pct == null ? `${item.label} — ${meta.label}` : `${item.label} — ${meta.label} · ${pctLabel(r)}`
+  const head = r.summary != null ? `${item.label} — ${r.summary}` : r.pct == null ? `${item.label} — ${meta.label}` : `${item.label} — ${meta.label} · ${pctLabel(r)}`
   // The caller's `note` is the server's own sentence and outranks the generic hint; neither is
   // reworded here.
   return `${head}. ${r.note ?? meta.hint}`
@@ -139,6 +166,7 @@ export function ScopeBar({
   right,
   className,
   showPercent = true,
+  variant = 'chips',
 }: ScopeBarProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const labelId = useId()
@@ -189,6 +217,16 @@ export function ScopeBar({
     [items, active, onChange],
   )
 
+  if (variant === 'menu') {
+    return (
+      <div className={['nds-scopebar', 'is-menu', className ?? ''].filter(Boolean).join(' ')}>
+        {label && <span className="nds-scopebar-label" id={labelId}>{label}</span>}
+        <ScopeMenu items={items} active={active} onChange={onChange} showPercent={showPercent} labelId={label ? labelId : undefined} ariaLabel={ariaLabel} />
+        {right != null && <div className="nds-scopebar-right">{right}</div>}
+      </div>
+    )
+  }
+
   return (
     <div className={['nds-scopebar', className ?? ''].filter(Boolean).join(' ')}>
       {label && (
@@ -235,7 +273,7 @@ export function ScopeBar({
               {ready && (
                 <>
                   <span className="nds-scope-sep" aria-hidden>·</span>
-                  <span className="nds-scope-state">{readinessMeta(ready.state, 'scope').label}</span>
+                  <span className="nds-scope-state">{ready.summary ?? readinessMeta(ready.state, 'scope').label}</span>
                 </>
               )}
               {/* Measuring is a SKELETON, never a dash: `—` already means "not scored / not listed",
@@ -260,7 +298,7 @@ export function ScopeBar({
                   repeats it — `eBay · Not set up —` says the same thing twice, and the second time
                   in a glyph that elsewhere means something else. Reviewed on market DE, where
                   every scope is absent. */}
-              {ready && showPercent && !((ready.state === 'absent' || ready.state === 'notComputed') && ready.pct == null) && (
+              {ready && showPercent && ready.summary == null && !((ready.state === 'absent' || ready.state === 'notComputed') && ready.pct == null) && (
                 <span className={`nds-scope-pct${ready.pct == null ? ' unknown' : ''}`}>
                   {pctLabel(ready)}
                 </span>
@@ -278,6 +316,102 @@ export function ScopeBar({
         )}
       </div>
       {right != null && <div className="nds-scopebar-right">{right}</div>}
+    </div>
+  )
+}
+
+/** Whether a scope shows its percentage — the chip's rule, one definition for chip, trigger and option. */
+function showsPct(r: ScopeBarReadiness, showPercent: boolean): boolean {
+  return showPercent && r.summary == null && !((r.state === 'absent' || r.state === 'notComputed') && r.pct == null)
+}
+
+/** The state text an option trails with: the summary, or the state word and (when shown) the percentage. */
+function stateText(r: ScopeBarReadiness, showPercent: boolean): string {
+  if (r.summary != null) return r.summary
+  const word = readinessMeta(r.state, 'scope').label
+  return showsPct(r, showPercent) ? `${word} · ${pctLabel(r)}` : word
+}
+
+/**
+ * The menu's rows, from the same items the chips render — one per scope, in order. PURE apart from
+ * the dot node. A held scope keeps its reason (`heldReason`: reachable, announced, never selected);
+ * a loading scope says so rather than showing a dash.
+ */
+export function scopeMenuOptions(items: readonly ScopeBarItem[], showPercent = true): ListboxPanelOption[] {
+  return items.map((item) => {
+    const r = item.readiness
+    const ready = r && r !== 'loading' ? r : null
+    const tone = ready ? readinessMeta(ready.state, 'scope').tone : null
+    return {
+      value: item.id,
+      label: item.label,
+      leading: tone ? <span className={`nds-scope-dot ${tone}`} aria-hidden /> : undefined,
+      trailing: item.disabled ? 'Unavailable' : r === 'loading' ? 'Checking…' : ready ? stateText(ready, showPercent) : undefined,
+      title: chipTitle(item),
+      heldReason: item.disabled ? item.disabledReason ?? 'Unavailable' : undefined,
+    }
+  })
+}
+
+function ScopeMenu({ items, active, onChange, showPercent, labelId, ariaLabel }: {
+  items: ScopeBarItem[]; active: string; onChange: (id: string) => void; showPercent: boolean; labelId?: string; ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const faceId = useId()
+  const { popRef, style } = usePopoverPosition(open, ref, { width: 'anchor' })
+  useClickAway([ref, popRef], () => setOpen(false), open)
+  const close = () => { setOpen(false); triggerRef.current?.focus() }
+  const item = items.find((i) => i.id === active)
+  const r = item?.readiness
+  const ready = r && r !== 'loading' ? r : null
+  const tone = ready ? readinessMeta(ready.state, 'scope').tone : null
+  const held = item?.disabled === true
+  return (
+    <div className="nds-scope-menu" ref={ref}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="nds-scope nds-scope-trigger"
+        data-scope-trigger=""
+        data-scope-id={active}
+        data-scope-held={held ? 'true' : undefined}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={labelId ? `${labelId} ${faceId}` : undefined}
+        aria-label={labelId ? undefined : ariaLabel}
+        aria-description={held ? item?.disabledReason : undefined}
+        title={item ? chipTitle(item) : undefined}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span id={faceId} className="nds-scope-face">
+          {tone && <span className={`nds-scope-dot ${tone}`} aria-hidden />}
+          <span className="nds-scope-label">{item?.label ?? active}</span>
+          {ready && (
+            <>
+              <span className="nds-scope-sep" aria-hidden>·</span>
+              <span className="nds-scope-state">{ready.summary ?? readinessMeta(ready.state, 'scope').label}</span>
+            </>
+          )}
+          {r === 'loading' && <span className="nds-scope-pct loading" role="status" aria-busy="true" aria-label={`${item?.label ?? active} — checking readiness`} />}
+          {ready && showsPct(ready, showPercent) && <span className={`nds-scope-pct${ready.pct == null ? ' unknown' : ''}`}>{pctLabel(ready)}</span>}
+        </span>
+        <ChevronDown size={13} className="chev" aria-hidden />
+      </button>
+      {open && createPortal(
+        <ListboxPanel
+          panelRef={popRef}
+          style={style}
+          className="nds-scope-menu-pop"
+          ariaLabel={ariaLabel}
+          options={scopeMenuOptions(items, showPercent)}
+          value={active}
+          onCommit={(id) => { onChange(id); close() }}
+          onCancel={close}
+        />,
+        document.body,
+      )}
     </div>
   )
 }

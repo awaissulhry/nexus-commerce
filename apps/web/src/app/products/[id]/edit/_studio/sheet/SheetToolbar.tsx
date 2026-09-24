@@ -221,7 +221,10 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
             against 1200px of usable width at 1280, 9 controls clipped; after: the chips fold into one
             ~150px trigger and nothing clips at 1280 / 1440 / 1728 / 2048.
           */}
-          {!gone('chips') && <GridToolbarFold label="Filters" count={orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID).length}>
+          {/* Step 4.3 #2 (R-52) — ALWAYS folded into one trigger: `Filters N` (how many exist), or
+              `Filters · <label>` when one is on (single-select, so an active COUNT would read 0 or 1). */}
+          {!gone('chips') && <GridToolbarFold label="Filters" mode="always" activeLabel={(p.chips ?? []).find((chip) => chip.id === p.activeChipId)?.label}
+            count={orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID).length}>
           {orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID).map((chip) => {
             const on = p.activeChipId === chip.id
             const n = viewChipCountLabel(chip)

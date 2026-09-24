@@ -364,6 +364,8 @@ function censusInPage({ ALLOWED, SM, TOOLBAR_H, keepFormControls, DOCK_ROOT }) {
     })(),
     modalPresent: !!document.querySelector('.nds-modal'),
     scopebarH: document.querySelector('.nds-scopebar') ? Math.round(document.querySelector('.nds-scopebar').getBoundingClientRect().height) : null,
+    // Step 4.3 #2 (A-44, R-51) — the scope is ONE menu trigger and the language ONE control.
+    scopeRadios: document.querySelectorAll('.nds-scopebar [role="radio"]').length, scopeTriggers: document.querySelectorAll('.nds-scopebar .nds-scope-trigger').length, langChips: document.querySelectorAll('.nds-scopebar [aria-label="Content language"][role="group"]').length,
     toolbarH: document.querySelector('.nds-toolbar') ? Math.round(document.querySelector('.nds-toolbar').getBoundingClientRect().height) : null,
     SM,
     TOOLBAR_H,
@@ -403,6 +405,9 @@ function judge(surface, c) {
   }
   if (c.fab) fails.push('ASK AI FAB PRESENT on a studio surface (it opts out with the top bar)')
   if (c.scopebarH != null && c.scopebarH !== TOOLBAR_H) fails.push(`SCOPE ROW h${c.scopebarH} (want ${TOOLBAR_H})`)
+  // Guarded by the scope row's presence (a surface with no scope bar is not measured here, as the arm above).
+  if (c.scopebarH != null && (c.scopeTriggers !== 1 || c.scopeRadios !== 0)) fails.push(`SCOPE CONTROL: ${c.scopeTriggers} trigger(s), ${c.scopeRadios} radio chip(s) (want 1 menu trigger — R-51)`)
+  if (c.scopebarH != null && c.langChips !== 0) fails.push('LANGUAGE CHIPS still rendered (want ONE control — A-44)')
   if (surface.kind === 'sheet' && c.toolbarH != null && c.toolbarH < TOOLBAR_H) fails.push(`SHEET TOOLBAR h${c.toolbarH} (minimum ${TOOLBAR_H})`)
   if (surface.kind === 'overlay') {
     // Every assertion returns its MEASURED value, so a reader never has to re-derive one.

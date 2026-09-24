@@ -49,6 +49,19 @@ export interface OptionListProps {
   /** The Select-all row. On by default: both callers want it, and that is the point. */
   selectAll?: boolean
   emptyLabel?: string
+  /**
+   * The fewest options that may stay selected (Step 4.3 #2 — a content-language picker can never
+   * drop to none). Default 0 = today's behaviour for every caller. An option that would break the
+   * minimum stays checked, focusable and announced (`aria-disabled` + its title) and ignores the
+   * toggle; the Select-all row is not offered, because its "clear all" half would break it.
+   */
+  minSelected?: number
+}
+
+/** The next selection after toggling `v`, never dropping below `minSelected`. PURE. */
+export function nextSelection(value: readonly string[], v: string, minSelected = 0): string[] {
+  if (!value.includes(v)) return [...value, v]
+  return value.length <= minSelected ? [...value] : value.filter((x) => x !== v)
 }
 
 /** Past this many options a picker gets a search box without being asked. */
@@ -63,11 +76,13 @@ export function OptionList({
   listClassName,
   selectAll = true,
   emptyLabel = 'No matches',
+  minSelected = 0,
 }: OptionListProps) {
   const [q, setQ] = useState('')
 
   const allChecked = value.length === options.length && options.length > 0
-  const toggle = (v: string) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])
+  const locked = (v: string) => minSelected > 0 && value.includes(v) && value.length <= minSelected
+  const toggle = (v: string) => { if (!locked(v)) onChange(nextSelection(value, v, minSelected)) }
   // Select all deliberately applies to ALL options, not the filtered subset — a control labelled
   // "Select all" that silently selected a search result would be a lie.
   const toggleAll = () => onChange(allChecked ? [] : options.map((o) => o.value))
@@ -92,7 +107,7 @@ export function OptionList({
         </div>
       )}
       <div className={listClassName}>
-        {selectAll && (
+        {selectAll && minSelected === 0 && (
           <label className="nds-ms-opt all">
             <input
               type="checkbox"
@@ -107,8 +122,10 @@ export function OptionList({
         )}
         {matches.length === 0 && <div className="nds-combo-empty">{emptyLabel}</div>}
         {matches.map((o) => (
-          <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}>
-            <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} />
+          <label key={o.value} className={['nds-ms-opt', value.includes(o.value) ? 'sel' : ''].filter(Boolean).join(' ')}
+            title={locked(o.value) ? `At least ${minSelected} must stay selected` : undefined}>
+            <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)}
+              aria-disabled={locked(o.value) || undefined} />
             <span>{o.label}</span>
           </label>
         ))}

@@ -238,4 +238,3 @@
 }
 
 /* Ordered language chips share the scope bar and wrap with it. */
-.languageChips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
