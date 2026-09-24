@@ -8047,3 +8047,283 @@ without inserting the character (no silent replacement of bullet 1).
   no-formula column arm passed. **Fix:** the formula editor always receives `formulas: true`; the master builder adds the plain value
   editor only where the sheet has no formula wiring; the channel builder adds none (its selector decides); factory mirrored. Mutations
   7/7 red (M16 did not mutate → M16b). The next push must show the 36 keys gone.
+
+## A-53 — Motovento: the edit studio says "Waiting for the market…" forever. FOR YOUR RULING (one question, §7). Nothing built.
+
+Drafted by sub-agent MV1 (read only), 2026-09-24; the key code lines re-read by this lane ✓ (`workspace.service.ts` create writes no market; `scopes.ts` `defaultMarket` → null on no markets; the seed route `upsert … update`; `/marketplaces/grouped` returns only `_meta` on none). Scratch: `mv1/` in this session's scratchpad. Read-only: no repo file touched; production read with `SELECT` only inside
+`BEGIN READ ONLY … ROLLBACK`, `TZ=UTC`, host checked `*.neon.tech` (probe scripts:
+`mv1/ro.cjs`, `mv1/rls.cjs`; queries `mv1/q1.sql … q5.sql`). Railway: one read of the HTTP log.
+**read** = I opened the line or ran the query. **inferred** = not run.
+
+---
+
+### 1. Symptom
+
+**As reported:** on business **Motovento**, opening any product in the edit studio shows only
+*"Waiting for the market…"*, and it never changes. Screenshot: product `GALE-JACKET`, Draft, Parent;
+scope chip **"Shared product · Not set up"**; one language chip **"Italian · source"**.
+
+**As reproduced from code and data (read):**
+- The product in the screenshot is Motovento's copy: `cmub55nhk011wmm01zaf6urgx`, `DRAFT`,
+  `isParent=true`, business `bf0047bf-…`. (Xavia's `GALE-JACKET` is `ACTIVE`, a different row.) — q2
+- Motovento has **0** `Marketplace` rows. Xavia has 20 (19 active). — q1, q5
+- Emulating the API's own read (role `nexus_workspace_runtime` + `set_config` exactly as
+  `packages/database/workspace-adapter.ts:18-27`, then the route's query): **as Motovento → 0 markets,
+  2 connections (eBay, Etsy), 0 listings. As Xavia → 19 markets.** — `mv1/rls.cjs`
+- The screenshot shows the code on `main` (`0a563d6d5`), not HEAD: `main`'s `StudioBar.tsx:37` gives the
+  Shared chip `scored(MASTER_SCOPE)` → "Not set up", and `:55` draws languages as chips. HEAD shows
+  "See each channel" and a dropdown (R-51…R-53). (read: `git show 0a563d6d5:…/StudioBar.tsx`)
+- **The defect is identical on `main` and HEAD.** `git diff origin/main HEAD` is empty for
+  `contracts.tsx`, `scopes.ts`, `studio-data.ts`, `StudioLoader.tsx`, `StudioClient.tsx`,
+  `ProductSheetTab.tsx`, `MatrixTab.tsx`, `FamilyVariants.tsx`, `marketplaces.routes.ts`,
+  `workspace-hook.ts`. (read)
+
+### 2. Root cause
+
+**A business created after profiles went ON gets no `Marketplace` rows, and the studio cannot pick
+a market without one. The page then shows a "waiting" line for a state that can never change.**
+
+The chain (all read unless marked):
+
+1. `studio-data.ts:73` reads `GET /api/marketplaces/grouped` once, before the studio mounts
+   (`StudioLoader.tsx:55` shows the skeleton until it returns).
+2. The browser sends the chosen business in `x-nexus-workspace-id` (`lib/auth/install-fetch.ts:45-46`).
+   The API checks membership and runs the handler inside that business
+   (`apps/api/src/lib/workspace-hook.ts:97-103`). The route is not public: `listings.view`
+   (`permissions-manifest.ts:426`).
+3. The route runs `prisma.marketplace.findMany({ where: { isActive: true } })`
+   (`routes/marketplaces.routes.ts:251-266`). `Marketplace` is per business
+   (`schema.prisma:1961`, unique `(workspaceId, channel, code)` `:2008`) and RLS keeps only the
+   current business's rows (policy `nexus_workspace_isolation`, read from `pg_policies`). For
+   Motovento this returns **nothing**, so the response is only
+   `{ _meta: { primaryLanguage: 'it' } }` (`:264`).
+4. Why Motovento has none: business creation writes the profile, membership, account settings,
+   warehouse and stock location — **no markets** (`services/workspace.service.ts:117-157`,
+   `:139-147`). Nothing else writes `Marketplace` rows except the manual `POST /api/marketplaces/seed`
+   (`marketplaces.routes.ts:164`, no caller in `apps/web`), two scripts and old migrations. Xavia's rows
+   predate profiles and were moved to `nexus_legacy_workspace`. Motovento was created
+   2026-09-16 12:45 UTC. (q1)
+5. The browser gets `marketplaces = []` and `primaryLanguage = 'it'` (`studio-data.ts:89-91`), so
+   `marketplacesFailed` stays false (**the read succeeded**; it was just empty).
+6. `deriveScopeOptions([], 'it')` → no channels, **no markets**, locales `['it']`
+   (`scopes.ts:120-155`). The single "Italian · source" chip in the screenshot is this.
+7. `defaultMarket` → `null` when there are no markets (`scopes.ts:191`). `market = null`
+   (`contracts.tsx:577-580`). The "remember last market" effect only restores a market that exists
+   (`contracts.tsx:827`), so it does nothing.
+8. On the Shared scope `locale = primaryLanguage = 'it'` (`contracts.tsx:610`). So `!market` is true, and
+   `ProductSheetTab.tsx:43`, `MatrixTab.tsx:21`, `FamilyVariants.tsx:93` render "Waiting for the market…".
+9. Nothing can change it later: the market list is read once. The only re-read is the discovery retry
+   (`StudioClient.tsx:47-55`), and its only button is in the sheet footer
+   (`SheetFooterNote.tsx:87`) — inside the sheet that never mounts. On the Shared scope the bar has
+   no market picker (`StudioBar.tsx:49`: the market `Listbox` is inside `scope !== MASTER_SCOPE`).
+10. The chip: readiness with no market → `'No market selected.'` (`contracts.tsx:370-371`) → state
+    `absent` → "Not set up" (`design-system/grid/renderers/readiness.ts:82`). The hover says "No market
+    selected", but there is nothing to select.
+
+**Proof the request was answered, not refused:** a refused or failed read leaves `primaryLanguage`
+`null` (`studio-data.ts:86-91`), and then no language chip would be drawn. The screenshot shows
+"Italian · source", so the read returned 200 with `_meta`. (read from code and the screenshot) Railway
+HTTP log: `GET /api/marketplaces/grouped` returned **200** at 11:53:19 and 11:53:26 UTC today. The log
+does not name the business, so "these are the Owner's two opens" is **inferred**.
+
+### 3. Blast radius
+
+| Who | Measured | Effect |
+|---|---|---|
+| **Motovento** (`bf0047bf-…`) | 0 markets; 22 products (2 top-level: `GALE-JACKET` parent + 20 variations, `NEW-20260917-AEJN` on its own); eBay `motovento` + Etsy connected; 0 listings (q2, q3) | **Every product** in the studio: **Sheet, Matrix, Variants** are dead ends (read: the three branches). The eBay and Etsy chips are missing from the bar, because channels come from market rows (`scopes.ts:125-133`). |
+| **Xavia Racing** | 19 active markets (q5) | Not affected by the missing rows. A product with no listings still gets a market, because the market comes from the business's market table, not from the product (`contracts.tsx:577-580`, `scopes.ts:188-197`). No Xavia top-level product lacks listings today (q5: 0), so this is read from code, not seen in data. |
+| **Any business, when the market read fails** | Code: a non-2xx, timeout or transport failure on `/marketplaces/grouped` → `marketplaces = []` (`studio-data.ts:86-92`) → the same forever-"waiting" state, and the retry button is out of reach (step 9). HTTP log for the window the tool served: 3 requests, **all 200** — no case seen. | The same dead end for **any** business on a failed read. Step 1 below covers it. |
+| **Every future business** | `workspace.service.ts:117-157` writes no markets | Every new business starts in Motovento's state. |
+| Beyond the studio (**inferred**, not measured) | 69 API files read `Marketplace` (`grep -l`); e.g. `marketLanguages()` refuses with `market_languages_unconfigured` when there is no row (`services/pim/market-languages.ts:27`) | Language, currency, VAT and listing paths for Motovento are likely refused or empty too. The same seed (step 2) should fix them all. Not part of this fix. Follow-up F1 measures it. |
+
+### 4. The fix plan
+
+The smallest fix that removes the dead end for every business, in three steps. Step 1 (web) stops
+the page from pretending. Step 2 (API) gives every business its markets. Step 3 sets up Motovento's
+markets once (see Q1).
+
+#### Step 1 — one honest "no market" state in place of the three "waiting" lines (web)
+
+- **New `_studio/marketGate.ts`** (pure): `marketGate({ market, locale, marketCount, discoveryFailed })`
+  → `'ready' | 'failed' | 'none'`.
+  - `market && locale` → `ready`.
+  - Else `discoveryFailed` → `failed`.
+  - Else `marketCount === 0` → `none`.
+  - Else → `failed`: markets exist but none resolved, which should not happen, so offer a re-read
+    rather than a wait.
+- **New `_studio/NoMarketState.tsx`**: built from DS `EmptyState` (`design-system/components/EmptyState.tsx:3-22`)
+  and `Button`. No new DS component, no feature CSS beyond layout, `--nds-*` tokens only. The builder
+  reads `DESIGN.md` and `EmptyState.tsx` first (AGENTS.md).
+  - `failed` → title *"Markets could not be loaded"*. Description *"Nexus could not read this
+    business's markets, so the product sheet has no market to open in."* Action **Try again** →
+    `useStudioDiscovery().retry` (exists: `StudioClient.tsx:47-55`), showing *"Retrying…"* while it runs.
+  - `none` → title *"This business has no markets yet"*. Description *"The product sheet opens in a
+    market, and none are set up for this business. Setting up adds the standard Amazon, eBay, Shopify,
+    WooCommerce and Etsy markets. Only channels you have connected appear in the scope bar."*
+    - With `channels.sync` (`usePermission`, `AuthProvider.tsx:135`): action **Set up markets** →
+      `POST /api/marketplaces/seed` (step 2b), then `discovery.retry()`. It shows *"Setting up…"* while
+      it runs. A refusal shows the server's sentence in the description, via `StudioReadError`
+      (`studio-read.ts:24-39`), and the button stays.
+    - Without that permission there is no button, and the description ends *"Ask an owner of this
+      business to set up markets."*
+- **Replace** `ProductSheetTab.tsx:43`, `MatrixTab.tsx:21`, `FamilyVariants.tsx:93` with
+  `<NoMarketState />` whenever `marketGate(…) !== 'ready'`. Fix the comment at `FamilyVariants.tsx:91-92`:
+  the frame has already answered by the time a tab mounts.
+- **The hover:** `contracts.tsx:370-371` gives the gate's sentence (*"No market is set up for this
+  business."* / *"Markets could not be loaded."*), not *"No market selected."*
+- No `apps/factory` mirror: no shared DS file changes. (AGENTS.md mirror rule, read)
+
+**Tests (apps/web, node vitest):**
+- `marketGate.vitest.test.ts`, four cases: ready / failed read / zero markets / markets present but
+  unresolved.
+- `NoMarketState.vitest.test.ts`, using `renderToStaticMarkup` (precedent:
+  `presence/discovery-render.vitest.test.ts`). It checks each state's title, its button, the
+  button-free no-permission form, and the refusal sentence.
+- A pure `setUpMarkets(fetch, retry)` case: on 2xx it calls `retry` once; on 403 it returns the
+  server's sentence and does not call `retry`.
+- A source-scan case: the three tab files do not contain "Waiting for the market". It needs a
+  positive control that finds the string in a synthetic line.
+
+**Mutations that must turn red:**
+1. The gate returns `ready` when `market` is null.
+2. `failed` and `none` swapped.
+3. One "Waiting for the market…" branch put back in `MatrixTab.tsx`.
+4. `retry` not called after a successful set-up.
+5. The **Set up markets** button shown without `channels.sync`.
+
+#### Step 2 — every business gets its markets (API)
+
+- **2a. One catalogue, one file.** A new `apps/api/src/services/pim/market-catalogue.ts` (pure, no
+  Prisma import) holds the reference columns of the **20 rows Xavia carries in production today**
+  (q4): `channel, code, name, marketplaceId, region, currency, language, languages, domainUrl,
+  vatRate, taxInclusive, isActive`.
+  - That means BE (`nl, fr`), IE, TR, and US **inactive**, as on Xavia.
+  - It leaves out the per-business state: `isParticipating`, `participationStatus`,
+    `participationCheckedAt`, `fbaProgram`, `schemaMapping`.
+  - `routes/marketplaces.routes.ts:66-86` and `packages/database/scripts/seed-marketplaces.ts:21-48`
+    import it rather than keeping their own copies.
+  - The route's copy has **no VAT**. Seeding from it would write `vatRate NULL / taxInclusive false`
+    for EU markets, which is the exact underpricing `scripts/seed-marketplace-vat.mjs:2-8` records
+    (19–25 %). (read)
+  - Move the `ALLOWED` seed entry in `apps/api/scripts/check-market-currency.mjs` (its `requires`
+    SE→SEK, PL→PLN) to the new file.
+- **2b. `POST /api/marketplaces/seed` becomes create-only.** It uses `createMany({ data: catalogue,
+  skipDuplicates: true })` inside the request's business and returns `{ created, total }`. It never
+  rewrites a business's existing rows. Today's `upsert … update` (`:168-172`) rewrites name, id,
+  domain, region and currency.
+- **2c. Business creation seeds the catalogue.** In `workspace.service.ts` `create()`, in the same
+  transaction and after `accountSettings` (`:144`), write `tx.marketplace.createMany({ data: catalogue })`.
+  The row's `workspaceId` default comes from the transaction's business (`schema.prisma:1961`), the same way the warehouse row gets its own today (`schema.prisma:9051`). That this works for `createMany` is **inferred**; the real-database arm proves it. If
+  seeding fails, the business is not created.
+
+**Tests (apps/api):**
+- Unit, `market-catalogue.vitest.test.ts`:
+  - `(channel, code)` is unique.
+  - Every row has a non-empty `languages`.
+  - Every EU Amazon and eBay row has `taxInclusive=true` and a `vatRate`.
+  - SE→SEK, PL→PLN, TR→TRY.
+  - It equals the 20-row reference snapshot captured by q4, with the snapshot kept as the fixture.
+- **Real database (`formulaDatabase()`, profiles ON and OFF), extending `services/workspace.vitest.test.ts`:**
+  - `service.create(user, details())` → inside the new business, `marketplace.findMany({ isActive:
+    true })` = **19**, and `EBAY:IT` has `vatRate 22, taxInclusive true`.
+  - The other business's count is unchanged (isolation).
+  - Replaying the same `creationKey` adds no rows.
+- **Real database, the route (Fastify inject with the workspace hook, as the C5 precedent in
+  PLAN.md A-47 does):**
+  - The **reproduction arm is written first and must match production**: under a business with 0
+    rows, `GET /marketplaces/grouped` → only `_meta`.
+  - Then `POST /marketplaces/seed` → `created 20`. A second call → `created 0`. A row changed
+    beforehand (e.g. `languages`) is unchanged afterwards.
+  - Then `GET` → EBAY and AMAZON groups present.
+
+**Mutations that must turn red:**
+1. Remove the `createMany` from `create()`.
+2. Seed from a list without VAT.
+3. Put back `upsert … update` in the seed route (the "unchanged row" arm).
+4. Seed outside the creation transaction, or under another business (the isolation arm).
+5. Drop PL from the catalogue (the currency gate and the unit arm).
+
+**Gates:** `check-market-currency.mjs` (moved entry) and `scripts/check-market-languages.mjs`. The
+catalogue is an array of objects, not a map, and the route's identical array is not in
+`market-languages-baseline.json` today, so the guard is expected not to flag it. (**inferred**: run it)
+
+#### Step 3 — Motovento's markets, once (Q1 decides how)
+
+- **Recommended:** after the deploy, the Owner opens any Motovento product and presses **Set up
+  markets** (step 1). One idempotent production write, made by the Owner, through the tested path.
+- **Alternative:** an idempotent data migration that inserts the catalogue for every active business
+  with **zero** `Marketplace` rows (`… WHERE NOT EXISTS …` plus `ON CONFLICT DO NOTHING`); today that
+  is only Motovento (q5). A data backfill inside a migration needs your word
+  (feedback_additive_migrations_preapproved). Its test applies the SQL on `formulaDatabase()` with one
+  business that has part of the set and one with none: only the empty one gains rows, and a re-run
+  changes nothing. **Mutation:** drop `NOT EXISTS` → the partial business gains rows → red.
+
+#### Follow-ups (not in this fix)
+
+- **F1:** measure the other Motovento surfaces that read `Marketplace` (69 API files) after step 3, in
+  one read-only pass.
+- **F2:** the landing market is a tie broken alphabetically (`scopes.ts:194-196`). With only eBay
+  connected, Motovento would land on **DE**, not IT, unless the browser remembers a market. The
+  remembered market is per browser, not per business (`lastMarket.ts:19`). Preferring the business's
+  country (`AccountSettings.country = IT`, q3) is a separate ruling.
+- **F3:** the "Retry channel availability" button lives only in the sheet footer. Step 1 covers the
+  no-market case. Any other failed-read case still depends on the sheet being mounted.
+
+### 5. Pixel / UI declarations (written against HEAD)
+
+| Where | Before | After |
+|---|---|---|
+| Sheet / Matrix / Variants body, Motovento, before step 3 | Top-left muted line *"Waiting for the market…"*, nothing else, forever | DS `EmptyState` centred in the tab body: icon, *"This business has no markets yet"*, the two-sentence description, one **Set up markets** button (sm). Without `channels.sync`: no button, and the line *"Ask an owner…"*. |
+| Same, a failed market read (any business) | The same forever line | *"Markets could not be loaded"* + **Try again**, which shows *"Retrying…"* while running |
+| Shared chip hover | *"No market selected."* | *"No market is set up for this business."* / *"Markets could not be loaded."* The chip text is unchanged (HEAD: R-53 "See each channel"). |
+| After **Set up markets** succeeds | — | The same page, no reload: the bar gains **eBay** and **Etsy**, and the Sheet opens on the `GALE-JACKET` family (1 parent + 20 variations) |
+| Xavia, any product | Sheet opens | Unchanged, byte for byte: the gate returns `ready` |
+
+### 6. Predictions (written before any build)
+
+- **Reproduction arm** (route, 0-row business): body has no channel key, only `_meta.primaryLanguage = 'it'`.
+  Green on today's code. This is the arm that ties the test to production (it matches `rls.cjs`).
+- `workspace.vitest` new arm: **red** on today's code (0 rows), **green** after 2c (19 active, 20 total).
+- Seed-route arms: on today's code the "unchanged row" arm is **red** (upsert rewrites) and the VAT arm is
+  **red** (the route's list has no VAT). Both green after 2a/2b.
+- Web: `marketGate` and `NoMarketState` arms are new; the source-scan arm is **red** on today's code (3 hits).
+- **Browser, after deploy, before step 3 (Motovento):** the empty state with **Set up markets**. After
+  pressing it, `POST /api/marketplaces/seed` → 200 `{ created: 20, total: 20 }`, then
+  `GET /marketplaces/grouped` → 200 with `AMAZON`, `EBAY`, `ETSY`, `SHOPIFY`, `WOOCOMMERCE` groups. The
+  bar shows Shared + eBay + Etsy. The landing market is the remembered one if the browser has one,
+  otherwise **DE** (F2). The Sheet shows the `GALE-JACKET` family.
+- **Production read after step 3:** Motovento `Marketplace` = 20 rows (19 active), `EBAY:IT vatRate 22.00
+  taxInclusive true`. Xavia still 20, every column unchanged (compare q4 before/after).
+
+### 7. Questions for the Owner
+
+1. **How should Motovento get its markets: your one click on "Set up markets" after the deploy, or a
+   data migration that runs with the deploy?** *Recommendation: the click.* It is one tested, idempotent
+   write that you make yourself, through the same path any business would use, and no data write runs
+   inside a migration. Choose the migration if you want Motovento fixed with no action at all.
+
+(The catalogue is Xavia's 20 production rows, and new businesses are seeded at creation. Both follow
+from the measured data; say if you want either changed.)
+
+### 8. Closure
+
+- **Done when:**
+  - The three dead ends are gone from source (source-scan arm).
+  - Every new business has its 20 market rows (real-database arm).
+  - The seed route is create-only with VAT (real-database arms).
+  - Motovento has 20 rows (production read), and its studio opens the `GALE-JACKET` sheet in the browser.
+  - Xavia's rows are unchanged (q4 before/after).
+- **Cost when:** `flat`. There are 20 rows per business, written once at creation (one `createMany`
+  in a transaction that already writes 7 rows). The gate is O(1) per render. No new request on any
+  page load; set-up is one POST, only when the operator presses it.
+- **Gate:** the pre-push hook:
+  - `tsc` for web, api and factory.
+  - apps/web and apps/api vitest, including the new arms.
+  - The real-PostgreSQL suites, profiles ON and OFF.
+  - `check-market-currency.mjs` and `check-market-languages.mjs`.
+  - The profiles-ON ratchet.
+  - The browser gates, whose first real measurement of the new state comes at the push.
+- **Rollback:** revert the commits. The code is additive, and Xavia is untouched (creation seeding only
+  runs for new businesses; the seed route is create-only). Motovento's 20 rows can stay after a revert
+  and are harmless. Removing them would bring the dead end back. If removal is ever wanted, delete by
+  value (`workspaceId = 'bf0047bf-…'`), only while Motovento has no listings (q3: 0 today).
