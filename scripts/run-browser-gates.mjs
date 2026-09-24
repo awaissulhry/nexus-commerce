@@ -56,6 +56,15 @@ const UPDATE = argv.includes('--update-baseline')
 const flag = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined }
 
 /** The gates, in the order they run. One at a time: two browser gates on one server measure each other. */
+/**
+ * The gate API's own switches. `NEXUS_AMAZON_ENV_TOKEN=off` (2026-09-24): with the production-only Amazon keys blanked, the
+ * API's boot seed (`index.ts` seedEnvManagedConnections) otherwise rewrote the LOCAL env-managed Amazon connection to
+ * `isActive: false, authStatus: 'disconnected'` on every gate run — a side effect on the shared local database that made two
+ * local-database API tests fail at the next push. With it off, boot leaves that row untouched and no code path may use the
+ * environment refresh token (`useAmazonEnvToken` refuses by name).
+ */
+export const GATE_API_ENV = Object.freeze({ NEXUS_API_HOST: '127.0.0.1', NEXUS_DISABLE_BACKGROUND_JOBS: '1', ENABLE_QUEUE_WORKERS: '0', NEXUS_AMAZON_ENV_TOKEN: 'off' })
+
 export const GATES = [
   { id: 'grid-chrome', script: 'scripts/check-grid-chrome.mjs', args: ['--strict'] },
   { id: 'editor-open', script: 'scripts/check-editor-open.mjs', args: ['--strict'] },
@@ -296,7 +305,7 @@ async function main() {
   const apiLog = join(work, 'api.log')
   const api = startServer('API', process.execPath, ['--import', 'tsx', 'src/index.ts'], {
     cwd: join(ROOT, 'apps/api'), log: apiLog,
-    env: { ...baseEnv, PORT: String(apiPort), NEXUS_API_HOST: '127.0.0.1', NEXUS_DISABLE_BACKGROUND_JOBS: '1', ENABLE_QUEUE_WORKERS: '0' },
+    env: { ...baseEnv, PORT: String(apiPort), ...GATE_API_ENV },
   })
   const nextBin = createRequire(join(ROOT, 'apps/web/package.json')).resolve('next/dist/bin/next')
   const distDir = `.next-gate-${process.pid}`

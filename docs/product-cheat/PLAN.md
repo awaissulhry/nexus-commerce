@@ -226,3 +226,33 @@ code regression. **Classified honestly:** the parity arm now records that footer
 reconnecting here, so the footer shows the account note, not the key hint"* (a blind spot, printed as blind, never green), and that
 key is added to `scripts/browser-gates-baseline.json` (19 editor-open blind keys). The gate did what it exists for: nothing unknown
 passed.
+
+## A-49 — A-42's premise is out of date: the studio's text/number cells already open ONE value popup. Ruled R-63.
+
+Found by sub-agent E1 (phase 1, read only), re-read by this lane ✓: `design-system/grid/editors/FormulaCellEditor.tsx:401-403` swaps
+every plain scalar fallback (`agTextCellEditor`, `agLargeTextCellEditor`, `agNumberCellEditor`) for the formula-aware value popup
+whenever a formula is available — so on the studio sheet text and number already share one popup editor (G1's run measured it on
+master). AG's inline editors survive only on the Variants page (no formula wiring) and grids outside the studio. **R-47 on the live
+editor:** a typed letter REPLACES the number in the popup; the server refuses the save and the database keeps the number — the
+"empty box" of the 09-04 design doc is AG's number editor, still used by the Variants page. Also from T1's phase 1 (read only, to be
+proven in its build): `ListboxPanel` short lists — Enter commits the hidden highlight (row 1), not the option tabbed to.
+R-52's button text: only ONE filter can be active at a time, so it shows `Filters · <active one>` (or `Filters N` when none) — the
+"count of active filters" in R-52's row was this lane's wording, not the Owner's.
+
+| # | Question | Ruling (2026-09-24 10:24 UTC, fortieth set) |
+|---|---|---|
+| **R-63** | A-49 — EditorShell step 1 | ✅ **(A)** Keep the value popup as the ONE text/number editor; add R-47's number rule (a letter never wipes a number) and R-48's one hint line to it; the Variants page moves onto the same editor |
+
+### Step 4.2 — second push: the browser gates GREEN on their ratchet (0 new keys); refused later by 4 API tests — a side effect of the gates, found and fixed (2026-09-24 ~10:14–10:40 UTC)
+
+Browser gates: grid chrome ✅ 0 keys · editor-open ✅ 19 known blind keys, 0 new · census ✅ 7 known blind keys, 0 new (1,542 s).
+Then `apps/api` unit tests: **4 failed in 2 files** (`pim/variation-quality`, `pim/variation-rule-view`): *"ChannelConnection
+cmothu9bo… is not active"*. **Cause (read + measured):** the local env-managed Amazon row was set `isActive: false,
+authStatus: 'disconnected'` at **10:14:02 UTC** — the moment the gate's API booted: with the production-only Amazon keys blanked,
+`index.ts` `seedEnvManagedConnections` rewrites that row as "credentials not configured". The gates changed the shared local
+database, and two local-database tests read it. **Fix:** the runner's API now runs with `NEXUS_AMAZON_ENV_TOKEN=off`
+(`GATE_API_ENV` in `scripts/run-browser-gates.mjs`) — boot then leaves the row untouched, and `useAmazonEnvToken` refuses by name;
+a new runner arm (11/11) and a mutation (the switch removed → red; sha256 restored). **The local row restored** to what boot writes
+when credentials exist (`isActive: true`, `authStatus: 'unknown'`, `lastSyncError: null`; one row, local database only, guarded
+by its prior state) — the two test files then pass (19/19). 🟠 The same boot rewrite ran in G1's run 2 (00:53 UTC), so the row
+was most likely inactive from then on (inferred from the tests passing at the 23:34 push, not read).

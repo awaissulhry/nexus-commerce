@@ -83,3 +83,10 @@ test('🔴 a baselined NOT MEASURED row is printed as a BLIND SPOT on every run,
   assert.equal(v.failed, false)
   assert.ok(v.lines.some((l) => /1 known row\(s\) NOT MEASURED — the gate is BLIND there/.test(l)), v.lines.join('\n'))
 })
+
+test('🔴 the gate API never rewrites the local Amazon env connection: boot seeding and the env token are off, jobs and workers off', async () => {
+  const { GATE_API_ENV } = await import('./run-browser-gates.mjs')
+  assert.equal(GATE_API_ENV.NEXUS_AMAZON_ENV_TOKEN, 'off')
+  assert.equal(GATE_API_ENV.NEXUS_DISABLE_BACKGROUND_JOBS, '1')
+  assert.equal(GATE_API_ENV.ENABLE_QUEUE_WORKERS, '0')
+})
