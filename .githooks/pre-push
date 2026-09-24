@@ -32,7 +32,7 @@ cd "$(git rev-parse --show-toplevel)"
 # Additive only — it removes no gate and changes no exit code. `|| true` because `set -e` is
 # on and "nothing to sweep" is the normal, healthy case.
 find apps/web apps/factory -maxdepth 1 -type d \
-  \( -name '.next-push-*' -o -name '.next-check-*' -o -name '.next-diag-*' \) \
+  \( -name '.next-push-*' -o -name '.next-check-*' -o -name '.next-diag-*' -o -name '.next-gate-*' \) \
   -mmin +120 -exec rm -rf {} + 2>/dev/null || true
 
 echo "→ Checking schema/migration drift (table-level)..."
@@ -463,6 +463,20 @@ node scripts/check-global-exposure.mjs || {
 echo "→ Checking 7:1 contrast on the design-system tokens (ratchet)..."
 { node --test scripts/check-nds-contrast.test.mjs >/dev/null && node scripts/check-nds-contrast.mjs --max-failures 49 --max-aa-failures 10; } || {
   echo "❌ contrast ratchet FAILED — a token pair got worse or a new pair fails (run: node scripts/check-nds-contrast.mjs)"
+  exit 1
+}
+
+# R-45 / R-50 / R-61 (A-43, A-48, 2026-09-24) — the three browser gates are back (removed 09-16, 7bd90cb11). Path-scoped (only when the
+# pushed commits touch a file a gate's reading depends on — each gate's own STAMP_FILES), OWN servers on free ports and the LOCAL
+# database, a RATCHET against scripts/browser-gates-baseline.json, and NOT MEASURED always fails. A UI push that runs editor-open costs
+# ~20–26 min (measured); any other push ~1 s.
+echo "→ Browser gates (grid chrome, open-gesture, control census — R-45, R-50, R-61)..."
+node --test scripts/run-browser-gates.test.mjs scripts/lib/gate-write-guard.test.mjs scripts/lib/gate-aloneness.test.mjs >/dev/null || {
+  echo "❌ browser-gate runner tests FAILED — run: node --test scripts/run-browser-gates.test.mjs"
+  exit 1
+}
+node scripts/run-browser-gates.mjs --pre-push || {
+  echo "❌ browser gates FAILED — see the summary above (rules: scripts/run-browser-gates.mjs header). Re-run by hand: npm run gates:browser"
   exit 1
 }
 

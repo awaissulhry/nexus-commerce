@@ -208,3 +208,9 @@ refuses the over-long bullets; a refused row is not stored; no flag → nothing 
 read; audit rows only for saved fields). **Mutations 5/5 red.** ⬜ Not tested: a mixed content + `attr_*` request where every `attr_*`
 row is refused; the sheet's on-screen display of a per-row content refusal (the browser half) — not run.
 *Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert.
+
+### Step 4.2 — all four gates in the hook (2026-09-24 ~09:55 UTC, R-45, R-61)
+`.githooks/pre-push`: after the contrast ratchet, the browser-gate stage (the runner's own tests, then `run-browser-gates.mjs
+--pre-push`); the `.next-gate-*` dirs join the two-hour sweep. `bash -n` clean; a docs-only change → *"no watched file changed —
+not run"*, exit 0 (checked). **Done when** (the plan's: five gates in the hook and green) — the four the plan names are in; green
+against their ratchets; the first push through them is the proof (below, when it lands).

@@ -78,7 +78,7 @@ been exercised.
 | **A-37 / Step 1.3** Reversible unpublish — the live proof | ✅ **RULED R-37; proven live and restored**: eBay quantity 0 (out-of-stock control on) keeps the item `Active`, restores to 10; Amazon merchant quantity 0 reads back, restores to 2. 🔴 The Amazon quantity is shared across EU markets — the test likely paused the SKU EU-wide for ~90 s (restored) | — |
 | **A-38** Step 1.3's Amazon half already exists (SCT.6 per-market offer close/reopen) | ✅ **RULED R-38 / R-39** — SCT.6 close + replay proven live on `xracingbxn48` Amazon·IT (no Nexus row written; re-read equal at ~1, 2.5, 3.7 min); the build is for the hard-delete flow (no republish exists) | `f7bd4b085`, `65e1d9c0a` |
 | **Step 3.5 eBay slice** The eBay quantity read-back records drift per listing | ✅ **BUILT (R-36)** — one per-entry verdict; a diff lands on the product's own listing on that ItemID, else the ItemID's one owner as `quantity:<SKU>`; ambiguous = counted, not guessed. 🔴 The list hides eBay shells — the filter now reaches through them | `298364359` |
-| **A-39 / Step 3.5b** Amazon content reads | ✅ **RULED R-41, slice b1 BUILT** — nightly 03:37 UTC per business, ≤ 10 min, ≤ 1 read/s, rotating; one additive column `ChannelDrift.checkedBySource` (migration `20260923b`); the writer keeps the true count. On with the deploy (`NEXUS_ENABLE_CONTENT_DRIFT=0` holds it). ⬜ b2 (eBay) later | `22ed2676b` |
+| **A-39 / Step 3.5b** Amazon content reads | ✅ **RULED R-41, slice b1 BUILT; b2 eBay BUILT (A-40, `fb992c921`)** — nightly 03:37 UTC per business, ≤ 10 min, ≤ 1 read/s, rotating; one additive column `ChannelDrift.checkedBySource` (migration `20260923b`); the writer keeps the true count. On with the deploy (`NEXUS_ENABLE_CONTENT_DRIFT=0` holds it). ⬜ b2 (eBay) later | `22ed2676b` |
 | **3.2** The four measurements | ✅ **CLOSED 2026-09-23** — M1 ✅, M2 = 0, M3 ✅, M4 = 0, predictions written first; the gate (15.7 #1) `sheet-payload-parity.vitest.test.ts` built, 3 mutations red; the production sample (15.7 #2) is Step 3.5b's rotation | see `git log` |
 
 **Phase 0 and Phase 1 are complete except 0.3 (Owner) and 1.3 (credentials).**
@@ -154,7 +154,36 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 4, 2026-09-23 ~21:35 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 5, 2026-09-24 ~09:55 UTC (READ THIS FIRST; everything below is history)
+
+**Times are UTC (`date -u`). Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed). The Owner merges.** The next merge ships
+three additive migrations (`20260923a`, `20260923b` — and the channel lane's `20260922a` is already on production).
+
+**Since handoff 4 (rulings R-42 … R-62 at the end of PLAN.md):**
+- **Step 2.7 CLOSED** (02:35 UTC verify): the first nightly after the deploy ran to `stopped: complete` for both businesses; every live
+  product has a fresh row. Step 2.6's day-after check ✅ (legacy `va` 35 / 44, not grown).
+- **Step 3.5 complete:** 3.5a + the eBay quantity slice + A-39 b1 (Amazon content, nightly) + A-40 b2 (eBay content, 13 studio ItemIDs;
+  shells "not compared" for good — Nexus never writes a live shell's title/specifics). **Step 3.6 CLOSED** by a browser check
+  (a refused cell keeps the typed value, marked "not saved" — noted for the Owner).
+- **A-41 fixed:** the studio eBay publish was refused for every family since 09-21 (no currency). **R-58** master bullets capped at the
+  tightest channel cap; **R-60** the sheet's content saves are per row (other callers keep all-or-nothing).
+- **R-42:** no single-SKU eBay item exists on production (31 ItemIDs, all multi-variation) — that unpublish path cannot be proven live.
+  eBay's Trading pool: 5,000 calls/day (GetApiAccessRules is retired, HTTP 410).
+- **Phase 4 STARTED (R-44: parallel sub-agent lanes allowed; R-45: the gates come back):** Step 4.0 BUILT (`check-nds-contrast.mjs`,
+  baseline 49/90 below 7:1, 10 below 4.5:1; R-49 strict 7:1 for all text). **Step 4.2: all four gates in the hook** — the contrast
+  ratchet + the three browser gates (fixed; a write guard that sees the proxy; own servers; a ratchet; ~20–26 min on a UI push, R-61).
+  Plans ruled: **A-42** EditorShell step 1 (R-47 number-cell fix, R-48 one hint line) · **A-44** top bar (R-51 scope dropdown too,
+  R-52 filters always folded) · **A-45** completeness column (R-53 "See each channel", R-54 "Filled (all fields)") · **A-46** bullets
+  in one cell (R-55 Tab between bullets, R-56 one cell by default).
+
+**Next, in order:** push (runs every gate, ~40 min) · build Step 4.3 #1 the EditorShell (A-42) behind the editor-open gate · #2 the top
+bar (A-44) · #3 bullets (A-46) · #4 completeness (A-45; 2.7 is closed, so it may build) · #5 the AAA sweep last (lower the contrast
+ratchet as it lands; the amber chip first). After the Owner's merge: `node docs/product-cheat/tools/prod-run.mjs content-drift`
+(read only) and the first night's `content-drift` CronRun line.
+**Known blind spots:** the browser gates cannot see Amazon scopes locally (the local Amazon account is disconnected) — 25 baselined keys.
+**Still the Owner's, kept for the end:** 0.3; listing content data (R-34).
+
+### Where this lane stands — handoff 4, 2026-09-23 ~21:35 UTC (history)
 
 **Times in this section are UTC, measured with `date -u`.** Handoff 3's "2026-09-24 ~01:30" was not UTC (its commit
 `f4c90dd19` is 20:09 UTC on 09-23).
