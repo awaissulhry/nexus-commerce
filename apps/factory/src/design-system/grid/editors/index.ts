@@ -3,6 +3,7 @@
  * the per-cell server round-trip state the ads bid/budget cells need.
  */
 import type { ColDef } from 'ag-grid-community'
+import { scalarValueEditor } from './FormulaCellEditor'
 
 export interface NumericEditorOptions {
   min?: number
@@ -22,7 +23,14 @@ export const numericEditor = (opts: NumericEditorOptions = {}): Pick<ColDef, 'ed
   cellEditorParams: { min: opts.min ?? 0, max: opts.max, step: opts.step ?? 1, precision: opts.precision ?? 0, showStepperButtons: false },
 })
 
-export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor'> => ({ editable: true, cellEditor: 'agTextCellEditor' })
+/**
+ * R-63 (A-42 step 1, 2026-09-24) — a free-text column opens the ONE value editor (formulas off), the same popup the studio
+ * sheets open for text, not AG's inline `agTextCellEditor`. Its consumer today is the Variants page's channel projection.
+ */
+export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor' | 'cellEditorPopup' | 'cellEditorParams' | 'suppressKeyboardEvent'> => ({
+  editable: true,
+  ...scalarValueEditor('text'),
+})
 
 export { selectEditor, SelectChevron, SELECT_CELL_CLASS, type SelectEditorParams } from './SelectCellEditor'
 /* Exported so a host can name it as the FALLBACK editor beside `formulaSelector` — `=` opens the
@@ -37,7 +45,10 @@ export { SheetWriter, DEFAULT_SHEET_FLUSH_MS, type SheetWriteCell, type SheetWri
 export { variationThemeChange, variationThemeWrite, type VariationThemeChange, type VariationThemeChangeKind, type VariationThemeWrite, type VariationThemeWriteFacts } from './sheetWriter'
 
 // PES.2 — D16 formula editing (#730). The RULES are pure and tested; the editor is wiring over them.
-export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, type FormulaEditorParams, type FormulaWiring } from './FormulaCellEditor'
+export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, scalarValueEditor, scalarValueEditorSpec, type FormulaEditorParams, type FormulaWiring } from './FormulaCellEditor'
+// R-47 / R-48 (A-42 step 1, 2026-09-24) — a number cell never loses its value to a stray letter; ONE key line for every editor.
+export { isNumberDraft, numberStart, acceptNumberEdit, numberCommitText, NUMBER_ONLY_MESSAGE, type NumberStart } from './numberEntry'
+export { EDITOR_KEY_HINT } from './editorHint'
 export { isFormulaDraft, commitValue, coerceTyped, completionToAccept, formulaAvailability, formulaEditorChoice, formulaSaveOutcome, FORMULA_BLOCKED_REASON, FORMULA_STORED_NOT_EVALUATED, type FormulaSaveResponse, type FormulaSaveOutcome, type FormulaAvailability, type FormulaEditorChoice, type CommitKind, exprOf, inStringLiteral, refTokenAt, completionsFor, applyCompletion, unknownRefs, type FormulaCandidate, type RefToken } from './formulaEditing'
 export { tokenizeForDisplay, refsOf, matchBrackets, callAt, type Token, type TokenKind, type CallContext } from './formulaTokens'
 export { assignRefColours, refColoursWrap, colourFor, REF_CYCLE, CYCLE_MEASURED_CONTRAST, type RefColour } from './formulaPalette'

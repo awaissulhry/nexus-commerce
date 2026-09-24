@@ -16,7 +16,7 @@
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { ImpactProtectorsEditor, protectorSummary } from '../ImpactProtectorsInput'
 import { AttributeShapeEditor } from '../AttributeShapeInput'
-import { formulaAvailability, formulaCellEditorSelector, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
+import { formulaAvailability, formulaCellEditorSelector, scalarValueEditor, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
 import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, SELECT_CELL_CLASS, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
@@ -485,7 +485,9 @@ export function buildMasterColumns(
       return {
         ...def,
         ...numericColumn,
-        cellEditor: 'agNumberCellEditor', cellEditorParams: SHEET_NUMBER_EDITOR_PARAMS,
+        /* R-63 — the ONE value editor (formulas off) when this sheet has no formula wiring (the Variants page); with
+           wiring the selector below opens the same popup with formulas on. Never AG's inline number editor. */
+        ...scalarValueEditor('number'),
         /* 🔴 `=` reaches this cell only through the SELECTOR (#775). `agNumberCellEditor` refuses the
            keystroke outright — it accepts digits — so the mode switch can never be typed once that
            editor is mounted. `cellEditorSelector` is resolved BEFORE any editor exists and sees
@@ -535,7 +537,8 @@ export function buildMasterColumns(
        * made the DS Listbox look "incompatible with AG" for a whole ruling (`SelectCellEditor`'s
        * header). This editor is far bigger than its cell: field, autocomplete, hint, preview.
        */
-      cellEditor: 'agTextCellEditor',
+      /* R-63 — the same ONE value editor as above, formulas off when there is no wiring. */
+      ...scalarValueEditor('text'),
       ...(opts.formula ? formulaSelector(opts.formula, col, { component: 'agTextCellEditor' }) : {}),
       editable,
       cellRenderer: (p: ICellRendererParams<StudioRow>) =>

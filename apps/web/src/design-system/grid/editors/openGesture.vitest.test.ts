@@ -73,9 +73,11 @@ describe('EDITOR_MODE_BY_KIND', () => {
     for (const mode of Object.values(EDITOR_MODE_BY_KIND)) expect(['inline', 'popup']).toContain(mode)
   })
 
-  it('keeps short text and number INLINE, and long text a popup', () => {
-    expect(EDITOR_MODE_BY_KIND.text).toBe('inline')
-    expect(EDITOR_MODE_BY_KIND.number).toBe('inline')
+  /* R-63 (A-42 step 1, 2026-09-24): text and number open the ONE value popup on every surface — it has been `pop:value`
+     in the gate's contract since #775; this declaration now says what the grid does. */
+  it('opens short text and number in the ONE value popup (R-63), and long text a popup', () => {
+    expect(EDITOR_MODE_BY_KIND.text).toBe('popup')
+    expect(EDITOR_MODE_BY_KIND.number).toBe('popup')
     expect(EDITOR_MODE_BY_KIND.longtext).toBe('popup')
   })
 

@@ -181,6 +181,16 @@ function readCaps() {
   return Object.keys(caps).length ? caps : null
 }
 
+/**
+ * R-47 / R-48 (A-42 step 1, 2026-09-24) — the two sentences the value editor must show, READ FROM THE SOURCE like the caps:
+ * a hardcoded copy here would pass on yesterday's wording. Unreadable ⇒ the arms below record NOT MEASURED, never green.
+ */
+const readConstant = (file, name) => {
+  try { return readFileSync(file, 'utf8').match(new RegExp(`export const ${name} = '([^']+)'`))?.[1] ?? null } catch { return null }
+}
+const NUMBER_ONLY_MESSAGE = readConstant('apps/web/src/design-system/grid/editors/numberEntry.ts', 'NUMBER_ONLY_MESSAGE')
+const EDITOR_KEY_HINT = readConstant('apps/web/src/design-system/grid/editors/editorHint.ts', 'EDITOR_KEY_HINT')
+
 // The document owns the driving columns and modes for the four scalar editor arms too.
 const scalarContract = readContract()
 if (!scalarContract.rows) { console.error(scalarContract.error); process.exit(2) }
@@ -193,6 +203,8 @@ const STAMP_FILES = [
   'apps/web/src/design-system/grid/NexusGrid.tsx',
   'apps/web/src/design-system/grid/editors/openGesture.ts',
   'apps/web/src/design-system/grid/editors/editorBox.ts',
+  'apps/web/src/design-system/grid/editors/numberEntry.ts',
+  'apps/web/src/design-system/grid/editors/editorHint.ts',
   'apps/web/src/design-system/grid/theme/grid.css',
   'apps/web/src/design-system/grid/hosts/GridSheet.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx',
@@ -1017,6 +1029,8 @@ if (RUN.includes('contract')) {
      */
     const contractsByScope = new Map()
     const cellsByScope = new Map()
+    /** R-48 — one failure per scope for the key line, not one per gesture. */
+    const hintFailed = new Set()
     for (const sc of SCOPES_TO_RUN) {
       if (!sc.apiQ) continue /* the Matrix host has no column contract on the sheet route */
       /* MX.F — "could not read" must say WHY: the status the page-context fetch got, or the error it threw.
@@ -1319,6 +1333,32 @@ if (RUN.includes('contract')) {
             bad++
             failures.push(`contract ${scope.key} · ${row.kind}/${row.state}/${g} on ${target}: expected ${row.expect[g]}, got ${actual}`)
           }
+          /* R-48 — every value popup shows the ONE key line, read from the source (numbers masked out of the key by nothing:
+             the line has none). R-47 — a letter typed on a NUMBER cell (`type` presses `a`) is refused: the field keeps
+             the stored value, never the letter, and says so. Both read inside the open popup, before it is cancelled. */
+          if (actual === 'pop:value') {
+            const inPopup = await page.evaluate(() => {
+              const p = document.querySelector('.ag-popup-editor')
+              return {
+                hint: p?.querySelector('.nds-editor-keyhint')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+                input: p?.querySelector('input[aria-label="Cell value"]')?.value ?? null,
+                status: [...(p?.querySelectorAll('[role="status"]') ?? [])].map((n) => n.textContent ?? '').join(' ').replace(/\s+/g, ' ').trim(),
+              }
+            })
+            if (!EDITOR_KEY_HINT) failures.push(`hint ${scope.key}: NOT MEASURED — EDITOR_KEY_HINT could not be read from editorHint.ts`)
+            else if (inPopup.hint !== EDITOR_KEY_HINT && !hintFailed.has(scope.key)) {
+              hintFailed.add(scope.key); bad++
+              failures.push(`hint ${scope.key} · ${row.kind}/${row.state}/${g} on ${target}: the value editor's key line reads ${JSON.stringify(inPopup.hint)}, expected ${JSON.stringify(EDITOR_KEY_HINT)}`)
+            }
+            if (row.kind === 'number' && g === 'type') {
+              if (!NUMBER_ONLY_MESSAGE) failures.push(`number-letter ${scope.key}: NOT MEASURED — NUMBER_ONLY_MESSAGE could not be read from numberEntry.ts`)
+              else if (inPopup.input === null) failures.push(`number-letter ${scope.key} · ${row.state} on ${target}: NOT MEASURED — no Cell value field in the popup`)
+              else if (inPopup.input === 'a' || !inPopup.status.includes(NUMBER_ONLY_MESSAGE)) {
+                bad++
+                failures.push(`number-letter ${scope.key} · ${row.state} on ${target}: typing a letter left ${JSON.stringify(inPopup.input)} in the field and said ${JSON.stringify(inPopup.status)} — a letter must be refused and the value kept (R-47)`)
+              }
+            }
+          }
           await escape_()
         }
         /* 🔴 RELEASE THE HELD FLUSH. `heldFlush` makes every write hang so the client believes a save
@@ -1541,7 +1581,8 @@ if (RUN.includes('parity')) {
         ?? (matrix ? editable.find(c => !c.classList.contains('nds-cell-is-select')) : null)
       const cs = text ? getComputedStyle(text) : null
       const footer = (document.querySelector('.nds-grid-sheet-status .nds-grid-sheet-noteslot')?.innerText || '').replace(/\s+/g, ' ').trim()
-      const disabledScope = document.querySelector('[data-scope-id][role="radio"][aria-checked="true"][aria-disabled="true"]')
+      // Step 4.3 #2 (R-51): the scope is a menu now; a held ACTIVE scope is its trigger with data-scope-held (the chip form still matches).
+      const disabledScope = document.querySelector('[data-scope-id][role="radio"][aria-checked="true"][aria-disabled="true"], [data-scope-trigger][data-scope-held="true"]')
       const availabilityReason = disabledScope?.getAttribute('aria-description')?.replace(/\s+/g, ' ').trim() || null
       const availabilityNote = document.querySelector('.nds-grid-sheet-noteslot .nds-grid-sheet-note.provenance[role="status"]')
       const groupHeight = matrix ? document.querySelector('.ag-header-row-group')?.getBoundingClientRect().height ?? 0 : 0

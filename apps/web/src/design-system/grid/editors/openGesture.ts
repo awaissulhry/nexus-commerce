@@ -165,9 +165,17 @@ export function fillHandleHit(target: unknown): FillHandleHit | null {
  * contract read today is 96 columns — 46 text, 23 select, 18 number, 9 longtext, 0 boolean). It is
  * here so that a kind which starts arriving cannot arrive without a declared mode.
  */
+/*
+ * 🔴 R-63 (2026-09-24, A-42 step 1 as amended by A-49): `text` and `number` are `popup`. Since #775 the studio's
+ * `formulaCellEditorSelector` has swapped both inline fallbacks for the DS value popup (`FormulaCellEditor`, `Cell value`)
+ * wherever a formula is available, and the contract the gate asserts (`docs/2026-09-03-cell-editing-contract.md`) has
+ * read `pop:value` for them ever since — the "inline 20/20" measurement above predates that swap. Step 1 made it true
+ * everywhere: with no formula available (a refused column or row, or a sheet built without formula wiring such as the
+ * Variants page) the same popup opens with formulas off (`scalarValueEditor`). One editor, not a size of two.
+ */
 export const EDITOR_MODE_BY_KIND = {
-  text: 'inline',
-  number: 'inline',
+  text: 'popup',
+  number: 'popup',
   select: 'popup',
   boolean: 'popup',
   longtext: 'popup',

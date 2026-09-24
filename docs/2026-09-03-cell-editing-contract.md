@@ -97,6 +97,10 @@ For the `list` and `measure` rows, `kind` is the column's SHAPE (AM.1), not its 
 them by `shape`, and a scalar row never resolves to a shaped column of the same wire kind. Neither shaped
 column is in a landing view, so the gate reveals one through Customise, as it does for `locked`.
 
+R-47 (2026-09-24): on a `number` row the `type` gesture (key `a`) still opens `pop:value`, and the field keeps the stored value —
+the letter is refused with "Numbers only — the value was kept." (asserted by the gate's `number-letter` arm). R-63: the Variants
+page opens `pop:value` for text/number too (formulas off).
+
 ## The Matrix table (MX.G, 2026-09-13) — driven on the Matrix host, `?tab=matrix` on GALE, master scope
 
 The Matrix page (`docs/2026-09-13-matrix-page-design.md` §3.4) puts eight cell KINDS under every coordinate group,

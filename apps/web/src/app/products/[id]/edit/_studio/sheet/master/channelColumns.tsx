@@ -20,7 +20,7 @@ import {
   type ColDef, type ValueGetterParams, type ValueSetterParams, type FormulaWiring,
   longTextEditor, selectEditor, SELECT_CELL_CLASS, formulaCellEditorSelector, numericColumn,
   sheetValidationFor, composeSheetCellClassRules, shapeColumnDef, shapeEditorSpec, isShaped,
-  suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef,
+  suppressFormulaKeys, SelectPanelEditor, variationThemeColumnDef, scalarValueEditor,
 } from '@/design-system/grid'
 
 export const channelValidation = (col: SheetColumn) => sheetValidationFor<ChannelSheetRow>(col, row => columnApplies(col, row))
@@ -61,8 +61,10 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
         : col.kind === 'boolean'
           ? selectEditor(BOOLEAN_OPTIONS)
           : col.kind === 'number'
-            ? { ...numericColumn, cellEditor: 'agNumberCellEditor', cellEditorParams: SHEET_NUMBER_EDITOR_PARAMS }
-            : {}),
+            /* R-63 — the ONE value editor, the same one master's builder names (the selector below swaps it for the
+               formula-aware popup wherever a formula is available). */
+            ? { ...numericColumn, ...scalarValueEditor('number') }
+            : col.kind === 'text' ? scalarValueEditor('text') : {}),
     ...shapeColumnDef<ChannelSheetRow>(col, (d) => d.values?.[col.key]?.value),
     ...formulaCellEditorSelector<ChannelSheetRow>(
       formulaWiring,
