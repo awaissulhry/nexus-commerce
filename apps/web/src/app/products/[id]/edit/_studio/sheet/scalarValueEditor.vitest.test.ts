@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { _mergeDeep } from 'ag-grid-community'
+import { mergeEditorParamsLikeAg as _mergeDeep } from '../../../../../../design-system/grid/editors/editorParamsMerge'
 import { CellSaveTracker, FormulaCellEditor, textEditor } from '@/design-system/grid'
 import { buildMasterColumns } from './master/columns'
 import { buildChannelColumns, type BuildChannelColumnsOptions } from './master/channelColumns'
