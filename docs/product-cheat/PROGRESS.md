@@ -154,7 +154,7 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 6, 2026-09-24 ~11:40 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 6, 2026-09-24 11:34 UTC (READ THIS FIRST; everything below is history)
 
 **Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed; the Owner merges).** Since handoff 5 (rulings R-63 … R-64; A-49, A-50):
 - **Step 4.3 #1, #2, #4 BUILT** in three parallel lanes + an integrator: **one text/number editor** on every scope (R-63), a letter never
