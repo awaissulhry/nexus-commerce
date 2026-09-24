@@ -169,8 +169,7 @@ built** (plans ruled: A-46/R-55/R-56 with BL1's phase-1 file; A-51/R-65/R-66 wit
    the number rule swallows `=`. 36 editor-open keys. Fix → re-run → push.
 2. The browser gates' blind spots: editor-open 20 baselined keys (AMAZON·IT contract rows may now be measurable — the next run shows
    "gone"); census now fully green (7 gone).
-3. Then: build #3 bullets (BL1 phase 2, plan in the session scratchpad `BL1-phase1.md`, folded nowhere yet — fold it into PLAN.md
-   first) and #5 the AAA sweep (A-51: 11 token edits in `tokens/css-vars.ts` + `colors.ts`, web AND factory, `npm run tokens:gen` +
+3. Then: build #3 bullets (BL1 phase 2, plan folded into PLAN.md as **A-52**) and #5 the AAA sweep (A-51: 11 token edits in `tokens/css-vars.ts` + `colors.ts`, web AND factory, `npm run tokens:gen` +
    `tokens:gen:factory`, `grid/spec.json:14,19` stripFg, new hover values + a hover check, the hook's contrast ratchet → 0 / 0).
 4. After the Owner's merge: `node docs/product-cheat/tools/prod-run.mjs content-drift` (read only) and the first nights' CronRun lines
    (content-drift, readiness — A-50 will lower non-Italian readiness % to the true value).
