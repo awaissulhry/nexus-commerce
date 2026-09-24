@@ -154,7 +154,7 @@ database with 0 policies. `--prepare` still exists for a database prepared some 
 
 ## Next — start here
 
-### Where this lane stands — handoff 5, 2026-09-24 ~09:55 UTC (READ THIS FIRST; everything below is history)
+### Where this lane stands — handoff 5, 2026-09-24 09:45 UTC (READ THIS FIRST; everything below is history)
 
 **Times are UTC (`date -u`). Branch `pes/phase-0`; `main` still `0a563d6d5` (NOT deployed). The Owner merges.** The next merge ships
 three additive migrations (`20260923a`, `20260923b` — and the channel lane's `20260922a` is already on production).
