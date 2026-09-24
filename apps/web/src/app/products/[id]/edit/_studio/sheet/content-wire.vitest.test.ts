@@ -36,7 +36,8 @@ describe('LX.12 canonical language wire mirrors', () => {
     // Existing scope-specific fields are explicit exemptions; a new one must be reviewed here.
     const exemptions = {
       StudioCellValue: { masterOnly: [], channelOnly: ['affectsAllChannels', 'nexusDraft', 'resettable', 'shopifyWrite', 'writable', 'writeBlockedReason', 'writeVerb'] },
-      SheetColumn: { masterOnly: ['axis'], channelOnly: ['shopifyField'] },
+      // `referenceImages` (2026-09-24): pictures for Shopify references, display only, Shopify channel scope only — like `shopifyField`.
+      SheetColumn: { masterOnly: ['axis'], channelOnly: ['referenceImages', 'shopifyField'] },
     }
     for (const [name, allowed] of Object.entries(exemptions)) {
       const master = properties('apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts', name)
