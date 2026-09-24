@@ -31,6 +31,9 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
   })))].sort().join(',') : ''
   const coordinate = JSON.stringify([channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, sheet?.family?.id, sheet?.scope.locale])
   const [resolved, setResolved] = useState<{ coordinate: string; labels: ReferenceLabels } | null>(null)
+  /* 2026-09-24 — pictures for Shopify references (files, video posters, products), from the same lookup as their
+     names, so a file cell can show the image itself. Display only; never a value. */
+  const [pictures, setPictures] = useState<{ coordinate: string; images: Record<string, string> } | null>(null)
 
   useEffect(() => {
     if (!keys) return
@@ -50,7 +53,11 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
       for (let offset = 0; offset < ids.length; offset += 100) tasks.push(fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(sheet.family.id)}/shopify-linked/reference-names?${query}`, {
         method: 'POST', credentials: 'include', signal: abort.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(offset, offset + 100) }),
       }).then(async response => { if (!response.ok) throw new Error('Shopify reference names are unavailable'); return response.json() })
-        .then((references: Array<{ id: string; label: string }>) => apply(Object.fromEntries(shopifyFields.map(column => [column.key, Object.fromEntries(references.map(reference => [reference.id, reference.label]))])))))
+        .then((references: Array<{ id: string; label: string; image?: string | null }>) => {
+          apply(Object.fromEntries(shopifyFields.map(column => [column.key, Object.fromEntries(references.map(reference => [reference.id, reference.label]))])))
+          const found = Object.fromEntries(references.flatMap(reference => typeof reference.image === 'string' && reference.image ? [[reference.id, reference.image]] : []))
+          if (!abort.signal.aborted && Object.keys(found).length) setPictures(previous => ({ coordinate, images: { ...(previous?.coordinate === coordinate ? previous.images : {}), ...found } }))
+        }))
     }
     if (channel === 'EBAY') {
       for (const productType of categoryIds.split(',').filter(Boolean)) {
@@ -100,6 +107,10 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
     return () => abort.abort()
   }, [coordinate, channel, market, connectionId, categoryIds, productTypes, browseNodeIds, keys, shopifyIds, sheet?.family?.id, sheet?.scope.locale, sheet?.columns])
 
-  return useMemo(() => sheet ? { ...sheet, columns: nameReferenceColumns(sheet.columns, resolved?.coordinate === coordinate ? resolved.labels : {}) } : null,
-    [sheet, resolved, coordinate]) as T | null
+  return useMemo(() => {
+    if (!sheet) return null
+    const images = pictures?.coordinate === coordinate ? pictures.images : null
+    const columns = nameReferenceColumns(sheet.columns, resolved?.coordinate === coordinate ? resolved.labels : {})
+    return { ...sheet, columns: images ? columns.map(column => column.shopifyField?.type.includes('_reference') ? { ...column, referenceImages: images } : column) : columns }
+  }, [sheet, resolved, pictures, coordinate]) as T | null
 }

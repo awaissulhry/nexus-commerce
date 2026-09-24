@@ -84,6 +84,8 @@ export interface SheetColumn {
   scope: 'global' | 'per_variant'
   options?: string[]
   optionLabels?: Record<string, string>
+  /** Shopify reference id → picture URL (files, video posters, products), resolved with the names. Display only. */
+  referenceImages?: Record<string, string>
   /** `strict` = the channel accepts only the list (an off-list value WARNS, never blocks). */
   mode?: 'strict' | 'open'
   requiredBy: string[]

@@ -1314,6 +1314,25 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-cell-list-more { flex: none; font-size: 11px; color: var(--nds-grid-muted-fg); }
 .nds-cell-measure { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
 .nds-cell-measure .u { font-size: 12px; color: var(--nds-grid-muted-fg); }
+/* MetafieldValue (2026-09-24) — a store field drawn by its type: pictures, swatches, marks, stars.
+   Laid-out flex children only; an absolutely positioned child escapes an AG cell. */
+.nds-mf-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-mf-number { font-variant-numeric: tabular-nums; }
+.nds-mf-invalid { color: var(--nds-warning-text); }
+/* italic overhang — see `.nds-cell-required` */
+.nds-mf-pending { color: var(--nds-text-muted); font-style: italic; padding-inline-end: 2px; }
+.nds-mf-refs, .nds-mf-colors, .nds-mf-rating, .nds-mf-bool { display: inline-flex; align-items: center; gap: var(--nds-space-2); min-width: 0; max-width: 100%; overflow: hidden; }
+.nds-mf-picture {
+  flex: none; width: 24px; height: 24px; border-radius: var(--nds-radius-sm); object-fit: cover; display: inline-flex;
+  align-items: center; justify-content: center; background: var(--nds-surface-sunken); border: 1px solid var(--nds-border-subtle); color: var(--nds-text-muted);
+}
+.nds-mf-swatch { flex: none; width: 14px; height: 14px; border-radius: var(--nds-radius-round); border: 1px solid var(--nds-border-strong); }
+.nds-mf-rating svg { flex: none; color: var(--nds-border-strong); }
+.nds-mf-rating svg.on { color: var(--nds-warning); fill: currentColor; }
+.nds-mf-rating svg.half { color: var(--nds-warning); fill: var(--nds-warning-soft); }
+.nds-mf-bool svg { flex: none; }
+.nds-mf-bool[data-value="yes"] svg { color: var(--nds-success-text); }
+.nds-mf-bool[data-value="no"] svg { color: var(--nds-text-muted); }
 .nds-list-editor, .nds-measure-editor {
   display: flex; flex-direction: column; gap: var(--nds-space-1);
   padding: var(--nds-space-2); box-sizing: border-box; min-width: 0;

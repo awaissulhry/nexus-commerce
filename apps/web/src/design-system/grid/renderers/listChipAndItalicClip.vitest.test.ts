@@ -55,6 +55,8 @@ describe('italic text inside a clipped cell carries an end padding, so the last 
       '.nds-ag-wrap .ag-cell.nds-cell-is-ai-draft',
       // a LEADING glyph: an italic overhang paints to the right, into the text, never past the clip
       '.nds-formula-glyph',
+      // a store reference whose name is still loading (MetafieldValue, 2026-09-24) — padded
+      '.nds-mf-pending',
     ]
     for (const s of selectors) expect(known, `italic rule "${s}" — pad its clipped text, then list it here`).toContain(s)
   })

@@ -7,7 +7,7 @@ import { informationRegistry, informationSheetValue, informationPendingValue, in
 import { shopifyLinkedDraftSchema, type ShopifyLinkedDraft, type ShopifyLinkedWorkspace, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { getStudioSheet } from '../pim/studio-sheet.service.js'
-import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
+import { readShopifyDisplaySchema, readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin } from './admin-client.js'
@@ -17,7 +17,8 @@ import { AUTOMATION_KEY, LINKED_KEY, getLinkedWorkspace, linkedState, linkedTran
 export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<StudioSheet> {
   if (page.scope.channel !== 'SHOPIFY' || !page.scope.connectionId) return page
   const accountId = page.scope.connectionId
-  const schema = await readShopifyMappingSchema(accountId)
+  // Display only: the last known field list now, a refresh behind it (a cold read took 34 s, 2026-09-24).
+  const schema = await readShopifyDisplaySchema(accountId)
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: page.rows.map(r => r.id) }, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: accountId }, select: { id: true, productId: true, externalListingId: true, platformAttributes: true, aliasKey: true } })
   const result = { ...page, rows: [...page.rows] }
   for (const alias of page.aliases) {

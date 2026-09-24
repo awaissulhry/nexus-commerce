@@ -84,6 +84,8 @@ export interface ChannelSheetProps {
     locale?: string;
 }
 const DRAWER_READ_ONLY = 'Edit channel values in the sheet — the drawer is read-only on a channel scope.';
+/** The server's `schemaMissing` entry for a Shopify scope built without the store's field list. */
+const SHOPIFY_FIELDS_UNREAD = 'SHOPIFY:*';
 export function useChannelSheetAdapter({ productId, channel, marketplace, locale, accountId, shopifySchema }: ChannelSheetProps): ProductSheetModel<ChannelSheetRow, null, ChannelSheetRow> {
     const record = useStudioRecord();
     const { apiRef, gridReady, getGridApi, bindGridApi, releaseGrid, search, setSearch, showRefusedOnly, setShowRefusedOnly, lastSavedAt, setLastSavedAt, lastDataCell, refusalReason, onCellFocused, onCellDoubleClicked, onCellKeyDown, onSelectionChanged, rowSelection, selectedRows: selected, setSelectedRows: setSelected, announceRefusals } = useProductSheetInteraction<ChannelSheetRow>('channel');
@@ -780,7 +782,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 tone: data.meta.schemaMissing.length ? 'warning' : 'neutral',
                 label: data.meta.schemaMissing.length ? 'Requirements incomplete' : 'Requirements',
                 detail: data.meta.schemaMissing.length
-                    ? `Incomplete: ${data.meta.schemaMissing.map(key => key === 'ETSY:*' ? 'Etsy category not selected' : key.replace(/^ETSY:/, 'Etsy category ')).join(', ')}. Readiness cannot be confirmed until these requirements are available.`
+                    ? `Incomplete: ${data.meta.schemaMissing.map(key => key === 'ETSY:*' ? 'Etsy category not selected' : key === SHOPIFY_FIELDS_UNREAD ? 'Shopify store fields still loading' : key.replace(/^ETSY:/, 'Etsy category ')).join(', ')}. Readiness cannot be confirmed until these requirements are available.`
                     : 'Requirements depend on the listing category and marketplace. Refresh them after changing categories and before publishing.',
             }] : [],
         },
@@ -916,6 +918,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             {listResetConfirm.element}
             {reloadConfirm.element}</>, afterPreferences: <>
     {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
+    {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads
+        itself when the list arrives (`schemaRevision`), and the metafield columns appear then. */}
+    {channel === 'SHOPIFY' && data && !loading && data.meta.schemaMissing.includes(SHOPIFY_FIELDS_UNREAD) && <Banner tone="info" title="Loading this store's Shopify fields">
+      Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
+    </Banner>}
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
     {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><ProductTransferDrawer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
         {mediaEditor.element}

@@ -15,11 +15,19 @@ const page = (nodes: unknown[]) => ({ nodes, pageInfo: { hasNextPage: false, end
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('NEXUS_PUBLIC_API_URL', 'https://api.nexus.example')
+  // Registration is a Shopify write: these cases run with Shopify publishing live.
+  vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', 'true')
+  vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'live')
   mocks.resolve.mockImplementation(async () => ({ id: 'store-A', channelType: 'SHOPIFY', isActive: true, region: 'store-a.myshopify.com' }))
 })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Shopify attribute notifications', () => {
+  it('asks Shopify nothing while Shopify writes are off, and says why (2026-09-24: a 502 on every page load)', async () => {
+    vi.stubEnv('SHOPIFY_PUBLISH_MODE', 'dry-run')
+    await expect(withWorkspace(scope, () => ensureShopifySchemaSubscriptions('store-A'))).resolves.toMatchObject({ live: false, reason: expect.stringContaining('Shopify publishing is on') })
+    expect(mocks.graphql).not.toHaveBeenCalled()
+  })
   it('registers each missing topic against the exact business and store, and keeps existing subscriptions', async () => {
     mocks.graphql.mockImplementation(async (query, vars) => {
       if (query.includes('query NexusSchemaSubscriptions')) return { webhookSubscriptions: page([{ topic: 'METAFIELD_DEFINITIONS_CREATE', endpoint: { callbackUrl: 'https://api.nexus.example/webhooks/shopify/attributes/business_test_a/store-A' } }]) }

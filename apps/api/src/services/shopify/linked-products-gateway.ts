@@ -41,6 +41,10 @@ function fieldDefinition(raw: any): ShopifyFieldDefinition {
   return { ...raw, type: raw.type.name, access: raw.access ?? { admin: null, storefront: null }, readOnlyReason: accessReason(raw.namespace, raw.access) }
 }
 export async function readLinkedStoreSchema(gql: ShopifyGraphql): Promise<ShopifyStoreSchema> {
+  // Independent reads run together. In sequence a cold read measured 34 s on production (2026-09-24),
+  // past the web proxy's ~30 s limit. The handler below only marks the promise handled; it is awaited later.
+  const entriesRead = collectShopifyPages<any>(async after => (await gql(`query NexusLinkedEntryDefinitions($after:String) { metaobjectDefinitions(first:100,after:$after) { nodes { ${metaDefinitionSelection} } ${pageInfo} } }`, { after })).metaobjectDefinitions)
+  entriesRead.catch(() => undefined)
   const settings = await gql(`query NexusLinkedSettings { shopLocales { locale primary published } metafieldDefinitionTypes { name category }
     shop { id currencyCode } currentAppInstallation { app { id } accessScopes { handle } }
     productInput: __type(name:"ProductUpdateInput") { inputFields { name } }
@@ -54,7 +58,8 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql): Promise<Shopif
     inventoryPolicyEnum: __type(name:"ProductVariantInventoryPolicy") { enumValues { name description } }
   }`)
   const definitions: ShopifyFieldDefinition[] = []
-  for (const ownerType of ['PRODUCT', 'PRODUCTVARIANT']) {
+  // Product and variant definitions are read side by side; `definitions` is sorted below, so arrival order is not identity.
+  await Promise.all(['PRODUCT', 'PRODUCTVARIANT'].map(async ownerType => {
     const rows = await collectShopifyPages<any>(async after => (await gql(`query NexusLinkedDefinitions($ownerType:MetafieldOwnerType!,$after:String) { metafieldDefinitions(ownerType:$ownerType,first:100,after:$after) { nodes { ${definitionSelection} } ${pageInfo} } }`, { ownerType, after })).metafieldDefinitions)
     for (const row of rows) {
       if (row.constraints) {
@@ -75,8 +80,8 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql): Promise<Shopif
       }
       definitions.push(fieldDefinition(row))
     }
-  }
-  const entries = await collectShopifyPages<any>(async after => (await gql(`query NexusLinkedEntryDefinitions($after:String) { metaobjectDefinitions(first:100,after:$after) { nodes { ${metaDefinitionSelection} } ${pageInfo} } }`, { after })).metaobjectDefinitions)
+  }))
+  const entries = await entriesRead
   const metaobjectDefinitions = entries.map(raw => ({ id: raw.id, name: raw.name, type: raw.type, description: raw.description, access: raw.access, publishable: raw.capabilities?.publishable?.enabled ?? false,
     fields: raw.fieldDefinitions.map((f: any) => fieldDefinition({ ...f, id: `${raw.id}/${f.key}`, namespace: raw.type, ownerType: 'METAOBJECT', access: raw.access })) }))
   const appId = settings.currentAppInstallation?.app?.id?.split('/').at(-1)
@@ -183,9 +188,9 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
 
 export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]) {
   if (ids.length > 100 || ids.some(id => !shopifyGid.safeParse(id).success)) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
-  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title } ... on ProductVariant { title product { title } } ... on Collection { title } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
+  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title } } ... on Collection { title } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
   if (!Array.isArray(nodes) || nodes.length !== ids.length || nodes.some((n: any, i: number) => n && n.id !== ids[i])) throw new WorkspaceScopeError('Shopify returned incomplete or mismatched references. Retry before synchronizing.', 502)
-  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: n?.image?.url ?? n?.preview?.image?.url ?? null, available: !!n, type: n?.type ?? n?.__typename }))
+  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: n?.image?.url ?? n?.preview?.image?.url ?? n?.featuredMedia?.preview?.image?.url ?? null, available: !!n, type: n?.type ?? n?.__typename }))
 }
 
 export async function readLinkedMetaobject(gql: ShopifyGraphql, id: string) {

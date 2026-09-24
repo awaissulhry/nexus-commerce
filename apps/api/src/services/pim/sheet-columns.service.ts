@@ -762,7 +762,8 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       editable: d.editable,
       width: d.width ?? defaultWidth(kind, d.shape),
       helpText: d.helpText,
-      defaultVisible: d.requiredBy.length > 0 || DEFAULT_VISIBLE_GROUPS.has(d.group),
+      // A connected store's own metafields are shown on its channel scope by default (Owner, 2026-09-24).
+      defaultVisible: d.requiredBy.length > 0 || DEFAULT_VISIBLE_GROUPS.has(d.group) || (scopeKind === 'channel' && !!d.shopifyField?.definition),
       deprecatedOptions: d.deprecatedOptions.length > 0 ? d.deprecatedOptions : undefined,
       shape: d.shape,
       ...(d.shape === 'list' ? { cardinality: d.cardinality } : {}),
@@ -1191,6 +1192,13 @@ export const SHEET_CONTENT_FIELDS: FieldDefinition[] = [
  * product opened" into the bound this codebase already accepts for this object.
  */
 const COLUMN_SET_CACHE_MAX = 64
+/** `schemaMissing` entry for a Shopify scope built without the store's field list (its metafields). */
+export const SHOPIFY_FIELDS_UNREAD = 'SHOPIFY:*'
+/**
+ * 2026-09-24 — a set built without the store's field list is served once and never kept. A 5-minute
+ * copy of it hid every store metafield after each miss, and the next rebuild usually missed again.
+ */
+export const lacksShopifyStoreFields = (set: Pick<SheetColumnSet, 'schemaMissing'>) => set.schemaMissing.includes(SHOPIFY_FIELDS_UNREAD)
 const columnSetCache = new WorkspaceCache<string, { at: number; value: SheetColumnSet }>(COLUMN_SET_CACHE_MAX)
 const COLUMN_SET_TTL_MS = 5 * 60_000
 /** Same shape, same TTL, same unbounded growth — keyed by product type rather than by family. */
@@ -1386,7 +1394,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
         try { spec = await shopify.loadShopifyProductSpec(input.accountId, input.locale) }
         catch (error) {
           console.error('[sheet-columns] Shopify requirements unavailable:', error instanceof Error ? error.message : error)
-          schemaMissing.push('SHOPIFY:*')
+          schemaMissing.push(SHOPIFY_FIELDS_UNREAD)
           spec = await shopify.loadShopifyProductSpec(null, input.locale)
         }
       } else spec = etsyProductSpec(input.locale)
@@ -1434,7 +1442,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     cov.columns = columns.filter((c) => c.channels?.[cov.coordinate]?.categories.includes(cov.category)).length
   }
   const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, groups, droppedKeys, schemaMissing, schemaAge, coverage, availableMarkets, coordinatesNotListed }
-  columnSetCache.set(cacheKey, { at: Date.now(), value })
+  if (!lacksShopifyStoreFields(value)) columnSetCache.set(cacheKey, { at: Date.now(), value })
   return value
 }
 
