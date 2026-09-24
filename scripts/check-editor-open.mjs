@@ -1672,6 +1672,14 @@ if (RUN.includes('parity')) {
         // Presence policy replaces keyboard hints with the selected disabled scope's
         // explanation. Require that exact accessible reason in the shared status
         // primitive; arbitrary footer differences still fail the comparison.
+        // A channel whose account NEEDS RECONNECTING stays editable but shows the account note in the footer instead of the
+        // key hint (`presence/connection.ts` connectionScopePolicy). The hint is then not on screen, so its parity cannot be
+        // read: NOT MEASURED (a blind spot, baselined), never green and never a false defect. Seen 2026-09-24 on EBAY·IT: the
+        // runner blanks the production-only eBay keys, so the local eBay token cannot be refreshed once it expires.
+        if (k === 'footerNote' && typeof r.footerNote === 'string' && /account needs reconnecting\. Content editing remains available/.test(r.footerNote)) {
+          failures.push(`parity ${key} · footerNote: NOT MEASURED — the channel account needs reconnecting here, so the footer shows the account note, not the key hint`)
+          continue
+        }
         if (k === 'footerNote' && r.availabilityFooter) {
           if (!r.availabilityFooter.announced || r.footerNote !== r.availabilityFooter.reason) {
             failures.push(`parity ${key} · footerNote: disabled scope reason was not rendered and announced: ${JSON.stringify(r.availabilityFooter)}`)

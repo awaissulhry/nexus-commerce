@@ -214,3 +214,15 @@ row is refused; the sheet's on-screen display of a per-row content refusal (the 
 --pre-push`); the `.next-gate-*` dirs join the two-hour sweep. `bash -n` clean; a docs-only change → *"no watched file changed —
 not run"*, exit 0 (checked). **Done when** (the plan's: five gates in the hook and green) — the four the plan names are in; green
 against their ratchets; the first push through them is the proof (below, when it lands).
+
+### Step 4.2 — the first push through all four gates: REFUSED once, correctly, on one NEW key (2026-09-24 09:45–10:23 UTC)
+
+The browser-gate stage ran every gate (1,544 s): grid chrome ✅ 0 keys · control census ✅ 7 known blind keys, 0 new · **editor-open:
+19 keys, 1 NEW** — `parity EBAY·IT · footerNote: "The eBay account needs reconnecting. Content editing remains available; the channel
+could not be checked." — master reads "Enter to edit · …"`. Cause (read): `presence/connection.ts` `connectionScopePolicy` replaces the
+key hint with the account note when the connection `needsReconnect`; the runner blanks the production-only eBay keys (by design), so
+the local eBay token cannot be refreshed once it expires (it was still valid in G1's run 2 at 01:18 UTC) — an environment state, not a
+code regression. **Classified honestly:** the parity arm now records that footer as *"NOT MEASURED — the channel account needs
+reconnecting here, so the footer shows the account note, not the key hint"* (a blind spot, printed as blind, never green), and that
+key is added to `scripts/browser-gates-baseline.json` (19 editor-open blind keys). The gate did what it exists for: nothing unknown
+passed.
