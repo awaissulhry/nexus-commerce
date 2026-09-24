@@ -183,6 +183,13 @@ export interface ProductBulkContext {
   userId?: string | null
   ip?: string | null
   logger: Pick<FastifyBaseLogger, 'warn' | 'error'>
+  /**
+   * R-60 — CONTENT rows (title, description, bullets, keywords) judged PER ROW: a good row is stored, a refused row is
+   * refused with its reason in `errors[]` and nothing of it is stored. OPT-IN, set only by the sheet's `PATCH
+   * /products/bulk`, whose clients read per-row errors. Every other caller (translation form, restore, AI writes) keeps
+   * all-or-nothing: they answer "failed" on any error and would otherwise hide a partial save.
+   */
+  contentPerRow?: boolean
 }
 
 export class ProductBulkError extends Error {
@@ -687,15 +694,33 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   if (contentEdits.length && !primaryContext) {
     for (const refusal of await masterBulletCapRefusals(contentEdits)) errors.push(refusal)
   }
-  if (errors.length) return { success: false, updated: 0, errors }
-  if (contentEdits.length) {
+  if (errors.length && !context.contentPerRow) return { success: false, updated: 0, errors }
+  // R-60 — per row (the sheet's opt-in only): a refused content row leaves BOTH paths below; the other rows go on.
+  const refusedRows = errors.length ? new Set(changes.filter(change => errors.some(e => e.id === change.id && e.field === change.field))) : null
+  const contentToWrite = refusedRows ? contentEdits.filter(edit => !refusedRows.has(edit.change)) : contentEdits
+  const otherRows = async (remaining: typeof changes) => {
+    if (!remaining.length) return { updated: 0, errors: [] }
+    const product = expectedVersion !== undefined ? await prisma.product.findUnique({ where: { id: remaining[0].id }, select: { version: true } }) : null
+    try {
+      return await applyProductBulkEdits({ ...input, changes: remaining, expectedVersion: product?.version }, { ...context, ifMatch: undefined })
+    } catch (error) {
+      // Per row, "every other row was refused" is a set of row errors, not a failure of the rows that were saved.
+      if (context.contentPerRow && error instanceof ProductBulkError && error.statusCode === 400 && Array.isArray(error.details.errors)) {
+        return { updated: 0, errors: error.details.errors as ProductBulkChangeError[] }
+      }
+      throw error
+    }
+  }
+  if (contentToWrite.length) {
     const addressed = new Set(contentEdits.map(edit => edit.change))
-    const remaining = changes.filter(change => !addressed.has(change))
-    return applyContentBulk(input, context, contentEdits, async () => {
-      if (!remaining.length) return { updated: 0, errors: [] }
-      const product = expectedVersion !== undefined ? await prisma.product.findUnique({ where: { id: remaining[0].id }, select: { version: true } }) : null
-      return applyProductBulkEdits({ ...input, changes: remaining, expectedVersion: product?.version }, { ...context, ifMatch: undefined })
-    })
+    const remaining = changes.filter(change => !addressed.has(change) && !refusedRows?.has(change))
+    return applyContentBulk(input, context, contentToWrite, () => otherRows(remaining), refusedRows ? errors : [])
+  }
+  if (refusedRows) {
+    const addressed = new Set(contentEdits.map(edit => edit.change))
+    const rest = await otherRows(changes.filter(change => !addressed.has(change) && !refusedRows.has(change)))
+    const all = [...errors, ...((rest as { errors?: ProductBulkChangeError[] }).errors ?? [])]
+    return { ...rest, success: (rest.updated ?? 0) > 0, updated: rest.updated ?? 0, errors: all }
   }
   /** `n > cap` is over; a value exactly AT the cap is accepted. */
   const capViolation = (field: string, value: unknown, id?: string): string | null => {

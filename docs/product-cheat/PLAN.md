@@ -166,3 +166,45 @@ merge); at 34 roots it covers the catalogue in one night, as predicted. 🟠 Sta
 `node docs/product-cheat/tools/axis-stores.mjs` (production, read only) — record `records/step-2.6-axis-stores-production-2026-09-24T02-35Z.txt`:
 legacy `va` sizes **35**, colours **44** — ✅ **not grown** (= the 21:09 mid-way run and the post-2.6d count); store `vr` 301 / 285;
 `va` vs `vr` **0** differ.
+
+## A-48 — Step 4.2: the three browser gates are fixed and run end to end behind a runner. TWO QUESTIONS FOR YOU. Not in the hook yet.
+
+Built by sub-agent G1 (report: session scratchpad `G1-report.md`; nothing committed yet). 🟠 Method miss stated by G1: predictions were
+not written before its first run; it overwrote `scripts/lib/gate-aloneness.test.mjs` by mistake and restored it byte-identical from git.
+
+| Fix | Where |
+|---|---|
+| 🔴 the editor-open write guard: any non-GET to `/api/…` OR `/backend/api/…`, **on any host**, is aborted and counted (the old rule let a proxied `PATCH /backend/api/products/bulk` reach the database) | new `scripts/lib/gate-write-guard.mjs` (+6 arms), used by editor-open and grid chrome |
+| `pgrep -af` — the safe wrapper refused on every run since 09-13 | `scripts/lib/gate-aloneness.mjs` (+1 arm) |
+| sign-in accepts `/backend/api/auth/me`; grid chrome signs in; workspace-scoped URLs; census itemises every red surface | the gate scripts + `scripts/studio-browser-auth.mjs`, `scripts/studio-gate-session.mjs` |
+| the runner (R-50): path-scoped by each gate's own stamp list; OWN servers on free ports + the LOCAL database (read back from the API process's env; the 28 root-`.env`-only keys blanked); a ratchet vs `scripts/browser-gates-baseline.json`; NOT MEASURED always fails; stops what it started | new `scripts/run-browser-gates.mjs` (+10 arms), `package.json` `gates:browser` |
+
+**Measured end to end (run 2, 2026-09-24 00:53–01:19 UTC, 1,543 s):** servers 8 s · grid chrome ✅ 16 s, 0 writes · editor-open 1,130 s —
+every open gesture ✅ 20/20 kinds with **0 writes armed**, geometry ✅, master contract ✅; **Amazon·IT renders no rows locally** → 18
+NOT MEASURED keys · census 387 s — master ✅, eBay·IT ✅, **Amazon·DE NOT MEASURED** (`studio/destination` → 400, most likely the
+local Amazon account is disconnected — inferred). Baseline = those **25 blind keys**, printed on every run as *"BLIND there
+(baselined, not green)"*. 🟠 Unresolved: U2 saw census 14/14 incl. Amazon·DE with its own older account. Mutations **10 of 11 red**
+(M8 did not mutate — a later SIGKILL still stopped the server; M8b replaced it, red).
+
+🔴 **The cost is ~20–26 minutes for a push that touches the editors or the grid** (editor-open ≈ 19 min). R-50 was chosen on "a few
+minutes" — wrong; this is the measured number. A push that touches none of the watched files: ~1 s.
+🔴 **A decision G1 took, for you to accept or undo:** the disposable local gate user copies the WIDEST role (today ADMIN) with MFA off —
+the only way a gate can open a channel scope (`settings.integrations.manage`). Local only, deleted after each run, API writes aborted.
+Noted, by design: `apps/api/src/env.ts:18-19` loads the root `.env` (production channel credentials) after the cwd `.env`,
+non-overriding — hence "run the API from `apps/api`"; the runner blanks those 28 keys for its own servers.
+
+| # | Question | Ruling (2026-09-24 ~09:45 UTC, thirty-ninth set) |
+|---|---|---|
+| **R-61** | A-48 Q1 — the gate cost, measured (~20–26 min on a UI push) | ✅ **All three browser gates in the push** (path-scoped) |
+| **R-62** | A-48 Q2 — the disposable local gate user copies the widest role (ADMIN), MFA off | ✅ **Accepted** |
+
+## A-47 / R-60 — BUILT: content saves are judged per row on the sheet's `PATCH /products/bulk` only.
+
+Built by sub-agent B1; re-run by this lane (26 files / 328 tests green, 12 skipped as before; `tsc` 0). `bulk-edit.service.ts` — an opt-in
+`contentPerRow`; `pim/content-bulk-write.ts` — with it, only good rows are written and the errors merged; `routes/products.routes.ts` —
+ONE line, `contentPerRow: true`, in the `PATCH /products/bulk` handler. Without the flag nothing changes: restore, the translation form
+and the AI writes keep all-or-nothing. New `content-per-row.vitest.test.ts` (5 arms: the real sheet route stores the good title and
+refuses the over-long bullets; a refused row is not stored; no flag → nothing stored; only the sheet route sets the flag — a source
+read; audit rows only for saved fields). **Mutations 5/5 red.** ⬜ Not tested: a mixed content + `attr_*` request where every `attr_*`
+row is refused; the sheet's on-screen display of a per-row content refusal (the browser half) — not run.
+*Done when* ✅ (tests) · *Cost when* `flat` · *Rollback* — revert.

@@ -21,8 +21,9 @@ const addressKey = (value: unknown, label: string) => {
     : ['pin', address.language, address.coordinate.channel, address.coordinate.market, address.coordinate.accountId ?? '', address.coordinate.aliasId ?? ''])
 }
 export interface ContentEdit { change: Change; column: SheetColumn }
-export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>) {
-  const errors: Array<{ id: string; field: string; error: string }> = []
+export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>,
+  priorErrors: Array<{ id: string; field: string; error: string }> = []) {
+  const errors: Array<{ id: string; field: string; error: string }> = [...priorErrors]
   const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number }> = []
   const contexts = input.marketplaceContexts ?? (input.marketplaceContext ? [input.marketplaceContext] : [])
   for (const edit of edits) {
@@ -71,8 +72,16 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version })
     } catch (error) { errors.push({ id: change.id, field: change.field, error: error instanceof Error ? error.message : String(error) }) }
   }
-  if (errors.length) return { success: false, updated: 0, errors }
-  if (input.dryRun) return { success: true, dryRun: true, updated: 0, validated: plans.length, errors: [] }
+  // R-60 — per row only on the sheet's opt-in (never inside a formula write, which is one value by construction).
+  const perRow = context.contentPerRow === true && !currentFormulaWrite(context.formulaWriteToken)
+  if (errors.length && !perRow) return { success: false, updated: 0, errors }
+  if (perRow && !plans.length) {
+    if (input.dryRun) return { success: false, dryRun: true, updated: 0, validated: 0, errors }
+    const rest = await inDatabaseTransaction(prisma, () => facts())
+    const updated = rest.updated ?? 0
+    return { ...rest, success: updated > 0, updated, errors: [...errors, ...(rest.errors ?? [])] }
+  }
+  if (input.dryRun) return { success: true, dryRun: true, updated: 0, validated: plans.length, errors: perRow ? errors : [] }
   return inDatabaseTransaction(prisma, async () => {
     const groups = new Map<string, typeof plans>()
     for (const plan of plans) { const key = `${plan.edit.change.id}:${JSON.stringify(plan.address)}`; groups.set(key, [...(groups.get(key) ?? []), plan]) }
@@ -108,6 +117,6 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
     }
     const ids = [...new Set(edits.map(edit => edit.change.id))]
     await afterDatabaseCommit(`product-cache:${ids.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
-    return { ...rest, success: true, updated: plans.length + (rest.updated ?? 0), currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: rest.errors ?? [] }
+    return { ...rest, success: true, updated: plans.length + (rest.updated ?? 0), currentVersion: rest.currentVersion ?? currentVersion, versionOf: rest.versionOf ?? versionOf, errors: perRow ? [...errors, ...(rest.errors ?? [])] : rest.errors ?? [] }
   })
 }
