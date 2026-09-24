@@ -138,3 +138,31 @@ red** (one — children not counted — first stayed green; a parent/child arm w
 form (`routes/product-translations.routes.ts:147-151`), restore (`routes/products.routes.ts:838-841`), the AI writes
 (`routes/products-ai.routes.ts:319-322`). Per row there would commit some fields and still report "failed", with no audit row.
 **Recommendation:** per row as an OPT-IN used only by the sheet's `PATCH /products/bulk`; the three callers keep all-or-nothing.
+- 🟠 **Stated:** R-45's hook cost was described to the Owner as "a few minutes"; G1 MEASURED ~20–26 minutes for a UI push that runs
+  editor-open (see A-48). Raised with the Owner before the browser gates enter the hook.
+
+| # | Question | Ruling (2026-09-24 ~09:30 UTC, thirty-eighth set) |
+|---|---|---|
+| **R-60** | A-47 / R-59 refined — per-row content saves | ✅ **Sheet only:** per row as an opt-in used by the sheet's `PATCH /products/bulk`; the translation form, restore and the AI writes keep all-or-nothing |
+
+## Step 2.7 — CLOSED (verified 2026-09-24 02:35 UTC, run by this lane under R-40). Step 2.6's day-after check — ✅.
+
+`node docs/product-cheat/tools/readiness-age.mjs` (production, `BEGIN READ ONLY`, `readOnly: on`) — record
+`records/step-2.7-readiness-age-production-2026-09-24T02-35Z.txt`:
+
+| R-28's verify | Measured |
+|---|---|
+| `CronRun` `readiness-reconcile` SUCCESS for both businesses | ✅ Xavia Racing 02:17:02–02:22:58 UTC (356 s) · Motovento 02:17:00–02:17:01 |
+| `stopped: complete`, 0 failed | ✅ *"32 done · 9741 rows · stopped: complete"* · *"2 done · 22 rows · stopped: complete"* |
+| no live product without a row since the deploy | ✅ Xavia Racing 333 live products, **0** without a row since the 06:46 UTC deploy; Motovento 22, **0** |
+| roots due now | **0** in both (34 live roots) |
+
+The run inside the 10-minute budget (356 s for 32 roots) — the deployed job is still the id-order one (A-30 ships with the next
+merge); at 34 roots it covers the catalogue in one night, as predicted. 🟠 Stated: Xavia Racing still holds 145 rows computed on
+2026-09-14 (5 families); every LIVE product has a newer row, so they belong to products that are no longer live.
+**All four closure fields:** *Done when* ✅ (the verify above) · *Cost when* — bounded at 10 min a night; 356 s today · *Gate* — A-30's
+8 arms + 5 mutations, and this verify · *Rollback* — revert A-30; the data is derived.
+
+`node docs/product-cheat/tools/axis-stores.mjs` (production, read only) — record `records/step-2.6-axis-stores-production-2026-09-24T02-35Z.txt`:
+legacy `va` sizes **35**, colours **44** — ✅ **not grown** (= the 21:09 mid-way run and the post-2.6d count); store `vr` 301 / 285;
+`va` vs `vr` **0** differ.
