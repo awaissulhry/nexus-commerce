@@ -167,7 +167,8 @@ describe.skipIf(!concurrentDatabaseUrl())('private eBay quarantine maintenance a
     expect(result).toEqual({ can_set: false, inherits: false, can_create: false })
     const fn = (await database.pool.query(`SELECT pg_get_userbyid(proowner) AS owner, prosecdef, proconfig
       FROM pg_proc WHERE oid='public.nexus_rewrap_ebay_quarantine(text,text,text,text,text,text,uuid)'::regprocedure`)).rows[0]
-    expect(fn).toEqual({ owner: writer, prosecdef: true, proconfig: ['search_path=pg_catalog'] })
+    // pg_temp last: a definer that omits it resolves caller-created temporary types first (C11f6b review).
+    expect(fn).toEqual({ owner: writer, prosecdef: true, proconfig: ['search_path=pg_catalog, pg_temp'] })
     const rights = (await database.pool.query(`SELECT has_table_privilege($1,'"EbayNoticeQuarantine"','SELECT') AS read,
       has_column_privilege($1,'"EbayNoticeQuarantine"','payloadEnc','UPDATE') AS cipher,
       has_column_privilege($1,'"EbayNoticeQuarantine"','deliveries','UPDATE') AS delivery,
