@@ -215,7 +215,7 @@ row is refused; the sheet's on-screen display of a per-row content refusal (the 
 not run"*, exit 0 (checked). **Done when** (the plan's: five gates in the hook and green) — the four the plan names are in; green
 against their ratchets; the first push through them is the proof (below, when it lands).
 
-### Step 4.2 — the first push through all four gates: REFUSED once, correctly, on one NEW key (2026-09-24 09:45–10:23 UTC)
+### Step 4.2 — the first push through all four gates: REFUSED once, correctly, on one NEW key (2026-09-24, push started 09:45 UTC, refused before 10:13 UTC)
 
 The browser-gate stage ran every gate (1,544 s): grid chrome ✅ 0 keys · control census ✅ 7 known blind keys, 0 new · **editor-open:
 19 keys, 1 NEW** — `parity EBAY·IT · footerNote: "The eBay account needs reconnecting. Content editing remains available; the channel
