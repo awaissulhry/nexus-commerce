@@ -75,10 +75,10 @@ describe.runIf(canRun)('prisma/baseline.sql', () => {
 
     residual = execFileSync('npx', [
       'prisma', 'migrate', 'diff',
-      '--from-url', targetUrl,
-      '--to-schema-datamodel', 'prisma/schema.prisma',
+      '--from-config-datasource',
+      '--to-schema', 'prisma/schema.prisma',
       '--script',
-    ], { cwd: pkgRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    ], { cwd: pkgRoot, env: { ...process.env, DATABASE_URL: targetUrl, MIGRATION_DATABASE_URL: targetUrl }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   }, 600_000)
 
   afterAll(async () => { if (canRun) await admin(`DROP DATABASE IF EXISTS "${DB}"`) }, 60_000)

@@ -93,13 +93,16 @@ jobs:
         run: npm run build --workspace=@nexus/api
 
       - name: Migration credential selection
-        run: npm test --workspace=@nexus/database -- scripts/migration-connection.vitest.test.ts
+        run: npm test --workspace=@nexus/database -- scripts/migration-connection.vitest.test.ts scripts/workspace-singletons.vitest.test.ts
 
       - name: Prepare disposable tenant-role database
         run: docker pull postgres:17-alpine
 
       - name: Runtime login isolation on PostgreSQL 17
         run: npm test --workspace=@nexus/database -- scripts/runtime-role-postgres.vitest.test.ts
+
+      - name: Concurrent domain operations through restricted database logins
+        run: node scripts/run-real-postgres-tests.mjs --required
 
       - name: Tenant model ownership and SQL parity
         run: |
@@ -112,7 +115,7 @@ jobs:
           node scripts/check-graph-contract.mjs
 
       - name: Authentication and durable event regressions
-        run: npm test --workspace=@nexus/api -- src/lib/auth src/routes/auth-routes.vitest.test.ts src/lib/events src/lib/cron src/workers/event-relay-roles.vitest.test.ts
+        run: npm test --workspace=@nexus/api -- src/lib/auth src/routes/auth-routes.vitest.test.ts src/lib/events src/lib/cron src/workers/event-relay-roles.vitest.test.ts src/services/workspace.vitest.test.ts src/services/connection-dependents.vitest.test.ts src/test-support/pglite-protocol.vitest.test.ts
 
       - name: Web proxy security regressions
         run: npm test --workspace=@nexus/web -- src/proxy.vitest.test.ts src/lib/workspaces/api-proxy.vitest.test.ts

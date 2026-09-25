@@ -59,11 +59,13 @@ jobs:
 
       - name: Require prepared worker and scheduler services
         env:
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
           WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
           SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
         run: |
-          test -n "$WORKER_SERVICE" && test -n "$SCHEDULER_SERVICE" || {
-            echo "Configure the worker and scheduler services before deploying the separated API. See tasks/architecture-operations.md."
+          test -n "$API_SERVICE" && test -n "$WORKER_SERVICE" && test -n "$SCHEDULER_SERVICE" &&
+          test "$API_SERVICE" != "$WORKER_SERVICE" && test "$API_SERVICE" != "$SCHEDULER_SERVICE" && test "$WORKER_SERVICE" != "$SCHEDULER_SERVICE" || {
+            echo "Configure three distinct API, worker and scheduler services before deploying. See tasks/architecture-operations.md."
             exit 1
           }
 

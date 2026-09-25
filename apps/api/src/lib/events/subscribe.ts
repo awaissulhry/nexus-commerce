@@ -87,7 +87,7 @@ export async function subscribeEvents(
       )
     },
     onError: (error, message) => {
-      logger.error('event consumer failed; durable delivery remains pending', {
+      logger.error('event consumer failed', {
         group: subscription.group, eventId: message.envelope.id,
         type: message.envelope.type, version: message.envelope.version,
       })

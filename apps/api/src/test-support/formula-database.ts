@@ -5,12 +5,14 @@ import { workspacePolicySql } from '../../../../packages/database/scripts/worksp
 import { Pool } from 'pg'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { fixExtendedQueryReady } from './pglite-protocol.js'
 
 /** Disposable real PostgreSQL + the generated production Prisma client. No catalog connection. */
 export async function formulaDatabase(options: { maxConnections?: number; port?: number } = {}) {
   const root = fileURLToPath(new URL('../../../../', import.meta.url))
-  const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+  const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--config', `${root}/packages/database/prisma.config.ts`, '--from-empty', '--to-schema', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
   const db = await PGlite.create()
+  fixExtendedQueryReady(db)
   await db.exec(sql)
   // LX.F P3-22 — the deployed databases carry columns `schema.prisma` does not.
   // `ChannelListing.variationExcluded` is DELIBERATELY absent from the schema

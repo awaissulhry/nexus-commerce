@@ -2,9 +2,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator modelMetadata {
+  provider = "nexus-model-metadata"
+  output   = "../workspaces"
+}
+
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum FulfillmentMethod {

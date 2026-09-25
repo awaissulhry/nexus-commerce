@@ -78,7 +78,7 @@ const docker = (...cmd) => execFileSync('docker', cmd, { encoding: 'utf8', stdio
 
 function skip(reason) {
   console.log(`⚠ real-PostgreSQL tests SKIPPED — ${reason}. They prove no stock update is lost under concurrency and that a shared-product copy completes end to end; run them where Docker is available.`)
-  process.exit(0)
+  process.exit(args.includes('--required') || process.env.CI === 'true' ? 1 : 0)
 }
 
 try { docker('info', '--format', '{{.ServerVersion}}') } catch { skip('Docker is not available here') }
