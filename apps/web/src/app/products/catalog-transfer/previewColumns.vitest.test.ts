@@ -72,3 +72,41 @@ describe('catalog review on the Nexus table', () => {
     expect(html).toContain('New title')
   })
 })
+
+describe('channel-file rows and the channel read (CFI)', () => {
+  const file = { origin: 'channel-file' as const }
+  it('shows what the channel held at its last read, and never claims a read that did not happen', () => {
+    expect(render('channel', {})).toContain('Not read yet')
+    expect(render('channel', { entity: 'Products' })).toContain('Not a channel value')
+    const same = render('channel', { channelRead: { differs: false, readAt: '2026-09-24T03:37:00.000Z', source: 'amazon-content' } })
+    expect(same).toContain('Same as Nexus at the last read')
+    expect(same).toContain('2026-09-24T03:37:00.000Z')
+    const differs = render('channel', { channelRead: { differs: true, value: 'Giacca Gale', ours: 'Old', readAt: '2026-09-24T03:37:00.000Z', source: 'amazon-content' } })
+    expect(differs).toContain('Giacca Gale')
+    expect(differs).not.toContain('Same as Nexus')
+    expect(columns.map(c => c.label)).toContain('On the channel')
+  })
+  it('names presence, price and sale in words and says nothing is sent', () => {
+    const ended = render('after', { ...file, entity: 'Listings', field: 'presence', after: 'ENDED' })
+    expect(ended).toContain('Listing ended on the channel')
+    expect(ended).toContain('nothing is sent')
+    expect(render('field', { ...file, entity: 'Listings', field: 'presence' })).toContain('Listing on the channel')
+    const price = render('after', { ...file, field: 'price', after: 89.9 })
+    expect(price).toContain('89.90')
+    expect(price).toContain('not sent to the channel')
+    expect(render('after', { ...file, field: 'sale', after: { value: 69, start: '2026-10-01', end: '2026-10-31' } })).toContain('69.00 · 2026-10-01 to 2026-10-31')
+    expect(render('after', { ...file, field: 'sale', after: { value: null, start: null, end: null } })).toContain('No sale')
+    expect(render('field', { ...file, entity: 'Listings', field: 'sellerSku' })).toContain('Channel SKU')
+  })
+  it('explains a full-update blank as a removal on the channel', () => {
+    const cleared = render('after', { ...file, action: 'CLEAR', clearIfPresent: true, after: null, before: 'Poliestere' })
+    expect(cleared).toContain('Removed on the channel — will be cleared')
+    expect(render('before', { ...file, action: 'CLEAR', clearIfPresent: true, before: 'Poliestere', beforeState: 'inherited' })).toContain('Poliestere')
+  })
+  it('shows the SKU as written in the file and marks rows from the channel file', () => {
+    const product = render('product', { ...file, sku: 'IT-MOSS-JACKET', fileSku: 'MOSS-JACKET' })
+    expect(product).toContain('File SKU: MOSS-JACKET')
+    expect(product).toContain('From the channel file')
+    expect(render('product', {})).not.toContain('From the channel file')
+  })
+})

@@ -2,6 +2,14 @@ import { normalizeLanguage } from './content-language.js'
 import ExcelJS from 'exceljs'
 import { assertCsvRectangle, parseCatalogCsv } from './catalog-csv-dialect.js'
 import { TRANSFER_CHANNELS, TRANSFER_COLUMNS, transferFileRow, type TransferRow, type TransferIssue, type TransferEntity } from '@nexus/shared/catalog-transfer'
+import { sniffWorkbook, amazonTemplateWrongDoor, amazonAttributeSheetDoor } from './channel-file-sniff.js'
+
+/** CFI-1 — the zip walk that keeps Amazon's own files away from ExcelJS in every generic reader. */
+export async function refuseChannelTemplates(buffer: Buffer, filename: string) {
+  const sniff = await sniffWorkbook(buffer)
+  if (sniff.kind === 'amazon-template') throw new Error(amazonTemplateWrongDoor(filename))
+  if (sniff.kind === 'amazon-attribute-sheet') throw new Error(amazonAttributeSheetDoor(filename, sniff.sheet))
+}
 
 export const TRANSFER_MAX_ROWS = 50_000
 export const TRANSFER_MAX_FILE_BYTES = 10 * 1024 * 1024
@@ -111,9 +119,11 @@ export async function readTransferFile(buffer: Buffer, filename: string, options
     assertCsvRectangle(grid, delimiter)
     return parseTransferRecords(recordsOf(grid))
   }
-  if (!/\.xlsx$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')
+  if (!/\.xls[xm]$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')
   const { checkWorkbookSize } = await import('./catalog-source-file.js')
   await checkWorkbookSize(buffer)
+  // 🔴 CFI-1 — never hand an Amazon template to ExcelJS: it ran > 8 min on the main thread (2026-09-24, d6).
+  await refuseChannelTemplates(buffer, filename)
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer as never)
   return readTransferWorkbook(workbook, options)

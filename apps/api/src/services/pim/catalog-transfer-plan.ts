@@ -15,6 +15,7 @@ import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } f
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver, type ReferenceResolver } from './reference-values.service.js'
+import { validateSaleWindow } from './sale-window.js'
 
 // Inventory, pricing and publication have their own transactional owners. An attribute import
 // must not bypass their ledgers, rules or outbound queues by writing their backing columns.
@@ -29,6 +30,9 @@ export const CLASSIFICATION_FIELDS = new Set(['family', 'parentSku', 'categoryId
 const CONTENT = new Set(['name', 'title', 'description', 'bulletPoints', 'keywords'])
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 export const fingerprint = (value: unknown) => createHash('sha256').update(transferCanonical(value)).digest('hex')
+/** Everything a target WRITES. Apply re-plans each record and refuses unless this is byte-identical to the reviewed one. */
+export const targetWriteFingerprint = (target: Pick<TransferTarget, 'patch' | 'contentWrites' | 'priceWrite' | 'presence'>) =>
+  fingerprint([target.patch, target.contentWrites, target.priceWrite ?? null, target.presence ?? null])
 export interface TransferProduct extends ValueRecord {
   id: string; sku: string; version: number; parentId: string | null; familyId: string | null; isParent: boolean
   categories: { categoryId: string; isPrimary: boolean }[]
@@ -45,6 +49,24 @@ export interface TransferContext {
   categoryDefaults?: Record<string, string | null>
   parentsWithChildren?: Set<string>
   relationshipBlockedProducts?: Set<string>
+  /** CFI-6 — listing ids with a PENDING `PRICE_UPDATE`: a channel's own price is never recorded under an operator's unsent push. */
+  pendingPriceListings?: Set<string>
+  /** CFI-6 — sale windows (raw columns, `sale-window.ts`) of the listings a channel file prices. */
+  saleWindows?: Map<string, { start: string | null; end: string | null }>
+  /** CFI-4 — the active offer SKUs each listing already carries, for the seller-SKU identity check. */
+  offerSkus?: Map<string, string[]>
+}
+/** CFI-6 — a channel file's own selling price and sale, recorded through the one price door without a push. */
+export interface TransferPriceWrite {
+  price?: number
+  sale?: { value: number | null; start: string | null; end: string | null }
+  /** The listing's own price the review showed (A-17 `expectedPrice`): a number = pinned, `null` = following the master. */
+  expectedPrice: number | null
+  /**
+   * The sale price + window the review showed. Part of the target's write fingerprint, so an apply refuses a record whose
+   * sale changed since review — the window lives in raw columns (`sale-window.ts`) no listing snapshot can see.
+   */
+  expectedSale: { value: number | null; start: string | null; end: string | null }
 }
 export interface TransferTarget {
   key: string
@@ -59,8 +81,16 @@ export interface TransferTarget {
   rows: TransferRow[]
   contractHash: string
   create: boolean
+  /** CFI-6 — never part of `patch`: applied through `writeChannelPrices` in record-only mode. */
+  priceWrite?: TransferPriceWrite
+  /** CFI-3 (Q1 delete) — the channel deleted this listing; applied by `recordChannelDeletion`, nothing sent. */
+  presence?: 'ENDED'
 }
-export interface TransferPlan { targets: TransferTarget[]; issues: TransferIssue[]; warnings: string[]; exclusions?: SourceExclusion[] }
+export interface TransferPlan {
+  targets: TransferTarget[]; issues: TransferIssue[]; warnings: string[]; exclusions?: SourceExclusion[]
+  /** CFI-3 — blank cells of full-update rows whose Nexus value was already empty (nothing to clear), and ones that could not be checked. */
+  stats?: { alreadyEmpty: number; clearUnchecked: number }
+}
 export interface TransferContracts {
   reference?: ReferenceResolver
   /** `extraSaved` declares attribute keys the target does not hold yet (a first shared copy: the
@@ -147,6 +177,91 @@ function cell(row: TransferRow, before: { state: 'stored' | 'inherited'; value: 
   return { ...row, before: before.value, after, beforeState: before.state, afterState: state, verdict: unchanged ? 'unchanged' : 'changed' }
 }
 
+// ── CFI (R-CFI-1) — values read from the channel's OWN file ─────────────────────────────────────
+const fromChannelFile = (row: TransferRow) => row.origin === 'channel-file'
+/** `list_price` is the RRP: a saved listing fact the studio publisher serializes (`studio-publication-amazon.ts:134`), not a selling price. */
+export const isRrpField = (field: Pick<CatalogueField, 'fieldKey' | 'sheetKey' | 'channelStore'>) =>
+  [field.fieldKey, field.sheetKey].some(key => key?.split('__')[0] === 'list_price')
+  || field.channelStore?.kind === 'platformAttributes' && field.channelStore.path[0] === 'list_price'
+/** Every seller-SKU identity a listing already holds: active offers, the platform-attribute sku keys, the flat-file snapshot. */
+function heldSellerSkus(listing: ValueRecord | null, context: TransferContext): string[] {
+  if (!listing) return []
+  const platform = jsonRecord(listing.platformAttributes), snapshot = jsonRecord(listing.flatFileSnapshot)
+  return [...new Set([...context.offerSkus?.get(String(listing.id)) ?? [],
+    ...[platform.sellerSku, platform.seller_sku, platform.sku, platform.item_sku, snapshot.item_sku].filter((v): v is string => typeof v === 'string' && !!v.trim())])]
+}
+/** Empty the way a channel sees it: nothing, blank text, an empty list, or a measure/record whose parts are all empty. */
+export function isEmptyChannelValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return !value.trim()
+  if (Array.isArray(value)) return value.every(isEmptyChannelValue)
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    if ('value' in record) return isEmptyChannelValue(record.value)
+    return Object.values(record).every(isEmptyChannelValue)
+  }
+  return false
+}
+const priceNumber = (value: unknown) => value === null || value === undefined || value === '' ? null : Number(value)
+/** The listing's own selling price as the price door reads it: pinned (`followMasterPrice === false`) or following the master. */
+function listingOwnPrice(listing: ValueRecord | null): { state: 'stored' | 'inherited'; value: number | null } {
+  if (!listing || listing.followMasterPrice !== false) return { state: 'inherited', value: null }
+  return { state: 'stored', value: priceNumber(listing.priceOverride) ?? priceNumber(listing.price) }
+}
+const round2 = (n: number) => Math.round(n * 100) / 100
+const clearKey = (targetKey: string, locale: string, field: string) => JSON.stringify([targetKey, locale, field])
+
+/**
+ * CFI-3 (Q1, D3) — for every `clearIfPresent` row, the value Nexus would publish on that coordinate today (a listing
+ * override, else the mapped master value): ONE `resolveBatch` per channel · account · market · alias · category · locale,
+ * never one per cell. `null` = could not be read; the row is then left alone and the plan says so.
+ */
+async function effectiveForClears(groups: Map<string, TransferRow[]>, context: TransferContext, contracts: TransferContracts, warnings: Set<string>) {
+  const out = new Map<string, { value: unknown } | null>()
+  const batches = new Map<string, { channel: string; accountId: string; marketplace: string; aliasKey: string; category: string; locale: string; productIds: Set<string>; fieldKeys: Set<string>; keys: { cellKey: string; productId: string; fieldKey: string }[] }>()
+  for (const [key, group] of groups) {
+    const clears = group.filter(r => r.clearIfPresent && fromChannelFile(r) && r.action === 'CLEAR' && r.entity === 'Overrides')
+    if (!clears.length) continue
+    const first = group[0], product = context.products.get(first.sku), listing = context.listings.get(key)?.[0]
+    // A product this file creates holds nothing Nexus could publish yet.
+    if (!product) { for (const r of clears) out.set(clearKey(key, r.locale, r.field), { value: null }); continue }
+    const categoryKey = transferCategoryField(first.channel)
+    const categoryRow = group.find(r => r.entity === 'Listings' && r.field === categoryKey && r.action === 'SET')
+    const category = String(categoryRow?.value ?? jsonRecord(listing?.platformAttributes)[categoryKey] ?? context.categoryDefaults?.[JSON.stringify([first.sku, first.channel, first.marketplace])] ?? '')
+    let fields: CatalogueField[]
+    try { fields = (await contracts.channel(first.channel, first.marketplace, category)).fields } catch { for (const r of clears) out.set(clearKey(key, r.locale, r.field), null); continue }
+    const languageRows = context.markets.filter(m => m.channel === first.channel && m.code === first.marketplace)
+    const languages = marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] })))
+    for (const r of clears) {
+      const field = fields.find(f => f.fieldKey === r.field || f.sheetKey === r.field)
+      if (!field) continue // the row loop names it
+      const locale = r.locale || languages[0] || ''
+      const batchKey = JSON.stringify([first.channel, first.accountId, first.marketplace, first.aliasKey, category, locale])
+      if (!batches.has(batchKey)) batches.set(batchKey, { channel: first.channel, accountId: first.accountId, marketplace: first.marketplace, aliasKey: first.aliasKey, category, locale, productIds: new Set(), fieldKeys: new Set(), keys: [] })
+      const batch = batches.get(batchKey)!
+      batch.productIds.add(String(product.id)); batch.fieldKeys.add(field.fieldKey)
+      batch.keys.push({ cellKey: clearKey(key, r.locale, r.field), productId: String(product.id), fieldKey: field.fieldKey })
+    }
+  }
+  if (!batches.size) return out
+  const { resolveBatch } = await import('./mapping/resolve-batch.service.js')
+  for (const batch of batches.values()) {
+    try {
+      const result = await resolveBatch({ channel: batch.channel, channelConnectionId: batch.accountId, marketplace: batch.marketplace, aliasKey: batch.aliasKey, productIds: [...batch.productIds], fieldKeys: [...batch.fieldKeys], ...(batch.locale ? { locale: batch.locale } : {}), productType: batch.category || null, includeCatalogue: false })
+      const byProduct = new Map(result.products.map(p => [p.productId, p]))
+      for (const k of batch.keys) {
+        const cells = byProduct.get(k.productId)?.cells ?? {}
+        const hit = cells[k.fieldKey] ?? Object.values(cells).find(c => c.fieldKey === k.fieldKey)
+        out.set(k.cellKey, { value: hit?.value ?? null })
+      }
+    } catch {
+      for (const k of batch.keys) out.set(k.cellKey, null)
+      warnings.add(`${batch.channel} ${batch.marketplace}: the current values behind the blank cells of full-update rows could not be read, so none of them was cleared. Review those fields after this import.`)
+    }
+  }
+  return out
+}
+
 /**
  * LX.F2 R-LX-21 (F-LX-4) — `options.revalidateDeclaredVersion` is FALSE on the two APPLY
  * paths. The workbook's `version` column is an EXPORT-FRESHNESS check and it belongs to the
@@ -223,6 +338,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     groups.get(key)!.push(row)
   }
   const productRows = new Map([...groups.values()].filter(r => r[0].entity === 'Products').map(r => [r[0].sku, r]))
+  const effective = await effectiveForClears(groups, context, contracts, warnings)
+  const stats = { alreadyEmpty: 0, clearUnchecked: 0 }
   const familyFor = (sku: string, visiting = new Set<string>()): string | null => {
     if (visiting.has(sku)) throw new Error('Parent relationships contain a cycle')
     visiting.add(sku)
@@ -249,6 +366,11 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     const groupIssueStart = issues.length
     if (existingProduct?.deletedAt) { error(first, 'This SKU is archived. Restore it before importing.'); continue }
     if (existingListings.length > 1) { error(first, 'Multiple listings have this exact coordinate. Resolve the duplicate before importing.'); continue }
+    // CFI-3 (Q1 delete) — the channel deleted a listing Nexus never held: there is nothing to end, and nothing is created.
+    if (!isProduct && !before && group.some(r => r.entity === 'Listings' && r.field === 'presence' && fromChannelFile(r))) {
+      for (const r of group) exclusions.push({ row: r.row, sku: r.sku, field: r.field, source: r.source, identity: r, message: 'The channel file deletes this listing, but Nexus holds no listing here — nothing to end' })
+      continue
+    }
     if (mode === 'create' && before) { error(first, 'This record already exists; choose Update or Create or update'); continue }
     if (mode === 'update' && !before) { error(first, 'This record does not exist; Update never creates an unknown SKU or listing'); continue }
     if (!isProduct && !existingProduct && !productRows.has(first.sku)) { error(first, 'Create the shared product in Products before adding its listings'); continue }
@@ -388,6 +510,23 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           const alias = context.aliases?.find(a => a.id === first.aliasKey && a.status === 'ACTIVE' && a.channel === first.channel && a.marketplace === first.marketplace && a.channelConnectionId === first.accountId)
           if (!alias || alias.productId !== (existingProduct?.parentId ?? existingProduct?.id)) throw new Error('This alias is not an active listing of this product family and account. Create the alias in Product Edit Studio first.')
         }
+        // CFI-3 (Q1 delete) — a channel file's delete row: the listing is marked ended at apply; nothing is sent.
+        const presenceRow = group.find(r => r.entity === 'Listings' && r.field === 'presence' && fromChannelFile(r))
+        if (presenceRow) {
+          if (presenceRow.action !== 'SET' || presenceRow.value !== 'ENDED') throw new Error('A channel file can only record that the channel ENDED this listing')
+          if (group.length > 1) throw new Error('This file both deletes this listing and updates it. Keep one of the two rows.')
+          // A delete ends only the listing that holds the file's seller SKU: the product's own SKU, or an identity this listing carries.
+          // The listing sells under its held identity when it has one (the studio publishes `identities[0] ?? product.sku`), so
+          // the file's SKU must be that identity — even when it equals the Nexus SKU — and only a listing with none sells as the Nexus SKU.
+          const fileSku = presenceRow.fileSku ?? first.sku, held = heldSellerSkus(before, context)
+          if (held.length ? !held.includes(fileSku) : fileSku !== first.sku) {
+            throw new Error(`The file deletes seller SKU ${fileSku}, which this listing does not hold${held.length ? ` (it sells as ${held.join(', ')})` : ''}`)
+          }
+          const status = before?.listingStatus ?? null
+          target.contractHash = fingerprint(['presence', 'ENDED'])
+          target.cells.push(cell(presenceRow, { state: 'stored', value: status }, 'ENDED', 'stored'))
+          if (status !== 'ENDED') target.presence = 'ENDED'
+        } else {
         const categoryKey = transferCategoryField(first.channel)
         const categoryRow = group.find(r => r.entity === 'Listings' && r.field === categoryKey)
         const sharedTarget = targets.find(t => t.identity.entity === 'Products' && t.identity.sku === first.sku)
@@ -405,7 +544,11 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
         }
         if (contract.warning) warnings.add(contract.warning)
         target.contractHash = fingerprint([category, contract.fields])
-        const working = clone(before ?? { overrideData: {}, platformAttributes: {} })
+        // CFI-4 — a NEW market listing still belongs to its product, business and coordinate. Without them the content
+        // resolver refused every text field ("Content listing does not belong to this product/workspace", measured on
+        // REGAL IT, AIREON DE, MOSS DE and WATERPROOF FR, 2026-09-24).
+        const working = clone(before ?? { productId: existingProduct?.id ?? null, workspaceId: existingProduct?.workspaceId ?? null, channel: first.channel, marketplace: first.marketplace,
+          channelConnectionId: first.accountId, aliasKey: first.aliasKey, overrideData: {}, platformAttributes: {}, translations: [] })
         const resolvedFields = new Set<string>()
         const languageRows = context.markets.filter(m => m.channel === first.channel && m.code === first.marketplace)
         const languages = group.some(row => contract.fields.some(f => (f.fieldKey === row.field || f.sheetKey === row.field) && channelContentField(f, contract.masterLocalizableKeys))) ? marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] }))) : []
@@ -427,8 +570,56 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             target.patch.platformAttributes = working.platformAttributes = platform
             continue
           }
+          // CFI-4 — the seller SKU the channel uses when it differs from the Nexus SKU: the identity the studio publisher reads.
+          if (row.entity === 'Listings' && row.field === 'sellerSku' && fromChannelFile(row)) {
+            if (row.action !== 'SET' || typeof row.value !== 'string' || !row.value.trim() || row.value !== row.value.trim()) { error(row, 'A seller SKU is a non-empty text without surrounding spaces'); continue }
+            const platform = { ...jsonRecord(working.platformAttributes) }
+            const other = heldSellerSkus(before, context).filter(sku => sku !== row.value)
+            if (other.length) { error(row, `This listing already carries the seller SKU ${other.join(', ')} on ${first.channel} ${first.marketplace}; the file says ${String(row.value)}. Reconcile the listing identity before importing.`); continue }
+            const previous = typeof platform.sellerSku === 'string' ? platform.sellerSku : null
+            target.cells.push(cell(row, { state: previous === null ? 'inherited' : 'stored', value: previous }, row.value, 'stored'))
+            if (previous !== row.value) { platform.sellerSku = row.value; target.patch.platformAttributes = working.platformAttributes = platform }
+            continue
+          }
+          // CFI-6 (Q2) — the channel's own selling price and sale, recorded through the one price door without a push.
+          if (row.entity === 'Overrides' && (row.field === 'price' || row.field === 'sale') && fromChannelFile(row)) {
+            if (row.action !== 'SET') { error(row, 'A channel file records a price or a sale; it cannot clear or inherit one'); continue }
+            const listingId = before ? String(before.id) : null
+            const own = listingOwnPrice(before)
+            const reviewedSale = { value: priceNumber(before?.salePrice), ...(listingId ? context.saleWindows?.get(listingId) ?? { start: null, end: null } : { start: null, end: null }) }
+            const pending = () => !!listingId && !!context.pendingPriceListings?.has(listingId)
+            const waiting = `A price change is waiting to be sent to ${first.channel}. Send or cancel it before importing the channel's price.`
+            if (row.field === 'price') {
+              const amount = typeof row.value === 'number' ? row.value : typeof row.value === 'string' && row.value.trim() ? Number(row.value) : Number.NaN
+              if (!Number.isFinite(amount) || amount < 0) { error(row, 'A price is a number of zero or more'); continue }
+              const changed = cell(row, own, round2(amount), 'stored')
+              if (changed.verdict === 'changed' && pending()) { error(row, waiting); continue }
+              target.cells.push(changed)
+              if (changed.verdict === 'changed') target.priceWrite = { ...target.priceWrite, price: round2(amount), expectedPrice: own.value, expectedSale: reviewedSale }
+            } else {
+              const sale = jsonRecord(row.value)
+              const amount = sale.value === null || sale.value === undefined || sale.value === '' ? null : Number(sale.value)
+              if (amount !== null && (!Number.isFinite(amount) || amount < 0)) { error(row, 'A sale price is a number of zero or more'); continue }
+              const next = { value: amount === null ? null : round2(amount), start: amount === null ? null : typeof sale.start === 'string' ? sale.start : null, end: amount === null ? null : typeof sale.end === 'string' ? sale.end : null }
+              const problem = validateSaleWindow(next.value, next)
+              if (problem) { error(row, problem); continue }
+              const changed = cell(row, { state: 'stored', value: reviewedSale }, next, 'stored')
+              if (changed.verdict === 'changed' && pending()) { error(row, waiting); continue }
+              target.cells.push(changed)
+              if (changed.verdict === 'changed') target.priceWrite = { ...target.priceWrite, sale: next, expectedPrice: own.value, expectedSale: reviewedSale }
+            }
+            continue
+          }
           if (row.entity !== 'Overrides') { error(row, `Listings accepts ${categoryKey}; put channel attribute values in Overrides`); continue }
-          const field = contract.fields.find(f => f.fieldKey === row.field || f.sheetKey === row.field)
+          let field = contract.fields.find(f => f.fieldKey === row.field || f.sheetKey === row.field)
+          // CFI-5 (lane request L3-1) — an eBay custom item specific from the channel's own workbook: eBay accepts seller-defined
+          // aspects, and the listing already stores them at `platformAttributes.itemSpecifics[<Name>]`. A schema aspect with the
+          // same store path keeps its own field; otherwise the specific is planned as a scalar text at that exact path.
+          const specific = !field && fromChannelFile(row) && first.channel === 'EBAY' && row.field.startsWith('itemSpecifics.') ? row.field.slice('itemSpecifics.'.length) : ''
+          if (specific && specific.trim() && !['__proto__', 'prototype', 'constructor'].includes(specific)) {
+            field = contract.fields.find(f => f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics' && f.channelStore.path[1] === specific)
+              ?? { fieldKey: row.field, sheetKey: row.field, label: specific, kind: 'text', shape: 'scalar', editable: true, channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', specific] } } as CatalogueField
+          }
           if (!field) { error(row, 'This attribute is not declared by the listing category'); continue }
           const textField = channelContentField(field, contract.masterLocalizableKeys)
           if (textField) (target.contentFields ??= {})[row.field] = textField
@@ -442,18 +633,39 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           const keys = [...new Set([field.fieldKey, field.sheetKey].filter((s): s is string => !!s))]
           const old = textField && address && existingProduct ? channelContentState(existingProduct, working, textField, address.language, languages) : storedChannelState(working, field.channelStore, keys)
           if (textField) old.value = contentWireValue(old.value, field.shape, textField)
+          // CFI-3 (Q1, D3) — a full-update blank clears the market value ONLY when Nexus would publish one; an already-empty
+          // value plans nothing. `before` shows the value Nexus would have published, so the review says what goes.
+          if (row.clearIfPresent) {
+            if (!fromChannelFile(row) || row.action !== 'CLEAR') { error(row, 'Only a channel file’s full-update blank can clear a value when present'); continue }
+            const current = effective.get(clearKey(key, row.locale, row.field))
+            if (!current) { stats.clearUnchecked++; continue }
+            if (isEmptyChannelValue(current.value) && (old.state !== 'stored' || isEmptyChannelValue(old.value))) { stats.alreadyEmpty++; continue }
+            if (old.state === 'inherited') old.value = current.value
+          }
           if (preserve(row, old.state === 'stored')) continue
           const state = row.action === 'INHERIT' ? 'inherited' : 'stored'
           let value = row.action === 'SET' ? row.value : null
           if (cell(row, old, value, state).verdict !== 'unchanged') {
-            if (!field.editable && before) { error(row, 'The channel marks this field read-only on an existing listing'); continue }
-            if (managedChannelField(field)) { error(row, 'Use the pricing or inventory workspace for this listing'); continue }
+            // CFI (origin 'channel-file') — the value is what the channel already holds, so a field that is read-only on a
+            // live listing, and the RRP (`list_price`), are stored as the channel's facts. Operator files keep both refusals.
+            if (!field.editable && before && !fromChannelFile(row)) { error(row, 'The channel marks this field read-only on an existing listing'); continue }
+            if (managedChannelField(field) && !(fromChannelFile(row) && isRrpField(field))) { error(row, 'Use the pricing or inventory workspace for this listing'); continue }
             if (row.action === 'SET' && isReferenceField(field.fieldKey)) {
               try { value = await resolveReference({ field: field.fieldKey, value, channel: first.channel, marketplace: first.marketplace, accountId: first.accountId, productType: category }) }
               catch (e) { error(row, e instanceof Error ? e.message : 'This reference could not be verified. Try again.'); continue }
             }
             const checked = validateChannelValue(field, value)
-            if (checked.errors.length) { error(row, checked.errors.join(' ')); continue }
+            let problems = checked.errors
+            // CFI-5 (lane request L3-2) — eBay holds a value outside its own listed choices on a live listing: from the channel's
+            // file that is the channel's fact, kept as written and named in the review. Amazon choices stay strict.
+            if (fromChannelFile(row) && first.channel === 'EBAY') {
+              const choice = problems.filter(e => e.includes('contains an unaccepted value') || e.includes('is deprecated by the channel'))
+              if (choice.length) {
+                warnings.add(`EBAY ${first.marketplace}: ${field.label} ${JSON.stringify(value)} is not one of eBay's listed choices; it is kept exactly as the channel file holds it.`)
+                problems = problems.filter(e => !choice.includes(e))
+              }
+            }
+            if (problems.length) { error(row, problems.join(' ')); continue }
             value = checked.value
           }
           const changed = cell(row, old, value, state)
@@ -465,6 +677,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
               Object.assign(target.patch, patch); Object.assign(working, patch)
             }
           }
+        }
         }
       }
     } catch (e) { error(first, e instanceof Error ? e.message : String(e)) }
@@ -481,5 +694,5 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     }
     if (issues.length === groupIssueStart) targets.push(target)
   }
-  return { targets, issues, warnings: [...warnings], ...(policy ? { exclusions } : {}) }
+  return { targets, issues, warnings: [...warnings], ...(policy || exclusions.length ? { exclusions } : {}), stats }
 }

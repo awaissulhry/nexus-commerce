@@ -1,0 +1,114 @@
+{
+ "db": "nexus_cfi_proof3_test",
+ "dir": "/Users/awais/Desktop/2026/LISTNGS",
+ "apply": "all",
+ "at": "2026-09-24T23:34:22.512Z",
+ "reports": [
+  {
+   "file": "JACKETS/Moss/Amazon/LISTINGS/DE/MOSS DE - FINAL (upload this)/MOSS DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 31,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 5074,
+    "issues": 0,
+    "exclusions": 121,
+    "links": 0,
+    "ledgerEntries": 5655
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 35,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 121,
+     "unchanged": 1463,
+     "alreadyEmpty": 3576,
+     "newOverrides": 29,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 1433
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "excluded": 121,
+     "unchanged": 30,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "control": "caught",
+   "roundTrip": {
+    "compared": 1467,
+    "equal": 1467,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 3576,
+    "clearsEmpty": 3576,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 30,
+     "equal": 30
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 1,
+     "equal": 1
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 6529
+  }
+ ]
+}

@@ -53,8 +53,11 @@ describe('legacy eBay workbook import identities and values', () => {
     expect(rows.find(r => r.field === 'material')?.value).toBe('Poliestere, Nylon')
     expect(rows.find(r => r.field === 'features')?.value).toEqual(['Ventilato', 'Impermeabile'])
     expect(rows.find(r => r.field === 'imageUrls')?.value).toEqual(['https://example.com/1.jpg', 'https://example.com/2.jpg'])
-    expect(result.rows.some(r => ['price', 'quantity', 'description'].includes(r.field))).toBe(false)
-    expect(result.exclusions.filter(r => ['Price (€)', 'Qty'].includes(r.field))).toHaveLength(210)
+    expect(result.rows.some(r => ['quantity', 'description'].includes(r.field))).toBe(false)
+    // CFI Q2a — a variation's price is imported (record-only door); a multi-variation parent has none; quantity never.
+    expect(result.rows.filter(r => r.field === 'price')).toHaveLength(100)
+    expect(result.exclusions.filter(r => r.field === 'Price (€)')).toHaveLength(5)
+    expect(result.exclusions.filter(r => r.field === 'Qty')).toHaveLength(105)
   })
   it.each(['wrong item', 'wrong parent', 'wrong listing', 'missing target', 'ambiguous account'])('refuses %s without falling back to the primary listing', kind => {
     const input = fixture()
@@ -83,15 +86,18 @@ describe('legacy eBay workbook import identities and values', () => {
     expect(result.issues).toEqual([expect.objectContaining({ row: 3, field: 'Category ID' })])
     expect(result.rows.some(r => r.row === 3)).toBe(false)
   })
-  it('rejects unsafe lifecycle actions, unsupported columns and invalid provider choices with source addresses', () => {
+  it('refuses an unconfirmed delete, an unknown column and a broken value with source addresses', () => {
     const input = fixture()
     set(input.sheet, 2, 'Action', 'end')
-    set(input.sheet, 3, 'Stagione (Season)', 'Tutte le stagioni')
-    input.sheet.getCell(1, headers.length + 1).value = 'athlete ⚠'
-    input.sheet.getCell(2, headers.length + 1).value = 'Unisex'
+    set(input.sheet, 3, 'Shared-SKU (Trading API)', 'maybe')
+    input.sheet.getCell(1, headers.length + 1).value = 'Unknown column'
+    input.sheet.getCell(4, headers.length + 1).value = 'x'
     const result = parse(input)
-    expect(result.issues.map(i => i.field)).toEqual(['Action', 'athlete ⚠', 'Stagione (Season)'])
-    expect(result.issues[2]).toMatchObject({ row: 3, source: { sheet: 'ebay_it', column: 'P' } })
+    expect(result.issues.map(i => i.field)).toEqual(['presence', 'Shared-SKU (Trading API)'])
+    expect(result.issues[1]).toMatchObject({ row: 3, source: { sheet: 'ebay_it', column: 'I' } })
+    expect(result.rows.some(r => r.row === 2)).toBe(false)
+    // A column eBay's category does not declare is the seller's own item specific, kept with a warning.
+    expect(result.rows.find(r => r.row === 4 && r.field === 'itemSpecifics.Unknown column')?.value).toBe('x')
   })
   it('refuses formulas, error cells, duplicate headers and extra worksheets', () => {
     for (const value of [{ formula: '1+1', result: 2 }, { error: '#REF!' }] as ExcelJS.CellValue[]) {

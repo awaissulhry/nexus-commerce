@@ -3,23 +3,67 @@ import { catalogTranslationRuns, previewCatalogTranslation, requireTranslationGe
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import type { TransferMode, ProductTransferSelection } from '@nexus/shared/catalog-transfer'
 import { Readable } from 'node:stream'
-import { readTransferFile, transferErrorsCsv, TRANSFER_MAX_FILE_BYTES } from '../services/pim/catalog-transfer-file.js'
+import { transferErrorsCsv, TRANSFER_MAX_FILE_BYTES } from '../services/pim/catalog-transfer-file.js'
 import { catalogTransferLanguages, catalogReadinessOptions, catalogTransferOptions, catalogTransferTemplate, exportCatalogTransfer } from '../services/pim/catalog-transfer-export.js'
 import { readCatalogTransfer, startCatalogTransfer, catalogTransferStatus, recoverCatalogTransfers, TransferConflict } from '../services/pim/catalog-transfer.service.js'
 import { stageTransferJob, readTransferJob, transferJobStatus, transferJobOutcomes, applyTransferJob, retryTransferJob, recoverTransferJobs, recentProductTransferJobs } from '../services/pim/catalog-transfer-jobs.js'
 import { inspectCatalogSource, previewCatalogSource, listSourcePresets, listSourceHistory, saveSourcePreset, deleteSourcePreset, sourceMappingFields } from '../services/pim/catalog-source.service.js'
 import { fetchCatalogSource } from '../services/pim/catalog-source-fetch.js'
 import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/pim/catalog-workbook-scopes.js'
-import { readAmazonCatalogWorkbook } from '../services/pim/catalog-amazon-workbook.js'
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
-import { writeEditorWorkbook, inspectEditorTransfer, readEditorInput, readEditorTransfer, requireEditorVersions, PRODUCT_TRANSFER_MAX_BYTES } from '../services/pim/catalog-editor-workbook.js'
+import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
+import { workspaceContext } from '../lib/workspace-context.js'
+import { writeEditorWorkbook, inspectEditorTransfer, readEditorInput, readEditorTransfer, requireEditorVersions, readCatalogTransferUpload, PRODUCT_TRANSFER_MAX_BYTES, type ChannelFileDecisions } from '../services/pim/catalog-editor-workbook.js'
 
 const actor = (request: FastifyRequest) => (request as FastifyRequest & { authUser?: { id?: string } }).authUser?.id ?? null
 const marketOf = (value: unknown) => {
   const market = String(value ?? '').trim().toUpperCase()
   if (!/^(?:[A-Z]{2}|GLOBAL)$/.test(market)) throw new Error('Select a marketplace for the attribute dictionary')
   return market
+}
+/**
+ * CFI-4 / D1 — the Owner's confirmations that travel with an upload: `links` is a JSON object mapping a file SKU to
+ * the Nexus SKU it is; `confirmDeletes` is 'true' or a JSON array of file SKUs. Anything else is refused by name, never guessed.
+ */
+export function decisionsOf(fields: Record<string, string>): ChannelFileDecisions {
+  let links: Record<string, string> | undefined
+  if (fields.links?.trim()) {
+    let value: unknown
+    try { value = JSON.parse(fields.links) } catch { throw new Error('Confirmed links must be a JSON object of file SKU → Nexus SKU') }
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 5000
+      || Object.entries(value).some(([from, to]) => !from.trim() || from.length > 200 || typeof to !== 'string' || !to.trim() || to.length > 200)) throw new Error('Confirmed links must be a JSON object of file SKU → Nexus SKU')
+    links = value as Record<string, string>
+  }
+  return { ...(links ? { links } : {}), ...confirmedDeletesOf(fields.confirmDeletes) }
+}
+/**
+ * D1 — which delete rows the Owner confirmed: 'true' = every delete row in the file, 'false' or absent = none, or a
+ * JSON array of the file SKUs confirmed one by one. Anything else is refused by name.
+ */
+const CONFIRM_DELETES_SHAPE = 'confirmDeletes must be true, false, or a JSON array of the file SKUs to end'
+function confirmedDeletesOf(raw: string | undefined): Pick<ChannelFileDecisions, 'confirmDeletes'> {
+  const value = raw?.trim()
+  if (!value || value === 'false') return {}
+  if (value === 'true') return { confirmDeletes: true }
+  let skus: unknown
+  try { skus = JSON.parse(value) } catch { throw new Error(CONFIRM_DELETES_SHAPE) }
+  if (!Array.isArray(skus) || !skus.length || skus.length > 5000 || skus.some(sku => typeof sku !== 'string' || !sku.trim() || sku.length > 200) || new Set(skus).size !== skus.length) throw new Error(CONFIRM_DELETES_SHAPE)
+  return { confirmDeletes: skus as string[] }
+}
+/**
+ * 🔴 Recover interrupted imports in EVERY business. With business profiles on (production since 2026-09-16) both
+ * recoverers read tenant tables, and outside a business profile they threw "Select a business profile." every 30 s —
+ * an import interrupted by a restart or a deploy was never resumed. Each recoverer runs inside each active business's
+ * context; one business (or one recoverer) failing is logged with its business id and never stops the rest.
+ */
+export async function recoverImportsInEveryBusiness(visit: (work: () => Promise<void>) => Promise<void> = visitActiveWorkspaces,
+  log: (failure: { err: unknown; workspaceId: string | null; recoverer: string }) => void = () => {}) {
+  await visit(async () => {
+    for (const [recoverer, recover] of [['catalog-transfers', recoverCatalogTransfers], ['transfer-jobs', recoverTransferJobs]] as const) {
+      try { await recover() } catch (err) { log({ err, workspaceId: workspaceContext()?.workspaceId ?? null, recoverer }) }
+    }
+  })
 }
 const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.setErrorHandler((error, request, reply) => {
@@ -45,13 +89,18 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.post('/catalog-transfer/products/:productId/inspect', async (request, reply) => {
     const productId = (request.params as { productId: string }).productId
     await productTransferOptions(productId)
-    const part = await request.file({ limits: { files: 1, fileSize: PRODUCT_TRANSFER_MAX_BYTES } })
-    if (!part) throw new Error('Choose a Nexus workbook, attribute CSV or editing ZIP')
+    const fields: Record<string, string> = {}
+    let buffer: Buffer | undefined, filename = ''
+    for await (const part of request.parts({ limits: { files: 1, fileSize: PRODUCT_TRANSFER_MAX_BYTES, fields: 2 } })) {
+      if (part.type === 'file') { filename = part.filename; buffer = await part.toBuffer() }
+      else fields[part.fieldname] = String(part.value ?? '')
+    }
+    if (!buffer) throw new Error('Choose a Nexus workbook, attribute CSV, editing ZIP, Amazon template or eBay workbook')
     // 🔴 Every stage says how long it took and what the heap looked like. On 2026-09-16 this
     // route's only trace was `incoming request`, and the reason it never completed had to be
     // reconstructed from proxy timings and a memory graph instead of read off a log line.
-    return reply.code(201).send(await inspectEditorTransfer(await part.toBuffer(), part.filename, productId, actor(request),
-      (event, detail) => request.log.info({ productId, ...detail }, event)))
+    return reply.code(201).send(await inspectEditorTransfer(buffer, filename, productId, actor(request),
+      (event, detail) => request.log.info({ productId, ...detail }, event), decisionsOf(fields)))
   })
   fastify.post('/catalog-transfer/products/:productId/preview', async (request, reply) => {
     const productId = (request.params as { productId: string }).productId
@@ -63,7 +112,7 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     }
     const fields: Record<string, string> = {}
     let buffer: Buffer | undefined, filename = ''
-    for await (const part of request.parts({ limits: { files: 1, fileSize: PRODUCT_TRANSFER_MAX_BYTES, fields: 2 } })) {
+    for await (const part of request.parts({ limits: { files: 1, fileSize: PRODUCT_TRANSFER_MAX_BYTES, fields: 4 } })) {
       if (part.type === 'file') { filename = part.filename; buffer = await part.toBuffer() }
       else fields[part.fieldname] = String(part.value ?? '')
     }
@@ -71,7 +120,7 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     let selection: ProductTransferSelection
     try { selection = JSON.parse(fields.selection) } catch { throw new Error('Select the products and destinations for this import') }
     const boundary = await resolveProductTransferBoundary((request.params as { productId: string }).productId, selection)
-    const parsed = requireEditorVersions(await readEditorTransfer(buffer, filename, productId, actor(request)))
+    const parsed = requireEditorVersions(await readEditorTransfer(buffer, filename, productId, actor(request), undefined, decisionsOf(fields)))
     return reply.code(201).send(await stageTransferJob({ ...parsed, boundary, mode: 'update', market: marketOf(fields.market), filename, userId: actor(request) }))
   })
   fastify.post('/catalog-transfer/products/:productId/source/preview', async (request, reply) => {
@@ -125,15 +174,20 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.post('/catalog-transfer/preview', async (request, reply) => {
     const fields: Record<string, string> = {}
     let buffer: Buffer | undefined, filename = ''
-    for await (const part of request.parts({ limits: { files: 1, fileSize: TRANSFER_MAX_FILE_BYTES, fields: 6 } })) {
+    for await (const part of request.parts({ limits: { files: 1, fileSize: TRANSFER_MAX_FILE_BYTES, fields: 9 } })) {
       if (part.type === 'file') { filename = part.filename; buffer = await part.toBuffer() }
       else fields[part.fieldname] = String(part.value ?? '')
     }
-    if (!buffer) throw new Error('Choose a CSV or XLSX file')
+    if (!buffer) throw new Error('Choose a CSV, XLSX or XLSM file')
     if (!['create', 'update', 'upsert'].includes(fields.mode)) throw new Error('Choose Create, Update or Create or update')
     if (fields.blankPolicy && !['ignore', 'clear'].includes(fields.blankPolicy)) throw new Error('Blank cells must be ignored or cleared')
-    const parsed = fields.format === 'amazon' ? await readAmazonCatalogWorkbook(buffer, fields.accountId, marketOf(fields.market), { familyId: fields.familyId, mode: fields.mode }) : await readTransferFile(buffer, filename, { blankPolicy: fields.blankPolicy as 'ignore' | 'clear' | undefined })
-    return reply.code(201).send(await stageTransferJob({ ...parsed, mode: fields.mode as TransferMode, market: marketOf(fields.market), filename, userId: actor(request) }))
+    // CFI-1 — every workbook is read on the parse worker, by what it IS; `format` is only the operator's hint.
+    // An empty marketplace means "use the file's own" — valid for an Amazon template or an eBay workbook only.
+    const chosenMarket = fields.market?.trim() ? marketOf(fields.market) : ''
+    const parsed = await readCatalogTransferUpload(buffer, filename, { format: fields.format, accountId: fields.accountId, market: chosenMarket, familyId: fields.familyId,
+      mode: fields.mode as TransferMode, blankPolicy: fields.blankPolicy as 'ignore' | 'clear' | undefined, ...decisionsOf(fields) }, (event, detail) => request.log.info({ filename, ...detail }, event))
+    const staged = await stageTransferJob({ ...parsed, mode: fields.mode as TransferMode, market: parsed.market, filename, userId: actor(request) })
+    return reply.code(201).send({ ...staged, links: parsed.links ?? [] })
   })
   fastify.get('/catalog-transfer/jobs/:jobId', async (request, reply) => {
     const current = await readTransferJob((request.params as { jobId: string }).jobId, actor(request))
@@ -163,7 +217,10 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     return reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', 'attachment; filename="nexus-catalog-errors.csv"').send(transferErrorsCsv(catalogTransferStatus(loaded).issues))
   })
   fastify.post('/catalog-transfer/jobs/:jobId/apply', async (request, reply) => {
-    const current = await applyTransferJob((request.params as { jobId: string }).jobId, actor(request), (request.body as { reviewToken?: string })?.reviewToken)
+    const body = request.body as { reviewToken?: string; readyOnly?: unknown } | undefined
+    if (body?.readyOnly !== undefined && typeof body.readyOnly !== 'boolean') throw new Error('readyOnly must be true or false')
+    // CFI-7 (D6) — `readyOnly` applies the ready records of a review that also holds refused ones; never implied.
+    const current = await applyTransferJob((request.params as { jobId: string }).jobId, actor(request), body?.reviewToken as string, { readyOnly: body?.readyOnly === true })
     if (current) return reply.code(202).send(current)
     const result = await startCatalogTransfer((request.params as { jobId: string }).jobId, actor(request))
     return result ? reply.code(202).send(result) : reply.code(404).send({ error: 'Import job not found' })
@@ -181,7 +238,8 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   const timer = setInterval(() => {
     if (recovering) return
     recovering = true
-    void Promise.all([recoverCatalogTransfers(), recoverTransferJobs()]).catch(error => fastify.log.warn({ err: error }, 'Catalog import recovery deferred')).finally(() => { recovering = false })
+    void recoverImportsInEveryBusiness(visitActiveWorkspaces, failure => fastify.log.warn(failure, 'Catalog import recovery deferred'))
+      .catch(error => fastify.log.warn({ err: error }, 'Catalog import recovery deferred')).finally(() => { recovering = false })
   }, 30_000)
   timer.unref()
   fastify.addHook('onClose', async () => { clearInterval(timer) })

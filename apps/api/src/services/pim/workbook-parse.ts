@@ -10,7 +10,7 @@
  * finishing).
  */
 import { Worker } from 'node:worker_threads'
-import type { HostMessage, PartOutcome, WorkerMessage } from './workbook-parse-protocol.js'
+import type { HostMessage, PartOptions, PartOutcome, WorkerMessage } from './workbook-parse-protocol.js'
 
 /**
  * Sized from measurement, not taste. The worst *legitimate* single workbook — 40 MB
@@ -67,7 +67,7 @@ const WORKER_EXEC_ARGV = (() => {
 
 export interface ParseSession {
   /** Parse one uploaded part. Rejects — never hangs, never takes the process with it. */
-  read(filename: string, bytes: Buffer, batchBudgetBytes: number): Promise<PartOutcome>
+  read(filename: string, bytes: Buffer, batchBudgetBytes: number, partOptions?: PartOptions): Promise<PartOutcome>
   close(): Promise<void>
 }
 
@@ -142,7 +142,7 @@ export function openWorkbookParser(options: ParseSessionOptions): ParseSession {
   })
 
   return {
-    read(filename, bytes, batchBudgetBytes) {
+    read(filename, bytes, batchBudgetBytes, partOptions) {
       return new Promise<PartOutcome>((resolve, reject) => {
         const partId = nextPart++
         parts.set(partId, { resolve, reject })
@@ -157,7 +157,7 @@ export function openWorkbookParser(options: ParseSessionOptions): ParseSession {
         // A Buffer is a view on a pooled ArrayBuffer; copy so the clone carries these bytes only.
         const copy = new Uint8Array(bytes.byteLength)
         copy.set(bytes)
-        worker.postMessage({ type: 'part', partId, bytes: copy, filename, batchBudgetBytes } as HostMessage, [copy.buffer])
+        worker.postMessage({ type: 'part', partId, bytes: copy, filename, batchBudgetBytes, options: partOptions } as HostMessage, [copy.buffer])
       })
     },
     async close() {

@@ -6460,6 +6460,8 @@ enum PriceChangeSource {
   CHANNEL_RULE
   MASTER_INHERIT
   FX
+  // CFI-6 (R-CFI-1) — the channel's own price, recorded from its file; nothing is sent.
+  CHANNEL_FILE_IMPORT
 }
 
 // ── Pricing F.1: Buy Box observation log ─────────────────────────────────

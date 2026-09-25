@@ -155,3 +155,34 @@ it('inspects a source CSV row above 256 KB without truncating its cells', async 
   expect(source.sample[0].SKU).toBe('000000')
   expect(source.sample[0].Description === description).toBe(true)
 })
+
+// CFI-1 / D1 / D6 — the Owner's confirmations travel as named fields and are refused by name when malformed,
+// before any file is read or any job is touched.
+it('refuses malformed import confirmations by name', async () => {
+  const boundary = 'cfi-decisions'
+  const form = (fields: Record<string, string>) => Buffer.concat([Buffer.from(Object.entries(fields).map(([k, v]) => `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`).join('')
+    + `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="rows.csv"\r\nContent-Type: text/csv\r\n\r\nentity,sku\r\n--${boundary}--\r\n`)])
+  const post = (fields: Record<string, string>) => app.inject({ method: 'POST', url: '/api/catalog-transfer/preview', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload: form({ mode: 'update', market: 'IT', ...fields }) })
+  for (const links of ['not json', '["A"]', '{"A": 7}', '{"": "B"}']) {
+    const refused = await post({ links })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error).toBe('Confirmed links must be a JSON object of file SKU → Nexus SKU')
+  }
+  for (const confirmDeletes of ['yes', '[]', '["A", 7]', '["A", "A"]', '{"A": true}', '[""]']) {
+    const deletes = await post({ confirmDeletes })
+    expect(deletes.statusCode).toBe(400)
+    expect(deletes.json().error).toBe('confirmDeletes must be true, false, or a JSON array of the file SKUs to end')
+  }
+  const apply = await app.inject({ method: 'POST', url: '/api/catalog-transfer/jobs/any/apply', payload: { reviewToken: 'x', readyOnly: 'yes' } })
+  expect(apply.statusCode).toBe(400)
+  expect(apply.json().error).toBe('readyOnly must be true or false')
+})
+
+it('reads the delete confirmation as all rows, none, or the listed file SKUs — unchanged', async () => {
+  const { decisionsOf } = await import('../../routes/catalog-transfer.routes.js')
+  expect(decisionsOf({ confirmDeletes: 'true' })).toEqual({ confirmDeletes: true })
+  expect(decisionsOf({ confirmDeletes: 'false' })).toEqual({})
+  expect(decisionsOf({})).toEqual({})
+  expect(decisionsOf({ confirmDeletes: '["GALE-JACKET-BLACK-MEN-XS", "GALE-JACKET"]', links: '{"MOSS-JACKET": "IT-MOSS-JACKET"}' }))
+    .toEqual({ confirmDeletes: ['GALE-JACKET-BLACK-MEN-XS', 'GALE-JACKET'], links: { 'MOSS-JACKET': 'IT-MOSS-JACKET' } })
+})

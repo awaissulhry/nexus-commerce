@@ -29,6 +29,8 @@ export type PriceChangeSourceLiteral =
   | 'CHANNEL_RULE'
   | 'MASTER_INHERIT'
   | 'FX'
+  /** CFI-6 — the channel's own price, recorded from its file; nothing is sent (`channel-price-write.service.ts` recordOnly). */
+  | 'CHANNEL_FILE_IMPORT'
 
 export interface PriceChangeInput {
   productId: string

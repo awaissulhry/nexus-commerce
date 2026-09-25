@@ -51,10 +51,36 @@ export interface TransferRow {
   action: TransferAction
   value?: unknown
   version?: number
+  /**
+   * CFI (R-CFI-1) — the value was read from the channel's OWN file (an Amazon template or our eBay
+   * workbook). It describes what the channel holds, so the planner may store a field that is
+   * read-only on a live listing, the RRP (`list_price`), and the channel-file-only fields
+   * `sellerSku` / `presence` (Listings) and `price` / `sale` (Overrides). Absent = an operator's file.
+   */
+  origin?: 'channel-file'
+  /**
+   * CFI Q1 — a blank cell of a FULL-update row: clear the market value only when Nexus's effective
+   * value is not already empty. Only with `action: 'CLEAR'`; an already-empty value plans nothing.
+   */
+  clearIfPresent?: true
+  /** CFI-4 — the SKU as written in the file, when the row was resolved to a different Nexus SKU. */
+  fileSku?: string
 }
-export interface TransferIssue { row: number; sku: string; field: string; message: string; source?: TransferRow['source'] }
+export interface TransferIssue {
+  row: number; sku: string; field: string; message: string; source?: TransferRow['source']
+  /** CFI — a channel-file issue names the file's own SKU and the listing coordinate it concerns (e.g. an unconfirmed delete). */
+  fileSku?: string; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string
+}
+/**
+ * CFI-8 (D7) — what the channel held at its last read (`ChannelDrift`). `differs: false` = the last
+ * read recorded no difference from Nexus for this field; `readAt` is that read's time.
+ */
+export type TransferChannelRead =
+  | { differs: true; value: unknown; ours: unknown; readAt: string; source: string }
+  | { differs: false; readAt: string; source: string }
 export interface TransferCell extends TransferRow {
   label?: string
+  channelRead?: TransferChannelRead
   effectiveBefore?: { value: unknown; source: string }
   effectiveAfter?: { value: unknown; source: string }
   before: unknown
