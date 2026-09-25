@@ -1931,6 +1931,10 @@ model ChannelListingSnapshot {
   /// "the state sent at 14:02" rather than an anonymous list.
   publishEventId String?
 
+  /// A captured request is not an accepted baseline until the channel result confirms it.
+  outcome    String    @default("UNACCEPTED")
+  acceptedAt DateTime?
+
   /// The captured state. For a pre-publish snapshot this is the payload that
   /// was actually SENT — not a re-render of the listing, which could differ
   /// from what the channel received.

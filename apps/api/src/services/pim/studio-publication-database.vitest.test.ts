@@ -5,6 +5,11 @@ const fixture = vi.hoisted(() => ({
   facts: vi.fn(),
   sendEbay: vi.fn(),
   readEbay: vi.fn(),
+  sendAmazon: vi.fn(),
+  readAmazon: vi.fn(),
+  providerWrite: vi.fn(),
+  shopPreview: vi.fn(),
+  shopSend: vi.fn(),
 }))
 
 vi.mock('@nexus/database', async () => {
@@ -12,28 +17,66 @@ vi.mock('@nexus/database', async () => {
   fixture.database = await formulaDatabase()
   return { default: fixture.database.client }
 })
-vi.mock('./studio-publication-plan.js', () => ({
-  readPublicationFacts: fixture.facts,
-  publicationDigest: (value: unknown) => JSON.stringify(value),
-  object: (value: unknown) => value && typeof value === 'object' ? value : {},
-}))
+vi.mock('./studio-publication-plan.js', async () => {
+  const { createHash } = await import('node:crypto')
+  return { readPublicationFacts: fixture.facts,
+    publicationDigest: (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, entry) =>
+      entry && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)).digest('hex'),
+    object: (value: unknown) => value && typeof value === 'object' ? value : {} }
+})
 vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'live' }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => 'live' }))
+vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: async () => ({ initialized: true }), saveContentWorkspace: vi.fn() }))
+vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: fixture.shopPreview, synchronizeContent: fixture.shopSend }))
 vi.mock('./studio-publication-amazon.js', () => ({
-  prepareAmazonPublication: vi.fn(), sendAmazonPublication: vi.fn(), readAmazonPublication: vi.fn(),
+  prepareAmazonPublication: async (facts: any) => ({ kind: 'amazon', sellerId: 'seller-a', marketplaceId: 'market-it',
+    products: facts.products.map((p: any) => ({ productId: p.id, sku: `REMOTE-${p.sku}` })),
+    feed: { header: { sellerId: 'seller-a', version: '2.0' }, messages: facts.products.map((p: any, i: number) => ({ messageId: i + 1, sku: `REMOTE-${p.sku}`, operationType: 'UPDATE', productType: 'COAT', attributes: { item_name: [{ value: `Sent ${p.sku}` }] } })) } }),
+  sendAmazonPublication: fixture.sendAmazon, readAmazonPublication: fixture.readAmazon,
 }))
 vi.mock('./studio-publication-ebay.js', () => ({
-  prepareEbayPublication: async () => ({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null, xml: '<AddFixedPriceItemRequest/>' }),
+  prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null,
+    products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })), xml: '<AddFixedPriceItemRequest><Item><Title>Exact sent title</Title></Item></AddFixedPriceItemRequest>' }),
   sendEbayPublication: fixture.sendEbay,
   readEbayPublication: fixture.readEbay,
+  ebayPublicationRequest: (plan: any, reviewId: string) => ({ operation: 'AddFixedPriceItem', xml: plan.xml.replace('<Item>', `<Item><UUID>${reviewId}</UUID>`) }),
+}))
+vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
+vi.mock('./studio-publication-amazon-changes.js', () => ({
+  prepareAmazonChanges: async (_facts: any, publication: any) => ({ kind: 'amazon-changes', publication, remoteRevision: 'remote-1', products: [], schemas: [],
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'item_name', label: 'Title',
+      current: { state: 'value', value: publication.feed.messages.find((message: any) => message.sku === p.sku).attributes.item_name },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.includes(p.productId))) },
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
+}))
+vi.mock('./studio-publication-ebay-changes.js', () => ({
+  prepareEbayChanges: async (_facts: any, publication: any) => ({ kind: 'ebay-changes', publication, remoteRevision: 'remote-1',
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Exact sent title' },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileEbayChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
 }))
 
 import prisma from '../../db.js'
-import { previewStudioPublication, studioPublicationResult, submitStudioPublication } from './studio-publication.service.js'
+import { ebayPublicationRequest } from './studio-publication-ebay.js'
+import { previewStudioPublication as previewRaw, studioPublicationResult, submitStudioPublication as submitRaw, previewStudioPublicationSelection } from './studio-publication.service.js'
+
+async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
+  const review = await previewRaw(...args)
+  if (review.id && ['AMAZON', 'EBAY'].includes(args[1].channel)) await previewStudioPublicationSelection(args[0], review.id, { selectedIds: review.changes?.filter(c => c.selectable).map(c => c.id) ?? [] }, args[2])
+  return review
+}
+async function submitStudioPublication(productId: string, id: string, body: Record<string, unknown>, userId: string | null) {
+  const stored = await prisma.bulkOperation.findUnique({ where: { id } })
+  return submitRaw(productId, id, { ...body, selectionToken: (stored?.changes as any)?.selection?.token }, userId)
+}
 
 const productId = 'publication-database-product'
 const accountId = 'publication-database-ebay'
+const childId = 'publication-database-child'
 const scope = { channel: 'EBAY', marketplace: 'IT', accountId }
 const facts = () => ({
   scope,
@@ -46,18 +89,175 @@ const facts = () => ({
 
 beforeAll(async () => {
   await prisma.product.create({ data: { id: productId, sku: 'PGLITE-PUBLISH', name: 'Disposable publication fixture', basePrice: 10, status: 'DRAFT' } })
+  await prisma.product.create({ data: { id: childId, sku: 'PGLITE-CHILD', name: 'Disposable child', parentId: productId, basePrice: 10, status: 'DRAFT' } })
   await prisma.channelConnection.create({ data: { id: accountId, channelType: 'EBAY', isActive: true } })
 }, 120_000)
 
 beforeEach(async () => {
   vi.clearAllMocks()
   fixture.facts.mockImplementation(async () => facts())
-  fixture.sendEbay.mockResolvedValue({ reference: '123456789012', warnings: ['eBay normalized a submitted value.'] })
+  fixture.readEbay.mockReset(); fixture.readEbay.mockResolvedValue(null)
+  fixture.readAmazon.mockReset(); fixture.readAmazon.mockResolvedValue(null)
+  fixture.shopPreview.mockResolvedValue({ errors: [], initialized: true, revision: 'shop-draft', remoteRevision: 'shop-remote', draft: {},
+    variants: [{ id: childId, sku: 'EFFECTIVE-SHOP-SKU' }], changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Stock', isActive: true }] })
+  fixture.shopSend.mockImplementation(async (_product, _scope, _body, beforeMutation) => {
+    await beforeMutation?.({ query: 'mutation First { productSet(input:$input) { product { id } } }', variables: { input: { variants: [{ sku: 'EFFECTIVE-SHOP-SKU' }] } } })
+    fixture.providerWrite()
+    await beforeMutation?.({ query: 'mutation Second { productUpdate(product:$product) { product { id } } }', variables: { product: { id: 'gid://shopify/Product/42' } } })
+    fixture.providerWrite()
+    return { productId: 'gid://shopify/Product/42' }
+  })
+  fixture.sendEbay.mockImplementation(async (plan, _account, reviewId, beforeSend) => {
+    try { await beforeSend?.(ebayPublicationRequest(plan, reviewId)) }
+    catch (error) { throw Object.assign(error, { notSent: true }) }
+    fixture.providerWrite()
+    return { reference: '123456789012', warnings: ['eBay normalized a submitted value.'] }
+  })
+  fixture.sendAmazon.mockImplementation(async (plan, _account, beforeSend) => {
+    try { await beforeSend?.({ feedType: 'JSON_LISTINGS_FEED', marketplaceIds: ['market-it'], feed: plan.feed }) }
+    catch (error) { throw Object.assign(error, { notSent: true }) }
+    fixture.providerWrite()
+    return 'feed-database'
+  })
   await prisma.bulkOperation.deleteMany({ where: { changes: { path: ['kind'], equals: 'studio-publication' } } })
-  await prisma.channelListing.deleteMany({ where: { productId } })
+  await prisma.channelListing.deleteMany({ where: { productId: { in: [productId, childId] } } })
+  await prisma.channelPublishAttempt.deleteMany({ where: { productId: { in: [productId, childId] } } })
 })
 
 afterAll(async () => { await fixture.database?.close() }, 30_000)
+
+const shopifyFacts = () => ({ ...facts(), scope: { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId },
+  products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
+
+it('records Shopify mutations against the effective variant SKU and verifies all ordered request captures', async () => {
+  fixture.facts.mockResolvedValue(shopifyFacts())
+  const review = await previewStudioPublication(productId, shopifyFacts().scope, null)
+  const result = await submitStudioPublication(productId, review.id!, { locationId: 'shop-location' }, null)
+  expect(result).toMatchObject({ status: 'VERIFIED', results: expect.arrayContaining([expect.objectContaining({ sku: 'EFFECTIVE-SHOP-SKU' })]) })
+  const snapshots = await prisma.channelListingSnapshot.findMany({ where: { publishEventId: review.id } })
+  expect(snapshots).toHaveLength(2)
+  const child = snapshots.find(row => (row.payload as any).productId === childId)!
+  expect(child).toMatchObject({ outcome: 'ACCEPTED', acceptedAt: expect.any(Date), payload: { sku: 'EFFECTIVE-SHOP-SKU',
+    requests: [{ variables: { input: { variants: [{ sku: 'EFFECTIVE-SHOP-SKU' }] } } }, { variables: { product: { id: 'gid://shopify/Product/42' } } }] } })
+  expect(await prisma.channelPublishAttempt.findFirst({ where: { productId: childId } })).toMatchObject({ sku: 'EFFECTIVE-SHOP-SKU', outcome: 'success' })
+  expect(fixture.providerWrite).toHaveBeenCalledTimes(2)
+}, 30_000)
+
+it('keeps a Shopify first-journal failure retryable without claiming a remote send', async () => {
+  fixture.facts.mockResolvedValue(shopifyFacts())
+  const review = await previewStudioPublication(productId, shopifyFacts().scope, null)
+  await fixture.database.db.exec('ALTER TABLE "ChannelPublishAttempt" ADD CONSTRAINT "pco_reject_shop_pending" CHECK (outcome <> \'pending\')')
+  try {
+    expect(await submitStudioPublication(productId, review.id!, { locationId: 'shop-location' }, null)).toMatchObject({ status: 'FAILED' })
+    expect(fixture.providerWrite).not.toHaveBeenCalled()
+    expect(await prisma.channelListingSnapshot.count({ where: { publishEventId: review.id } })).toBe(0)
+    expect((await previewStudioPublication(productId, shopifyFacts().scope, null)).id).not.toBeNull()
+  } finally { await fixture.database.db.exec('ALTER TABLE "ChannelPublishAttempt" DROP CONSTRAINT "pco_reject_shop_pending"') }
+}, 30_000)
+
+it('keeps a Shopify later-journal failure unverified after one mutation attempt', async () => {
+  fixture.facts.mockResolvedValue(shopifyFacts())
+  const review = await previewStudioPublication(productId, shopifyFacts().scope, null)
+  await fixture.database.db.exec('ALTER TABLE "ChannelListingSnapshot" ADD CONSTRAINT "pco_one_shop_request" CHECK (jsonb_array_length(payload->\'requests\') <= 1)')
+  try {
+    expect(await submitStudioPublication(productId, review.id!, { locationId: 'shop-location' }, null)).toMatchObject({ status: 'UNVERIFIED' })
+    expect(fixture.providerWrite).toHaveBeenCalledOnce()
+    const rows = await prisma.channelListingSnapshot.findMany({ where: { publishEventId: review.id } })
+    expect(rows).toHaveLength(2)
+    expect(rows.every(row => row.outcome === 'UNKNOWN' && row.acceptedAt === null && (row.payload as any).requests.length === 1)).toBe(true)
+    expect((await previewStudioPublication(productId, shopifyFacts().scope, null)).id).toBeNull()
+  } finally { await fixture.database.db.exec('ALTER TABLE "ChannelListingSnapshot" DROP CONSTRAINT "pco_one_shop_request"') }
+}, 30_000)
+
+it('journals the exact eBay request before dispatch and accepts it only after active read-back', async () => {
+  fixture.providerWrite.mockImplementationOnce(async () => {})
+  const review = await previewStudioPublication(productId, scope, null)
+  fixture.readEbay.mockImplementationOnce(async () => {
+    const snapshot = await prisma.channelListingSnapshot.findFirstOrThrow({ where: { publishEventId: review.id } })
+    expect(snapshot).toMatchObject({ outcome: 'SUBMITTED', acceptedAt: null, payload: { kind: 'studio-publication', productId, channelConnectionId: accountId,
+      requests: [{ operation: 'AddFixedPriceItem', xml: expect.stringContaining(`<UUID>${review.id}</UUID>`) }] } })
+    expect(await prisma.channelPublishAttempt.findFirst({ where: { productId } })).toMatchObject({ outcome: 'submitted', submissionId: '123456789012' })
+    return null
+  })
+  expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'UNVERIFIED' })
+  expect(await prisma.channelListingSnapshot.findFirst({ where: { publishEventId: review.id } })).toMatchObject({ outcome: 'SUBMITTED', acceptedAt: null,
+    payload: { requests: [{ operation: 'AddFixedPriceItem', xml: expect.stringContaining(`<UUID>${review.id}</UUID>`) }] } })
+  fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
+  const accepted = await prisma.channelListingSnapshot.findFirstOrThrow({ where: { publishEventId: review.id } })
+  expect(accepted).toMatchObject({ outcome: 'ACCEPTED', acceptedAt: expect.any(Date) })
+  await studioPublicationResult(productId, review.id!, null)
+  expect(await prisma.channelListingSnapshot.findUnique({ where: { id: accepted.id } })).toMatchObject({ acceptedAt: accepted.acceptedAt })
+  expect(fixture.providerWrite).toHaveBeenCalledOnce()
+}, 30_000)
+
+it('does not send if exact request and audit cannot both be durably recorded', async () => {
+  const review = await previewStudioPublication(productId, scope, null)
+  await fixture.database.db.exec('ALTER TABLE "ChannelPublishAttempt" ADD CONSTRAINT "pco_reject_pending_test" CHECK (outcome <> \'pending\')')
+  try {
+    expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'FAILED' })
+    expect(fixture.providerWrite).not.toHaveBeenCalled()
+    expect(await prisma.channelListingSnapshot.count({ where: { publishEventId: review.id } })).toBe(0)
+  } finally { await fixture.database.db.exec('ALTER TABLE "ChannelPublishAttempt" DROP CONSTRAINT "pco_reject_pending_test"') }
+}, 30_000)
+
+it('attributes Amazon messages by seller SKU and advances only the accepted SKU after its processing report', async () => {
+  const amazon = { ...scope, channel: 'AMAZON' }
+  fixture.facts.mockResolvedValue({ ...facts(), scope: amazon, products: [...facts().products, { id: childId, sku: 'PGLITE-CHILD', name: 'Child' }] })
+  const review = await previewStudioPublication(productId, amazon, null)
+  expect(await submitStudioPublication(productId, review.id!, {}, null)).toMatchObject({ status: 'SUBMITTED' })
+  const captured = await prisma.channelListingSnapshot.findMany({ where: { publishEventId: review.id }, include: { channelListing: true } })
+  expect(captured).toHaveLength(2)
+  for (const row of captured) {
+    const sku = row.channelListing.productId === productId ? 'REMOTE-PGLITE-PUBLISH' : 'REMOTE-PGLITE-CHILD'
+    expect(row).toMatchObject({ outcome: 'SUBMITTED', acceptedAt: null, payload: { productId: row.channelListing.productId, sku,
+      requests: [{ feedType: 'JSON_LISTINGS_FEED', marketplaceIds: ['market-it'], header: { sellerId: 'seller-a' }, message: { sku } }] } })
+  }
+  fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: true, message: 'Invalid content' }] })
+  expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'PARTIAL' })
+  const settled = await prisma.channelListingSnapshot.findMany({ where: { publishEventId: review.id } })
+  expect(settled.find(row => (row.payload as any).productId === productId)).toMatchObject({ outcome: 'ACCEPTED', acceptedAt: expect.any(Date) })
+  expect(settled.find(row => (row.payload as any).productId === childId)).toMatchObject({ outcome: 'FAILED', acceptedAt: null })
+  expect(fixture.providerWrite).toHaveBeenCalledOnce()
+}, 30_000)
+
+it('binds a real stored content read to the selected listing and persists its explicit field selection', async () => {
+  const own = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, externalListingId: '123456789012' } })
+  const other = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, aliasKey: 'different-alias', externalListingId: 'another-item' } })
+  const at = '2026-09-24T18:40:00.000Z'
+  const content = { driftCount: 1, driftedFields: [{ field: 'Title', ours: 'Earlier Nexus', theirs: 'eBay title', source: 'ebay-content', checkedAt: at }],
+    checkedBySource: { 'ebay-content': { at, outcome: 'compared', differing: 1 } } }
+  await prisma.channelDrift.create({ data: { channelListingId: other.id, channel: 'EBAY', marketplace: 'IT', lastCheckedAt: new Date(at), ...content } })
+  const stock = await prisma.channelDrift.create({ data: { channelListingId: own.id, channel: 'EBAY', marketplace: 'IT', lastCheckedAt: new Date(at),
+    checkedBySource: { 'ebay-trading-getitem': { at, outcome: 'compared', differing: 0 } } } })
+  fixture.facts.mockResolvedValue({ ...facts(), listings: [own] })
+  const unreadReview = await previewStudioPublication(productId, scope, null)
+  expect(unreadReview.overwrite).toMatchObject({ requiresConfirmation: true, products: [{ status: 'not_read', fields: [] }] })
+  await expect(submitRaw(productId, unreadReview.id!, { confirmOverwrite: true }, null)).rejects.toThrow(/selection|token|review/i)
+  await prisma.channelDrift.update({ where: { id: stock.id }, data: content })
+  await expect(submitStudioPublication(productId, unreadReview.id!, { confirmOverwrite: true }, null)).rejects.toThrow('changed')
+  expect(fixture.sendEbay).not.toHaveBeenCalled()
+  const reviewed = await previewStudioPublication(productId, scope, null)
+  expect(reviewed.overwrite?.products[0]).toMatchObject({ status: 'compared', fields: [{ field: 'Title', nexusAtRead: 'Earlier Nexus', channelAtRead: 'eBay title' }] })
+  fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
+  await submitStudioPublication(productId, reviewed.id!, { confirmOverwrite: true }, null)
+  expect((await prisma.bulkOperation.findUniqueOrThrow({ where: { id: reviewed.id! } })).changes).toMatchObject({ selection: { token: expect.any(String), selectedIds: [productId] } })
+  expect(fixture.sendEbay).toHaveBeenCalledOnce()
+}, 30_000)
+
+it('refuses a concurrently replaced persisted selection at the database claim', async () => {
+  const review = await previewStudioPublication(productId, scope, null)
+  const initial = await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })
+  const selection = (initial.changes as any).selection
+  fixture.facts.mockImplementationOnce(async () => {
+    await prisma.bulkOperation.update({ where: { id: review.id! }, data: { changes: { ...(initial.changes as object), selection: { ...selection, token: 'replaced-while-submit-waited' } } } })
+    return facts()
+  })
+  await expect(submitRaw(productId, review.id!, { selectionToken: selection.token }, null)).rejects.toThrow(/changed|selection/i)
+  expect(fixture.providerWrite).not.toHaveBeenCalled()
+  expect(await prisma.channelListingSnapshot.count({ where: { publishEventId: review.id } })).toBe(0)
+  expect(await prisma.bulkOperation.findUnique({ where: { id: review.id! } })).toMatchObject({ status: 'PREVIEW', changes: { selection: { token: 'replaced-while-submit-waited' } } })
+}, 30_000)
 
 it('persists the eBay receipt before read-back and recovers the local projection without resending', async () => {
   const review = await previewStudioPublication(productId, scope, null)

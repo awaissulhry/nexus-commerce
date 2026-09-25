@@ -77,6 +77,10 @@ describe('channel-file rows and the channel read (CFI)', () => {
   const file = { origin: 'channel-file' as const }
   it('shows what the channel held at its last read, and never claims a read that did not happen', () => {
     expect(render('channel', {})).toContain('Not read yet')
+    // A field no read compares (e.g. Amazon's RRP) must never read "Same as Nexus" (production GALE DE, 2026-09-25).
+    const notCompared = render('channel', { channelRead: { notCompared: true, readAt: '2026-09-24T03:37:00.000Z' } })
+    expect(notCompared).toContain('Not compared by the channel read')
+    expect(notCompared).not.toContain('Same as Nexus')
     expect(render('channel', { entity: 'Products' })).toContain('Not a channel value')
     const same = render('channel', { channelRead: { differs: false, readAt: '2026-09-24T03:37:00.000Z', source: 'amazon-content' } })
     expect(same).toContain('Same as Nexus at the last read')

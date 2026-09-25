@@ -28,12 +28,11 @@ import { attributesFromCells } from '../pim/mapping/schema-requirements.js'
 import { mappedAmazonRoots } from '../amazon/mapping-payload.js'
 import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
 import { configuredAmazonMarketplaceId } from '../categories/marketplace-ids.js'
-import { CONTENT_ROOTS, STRUCTURE_ROOTS, type ContentEntry, type NotCompared } from './amazon-content-compare.js'
+import { CONTENT_ROOTS, STRUCTURE_ROOTS, OUT_OF_SCOPE_ROOTS, type ContentEntry, type NotCompared } from './amazon-content-compare.js'
 
 /** The studio's owners whose values another builder sends (`studio-publication-amazon.ts`, `ownedKeys`). */
 const OTHER_BUILDERS = new Set(['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'])
-/** Price is 3.5a's (list_price is the studio's RRP line) — out of A-39. */
-const OUT_OF_SCOPE_ROOTS = new Set(['list_price', 'purchasable_offer', 'fulfillment_availability'])
+
 
 export interface AmazonOurs {
   listingId: string

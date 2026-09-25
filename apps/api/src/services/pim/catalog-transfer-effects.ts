@@ -24,6 +24,7 @@ export async function enrichTransferEffects(jobId: string, plan: TransferPlan, c
   const beforeById = new Map(products.map(p => [p.id, p]))
   const afterById = new Map(products.map(p => [p.id, projectContentWrites({ ...p, ...patches[p.id] }, sharedTargets.filter(t => t.before?.id === p.id).flatMap(t => t.contentWrites ?? []))]))
   const groups = new Map<string, TransferTarget[]>()
+  const languageRows = context.markets.map(m => ({ ...m, languages: m.languages ?? [] }))
   for (const target of changed) {
     const id = target.identity, product = context.products.get(id.sku)
     if (!product) continue
@@ -59,7 +60,7 @@ export async function enrichTransferEffects(jobId: string, plan: TransferPlan, c
     for (const target of targets) {
       const contentCells = target.cells.filter(c => c.verdict === 'changed' && target.contentFields?.[c.field])
       if (!contentCells.length) continue
-      const languages = await marketLanguages(id.channel, id.marketplace)
+      const languages = marketLanguages(id.channel, id.marketplace, languageRows)
       const coordinate = { channel: id.channel, market: id.marketplace, accountId: id.accountId, ...(id.aliasKey ? { aliasId: id.aliasKey } : {}) }
       const product = context.products.get(target.identity.sku)!
       for (const side of ['Before', 'After'] as const) {

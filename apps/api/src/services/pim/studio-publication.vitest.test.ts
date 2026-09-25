@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
+const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -9,8 +9,30 @@ vi.mock('@nexus/database/workspace-context', () => ({ workspaceIdForQuery: () =>
 vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: m.mode }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
-vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', feed: { messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
-vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async () => ({ kind: 'ebay', xml: '<Item/>' }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus }))
+vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
+  products: [{ productId: 'parent', sku: 'SELLER-SKU' }, { productId: 'child', sku: 'SELLER-CHILD' }],
+  feed: { header: { version: '2.0' }, messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
+vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: '123', xml: '<Item/>',
+  products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })) }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus,
+  ebayPublicationRequest: (plan: any) => ({ operation: 'ReviseFixedPriceItem', xml: plan.xml }) }))
+vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
+vi.mock('./studio-publication-amazon-changes.js', () => ({
+  prepareAmazonChanges: async (_facts: any, publication: any) => ({ kind: 'amazon-changes', publication, remoteRevision: 'remote-1', products: [], schemas: [],
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.includes(p.productId))) },
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
+}))
+vi.mock('./studio-publication-ebay-changes.js', () => ({
+  prepareEbayChanges: async (_facts: any, publication: any) => ({ kind: 'ebay-changes', publication, remoteRevision: 'remote-1',
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileEbayChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
+}))
+// Durable exact-payload writes are exercised against formulaDatabase in the database suite.
+vi.mock('./studio-publication-records.js', () => ({ recordPublicationRequests: vi.fn(), settlePublicationRecords: vi.fn() }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: m.shopRead, saveContentWorkspace: m.shopSave }))
 vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: m.shopPreview, synchronizeContent: m.shopSend }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
@@ -18,22 +40,72 @@ vi.mock('../../db.js', () => {
   const matches = (row: any, where: any) => (!where.id || (typeof where.id === 'string' ? row.id === where.id : row.id !== where.id.not))
     && (!Object.hasOwn(where, 'userId') || row.userId === where.userId)
     && (!where.status || (typeof where.status === 'string' ? row.status === where.status : where.status.in.includes(row.status)))
-    && (!where.changes || row.changes[where.changes.path[0]] === where.changes.equals)
-  const db = { bulkOperation: {
-    findFirst: async ({ where }: any) => [...m.rows.values()].find(row => matches(row, where)) ?? null,
-    create: async ({ data }: any) => { m.rows.set(data.id, data); return data },
-    updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, { ...row, ...data }); return { count: rows.length } },
-    update: async ({ where, data }: any) => { m.persistenceFailure(data); const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, row); await m.persisted(row); return row },
+    && (!where.changes || (where.changes.path ? row.changes[where.changes.path[0]] === where.changes.equals : JSON.stringify(row.changes) === JSON.stringify(where.changes.equals)))
+  const db = { channelDrift: { findMany: m.drift }, bulkOperation: {
+    findFirst: async ({ where }: any) => structuredClone([...m.rows.values()].find(row => matches(row, where)) ?? null),
+    create: async ({ data }: any) => { m.rows.set(data.id, structuredClone(data)); return structuredClone(data) },
+    updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, structuredClone({ ...row, ...data })); return { count: rows.length } },
+    update: async ({ where, data }: any) => { m.persistenceFailure(data); const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, structuredClone(row)); await m.persisted(row); return structuredClone(row) },
   }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, count: async () => 2 }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
   return { default: db }
 })
-import { previewStudioPublication, submitStudioPublication, studioPublicationResult } from './studio-publication.service.js'
+import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult } from './studio-publication.service.js'
+
+// Existing recovery tests explicitly review a selection before their send/result scenario.
+async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
+  const review = await previewRaw(...args)
+  if (review.id && ['AMAZON', 'EBAY'].includes(args[1].channel)) await previewStudioPublicationSelection(args[0], review.id, { selectedIds: review.changes?.filter(c => c.selectable).map(c => c.id) ?? [] }, args[2])
+  return review
+}
+const submitStudioPublication = (productId: string, id: string, body: Record<string, unknown>, userId: string | null) =>
+  submitRaw(productId, id, { ...body, selectionToken: m.rows.get(id)?.changes.selection?.token }, userId)
 
 const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', listingId: 'alias-listing' }
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+
+const existingFacts = () => ({ ...facts(), listings: [{ id: 'listing-parent', productId: 'parent', externalListingId: 'existing-item' }] })
+const contentObservation = (theirs = 'Channel title') => ({ channelListingId: 'listing-parent',
+  checkedBySource: { 'amazon-content': { at: '2026-09-24T18:40:00.000Z', outcome: 'compared', differing: 1, notCompared: 12 } },
+  driftedFields: [{ source: 'amazon-content', field: 'item_name', ours: 'Earlier Nexus title', theirs, checkedAt: '2026-09-24T18:40:00.000Z' }] })
+
+it('reviews historical content differences and unread children before an existing listing overwrite', async () => {
+  m.facts.mockResolvedValue({ ...existingFacts(), listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'existing-child' }] })
+  m.drift.mockResolvedValue([contentObservation()])
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(review.overwrite).toMatchObject({ requiresConfirmation: true, products: [
+    { productId: 'parent', sku: 'SKU', status: 'compared', notCompared: 12,
+      fields: [{ field: 'item_name', nexusAtRead: 'Earlier Nexus title', channelAtRead: 'Channel title' }] },
+    { productId: 'child', sku: 'CHILD', status: 'not_read', fields: [] },
+  ] })
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it.each([undefined, false, 'forged', 1])('refuses an existing listing send without the exact selection token (%s)', async selectionToken => {
+  m.facts.mockResolvedValue(existingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await expect(submitRaw('parent', review.id!, { selectionToken, confirmOverwrite: true }, 'user')).rejects.toThrow(/selection|token|review/i)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.createListings).not.toHaveBeenCalled()
+  expect(m.rows.get(review.id!).status).toBe('PREVIEW')
+})
+
+it('records the explicitly reviewed sparse selection with the submitted review', async () => {
+  m.facts.mockResolvedValue(existingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(await submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')).toMatchObject({ status: 'SUBMITTED' })
+  expect(m.rows.get(review.id!).changes.selection.token).toEqual(expect.any(String))
+  expect(m.amazon).toHaveBeenCalledOnce()
+})
+
+it('invalidates the selected review when the observed channel differences change', async () => {
+  m.facts.mockResolvedValue(existingFacts()); m.drift.mockResolvedValue([contentObservation()])
+  const review = await previewStudioPublication('parent', scope, 'user')
+  m.drift.mockResolvedValue([contentObservation('A more recent channel title')])
+  await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')).rejects.toThrow(/changed/i)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.createListings).not.toHaveBeenCalled()
+})
 
 it('checkpoints eBay acknowledgement before read-back and recovers local persistence without resending', async () => {
   const ebayScope = { ...scope, channel: 'EBAY' }
@@ -104,7 +176,7 @@ it('reviews saved family values and publishes directly to the exact account and 
   const result = await submitStudioPublication('parent', review.id!, {}, 'user')
   expect(result.status).toBe('SUBMITTED')
   expect(result.results).toHaveLength(2)
-  expect(m.amazon).toHaveBeenCalledWith(expect.objectContaining({ kind: 'amazon' }), 'seller-b')
+  expect(m.amazon).toHaveBeenCalledWith(expect.objectContaining({ kind: 'amazon' }), 'seller-b', expect.any(Function))
   expect(m.updateListings).not.toHaveBeenCalled()
   expect(m.createListings.mock.calls[0][0].data).toEqual(expect.arrayContaining([expect.objectContaining({ productId: 'child', channelConnectionId: 'seller-b', aliasKey: 'alias-b', isPublished: false })]))
 })
@@ -187,7 +259,7 @@ it.each([false, true])('uses Shopify’s native family publisher and retains its
   m.facts.mockResolvedValue({ ...facts(), scope: shopScope, excluded: 0 })
   m.shopRead.mockResolvedValue({ initialized: false, draft: { options: ['Size'] }, revision: 'uninitialized' })
   m.shopSave.mockResolvedValue({ revision: 'draft-v1' })
-  m.shopPreview.mockResolvedValue({ errors: [], initialized: true, revision: 'draft-v1', remoteRevision: 'remote-v2', draft: { options: ['Size'] }, changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Warehouse', isActive: true }] })
+  m.shopPreview.mockResolvedValue({ errors: [], initialized: true, revision: 'draft-v1', remoteRevision: 'remote-v2', draft: { options: ['Size'] }, variants: [{ id: 'child', sku: 'CHILD' }], changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Warehouse', isActive: true }] })
   m.shopSend.mockResolvedValue({ productId: 'gid://shopify/Product/42' })
   const review = await previewStudioPublication('parent', shopScope, 'user')
   expect(review.visibility).toBe('DRAFT')
@@ -200,5 +272,5 @@ it.each([false, true])('uses Shopify’s native family publisher and retains its
     message: expect.stringContaining(persistenceFails ? 'could not record' : 'DRAFT'),
     results: [expect.objectContaining({ reference: 'gid://shopify/Product/42' }), expect.anything()] })
   expect(m.shopSend).toHaveBeenCalledOnce()
-  expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true })
+  expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true }, expect.any(Function))
 })

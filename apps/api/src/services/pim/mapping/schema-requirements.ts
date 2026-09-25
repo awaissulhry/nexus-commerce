@@ -88,21 +88,34 @@ function validator(schema: Node) {
   return validate
 }
 
-/** Amazon deletes identify attribute instances by their schema selector values. */
-export function attributeDeleteValue(spec: ChannelSpec, attribute: string): Record<string, unknown>[] {
+function attributeDefinition(spec: ChannelSpec, attribute: string) {
   const root = spec.validationSchema as Node | undefined
-  const node = root?.properties?.[attribute]
-  const selectors: string[] = node?.selectors ?? []
+  const deref = (node: Node | undefined): Node => node?.$ref?.startsWith('#/')
+    ? node.$ref.slice(2).split('/').reduce((v: any, k: string) => v?.[k.replace(/~1/g, '/').replace(/~0/g, '~')], root) ?? node : node ?? {}
+  const node = deref(root?.properties?.[attribute])
+  return { node, items: deref(node.items), deref }
+}
+
+export function attributeSelectorKeys(spec: ChannelSpec, attribute: string): string[] {
+  const { node } = attributeDefinition(spec, attribute)
+  return Array.isArray(node.selectors) ? node.selectors.filter((key: unknown): key is string => typeof key === 'string') : []
+}
+
+/** Explicit live instances take precedence over schema defaults; old callers retain schema-owned deletes. */
+export function attributeDeleteValue(spec: ChannelSpec, attribute: string, instances?: readonly unknown[]): Record<string, unknown>[] {
+  const { items, deref } = attributeDefinition(spec, attribute)
+  const selectors = attributeSelectorKeys(spec, attribute)
   if (!selectors.length) throw new Error(`Cannot clear ${attribute}: the category schema declares no attribute selectors.`)
-  const values: Record<string, unknown> = {}
-  for (const key of selectors) {
-    let definition = node.items?.properties?.[key] ?? {}
-    if (definition.$ref?.startsWith('#/')) definition = definition.$ref.slice(2).split('/').reduce((v: any, k: string) => v?.[k.replace(/~1/g, '/').replace(/~0/g, '~')], root) ?? {}
-    const value = definition.const ?? (definition.enum?.length === 1 ? definition.enum[0] : definition.default)
-    if (!serializedValue(value) || (definition.enum && !definition.enum.includes(value))) throw new Error(`Cannot clear ${attribute}: its ${key} selector needs an explicit existing attribute value.`)
-    values[key] = value
-  }
-  return [values]
+  if (instances && !instances.length) throw new Error(`Cannot clear ${attribute}: no existing attribute instance was selected.`)
+  const values = (instances ?? [null]).map(instance => Object.fromEntries(selectors.map(key => {
+    const definition = deref(items.properties?.[key])
+    const value = instances ? (instance && typeof instance === 'object' ? (instance as Record<string, unknown>)[key] : undefined)
+      : definition.const ?? (definition.enum?.length === 1 ? definition.enum[0] : definition.default)
+    if (!serializedValue(value) || !['string', 'number', 'boolean'].includes(typeof value) || (definition.const !== undefined && definition.const !== value)
+      || (definition.enum && !definition.enum.includes(value))) throw new Error(`Cannot clear ${attribute}: its ${key} selector needs an explicit existing attribute value.`)
+    return [key, value]
+  })))
+  return [...new Map(values.map(value => [JSON.stringify(value), value])).values()]
 }
 
 /** Attribute requiredness must remain present after a value is filled. AJV's

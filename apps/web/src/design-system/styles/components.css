@@ -2895,3 +2895,9 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-detailpop-reason, .nds-detailpop-note, .nds-detailpop-foot { color: var(--nds-text); }
 .nds-detailpop-note { margin: 8px 0 0; }
 .nds-detailpop-foot { margin-top: 10px; font-size: var(--nds-font-size-xs); }
+/* ChangeReview — selectable comparisons; field text stays readable when its choice is disabled. */
+.nds-change-review { display: grid; gap: var(--nds-space-12); min-width: 0; }
+.nds-change-review-item { display: grid; gap: var(--nds-space-10); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); color: var(--nds-text); overflow-wrap: anywhere; }
+.nds-change-review-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nds-space-8); }
+.nds-change-review-note { margin: 0; color: var(--nds-text-2); }
+.nds-change-review-item .nds-kv dd { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }

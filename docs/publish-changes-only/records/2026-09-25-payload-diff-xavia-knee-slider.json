@@ -1,0 +1,165 @@
+{
+ "sku": "xavia-knee-slider",
+ "market": "IT",
+ "field": "part_number",
+ "database": "127.0.0.1",
+ "child": "xavia-knee-slider-black",
+ "before": {
+  "messageCount": 9,
+  "operationTypes": [
+   "PARTIAL_UPDATE"
+  ],
+  "feedBytes": 8582,
+  "rootsPerMessage": {
+   "min": 5,
+   "max": 8,
+   "total": 69
+  },
+  "messages": [
+   {
+    "sku": "xavia-knee-slider",
+    "op": "PARTIAL_UPDATE",
+    "roots": 5,
+    "bytes": 579
+   },
+   {
+    "sku": "xavia-knee-slider-black",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 986
+   },
+   {
+    "sku": "xavia-knee-slider-blue",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 984
+   },
+   {
+    "sku": "xavia-knee-slider-green",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 988
+   },
+   {
+    "sku": "xavia-knee-slider-orange",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 993
+   },
+   {
+    "sku": "xavia-knee-slider-pink",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 985
+   },
+   {
+    "sku": "xavia-knee-slider-red",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 986
+   },
+   {
+    "sku": "xavia-knee-slider-white",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 990
+   },
+   {
+    "sku": "xavia-knee-slider-yellow",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 991
+   }
+  ]
+ },
+ "write": {
+  "updated": 1,
+  "probe": "PCO-PROBE-qt2t9ejo"
+ },
+ "after": {
+  "messageCount": 9,
+  "operationTypes": [
+   "PARTIAL_UPDATE"
+  ],
+  "feedBytes": 8662,
+  "rootsPerMessage": {
+   "min": 5,
+   "max": 9,
+   "total": 70
+  },
+  "messages": [
+   {
+    "sku": "xavia-knee-slider",
+    "op": "PARTIAL_UPDATE",
+    "roots": 5,
+    "bytes": 579
+   },
+   {
+    "sku": "xavia-knee-slider-black",
+    "op": "PARTIAL_UPDATE",
+    "roots": 9,
+    "bytes": 1066
+   },
+   {
+    "sku": "xavia-knee-slider-blue",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 984
+   },
+   {
+    "sku": "xavia-knee-slider-green",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 988
+   },
+   {
+    "sku": "xavia-knee-slider-orange",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 993
+   },
+   {
+    "sku": "xavia-knee-slider-pink",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 985
+   },
+   {
+    "sku": "xavia-knee-slider-red",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 986
+   },
+   {
+    "sku": "xavia-knee-slider-white",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 990
+   },
+   {
+    "sku": "xavia-knee-slider-yellow",
+    "op": "PARTIAL_UPDATE",
+    "roots": 8,
+    "bytes": 991
+   }
+  ]
+ },
+ "diff": {
+  "changedMessages": 1,
+  "changed": [
+   {
+    "sku": "xavia-knee-slider-black",
+    "roots": [
+     "part_number"
+    ],
+    "changeOnlyBytes": 206
+   }
+  ],
+  "changeOnlyBytes": 206,
+  "wholeFeedBytes": 8662,
+  "changeOnlyShare": 0.0238,
+  "unchangedMessagesResent": 8
+ },
+ "rolledBack": true,
+ "networkAttempts": []
+}

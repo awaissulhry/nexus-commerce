@@ -1,0 +1,143 @@
+{
+  "kind": "pco7-amazon-proof",
+  "proposalPath": "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco7-amazon-proposal-2026-09-25T03-42-32-251Z.json",
+  "preparedAt": "2026-09-25T03:42:38.292Z",
+  "scope": {
+    "workspaceId": "nexus_legacy_workspace",
+    "productId": "cmokmy0ky0007pm0p3vj7q0mh",
+    "listingId": "cmp26an0g006jrx01o2m7v38t",
+    "accountId": "cmothu9bo0000nz01asw6wx8j",
+    "aliasKey": "",
+    "sku": "GALE-JACKET-BLACK-MEN-S",
+    "marketplace": "IT",
+    "marketplaceId": "APJ6JRA9NG5V4",
+    "sellerId": "A1VRHKTGYO1JNU",
+    "asin": "B0BMS5B768",
+    "productType": "COAT"
+  },
+  "attribute": "generic_keyword",
+  "token": "nexuspco202609251dab4448",
+  "schemaDigest": "3005c7bcb5194b24465311ce8666baa8f4b34ba16e93a5dd2d253f00408fef21",
+  "originalRoot": [
+    {
+      "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+    }
+  ],
+  "originalDigest": "4c4e19db2e889a2d957a522fb5bb38300b483cba3f50cf1232275da82a7ce727",
+  "temporaryRoot": [
+    {
+      "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale nexuspco202609251dab4448",
+      "language_tag": "it_IT",
+      "marketplace_id": "APJ6JRA9NG5V4"
+    }
+  ],
+  "send": {
+    "kind": "amazon",
+    "sellerId": "A1VRHKTGYO1JNU",
+    "marketplaceId": "APJ6JRA9NG5V4",
+    "products": [
+      {
+        "productId": "cmokmy0ky0007pm0p3vj7q0mh",
+        "sku": "GALE-JACKET-BLACK-MEN-S"
+      }
+    ],
+    "feed": {
+      "header": {
+        "sellerId": "A1VRHKTGYO1JNU",
+        "version": "2.0",
+        "issueLocale": "it_IT"
+      },
+      "messages": [
+        {
+          "messageId": 1,
+          "sku": "GALE-JACKET-BLACK-MEN-S",
+          "operationType": "PATCH",
+          "productType": "COAT",
+          "patches": [
+            {
+              "op": "replace",
+              "path": "/attributes/generic_keyword",
+              "value": [
+                {
+                  "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale nexuspco202609251dab4448",
+                  "language_tag": "it_IT",
+                  "marketplace_id": "APJ6JRA9NG5V4"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "fieldWrites": {
+      "cmokmy0ky0007pm0p3vj7q0mh": [
+        {
+          "field": "generic_keyword:[\"APJ6JRA9NG5V4\",\"it_IT\"]",
+          "value": {
+            "state": "value",
+            "value": [
+              {
+                "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale nexuspco202609251dab4448",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "restore": {
+    "kind": "amazon",
+    "sellerId": "A1VRHKTGYO1JNU",
+    "marketplaceId": "APJ6JRA9NG5V4",
+    "products": [
+      {
+        "productId": "cmokmy0ky0007pm0p3vj7q0mh",
+        "sku": "GALE-JACKET-BLACK-MEN-S"
+      }
+    ],
+    "feed": {
+      "header": {
+        "sellerId": "A1VRHKTGYO1JNU",
+        "version": "2.0",
+        "issueLocale": "it_IT"
+      },
+      "messages": [
+        {
+          "messageId": 1,
+          "sku": "GALE-JACKET-BLACK-MEN-S",
+          "productType": "COAT",
+          "operationType": "PATCH",
+          "patches": [
+            {
+              "op": "replace",
+              "path": "/attributes/generic_keyword",
+              "value": [
+                {
+                  "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+                  "language_tag": "it_IT",
+                  "marketplace_id": "APJ6JRA9NG5V4"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "preview": {
+    "send": {
+      "available": true,
+      "ok": true
+    },
+    "restore": {
+      "available": true,
+      "ok": true
+    }
+  },
+  "delayedReadSeconds": 60,
+  "digest": "15e10266ce67ec88dd6f8f386ca02e75305ac4d0e3382ca55b509c2444dbd48d"
+}

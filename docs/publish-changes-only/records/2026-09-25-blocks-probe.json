@@ -1,0 +1,148 @@
+{
+  "readOnly": "on",
+  "ebayModel": [
+    {
+      "ws": "nexus_legacy_workspace",
+      "model": "INVENTORY (refused)",
+      "listings": 208,
+      "families": 8,
+      "active": 208
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "model": "TRADING",
+      "listings": 124,
+      "families": 32,
+      "active": 94
+    }
+  ],
+  "ebayFba": [
+    {
+      "listings": 0,
+      "families": 0
+    }
+  ],
+  "amazonClosed": [
+    {
+      "mkt": "DE",
+      "listings": 178,
+      "families_refused": 11
+    },
+    {
+      "mkt": "ES",
+      "listings": 93,
+      "families_refused": 7
+    },
+    {
+      "mkt": "FR",
+      "listings": 79,
+      "families_refused": 6
+    }
+  ],
+  "listingsByChannelMarket": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "listings": 214,
+      "products": 214
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "ES",
+      "listings": 123,
+      "products": 123
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "FR",
+      "listings": 115,
+      "products": 115
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "listings": 273,
+      "products": 273
+    },
+    {
+      "ch": "EBAY",
+      "mkt": "IT",
+      "listings": 332,
+      "products": 248
+    }
+  ],
+  "connections": [
+    {
+      "ws": "bf0047bf-e1d9-48d0-8cc6-20e94bb734dd",
+      "ch": "EBAY",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    },
+    {
+      "ws": "bf0047bf-e1d9-48d0-8cc6-20e94bb734dd",
+      "ch": "ETSY",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "ch": "AMAZON",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "ch": "AMAZON_ADS",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "ch": "EBAY",
+      "active": false,
+      "auth": "disconnected",
+      "n": 12
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "ch": "EBAY",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    },
+    {
+      "ws": "nexus_legacy_workspace",
+      "ch": "SHOPIFY",
+      "active": true,
+      "auth": "connected",
+      "n": 1
+    }
+  ],
+  "publishRoles": [
+    {
+      "ws": "(template)",
+      "key": "ADMIN",
+      "name": "Admin",
+      "has_publish": true,
+      "members": 0
+    },
+    {
+      "ws": "(template)",
+      "key": "OPS_MANAGER",
+      "name": "Operations Manager",
+      "has_publish": true,
+      "members": 0
+    },
+    {
+      "ws": "(template)",
+      "key": "OWNER",
+      "name": "Owner",
+      "has_publish": false,
+      "members": 2
+    }
+  ]
+}

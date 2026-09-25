@@ -1,6 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { amazonSpecFromDefinition } from '../channel-specs/amazon.js'
-import { attributesFromCells, evaluateSchemaRequirements, registerCatalogueSchema, validateSchemaAttributes } from './schema-requirements.js'
+import { attributeDeleteValue, attributesFromCells, evaluateSchemaRequirements, registerCatalogueSchema, validateSchemaAttributes } from './schema-requirements.js'
+
+it('uses actual selectors for deletes, deduplicates repeated instances, and refuses unknown selector values', () => {
+  const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    content: { type: 'array', selectors: ['marketplace_id', 'language_tag', 'value'], items: { properties: {
+      marketplace_id: { const: 'IT' }, language_tag: { enum: ['it_IT', 'en_GB'] }, value: { type: 'string' },
+    } } },
+  } } })
+  const actual = { marketplace_id: 'IT', language_tag: 'en_GB', value: 'Exact existing value', ignored: true }
+  expect(attributeDeleteValue(spec, 'content', [actual, actual])).toEqual([{ marketplace_id: 'IT', language_tag: 'en_GB', value: 'Exact existing value' }])
+  expect(() => attributeDeleteValue(spec, 'content', [{ marketplace_id: 'IT', language_tag: 'de_DE', value: 'Wrong language' }])).toThrow(/language_tag/)
+  expect(() => attributeDeleteValue(spec, 'content', [{ marketplace_id: 'IT', value: 'Missing language' }])).toThrow(/language_tag/)
+})
 
 const attribute = (extra: object = {}) => ({ type: 'array', items: { type: 'object', properties: { value: { type: 'string', ...extra } }, required: ['value'] } })
 const schema = {

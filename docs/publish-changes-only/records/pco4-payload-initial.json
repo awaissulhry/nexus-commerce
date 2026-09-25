@@ -1,0 +1,158 @@
+{
+  "sku": "xavia-knee-slider",
+  "market": "IT",
+  "field": "part_number",
+  "database": "127.0.0.1",
+  "child": "xavia-knee-slider-black",
+  "before": {
+    "messageCount": 9,
+    "operationTypes": [
+      "PARTIAL_UPDATE"
+    ],
+    "feedBytes": 8582,
+    "rootsPerMessage": {
+      "min": 5,
+      "max": 8,
+      "total": 69
+    },
+    "messages": [
+      {
+        "sku": "xavia-knee-slider",
+        "op": "PARTIAL_UPDATE",
+        "roots": 5,
+        "bytes": 579
+      },
+      {
+        "sku": "xavia-knee-slider-black",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-blue",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 984
+      },
+      {
+        "sku": "xavia-knee-slider-green",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 988
+      },
+      {
+        "sku": "xavia-knee-slider-orange",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 993
+      },
+      {
+        "sku": "xavia-knee-slider-pink",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 985
+      },
+      {
+        "sku": "xavia-knee-slider-red",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-white",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 990
+      },
+      {
+        "sku": "xavia-knee-slider-yellow",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 991
+      }
+    ]
+  },
+  "write": {
+    "updated": 1,
+    "probe": "PCO-PROBE-c7u7teok"
+  },
+  "after": {
+    "messageCount": 9,
+    "operationTypes": [
+      "PARTIAL_UPDATE"
+    ],
+    "feedBytes": 8662,
+    "rootsPerMessage": {
+      "min": 5,
+      "max": 9,
+      "total": 70
+    },
+    "messages": [
+      {
+        "sku": "xavia-knee-slider",
+        "op": "PARTIAL_UPDATE",
+        "roots": 5,
+        "bytes": 579
+      },
+      {
+        "sku": "xavia-knee-slider-black",
+        "op": "PARTIAL_UPDATE",
+        "roots": 9,
+        "bytes": 1066
+      },
+      {
+        "sku": "xavia-knee-slider-blue",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 984
+      },
+      {
+        "sku": "xavia-knee-slider-green",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 988
+      },
+      {
+        "sku": "xavia-knee-slider-orange",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 993
+      },
+      {
+        "sku": "xavia-knee-slider-pink",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 985
+      },
+      {
+        "sku": "xavia-knee-slider-red",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-white",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 990
+      },
+      {
+        "sku": "xavia-knee-slider-yellow",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 991
+      }
+    ]
+  },
+  "compiled": {
+    "fixture": "before payload as accepted baseline and channel read",
+    "messages": [],
+    "products": [],
+    "fieldWrites": {},
+    "feedBytes": 92,
+    "unchangedProductsSkipped": 9
+  },
+  "error": "Error: The real compiler did not produce exactly one changed child/root.\n    at <anonymous> (/Users/awais/nexus-commerce/docs/publish-changes-only/tools/payload-diff.mts:97:84)\n    at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/lib/database-context.ts:71:23)\n    at async Proxy._transactionWithCallback (/Users/awais/nexus-commerce/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:722:18)\n    at async Proxy.<anonymous> (file:///Users/awais/nexus-commerce/packages/database/workspace-router.js:120:36)\n    at async inDatabaseTransaction (/Users/awais/nexus-commerce/apps/api/src/lib/database-context.ts:70:16)\n    at async <anonymous> (/Users/awais/nexus-commerce/docs/publish-changes-only/tools/payload-diff.mts:52:3)",
+  "rolledBack": true,
+  "networkAttempts": []
+}

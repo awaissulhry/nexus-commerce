@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { amazonSpecFromDefinition } from '../pim/channel-specs/amazon.js'
-import { applyResolvedMappingToAmazonFeed } from './mapping-payload.js'
+import { applyResolvedMappingToAmazonFeed, amazonRootPatch } from './mapping-payload.js'
 import type { ResolveBatchResult } from '../pim/mapping/resolve-batch.service.js'
 const attr = (type = 'string') => ({ type: 'array', selectors: ['marketplace_id'], items: { type: 'object', properties: { value: { type }, marketplace_id: { const: 'IT' } } } })
 const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { item_name: attr(), bullet_point: attr(), weight: { type: 'array', items: { type: 'object', properties: { value: { type: 'number' }, unit: { enum: ['kg'] } } } } } } })
@@ -12,6 +12,13 @@ function resolution(extra: Record<string, unknown> = {}) {
 const original = { header: { sellerId: 'test' }, messages: [{ messageId: 1, operationType: 'PARTIAL_UPDATE', productType: 'OLD', attributes: {
   item_name: [{ value: 'Stale legacy title' }], purchasable_offer: [{ currency: 'EUR', our_price: [{ schedule: [{ value_with_tax: 49 }] }] }], main_product_image_locator: [{ media_location: 'https://example.com/photo.jpg' }],
 } }] }
+it('clears only the explicitly observed selector instances instead of a schema default language', () => {
+  const localized = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { item_name: {
+    ...attr(), selectors: ['marketplace_id', 'language_tag'], items: { properties: { marketplace_id: { const: 'IT' }, language_tag: { enum: ['it_IT', 'en_GB'], default: 'it_IT' }, value: { type: 'string' } } },
+  } } } })
+  expect(amazonRootPatch(localized, 'item_name', undefined, [{ marketplace_id: 'IT', language_tag: 'en_GB', value: 'Earlier English' }]))
+    .toEqual({ op: 'delete', path: '/attributes/item_name', value: [{ marketplace_id: 'IT', language_tag: 'en_GB' }] })
+})
 describe('actual Amazon feed envelope uses canonical mapping values', () => {
   it('replaces stale authored attributes and preserves pricing and media owned values', () => {
     const output = JSON.parse(applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution(), spec))

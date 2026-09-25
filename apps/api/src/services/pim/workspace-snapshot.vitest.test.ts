@@ -33,6 +33,12 @@ beforeEach(() => {
   f.state.snapshots = [{ id: 'saved', channelListingId: 'b-alt', channel: 'EBAY', marketplace: 'IT', aliasKey: 'alt', payload: { __capturedFrom: 'listing-state', state: { ...f.state.listing, title: 'Saved' } } }]
 })
 describe('snapshot restore preserves destination and atomic conflict checks', () => {
+  it('refuses provider request journals as restorable listing state without changing the draft', async () => {
+    f.state.snapshots[0].payload = { schemaVersion: 1, kind: 'studio-publication', productId: 'p', channelConnectionId: 'b', sku: 'REMOTE-SKU', requests: [{ operation: 'ReviseFixedPriceItem', xml: '<Item/>' }] }
+    await expect(restoreToDraft(request)).rejects.toThrow(/request.*journal|journal.*restore/i)
+    expect(f.db.$transaction).not.toHaveBeenCalled()
+    expect(f.state.listing).toMatchObject({ title: 'Current', version: 3, isPublished: true })
+  })
   it.each([{ productId: 'foreign' }, { accountId: 'a' }, { listingId: 'a-alt' }, { expectedVersion: 2 }, { expectedVersion: undefined }])('refuses %j without a write', async patch => {
     await expect(restoreToDraft({ ...request, ...patch })).rejects.toThrow()
     expect(f.db.$transaction).not.toHaveBeenCalled()

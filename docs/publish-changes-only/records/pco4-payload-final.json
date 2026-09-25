@@ -1,0 +1,244 @@
+{
+  "sku": "xavia-knee-slider",
+  "market": "IT",
+  "field": "part_number",
+  "database": "127.0.0.1",
+  "child": "xavia-knee-slider-black",
+  "before": {
+    "messageCount": 9,
+    "operationTypes": [
+      "PARTIAL_UPDATE"
+    ],
+    "feedBytes": 8582,
+    "rootsPerMessage": {
+      "min": 5,
+      "max": 8,
+      "total": 69
+    },
+    "messages": [
+      {
+        "sku": "xavia-knee-slider",
+        "op": "PARTIAL_UPDATE",
+        "roots": 5,
+        "bytes": 579
+      },
+      {
+        "sku": "xavia-knee-slider-black",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-blue",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 984
+      },
+      {
+        "sku": "xavia-knee-slider-green",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 988
+      },
+      {
+        "sku": "xavia-knee-slider-orange",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 993
+      },
+      {
+        "sku": "xavia-knee-slider-pink",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 985
+      },
+      {
+        "sku": "xavia-knee-slider-red",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-white",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 990
+      },
+      {
+        "sku": "xavia-knee-slider-yellow",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 991
+      }
+    ]
+  },
+  "write": {
+    "updated": 1,
+    "probe": "PCO-PROBE-7cwh6qqf"
+  },
+  "after": {
+    "messageCount": 9,
+    "operationTypes": [
+      "PARTIAL_UPDATE"
+    ],
+    "feedBytes": 8662,
+    "rootsPerMessage": {
+      "min": 5,
+      "max": 9,
+      "total": 70
+    },
+    "messages": [
+      {
+        "sku": "xavia-knee-slider",
+        "op": "PARTIAL_UPDATE",
+        "roots": 5,
+        "bytes": 579
+      },
+      {
+        "sku": "xavia-knee-slider-black",
+        "op": "PARTIAL_UPDATE",
+        "roots": 9,
+        "bytes": 1066
+      },
+      {
+        "sku": "xavia-knee-slider-blue",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 984
+      },
+      {
+        "sku": "xavia-knee-slider-green",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 988
+      },
+      {
+        "sku": "xavia-knee-slider-orange",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 993
+      },
+      {
+        "sku": "xavia-knee-slider-pink",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 985
+      },
+      {
+        "sku": "xavia-knee-slider-red",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 986
+      },
+      {
+        "sku": "xavia-knee-slider-white",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 990
+      },
+      {
+        "sku": "xavia-knee-slider-yellow",
+        "op": "PARTIAL_UPDATE",
+        "roots": 8,
+        "bytes": 991
+      }
+    ]
+  },
+  "reviewedChoices": [
+    {
+      "id": "[\"cmokmy2z0006gpm0pgo4ouh36\",\"part_number\"]",
+      "productId": "cmokmy2z0006gpm0pgo4ouh36",
+      "sku": "xavia-knee-slider-black",
+      "field": "part_number",
+      "label": "part_number",
+      "current": {
+        "state": "value",
+        "value": [
+          {
+            "value": "PCO-PROBE-7cwh6qqf",
+            "marketplace_id": "APJ6JRA9NG5V4"
+          }
+        ]
+      },
+      "lastAccepted": {
+        "state": "unknown",
+        "reason": "No accepted publish record"
+      },
+      "channel": {
+        "state": "absent"
+      },
+      "status": "DIFFERS",
+      "localChanged": null,
+      "channelChanged": null,
+      "selectable": true,
+      "selectedByDefault": false,
+      "reason": "No accepted publish record. Choose whether to replace the differing channel value.",
+      "operation": "replace"
+    }
+  ],
+  "compiled": {
+    "fixture": "before payload as accepted baseline and channel read",
+    "messages": [
+      {
+        "messageId": 1,
+        "sku": "xavia-knee-slider-black",
+        "operationType": "PATCH",
+        "productType": "AUTO_ACCESSORY",
+        "patches": [
+          {
+            "op": "replace",
+            "path": "/attributes/part_number",
+            "value": [
+              {
+                "value": "PCO-PROBE-7cwh6qqf",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "products": [
+      {
+        "productId": "cmokmy2z0006gpm0pgo4ouh36",
+        "sku": "xavia-knee-slider-black"
+      }
+    ],
+    "fieldWrites": {
+      "cmokmy2z0006gpm0pgo4ouh36": [
+        {
+          "field": "part_number",
+          "value": {
+            "state": "value",
+            "value": [
+              {
+                "value": "PCO-PROBE-7cwh6qqf",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "feedBytes": 330,
+    "unchangedProductsSkipped": 8
+  },
+  "diff": {
+    "changedMessages": 1,
+    "changed": [
+      {
+        "sku": "xavia-knee-slider-black",
+        "roots": [
+          "part_number"
+        ],
+        "changeOnlyBytes": 206
+      }
+    ],
+    "changeOnlyBytes": 206,
+    "wholeFeedBytes": 8662,
+    "changeOnlyShare": 0.0238,
+    "unchangedMessagesResent": 8
+  },
+  "rolledBack": true,
+  "networkAttempts": []
+}

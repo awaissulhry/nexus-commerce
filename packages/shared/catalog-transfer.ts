@@ -78,6 +78,8 @@ export interface TransferIssue {
 export type TransferChannelRead =
   | { differs: true; value: unknown; ours: unknown; readAt: string; source: string }
   | { differs: false; readAt: string; source: string }
+  /** The listing was read, but no read compares this field (e.g. Amazon RRP, images, parent links) — never "same". */
+  | { notCompared: true; readAt: string }
 export interface TransferCell extends TransferRow {
   label?: string
   channelRead?: TransferChannelRead

@@ -111,6 +111,7 @@ import { FormulaEditorExample } from './FormulaEditorExample'
 import { SlotListEditorExample } from './SlotListEditorExample'
 import { MetafieldValueExample } from './MetafieldValueExample'
 import { RecordListExample } from './RecordListExample'
+import { ChangeReviewExample } from './ChangeReviewExample'
 import { OrderedListExample } from './OrderedListExample'
 import { AsyncListboxExample } from './AsyncListboxExample'
 import { MediaGalleryExample } from './MediaGalleryExample'
@@ -1004,6 +1005,7 @@ export function TokenCatalog() {
         <h3>WorkspaceSubheader · collapsible secondary navigation</h3>
         <WorkspaceSubheaderExample />
         <RecordListExample />
+        <ChangeReviewExample />
         <OrderedListExample />
         <AsyncListboxExample />
         <MediaGalleryExample />

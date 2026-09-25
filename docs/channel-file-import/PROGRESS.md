@@ -1,5 +1,23 @@
 # CFI — progress
 
+## 2026-09-25 ~01:10 UTC — LIVE; GALE imported into production on the Owner's word, file by file
+
+- Deployed: API `63f571de` healthy; migration `20260925a_cfi_price_source_channel_file` applied 00:23:44 UTC (enum value present);
+  web live (new import page read in the Owner's browser); the old "Catalog import recovery deferred" error stopped.
+- Restore path: read-only snapshot of GALE-JACKET (21 products, 84 Amazon listings) taken 00:27 UTC before the first preview
+  (scratchpad `prod/gale-before-20260925T002748Z.json`).
+- GALE IT (`cmug83nkp…`): 1,016 unchanged, 21 changed (condition `Nuovo` → Amazon's code `new_new`); saved 21/21; read-back = exactly
+  those 21 values; 0 outbound rows.
+- GALE DE / FR / ES (`cmug8h3u…`, `cmug8m6v…`, `cmug8o8t…`): 938 / 957 / 936 values, 0 refusals. Checked against Amazon live
+  (read-only "verify against live"): prices (FR 99, DE XXS 99) and titles match the FILES, not Nexus. Saved: DE 21/21, ES 21/21,
+  FR 20/21 + the failed FR parent record re-run and saved (`cmug939e…`). Read-back: DE 729, ES 721, FR 781 values changed; no shared
+  product changed; 0 outbound rows.
+- GALE eBay IT: 0 changes — the Owner's account had already imported and saved it at 00:30 UTC (942 values, 105 records).
+- Two defects found in production and fixed in the next commit: (1) the review said "Same as Nexus" for fields no channel read
+  compares (the Amazon content read skips RRP, price, stock, images, parent links) — now "Not compared by the channel read";
+  (2) three market files applied at once all touched GALE-JACKET: a write conflict was swallowed and the next statement failed with
+  25P02, so the FR parent record was marked FAILED instead of retried — now retried up to 3 times, then resumed by the recovery.
+
 ## 2026-09-25 ~05:00 — UI checked in a real browser; last fixes in; the Owner said "push it all to production"
 
 - Real-browser check (L6; API + web from the worktree on `nexus_cfi_ui_test`, disposable user, Playwright, light/dark/390 px/keyboard):

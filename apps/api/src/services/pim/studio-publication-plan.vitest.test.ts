@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn() }))
+const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn() }))
+vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: async () => ({ displayName: 'Selected account', authStatus: 'connected' }) }))
@@ -14,6 +15,7 @@ import { permissionForRoute } from '../../lib/auth/permissions-manifest.js'
 const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b', listingId: 'alias-parent' }
 beforeEach(() => {
   vi.clearAllMocks(); m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
+  m.closed.mockResolvedValue(new Set())
   m.languages.mockResolvedValue(['it', 'en'])
   m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent' }, { id: 'excluded', sku: 'EXCLUDED', parentId: 'parent' }, { id: 'parent', sku: 'PARENT', isParent: true }])
   m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
@@ -34,6 +36,36 @@ it('makes changed mapping results invalidate the reviewed saved revision', async
   const after = await readPublicationFacts('parent', scope)
   expect(after.revision).not.toBe(before.revision)
   expect(after.issues).toContainEqual(expect.objectContaining({ sku: 'CHILD', field: 'title', severity: 'error' }))
+})
+it.each(['AMAZON', 'EBAY'])('keeps new-listing offer requirements but does not block existing %s content on price or stock cells', async channel => {
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', externalListingId: 'existing' }, { id: 'listing-child', productId: 'child' }, { id: 'listing-excluded', productId: 'excluded' }])
+  m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: {
+    price: { value: null, sourceOwner: { label: 'Pricing' }, errors: ['Missing price'] },
+    quantity: { value: -1, sourceOwner: { label: 'Inventory' }, errors: ['Invalid stock'] },
+    title: { value: 'Title', errors: ['Review this title'] },
+  } })), missingProductIds: [], catalogue: { fields: [] } }))
+  const facts = await readPublicationFacts('parent', { ...scope, channel })
+  expect(facts.issues.filter(i => i.productId === 'parent').map(i => i.field)).toEqual(['title', 'title'])
+  expect(facts.issues.filter(i => i.productId === 'child').map(i => i.field)).toEqual(['price', 'quantity', 'title', 'price', 'quantity', 'title'])
+})
+it('skips and names a closed Amazon product before resolving its fields, retaining the open child and parent identity', async () => {
+  m.closed.mockResolvedValue(new Set(['parent|IT']))
+  const facts = await readPublicationFacts('parent', scope)
+  expect(facts.products.map(p => p.id)).toEqual(['child'])
+  expect(facts.parent.id).toBe('parent')
+  expect(facts.listings.some(l => l.productId === 'parent')).toBe(true)
+  expect(facts.skipped).toEqual([{ productId: 'parent', sku: 'PARENT', reason: 'Offer closed — not sent' }])
+  expect(facts.issues.filter(i => i.severity === 'error')).toEqual([])
+  expect(m.resolve.mock.calls.every(([r]) => r.productIds.join(',') === 'child')).toBe(true)
+})
+it('binds closed-offer changes into the review and does not skip another marketplace or eBay', async () => {
+  const before = await readPublicationFacts('parent', scope)
+  m.closed.mockResolvedValue(new Set(['child|IT']))
+  expect((await readPublicationFacts('parent', scope)).revision).not.toBe(before.revision)
+  m.closed.mockResolvedValue(new Set(['child|DE']))
+  expect((await readPublicationFacts('parent', scope)).products.map(p => p.id)).toEqual(['parent', 'child'])
+  m.closed.mockResolvedValue(new Set(['child|IT']))
+  expect((await readPublicationFacts('parent', { ...scope, channel: 'EBAY' })).products.map(p => p.id)).toEqual(['parent', 'child'])
 })
 it('preserves the saved revision when PostgreSQL JSON storage reorders scope keys', async () => {
   const before = await readPublicationFacts('parent', scope)
