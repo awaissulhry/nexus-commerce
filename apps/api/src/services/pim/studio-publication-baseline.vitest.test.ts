@@ -1,9 +1,11 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, aroundAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '@nexus/database/workspace-context'
 import type { Prisma } from '@prisma/client'
 import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import type { PublicationFacts } from './studio-publication-plan.js'
 
 const fixture = vi.hoisted(() => ({ database: null as any, transactionOptions: [] as unknown[] }))
+aroundAll(run => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, run))
 vi.mock('@nexus/database', async () => {
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   fixture.database = await formulaDatabase()

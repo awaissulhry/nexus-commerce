@@ -1,7 +1,9 @@
-import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, aroundAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '@nexus/database/workspace-context'
 import type { StudioPublishResult } from '@nexus/shared/studio-publication'
 
 const fixture = vi.hoisted(() => ({ database: null as any }))
+aroundAll(run => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, run))
 vi.mock('@nexus/database', async () => {
   const { formulaDatabase } = await import('../../test-support/formula-database.js')
   fixture.database = await formulaDatabase()

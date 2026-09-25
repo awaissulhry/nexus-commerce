@@ -159,3 +159,9 @@ adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Ro
 - Focused rejection-audit/transport/compiler suite76/76passed; fresh API types passed; eBay14/14mutations repeated, allSHArestored (`pco3-6-ebay-census-mutations-final.jsonl`). No checks were skipped or weakened.
 - eBay proposal source binding was refreshed after this equivalent call-site change; both wire requests, scope, original/temporary/restore descriptions, comment, operation IDs and expiry are unchanged. Current digest70ea672d12f2462225464c306cc59913f92b225e7c192888e21157d8ea3b4ee5. Per-run approval is still pending; no live write.
 - Retrying the full push hook. Main production was unchanged by the failed push.
+
+## Profiles-enabled fixture correction — 2026-09-25T05:09Z
+
+- Retry passed all11916API tests,4850web tests, both production builds,2726mapped routes,127security tests, and all real-PostgreSQL concurrency/copy/stock suites.
+- Final profiles-enabled ratchet correctly refused two new disposable-DB fixtures that seeded data without a selected business. Added Vitest aroundAll + the real withWorkspace context in baseline/records tests; no production code or ratchet baseline changed.42/42tests pass with profiles explicitly enabled after reproducing both missing-context failures.
+- Another lane pushed3c22d9633 from an isolated worktree while this fix was queued. No files were edited during that push. Integrating its catalog-performance commit before the final retry.
