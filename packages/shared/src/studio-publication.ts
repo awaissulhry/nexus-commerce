@@ -29,6 +29,9 @@ export interface StudioPublishReview {
   locations?: Array<{ id: string; name: string }>
   visibility?: string
   previousPublicationId?: string
+  /** Fresh channel comparison. Missing means this server cannot review sparse publication yet. */
+  changes?: StudioPublishChange[]
+  skipped?: Array<{ productId: string; sku: string; reason: string }>
   /** Historical content observations, not a live read or a list of changes to be sent. */
   overwrite?: StudioPublishOverwrite
 }
@@ -81,4 +84,14 @@ export interface StudioPublishResult {
   message: string
   warnings?: string[]
   results: Array<{ sku: string; status: 'SUBMITTED' | 'ACCEPTED' | 'VERIFIED' | 'FAILED'; message: string; reference?: string }>
+}
+
+/** Exact request for one explicit selection, bound to a durable review. */
+export interface StudioPublishSelection {
+  reviewId: string
+  token: string
+  selectedIds: string[]
+  products: Array<{ productId: string; sku: string }>
+  fieldCount: number
+  payload: { format: 'json' | 'xml'; content: string }
 }

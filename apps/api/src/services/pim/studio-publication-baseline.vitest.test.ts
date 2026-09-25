@@ -81,6 +81,45 @@ it('folds sparse accepted publishes per field and applies later request ordinals
   expect(result.values.size).toBe(2)
 })
 
+it('folds scoped Amazon language intents independently and never adopts preserved remote companions', async () => {
+  const marketplaceId = 'A1PA6795UKMFR9'
+  // Contractual keys from the scoped content compiler; no provider/runtime module is imported.
+  const de = 'item_name:["A1PA6795UKMFR9","de_DE"]'
+  const en = 'item_name:["A1PA6795UKMFR9","en_GB"]'
+  const entry = (language_tag: string, text: string) => ({ marketplace_id: marketplaceId, language_tag, value: text })
+  const deInitial = entry('de_DE', 'Erster Titel'), enInitial = entry('en_GB', 'First title')
+  const deNext = entry('de_DE', 'Neuer deutscher Titel'), enNext = entry('en_GB', 'New English title')
+  const germanFacts = { ...await facts(), scope: { ...scope, marketplace: 'DE' } }
+  const readLanguages = () => readPublicationBaseline(germanFacts, identities)
+  const accepted = (id: string, writes: StudioPublishFieldWrite[], op: 'replace' | 'delete', entries: unknown[]) => save(id, [], {
+    channelListingId: 'baseline-listing-market', marketplace: 'DE',
+    payload: envelope([{ intentVersion: 1, writes, feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [marketplaceId],
+      header: { sellerId: 'seller-de', version: '2.0' }, message: { messageId: 1, sku: identities[0].sku, operationType: 'PATCH', productType: 'COAT',
+        patches: [{ op, path: '/attributes/item_name', value: entries }] } }]) as Prisma.InputJsonValue,
+  })
+
+  await accepted('languages-initial', [value(de, [deInitial]), value(en, [enInitial])], 'replace', [deInitial, enInitial])
+  const initial = await readLanguages()
+  expect(field(initial, de)).toEqual({ state: 'value', value: [deInitial] })
+  expect(field(initial, en)).toEqual({ state: 'value', value: [enInitial] })
+
+  await accepted('languages-de-only', [value(de, [deNext])], 'replace', [deNext, entry('en_GB', 'Seller Central English companion')])
+  const afterDe = await readLanguages()
+  expect(field(afterDe, de)).toEqual({ state: 'value', value: [deNext] })
+  expect(field(afterDe, en)).toEqual({ state: 'value', value: [enInitial] })
+
+  await accepted('languages-en-only', [value(en, [enNext])], 'replace', [enNext, entry('de_DE', 'Seller Central German companion')])
+  const afterEn = await readLanguages()
+  expect(field(afterEn, de)).toEqual({ state: 'value', value: [deNext] })
+  expect(field(afterEn, en)).toEqual({ state: 'value', value: [enNext] })
+
+  await accepted('languages-delete-de', [absent(de)], 'delete', [{ marketplace_id: marketplaceId, language_tag: 'de_DE' }])
+  const afterDelete = await readLanguages()
+  expect(field(afterDelete, de)).toEqual({ state: 'absent' })
+  expect(field(afterDelete, en)).toEqual({ state: 'value', value: [enNext] })
+  expect([...afterDelete.values.keys()].sort()).toEqual([publicationChangeId(identities[0].productId, de), publicationChangeId(identities[0].productId, en)].sort())
+})
+
 it('keeps explicit deletion tombstones and replaces them on a later recreate', async () => {
   await save('initial', [value('description', 'Old description')])
   await save('delete', [absent('description')])

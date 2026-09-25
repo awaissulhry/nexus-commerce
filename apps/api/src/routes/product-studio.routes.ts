@@ -123,6 +123,13 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
+  fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/selection', async (request, reply) => {
+    try {
+      const { previewStudioPublicationSelection } = await import('../services/pim/studio-publication.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await previewStudioPublicationSelection(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
   fastify.get<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId', async (request, reply) => {
     try {
       const { studioPublicationResult } = await import('../services/pim/studio-publication.service.js')

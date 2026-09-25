@@ -26,6 +26,16 @@ describe('parseEbayItemContent', () => {
   it('an answer with no title or specifics reads as null / empty (never as a value)', () => {
     expect(parseEbayItemContent('<Item><ItemID>1</ItemID></Item>')).toEqual({ title: null, itemSpecifics: {} })
   })
+
+  it('reads XML structure rather than apparent tags inside description CDATA', () => {
+    const xml = '<Item><Description><![CDATA[<Title>Not the title</Title><ItemSpecifics><NameValueList><Name>Fake</Name><Value>Wrong</Value></NameValueList></ItemSpecifics>]]></Description><Title><![CDATA[Real & title]]></Title><ItemSpecifics><NameValueList><Name>Materiale</Name><Value>Caf&#xE9;</Value></NameValueList></ItemSpecifics></Item>'
+    expect(parseEbayItemContent(xml)).toEqual({ title: 'Real & title', itemSpecifics: { Materiale: ['Café'] } })
+  })
+
+  it('reads namespace-prefixed Trading content and refuses malformed XML', () => {
+    expect(parseEbayItemContent('<e:Item xmlns:e="urn:ebay:apis:eBLBaseComponents"><e:Title>Real title</e:Title></e:Item>')).toEqual({ title: 'Real title', itemSpecifics: {} })
+    expect(() => parseEbayItemContent('<Item><Title>Broken</Item>')).toThrow(/XML/i)
+  })
 })
 
 const theirs = parseEbayItemContent(GETITEM)

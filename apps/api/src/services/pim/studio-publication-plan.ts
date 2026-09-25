@@ -9,6 +9,7 @@ import { resolveBatch } from './mapping/resolve-batch.service.js'
 import { marketLanguages } from './market-languages.js'
 import { publishContentIssues, resolvePublishContent, requireReviewedContent } from './publish-review-gate.js'
 import { foreignOwnTextIssues } from './foreign-own-text.js'
+import { closedMarketSet } from '../amazon-market-offer.service.js'
 
 // JSONB can return object keys in a different order from the preview request.
 // Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
@@ -37,16 +38,21 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: scope.channel,
     marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: destination.aliasKey ?? '' }, include: { translations: true, offers: true } })
   const excludedIds = await readExcludedListingIds(listings.map(l => l.id))
-  const included = products.filter(p => !listings.some(l => l.productId === p.id && excludedIds.has(l.id)))
+  const selected = products.filter(p => !listings.some(l => l.productId === p.id && excludedIds.has(l.id)))
     .sort((a, b) => Number(b.id === parent.id) - Number(a.id === parent.id) || a.sku.localeCompare(b.sku))
+  const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
+  const skipped = selected.filter(p => closed.has(`${p.id}|${scope.marketplace}`))
+    .map(p => ({ productId: p.id, sku: p.sku, reason: 'Offer closed — not sent' }))
+  const included = selected.filter(p => !closed.has(`${p.id}|${scope.marketplace}`))
   const issues: StudioPublishIssue[] = []
   const error = (message: string) => issues.push({ message, severity: 'error' })
-  if (!included.length) error('Every product is excluded from this destination. Include a product in Information first.')
-  if (!included.some(p => p.id === parent.id)) error('The parent listing is excluded. Include it before publishing this family.')
-  if ((parent.isParent || parent.isMaster) && included.length < 2) error('This family has no included variants to publish.')
+  if (!selected.length) error('Every product is excluded from this destination. Include a product in Information first.')
+  if (!selected.some(p => p.id === parent.id)) error('The parent listing is excluded. Include it before publishing this family.')
+  if ((parent.isParent || parent.isMaster) && selected.length < 2) error('This family has no included variants to publish.')
+  for (const skip of skipped) issues.push({ ...skip, message: skip.reason, severity: 'warning' })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
   if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error('Reconnect this account before publishing.')
-  for (const listing of listings.filter(l => !excludedIds.has(l.id))) {
+  for (const listing of listings.filter(l => included.some(p => p.id === l.productId))) {
     const refusal = assertPushAllowed(listing)
     if (refusal) error(refusal.sentence)
   }
@@ -56,6 +62,8 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     const result = await resolveBatch({ channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
       aliasKey: destination.aliasKey ?? '', productIds: included.map(p => p.id), locale, includeCatalogue: true })
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
+      const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
+      if (existing && ['AMAZON', 'EBAY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       for (const message of cell.errors) issues.push({ productId: row.productId, sku: row.sku, field, severity: 'error', message: `${cell.label ?? field}: ${message}` })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
@@ -77,9 +85,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     }
   }
   const alias = destination.aliasKey ? await prisma.productListingAlias.findUnique({ where: { id: destination.aliasKey }, select: { label: true } }) : null
-  const revision = publicationDigest({ scope, products, listings, excluded: [...excludedIds].sort(),
+  const revision = publicationDigest({ scope, products, listings, excluded: [...excludedIds].sort(), skipped,
     resolved: resolved.map(r => ({ products: r.products, catalogue: r.catalogue })) })
-  return { scope, destination, account, parent, products: included, listings, resolved, languages, issues, revision,
-    excluded: products.length - included.length, aliasLabel: alias?.label ?? 'Primary listing' }
+  return { scope, destination, account, parent, products: included, listings, resolved, languages, issues, revision, skipped,
+    excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing' }
 }
 export type PublicationFacts = Awaited<ReturnType<typeof readPublicationFacts>>

@@ -14,6 +14,7 @@
  */
 import type { DriftField } from '../channel-drift.service.js'
 import { normaliseText, type Comparison, type NotCompared } from './amazon-content-compare.js'
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
 
 export const EBAY_CONTENT_SOURCE = 'ebay-content'
 
@@ -22,9 +23,39 @@ export const EBAY_SHELL_REASON = 'shell listing: Nexus does not write a live she
 
 export interface EbayItemContent { title: string | null; itemSpecifics: Record<string, string[]> }
 
-function unescapeXml(s: string): string {
-  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&amp;/g, '&')
+export const ebayXmlObject = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+export const ebayXmlList = (value: unknown): unknown[] => value == null ? [] : Array.isArray(value) ? value : [value]
+export const ebayXmlText = (value: unknown): string | null => typeof value === 'string' ? value : typeof ebayXmlObject(value)['#text'] === 'string' ? ebayXmlObject(value)['#text'] as string : null
+
+/** Parse only actual Item children; markup inside Description/CDATA is content, never fields. */
+export function parseEbayItemDocument(xml: string): Record<string, unknown> {
+  if (XMLValidator.validate(xml) !== true) throw new Error('The eBay XML content could not be parsed.')
+  const parsed = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, parseTagValue: false, parseAttributeValue: false, trimValues: false, htmlEntities: true }).parse(xml)
+  const root = ebayXmlObject(parsed)
+  return ebayXmlObject(root.Item ?? ebayXmlObject(root.GetItemResponse).Item
+    ?? ebayXmlObject(root.ReviseFixedPriceItemRequest).Item ?? ebayXmlObject(root.AddFixedPriceItemRequest).Item)
+}
+
+const publicationRoots = ['SKU', 'InventoryTrackingMethod', 'Title', 'SubTitle', 'Description', 'PrimaryCategory', 'ConditionID', 'Country', 'Currency', 'Location', 'PostalCode',
+  'ListingDuration', 'ItemSpecifics', 'StartPrice', 'Quantity', 'ProductListingDetails', 'Variations', 'PictureDetails', 'SellerProfiles',
+  'DispatchTimeMax', 'VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer']
+
+/** The real GetItem preparation and revision digest use this same stable projection. */
+export function parseEbayPublicationItem(xml: string): Record<string, unknown> {
+  const item = parseEbayItemDocument(xml)
+  return JSON.parse(JSON.stringify(Object.fromEntries(publicationRoots.filter(key => item[key] !== undefined).map(key => [key, item[key]])),
+    (key, value) => key === 'QuantitySold' || (key === '#text' && typeof value === 'string' && !value.trim()) ? undefined : value))
+}
+
+export function ebayContentFromItem(item: Record<string, unknown>): EbayItemContent {
+  const itemSpecifics: Record<string, string[]> = {}
+  for (const entry of ebayXmlList(ebayXmlObject(item.ItemSpecifics).NameValueList)) {
+    const nv = ebayXmlObject(entry), name = ebayXmlText(nv.Name)
+    if (name === null) continue
+    const values = ebayXmlList(nv.Value).map(ebayXmlText).filter((value): value is string => value !== null)
+    itemSpecifics[name] = [...(itemSpecifics[name] ?? []), ...values]
+  }
+  return { title: ebayXmlText(item.Title), itemSpecifics }
 }
 
 /**
@@ -33,20 +64,10 @@ function unescapeXml(s: string): string {
  * `<Variations>` block is removed first, so a variation's specifics are never mistaken for the item's.
  */
 export function parseEbayItemContent(xml: string): EbayItemContent {
-  const item = (xml ?? '').replace(/<Variations>[\s\S]*?<\/Variations>/g, '')
-  const title = /<Title>([\s\S]*?)<\/Title>/.exec(item)?.[1]
-  const block = /<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/.exec(item)?.[1] ?? ''
-  const itemSpecifics: Record<string, string[]> = {}
-  for (const nv of block.matchAll(/<NameValueList>([\s\S]*?)<\/NameValueList>/g)) {
-    const name = /<Name>([\s\S]*?)<\/Name>/.exec(nv[1])?.[1]
-    if (name === undefined) continue
-    const values = [...nv[1].matchAll(/<Value>([\s\S]*?)<\/Value>/g)].map(v => unescapeXml(v[1]))
-    itemSpecifics[unescapeXml(name)] = [...(itemSpecifics[unescapeXml(name)] ?? []), ...values]
-  }
-  return { title: title === undefined ? null : unescapeXml(title), itemSpecifics }
+  return ebayContentFromItem(parseEbayItemDocument(xml))
 }
 
-const nameKey = (name: string) => normaliseText(name).toLowerCase()
+export const ebayAspectKey = (name: string) => normaliseText(name).toLowerCase()
 const valueSet = (values: readonly unknown[]) => [...new Set(values.map(normaliseText).filter(Boolean))].sort()
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i])
 
@@ -68,7 +89,7 @@ export function compareEbayContent(ours: EbayOursContent, theirs: EbayItemConten
 
   const theirsByName = new Map<string, string[]>()
   for (const [name, values] of Object.entries(theirs.itemSpecifics)) {
-    const key = nameKey(name)
+    const key = ebayAspectKey(name)
     theirsByName.set(key, [...(theirsByName.get(key) ?? []), ...values])
   }
   const ourKeys = new Set<string>()
@@ -76,15 +97,15 @@ export function compareEbayContent(ours: EbayOursContent, theirs: EbayItemConten
     const values = valueSet(Array.isArray(raw) ? raw : [raw])
     const field = `aspect:${name}`
     if (!values.length) { notCompared.push({ field, reason: 'no value of ours' }); continue }
-    ourKeys.add(nameKey(name))
+    ourKeys.add(ebayAspectKey(name))
     compared.push(field)
-    const theirValues = theirsByName.get(nameKey(name))
+    const theirValues = theirsByName.get(ebayAspectKey(name))
     if (!theirValues) { differing.push({ field, ours: values, theirs: null }); continue }
     const theirSet = valueSet(theirValues)
     if (!sameSet(values, theirSet)) differing.push({ field, ours: values, theirs: theirSet })
   }
   for (const [name] of Object.entries(theirs.itemSpecifics)) {
-    if (!ourKeys.has(nameKey(name))) notCompared.push({ field: `aspect:${name}`, reason: 'we do not send this aspect' })
+    if (!ourKeys.has(ebayAspectKey(name))) notCompared.push({ field: `aspect:${name}`, reason: 'we do not send this aspect' })
   }
   return { compared, differing, notCompared }
 }

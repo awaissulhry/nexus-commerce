@@ -14,8 +14,18 @@ import { publicationImages } from './studio-publication-media.js'
 import { readEbayMediaGallery } from '../images/ebay-media-workspace.service.js'
 import { inspectMediaDraft } from '@nexus/shared/ebay-media'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
+import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
+import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
+export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
-export interface EbayPublication { kind: 'ebay'; marketplace: string; itemId: string | null; xml: string; liveRevision: string | null }
+export interface EbayPublication {
+  kind: 'ebay'; marketplace: string; itemId: string | null; xml: string; liveRevision: string | null
+  products: Array<{ productId: string; sku: string }>
+  liveContent?: Record<string, unknown> | null
+  liveReadError?: string
+  fieldWrites?: Record<string, StudioPublishFieldWrite[]>
+}
 export interface EbayPublicationReceipt { reference: string; warnings: string[]; verified?: boolean }
 
 function setPath(target: Record<string, any>, path: string[], value: unknown) {
@@ -52,9 +62,11 @@ async function requestLiveItem(itemId: string, accountId: string, market: string
 
 function liveItemReceipt(itemId: string, got: Awaited<ReturnType<typeof requestLiveItem>>): EbayPublicationReceipt {
   if (!got.raw || !['Success', 'Warning'].includes(got.ack)) throw new Error('The current eBay listing could not be verified.')
+  const item = parseEbayItemDocument(got.raw)
+  if (ebayXmlText(item.ItemID) !== itemId) throw new Error('eBay returned a different or unidentified listing.')
   const warnings = [...(got.errors ?? [])]
-  if (!/<ListingStatus>Active<\/ListingStatus>/.test(got.raw)) return { reference: itemId, warnings: [...warnings, 'This eBay listing is not active.'], verified: false }
-  if (/<InventoryTrackingMethod>SKU<\/InventoryTrackingMethod>/.test(got.raw) && /<InventoryModel>/.test(got.raw)) return { reference: itemId, warnings: [...warnings, 'This listing uses the eBay Inventory model.'], verified: false }
+  if (ebayXmlText(ebayXmlObject(item.SellingStatus).ListingStatus) !== 'Active') return { reference: itemId, warnings: [...warnings, 'This eBay listing is not active.'], verified: false }
+  if (ebayXmlText(item.InventoryTrackingMethod) === 'SKU' && item.InventoryModel !== undefined) return { reference: itemId, warnings: [...warnings, 'This listing uses the eBay Inventory model.'], verified: false }
   return { reference: itemId, warnings, verified: true }
 }
 
@@ -64,19 +76,21 @@ export async function readEbayPublication(itemId: string, accountId: string, mar
   catch { return null }
 }
 
-async function liveItem(itemId: string, accountId: string, market: string) {
+/** One stable parsed-content digest for review and the last read before dispatch. */
+export function ebayLiveContentRevision(xml: string): string {
+  return publicationDigest(parseEbayPublicationItem(xml))
+}
+
+async function readLiveItem(itemId: string, accountId: string, market: string) {
   const got = await requestLiveItem(itemId, accountId, market)
   const receipt = liveItemReceipt(itemId, got)
   if (!receipt.verified) throw new Error(receipt.warnings.at(-1) ?? 'The current eBay listing could not be verified.')
-  // Exclude sold counters while protecting every editable field this publication
-  // sends. Item-level StartPrice/Quantity are the single-SKU equivalents of the
-  // price and quantity held inside Variations.
-  const stable = got.raw.replace(/<QuantitySold>[^<]*<\/QuantitySold>/g, '')
-  const fields = ['SKU', 'Title', 'SubTitle', 'Description', 'PrimaryCategory', 'ConditionID', 'Country', 'Currency', 'Location', 'PostalCode',
-    'ListingDuration', 'ItemSpecifics', 'StartPrice', 'Quantity', 'ProductListingDetails', 'Variations', 'PictureDetails', 'SellerProfiles',
-    'DispatchTimeMax', 'VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer']
-  return publicationDigest(fields.map(key => stable.match(new RegExp(`<${key}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${key}>`))?.[0] ?? ''))
+  const item = parseEbayItemDocument(got.raw)
+  if (ebayXmlText(item.ItemID) !== itemId) throw new Error('eBay returned a different or unidentified listing. Nothing will be sent.')
+  const content = parseEbayPublicationItem(got.raw)
+  return { content, revision: publicationDigest(content) }
 }
+const liveItem = async (itemId: string, accountId: string, market: string) => (await readLiveItem(itemId, accountId, market)).revision
 
 /**
  * PLAN R-43 (A-39 slice b2) — the listing input this builder sends, extracted from `prepareEbayPublication` with its
@@ -103,6 +117,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const rows = []
+  const identities: Array<{ productId: string; sku: string }> = []
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
   for (const product of products) {
@@ -125,7 +140,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     const pa = effective.platformAttributes
     // These saved fields require transport support; silently omitting them would publish a different product.
     for (const key of ['videoId', 'compatibility', 'regulatory', 'packageType', 'packageWeight', 'packageLength', 'packageWidth', 'packageHeight', 'bestOfferFloor', 'bestOfferCeiling']) {
-      if (pa[key] != null && pa[key] !== '' && pa[key] !== 0 && pa[key] !== false) throw new Error(`${product.sku}: ${key} needs the eBay offer publication workflow before this listing can be sent.`)
+      if (!itemId && pa[key] != null && pa[key] !== '' && pa[key] !== 0 && pa[key] !== false) throw new Error(`${product.sku}: ${key} needs the eBay offer publication workflow before this listing can be sent.`)
     }
     if (pa.listingFormat && pa.listingFormat !== 'FIXED_PRICE') throw new Error('Direct publication supports fixed-price eBay listings.')
     if (products.length > 1 && pa.bestOffer === true) throw new Error('eBay does not support Best Offer on a variation listing. Turn it off in Information before publishing.')
@@ -147,6 +162,8 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     effective.description = String(resolved.cells.description?.value ?? effective.description ?? '')
     effective.updatedAt = listing?.updatedAt ?? product.updatedAt
     const row = buildFlatRow({ ...product, channelListings: [effective] } as any, { marketplace: scope.marketplace, parentImages: parent.images })
+    if (typeof row.sku !== 'string' || !row.sku.trim()) throw new Error(`${product.sku}: the eBay seller SKU is unavailable.`)
+    identities.push({ productId: product.id, sku: row.sku })
     row[`${scope.marketplace.toLowerCase()}_price`] = price
     row[`${scope.marketplace.toLowerCase()}_qty`] = quantity
     const images = pa._productMediaLocales !== undefined ? publicationImages(facts, product)
@@ -162,24 +179,24 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     input.family.variants = input.family.variants?.map(v => ({ ...v, included: products.some(p => p.id === v.id) }))
     const projection = resolveVariationProjection(input)
     const problems = variationReadinessItems(projection, `EBAY ${scope.marketplace}`).filter(i => i.severity === 'error')
-    if (problems.length) throw new Error(problems.map(i => i.message).join('; '))
+    if (!itemId && problems.length) throw new Error(problems.map(i => i.message).join('; '))
     const axes = projection.axes.filter(a => a.included)
-    if (!axes.length || axes.some(a => !a.channelName)) throw new Error('Set the eBay variation theme in Information before publishing.')
+    if (!itemId && (!axes.length || axes.some(a => !a.channelName))) throw new Error('Set the eBay variation theme in Information before publishing.')
     parentRow.variation_theme = axes.map(a => a.channelName).join(',')
     for (const row of variants) for (const axis of axes) {
       const value = input.family.variants?.find(v => v.id === row._productId)?.axisValues[axis.familyKey]
-      if (!value) throw new Error(`${row.sku}: ${axis.familyKey} is missing.`)
-      row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value
+      if (!value && !itemId) throw new Error(`${row.sku}: ${axis.familyKey} is missing.`)
+      if (axis.channelName) row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value ?? ''
     }
   }
   const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency)
-  return { shared, itemId, parentListing, settings, galleries, variants }
+  return { shared, itemId, parentListing, settings, galleries, variants, identities }
 }
 
 export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
   const { scope, parent, products } = facts
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
-  const { shared, itemId, parentListing, settings, galleries, variants } = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
+  const { shared, itemId, parentListing, settings, galleries, variants, identities } = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')
@@ -210,16 +227,21 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
     shared.variationPictures = gallery.draft.axis ? { axisName: gallery.draft.axis, byValue: Object.fromEntries(gallery.draft.galleries
       .filter(g => g.axis === gallery.draft.axis && g.value !== null).map(g => [g.value!, urls(g.assetIds)])) } : undefined
   }
-  if (Object.values(shared.policies).some(v => !v)) throw new Error('Choose shipping, payment and return policies in Information before publishing.')
-  if (!shared.title.trim() || !shared.description.trim() || !shared.pictureUrls?.length) throw new Error('A title, description and product image are required for eBay.')
-  if (shared.variations.some(v => v.price == null || !Number.isFinite(v.price) || v.price <= 0 || !Number.isSafeInteger(v.quantity))) throw new Error('Every included variation needs a valid price and quantity.')
-  if (!shared.variations.some(v => v.quantity > 0)) throw new Error('This eBay listing has no available stock to publish.')
+  if (!itemId && Object.values(shared.policies).some(v => !v)) throw new Error('Choose shipping, payment and return policies in Information before publishing.')
+  if (!itemId && (!shared.title.trim() || !shared.description.trim() || !shared.pictureUrls?.length)) throw new Error('A title, description and product image are required for eBay.')
+  if (!itemId && shared.variations.some(v => v.price == null || !Number.isFinite(v.price) || v.price <= 0 || !Number.isSafeInteger(v.quantity))) throw new Error('Every included variation needs a valid price and quantity.')
+  if (!itemId && !shared.variations.some(v => v.quantity > 0)) throw new Error('This eBay listing has no available stock to publish.')
   const rendered = await renderListingDescriptionSafe(prisma, { productId: parent.id, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
     aliasKey: facts.destination.aliasKey ?? '', mode: products.length > 1 ? 'group' : 'single', body: shared.description, title: shared.title })
   if (rendered.warnings.length) throw new Error(rendered.warnings.join('; '))
   shared.description = rendered.html
-  const liveRevision = itemId ? await liveItem(itemId, scope.accountId, scope.marketplace) : null
-  return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
+  let liveRevision: string | null = null, liveContent: Record<string, unknown> | null = null, liveReadError: string | undefined
+  if (itemId) {
+    try { const live = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = live.revision; liveContent = live.content }
+    catch (error) { liveReadError = error instanceof Error ? error.message : String(error) }
+  }
+  return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), products: identities,
+    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
 }
 
 export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string,
@@ -236,9 +258,7 @@ export async function sendEbayPublication(plan: EbayPublication, accountId: stri
     if (!check.raw || !['Success', 'Warning'].includes(check.ack)) throw Object.assign(new Error('eBay did not validate this listing. Nothing was submitted.'), { notSent: true })
     validationWarnings = check.errors ?? []
   }
-  const key = operationId.replace(/-/g, '').toUpperCase()
-  const xml = plan.xml.replace('<Item>', `<Item><${plan.itemId ? 'InvocationID' : 'UUID'}>${key}</${plan.itemId ? 'InvocationID' : 'UUID'}>`)
-  const operation = plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem'
+  const { operation, xml } = ebayPublicationRequest(plan, operationId)
   try { await beforeSend?.({ operation, xml }) } catch (error) { markNotSent(error) }
   let sent: TradingCallResult
   try {

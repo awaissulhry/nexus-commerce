@@ -17,11 +17,13 @@ vi.mock('@nexus/database', async () => {
   fixture.database = await formulaDatabase()
   return { default: fixture.database.client }
 })
-vi.mock('./studio-publication-plan.js', () => ({
-  readPublicationFacts: fixture.facts,
-  publicationDigest: (value: unknown) => JSON.stringify(value),
-  object: (value: unknown) => value && typeof value === 'object' ? value : {},
-}))
+vi.mock('./studio-publication-plan.js', async () => {
+  const { createHash } = await import('node:crypto')
+  return { readPublicationFacts: fixture.facts,
+    publicationDigest: (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, entry) =>
+      entry && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)).digest('hex'),
+    object: (value: unknown) => value && typeof value === 'object' ? value : {} }
+})
 vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: () => 'live' }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => 'live' }))
@@ -34,13 +36,43 @@ vi.mock('./studio-publication-amazon.js', () => ({
   sendAmazonPublication: fixture.sendAmazon, readAmazonPublication: fixture.readAmazon,
 }))
 vi.mock('./studio-publication-ebay.js', () => ({
-  prepareEbayPublication: async () => ({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null, xml: '<AddFixedPriceItemRequest/>' }),
+  prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null,
+    products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })), xml: '<AddFixedPriceItemRequest><Item><Title>Exact sent title</Title></Item></AddFixedPriceItemRequest>' }),
   sendEbayPublication: fixture.sendEbay,
   readEbayPublication: fixture.readEbay,
+  ebayPublicationRequest: (plan: any, reviewId: string) => ({ operation: 'AddFixedPriceItem', xml: plan.xml.replace('<Item>', `<Item><UUID>${reviewId}</UUID>`) }),
+}))
+vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
+vi.mock('./studio-publication-amazon-changes.js', () => ({
+  prepareAmazonChanges: async (_facts: any, publication: any) => ({ kind: 'amazon-changes', publication, remoteRevision: 'remote-1', products: [], schemas: [],
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'item_name', label: 'Title',
+      current: { state: 'value', value: publication.feed.messages.find((message: any) => message.sku === p.sku).attributes.item_name },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.includes(p.productId))) },
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
+}))
+vi.mock('./studio-publication-ebay-changes.js', () => ({
+  prepareEbayChanges: async (_facts: any, publication: any) => ({ kind: 'ebay-changes', publication, remoteRevision: 'remote-1',
+    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Exact sent title' },
+      lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
+  compileEbayChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+    fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
 }))
 
 import prisma from '../../db.js'
-import { previewStudioPublication, studioPublicationResult, submitStudioPublication } from './studio-publication.service.js'
+import { ebayPublicationRequest } from './studio-publication-ebay.js'
+import { previewStudioPublication as previewRaw, studioPublicationResult, submitStudioPublication as submitRaw, previewStudioPublicationSelection } from './studio-publication.service.js'
+
+async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
+  const review = await previewRaw(...args)
+  if (review.id && ['AMAZON', 'EBAY'].includes(args[1].channel)) await previewStudioPublicationSelection(args[0], review.id, { selectedIds: review.changes?.filter(c => c.selectable).map(c => c.id) ?? [] }, args[2])
+  return review
+}
+async function submitStudioPublication(productId: string, id: string, body: Record<string, unknown>, userId: string | null) {
+  const stored = await prisma.bulkOperation.findUnique({ where: { id } })
+  return submitRaw(productId, id, { ...body, selectionToken: (stored?.changes as any)?.selection?.token }, userId)
+}
 
 const productId = 'publication-database-product'
 const accountId = 'publication-database-ebay'
@@ -75,8 +107,8 @@ beforeEach(async () => {
     fixture.providerWrite()
     return { productId: 'gid://shopify/Product/42' }
   })
-  fixture.sendEbay.mockImplementation(async (_plan, _account, reviewId, beforeSend) => {
-    try { await beforeSend?.({ operation: 'AddFixedPriceItem', xml: `<AddFixedPriceItemRequest><Item><UUID>${reviewId}</UUID><Title>Exact sent title</Title></Item></AddFixedPriceItemRequest>` }) }
+  fixture.sendEbay.mockImplementation(async (plan, _account, reviewId, beforeSend) => {
+    try { await beforeSend?.(ebayPublicationRequest(plan, reviewId)) }
     catch (error) { throw Object.assign(error, { notSent: true }) }
     fixture.providerWrite()
     return { reference: '123456789012', warnings: ['eBay normalized a submitted value.'] }
@@ -189,7 +221,7 @@ it('attributes Amazon messages by seller SKU and advances only the accepted SKU 
   expect(fixture.providerWrite).toHaveBeenCalledOnce()
 }, 30_000)
 
-it('binds a real stored content read to the selected listing and persists its explicit overwrite acknowledgement', async () => {
+it('binds a real stored content read to the selected listing and persists its explicit field selection', async () => {
   const own = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, externalListingId: '123456789012' } })
   const other = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, aliasKey: 'different-alias', externalListingId: 'another-item' } })
   const at = '2026-09-24T18:40:00.000Z'
@@ -201,7 +233,7 @@ it('binds a real stored content read to the selected listing and persists its ex
   fixture.facts.mockResolvedValue({ ...facts(), listings: [own] })
   const unreadReview = await previewStudioPublication(productId, scope, null)
   expect(unreadReview.overwrite).toMatchObject({ requiresConfirmation: true, products: [{ status: 'not_read', fields: [] }] })
-  await expect(submitStudioPublication(productId, unreadReview.id!, {}, null)).rejects.toThrow(/confirm.*overwrite/i)
+  await expect(submitRaw(productId, unreadReview.id!, { confirmOverwrite: true }, null)).rejects.toThrow(/selection|token|review/i)
   await prisma.channelDrift.update({ where: { id: stock.id }, data: content })
   await expect(submitStudioPublication(productId, unreadReview.id!, { confirmOverwrite: true }, null)).rejects.toThrow('changed')
   expect(fixture.sendEbay).not.toHaveBeenCalled()
@@ -209,8 +241,22 @@ it('binds a real stored content read to the selected listing and persists its ex
   expect(reviewed.overwrite?.products[0]).toMatchObject({ status: 'compared', fields: [{ field: 'Title', nexusAtRead: 'Earlier Nexus', channelAtRead: 'eBay title' }] })
   fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
   await submitStudioPublication(productId, reviewed.id!, { confirmOverwrite: true }, null)
-  expect((await prisma.bulkOperation.findUniqueOrThrow({ where: { id: reviewed.id! } })).changes).toMatchObject({ confirmOverwrite: true })
+  expect((await prisma.bulkOperation.findUniqueOrThrow({ where: { id: reviewed.id! } })).changes).toMatchObject({ selection: { token: expect.any(String), selectedIds: [productId] } })
   expect(fixture.sendEbay).toHaveBeenCalledOnce()
+}, 30_000)
+
+it('refuses a concurrently replaced persisted selection at the database claim', async () => {
+  const review = await previewStudioPublication(productId, scope, null)
+  const initial = await prisma.bulkOperation.findUniqueOrThrow({ where: { id: review.id! } })
+  const selection = (initial.changes as any).selection
+  fixture.facts.mockImplementationOnce(async () => {
+    await prisma.bulkOperation.update({ where: { id: review.id! }, data: { changes: { ...(initial.changes as object), selection: { ...selection, token: 'replaced-while-submit-waited' } } } })
+    return facts()
+  })
+  await expect(submitRaw(productId, review.id!, { selectionToken: selection.token }, null)).rejects.toThrow(/changed|selection/i)
+  expect(fixture.providerWrite).not.toHaveBeenCalled()
+  expect(await prisma.channelListingSnapshot.count({ where: { publishEventId: review.id } })).toBe(0)
+  expect(await prisma.bulkOperation.findUnique({ where: { id: review.id! } })).toMatchObject({ status: 'PREVIEW', changes: { selection: { token: 'replaced-while-submit-waited' } } })
 }, 30_000)
 
 it('persists the eBay receipt before read-back and recovers the local projection without resending', async () => {

@@ -26,9 +26,9 @@ export function mappedAmazonRoots(spec: ChannelSpec, catalogue: readonly MappedF
 }
 
 /** A-33 — one root as a listing patch. A clear names the instance by the schema's selector values (`attributeDeleteValue`). */
-export function amazonRootPatch(spec: ChannelSpec, root: string, value: unknown): AttributePatch {
+export function amazonRootPatch(spec: ChannelSpec, root: string, value: unknown, deleteInstances?: readonly unknown[]): AttributePatch {
   return value === undefined
-    ? { op: 'delete', path: `/attributes/${root}`, value: attributeDeleteValue(spec, root) }
+    ? { op: 'delete', path: `/attributes/${root}`, value: attributeDeleteValue(spec, root, deleteInstances) }
     : { op: 'replace', path: `/attributes/${root}`, value }
 }
 /** Overlay the real resolver outputs onto the actual JSON feed envelope. Pricing,

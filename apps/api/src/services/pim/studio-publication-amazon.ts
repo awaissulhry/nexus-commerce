@@ -1,4 +1,5 @@
 import type { PublicationFacts } from './studio-publication-plan.js'
+import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { object } from './studio-publication-plan.js'
 import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../amazon/cockpit-publish-row.js'
 import { AmazonFlatFileService } from '../amazon/flat-file.service.js'
@@ -12,7 +13,6 @@ import { configuredAmazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { getAmazonSellerId, getAmazonSpClient } from '../../lib/amazon-sp-client.js'
 import { AmazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { getAmazonRegion } from '../../lib/amazon-sp-client.js'
-import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { attributesFromCells } from './mapping/schema-requirements.js'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
@@ -27,6 +27,7 @@ export interface AmazonPublication {
   sellerId: string
   marketplaceId: string
   products: Array<{ productId: string; sku: string }>
+  fieldWrites?: Record<string, StudioPublishFieldWrite[]>
   feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; requirements?: string; attributes?: Record<string, unknown>; patches?: any[] }> }
 }
 
@@ -35,15 +36,15 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   const marketplaceId = await configuredAmazonMarketplaceId(scope.marketplace)
   if (!marketplaceId) throw new Error('The Amazon marketplace identifier is unavailable.')
   const sellerId = await getAmazonSellerId(scope.accountId)
-  const closed = await closedMarketSet(products.map(p => p.id))
-  if (products.some(p => closed.has(`${p.id}|${scope.marketplace}`))) throw new Error('An Amazon offer is closed. Reopen it before publishing.')
+  if (!products.length) return { kind: 'amazon', sellerId, marketplaceId, products: [], feed: { header: { sellerId, version: '2.0' }, messages: [] } }
   const service = new AmazonFlatFileService(prisma, new CategorySchemaService(prisma, new AmazonService()))
   const rootListing = listings.find(l => l.productId === parent.id)
   const gallery = object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing
     ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
-  const sellerSkus = new Map(products.map(product => {
+  const identityProducts = products.some(product => product.id === parent.id) ? products : [parent, ...products]
+  const sellerSkus = new Map(identityProducts.map(product => {
     const listing = listings.find(l => l.productId === product.id)
     const offers = [...new Set(listing?.offers.filter(o => o.isActive).map(o => o.sku) ?? [])]
     if (offers.length > 1) throw new Error(`${product.sku} has multiple seller SKUs. Select its offer before publishing.`)
@@ -53,10 +54,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     if (!identities.length && facts.destination.aliasKey) throw new Error(`${product.sku}: this alias needs its own Amazon seller SKU before publishing.`)
     return [product.id, identities[0] ?? product.sku]
   }))
-  if (new Set(sellerSkus.values()).size !== products.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
+  if (new Set(sellerSkus.values()).size !== identityProducts.length) throw new Error('Included products share an Amazon seller SKU. Reconcile their listing identities before publishing.')
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
   let variationInput: Awaited<ReturnType<typeof loadStoredVariationProjection>>['input'] | undefined
-  if (products.length > 1) {
+  if (products.length > 1 || products.some(product => product.id !== parent.id)) {
     const stored = await loadStoredVariationProjection({ productId: parent.id, channel: scope.channel, market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
     variationInput = stored.input
     variationInput.family.variants = variationInput.family.variants?.map(v => {
@@ -96,10 +97,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const activeOffer = listing?.offers.find(o => o.isActive)
     const fulfillment = activeOffer?.fulfillmentMethod ?? listing?.fulfillmentMethod ?? product.fulfillmentMethod
     if (fulfillment) row.fulfillment_availability__fulfillment_channel_code = fulfillment === 'FBA' ? `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(scope.accountId)]}` : 'DEFAULT'
-    if (!product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
+    if (row._isNew && !product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
     const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))
     row.fulfillment_availability__quantity = Math.min(available, Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0)))
-    if (!Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
+    if (row._isNew && !Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
     if (gallery && listing) {
       const { desired, problems } = desiredAmazonImages(gallery, listing.id)
       if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
@@ -158,7 +159,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     feed.header = envelope.header
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
   }
-  return { kind: 'amazon', sellerId, marketplaceId, feed, products: [...sellerSkus].map(([productId, sku]) => ({ productId, sku })) }
+  return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })) }
 }
 
 /** Validate the complete family before submitting its single feed. An acknowledgement is not live status. */
