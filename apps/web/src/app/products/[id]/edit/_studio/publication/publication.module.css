@@ -1,4 +1,5 @@
 .body { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.payload { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 .body p { margin: 0; overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
 .issues { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-6); overflow-wrap: anywhere; }

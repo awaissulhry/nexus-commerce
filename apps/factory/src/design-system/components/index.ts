@@ -81,3 +81,4 @@ export { ActionConfirm, canConfirmAction, useActionConfirm, type ActionConfirmPr
 export { AsOf, type AsOfProps } from './AsOf'
 export { PresenceMark, type PresenceMarkProps } from './PresenceMark'
 export { DetailPopover, type DetailPopoverProps } from './DetailPopover'
+export { ChangeReview, type ChangeReviewProps, type ChangeReviewItem } from './ChangeReview'
