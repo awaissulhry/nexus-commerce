@@ -20,6 +20,8 @@ export const AMAZON_CONTENT_SOURCE = 'amazon-content'
 export const CONTENT_ROOTS = ['item_name', 'product_description', 'bullet_point', 'generic_keyword'] as const
 /** Structure, not content: owned by the variation resolver / the parent link (A-39 "out of scope"). */
 export const STRUCTURE_ROOTS: ReadonlySet<string> = new Set(['child_parent_sku_relationship', 'variation_theme', 'parentage_level'])
+/** Price is 3.5a's (list_price is the studio's RRP line) — out of A-39: the content read never compares these roots. */
+export const OUT_OF_SCOPE_ROOTS: ReadonlySet<string> = new Set(['list_price', 'purchasable_offer', 'fulfillment_availability'])
 
 export type ContentEntry = { value: unknown; marketplace_id?: string; language_tag?: string }
 export type NotCompared = { field: string; reason: string }

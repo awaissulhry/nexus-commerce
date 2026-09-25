@@ -32,6 +32,8 @@ export function ChannelReadCell({ cell }: { cell: TransferCell }) {
   if (cell.entity === 'Products') return <span className={styles.secondary}>Not a channel value</span>
   const read = cell.channelRead
   if (!read) return <span className={styles.secondary}>Not read yet</span>
+  // Only a read that COMPARES this field may say "same" — the Amazon content read never compares the RRP, price, stock or images.
+  if ('notCompared' in read) return <div className={styles.cell}>Not compared by the channel read<span className={styles.secondary}>listing read <AsOf at={read.readAt} /></span></div>
   if (!read.differs) return <div className={styles.cell}>Same as Nexus at the last read<span className={styles.secondary}>read <AsOf at={read.readAt} via={read.source} /></span></div>
   return <div className={styles.cell}>{channelFileValue(cell, read.value) ?? display(read.value)}<span className={styles.secondary}>read <AsOf at={read.readAt} via={read.source} /></span></div>
 }

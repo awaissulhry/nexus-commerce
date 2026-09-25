@@ -38,7 +38,7 @@ vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: async (inpu
 } }))
 import { buildTransferPlan, transferContracts } from './catalog-transfer-plan.js'
 import { loadTransferContext, resetPresenceColumnCache } from './catalog-transfer.service.js'
-import { applyTransferJob, readTransferJob, stageTransferJob, transferJobOutcomes, transferJobStatus } from './catalog-transfer-jobs.js'
+import { applyTransferJob, readTransferJob, retryWriteConflicts, sourceCompares, stageTransferJob, transferJobOutcomes, transferJobStatus, writeConflict } from './catalog-transfer-jobs.js'
 import { resetSaleWindowColumnCache } from './sale-window.js'
 import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
@@ -243,10 +243,44 @@ describe('channel-file jobs', () => {
     const at = '2026-09-24T03:37:00.000Z'
     state.store.data.channelDrift.set('d1', { id: 'd1', channelListingId: 'p0-account-a', driftedFields: [{ field: 'color', ours: { '[0].value': 'Nero' }, theirs: { '[0].value': 'Schwarz' }, source: 'amazon-content', checkedAt: at }],
       checkedBySource: { 'amazon-content': { at, outcome: 'compared', differing: 1 } } })
-    const review = await stage([cf({ field: 'color', value: 'Nero' }), cf({ field: 'material', value: 'Mesh' })])
+    const review = await stage([cf({ field: 'color', value: 'Nero' }), cf({ field: 'material', value: 'Mesh' }), cf({ field: 'list_price', value: 129 })])
     const cells = (await transferJobOutcomes(review.jobId, 'owner'))!.rows.flatMap(r => r.cells) as any[]
     expect(cells.find(c => c.field === 'color').channelRead).toEqual({ differs: true, value: { '[0].value': 'Schwarz' }, ours: { '[0].value': 'Nero' }, readAt: at, source: 'amazon-content' })
     expect(cells.find(c => c.field === 'material').channelRead).toEqual({ differs: false, readAt: at, source: 'amazon-content' })
+    // 🔴 The content read never compares the RRP: "same as Nexus" there would be a false claim (GALE DE, production 09-25).
+    expect(cells.find(c => c.field === 'list_price').channelRead).toEqual({ notCompared: true, readAt: at })
+  })
+
+  it('runs a record again after a write conflict instead of marking it failed (production 09-25, 25P02)', async () => {
+    // The shape production logged: a swallowed serialization failure, then the next statement in the aborted transaction.
+    const aborted = new Error('Invalid `prisma.product.findUnique()` invocation: Error occurred during query execution: ConnectorError(PostgresError { code: "25P02", message: "current transaction is aborted, commands ignored until end of transaction block" })')
+    expect(writeConflict(aborted)).toBe(true)
+    expect(writeConflict(Object.assign(new Error('x'), { code: 'P2034' }))).toBe(true)
+    expect(writeConflict(new Error('The exported version no longer matches this record.'))).toBe(false)
+    let calls = 0
+    const noWait = async () => {}
+    await expect(retryWriteConflicts(async () => { calls++; if (calls < 3) throw aborted; return 'saved' }, 3, noWait)).resolves.toBe('saved')
+    expect(calls).toBe(3)
+    calls = 0
+    await expect(retryWriteConflicts(async () => { calls++; throw aborted }, 3, noWait)).rejects.toBe(aborted) // then the lease recovery resumes it
+    expect(calls).toBe(3)
+    calls = 0
+    const real = new Error('Listing changed since preview; preview this listing again')
+    await expect(retryWriteConflicts(async () => { calls++; throw real }, 3, noWait)).rejects.toBe(real) // a real refusal is never retried
+    expect(calls).toBe(1)
+  })
+
+  it('claims "no difference" only for fields a read source really compares', () => {
+    const o = (field: string) => ({ entity: 'Overrides' as const, field })
+    expect(sourceCompares('amazon-content', o('item_name'))).toBe(true)
+    expect(sourceCompares('amazon-content', o('apparel_size__size'))).toBe(true)
+    for (const field of ['list_price', 'purchasable_offer', 'fulfillment_availability', 'parentage_level', 'variation_theme', 'image_locator_ps01', 'main_product_image_locator', 'price', 'sale'])
+      expect(sourceCompares('amazon-content', o(field)), field).toBe(false)
+    expect(sourceCompares('amazon-merchant-listings-report', o('price'))).toBe(true)
+    expect(sourceCompares('amazon-merchant-listings-report', o('item_name'))).toBe(false)
+    expect(sourceCompares('ebay-content', o('title'))).toBe(true)
+    expect(sourceCompares('ebay-content', o('itemSpecifics.Genere'))).toBe(false)
+    for (const field of ['productType', 'presence', 'sellerSku']) expect(sourceCompares('amazon-content', { entity: 'Listings', field }), field).toBe(false)
   })
 
   it('keeps the identity proposals and the unconfirmed deletes on the review', async () => {

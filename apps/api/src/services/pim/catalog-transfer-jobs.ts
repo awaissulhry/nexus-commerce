@@ -13,6 +13,7 @@ import { preservedTransferOverrides } from './catalog-transfer-preserved.js'
 import { createReferenceResolver } from './reference-values.service.js'
 import { assertProductTransferRows, checkProductTransferBoundary } from './catalog-product-transfer.js'
 import { enrichTransferEffects } from './catalog-transfer-effects.js'
+import { STRUCTURE_ROOTS, OUT_OF_SCOPE_ROOTS as AMAZON_OUT_OF_SCOPE_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 
 export const TRANSFER_BATCH = 100
@@ -256,7 +257,7 @@ export async function runTransferJob(id: string) {
             continue
           }
           try {
-            await inDatabaseTransaction(prisma, async () => {
+            await retryWriteConflicts(() => inDatabaseTransaction(prisma, async () => {
               const tx = prisma
               const claim = await tx.bulkOperation.updateMany({ where: { id, status: 'RUNNING', processed }, data: { processed: item.rowIndex, expiresAt: new Date(Date.now() + LEASE_MS) } })
               if (!claim.count) throw new TransferConflict('Job checkpoint already advanced')
@@ -292,7 +293,7 @@ export async function runTransferJob(id: string) {
               const after = sharedSku ? await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sharedSku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } }) : null
               if (!target && record.sharedBefore !== undefined && fingerprint(safeSnapshot(after)) !== fingerprint(record.sharedBefore)) throw new TransferConflict('Excluded shared data changed since preview; review its dependent updates again')
               await tx.importJobRow.update({ where: { id: item.id }, data: { status: target ? 'SUCCESS' : 'EXCLUDED', completedAt: new Date(), ...(after ? { afterState: json(safeSnapshot(after)) } : {}) } })
-            })
+            }))
           } catch (error) {
             // Infrastructure failures leave the checkpoint untouched for lease recovery.
             if (transientFailure(error)) throw error
@@ -402,15 +403,50 @@ async function attachChannelReads(targets: TransferTarget[]) {
     for (const cell of target.cells) {
       const root = cell.field.split('__')[0]
       const hit = entries.find(e => e.field === cell.field || e.field === root || e.field.startsWith(`${root}[`) || e.field === `aspect:${cell.label ?? cell.field}`)
+      // 🔴 "No difference recorded" is only true for a field the source COMPARES. The Amazon content read skips the RRP,
+      // price, stock, images and parent links; the price report compares price only; the eBay read compares the title
+      // (aspects only when they differ). Measured 2026-09-25: GALE DE's RRP read "Same as Nexus" although never compared.
+      const comparing = clocks.find(([source]) => sourceCompares(source, cell))
       const read: ChannelRead | null = hit ? { differs: true, value: hit.theirs, ours: hit.ours, readAt: hit.checkedAt, source: hit.source }
-        : clocks.length ? { differs: false, readAt: String(clocks[0][1].at), source: clocks[0][0] } : null
+        : comparing ? { differs: false, readAt: String(comparing[1].at), source: comparing[0] }
+        : clocks.length ? { notCompared: true, readAt: String(clocks[0][1].at) } : null
       if (read) cell.channelRead = read
     }
   }
 }
+/** Does this read source compare this review cell? (See `attachChannelReads`.) */
+export function sourceCompares(source: string, cell: Pick<TransferCell, 'entity' | 'field'>): boolean {
+  if (cell.entity !== 'Overrides') return false // productType, presence, sellerSku: no read compares them
+  const root = cell.field.split('__')[0]
+  if (cell.field === 'price') return source === 'amazon-merchant-listings-report'
+  if (cell.field === 'sale') return false
+  if (source === 'amazon-content') return !STRUCTURE_ROOTS.has(root) && !AMAZON_OUT_OF_SCOPE_ROOTS.has(root) && !/image_locator/.test(root)
+  if (source === 'ebay-content') return cell.field === 'title'
+  return false
+}
 function transientFailure(error: unknown) {
   const code = (error as { code?: string })?.code ?? ''
-  return code.startsWith('P1') || ['P2034', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code)
+  return code.startsWith('P1') || ['P2034', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code) || writeConflict(error)
+}
+/**
+ * 🔴 Production 2026-09-25 (GALE DE/FR/ES applied at once, all touching GALE-JACKET): a serializable write conflict raised
+ * inside a record's transaction was caught by a helper, and the NEXT statement failed with 25P02 "current transaction is
+ * aborted" — not P2034 — so the record was marked FAILED although nothing had been written (the transaction rolled back).
+ * Both shapes mean "run this record again".
+ */
+export function writeConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return (error as { code?: string })?.code === 'P2034' || /\b25P02\b|current transaction is aborted|write conflict or a deadlock|could not serialize access/i.test(message)
+}
+/** Run a record transaction again on a write conflict (it rolled back), up to three times; then the lease recovery resumes it. */
+export async function retryWriteConflicts<T>(work: () => Promise<T>, attempts = 3, pause = (ms: number) => new Promise(r => setTimeout(r, ms))): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try { return await work() }
+    catch (error) {
+      if (attempt >= attempts || !writeConflict(error)) throw error
+      await pause(150 * attempt + Math.floor(Math.random() * 100))
+    }
+  }
 }
 
 /**
