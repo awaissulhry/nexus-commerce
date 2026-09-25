@@ -11,9 +11,9 @@
 //     (a crash between handling and ack). Consumers must be idempotent on
 //     `envelope.id`; there is no exactly-once to be had here and pretending
 //     otherwise is how duplicates become silent corruption.
-//   - ordered per `subject`. Two events about the same product arrive in the
-//     order they were published. Nothing is promised across subjects — that is
-//     what makes parallelism possible at all.
+//   - no processing-order guarantee. Parallel relays and retries may deliver
+//     newer state before older events, even for one subject. Consumers reread
+//     current state or reject stale aggregate revisions before applying effects.
 
 import type { EventEnvelope } from '@nexus/events'
 
@@ -73,10 +73,9 @@ export interface EventBroker {
 // ── partitioning ────────────────────────────────────────────────────────────
 
 /**
- * Shard count. 1 by default, which makes the topology exactly single-stream
- * total ordering — the simplest thing that is correct. Raising it trades
- * cross-subject ordering (which nothing depends on) for parallelism, and
- * per-subject ordering is preserved at any value because a subject always
+ * Shard count. 1 by default. Raising it permits more stream parallelism;
+ * concurrent delivery and retries do not guarantee processing order. Stable
+ * subject affinity is preserved at any value because a subject always
  * hashes to the same shard.
  *
  * Changing this in production reshards: in-flight events for a subject may
