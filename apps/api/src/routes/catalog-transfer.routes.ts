@@ -12,6 +12,8 @@ import { fetchCatalogSource } from '../services/pim/catalog-source-fetch.js'
 import { catalogWorkbookTemplate, type WorkbookDestination } from '../services/pim/catalog-workbook-scopes.js'
 import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
+import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
+import { workspaceContext } from '../lib/workspace-context.js'
 import { writeEditorWorkbook, inspectEditorTransfer, readEditorInput, readEditorTransfer, requireEditorVersions, readCatalogTransferUpload, PRODUCT_TRANSFER_MAX_BYTES, type ChannelFileDecisions } from '../services/pim/catalog-editor-workbook.js'
 
 const actor = (request: FastifyRequest) => (request as FastifyRequest & { authUser?: { id?: string } }).authUser?.id ?? null
@@ -48,6 +50,20 @@ function confirmedDeletesOf(raw: string | undefined): Pick<ChannelFileDecisions,
   try { skus = JSON.parse(value) } catch { throw new Error(CONFIRM_DELETES_SHAPE) }
   if (!Array.isArray(skus) || !skus.length || skus.length > 5000 || skus.some(sku => typeof sku !== 'string' || !sku.trim() || sku.length > 200) || new Set(skus).size !== skus.length) throw new Error(CONFIRM_DELETES_SHAPE)
   return { confirmDeletes: skus as string[] }
+}
+/**
+ * 🔴 Recover interrupted imports in EVERY business. With business profiles on (production since 2026-09-16) both
+ * recoverers read tenant tables, and outside a business profile they threw "Select a business profile." every 30 s —
+ * an import interrupted by a restart or a deploy was never resumed. Each recoverer runs inside each active business's
+ * context; one business (or one recoverer) failing is logged with its business id and never stops the rest.
+ */
+export async function recoverImportsInEveryBusiness(visit: (work: () => Promise<void>) => Promise<void> = visitActiveWorkspaces,
+  log: (failure: { err: unknown; workspaceId: string | null; recoverer: string }) => void = () => {}) {
+  await visit(async () => {
+    for (const [recoverer, recover] of [['catalog-transfers', recoverCatalogTransfers], ['transfer-jobs', recoverTransferJobs]] as const) {
+      try { await recover() } catch (err) { log({ err, workspaceId: workspaceContext()?.workspaceId ?? null, recoverer }) }
+    }
+  })
 }
 const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   fastify.setErrorHandler((error, request, reply) => {
@@ -166,9 +182,11 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     if (!['create', 'update', 'upsert'].includes(fields.mode)) throw new Error('Choose Create, Update or Create or update')
     if (fields.blankPolicy && !['ignore', 'clear'].includes(fields.blankPolicy)) throw new Error('Blank cells must be ignored or cleared')
     // CFI-1 — every workbook is read on the parse worker, by what it IS; `format` is only the operator's hint.
-    const parsed = await readCatalogTransferUpload(buffer, filename, { format: fields.format, accountId: fields.accountId, market: marketOf(fields.market), familyId: fields.familyId,
+    // An empty marketplace means "use the file's own" — valid for an Amazon template or an eBay workbook only.
+    const chosenMarket = fields.market?.trim() ? marketOf(fields.market) : ''
+    const parsed = await readCatalogTransferUpload(buffer, filename, { format: fields.format, accountId: fields.accountId, market: chosenMarket, familyId: fields.familyId,
       mode: fields.mode as TransferMode, blankPolicy: fields.blankPolicy as 'ignore' | 'clear' | undefined, ...decisionsOf(fields) }, (event, detail) => request.log.info({ filename, ...detail }, event))
-    const staged = await stageTransferJob({ ...parsed, mode: fields.mode as TransferMode, market: marketOf(fields.market), filename, userId: actor(request) })
+    const staged = await stageTransferJob({ ...parsed, mode: fields.mode as TransferMode, market: parsed.market, filename, userId: actor(request) })
     return reply.code(201).send({ ...staged, links: parsed.links ?? [] })
   })
   fastify.get('/catalog-transfer/jobs/:jobId', async (request, reply) => {
@@ -220,7 +238,8 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
   const timer = setInterval(() => {
     if (recovering) return
     recovering = true
-    void Promise.all([recoverCatalogTransfers(), recoverTransferJobs()]).catch(error => fastify.log.warn({ err: error }, 'Catalog import recovery deferred')).finally(() => { recovering = false })
+    void recoverImportsInEveryBusiness(visitActiveWorkspaces, failure => fastify.log.warn(failure, 'Catalog import recovery deferred'))
+      .catch(error => fastify.log.warn({ err: error }, 'Catalog import recovery deferred')).finally(() => { recovering = false })
   }, 30_000)
   timer.unref()
   fastify.addHook('onClose', async () => { clearInterval(timer) })

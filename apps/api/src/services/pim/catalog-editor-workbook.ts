@@ -204,10 +204,13 @@ export function requireEditorVersions<T extends ParsedInput>(parsed: T): T {
  * now a hint: when the file is something else, it is read as what it is and the review says so in one sentence.
  */
 export async function readCatalogTransferUpload(buffer: Buffer, filename: string, input: {
+  /** Empty = "use the file's marketplace": allowed for an Amazon template or an eBay workbook only. */
   format?: string; accountId?: string; market: string; familyId?: string; mode: TransferMode; blankPolicy?: 'ignore' | 'clear'
-} & ChannelFileDecisions, log?: ImportLog): Promise<ParsedInput> {
+} & ChannelFileDecisions, log?: ImportLog): Promise<ParsedInput & { market: string }> {
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty file up to 10 MB')
-  if (!/\.xls[xm]$/i.test(filename)) return readTransferFile(buffer, filename, { blankPolicy: input.blankPolicy })
+  // A Nexus workbook or CSV names no marketplace of its own; its attribute dictionary needs the chosen one.
+  const requireMarket = () => { if (!input.market) throw new Error(NEXUS_FILE_NEEDS_MARKET); return input.market }
+  if (!/\.xls[xm]$/i.test(filename)) { const market = requireMarket(); return { ...await readTransferFile(buffer, filename, { blankPolicy: input.blankPolicy }), market } }
   const session = openWorkbookParser({
     log: (event, detail) => log?.(event, detail),
     // An editing workbook belongs to the product it was exported from; the catalog page has no baseline for it.
@@ -215,21 +218,27 @@ export async function readCatalogTransferUpload(buffer: Buffer, filename: string
   })
   try {
     // The chosen marketplace is the eBay reader's last hint, after the sheet name and the file name.
-    const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES, { blankPolicy: input.blankPolicy, market: input.market })
+    const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES, { blankPolicy: input.blankPolicy, market: input.market || undefined })
     const decisions = { links: input.links, confirmDeletes: input.confirmDeletes }
     if (outcome.kind === 'amazon') {
       const meta = outcome.parsed.meta
-      const parsed = await resolveAmazonCatalogWorkbook(outcome.parsed, { accountId: input.accountId || undefined, marketplace: input.market, familyId: input.familyId || undefined, mode: input.mode, ...decisions }) as ParsedInput
+      // No chosen marketplace = the template's own (a chosen one that contradicts the file is refused by the reader).
+      const market = input.market || meta.marketplace || ''
+      const parsed = { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { accountId: input.accountId || undefined, marketplace: input.market || undefined, familyId: input.familyId || undefined, mode: input.mode, ...decisions }) as ParsedInput, market }
       return input.format === 'amazon' ? parsed : withWarning(parsed, `${filename} is an Amazon template (${meta.marketplace ?? 'unknown marketplace'}, ${meta.contentLanguageTag ?? 'unknown language'}); it was read as one, not as the File type chosen.`)
     }
     if (outcome.kind === 'ebay') {
-      const parsed = await resolveEbayCatalogWorkbook(outcome.table, { ...decisions, market: input.market }) as ParsedInput
+      // The table's marketplace came from its sheet, its file name, or the chosen one — in that order.
+      const parsed = { ...await resolveEbayCatalogWorkbook(outcome.table, { ...decisions, market: input.market || undefined }) as ParsedInput, market: outcome.table.marketplace }
       return withWarning(parsed, `${filename} is an eBay workbook (sheet "${outcome.table.sheet}"); it was read as one${input.format === 'catalog' || !input.format ? ', not as a Nexus workbook' : ''}.`)
     }
-    if (input.format === 'amazon') return withWarning(outcome.parsed, `${filename} is not an Amazon template; it was read as a Nexus workbook.`)
-    return outcome.parsed
+    const market = requireMarket()
+    if (input.format === 'amazon') return { ...withWarning(outcome.parsed, `${filename} is not an Amazon template; it was read as a Nexus workbook.`), market }
+    return { ...outcome.parsed, market }
   } finally {
     await session.close()
   }
 }
-const withWarning = (parsed: ParsedInput, warning: string): ParsedInput => ({ ...parsed, warnings: [...(parsed.warnings ?? []), warning] })
+const withWarning = <T extends ParsedInput>(parsed: T, warning: string): T => ({ ...parsed, warnings: [...(parsed.warnings ?? []), warning] })
+/** The same sentence `marketOf` gives: a Nexus file cannot say which marketplace's attribute dictionary applies. */
+export const NEXUS_FILE_NEEDS_MARKET = 'Select a marketplace for the attribute dictionary'

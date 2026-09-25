@@ -13,6 +13,7 @@ import { preservedTransferOverrides } from './catalog-transfer-preserved.js'
 import { createReferenceResolver } from './reference-values.service.js'
 import { assertProductTransferRows, checkProductTransferBoundary } from './catalog-product-transfer.js'
 import { enrichTransferEffects } from './catalog-transfer-effects.js'
+import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 
 export const TRANSFER_BATCH = 100
 export const TRANSFER_JOB_KIND = 'catalog-transfer-v2'
@@ -331,13 +332,20 @@ export async function runTransferJob(id: string) {
   } catch (error) {
     if (transientFailure(error)) throw error
     const message = error instanceof Error ? error.message : String(error)
-    const stopped = await prisma.bulkOperation.findUnique({ where: { id } })
-    const stoppedPayload = payloadOf(stopped?.changes)
-    if (stoppedPayload?.outcomeVersion === 1) stoppedPayload.receipt = await transferReceipt(id, stopped?.total ?? 0)
-    await prisma.$transaction(async tx => {
-      await tx.bulkOperation.updateMany({ where: { id, status: { in: ['PREVIEWING', 'RUNNING'] } }, data: { status: 'FAILED', ...(stoppedPayload ? { changes: json(stoppedPayload) } : {}), completedAt: new Date(), expiresAt: null, errors: [{ message }] } })
-      await tx.importJob.updateMany({ where: { id }, data: { status: 'FAILED', errorSummary: message, completedAt: new Date() } })
-    })
+    const recordFailure = async () => {
+      const stopped = await prisma.bulkOperation.findUnique({ where: { id } })
+      const stoppedPayload = payloadOf(stopped?.changes)
+      if (stoppedPayload?.outcomeVersion === 1) stoppedPayload.receipt = await transferReceipt(id, stopped?.total ?? 0)
+      await prisma.$transaction(async tx => {
+        await tx.bulkOperation.updateMany({ where: { id, status: { in: ['PREVIEWING', 'RUNNING'] } }, data: { status: 'FAILED', ...(stoppedPayload ? { changes: json(stoppedPayload) } : {}), completedAt: new Date(), expiresAt: null, errors: [{ message }] } })
+        await tx.importJob.updateMany({ where: { id }, data: { status: 'FAILED', errorSummary: message, completedAt: new Date() } })
+      })
+    }
+    // The job runs as the signed-in user, and the row policy requires an ACTIVE member. A user who lost access mid-job
+    // failed the job's last statement, and would fail this write too — the job stuck in PREVIEWING/RUNNING forever. The
+    // failure is recorded under the job's own business with no actor; the job itself still ran as the user.
+    const context = workspaceContext()
+    await (context ? withWorkspace({ workspaceId: context.workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, recordFailure) : recordFailure())
   } finally { running.delete(id) }
   if (autoApply) {
     try { await applyTransferJob(id, autoApply.userId, autoApply.token) }

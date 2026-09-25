@@ -40,6 +40,7 @@ import { buildTransferPlan, transferContracts } from './catalog-transfer-plan.js
 import { loadTransferContext, resetPresenceColumnCache } from './catalog-transfer.service.js'
 import { applyTransferJob, readTransferJob, stageTransferJob, transferJobOutcomes, transferJobStatus } from './catalog-transfer-jobs.js'
 import { resetSaleWindowColumnCache } from './sale-window.js'
+import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
 
 const cf = (patch: Partial<TransferRow> = {}): TransferRow => ({ row: 7, entity: 'Overrides', sku: '000000', channel: 'AMAZON', accountId: 'account-a', marketplace: 'IT', aliasKey: '', locale: '', field: 'material', action: 'SET', value: 'Mesh', origin: 'channel-file', ...patch })
@@ -214,6 +215,28 @@ describe('channel-file jobs', () => {
     await applyTransferJob(review.jobId, 'owner', review.reviewToken!)
     expect((await waitFor(review.jobId, ['COMPLETED', 'PARTIAL'])).state).toBe('PARTIAL')
     expect(state.store.data.channelListing.get('p0-account-a')?.salePrice).toBeUndefined()
+  })
+
+  it('records FAILED under the business when the signed-in user loses access mid-job', async () => {
+    // The row policy, as the store has none: once the user's access is gone, every statement run AS that user fails (P2025).
+    const db = state.store.db, revoked = { on: false }
+    const asUser = () => workspaceContext()?.actorUserId === 'owner'
+    const denied = () => Object.assign(new Error('Record to update not found.'), { code: 'P2025' })
+    for (const [model, methods] of [['importJobRow', ['update', 'findMany', 'count']], ['bulkOperation', ['updateMany', 'findUnique', 'findFirst']], ['importJob', ['update', 'updateMany']]] as const) {
+      for (const method of methods) {
+        const real = db[model][method]
+        db[model][method] = async (args: unknown) => {
+          if (model === 'importJobRow' && method === 'update' && asUser()) revoked.on = true
+          if (revoked.on && asUser()) throw denied()
+          return real(args)
+        }
+      }
+    }
+    const staged = await withWorkspace({ workspaceId: 'nexus_legacy_workspace', actorUserId: 'owner', membershipId: 'm1', roleKeys: ['OWNER'] },
+      () => stageTransferJob({ rows: [cf({ field: 'material', value: 'Mesh' })], issues: [], mode: 'upsert', market: 'IT', filename: 'GALE IT.xlsm', userId: 'owner' }))
+    const done = await waitFor(staged.jobId, ['FAILED'])
+    expect(revoked.on).toBe(true)
+    expect(done).toMatchObject({ state: 'FAILED', error: 'Record to update not found.' })
   })
 
   it('shows what the channel last reported beside each listing cell', async () => {

@@ -124,4 +124,30 @@ describe('the drawer names the eBay marketplace from its own listings', () => {
     await expect(readEditorTransfer(await familySheet(), 'AIREON.xlsx', 'product-1', null)).rejects.toThrow(/Choose the eBay marketplace/)
     expect(calls.drawerEbay).toHaveLength(0)
   })
+
+})
+
+describe('an empty marketplace means "the file’s own" — for channel files only', () => {
+  it('reads an Amazon template with no chosen marketplace as the template’s own', async () => {
+    const parsed = await readCatalogTransferUpload(await ooxmlWorkbook({ sheets: amazonTemplateSheets() }), 'GALE IT.xlsm', { format: 'amazon', market: '', accountId: 'acct', mode: 'update' })
+    expect(calls.amazon[0].options.marketplace).toBeUndefined()
+    expect(parsed.market).toBe('IT')
+  })
+  it('reads an eBay workbook with no chosen marketplace as its sheet’s, and refuses a sheet that states none', async () => {
+    const book = new ExcelJS.Workbook(), sheet = book.addWorksheet('ebay_it')
+    sheet.addRow(EBAY_HEADERS); sheet.addRow(['AIREON', '', 'parent', '', '', '', '', 'Giacca', '1000', '177104', 'Colore,Taglia', '99', '5'])
+    const parsed = await readCatalogTransferUpload(Buffer.from(await book.xlsx.writeBuffer()), 'AIREON.xlsx', { format: 'catalog', market: '', mode: 'update' })
+    expect(parsed.market).toBe('IT')
+    expect(calls.ebay[0].options.market).toBeUndefined()
+    const family = new ExcelJS.Workbook(), named = family.addWorksheet('AIREON')
+    named.addRow(EBAY_HEADERS); named.addRow(['AIREON', '', 'parent', '', '', '', '', 'Giacca', '1000', '177104', 'Size,Color', '99', '5'])
+    await expect(readCatalogTransferUpload(Buffer.from(await family.xlsx.writeBuffer()), 'AIREON.xlsx', { format: 'catalog', market: '', mode: 'update' })).rejects.toThrow(/Choose the eBay marketplace/)
+  })
+  it('still requires a marketplace for a Nexus workbook and a CSV', async () => {
+    const book = new ExcelJS.Workbook(), sheet = book.addWorksheet('Products')
+    sheet.addRow(['sku', 'field', 'action', 'value']); sheet.addRow(['GALE-JACKET', 'name', 'SET', 'Gale jacket'])
+    await expect(readCatalogTransferUpload(Buffer.from(await book.xlsx.writeBuffer()), 'rows.xlsx', { format: 'catalog', market: '', mode: 'update' })).rejects.toThrow('Select a marketplace for the attribute dictionary')
+    await expect(readCatalogTransferUpload(Buffer.from('entity,sku\n'), 'rows.csv', { market: '', mode: 'update' })).rejects.toThrow('Select a marketplace for the attribute dictionary')
+    expect((await readCatalogTransferUpload(Buffer.from(await book.xlsx.writeBuffer()), 'rows.xlsx', { format: 'catalog', market: 'IT', mode: 'update' })).market).toBe('IT')
+  })
 })
