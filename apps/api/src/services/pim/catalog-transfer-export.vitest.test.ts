@@ -13,6 +13,7 @@ vi.mock('./catalog-transfer-plan.js', () => ({
   }),
 }))
 vi.mock('./mapping/category-mapping.service.js', () => ({ resolveCategoriesForProducts: vi.fn() }))
+vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: vi.fn() }))
 vi.mock('./catalog-transfer-download.js', () => ({ writeTransferDownload: vi.fn(async (groups: AsyncIterable<unknown[]>) => {
   const rows = []
   for await (const group of groups) rows.push(...group)
@@ -24,6 +25,7 @@ import ExcelJS from 'exceljs'
 import { readTransferFile } from './catalog-transfer-file.js'
 import { TRANSFER_COLUMNS, transferFileRow, type TransferRow } from '@nexus/shared/catalog-transfer'
 import { writeTransferDownload } from './catalog-transfer-download.js'
+import { resolveBatch } from './mapping/resolve-batch.service.js'
 
 const selection = Array.from({ length: 601 }, (_, i) => ({ id: `id-${i}`, sku: `SKU-${i}`, name: `Name ${i}`, version: i, familyId: 'jackets', parent: null, categories: [], localizedContent: {} }))
 beforeEach(() => {
@@ -77,6 +79,27 @@ describe('catalog export selection', () => {
   it('refuses products removed during generation instead of silently skipping them', async () => {
     vi.mocked(prisma.product.findMany).mockResolvedValueOnce(selection as never).mockResolvedValueOnce([])
     await expect(exportCatalogTransfer({ market: 'IT', familyId: 'jackets' })).rejects.toThrow('catalog changed')
+  })
+
+  it('batches effective exports by account, alias, category and language without mixing values', async () => {
+    const products = selection.slice(0, 25)
+    vi.mocked(prisma.product.findMany).mockImplementation(async (args: any) => args.select ? products : products.filter(p => args.where.id.in.includes(p.id)) as any)
+    vi.mocked(prisma.marketplace.findMany).mockResolvedValue([{ channel: 'SHOPIFY', code: 'GLOBAL', languages: ['it', 'de'] }] as never)
+    const destinations = [['a', '', 'coats'], ['a', 'outlet', 'coats'], ['b', '', 'jackets']]
+    vi.mocked(prisma.channelListing.findMany).mockResolvedValue(products.flatMap(p => destinations.map(([account, aliasKey, category]) => ({
+      id: `${p.id}-${account}-${aliasKey}`, productId: p.id, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: account,
+      aliasKey, version: 9, platformAttributes: { category },
+    }))) as never)
+    vi.mocked(resolveBatch).mockImplementation(async input => ({ products: [...input.productIds].reverse().map(productId => ({ productId, cells: {
+      title: { fieldKey: 'title', value: JSON.stringify([productId, input.channelConnectionId, input.aliasKey, input.productType, input.locale]) },
+    } })) }) as never)
+    const rows = await exportCatalogTransfer({ market: 'GLOBAL', familyId: 'jackets', effective: true }) as unknown as TransferRow[]
+    expect(rows).toHaveLength(25 * 3 * 2)
+    for (const p of products) for (const [accountId, aliasKey, category] of destinations) for (const locale of ['it', 'de']) {
+      expect(rows).toContainEqual(expect.objectContaining({ sku: p.sku, accountId, aliasKey, locale, version: 9, field: 'title', value: JSON.stringify([p.id, accountId, aliasKey, category, locale]) }))
+    }
+    expect(resolveBatch).toHaveBeenCalledTimes(6)
+    expect(vi.mocked(resolveBatch).mock.calls.every(([input]) => input.productIds.length <= 100)).toBe(true)
   })
 })
 
