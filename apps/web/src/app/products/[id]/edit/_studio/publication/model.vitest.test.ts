@@ -1,8 +1,19 @@
 import { expect, it } from 'vitest'
-import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt } from './model'
-import type { StudioPublishResult } from '@nexus/shared/studio-publication'
+import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged } from './model'
+import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
+it('requires overwrite confirmation for the exact current review and refuses missing warning evidence', () => {
+  const review: StudioPublishReview = { id: 'review-a', productId: 'p', scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'one' },
+    accountLabel: 'One', aliasLabel: 'Primary', mode: 'live', action: 'update', rows: [{ productId: 'p', sku: 'P', title: 'Product', existing: true }],
+    excluded: 0, issues: [], expiresAt: '2026-09-25T12:00:00Z', overwrite: { requiresConfirmation: true, products: [] } }
+  expect(publicationOverwriteAcknowledged(review, null)).toBe(false)
+  expect(publicationOverwriteAcknowledged(review, 'review-b')).toBe(false)
+  expect(publicationOverwriteAcknowledged(review, 'review-a')).toBe(true)
+  expect(publicationOverwriteAcknowledged({ ...review, id: 'review-b' }, 'review-a')).toBe(false)
+  expect(publicationOverwriteAcknowledged({ ...review, overwrite: undefined }, 'review-a')).toBe(false)
+  expect(publicationOverwriteAcknowledged({ ...review, overwrite: undefined, rows: review.rows.map(r => ({ ...r, existing: false })) }, null)).toBe(true)
+})
 it('keeps a selected alias only in its exact account and marketplace', () => {
   const current = { channel: 'AMAZON', marketplace: 'IT', accountId: 'two', listingId: 'alias' }
   const options = publicationDestinations([market, { ...market, id: 'de', code: 'DE' }], current)

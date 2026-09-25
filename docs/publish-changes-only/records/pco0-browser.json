@@ -1,0 +1,176 @@
+{
+  "fixture": "/private/tmp/pco0-browser-x7x6HQ",
+  "checkedAt": "2026-09-25T00:45:43.502Z",
+  "checks": [
+    "unchecked disables submit; Space acknowledges; exact review submits once with confirmOverwrite:true",
+    "new destination and review clear acknowledgment",
+    "expected stale 409 + refreshed review clear acknowledgment",
+    "light-1280: long values wrap, contrast ≥7:1, Space/Tab trap/Escape and opener focus restore",
+    "dark-1280: long values wrap, contrast ≥7:1, Space/Tab trap/Escape and opener focus restore",
+    "light-390: long values wrap, contrast ≥7:1, Space/Tab trap/Escape and opener focus restore",
+    "dark-390: long values wrap, contrast ≥7:1, Space/Tab trap/Escape and opener focus restore"
+  ],
+  "screenshots": [
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-light-1280-top.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-light-1280-acknowledgment.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-dark-1280-top.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-dark-1280-acknowledgment.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-light-390-top.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-light-390-acknowledgment.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-dark-390-top.png",
+    "/Users/awais/nexus-commerce/docs/publish-changes-only/records/pco0-browser-dark-390-acknowledgment.png"
+  ],
+  "contrasts": [
+    {
+      "name": "light-1280",
+      "samples": 47,
+      "minimum": 9.87,
+      "failing": []
+    },
+    {
+      "name": "dark-1280",
+      "samples": 47,
+      "minimum": 9.37,
+      "failing": []
+    },
+    {
+      "name": "light-390",
+      "samples": 47,
+      "minimum": 9.87,
+      "failing": []
+    },
+    {
+      "name": "dark-390",
+      "samples": 47,
+      "minimum": 9.37,
+      "failing": []
+    }
+  ],
+  "calls": [
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "success"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/pco-review-1/submit",
+      "body": {
+        "locationId": "",
+        "confirmOverwrite": true
+      },
+      "scenario": "success"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "destination"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "EBAY",
+        "marketplace": "IT",
+        "accountId": "ebay-one"
+      },
+      "scenario": "destination"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "stale"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/pco-review-4/submit",
+      "body": {
+        "locationId": "",
+        "confirmOverwrite": true
+      },
+      "scenario": "stale"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "stale"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "light-1280"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "dark-1280"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "light-390"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/pco-demo/studio-publication/preview",
+      "body": {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "accountId": "amazon-one",
+        "listingId": "selected-alias"
+      },
+      "scenario": "dark-390"
+    }
+  ],
+  "errors": [],
+  "expected409": [
+    {
+      "scenario": "stale",
+      "message": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+    }
+  ],
+  "blockedExternal": [],
+  "ok": true
+}

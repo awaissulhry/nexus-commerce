@@ -1,0 +1,867 @@
+{
+  "role": {
+    "user": "neondb_owner",
+    "rolbypassrls": true
+  },
+  "readOnly": "on",
+  "dbNow": "2026-09-24T23:53:02Z",
+  "controls": [
+    {
+      "products": 360,
+      "queue": 33916,
+      "listings": 1057,
+      "bulk_ops": 2137
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "nexus_legacy_workspace",
+      "name": "Xavia Racing",
+      "status": "active",
+      "legacy": true
+    },
+    {
+      "id": "bf0047bf-e1d9-48d0-8cc6-20e94bb734dd",
+      "name": "Motovento",
+      "status": "active",
+      "legacy": false
+    }
+  ],
+  "queueGroups": [
+    {
+      "ch": "AMAZON",
+      "status": "PENDING",
+      "dead": false,
+      "code": "-",
+      "type": "AD_BID_UPDATE",
+      "n": 1,
+      "oldest": "2026-09-15T08:42:39Z",
+      "newest": "2026-09-15T08:42:39Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "AD_BID_UPDATE",
+      "n": 29926,
+      "oldest": "2026-08-25T06:00:12Z",
+      "newest": "2026-09-24T22:04:45Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "QUANTITY_UPDATE",
+      "n": 425,
+      "oldest": "2026-08-25T18:15:12Z",
+      "newest": "2026-09-15T23:30:04Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "AD_ENTITY_STATE_UPDATE",
+      "n": 20,
+      "oldest": "2026-08-26T09:40:16Z",
+      "newest": "2026-08-26T09:40:54Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "AD_BUDGET_UPDATE",
+      "n": 7,
+      "oldest": "2026-08-26T02:00:05Z",
+      "newest": "2026-08-31T19:00:05Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "ADS_RECLAIMED",
+      "type": "AD_BID_UPDATE",
+      "n": 3,
+      "oldest": "2026-08-31T22:01:03Z",
+      "newest": "2026-09-15T08:42:00Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "PRICE_UPDATE",
+      "n": 2,
+      "oldest": "2026-09-14T19:54:25Z",
+      "newest": "2026-09-14T19:54:26Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "FAILED",
+      "dead": true,
+      "code": "ADS_STALE_IN_PROGRESS",
+      "type": "AD_BID_UPDATE",
+      "n": 1,
+      "oldest": "2026-07-02T06:04:27Z",
+      "newest": "2026-07-02T06:04:27Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SKIPPED",
+      "dead": false,
+      "code": "AMAZON_EMPTY_PATCH_NOT_SENT",
+      "type": "QUANTITY_UPDATE",
+      "n": 135,
+      "oldest": "2026-09-16T04:16:27Z",
+      "newest": "2026-09-24T04:16:58Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "SKIPPED",
+      "dead": false,
+      "code": "WRITE_GATE_DENIED",
+      "type": "AD_BID_UPDATE",
+      "n": 3,
+      "oldest": "2026-08-25T06:01:35Z",
+      "newest": "2026-08-27T07:05:57Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "AMAZON",
+      "status": "CANCELLED",
+      "dead": false,
+      "code": "-",
+      "type": "PRICE_UPDATE",
+      "n": 18,
+      "oldest": "2026-09-14T19:54:24Z",
+      "newest": "2026-09-14T19:54:50Z",
+      "max_retry": 1
+    },
+    {
+      "ch": "AMAZON",
+      "status": "CANCELLED",
+      "dead": false,
+      "code": "-",
+      "type": "QUANTITY_UPDATE",
+      "n": 2,
+      "oldest": "2026-08-27T21:00:18Z",
+      "newest": "2026-09-01T21:00:12Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "EBAY",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "QUANTITY_UPDATE",
+      "n": 1155,
+      "oldest": "2026-08-25T18:15:12Z",
+      "newest": "2026-09-24T12:30:49Z",
+      "max_retry": 2
+    },
+    {
+      "ch": "EBAY",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "CIRCUIT_OPEN_DEFERRED",
+      "type": "QUANTITY_UPDATE",
+      "n": 13,
+      "oldest": "2026-08-26T07:30:11Z",
+      "newest": "2026-08-29T05:15:15Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "EBAY",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "-",
+      "type": "CONTENT_UPDATE",
+      "n": 3,
+      "oldest": "2026-09-04T23:13:38Z",
+      "newest": "2026-09-04T23:16:52Z",
+      "max_retry": 0
+    },
+    {
+      "ch": "EBAY",
+      "status": "SUCCESS",
+      "dead": false,
+      "code": "EBAY_TRANSIENT",
+      "type": "QUANTITY_UPDATE",
+      "n": 2,
+      "oldest": "2026-08-29T00:15:04Z",
+      "newest": "2026-08-30T20:30:44Z",
+      "max_retry": 2
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "MAX_RETRIES_EXCEEDED",
+      "type": "PRICE_UPDATE",
+      "n": 1725,
+      "oldest": "2026-07-06T02:35:18Z",
+      "newest": "2026-07-19T17:28:43Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "MAX_RETRIES_EXCEEDED",
+      "type": "QUANTITY_UPDATE",
+      "n": 404,
+      "oldest": "2026-07-06T14:13:59Z",
+      "newest": "2026-07-19T19:26:08Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "EBAY_VALIDATION",
+      "type": "QUANTITY_UPDATE",
+      "n": 28,
+      "oldest": "2026-07-26T18:08:40Z",
+      "newest": "2026-07-26T18:09:28Z",
+      "max_retry": 1
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "EBAY_REVISE_DEBOUNCED",
+      "type": "QUANTITY_UPDATE",
+      "n": 22,
+      "oldest": "2026-07-20T00:30:29Z",
+      "newest": "2026-07-20T01:20:05Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "EBAY_LISTING_ENDED",
+      "type": "QUANTITY_UPDATE",
+      "n": 10,
+      "oldest": "2026-07-19T20:49:09Z",
+      "newest": "2026-07-20T00:30:33Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "MAX_RETRIES_EXCEEDED",
+      "type": "CONTENT_UPDATE",
+      "n": 5,
+      "oldest": "2026-09-01T00:52:59Z",
+      "newest": "2026-09-01T03:23:40Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "EBAY_VALIDATION",
+      "type": "CONTENT_UPDATE",
+      "n": 2,
+      "oldest": "2026-09-02T04:28:18Z",
+      "newest": "2026-09-02T04:38:41Z",
+      "max_retry": 1
+    },
+    {
+      "ch": "EBAY",
+      "status": "FAILED",
+      "dead": true,
+      "code": "EBAY_VALIDATION",
+      "type": "PRICE_UPDATE",
+      "n": 2,
+      "oldest": "2026-07-19T02:24:11Z",
+      "newest": "2026-07-19T03:18:45Z",
+      "max_retry": 3
+    },
+    {
+      "ch": "EBAY",
+      "status": "CANCELLED",
+      "dead": false,
+      "code": "-",
+      "type": "QUANTITY_UPDATE",
+      "n": 2,
+      "oldest": "2026-08-27T21:00:18Z",
+      "newest": "2026-09-01T21:00:12Z",
+      "max_retry": 0
+    }
+  ],
+  "wouldPickNow": [],
+  "pendingOnHold": [
+    {
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "n": 1,
+      "hold_max": "2026-09-24T23:53:21Z"
+    }
+  ],
+  "inProgress": [],
+  "queueByDay": [
+    {
+      "day": "2026-09-24",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-24",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-24",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 18
+    },
+    {
+      "day": "2026-09-23",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-23",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-23",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 130
+    },
+    {
+      "day": "2026-09-22",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-22",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-22",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 240
+    },
+    {
+      "day": "2026-09-21",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-21",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-21",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 50
+    },
+    {
+      "day": "2026-09-20",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 1446
+    },
+    {
+      "day": "2026-09-20",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-19",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 482
+    },
+    {
+      "day": "2026-09-19",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-18",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-18",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-18",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 60
+    },
+    {
+      "day": "2026-09-17",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-17",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-17",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 80
+    },
+    {
+      "day": "2026-09-16",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 964
+    },
+    {
+      "day": "2026-09-16",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SKIPPED",
+      "n": 15
+    },
+    {
+      "day": "2026-09-16",
+      "ch": "EBAY",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 20
+    },
+    {
+      "day": "2026-09-15",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "SUCCESS",
+      "n": 963
+    },
+    {
+      "day": "2026-09-15",
+      "ch": "AMAZON",
+      "type": "QUANTITY_UPDATE",
+      "status": "SUCCESS",
+      "n": 2
+    },
+    {
+      "day": "2026-09-15",
+      "ch": "AMAZON",
+      "type": "AD_BID_UPDATE",
+      "status": "PENDING",
+      "n": 1
+    }
+  ],
+  "failedMessages": [
+    {
+      "ch": "EBAY",
+      "msg": "get offers 404: {\"errors\":[{\"errorId\":25713,\"domain\":\"API_INVENTORY\",\"subdomain\":\"Selling\",\"category\":\"Request\",\"message\":\"Questa Proposta non è disponibile.\"}]",
+      "n": 1710,
+      "last": "2026-07-19T21:01:15Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "inventory_item PUT 400: {\"errors\":[{\"errorId\":25001,\"domain\":\"API_INVENTORY\",\"subdomain\":\"Selling\",\"category\":\"Request\",\"message\":\"Si è verificato un errore di ",
+      "n": 29,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "NEXUS_ENABLE_EBAY_PUBLISH=false — set true to enable eBay outbound sync.",
+      "n": 12,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay ReviseInventoryStatus Failure: Non puoi modificare un'inserzione scaduta \"#\". (code #)",
+      "n": 12,
+      "last": "2026-07-20T00:31:06Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "debounced: last revise 1s ago (< 15s min interval)",
+      "n": 8,
+      "last": "2026-07-20T01:22:04Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "debounced: last revise 14s ago (< 15s min interval)",
+      "n": 6,
+      "last": "2026-07-20T01:22:05Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "debounced: last revise 15s ago (< 15s min interval)",
+      "n": 5,
+      "last": "2026-07-20T01:22:05Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "inventory_item GET 200 — refusing content PUT built from an empty read (would wipe product data)",
+      "n": 5,
+      "last": "2026-09-01T03:53:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 593s.",
+      "n": 4,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 546s.",
+      "n": 4,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 550s.",
+      "n": 3,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 583s.",
+      "n": 3,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 369s.",
+      "n": 3,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 543s.",
+      "n": 3,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 278s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 472s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 299s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 462s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 363s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 554s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 521s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 566s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 4s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 452s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    },
+    {
+      "ch": "EBAY",
+      "msg": "eBay publish circuit open after 3 consecutive failures. Retry in 383s.",
+      "n": 2,
+      "last": "2026-07-19T21:00:01Z"
+    }
+  ],
+  "publishAttempts": [
+    {
+      "ch": "AMAZON",
+      "mode": "live",
+      "outcome": "success",
+      "n": 12,
+      "first": "2026-09-14T15:34:18Z",
+      "last": "2026-09-23T14:23:40Z"
+    },
+    {
+      "ch": "EBAY",
+      "mode": "live",
+      "outcome": "success",
+      "n": 575,
+      "first": "2026-09-16T08:15:08Z",
+      "last": "2026-09-24T12:30:33Z"
+    },
+    {
+      "ch": "EBAY",
+      "mode": "live",
+      "outcome": "failed",
+      "n": 11,
+      "first": "2026-09-18T05:15:13Z",
+      "last": "2026-09-23T05:15:14Z"
+    }
+  ],
+  "studioPublications": [
+    {
+      "ch": "AMAZON",
+      "status": "ACCEPTED",
+      "n": 1,
+      "first": "2026-09-14T20:29:24Z",
+      "last": "2026-09-14T20:29:24Z"
+    },
+    {
+      "ch": "AMAZON",
+      "status": "PREVIEW",
+      "n": 1,
+      "first": "2026-09-14T20:21:21Z",
+      "last": "2026-09-14T20:21:21Z"
+    }
+  ],
+  "studioPublicationsLatest": [
+    {
+      "at": "2026-09-14T20:29:24Z",
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "status": "ACCEPTED",
+      "products": 21,
+      "result": "Amazon processed feed 123797020710. Storefront visibility is still determined by Amazon."
+    },
+    {
+      "at": "2026-09-14T20:21:21Z",
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "status": "PREVIEW",
+      "products": 21,
+      "result": ""
+    }
+  ],
+  "snapshots": [],
+  "drift": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "rows": 57,
+      "drifting": 45,
+      "oldest_check": "2026-09-24T18:40:42Z",
+      "newest_check": "2026-09-24T18:40:42Z"
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "rows": 90,
+      "drifting": 0,
+      "oldest_check": "2026-09-24T18:40:42Z",
+      "newest_check": "2026-09-24T18:40:42Z"
+    },
+    {
+      "ch": "EBAY",
+      "mkt": "IT",
+      "rows": 231,
+      "drifting": 0,
+      "oldest_check": "2026-09-24T18:39:59Z",
+      "newest_check": "2026-09-24T23:30:46Z"
+    }
+  ],
+  "driftSample": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "n": 4,
+      "fields": "[{\"ours\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (3XL, Schwarz)\", \"field\": \"item_name[de_DE]\", \"source\": \"amazon-content\", \"theirs\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (Schwarz, 3XL)\", \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"Polyester\"}, \"field\": \"fabric_type\", \"source\": \"amazon-content\", \"theirs\": {\"[0].value\": \"100% Polyester\"}, \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"3XL\", \"[0].la",
+      "src": "{\"amazon-content\": {\"at\": \"2026-09-24T18:40:42.978Z\", \"outcome\": \"compared\", \"differing\": 4, \"notCompared\": 27}}"
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "n": 4,
+      "fields": "[{\"ours\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (4XL, Schwarz)\", \"field\": \"item_name[de_DE]\", \"source\": \"amazon-content\", \"theirs\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (Schwarz, 4XL)\", \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"Polyester\"}, \"field\": \"fabric_type\", \"source\": \"amazon-content\", \"theirs\": {\"[0].value\": \"100% Polyester\"}, \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"4XL\", \"[0].la",
+      "src": "{\"amazon-content\": {\"at\": \"2026-09-24T18:40:42.978Z\", \"outcome\": \"compared\", \"differing\": 4, \"notCompared\": 27}}"
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "n": 4,
+      "fields": "[{\"ours\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Schwarz)\", \"field\": \"item_name[de_DE]\", \"source\": \"amazon-content\", \"theirs\": \"XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (Schwarz, XS)\", \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"Polyester\"}, \"field\": \"fabric_type\", \"source\": \"amazon-content\", \"theirs\": {\"[0].value\": \"100% Polyester\"}, \"checkedAt\": \"2026-09-24T18:40:42.978Z\"}, {\"ours\": {\"[0].value\": \"XS\", \"[0].langu",
+      "src": "{\"amazon-content\": {\"at\": \"2026-09-24T18:40:42.978Z\", \"outcome\": \"compared\", \"differing\": 4, \"notCompared\": 27}}"
+    }
+  ],
+  "driftFields": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "field": "item_name[*]",
+      "listings": 45
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "field": "brand",
+      "listings": 32
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "field": "size",
+      "listings": 13
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "field": "supplier_declared_has_product_identifier_exemption",
+      "listings": 13
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "field": "fabric_type",
+      "listings": 13
+    }
+  ],
+  "driftFamilies": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "family": "xracing",
+      "drifting_listings": 29
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "family": "GALE-JACKET",
+      "drifting_listings": 13
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "family": "xavia-knee-slider",
+      "drifting_listings": 3
+    }
+  ],
+  "driftCompared": [
+    {
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "differing": 0,
+      "avg_not_compared": "16.9",
+      "rows": 90
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "differing": 116,
+      "avg_not_compared": "38.5",
+      "rows": 57
+    }
+  ],
+  "listings": [
+    {
+      "ch": "AMAZON",
+      "rows": 725,
+      "with_external_id": 700,
+      "is_published": 710,
+      "active": 235,
+      "with_flat_file_snapshot": 346,
+      "with_last_synced": 99,
+      "last_synced_max": "2026-07-15T15:27:28Z"
+    },
+    {
+      "ch": "EBAY",
+      "rows": 332,
+      "with_external_id": 327,
+      "is_published": 331,
+      "active": 302,
+      "with_flat_file_snapshot": 327,
+      "with_last_synced": 0,
+      "last_synced_max": null
+    }
+  ]
+}

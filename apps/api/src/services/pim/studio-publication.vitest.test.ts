@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
+const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -19,7 +19,7 @@ vi.mock('../../db.js', () => {
     && (!Object.hasOwn(where, 'userId') || row.userId === where.userId)
     && (!where.status || (typeof where.status === 'string' ? row.status === where.status : where.status.in.includes(row.status)))
     && (!where.changes || row.changes[where.changes.path[0]] === where.changes.equals)
-  const db = { bulkOperation: {
+  const db = { channelDrift: { findMany: m.drift }, bulkOperation: {
     findFirst: async ({ where }: any) => [...m.rows.values()].find(row => matches(row, where)) ?? null,
     create: async ({ data }: any) => { m.rows.set(data.id, data); return data },
     updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, { ...row, ...data }); return { count: rows.length } },
@@ -33,7 +33,48 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+
+const existingFacts = () => ({ ...facts(), listings: [{ id: 'listing-parent', productId: 'parent', externalListingId: 'existing-item' }] })
+const contentObservation = (theirs = 'Channel title') => ({ channelListingId: 'listing-parent',
+  checkedBySource: { 'amazon-content': { at: '2026-09-24T18:40:00.000Z', outcome: 'compared', differing: 1, notCompared: 12 } },
+  driftedFields: [{ source: 'amazon-content', field: 'item_name', ours: 'Earlier Nexus title', theirs, checkedAt: '2026-09-24T18:40:00.000Z' }] })
+
+it('reviews historical content differences and unread children before an existing listing overwrite', async () => {
+  m.facts.mockResolvedValue({ ...existingFacts(), listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'existing-child' }] })
+  m.drift.mockResolvedValue([contentObservation()])
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(review.overwrite).toMatchObject({ requiresConfirmation: true, products: [
+    { productId: 'parent', sku: 'SKU', status: 'compared', notCompared: 12,
+      fields: [{ field: 'item_name', nexusAtRead: 'Earlier Nexus title', channelAtRead: 'Channel title' }] },
+    { productId: 'child', sku: 'CHILD', status: 'not_read', fields: [] },
+  ] })
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it.each([undefined, false, 'true', 1])('refuses an existing listing overwrite without explicit true confirmation (%s)', async confirmOverwrite => {
+  m.facts.mockResolvedValue(existingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite }, 'user')).rejects.toThrow(/confirm.*overwrite/i)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.createListings).not.toHaveBeenCalled()
+  expect(m.rows.get(review.id!).status).toBe('PREVIEW')
+})
+
+it('records explicit overwrite confirmation with the submitted review', async () => {
+  m.facts.mockResolvedValue(existingFacts())
+  const review = await previewStudioPublication('parent', scope, 'user')
+  expect(await submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')).toMatchObject({ status: 'SUBMITTED' })
+  expect(m.rows.get(review.id!).changes.confirmOverwrite).toBe(true)
+  expect(m.amazon).toHaveBeenCalledOnce()
+})
+
+it('invalidates overwrite confirmation when the observed channel differences change', async () => {
+  m.facts.mockResolvedValue(existingFacts()); m.drift.mockResolvedValue([contentObservation()])
+  const review = await previewStudioPublication('parent', scope, 'user')
+  m.drift.mockResolvedValue([contentObservation('A more recent channel title')])
+  await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')).rejects.toThrow(/changed/i)
+  expect(m.amazon).not.toHaveBeenCalled(); expect(m.createListings).not.toHaveBeenCalled()
+})
 
 it('checkpoints eBay acknowledgement before read-back and recovers local persistence without resending', async () => {
   const ebayScope = { ...scope, channel: 'EBAY' }

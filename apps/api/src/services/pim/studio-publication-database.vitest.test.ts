@@ -59,6 +59,30 @@ beforeEach(async () => {
 
 afterAll(async () => { await fixture.database?.close() }, 30_000)
 
+it('binds a real stored content read to the selected listing and persists its explicit overwrite acknowledgement', async () => {
+  const own = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, externalListingId: '123456789012' } })
+  const other = await prisma.channelListing.create({ data: { productId, channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId, aliasKey: 'different-alias', externalListingId: 'another-item' } })
+  const at = '2026-09-24T18:40:00.000Z'
+  const content = { driftCount: 1, driftedFields: [{ field: 'Title', ours: 'Earlier Nexus', theirs: 'eBay title', source: 'ebay-content', checkedAt: at }],
+    checkedBySource: { 'ebay-content': { at, outcome: 'compared', differing: 1 } } }
+  await prisma.channelDrift.create({ data: { channelListingId: other.id, channel: 'EBAY', marketplace: 'IT', lastCheckedAt: new Date(at), ...content } })
+  const stock = await prisma.channelDrift.create({ data: { channelListingId: own.id, channel: 'EBAY', marketplace: 'IT', lastCheckedAt: new Date(at),
+    checkedBySource: { 'ebay-trading-getitem': { at, outcome: 'compared', differing: 0 } } } })
+  fixture.facts.mockResolvedValue({ ...facts(), listings: [own] })
+  const unreadReview = await previewStudioPublication(productId, scope, null)
+  expect(unreadReview.overwrite).toMatchObject({ requiresConfirmation: true, products: [{ status: 'not_read', fields: [] }] })
+  await expect(submitStudioPublication(productId, unreadReview.id!, {}, null)).rejects.toThrow(/confirm.*overwrite/i)
+  await prisma.channelDrift.update({ where: { id: stock.id }, data: content })
+  await expect(submitStudioPublication(productId, unreadReview.id!, { confirmOverwrite: true }, null)).rejects.toThrow('changed')
+  expect(fixture.sendEbay).not.toHaveBeenCalled()
+  const reviewed = await previewStudioPublication(productId, scope, null)
+  expect(reviewed.overwrite?.products[0]).toMatchObject({ status: 'compared', fields: [{ field: 'Title', nexusAtRead: 'Earlier Nexus', channelAtRead: 'eBay title' }] })
+  fixture.readEbay.mockResolvedValue({ reference: '123456789012', warnings: [], verified: true })
+  await submitStudioPublication(productId, reviewed.id!, { confirmOverwrite: true }, null)
+  expect((await prisma.bulkOperation.findUniqueOrThrow({ where: { id: reviewed.id! } })).changes).toMatchObject({ confirmOverwrite: true })
+  expect(fixture.sendEbay).toHaveBeenCalledOnce()
+}, 30_000)
+
 it('persists the eBay receipt before read-back and recovers the local projection without resending', async () => {
   const review = await previewStudioPublication(productId, scope, null)
   expect(review.id).toBeTruthy()

@@ -1,0 +1,45 @@
+{
+  "readOnly": "on",
+  "exposure": [
+    {
+      "ch": "AMAZON",
+      "mkt": "DE",
+      "listings": 214,
+      "open": 36,
+      "open_content_compared": 13,
+      "open_content_differs": 13
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "ES",
+      "listings": 123,
+      "open": 30,
+      "open_content_compared": 0,
+      "open_content_differs": 0
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "FR",
+      "listings": 115,
+      "open": 36,
+      "open_content_compared": 0,
+      "open_content_differs": 0
+    },
+    {
+      "ch": "AMAZON",
+      "mkt": "IT",
+      "listings": 273,
+      "open": 273,
+      "open_content_compared": 90,
+      "open_content_differs": 0
+    },
+    {
+      "ch": "EBAY",
+      "mkt": "IT",
+      "listings": 332,
+      "open": 332,
+      "open_content_compared": 0,
+      "open_content_differs": 0
+    }
+  ]
+}

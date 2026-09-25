@@ -6,7 +6,8 @@ import { Button, Select } from '@/design-system/primitives'
 import { Banner, Field, Modal, ProgressBar } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import { useStudioProduct, usePublicationSave, useStudioScope, useStudioDiscoveryFailure } from '../contracts'
-import { matchesPublicationReview, publicationDestinations, publicationScopeKey, retainPublicationReceipt } from './model'
+import { matchesPublicationReview, publicationDestinations, publicationScopeKey, retainPublicationReceipt, publicationOverwriteAcknowledged } from './model'
+import { PublicationOverwrite } from './PublicationOverwrite'
 import { publicationRequest as request } from './request'
 import styles from './publication.module.css'
 
@@ -26,6 +27,7 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
   const [busy, setBusy] = useState<'review' | 'publish' | 'status' | null>(null)
   const [locationId, setLocationId] = useState(''), [refresh, setRefresh] = useState(0)
   const [uncertain, setUncertain] = useState(false)
+  const [confirmedReviewId, setConfirmedReviewId] = useState<string | null>(null)
   const sending = useRef(false)
   const blockedSave = save.kind === 'saving' || save.kind === 'error'
   const saveRevision = save.kind === 'saved' ? save.at : save.kind
@@ -41,7 +43,7 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
     // Save notifications may arrive while a channel request is outstanding. Keep
     // its durable review and status until the user closes the dialog.
     if (sending.current || result || uncertain) return
-    setReview(null); setError(null); setLocationId('')
+    setReview(null); setError(null); setLocationId(''); setConfirmedReviewId(null)
     if (!scope || blockedSave || !canPublish || discoveryFailed) { setBusy(null); return }
     const controller = new AbortController()
     setBusy('review')
@@ -67,11 +69,12 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
   }
   const send = async () => {
     if (sending.current || !review?.id || !scope || !canPublish || blockedSave || uncertain || result || review.issues.some(i => i.severity === 'error')) return
+    if (!publicationOverwriteAcknowledged(review, confirmedReviewId)) return
     const saveBlocker = publicationBlocker(canChangeEditor)
     if (saveBlocker) { setReview(null); setError(saveBlocker); return }
     sending.current = true; setBusy('publish'); setError(null)
     const id = review.id
-    try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(id)}/submit`, 'POST', { locationId }), id) }
+    try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(id)}/submit`, 'POST', { locationId, confirmOverwrite: confirmedReviewId === id }), id) }
     catch (e) {
       const status = (e as { status?: number }).status
       setUncertain(!status || status >= 500)
@@ -92,12 +95,13 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
   const pending = busy === 'publish' || busy === 'status'
   const canSend = !!review?.id && !busy && !blockedSave && canPublish && !blockers.length && !result && !uncertain
     && (!review.locations || review.locations.some(l => l.id === locationId))
+    && publicationOverwriteAcknowledged(review, confirmedReviewId)
   return <Modal open onClose={() => { if (!pending) onClose() }} size="lg" readable title="Publish product"
     subtitle={`${product.sku} · Saved product information and included variants`}
     footer={<>
       <Button size="sm" disabled={pending} onClick={onClose}>{result ? 'Done' : 'Cancel'}</Button>
       {uncertain ? <Button size="sm" variant="primary" disabled={!!busy} onClick={checkStatus}>{busy === 'status' ? 'Checking…' : 'Check publication status'}</Button>
-        : result ? null : <Button size="sm" variant="primary" disabled={!canSend} onClick={send}>{busy === 'publish' ? 'Publishing…' : review?.visibility === 'DRAFT' ? 'Send draft to Shopify' : review?.action === 'update' ? 'Publish changes' : 'Publish product'}</Button>}
+        : result ? null : <Button size="sm" variant="primary" disabled={!canSend} onClick={send}>{busy === 'publish' ? 'Publishing…' : review?.visibility === 'DRAFT' ? 'Send draft to Shopify' : review?.action === 'update' ? 'Publish saved content' : 'Publish product'}</Button>}
     </>}>
     <div className={styles.body} aria-busy={!!busy}>
       {!canPublish && <Banner tone="warning" title="Publishing permission required">Your role needs product publishing access.</Banner>}
@@ -120,6 +124,9 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
         {review.issues.length > 0 && <Banner tone={blockers.length ? 'warning' : 'info'} title={blockers.length ? `${blockers.length} ${blockers.length === 1 ? 'issue' : 'issues'} to resolve before publishing` : 'Review notes'}>
           <ul className={styles.issues}>{review.issues.map((issue, i) => <li key={i}>{issue.sku && <strong>{issue.sku}: </strong>}{issue.message}</li>)}</ul>
         </Banner>}
+        {review.overwrite && <PublicationOverwrite overwrite={review.overwrite} confirmed={confirmedReviewId === review.id && !!review.id}
+          onConfirm={confirmed => setConfirmedReviewId(confirmed ? review.id : null)} disabled={!review.id || !!busy || uncertain || !!result} />}
+        {!review.overwrite && review.rows.some(row => row.existing) && <Banner tone="warning" title="Overwrite review unavailable">Refresh this review after the server update before publishing existing listings.</Banner>}
         <div className={styles.products} role="region" aria-label="Products in this publication" tabIndex={0}>
           {review.rows.map(row => <div key={row.productId} className={styles.product}><strong>{row.sku}</strong><span>{row.title}</span><span>{row.existing ? 'Existing listing' : 'New listing'}</span></div>)}
         </div>

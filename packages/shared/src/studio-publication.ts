@@ -29,6 +29,23 @@ export interface StudioPublishReview {
   locations?: Array<{ id: string; name: string }>
   visibility?: string
   previousPublicationId?: string
+  /** Historical content observations, not a live read or a list of changes to be sent. */
+  overwrite?: StudioPublishOverwrite
+}
+
+export interface StudioPublishOverwrite {
+  requiresConfirmation: boolean
+  products: Array<{
+    productId: string
+    sku: string
+    status: 'new' | 'not_read' | 'not_compared' | 'compared'
+    checkedAt: string | null
+    reason?: string
+    differing: number
+    notCompared: number | null
+    omittedDifferences: number
+    fields: Array<{ field: string; nexusAtRead: unknown; channelAtRead: unknown; checkedAt: string }>
+  }>
 }
 
 export interface StudioPublishResult {

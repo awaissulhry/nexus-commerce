@@ -3,6 +3,13 @@ import type { MarketplaceLite } from '../types'
 
 export const publicationScopeKey = (scope: StudioPublishScope) => JSON.stringify([scope.channel, scope.marketplace, scope.accountId, scope.listingId ?? null])
 
+/** A tick belongs to one durable review; refreshing or changing destination needs a new tick. */
+export function publicationOverwriteAcknowledged(review: StudioPublishReview | null, confirmedReviewId: string | null): boolean {
+  if (!review) return false
+  if (!review.rows.some(row => row.existing) && !review.overwrite?.requiresConfirmation) return true
+  return !!review.id && review.overwrite?.requiresConfirmation === true && confirmedReviewId === review.id
+}
+
 /** A status read without durable provider results cannot erase a receipt already received by this dialog. */
 export function retainPublicationReceipt(previous: StudioPublishResult | null, next: StudioPublishResult): StudioPublishResult {
   if (!previous || previous.id !== next.id || next.results.length) return next

@@ -5,4 +5,12 @@
 .products { max-height: 240px; overflow: auto; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); }
 .product { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); padding: var(--nds-space-10); overflow-wrap: anywhere; }
 .product + .product { border-top: 1px solid var(--nds-border-subtle); }
+.observations { max-height: 320px; overflow: auto; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); }
+.observation { display: grid; gap: var(--nds-space-8); padding: var(--nds-space-12); overflow-wrap: anywhere; }
+.observation + .observation { border-top: 1px solid var(--nds-border); }
+.observedField { display: grid; gap: var(--nds-space-6); }
+.observedValues { display: grid; gap: var(--nds-space-8); margin: 0; }
+.observedValues dt { color: var(--nds-text-muted); }
+.observedValues dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (min-width: 640px) { .observedValues { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 640px) { .product { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--nds-space-12); } }

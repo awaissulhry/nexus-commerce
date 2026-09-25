@@ -10,6 +10,7 @@ import { readPublicationFacts, publicationDigest, object } from './studio-public
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { prepareEbayPublication, sendEbayPublication, readEbayPublication, type EbayPublication } from './studio-publication-ebay.js'
+import { readPublicationOverwrite } from './studio-publication-overwrite.js'
 
 const KIND = 'studio-publication'
 const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
@@ -58,15 +59,16 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
     } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'ETSY' ? 'Etsy' : scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
   } catch (error) { issues.push({ severity: 'error', message: error instanceof Error ? error.message : String(error) }) }
   if (mode !== 'live') issues.push({ severity: 'error', message: mode === 'unavailable' ? 'Publication is unavailable for this channel.' : `Live publishing is ${mode === 'gated' ? 'disabled' : `in ${mode} mode`} for this channel. Enable live publishing in the channel configuration to send this product.` })
+  const overwrite = await readPublicationOverwrite(facts)
   const review: StudioPublishReview = {
     id: null, productId, scope, accountLabel: facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
     action: facts.listings.some(l => l.externalListingId) ? 'update' : 'create', excluded: facts.excluded,
     rows: facts.products.map(p => ({ productId: p.id, sku: p.sku,
       title: String(facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.title?.value ?? facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.item_name?.value ?? p.name ?? p.sku),
       existing: !!facts.listings.find(l => l.productId === p.id)?.externalListingId })),
-    issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility,
+    issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility, overwrite,
   }
-  return { facts, review, prepared, revision: publicationDigest([facts.revision, prepared, mode]) }
+  return { facts, review, prepared, revision: publicationDigest([facts.revision, prepared, mode, overwrite]) }
 }
 
 /** A durable review also owns retries, across API processes and browser reconnects. */
@@ -133,11 +135,13 @@ export async function submitStudioPublication(productId: string, id: string, bod
   if (operation.status !== 'PREVIEW') return studioPublicationResult(productId, id, userId)
   if (!operation.expiresAt || operation.expiresAt.getTime() <= Date.now()) throw new WorkspaceScopeError('This publication review expired. Review the current saved values again.')
   const plan = await buildReview(productId, data.scope as StudioPublishScope)
-  if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination or channel settings changed. Review the current values before publishing.')
+  if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination, channel settings or content-read evidence changed. Review the current values before publishing.')
   const blockers = plan.review.issues.filter(i => i.severity === 'error')
   if (blockers.length || !plan.prepared) throw new WorkspaceScopeError(blockers.map(i => i.message).join('\n') || 'Publication is unavailable.', 422)
   const input = object(body)
+  if (plan.review.overwrite?.requiresConfirmation && input.confirmOverwrite !== true) throw new WorkspaceScopeError('Confirm the overwrite warning for this review before publishing.', 400)
   if (plan.prepared.kind === 'shopify' && !plan.review.locations?.some(l => l.id === input.locationId)) throw new WorkspaceScopeError('Choose an inventory location from this Shopify store.', 400)
+  data.confirmOverwrite = plan.review.overwrite?.requiresConfirmation === true && input.confirmOverwrite === true
   data.startedAt = new Date().toISOString()
   data.delivery = { productIds: plan.facts.products.map(p => p.id), aliasKey: plan.facts.destination.aliasKey ?? '' }
   const claimed = await prisma.$transaction(async tx => {
