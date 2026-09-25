@@ -5,6 +5,8 @@
 import { gatewayFetch, type GatewayBody, type GatewayRequest } from './gateway.js'
 import { operationOfPath } from './channels.js'
 import { accountOfToken } from './token-accounts.js'
+import { graphqlRootField } from './graphql-root-field.js'
+export { graphqlRootField } from './graphql-root-field.js'
 
 /** REST: event subscriptions are connection setup; orders, fulfilments and refunds have their own switch. */
 const SETUP_REST = /\/webhooks(\/|\.json)/
@@ -13,14 +15,6 @@ const ACTION_REST = /\/(orders|fulfillments|fulfillment_orders|refunds|transacti
 const READ_MUTATIONS = /^(stagedUploadsCreate|bulkOperationRunQuery|bulkOperationCancel)$/
 const SETUP_MUTATIONS = /^(webhookSubscription|eventBridgeWebhookSubscription|pubSubWebhookSubscription)/
 const ACTION_MUTATIONS = /^(fulfillment|order|refund|return|draftOrder|reverseDelivery|reverseFulfillment)/i
-
-/** The first root field of a GraphQL mutation (`mutation X($a: T) { productSet(…) {…} }` → productSet). */
-export function graphqlRootField(query: string): { mutation: boolean; field: string | null } {
-  const text = query.replace(/#[^\n]*/g, '')
-  const mutation = /^\s*mutation\b/.test(text)
-  const body = text.slice(text.indexOf('{') + 1)
-  return { mutation, field: /^\s*(?:\w+\s*:\s*)?(\w+)/.exec(body)?.[1] ?? null }
-}
 
 export function shopifyKind(method: string, url: string, body?: GatewayBody): GatewayRequest['kind'] {
   const path = new URL(url).pathname

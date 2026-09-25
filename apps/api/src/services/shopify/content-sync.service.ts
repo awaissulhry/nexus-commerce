@@ -16,6 +16,7 @@ import { shopifyAdmin } from './admin-client.js'
 import { publishContent, readRemoteProduct, type ShopifyRemoteProduct } from './content-publisher.js'
 import { nativeListingValue } from './native-listing-value.js'
 import { assertPushAllowed, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
+import { graphqlRootField } from '../gateway/graphql-root-field.js'
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
   const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
@@ -62,7 +63,8 @@ export async function previewContentSync(productId: string, scope: ContentScope,
 }
 
 /** Same path for the editor, wizard and scheduled sync. The request must name its observed local and remote revisions. */
-export async function synchronizeContent(productId: string, scope: ContentScope, body: unknown) {
+export async function synchronizeContent(productId: string, scope: ContentScope, body: unknown,
+  beforeMutation?: (request: { query: string; variables: Record<string, unknown> }) => Promise<void>) {
   const input = object(body)
   const linkedDestination = await contentDestination(productId, scope)
   const linkedListing = await prisma.channelListing.findFirst({ where: { productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, channelConnectionId: linkedDestination.accountId, aliasKey: linkedDestination.aliasKey ?? '' } })
@@ -109,7 +111,11 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     }, { isolationLevel: 'Serializable' })
   }
   try {
-    const { graphql } = await shopifyAdmin(destination.accountId)
+    const { graphql: send } = await shopifyAdmin(destination.accountId)
+    const graphql: typeof send = async <T>(query: string, variables: Record<string, unknown> = {}) => {
+      if (graphqlRootField(query).mutation) await beforeMutation?.({ query, variables })
+      return send<T>(query, variables)
+    }
     const listing = current.listing!
     // Verify existing field baselines before product publication changes any of them.
     const reviewedInformation = preview.informationDraft ? await buildLinkedPlan(graphql, preview.informationDraft) : null

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn() }))
+vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 // Shared stock — publication reads the product's ledger (loadSyncLedgers): nothing is pooled here.
 vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, $queryRaw: async () => [] } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
@@ -39,7 +40,7 @@ import { limitsFor, vocabularyFor } from './family-projection-limits.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import { TradingApiFailure } from '../ebay-trading-api.service.js'
 
-const amazon: AmazonPublication = { kind: 'amazon', sellerId: 'SELLER', marketplaceId: 'MARKET', feed: { header: {}, messages: [
+const amazon: AmazonPublication = { kind: 'amazon', sellerId: 'SELLER', marketplaceId: 'MARKET', products: [{ productId: 'parent-id', sku: 'PARENT' }, { productId: 'child-id', sku: 'CHILD' }], feed: { header: {}, messages: [
   { messageId: 1, sku: 'PARENT', operationType: 'UPDATE', requirements: 'LISTING_PRODUCT_ONLY', productType: 'COAT', attributes: { parentage_level: [{ value: 'parent' }] } },
   { messageId: 2, sku: 'CHILD', operationType: 'PARTIAL_UPDATE', productType: 'COAT', attributes: { item_name: [{ value: 'Saved Italian title', language_tag: 'it_IT' }] } },
 ] } }
@@ -63,8 +64,35 @@ it('validates every family message before one feed, using the exact seller and p
 })
 
 it('does not upload or submit any family member when one Amazon preview fails', async () => {
+  const beforeSend = vi.fn()
   m.validate.mockResolvedValueOnce({ ok: true, available: true }).mockResolvedValueOnce({ ok: false, available: true, errors: 'Missing size' })
-  await expect(sendAmazonPublication(amazon, 'account-b')).rejects.toMatchObject({ notSent: true, message: 'CHILD: Missing size' })
+  await expect(sendAmazonPublication(amazon, 'account-b', beforeSend)).rejects.toMatchObject({ notSent: true, message: 'CHILD: Missing size' })
+  expect(beforeSend).not.toHaveBeenCalled()
+  expect(m.call).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled()
+})
+
+it('awaits the Amazon journal after every validation and captures the exact outgoing feed and metadata', async () => {
+  const events: string[] = []
+  m.validate.mockImplementation(async ({ sku }) => { events.push(`validate:${sku}`); return { ok: true, available: true } })
+  m.call.mockImplementation(async ({ operation }) => {
+    events.push(operation)
+    return operation === 'createFeedDocument' ? { feedDocumentId: 'doc', url: 'https://example.test/feed' } : { feedId: 'feed' }
+  })
+  const beforeSend = vi.fn(async (_request: { feedType: string; marketplaceIds: string[]; feed: AmazonPublication['feed'] }) => {
+    events.push('capture-start'); await Promise.resolve(); events.push('capture-finished')
+  })
+  expect(await sendAmazonPublication(amazon, 'account-b', beforeSend)).toBe('feed')
+  expect(events).toEqual(['validate:PARENT', 'validate:CHILD', 'capture-start', 'capture-finished', 'createFeedDocument', 'createFeed'])
+  expect(beforeSend).toHaveBeenCalledOnce()
+  expect(beforeSend).toHaveBeenCalledWith({ feedType: 'JSON_LISTINGS_FEED', marketplaceIds: ['MARKET'], feed: amazon.feed })
+  expect(JSON.parse((vi.mocked(fetch).mock.calls[0][1] as any).body)).toEqual(beforeSend.mock.calls[0][0].feed)
+  expect(m.call.mock.calls[1][0].body).toEqual({ feedType: 'JSON_LISTINGS_FEED', marketplaceIds: ['MARKET'], inputFeedDocumentId: 'doc' })
+})
+
+it.each([new Error('Journal unavailable'), 'Journal unavailable'])('does not create an Amazon feed document when the journal rejects (%s)', async error => {
+  const beforeSend = vi.fn().mockRejectedValue(error)
+  await expect(sendAmazonPublication(amazon, 'account-b', beforeSend)).rejects.toMatchObject({ message: 'Journal unavailable', notSent: true })
+  expect(beforeSend).toHaveBeenCalledOnce()
   expect(m.call).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled()
 })
 
@@ -156,6 +184,33 @@ it('returns the acknowledged eBay reference before read-back, with a stable dedu
   expect(m.trading.mock.calls.map(([call]) => call)).toEqual(['VerifyAddFixedPriceItem', 'AddFixedPriceItem'])
   expect(m.trading.mock.calls[1][1]).toContain('<UUID>ABCD1234</UUID>')
 })
+it.each([null, '456'])('awaits the eBay journal with final request identity before sending item %s', async itemId => {
+  const baseline = ebaySingleItem()
+  const plan = { kind: 'ebay' as const, marketplace: 'IT', itemId, liveRevision: itemId ? ebayLiveRevision(baseline) : null, xml: ebayPublicationXml(ebay, itemId, true) }
+  const events: string[] = []
+  m.trading.mockImplementation(async operation => {
+    events.push(operation)
+    return { ack: 'Success', errors: [], itemId: '456', raw: operation === 'GetItem' ? baseline : '<Ack>Success</Ack><ItemID>456</ItemID>' }
+  })
+  const beforeSend = vi.fn(async () => { events.push('capture-start'); await Promise.resolve(); events.push('capture-finished') })
+  expect(await sendEbayPublication(plan, 'account-b', 'abcd-1234', beforeSend)).toEqual({ reference: '456', warnings: [] })
+  const operation = itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem'
+  const identity = itemId ? 'InvocationID' : 'UUID'
+  expect(events).toEqual([itemId ? 'GetItem' : 'VerifyAddFixedPriceItem', 'capture-start', 'capture-finished', operation])
+  const finalXml = m.trading.mock.calls[1][1]
+  expect(beforeSend).toHaveBeenCalledOnce()
+  expect(beforeSend).toHaveBeenCalledWith({ operation, xml: finalXml })
+  expect(finalXml).toContain(`<${identity}>ABCD1234</${identity}>`)
+  expect(plan.xml).not.toContain(`<${identity}>`)
+})
+it.each([new Error('Journal unavailable'), 'Journal unavailable'])('does not send an eBay listing when the journal rejects (%s)', async error => {
+  m.trading.mockResolvedValue({ ack: 'Success', errors: [], itemId: '456', raw: '<Ack>Success</Ack><ItemID>456</ItemID>' })
+  const beforeSend = vi.fn().mockRejectedValue(error)
+  await expect(sendEbayPublication({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null, xml: ebayPublicationXml(ebay, null, true) }, 'account-b', 'abcd-1234', beforeSend))
+    .rejects.toMatchObject({ message: 'Journal unavailable', notSent: true })
+  expect(beforeSend).toHaveBeenCalledOnce()
+  expect(m.trading.mock.calls.map(([operation]) => operation)).toEqual(['VerifyAddFixedPriceItem'])
+})
 it('retains the prior item reference from a conclusive duplicate eBay acknowledgement', async () => {
   m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: '<Ack>Success</Ack>' })
     .mockRejectedValueOnce(new TradingApiFailure('Duplicate UUID used.', true, '123'))
@@ -177,10 +232,12 @@ it('allows an unchanged single-item revision and blocks stale remote price or qu
     .mockResolvedValueOnce({ ack: 'Success', errors: [], itemId: '456', raw: '<Ack>Success</Ack><ItemID>456</ItemID>' })
   await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234')).resolves.toEqual({ reference: '456', warnings: [] })
 
+  const beforeSend = vi.fn()
   for (const changed of [ebaySingleItem(26, 3), ebaySingleItem(25, 4)]) {
     m.trading.mockResolvedValueOnce({ ack: 'Success', errors: [], raw: changed })
-    await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234')).rejects.toMatchObject({ notSent: true, message: expect.stringContaining('eBay changed') })
+    await expect(sendEbayPublication(plan, 'account-b', 'abcd-1234', beforeSend)).rejects.toMatchObject({ notSent: true, message: expect.stringContaining('eBay changed') })
   }
+  expect(beforeSend).not.toHaveBeenCalled()
   expect(m.trading.mock.calls.filter(([call]) => call === 'ReviseFixedPriceItem')).toHaveLength(1)
 })
 it('preserves eBay acknowledgement warnings and the item reference independently of later read-back', async () => {
@@ -202,8 +259,10 @@ it('reads the acknowledged eBay item without resubmitting and distinguishes veri
   expect(m.trading.mock.calls.slice(-3).map(([call]) => call)).toEqual(['GetItem', 'GetItem', 'GetItem'])
 })
 it('never creates an eBay listing after a refused preview', async () => {
+  const beforeSend = vi.fn()
   m.trading.mockRejectedValue(new Error('Missing return policy'))
-  await expect(sendEbayPublication({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null, xml: ebayPublicationXml(ebay, null, true) }, 'account-b', 'id')).rejects.toMatchObject({ notSent: true })
+  await expect(sendEbayPublication({ kind: 'ebay', marketplace: 'IT', itemId: null, liveRevision: null, xml: ebayPublicationXml(ebay, null, true) }, 'account-b', 'id', beforeSend)).rejects.toMatchObject({ notSent: true })
+  expect(beforeSend).not.toHaveBeenCalled()
   expect(m.trading).toHaveBeenCalledTimes(1)
 })
 
@@ -222,6 +281,7 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'ALIAS-SKU', fulfillmentMethod: 'FBM' }], followMasterPrice: false, priceOverride: 35, stockBuffer: 2 }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   const prepared = await prepareAmazonPublication(facts)
+  expect(prepared.products).toEqual([{ productId: 'p', sku: 'ALIAS-SKU' }])
   expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00', fulfillment_availability__quantity: 3 }))
   expect(m.row.mock.calls[0][0]).not.toHaveProperty('main_product_image_locator')
   expect(m.row.mock.calls[0][0]).not.toHaveProperty('purchasable_offer__condition_type')
@@ -266,6 +326,10 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   }
   const prepared = await prepareAmazonPublication(facts)
   expect(prepared.feed.messages[1].attributes).toMatchObject({ list_price: [{ value_with_tax: 128.1, currency: 'EUR', marketplace_id: 'MARKET' }], child_parent_sku_relationship: [{ parent_sku: 'PARENT', child_relationship_type: 'variation', marketplace_id: 'MARKET' }] })
+  facts.listings = facts.listings.reverse().map((listing: any) => ({ ...listing, offers: [{ isActive: true, sku: `SELLER-${listing.productId}` }] }))
+  const sellerMapped = await prepareAmazonPublication(facts)
+  expect(sellerMapped.products).toEqual([{ productId: 'p', sku: 'SELLER-p' }, { productId: 'xs', sku: 'SELLER-xs' }, { productId: 'xxs', sku: 'SELLER-xxs' }])
+  expect(sellerMapped.feed.messages.map(message => message.sku)).toEqual(['SELLER-p', 'SELLER-xs', 'SELLER-xxs'])
   facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
 })

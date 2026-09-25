@@ -26,6 +26,7 @@ export interface AmazonPublication {
   kind: 'amazon'
   sellerId: string
   marketplaceId: string
+  products: Array<{ productId: string; sku: string }>
   feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; requirements?: string; attributes?: Record<string, unknown>; patches?: any[] }> }
 }
 
@@ -157,11 +158,13 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     feed.header = envelope.header
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
   }
-  return { kind: 'amazon', sellerId, marketplaceId, feed }
+  return { kind: 'amazon', sellerId, marketplaceId, feed, products: [...sellerSkus].map(([productId, sku]) => ({ productId, sku })) }
 }
 
 /** Validate the complete family before submitting its single feed. An acknowledgement is not live status. */
-export async function sendAmazonPublication(plan: AmazonPublication, accountId: string) {
+export async function sendAmazonPublication(plan: AmazonPublication, accountId: string,
+  beforeSend?: (request: { feedType: string; marketplaceIds: string[]; feed: AmazonPublication['feed'] }) => Promise<void>) {
+  const request = { feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [plan.marketplaceId], feed: plan.feed }
   let documentId: string
   let sp: Awaited<ReturnType<typeof getAmazonSpClient>>
   try {
@@ -173,6 +176,7 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
       if (!checked.available || !checked.ok) throw Object.assign(new Error(`${message.sku}: ${checked.available ? checked.errors : 'Amazon validation is unavailable. Nothing was submitted.'}`), { notSent: true })
     }
     sp = await getAmazonSpClient(accountId)
+    await beforeSend?.(request)
     const document = await sp.callAPI({ operation: 'createFeedDocument', endpoint: 'feeds', body: { contentType: 'application/json; charset=UTF-8' } })
     // gateway-exempt: pre-signed feed document on Amazon's storage; the feed itself goes through the gateway
     const uploaded = await fetch(document.url, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
@@ -180,7 +184,7 @@ export async function sendAmazonPublication(plan: AmazonPublication, accountId: 
     if (!uploaded.ok) throw new Error(`Amazon feed upload failed (${uploaded.status}).`)
     documentId = document.feedDocumentId
   } catch (error) { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
-  const feed = await sp.callAPI({ operation: 'createFeed', endpoint: 'feeds', body: { feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [plan.marketplaceId], inputFeedDocumentId: documentId } })
+  const feed = await sp.callAPI({ operation: 'createFeed', endpoint: 'feeds', body: { feedType: request.feedType, marketplaceIds: request.marketplaceIds, inputFeedDocumentId: documentId } })
   if (typeof object(feed).feedId !== 'string') throw new Error('Amazon did not return a feed identifier. Check submission history before retrying.')
   return feed.feedId as string
 }

@@ -11,13 +11,29 @@ import { WorkspaceScopeError } from './workspace-destination.js'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { prepareEbayPublication, sendEbayPublication, readEbayPublication, type EbayPublication } from './studio-publication-ebay.js'
 import { readPublicationOverwrite } from './studio-publication-overwrite.js'
+import { recordPublicationRequests, settlePublicationRecords, type PublicationRecordContext } from './studio-publication-records.js'
 
 const KIND = 'studio-publication'
 const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
 const RECEIPT_DEADLINE_MS = 30 * 60_000
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 const publishMode = (channel: string) => channel === 'AMAZON' ? getAmazonPublishMode() : channel === 'EBAY' ? getEbayPublishMode() : channel === 'SHOPIFY' ? getShopifyPublishMode() : 'unavailable'
-type Prepared = AmazonPublication | EbayPublication | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown }
+type Prepared = AmazonPublication | EbayPublication | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
+
+const recordContext = (id: string, data: Record<string, any>, userId: string | null): PublicationRecordContext => ({
+  reviewId: id, userId, channel: data.scope.channel, marketplace: data.scope.marketplace,
+  accountId: data.scope.accountId, aliasKey: data.delivery?.aliasKey ?? '',
+})
+
+/** Receipt and accepted baseline move together; legacy operations never acquire an invented send record. */
+async function storeResult(id: string, data: Record<string, any>, userId: string | null, result: StudioPublishResult, statuses: string[]) {
+  return prisma.$transaction(async tx => {
+    const stored = await tx.bulkOperation.updateMany({ where: { id, status: { in: statuses } },
+      data: { status: result.status, completedAt: IN_FLIGHT.includes(result.status) ? null : new Date(), changes: json({ ...data, result }) } })
+    if (stored.count && data.captureVersion === 1) await settlePublicationRecords(tx, recordContext(id, data, userId), result)
+    return stored
+  })
+}
 
 async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioPublishResult): Promise<StudioPublishResult> {
   const reference = previous.results[0]?.reference
@@ -55,7 +71,13 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
       locations = preview.locations.filter(l => l.isActive).map(({ id, name }) => ({ id, name }))
       if (!locations.length) issues.push({ severity: 'error', message: 'This Shopify store has no active inventory location.' })
       visibility = String(preview.changes.newProductStatus)
-      prepared = { kind: 'shopify', revision: preview.revision, remoteRevision: preview.remoteRevision, initialized: preview.initialized, draft: preview.draft }
+      const products = facts.products.map(product => {
+        const variants = preview.variants.filter(variant => variant.id === product.id)
+        if (variants.length > 1 || (!variants.length && product.id !== facts.parent.id)) throw new Error(`${product.sku}: the Shopify variant identity is unavailable.`)
+        // A grouped parent is a family content owner; sellable variants use the SKU actually sent by the native publisher.
+        return { productId: product.id, sku: variants[0]?.sku ?? product.sku }
+      })
+      prepared = { kind: 'shopify', revision: preview.revision, remoteRevision: preview.remoteRevision, initialized: preview.initialized, draft: preview.draft, products }
     } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'ETSY' ? 'Etsy' : scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
   } catch (error) { issues.push({ severity: 'error', message: error instanceof Error ? error.message : String(error) }) }
   if (mode !== 'live') issues.push({ severity: 'error', message: mode === 'unavailable' ? 'Publication is unavailable for this channel.' : `Live publishing is ${mode === 'gated' ? 'disabled' : `in ${mode} mode`} for this channel. Enable live publishing in the channel configuration to send this product.` })
@@ -100,7 +122,7 @@ export async function studioPublicationResult(productId: string, id: string, use
     const previous = data.result as StudioPublishResult
     if (operation.status === 'UNVERIFIED' && data.scope.channel === 'EBAY' && previous.results[0]?.reference) {
       const result = await reconcileEbayReceipt(data, previous)
-      await prisma.bulkOperation.updateMany({ where: { id, status: 'UNVERIFIED' }, data: { status: result.status, completedAt: result.status === 'ACCEPTED' ? new Date() : null, changes: json({ ...data, result }) } })
+      await storeResult(id, data, userId, result, ['UNVERIFIED'])
       return result
     }
     if (operation.status === 'SUBMITTED' && data.scope.channel === 'AMAZON') {
@@ -112,7 +134,7 @@ export async function studioPublicationResult(productId: string, id: string, use
           const result: StudioPublishResult = { id, status: failed === report.results.length ? 'FAILED' : failed ? 'PARTIAL' : 'ACCEPTED',
             message: failed ? `${failed} products were rejected by Amazon. Review the processing messages before publishing corrected values.` : `Amazon processed feed ${reference}. Storefront visibility is still determined by Amazon.`,
             results: report.results.map(r => ({ sku: r.sku, status: r.failed ? 'FAILED' : 'ACCEPTED', message: r.message, reference })) }
-          await prisma.bulkOperation.updateMany({ where: { id, status: 'SUBMITTED' }, data: { status: result.status, completedAt: new Date(), changes: json({ ...data, result }) } })
+          await storeResult(id, data, userId, result, ['SUBMITTED'])
           return result
         }
       }
@@ -122,7 +144,7 @@ export async function studioPublicationResult(productId: string, id: string, use
   const startedAt = data.startedAt ? new Date(data.startedAt).getTime() : operation.createdAt?.getTime()
   if (operation.status === 'PUBLISHING' && startedAt && Date.now() - startedAt > RECEIPT_DEADLINE_MS) {
     const result: StudioPublishResult = { id, status: 'UNVERIFIED', message: 'The submission did not record a channel receipt within 30 minutes. It may have reached the channel. Check its submission history before retrying; Nexus will not send a duplicate automatically.', results: [] }
-    const updated = await prisma.bulkOperation.updateMany({ where: { id, status: 'PUBLISHING' }, data: { status: result.status, changes: json({ ...data, result }) } })
+    const updated = await storeResult(id, data, userId, result, ['PUBLISHING'])
     return updated.count ? result : studioPublicationResult(productId, id, userId)
   }
   return { id, status: operation.status === 'PUBLISHING' ? 'PUBLISHING' : 'FAILED', message: operation.status === 'PUBLISHING' ? 'The channel is processing this publication. Check again for its result.' : 'This review has not been submitted.', results: [] }
@@ -144,6 +166,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
   data.confirmOverwrite = plan.review.overwrite?.requiresConfirmation === true && input.confirmOverwrite === true
   data.startedAt = new Date().toISOString()
   data.delivery = { productIds: plan.facts.products.map(p => p.id), aliasKey: plan.facts.destination.aliasKey ?? '' }
+  data.captureVersion = 1
   const claimed = await prisma.$transaction(async tx => {
     await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text', `studio-publication:${data.publicationKey}`)
     const other = await tx.bulkOperation.findFirst({ where: { id: { not: id }, status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: data.publicationKey } }, select: { id: true } })
@@ -154,15 +177,25 @@ export async function submitStudioPublication(productId: string, id: string, bod
   let result: StudioPublishResult
   let providerStarted = false
   let receipt: StudioPublishResult | undefined
+  const context = recordContext(id, data, userId)
   const checkpoint = async (value: StudioPublishResult) => {
     receipt = value
-    await prisma.bulkOperation.update({ where: { id }, data: { status: value.status, changes: json({ ...data, result: value }) } })
+    await prisma.$transaction(async tx => {
+      await tx.bulkOperation.update({ where: { id }, data: { status: value.status, changes: json({ ...data, result: value }) } })
+      await settlePublicationRecords(tx, context, value)
+    })
   }
+  // Journal FKs name only this destination. These drafts never establish channel presence.
+  const ensureDrafts = () => prisma.channelListing.createMany({ data: plan.facts.products.filter(p => !plan.facts.listings.some(l => l.productId === p.id)).map(p => ({
+    productId: p.id, channel: plan.facts.scope.channel, marketplace: plan.facts.scope.marketplace, region: plan.facts.scope.marketplace, channelMarket: `${plan.facts.scope.channel}_${plan.facts.scope.marketplace}`,
+    channelConnectionId: plan.facts.scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', aliasId: plan.facts.destination.aliasKey, isPublished: false, listingStatus: 'DRAFT',
+  })), skipDuplicates: true })
   try {
     const { scope } = plan.facts
     if (publishMode(scope.channel) !== 'live') throw new Error('Live publication was disabled before submission.')
     if ((await readPublicationFacts(productId, scope)).revision !== plan.facts.revision) throw new Error('Saved information changed while this publication was waiting. Review the current values before publishing.')
     if (plan.prepared.kind === 'shopify') {
+      const shopify = plan.prepared
       const contentScope = { accountId: scope.accountId, listingId: scope.listingId, market: scope.marketplace }
       let revision = plan.prepared.revision
       if (!plan.prepared.initialized) {
@@ -171,25 +204,38 @@ export async function submitStudioPublication(productId: string, id: string, bod
         revision = saved.revision
       }
       const { synchronizeContent } = await import('../shopify/content-sync.service.js')
-      providerStarted = true
+      let requestIndex = 0
+      let journal = Promise.resolve()
       const sent = await synchronizeContent(productId, contentScope, { expectedRevision: revision, expectedRemoteRevision: plan.prepared.remoteRevision,
-        locationId: input.locationId, confirmActive: true })
-      result = { id, status: 'VERIFIED', message: `Shopify verified the saved product and variants. Visibility: ${plan.review.visibility}.`, results: plan.review.rows.map(r => ({ sku: r.sku, status: 'VERIFIED', message: 'Verified by Shopify', reference: sent.productId })) }
+        locationId: input.locationId, confirmActive: true }, request => {
+          const index = requestIndex++
+          // The publisher may start independent mutations together. Their durable ordinals remain ordered.
+          journal = journal.then(async () => {
+            if (index === 0) await ensureDrafts()
+            await recordPublicationRequests(context, shopify.products.map(p => ({ ...p, request })), index)
+            providerStarted = true
+          })
+          return journal
+        })
+      result = { id, status: 'VERIFIED', message: `Shopify verified the saved product and variants. Visibility: ${plan.review.visibility}.`, results: shopify.products.map(r => ({ sku: r.sku, status: 'VERIFIED', message: 'Verified by Shopify', reference: sent.productId })) }
       receipt = result
     } else {
       // Creation stores a correctly attributed draft. Only provider results can establish publication.
-      await prisma.channelListing.createMany({ data: plan.facts.products.filter(p => !plan.facts.listings.some(l => l.productId === p.id)).map(p => ({
-        productId: p.id, channel: scope.channel, marketplace: scope.marketplace, region: scope.marketplace, channelMarket: `${scope.channel}_${scope.marketplace}`,
-        channelConnectionId: scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', aliasId: plan.facts.destination.aliasKey, isPublished: false, listingStatus: 'DRAFT',
-      })), skipDuplicates: true })
+      await ensureDrafts()
       providerStarted = true
       if (plan.prepared.kind === 'amazon') {
-        const reference = await sendAmazonPublication(plan.prepared, scope.accountId)
+        const amazon = plan.prepared
+        const reference = await sendAmazonPublication(amazon, scope.accountId, request => recordPublicationRequests(context, request.feed.messages.map(message => {
+          const products = amazon.products.filter(product => product.sku === message.sku)
+          if (products.length !== 1) throw new Error(`The exact product for Amazon seller SKU ${message.sku} could not be recorded.`)
+          return { productId: products[0].productId, sku: message.sku, request: { feedType: request.feedType, marketplaceIds: request.marketplaceIds, header: request.feed.header, message } }
+        })))
         result = { id, status: 'SUBMITTED', message: `Submitted to Amazon. Feed ${reference} is awaiting processing; the listing is not yet confirmed live.`,
           results: plan.prepared.feed.messages.map(message => ({ sku: message.sku, status: 'SUBMITTED', reference, message: 'Awaiting Amazon processing' })) }
         await checkpoint(result)
       } else {
-        const sent = await sendEbayPublication(plan.prepared, scope.accountId, id)
+        const sent = await sendEbayPublication(plan.prepared, scope.accountId, id,
+          request => recordPublicationRequests(context, plan.facts.products.map(p => ({ productId: p.id, sku: p.sku, request }))))
         result = { id, status: 'UNVERIFIED', warnings: sent.warnings,
           message: `eBay acknowledged item ${sent.reference}. Its active listing status still needs checking.`,
           results: plan.review.rows.map(row => ({ sku: row.sku, status: 'ACCEPTED', reference: sent.reference, message: 'Acknowledged by eBay' })) }
@@ -204,8 +250,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
       : { id, status: refused ? 'FAILED' : 'UNVERIFIED', message: `${refused ? 'Nothing was submitted.' : 'Publication could not be verified. Check the channel before retrying:'} ${error instanceof Error ? error.message : String(error)}`, results: [] }
   }
   try {
-    const stored = await prisma.bulkOperation.updateMany({ where: { id, status: { in: IN_FLIGHT } },
-      data: { status: result.status, completedAt: IN_FLIGHT.includes(result.status) ? null : new Date(), changes: json({ ...data, result }) } })
+    const stored = await storeResult(id, data, userId, result, IN_FLIGHT)
     // A status read may already have recorded a terminal processing report.
     return stored.count ? result : await studioPublicationResult(productId, id, userId)
   } catch (error) {

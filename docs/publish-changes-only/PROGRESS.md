@@ -3,8 +3,8 @@
 | Step | Status | Commit |
 |---|---|---|
 | Plan + automatic-writer audit | ✅ written; §1b completed, production BullMQ startup verified; **Q1(a), Q2(a) approved (Owner: “go”)** | — |
-| PCO-0 — interim Publish warning | ✅ built and verified locally; historical differences, unknowns, explicit review-bound confirmation; commit now authorized | — |
-| PCO-1 — exact send / acceptance records | 🟡 starting additive records and transport capture | — |
+| PCO-0 — interim Publish warning | ✅ built and verified locally; historical differences, unknowns, explicit review-bound confirmation | `6431f5c67` |
+| PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration not applied to production | committing |
 | PCO-2 … PCO-6 | ⬜ implementation authorized; follows capture | — |
 | PCO-7 — live channel proofs | ⬜ each run needs the Owner's word after read + preview | — |
 
@@ -47,6 +47,26 @@ Three Shopify journal tests failed before its callback; 15 journal/status tests 
 also initialized Redis. Extracting that existing pure classifier removes the unintended dependency.
 One combined main tool batch incorrectly applied the Shopify hook after detecting a push; edits were stopped immediately.
 Subsequent guarded batches exit before any mutation unless the push check is clear.
+
+## PCO-1 verification
+
+- Captures exact final Amazon messages/header/market, eBay XML including request identity, and ordered Shopify GraphQL mutations.
+  Awaited snapshot + audit transaction before the mutation. Existing/manual snapshots default UNACCEPTED; they are never invented baselines.
+- Receipt, snapshot outcome and audit settle atomically. Amazon accepts per SKU only from processing report; eBay ACK alone does not accept;
+  Shopify accepts after verification. Preserves previous accepted results and uncertainty; request journals cannot be restored as listing-state drafts.
+- Review found Shopify effective-SKU attribution and first-journal-failure classification gaps; added real DB tests, observed two failures,
+  fixed both. First journal failure is FAILED/retryable; after one mutation it is UNVERIFIED; listing SKU override is recorded exactly.
+- Red proofs: 9 transport failures, 3 journal callback failures, 3 receipt integration failures, 1 restore-guard failure, then 2 review regressions.
+- Final mutation controls: 94 tests across transports, Shopify callback, service + formulaDatabase, restore and records; **20/20 mutations caught**;
+  every source SHA restored. `records/pco1-mutations-2026-09-25.jsonl`. Earlier helper-only mutation attempt ran zero mutants (sandbox EPERM at control);
+  the final combined proof ran from the authorized main session and covers eight helper mutations as well.
+- Additional gateway/plan/parity/account/native-status regressions: 55 passed. Existing gateway fixtures logged refused local Redis connections;
+  no test failure or live channel call. Journal-specific and transport controls isolate the queue boundary.
+- Fresh private API + web TypeScript checks pass; shared rebuilt; column drift 447 tables pass. Prisma generated locally; baseline generator
+  changed exactly the two snapshot columns. Independent re-review: both findings resolved, no further required changes.
+- Done when: every studio send records exact requests, with accepted baseline only on channel confirmation — met under stubbed-provider proofs.
+  Cost when: more than one migration or business-payload change — neither. Gate: tests/mutations/types/review passed; no production migration/send.
+  Rollback: revert application changes while keeping an applied additive migration/history and unused columns.
 
 ## Facts the next session must not re-derive (measured 2026-09-25, production, read only)
 

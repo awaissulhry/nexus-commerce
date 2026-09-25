@@ -11,6 +11,8 @@ vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
 vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', feed: { messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
 vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async () => ({ kind: 'ebay', xml: '<Item/>' }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus }))
+// Durable exact-payload writes are exercised against formulaDatabase in the database suite.
+vi.mock('./studio-publication-records.js', () => ({ recordPublicationRequests: vi.fn(), settlePublicationRecords: vi.fn() }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: m.shopRead, saveContentWorkspace: m.shopSave }))
 vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: m.shopPreview, synchronizeContent: m.shopSend }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
@@ -145,7 +147,7 @@ it('reviews saved family values and publishes directly to the exact account and 
   const result = await submitStudioPublication('parent', review.id!, {}, 'user')
   expect(result.status).toBe('SUBMITTED')
   expect(result.results).toHaveLength(2)
-  expect(m.amazon).toHaveBeenCalledWith(expect.objectContaining({ kind: 'amazon' }), 'seller-b')
+  expect(m.amazon).toHaveBeenCalledWith(expect.objectContaining({ kind: 'amazon' }), 'seller-b', expect.any(Function))
   expect(m.updateListings).not.toHaveBeenCalled()
   expect(m.createListings.mock.calls[0][0].data).toEqual(expect.arrayContaining([expect.objectContaining({ productId: 'child', channelConnectionId: 'seller-b', aliasKey: 'alias-b', isPublished: false })]))
 })
@@ -228,7 +230,7 @@ it.each([false, true])('uses Shopify’s native family publisher and retains its
   m.facts.mockResolvedValue({ ...facts(), scope: shopScope, excluded: 0 })
   m.shopRead.mockResolvedValue({ initialized: false, draft: { options: ['Size'] }, revision: 'uninitialized' })
   m.shopSave.mockResolvedValue({ revision: 'draft-v1' })
-  m.shopPreview.mockResolvedValue({ errors: [], initialized: true, revision: 'draft-v1', remoteRevision: 'remote-v2', draft: { options: ['Size'] }, changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Warehouse', isActive: true }] })
+  m.shopPreview.mockResolvedValue({ errors: [], initialized: true, revision: 'draft-v1', remoteRevision: 'remote-v2', draft: { options: ['Size'] }, variants: [{ id: 'child', sku: 'CHILD' }], changes: { newProductStatus: 'DRAFT' }, locations: [{ id: 'shop-location', name: 'Warehouse', isActive: true }] })
   m.shopSend.mockResolvedValue({ productId: 'gid://shopify/Product/42' })
   const review = await previewStudioPublication('parent', shopScope, 'user')
   expect(review.visibility).toBe('DRAFT')
@@ -241,5 +243,5 @@ it.each([false, true])('uses Shopify’s native family publisher and retains its
     message: expect.stringContaining(persistenceFails ? 'could not record' : 'DRAFT'),
     results: [expect.objectContaining({ reference: 'gid://shopify/Product/42' }), expect.anything()] })
   expect(m.shopSend).toHaveBeenCalledOnce()
-  expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true })
+  expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true }, expect.any(Function))
 })

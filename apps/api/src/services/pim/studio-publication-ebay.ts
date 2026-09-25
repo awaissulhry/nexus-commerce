@@ -222,11 +222,12 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
   return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
 }
 
-export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string): Promise<EbayPublicationReceipt> {
+export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string,
+  beforeSend?: (request: { operation: string; xml: string }) => Promise<void>): Promise<EbayPublicationReceipt> {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw Object.assign(new Error('Live eBay publication was disabled.'), { notSent: true })
-  const beforeSend = (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
-  if (plan.itemId && await liveItem(plan.itemId, accountId, plan.marketplace).catch(beforeSend) !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
-  const oauthToken = await ebayAuthService.getValidToken(accountId).catch(beforeSend)
+  const markNotSent = (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
+  if (plan.itemId && await liveItem(plan.itemId, accountId, plan.marketplace).catch(markNotSent) !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
+  const oauthToken = await ebayAuthService.getValidToken(accountId).catch(markNotSent)
   const ctx = { oauthToken, siteId: siteIdForMarket(plan.marketplace), connectionId: accountId, market: plan.marketplace }
   let validationWarnings: string[] = []
   if (!plan.itemId) {
@@ -237,15 +238,17 @@ export async function sendEbayPublication(plan: EbayPublication, accountId: stri
   }
   const key = operationId.replace(/-/g, '').toUpperCase()
   const xml = plan.xml.replace('<Item>', `<Item><${plan.itemId ? 'InvocationID' : 'UUID'}>${key}</${plan.itemId ? 'InvocationID' : 'UUID'}>`)
+  const operation = plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem'
+  try { await beforeSend?.({ operation, xml }) } catch (error) { markNotSent(error) }
   let sent: TradingCallResult
   try {
-    sent = await callTradingApi(plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem', xml, ctx)
+    sent = await callTradingApi(operation, xml, ctx)
   } catch (error) {
     if (error instanceof TradingApiFailure && error.duplicateSubmission) {
       if (error.priorItemId) return { reference: error.priorItemId, warnings: [...validationWarnings, error.message] }
       throw error
     }
-    if (error instanceof Error && /^eBay (?:Add|Revise)FixedPriceItem Failure:/.test(error.message)) beforeSend(error)
+    if (error instanceof Error && /^eBay (?:Add|Revise)FixedPriceItem Failure:/.test(error.message)) markNotSent(error)
     throw error
   }
   const itemId = sent.itemId ?? plan.itemId

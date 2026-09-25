@@ -733,6 +733,8 @@ CREATE TABLE "ChannelListingSnapshot" (
     "aliasKey" TEXT NOT NULL DEFAULT '',
     "reason" TEXT NOT NULL,
     "publishEventId" TEXT,
+    "outcome" TEXT NOT NULL DEFAULT 'UNACCEPTED',
+    "acceptedAt" TIMESTAMP(3),
     "payload" JSONB NOT NULL,
     "label" TEXT,
     "capturedBy" TEXT,
