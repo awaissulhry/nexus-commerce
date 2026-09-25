@@ -48,6 +48,33 @@ export interface StudioPublishOverwrite {
   }>
 }
 
+/** Absence is a known cleared value; unknown never means unchanged or cleared. */
+export type StudioPublishValue = { state: 'value'; value: unknown } | { state: 'absent' } | { state: 'unknown'; reason: string }
+
+/** An intentional field write; required preserved collection siblings are not adopted as Nexus changes. */
+export interface StudioPublishFieldWrite {
+  field: string
+  value: Exclude<StudioPublishValue, { state: 'unknown' }>
+}
+
+export interface StudioPublishChange {
+  id: string
+  productId: string
+  sku: string
+  field: string
+  label: string
+  current: StudioPublishValue
+  lastAccepted: StudioPublishValue
+  channel: StudioPublishValue
+  status: 'SEND' | 'DIFFERS' | 'CANNOT_COMPARE' | 'SAME'
+  localChanged: boolean | null
+  channelChanged: boolean | null
+  selectable: boolean
+  selectedByDefault: boolean
+  reason: string
+  operation: 'replace' | 'delete' | null
+}
+
 export interface StudioPublishResult {
   id: string
   status: 'SUBMITTED' | 'ACCEPTED' | 'VERIFIED' | 'PARTIAL' | 'FAILED' | 'PUBLISHING' | 'UNVERIFIED'

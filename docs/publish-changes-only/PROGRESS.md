@@ -4,8 +4,9 @@
 |---|---|---|
 | Plan + automatic-writer audit | ✅ written; §1b completed, production BullMQ startup verified; **Q1(a), Q2(a) approved (Owner: “go”)** | — |
 | PCO-0 — interim Publish warning | ✅ built and verified locally; historical differences, unknowns, explicit review-bound confirmation | `6431f5c67` |
-| PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration not applied to production | committing |
-| PCO-2 … PCO-6 | ⬜ implementation authorized; follows capture | — |
+| PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration not applied to production | `302b4d787` |
+| PCO-2 — field comparison + accepted history | ✅ 53 tests; 17/17 mutations; fresh API types | local commit below |
+| PCO-3 … PCO-6 | ⬜ implementation authorized; follows comparison | — |
 | PCO-7 — live channel proofs | ⬜ each run needs the Owner's word after read + preview | — |
 
 ## Continuation B — 2026-09-25
@@ -69,6 +70,17 @@ Subsequent guarded batches exit before any mutation unless the push check is cle
   Rollback: revert application changes while keeping an applied additive migration/history and unused columns.
 
 ## Facts the next session must not re-derive (measured 2026-09-25, production, read only)
+
+PCO-2 verified: pure three-way comparison distinguishes absent/null/unknown, requires explicit first-publish choices,
+and rejects forged/nonselectable field IDs. Accepted history folds versioned intentional fields only, across pagination;
+raw legacy request records invalidate affected prior knowledge instead of inventing baselines. Required collection companions
+do not become local edit baselines. Provider normalizers can supply comparison verdicts without changing exact sent values.
+Independent review found an unchanged-local/accepted-only comparison case; its regression failed first, then passed with the guard.
+53 control tests passed; 17/17 mutations caught with all source SHA restores. First mutation run stopped on an unasserted
+domain throw in the positive selection test; strengthened that assertion without weakening the harness. Fresh API types passed
+after replacing Object.hasOwn with the existing target-compatible hasOwnProperty.call. No new production wiring in this step.
+Done when: all comparison/accepted-history cases are covered — met. Cost when: drift comparators cannot be shared — not reached;
+adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Rollback: revert the isolated helper/contract commit.
 
 - Production gates: **Amazon = live, eBay = live, Shopify = gated** (Railway boot log, deploy `674bf97f`, 2026-09-24 20:23 UTC).
   Local `apps/api/.env` sets none → all `gated` locally.
