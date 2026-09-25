@@ -10,6 +10,7 @@ import { TransferReview } from '@/app/products/catalog-transfer/TransferReview'
 import { transferApi } from '@/app/products/catalog-transfer/transferApi'
 import { defaultSourceMapping, type SourceInspection, type SourceMapping, type TransferJob } from '@/app/products/catalog-transfer/sourceMapping'
 import { SourceMappingEditor } from '@/app/products/catalog-transfer/SourceMappingEditor'
+import { appendConfirmations, NO_CONFIRMATIONS, type Confirmations } from '@/app/products/catalog-transfer/reviewConfirmations'
 import { channelName, languageName } from '@/app/products/catalog-transfer/workbookSelection'
 import { useStudioSave } from '../contracts'
 import { editorTransferSelection, updateTransferProducts, transferDestinationGroups, type DestinationMode, type ProductTransferContext } from './productTransferSelection'
@@ -59,6 +60,8 @@ export function ProductTransferDrawer(props: Props) {
   const [jobId, setJobId] = useState(''), [file, setFile] = useState<File | null>(null), [error, setError] = useState(''), [note, setNote] = useState('')
   const [busy, setBusy] = useState(''), [attempt, setAttempt] = useState(0), [elapsed, setElapsed] = useState(0)
   const [reviewBusy, setReviewBusy] = useState(false)
+  // CFI-4 / CFI-3 — what the Owner confirmed for the file in hand; cleared with the file.
+  const [confirmed, setConfirmed] = useState<Confirmations>(NO_CONFIRMATIONS)
   const abortRef = useRef<AbortController | null>(null)
   const completed = useRef('')
   const deferred = useRef<TransferJob | null>(null)
@@ -152,7 +155,7 @@ export function ProductTransferDrawer(props: Props) {
     setNote('Download started. Edit value cells directly; blank or unchanged cells preserve data. Unhide action columns for explicit clearing or inheritance. Keep identities and versions intact. Return the XLSX or complete ZIP here within 30 days.')
   })
   const inspect = (next: File) => run('inspect', async signal => {
-    setFile(next); setInputId(''); setSource(null)
+    setFile(next); setInputId(''); setSource(null); setConfirmed(NO_CONFIRMATIONS)
     const body = new FormData(); body.set('file', next)
     if (sourceMode) {
       const result = await transferApi<SourceInspection>('catalog-transfer/source/inspect', body, signal)
@@ -166,6 +169,19 @@ export function ProductTransferDrawer(props: Props) {
       setNote(`File read${result.issues ? ` with ${result.issues} issues to inspect in the review` : ''}. Check the products, named listings and languages below. Every input is validated against this selection. ${(result.warnings ?? []).join(' ')}`)
     }
   }, UPLOAD_DEADLINE_MS)
+  /*
+   * CFI — the SAME file, read again with the Owner's confirmations (links, deletes), then reviewed with
+   * the scope that read produced. Throws for the review to show; nothing is written before a save.
+   */
+  const recheck = async (confirmations: Confirmations) => {
+    if (!file || sourceMode) throw new Error('Upload the same file again to confirm these.')
+    const body = appendConfirmations(new FormData(), confirmations); body.set('file', file)
+    const read = await transferApi<{ inputId: string; selection: ProductTransferSelection }>(`catalog-transfer/products/${encodeURIComponent(productId)}/inspect`, body)
+    const scope = read.selection.productIds.length && (read.selection.includeShared || read.selection.listingIds.length) ? read.selection : selection
+    if (!scope) throw new Error('Choose the products and listings for this import, then review again.')
+    const job = await transferApi<TransferJob>(`catalog-transfer/products/${encodeURIComponent(productId)}/preview`, { inputId: read.inputId, market, selection: scope })
+    setInputId(read.inputId); setSelection(scope); setConfirmed(confirmations); rememberJob(job.jobId); setShowReview(true)
+  }
   const preview = () => run('preview', async signal => {
     if (!selection || (!inputId && !source)) return
     const path = `catalog-transfer/products/${encodeURIComponent(productId)}/${sourceMode ? 'source/preview' : 'preview'}`
@@ -193,14 +209,14 @@ export function ProductTransferDrawer(props: Props) {
       {error && <Banner tone="danger" action={!options ? <Button onClick={() => { setError(''); setAttempt(n => n + 1) }}>Retry</Button> : undefined}>{error}</Banner>}
       {!options && !error && <p role="status">Loading this product and its destinations…</p>}
       {unsafe && <Banner tone="warning">Finish saving or resolve the unsaved editor changes before importing or exporting.</Banner>}
-      {options && jobId && showReview ? <TransferReview key={jobId} jobId={jobId} productId={productId} allowApply={!unsafe && canImport} options={{ ...options, families: [] }} onBusyChange={setReviewBusy} onJob={rememberJob} onReset={() => { rememberJob(''); setFile(null); setInputId(''); setSource(null); setNote('') }} onSettled={settled} onReturn={props.onClose} /> : options && selection && <>
+      {options && jobId && showReview ? <TransferReview key={jobId} jobId={jobId} productId={productId} allowApply={!unsafe && canImport} options={{ ...options, families: [] }} onBusyChange={setReviewBusy} onJob={rememberJob} onReset={() => { rememberJob(''); setFile(null); setInputId(''); setSource(null); setNote('') }} onSettled={settled} onReturn={props.onClose} onRecheck={file && !sourceMode ? recheck : undefined} confirmed={confirmed} /> : options && selection && <>
         {!!jobId && <Banner tone="info" action={<Button onClick={() => setShowReview(true)}>Open saved review</Button>}>Your previous import review is still available.</Banner>}
         {!jobId && !!options.recentJobs?.length && <Disclosure summary="Recent imports for this product">{options.recentJobs.map(job => <div key={job.id} className={styles.actions}><span>{job.filename ?? 'Product import'}</span><Button size="sm" onClick={() => { rememberJob(job.id); setShowReview(true) }}>Open review</Button></div>)}</Disclosure>}
         {props.intent === 'import' && <>
           <Field label="File type"><Select disabled={!!busy} value={sourceMode ? 'source' : 'workbook'} onChange={e => { setSourceMode(e.target.value === 'source'); setFile(null); setSource(null); setInputId(''); setError(''); setNote('') }}>
-            <option value="workbook">Nexus editing workbook or ZIP</option><option value="source">Map a supplier spreadsheet</option>
+            <option value="workbook">Workbook: Nexus editing workbook or ZIP, Amazon template or our eBay workbook</option><option value="source">Map a supplier spreadsheet</option>
           </Select></Field>
-          <FileDropzone accept={sourceMode ? '.xlsx,.csv,.json' : '.xlsx,.csv,.zip'} maxBytes={(sourceMode ? 10 : 50) * 1024 * 1024} disabled={!!busy || unsafe || !canImport} onFiles={files => { if (files[0]) void inspect(files[0]) }} hint={sourceMode ? 'Supplier CSV, single-sheet XLSX or JSON · up to 10 MB' : 'Nexus XLSX or attribute CSV · 10 MB per file · complete ZIP up to 50 MB'} />
+          <FileDropzone accept={sourceMode ? '.xlsx,.csv,.json' : '.xlsx,.xlsm,.csv,.zip'} maxBytes={(sourceMode ? 10 : 50) * 1024 * 1024} disabled={!!busy || unsafe || !canImport} onFiles={files => { if (files[0]) void inspect(files[0]) }} hint={sourceMode ? 'Supplier CSV, single-sheet XLSX or JSON · up to 10 MB' : 'Nexus XLSX, attribute CSV, an Amazon template (.xlsm or .xlsx) or our eBay workbook · 10 MB per file · complete ZIP up to 50 MB'} />
           {file && <p role="status">{busy === 'inspect' ? `Reading ${file.name}…${elapsed > 3 ? ` ${elapsed}s` : ''}` : file.name}</p>}
         </>}
         <div className={styles.fields}>

@@ -38,6 +38,8 @@
 .secondary { color: var(--nds-text-2); }
 .reviewMetrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .issues { display: grid; gap: var(--nds-space-12); margin: var(--nds-space-12) 0; overflow-wrap: anywhere; }
+/* CFI — a confirmation row (link proposal, delete): full width; SKUs wrap only at their own hyphens, never mid-word. */
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); width: 100%; min-width: 0; overflow-wrap: normal; word-break: normal; }
 .cell { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); min-width: 140px; max-width: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mappingRow { display: flex; flex-direction: column; gap: var(--nds-space-18); padding-block: var(--nds-space-18); }
 .wrap { overflow-wrap: anywhere; }

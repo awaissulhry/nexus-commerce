@@ -12,6 +12,8 @@ import { WorkbookTemplate, type WorkbookSetup } from './WorkbookTemplate'
 import { defaultSourceMapping, type SourceInspection, type SourceMapping, type TransferJob, type TransferOptions } from './sourceMapping'
 import { transferApi } from './transferApi'
 import { destinationMarkets } from './workbookSelection'
+import { appendConfirmations, NO_CONFIRMATIONS, type Confirmations } from './reviewConfirmations'
+import { readsFileMarket, uploadMarket } from './reviewText'
 import type { TransferMode } from '@nexus/shared/catalog-transfer'
 import styles from './transfer.module.css'
 
@@ -31,6 +33,10 @@ export default function CatalogTransferPage() {
   const [source, setSource] = useState<SourceInspection | null>(null), [mapping, setMapping] = useState<SourceMapping | null>(null), [jobId, setJobId] = useState('')
   const [blankPolicy, setBlankPolicy] = useState<'ignore' | 'clear'>('ignore')
   const [accountId, setAccountId] = useState(''), [skus, setSkus] = useState(''), [purpose, setPurpose] = useState('editing'), [exportMarkets, setExportMarkets] = useState('all')
+  // CFI-4 / CFI-3 — what the Owner confirmed for the file in hand; cleared with the file.
+  const [confirmed, setConfirmed] = useState<Confirmations>(NO_CONFIRMATIONS)
+  // CFI — an Amazon template's marketplace: '' = use the file's own (its settings name it); a choice is explicit.
+  const [channelMarket, setChannelMarket] = useState('')
   useEffect(() => {
     const abort = new AbortController()
     void transferApi<TransferOptions>('catalog-transfer/options', undefined, abort.signal).then(o => { if (!abort.signal.aborted) setOptions(o) }).catch(e => { if (!abort.signal.aborted) setError(e.message) })
@@ -44,26 +50,37 @@ export default function CatalogTransferPage() {
   }, [])
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(''); setDownloaded(''); try { await fn() } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) } }
   const showJob = (id: string) => { setJobId(id); setTab('import'); window.history.replaceState(null, '', `${window.location.pathname}?job=${encodeURIComponent(id)}`) }
-  const reset = () => { setJobId(''); setSource(null); setMapping(null); setFile(null); window.history.replaceState(null, '', window.location.pathname) }
+  const reset = () => { setJobId(''); setSource(null); setMapping(null); setFile(null); setConfirmed(NO_CONFIRMATIONS); window.history.replaceState(null, '', window.location.pathname) }
   const inspect = () => run(async () => {
     let result: SourceInspection
     if (file) { const body = new FormData(); body.append('file', file); result = await transferApi('catalog-transfer/source/inspect', body) }
     else result = await transferApi('catalog-transfer/source/fetch', { url })
     setSource(result); setMapping(defaultSourceMapping(result.headers, market, mode))
   })
+  const uploadFile = (current: File, confirmations: Confirmations) => {
+    const body = new FormData(); body.append('file', current); body.append('market', uploadMarket(format, current.name, market, channelMarket)); body.append('mode', mode); body.append('format', format); body.append('blankPolicy', blankPolicy)
+    if (format === 'amazon') { body.append('accountId', accountId); body.append('familyId', familyId) }
+    return transferApi<TransferJob>('catalog-transfer/preview', appendConfirmations(body, confirmations))
+  }
   const preview = () => run(async () => {
     let result: TransferJob
     if (source && mapping) result = await transferApi('catalog-transfer/source/preview', { sourceId: source.sourceId, inputHash: source.hash, mapping: { ...mapping, market, mode } })
-    else { if (!file) return; const body = new FormData(); body.append('file', file); body.append('market', market); body.append('mode', mode); body.append('format', format); body.append('blankPolicy', blankPolicy); if (format === 'amazon') { body.append('accountId', accountId); body.append('familyId', familyId) } result = await transferApi('catalog-transfer/preview', body) }
+    else { if (!file) return; setConfirmed(NO_CONFIRMATIONS); result = await uploadFile(file, NO_CONFIRMATIONS) }
     showJob(result.jobId)
   })
+  // The SAME file, checked again with the Owner's confirmations; the review then shows the new check.
+  const recheck = async (confirmations: Confirmations) => {
+    if (!file) throw new Error('Upload the same file again to confirm these.')
+    const result = await uploadFile(file, confirmations)
+    setConfirmed(confirmations); showJob(result.jobId)
+  }
   return <div className={styles.workspace}>
     <PageHeader eyebrow="Products" title="Catalog import & export" subtitle="Prepare products for Amazon and eBay across marketplaces, using one file." actions={<Button asChild><Link href="/products">Back to products</Link></Button>} />
     <Tabs idBase="catalog-transfer" ariaLabel="Catalog transfer workflow" tabs={[{ id: 'template', label: 'Create workbook', disabled: busy }, { id: 'import', label: 'Import & review', disabled: busy }, { id: 'export', label: 'Export existing products', disabled: busy }, { id: 'sources', label: 'Sources & history', disabled: busy }]} active={tab} onChange={setTab} />
     {error && <Banner tone="danger" title="Unable to complete this step">{error}</Banner>}
     {downloaded && <Banner tone="success" title="Workbook downloaded" action={tab !== 'import' ? <Button onClick={() => { reset(); setTab('import'); setFormat('catalog') }}>Import filled workbook</Button> : undefined}>{downloaded}</Banner>}
     {!options ? error ? <div><Button onClick={() => { setError(''); setLoadAttempt(n => n + 1) }}>Try loading options again</Button></div> : <p role="status">Loading catalog options…</p> : <div {...tabPanelProps('catalog-transfer', tab)} className={styles.stack}>
-      {tab === 'sources' ? <SourcesPanel onJob={showJob} /> : tab === 'import' && jobId ? <TransferReview key={jobId} jobId={jobId} options={options} onReset={reset} onJob={showJob} /> : <>
+      {tab === 'sources' ? <SourcesPanel onJob={showJob} /> : tab === 'import' && jobId ? <TransferReview key={jobId} jobId={jobId} options={options} onReset={reset} onJob={showJob} onRecheck={file && !source ? recheck : undefined} confirmed={confirmed} /> : <>
         <div className={styles.fields}>
           <Field label="Product family" required={tab === 'template'} hint={tab === 'template' ? 'For example, Jackets. Determines which shared product details your file contains.' : 'Choose for exports, source mapping or new products from an Amazon file. Nexus workbooks already contain their family codes.'}><Listbox options={options.families.map(f => ({ value: f.id, label: f.label }))} value={familyId} onChange={id => { setFamilyId(id); setDownloaded('') }} emptyLabel="Choose a family" disabled={busy} width="100%" /></Field>
         </div>
@@ -79,17 +96,17 @@ export default function CatalogTransferPage() {
         </div></Card> : tab === 'import' ? <Card header={<h2>{source ? 'Map incoming columns' : 'Upload your completed file'}</h2>} description="Review exactly what will change before saving. Importing prepares your catalog; publication is a separate step."><div className={styles.stack}>
           <Field label="What should this file do?" hint="This applies to both products and listing destinations. You will review new records and changes before saving."><Listbox options={[{ value: 'update', label: 'Update existing products and listings only' }, { value: 'create', label: 'Create new products and listings only' }, { value: 'upsert', label: 'Create new records and update existing ones' }]} value={mode} onChange={v => setMode(v as TransferMode)} disabled={busy} width="100%" /></Field>
           {!source ? <>
-            <Field label="File type"><Listbox value={format} options={[{ value: 'catalog', label: 'Nexus workbook — columns map automatically' }, { value: 'amazon', label: 'Amazon template — columns map automatically' }, { value: 'source', label: 'Supplier or other file — choose column mappings' }]} onChange={v => { setFormat(v); setFile(null); setUrl(''); if (!market && v !== 'amazon') setMarket(options.markets.some(m => m.code === 'IT') ? 'IT' : options.markets[0]?.code ?? '') }} disabled={busy} width="100%" /></Field>
+            <Field label="File type" hint="Nexus also detects the file itself. If the file is another type, the review says so and reads it as what it is."><Listbox value={format} options={[{ value: 'catalog', label: 'Nexus workbook — columns map automatically' }, { value: 'amazon', label: 'Amazon template — columns map automatically' }, { value: 'source', label: 'Supplier or other file — choose column mappings' }]} onChange={v => { setFormat(v); setFile(null); setUrl(''); if (!market && v !== 'amazon') setMarket(options.markets.some(m => m.code === 'IT') ? 'IT' : options.markets[0]?.code ?? '') }} disabled={busy} width="100%" /></Field>
             {format === 'catalog' && <Field label="Blank cells" hint="Applies independently to each language sheet in a Nexus workbook. Omitted columns preserve their values; explicit SET, CLEAR and INHERIT actions take precedence."><Listbox value={blankPolicy} onChange={value => setBlankPolicy(value as 'ignore' | 'clear')} options={[{ value: 'ignore', label: 'Ignore — preserve existing values' }, { value: 'clear', label: 'Clear — remove values in present columns' }]} disabled={busy} /></Field>}
             {format === 'amazon' && <>
-              <Field label="Destination Amazon account" hint="Choose the seller account this file belongs to."><Listbox options={options.accounts.filter(a => a.channelType === 'AMAZON').map(a => ({ value: a.id, label: a.displayName ?? a.id }))} value={accountId} onChange={id => { setAccountId(id); if (!destinationMarkets(options, id).some(m => m.code === market)) setMarket('') }} disabled={busy} width="100%" /></Field>
-              <Field label="Amazon marketplace" hint="The file’s marketplace and language must match this destination."><Listbox options={destinationMarkets(options, accountId).map(m => ({ value: m.code, label: m.name }))} value={market} onChange={setMarket} disabled={busy || !accountId} width="100%" /></Field>
-              <p>Amazon values stay scoped to this account and marketplace. Existing shared facts and other translations are preserved. Review managed or unsupported columns in the import outcomes.</p>
+              <Field label="Amazon account" hint="Optional. When exactly one Amazon account covers the file’s marketplace, Nexus selects it. Choose one when you sell there through more than one account."><Listbox options={options.accounts.filter(a => a.channelType === 'AMAZON').map(a => ({ value: a.id, label: a.displayName ?? a.id }))} value={accountId} emptyLabel="Select automatically" onChange={id => { setAccountId(id); if (id && channelMarket && !destinationMarkets(options, id).some(m => m.code === channelMarket)) setChannelMarket('') }} disabled={busy} width="100%" /></Field>
+              <Field label="Amazon marketplace" hint="By default Nexus uses the marketplace the file names. Choose one only to make sure the file belongs to it; a different file is then refused."><Listbox options={(accountId ? destinationMarkets(options, accountId) : options.markets.filter(m => m.channel === 'AMAZON')).map(m => ({ value: m.code, label: m.name }))} value={channelMarket} emptyLabel="Use the file’s marketplace" onChange={setChannelMarket} disabled={busy} width="100%" /></Field>
+              <p>Amazon values stay scoped to this account and marketplace, in the file’s language. Prices are recorded without being sent. Quantities are never imported. Review every column that was kept out in the import outcomes.</p>
             </>}
-            <FileDropzone accept={format === 'source' ? '.csv,.xlsx,.json' : format === 'amazon' ? '.xlsx,.xlsm' : '.csv,.xlsx'} maxBytes={10 * 1024 * 1024} disabled={busy} onFiles={files => { setFile(files[0] ?? null); setUrl('') }} hint="Up to 10 MB · 50,000 mapped attribute outcomes" />
-            {file && <div className={styles.file}><strong>{file.name}</strong><Button size="sm" disabled={busy} onClick={() => setFile(null)}>Remove selected file</Button></div>}
+            <FileDropzone accept={format === 'source' ? '.csv,.xlsx,.json' : '.xlsx,.xlsm,.csv'} maxBytes={10 * 1024 * 1024} disabled={busy} onFiles={files => { setFile(files[0] ?? null); setUrl(''); setConfirmed(NO_CONFIRMATIONS) }} hint={format === 'source' ? 'Up to 10 MB · 50,000 mapped attribute outcomes' : 'A Nexus workbook, an Amazon template (.xlsm or .xlsx) or our eBay workbook · up to 10 MB · 50,000 mapped attribute outcomes'} />
+            {file && <div className={styles.file}><strong>{file.name}</strong><Button size="sm" disabled={busy} onClick={() => { setFile(null); setConfirmed(NO_CONFIRMATIONS) }}>Remove selected file</Button></div>}
             {format === 'source' && <Field label="Or fetch a source URL" hint="Fetches one immutable copy for mapping and preview."><Input type="url" value={url} onChange={e => { setUrl(e.target.value); setFile(null) }} disabled={busy} placeholder="https://supplier.example/catalog.csv" /></Field>}
-            <div><Button variant="primary" disabled={busy || !market || !file && !url.trim() || format === 'amazon' && !accountId} onClick={format === 'source' ? inspect : preview}>{busy ? 'Checking your file…' : format === 'source' ? 'Continue to column mapping' : 'Review file before saving'}</Button></div>
+            <div><Button variant="primary" disabled={busy || !file && !url.trim() || !readsFileMarket(format, file?.name) && !market} onClick={format === 'source' ? inspect : preview}>{busy ? 'Checking your file…' : format === 'source' ? 'Continue to column mapping' : 'Review file before saving'}</Button></div>
           </> : mapping && <>
             <SourceMappingEditor source={source} mapping={{ ...mapping, market, mode }} onChange={setMapping} options={options} familyId={familyId} disabled={busy} />
             <div className={styles.actions}><Button disabled={busy} onClick={() => { setSource(null); setMapping(null) }}>Choose another source</Button><Button variant="primary" disabled={busy || !mapping.skuColumn || !mapping.bindings.length || mapping.bindings.some(b => !b.field)} onClick={preview}>{busy ? 'Preparing review…' : 'Preview mapped import'}</Button></div>
