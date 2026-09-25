@@ -18,7 +18,7 @@ import { join } from 'node:path'
 
 const SRC = join(import.meta.dirname, '..')
 const job = readFileSync(join(SRC, 'jobs', 'image-readback-sweep.job.ts'), 'utf8')
-const index = readFileSync(join(SRC, 'index.ts'), 'utf8')
+const scheduler = readFileSync(join(SRC, 'runtime', 'scheduler.ts'), 'utf8')
 const service = readFileSync(join(SRC, 'services', 'images', 'live-image-readback.service.ts'), 'utf8')
 
 describe('it is scheduled, not only registered', () => {
@@ -28,11 +28,11 @@ describe('it is scheduled, not only registered', () => {
   })
 
   it('is started at boot, beside eBay’s', () => {
-    expect(index).toContain('startImageReadbackSweepCron')
-    expect(index).toContain('startImageReadbackSweepCron();')
+    expect(scheduler).toContain('startImageReadbackSweepCron')
+    expect(scheduler).toContain('startImageReadbackSweepCron();')
     // Next to the eBay one, so the two are read together.
-    const iEbay = index.indexOf('startEbayImageReadbackCron();')
-    const iThis = index.indexOf('startImageReadbackSweepCron();')
+    const iEbay = scheduler.indexOf('startEbayImageReadbackCron();')
+    const iThis = scheduler.indexOf('startImageReadbackSweepCron();')
     expect(iEbay).toBeGreaterThan(0)
     expect(Math.abs(iThis - iEbay)).toBeLessThan(200)
   })

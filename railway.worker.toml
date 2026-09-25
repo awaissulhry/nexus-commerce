@@ -1,0 +1,5 @@
+# Set this as the worker service's Config File Path. API owns schema release.
+[deploy]
+startCommand = "npm run start:worker"
+healthcheckPath = "/health/ready"
+healthcheckTimeout = 90

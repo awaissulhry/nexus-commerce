@@ -214,6 +214,7 @@ const FAST_TICKS_AFTER_PUBLISH = 5
 
 let timer: NodeJS.Timeout | null = null
 let running = false
+let activeDrain: Promise<void> | null = null
 let ticking = false
 let pruneCounter = 0
 let currentDelayMs = BASE_INTERVAL_MS
@@ -244,7 +245,7 @@ export function relayDelayMs(): number {
   return currentDelayMs
 }
 
-export function startRelay(broker: EventBroker, intervalMs = BASE_INTERVAL_MS): () => void {
+export function startRelay(broker: EventBroker, intervalMs = BASE_INTERVAL_MS): () => Promise<void> {
   if (running) return stopRelay
   running = true
   currentDelayMs = intervalMs
@@ -273,7 +274,7 @@ export function startRelay(broker: EventBroker, intervalMs = BASE_INTERVAL_MS): 
       return
     }
     ticking = true
-    void relayOnce(broker, config)
+    activeDrain = relayOnce(broker, config)
       .then(async (result) => {
         if (result.published > 0) {
           logger.debug('event relay: drained', result)
@@ -304,10 +305,11 @@ export function startRelay(broker: EventBroker, intervalMs = BASE_INTERVAL_MS): 
   return stopRelay
 }
 
-export function stopRelay(): void {
+export async function stopRelay(): Promise<void> {
   running = false
   if (timer) clearTimeout(timer)
   timer = null
   currentDelayMs = BASE_INTERVAL_MS
   fastTicksRemaining = 0
+  await activeDrain
 }

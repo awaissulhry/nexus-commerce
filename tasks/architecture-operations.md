@@ -31,6 +31,35 @@ before deploying it. Do not use the migration URL as a fallback runtime credenti
 Separate inputs are an access-control boundary, not a promise that deployment
 platform administrators or the release service cannot see both secret values.
 
+## Process cutover
+
+Create the worker and scheduler services from the same repository/build as the API.
+Set their Config File Path to `/railway.worker.toml` and `/railway.scheduler.toml`
+respectively. They use `/health/ready`; only the API service runs schema migrations.
+Provide the required integration variables, restricted `DATABASE_URL`, and Redis
+connection. Set `ENABLE_QUEUE_WORKERS=1` on API and worker (the API is a producer
+only); clear `NEXUS_DISABLE_BACKGROUND_JOBS` on both background services.
+
+Configure GitHub `RAILWAY_WORKER_SERVICE` and `RAILWAY_SCHEDULER_SERVICE` before
+enabling deployment. The workflow refuses an API-only rollout without these IDs.
+For the first cutover, quiesce the old API's background jobs, then start the worker
+and scheduler and replace the API. Expect a bounded pause while durable queues wait;
+do not run old unleased consumers alongside the new services. Subsequent releases
+expand schema/API first and update both services from the same SHA.
+
+API serves HTTP and broadcast event intake. Worker owns BullMQ, the event relay,
+durable consumers, SQS/inbox retries and continuous stock/media/assortment polling.
+Scheduler owns the existing timed job bodies with renewable leases. These schedules
+are still timer driven; arbitrary missed historical ticks are not replayed. Jobs
+that require catch-up must query durable due state, as scheduled changes already do.
+Replacing every schedule with BullMQ is a separate behavior migration, not required
+to isolate API CPU or prevent concurrent tick ownership.
+
+API writes no longer start inline cross-business pool/assortment drains; workers
+discover the durable rows. Assortment LISTEN wakes promptly; stock-pool idle polling
+can take up to ten seconds. Shutdown stops new work and waits for current tasks with
+a 30-second outer bound; interrupted durable work remains recoverable.
+
 ## Release behavior
 
 The GitHub deployment workflow calls CI for its own checkout and depends on success.
