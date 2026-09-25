@@ -33,6 +33,9 @@ const { inDatabaseTransaction } = await import(`${API}/lib/database-context.js`)
 const { withWorkspace, LEGACY_WORKSPACE_ID } = await import(`${API}/lib/workspace-context.js`)
 const { readPublicationFacts } = await import(`${API}/services/pim/studio-publication-plan.js`)
 const { prepareAmazonPublication } = await import(`${API}/services/pim/studio-publication-amazon.js`)
+const { prepareAmazonChanges, compileAmazonChanges } = await import(`${API}/services/pim/studio-publication-amazon-changes.js`)
+const { publicationChangeId } = await import(`${API}/services/pim/studio-publication-changes.js`)
+const { AmazonSpApiClient } = await import(`${API}/clients/amazon-sp-api.client.js`)
 const { applyProductBulkEdits } = await import(`${API}/services/products/bulk-edit.service.js`)
 
 class Rollback extends Error { constructor() { super('rollback') } }
@@ -66,6 +69,15 @@ try {
     const build = async () => prepareAmazonPublication(await readPublicationFacts(root.id, scope))
     const before = await build()
     report.before = shape(before.feed)
+    // PCO-4 measurement uses the exact before values as accepted-history/live-read fixtures.
+    // Network stays refused. This proves compiler sparsity, not provider acceptance.
+    const baseline = new Map(before.products.flatMap((p, index) => Object.entries(before.feed.messages[index].attributes ?? {})
+      .map(([field, value]) => [publicationChangeId(p.productId, field), { state: 'value', value }] as const)))
+    AmazonSpApiClient.prototype.getListingsItem = async ({ sku }: { sku: string }) => {
+      const message = before.feed.messages.find((message: any) => message.sku === sku)
+      if (!message) throw new Error('Unexpected fixture SKU')
+      return { success: true, sku, rawResponse: { sku, attributes: message.attributes ?? {}, summaries: [{ marketplaceId: before.marketplaceId, productType: message.productType }] } } as any
+    }
 
     const probe = `PCO-PROBE-${Math.random().toString(36).slice(2, 10)}`
     const write = await applyProductBulkEdits({ changes: [{ id: child.id, field: `attr_${FIELD}`, value: probe, target: 'channel' }],
@@ -75,6 +87,18 @@ try {
 
     const after = await build()
     report.after = shape(after.feed)
+    const plan = await prepareAmazonChanges(await readPublicationFacts(root.id, scope), after, baseline as any)
+    // The original part_number probe adds a field absent from the old request, so it has no accepted
+    // field record. Its first send correctly needs an explicit choice instead of an automatic tick.
+    const choices = plan.changes.filter((change: any) => change.productId === child.id && change.field === FIELD)
+    report.reviewedChoices = choices
+    const selectedIds = choices.filter((change: any) => change.selectable).map((change: any) => change.id)
+    const sparse = compileAmazonChanges(plan, selectedIds)
+    report.compiled = { fixture: 'before payload as accepted baseline and channel read', messages: sparse.feed.messages,
+      products: sparse.products, fieldWrites: sparse.fieldWrites, feedBytes: bytes(sparse.feed),
+      unchangedProductsSkipped: before.products.length - sparse.products.length }
+    if (sparse.feed.messages.length !== 1 || sparse.feed.messages[0].patches?.length !== 1
+      || sparse.feed.messages[0].patches[0].path !== `/attributes/${FIELD}`) throw new Error('The real compiler did not produce exactly one changed child/root.')
     // The diff: per message (by sku), the attribute roots whose JSON changed, appeared or disappeared.
     const bySku = new Map((before.feed.messages as any[]).map(m => [m.sku, m]))
     const changed: Array<{ sku: string; roots: string[]; changeOnlyBytes: number }> = []

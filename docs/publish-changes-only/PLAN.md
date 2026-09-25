@@ -318,15 +318,20 @@ Prediction written first: IT mostly unread, DE open 36, eBay 0 compared — righ
   `amazonRootPatch`; `services/channel-batch/amazon-batch-feed.service.ts:190`), and the studio validation already passes `patches`
   (`studio-publication-amazon.ts:171`) (read).
 - **eBay:** `ReviseFixedPriceItem` with only the changed parts: Title, Description, ItemSpecifics (the whole set when one changes),
-  PictureDetails (whole set), and only the changed Variations by SKU. Price and quantity stay with `ReviseInventoryStatus`.
+  PictureDetails (whole set), and Pictures-only variation galleries. Existing Variation content requiring price/quantity is
+  refused by name under R-PCO-2. Live unselected aspects remain in required collection replacements; only selected field intents
+  become accepted baselines. Price and quantity stay with `ReviseInventoryStatus`.
   Narrow Trading revises already work in this code base (description only `ebay-description-push.service.ts:59`, pictures only
   `images/ebay-shared-image-publish.service.ts:208`, added variations `ebay-variation-add.service.ts:65-90`). The live-digest check stays.
 - **Shopify:** stays gated until you link. Later: the native sync already works per product with local/remote revisions.
 
 ### 4.5 The edge cases
 
-- **One child changed:** one message (Amazon) / one Variation (eBay). Measured case §4.1.
-- **A field cleared in Nexus:** Amazon `delete` patch; eBay: the part is sent empty only where eBay allows it, else refused by name.
+- **One child changed:** one message (Amazon). Existing eBay variation content is refused under R-PCO-2; item-level content
+  remains a narrow revise. Measured Amazon case §4.1 now produces one real compiler PATCH.
+- **A field cleared in Nexus:** authored clear only; omission never means deletion. Amazon uses actual observed selectors,
+  with separate marketplace/language intent keys; eBay optional aspect clears preserve siblings and use DeletedField only for
+  an empty supported collection. Required specifics, blank title/description/gallery and unsupported clears are refused by name.
 - **Images, variation theme, parent/child:** each is an attribute root / Trading part like any other. A variation-theme change on a live
   family is listed with a warning.
 - **Closed Amazon offer:** the closed product is **skipped and named** ("offer closed — not sent"); the others go. Today the whole family is refused.
@@ -341,6 +346,11 @@ Prediction written first: IT mostly unread, DE open 36, eBay 0 compared — righ
 channel now · a tick for "differs" rows, and counts ("2 fields in 1 product will be sent · 8 products unchanged, not sent"). The design
 system has no before/after list (checked: `components/`, `patterns/`) → a new DS component (catalog, CHANGELOG web + factory, barrel,
 `.claude/DS-GAPS.md`), 7:1 contrast, keyboard, light/dark, 390 px.
+
+Implemented review has two stages: select changes, then review their exact compiled request and affected products before Publish.
+Changing a choice invalidates its token immediately. A durable compare-and-set protects concurrent choices and the actual send claim.
+Atomic listing creation is labelled as a change/creation, not as one field. JSON request rendering is canonical across JSONB storage.
+An Amazon create first requires a confirmed remote 404; missing Nexus identity never authorizes overwriting an existing seller SKU.
 
 ---
 

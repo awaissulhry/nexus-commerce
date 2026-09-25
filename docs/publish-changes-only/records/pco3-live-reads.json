@@ -1,0 +1,211 @@
+{
+  "at": "2026-09-25T02:46:21.581Z",
+  "discoveryReadOnly": true,
+  "channelMutations": 0,
+  "amazon": {
+    "account": "cmothu9bo0000nz01asw6wx8j",
+    "concurrency": 4,
+    "seconds": 11.541,
+    "results": [
+      {
+        "sku": "GALE-JACKET",
+        "success": true,
+        "seconds": 2.245,
+        "matchingSku": true,
+        "roots": 42,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-3XL",
+        "success": true,
+        "seconds": 3.053,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-4XL",
+        "success": true,
+        "seconds": 2.785,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-5XL",
+        "success": true,
+        "seconds": 2.921,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-L",
+        "success": true,
+        "seconds": 1.491,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-M",
+        "success": true,
+        "seconds": 1.485,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-S",
+        "success": true,
+        "seconds": 1.536,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-XL",
+        "success": true,
+        "seconds": 1.316,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-XS",
+        "success": true,
+        "seconds": 1.488,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-XXL",
+        "success": true,
+        "seconds": 1.641,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-BLACK-MEN-XXS",
+        "success": true,
+        "seconds": 1.505,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+        "success": true,
+        "seconds": 1.683,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+        "success": true,
+        "seconds": 1.986,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+        "success": true,
+        "seconds": 1.376,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-L",
+        "success": true,
+        "seconds": 1.858,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-M",
+        "success": true,
+        "seconds": 1.439,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-S",
+        "success": true,
+        "seconds": 1.475,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-XL",
+        "success": true,
+        "seconds": 1.407,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-XS",
+        "success": true,
+        "seconds": 1.515,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+        "success": true,
+        "seconds": 1.513,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      },
+      {
+        "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+        "success": true,
+        "seconds": 2.883,
+        "matchingSku": true,
+        "roots": 55,
+        "productType": "COAT",
+        "error": null
+      }
+    ]
+  },
+  "ebay": {
+    "account": "cmr4aaqb00025nz016k18rup9",
+    "sku": "AIREON",
+    "itemId": "257646289420",
+    "matchingItem": true,
+    "seconds": 1.46,
+    "title": "AIREON Completo Moto Uomo 3 in 1 Giacca e Pantaloni Impermeabile Fodera Termica",
+    "aspects": 1,
+    "ack": "Success"
+  }
+}

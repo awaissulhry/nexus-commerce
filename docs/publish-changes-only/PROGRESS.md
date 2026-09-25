@@ -5,8 +5,11 @@
 | Plan + automatic-writer audit | ✅ written; §1b completed, production BullMQ startup verified; **Q1(a), Q2(a) approved (Owner: “go”)** | — |
 | PCO-0 — interim Publish warning | ✅ built and verified locally; historical differences, unknowns, explicit review-bound confirmation | `6431f5c67` |
 | PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration not applied to production | `302b4d787` |
-| PCO-2 — field comparison + accepted history | ✅ 53 tests; 17/17 mutations; fresh API types | local commit below |
-| PCO-3 … PCO-6 | ⬜ implementation authorized; follows comparison | — |
+| PCO-2 — field comparison + accepted history | ✅ 53 tests; 17/17 mutations; fresh API types | `62c42c428` |
+| PCO-3 — fresh channel evidence | ✅ built and locally verified; 21/21 live reads in7.958s at5concurrent | `ba1ee4957` |
+| PCO-4 — Amazon sparse request | ✅ one child/root330bytes,8unchanged skipped; language-scoped accepted history; confirmed-404 create | `ba1ee4957` |
+| PCO-5 — eBay sparse request | ✅ supported narrow fields/collections; explicit authored clears; strict variation boundary | `ba1ee4957` |
+| PCO-6 — selection review | ✅ durable selection/CAS + UI/DSmirror; browser,49mutations, fresh API/web/Factory types | `949a1e574` |
 | PCO-7 — live channel proofs | ⬜ each run needs the Owner's word after read + preview | — |
 
 ## Continuation B — 2026-09-25
@@ -69,7 +72,46 @@ Subsequent guarded batches exit before any mutation unless the push check is cle
   Cost when: more than one migration or business-payload change — neither. Gate: tests/mutations/types/review passed; no production migration/send.
   Rollback: revert application changes while keeping an applied additive migration/history and unused columns.
 
-## Facts the next session must not re-derive (measured 2026-09-25, production, read only)
+## PCO-3 through PCO-6 implementation / measured checks (not released)
+
+- Durable private change plan and pure selection endpoint; changing checkbox choices performs no fresh channel read.
+  Explicit selection token and JSON compare-and-set both at preview persistence and submission claim; legacy unsent reviews refuse.
+  Fresh submit rebuilds facts/live evidence/accepted history and recompiles the exact selected request; only actual participants get drafts/receipts.
+  Request journal carries versioned intentional fields, separately from unchanged provider-required collection companions.
+- Selection/database review exposed JSONB object-key ordering in the embedded JSON request string. Canonical rendering fixed the real DB
+  reproduction. Service, selection, disposable-DB tests59/59; new selection tests23. Shopify existing-product detection checks native remote
+  identity too and refuses the full publisher, even if its environment gate is opened. Shopify change-only remains deferred until linking.
+- Main read-only probe: GALE-JACKET Amazon IT21/21 exact seller SKUs with attributes. Four concurrent requests11.541s exceeded the10s target;
+  five concurrent7.958s passed. eBay GetItem matched item257646289420 with parsed content in1.372s. Listing gates disabled only in the local
+  probe process; no channel mutation. Normal OAuth/gateway logs may be written. Production Redis DNS failed in existing imported queue code;
+  reads themselves all succeeded. Records `pco3-live-reads.json`, `pco3-live-reads-c5.json`. Five matches the documented default rate/burst5.
+- Local rollback-only payload probe: xavia-knee-slider IT, childblack part_number addition. Accepted-field fixture contains only roots previously
+  sent, so this new root correctly remains unticked initially; explicit selection produces1PATCH/1root,330feedbytes vs8662fullfeedbytes,
+ 8 unchanged products skipped. No network attempts; rollback true. Records `pco4-payload-{initial,selected}.json` retain both first diagnostic
+  and successful explicit-selection run. Live reads are separately measured; this probe is a compiler fixture, not provider acceptance.
+- New ChangeReview DS component (Checkbox+KeyValue) mirrored to Factory, catalog/changelog/gap recorded. Browser real dialog with mock API:
+  nine scenarios incl stale/destination/late-selection/legacy/double-submit; desktop1280/mobile390, light/dark, keyboard and focus pass.
+  Initial sampled text minimum9.37:1; final expanded request preview minimum8.02:1; no unexpected console/network failures. Final labels use changes and compiled-product counts for atomic creates.
+  Main inspected desktop/mobile screenshots.12 UI contract tests pass; fresh web types, DS conformance, token guard and both7:1 contrast gates pass.
+- All required reviews resolved: scoped Amazon content intent keys preserve each language's accepted history; confirmed remote404 required
+  before any atomic UPDATE; create metadata root order canonical across JSONB. eBay absent XML aspects remain unknown unless a correctly mapped,
+  error-free authored override proves a clear. Empty omitted create fields never become deletion baselines. Parsed ItemID/status rejects foreign
+  items and description CDATA; real GetItem projection retains required SKU tracking identity. Existing-listing price/stock validation errors
+  stay outside content sends while creation requirements remain. Frontend validates selected owners/SKUs and current product/destination.
+- Final mutations:20integration/UI/planner +13Amazon/selector +14eBay/parser/receipt +1realDBlanguagefold +1browser focus = **49/49**, every source SHA restored.
+  Controls83 +76 +91 (overlapping suites); separate browser green/mutant/restored-control proof. Records `pco3-6-integration-mutations-final.jsonl`, `pco3-6-amazon-mutations.jsonl`,
+  `pco3-6-ebay-mutations-final.jsonl`, `pco6-focus-mutation.json`. Earlier runs stopped on Vitest rejection-stack classification or an outdated expected test name;
+  assertions were strengthened to explicit refusal status/message, never relaxed. Harness infrastructure/restore guards unchanged.
+- Final broader publication/comparator/serializer regression run: **299API tests in16files passed;18web tests in5files passed**.
+  Existing reader fixtures log localhost Redis refusals; disposable-DB refusal tests intentionally log CHECK constraint errors.
+  Fresh private API, web and Factory TypeScript checks all passed; API/web repeated after the final variation warning and preview-focus additions. No test suppression or production service code changed during mutation proof.
+  The additional live variation-theme warning regression failed first and then passed, including its mutation. Final request preview receives keyboard focus and its payload can be scrolled by keyboard. Latest main production API readiness read: healthy build7103b0ad; current main's Railway and Vercel status checks both success.
+- Done when: fresh unknown-safe comparisons, sparse requests and exact selection review work — met under local/provider-stub validation.
+  Cost when:21-SKU live reads>10s — measured4workers11.541s, adjusted5workers7.958s; supported provider collection requirements preserved explicitly.
+  Gate: tests, mutations, types, DS/browser and independent review pass; actual first channel acceptance remains PCO-7 on the Owner's per-run word.
+  Rollback: revert these application/UI changes, retaining PCO-1's additive migration/history; the interim overwrite-confirmation path returns.
+- No production migration, push or live channel write yet. PCO-7 proof tools are being prepared read-only; synthetic proof snapshots must use
+  reason `publish-proof` before sending so a temporary canary and its restoration never seed normal Nexus accepted-field baselines.
 
 PCO-2 verified: pure three-way comparison distinguishes absent/null/unknown, requires explicit first-publish choices,
 and rejects forged/nonselectable field IDs. Accepted history folds versioned intentional fields only, across pagination;
@@ -82,6 +124,8 @@ after replacing Object.hasOwn with the existing target-compatible hasOwnProperty
 Done when: all comparison/accepted-history cases are covered — met. Cost when: drift comparators cannot be shared — not reached;
 adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Rollback: revert the isolated helper/contract commit.
 
+## Earlier production measurements (2026-09-25, retained as historical)
+
 - Production gates: **Amazon = live, eBay = live, Shopify = gated** (Railway boot log, deploy `674bf97f`, 2026-09-24 20:23 UTC).
   Local `apps/api/.env` sets none → all `gated` locally.
 - Queue: 2,199 FAILED rows, **all dead** → never re-sent automatically. 0 rows would be picked now. Shopify: 0 rows.
@@ -91,3 +135,9 @@ adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Ro
   `ChannelDrift` rows are the stock read-back, not content).
 - eBay Inventory-model: 208 of 332 listings (8 families) refused by studio Publish.
 - The Owner will link Shopify products and listings later (2026-09-25); Shopify stays gated until then.
+
+## PCO-7 preparation status
+
+- Amazon IT GALE-JACKET-BLACK-MEN-S: original Italian backend search terms read; proposed append `nexuspco202609251dab4448`; Amazon validated both the sparse send and exact restore. Proposal digest `15e10266ce67ec88dd6f8f386ca02e75305ac4d0e3382ca55b509c2444dbd48d`, prepared2026-09-25T03:42Z. Per-run approval requested asynchronously; **no answer/approval yet**. No channel write.
+- Initial eBay standalone discovery found0 eligible items. Preparing one normal Trading family ItemID instead, retaining exact account/alias/participant boundaries, title-only XML and provider revision restrictions. No approval requested for eBay until its exact preview exists.
+- Core backend commit `ba1ee4957`; review UI/DS commit `949a1e574`. Release push remains authorized. Proof execution requires the receipt migration after deployment, and separate per-run word; proof tools never migrate.
