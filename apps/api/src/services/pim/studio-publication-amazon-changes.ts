@@ -170,13 +170,16 @@ function providerEqual(root: string, ours: StudioPublishValue, theirs: StudioPub
   return compared.compared.includes(root) && !compared.differing.length
 }
 
-/** Five workers fit Amazon's default read rate; live reads have a 9.5-second budget, separate from local schema preparation. */
+/** Five concurrent reads; each group of up to21 products gets a finite 9.5-second family budget. */
 export async function prepareAmazonChanges(facts: PublicationFacts, publication: AmazonPublication, baselineValues: Map<string, StudioPublishValue>): Promise<AmazonChangePlan> {
   const prepared = clone(publication)
+  const previouslyPublished = new Set([...baselineValues.keys()].map(key => (JSON.parse(key) as [string, string])[0]))
   const client = prepared.products.length ? new AmazonSpApiClient({ id: facts.scope.accountId, region: await getAmazonRegion(facts.scope.accountId) }) : null
   const schemaPromises = new Map<string, Promise<ChannelSpec>>()
   const products: ProductPlan[] = [], inputs: PublicationChangeInput[][] = [], observations: unknown[] = []
-  const deadline = Date.now() + 9_500
+  const readBudgetMs = 9_500 * Math.max(1, Math.ceil(prepared.products.length / 21))
+  const deadline = Date.now() + readBudgetMs
+  const timeoutMessage = `The live content read exceeded the ${readBudgetMs / 1_000}-second review budget.`
   let next = 0
   async function worker() {
     while (next < prepared.products.length) {
@@ -184,7 +187,7 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       const messages = prepared.feed.messages.filter(message => message.sku === product.sku)
       if (messages.length !== 1 || !facts.products.some(p => p.id === product.productId)) throw new Error(`${product.sku}: the prepared product identity is ambiguous.`)
       const message = messages[0], current = currentRoots(message)
-      const newListing = !facts.listings.find(listing => listing.productId === product.productId)?.externalListingId
+      const newListing = !facts.listings.find(listing => listing.productId === product.productId)?.externalListingId && !previouslyPublished.has(product.productId)
       const meta: ProductPlan = { ...product, newListing, patches: {}, content: {}, contentRoots: {} }
       products[index] = meta; inputs[index] = []
       if (newListing && (message.operationType !== 'UPDATE' || !message.attributes)) throw new Error(`${product.sku}: a new listing requires its complete UPDATE.`)
@@ -200,9 +203,9 @@ export async function prepareAmazonChanges(facts: PublicationFacts, publication:
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
         const remaining = deadline - Date.now()
-        if (remaining <= 0) throw new Error('The live content read exceeded the 9.5-second review budget.')
+        if (remaining <= 0) throw new Error(timeoutMessage)
         const response = await Promise.race([client!.getListingsItem({ sellerId: prepared.sellerId, sku: product.sku, marketplaceId: prepared.marketplaceId, includedData: ['summaries', 'attributes'] }),
-          new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('The live content read exceeded the 9.5-second review budget.')), remaining) })])
+          new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error(timeoutMessage)), remaining) })])
         if (!response.success) throw new Error(response.error ?? 'Amazon could not read this listing.')
         // The client produces this exact no-body result only for HTTP 404. A failed or empty 200 is not absence.
         confirmedAbsent = response.sku === product.sku && response.asin === null && response.status === null && response.rawResponse === undefined && response.error === undefined

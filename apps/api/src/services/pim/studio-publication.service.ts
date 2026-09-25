@@ -62,6 +62,7 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
   const facts = await readPublicationFacts(productId, scope)
   const mode = publishMode(scope.channel)
   const issues = [...facts.issues]
+  const existingProducts = new Set(facts.listings.filter(listing => listing.externalListingId).map(listing => listing.productId))
   let prepared: Prepared | null = null
   let changePlan: PublicationChangePlan | null = null
   let baselineRevision: string | null = null
@@ -92,8 +93,11 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
       baselineRevision = baseline.revision
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values)
         : await prepareEbayChanges(facts, prepared, baseline.values)
+      if (changePlan.kind === 'amazon-changes') for (const product of changePlan.products) {
+        if (product.newListing === false) existingProducts.add(product.productId)
+      }
       if (changePlan.kind === 'amazon-changes' && changePlan.changes.some(change => change.field === 'variation_theme' && change.status !== 'SAME'
-        && facts.listings.some(listing => listing.productId === change.productId && listing.externalListingId)))
+        && existingProducts.has(change.productId)))
         issues.push({ severity: 'warning', field: 'variation_theme', message: 'Changing a live variation theme can regroup its variants. Review the variation relationships before publishing.' })
     }
   } catch (error) { issues.push({ severity: 'error', message: error instanceof Error ? error.message : String(error) }) }
@@ -101,11 +105,11 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
   const overwrite = await readPublicationOverwrite(facts)
   const review: StudioPublishReview = {
     id: null, productId, scope, accountLabel: facts.account.displayName, aliasLabel: facts.aliasLabel, mode,
-    action: facts.listings.some(l => l.externalListingId) ? 'update' : 'create', excluded: facts.excluded,
+    action: existingProducts.size ? 'update' : 'create', excluded: facts.excluded,
     changes: changePlan?.changes, skipped: facts.skipped,
     rows: facts.products.map(p => ({ productId: p.id, sku: p.sku,
       title: String(facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.title?.value ?? facts.resolved[0]?.products.find(r => r.productId === p.id)?.cells.item_name?.value ?? p.name ?? p.sku),
-      existing: !!facts.listings.find(l => l.productId === p.id)?.externalListingId })),
+      existing: existingProducts.has(p.id) })),
     issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility, overwrite,
   }
   return { facts, review, prepared, changePlan, revision: publicationDigest([facts.revision, changePlan ?? prepared, baselineRevision, mode, overwrite]) }

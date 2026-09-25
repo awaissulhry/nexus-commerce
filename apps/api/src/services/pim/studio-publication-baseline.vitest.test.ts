@@ -71,6 +71,12 @@ it('returns no invented baseline for empty history and a stable revision', async
   expect(first.revision).toMatch(/^[a-f0-9]{64}$/)
   expect(second.revision).toBe(first.revision)
 })
+it('retains accepted field history while a newly created listing awaits its local external ID', async () => {
+  await save('accepted-new', [], { channelListingId: 'baseline-listing-new', payload: envelope([intent([value('brand', 'Accepted brand')])], {
+    productId: identities[2].productId, sku: identities[2].sku,
+  }) as Prisma.InputJsonValue })
+  expect(field(await read(), 'brand', identities[2].productId)).toEqual({ state: 'value', value: 'Accepted brand' })
+})
 
 it('folds sparse accepted publishes per field and applies later request ordinals last', async () => {
   await save('first', [value('item_name', 'First title'), value('brand', 'Original brand')])

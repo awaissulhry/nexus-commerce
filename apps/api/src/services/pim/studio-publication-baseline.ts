@@ -17,7 +17,7 @@ export async function readPublicationBaseline(facts: PublicationFacts, identitie
   if (identities.some(item => !included.has(item.productId) || !item.sku.trim()) || [...included].some(productId => !identity.has(productId))) throw new Error('Every included publication product needs its exact provider identity.')
   const { scope } = facts
   const aliasKey = facts.destination.aliasKey ?? ''
-  const listings = facts.listings.filter(listing => included.has(listing.productId) && listing.externalListingId
+  const listings = facts.listings.filter(listing => included.has(listing.productId)
     && listing.channel === scope.channel && listing.marketplace === scope.marketplace && listing.channelConnectionId === scope.accountId && listing.aliasKey === aliasKey)
   if (new Set(listings.map(listing => listing.productId)).size !== listings.length) throw new Error('The publication listing identity is ambiguous.')
   const byListing = new Map(listings.map(listing => [listing.id, { productId: listing.productId, sku: identity.get(listing.productId)! }]))
@@ -37,12 +37,12 @@ export async function readPublicationBaseline(facts: PublicationFacts, identitie
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       })
       for (const row of rows) {
-        revision.update('\n').update(canonical(row))
         const target = byListing.get(row.channelListingId)!
         const journal = object(row.payload)
         if (journal.schemaVersion !== 1 || journal.kind !== 'studio-publication' || !Array.isArray(journal.requests) || !journal.requests.length
           || typeof journal.productId !== 'string' || typeof journal.channelConnectionId !== 'string' || typeof journal.sku !== 'string') throw new Error('An accepted publication journal has invalid identity or request metadata.')
         if (journal.productId !== target.productId || journal.channelConnectionId !== scope.accountId || journal.sku !== target.sku) continue
+        revision.update('\n').update(canonical(row))
         const known = fieldsByProduct.get(target.productId) ?? new Set<string>()
         fieldsByProduct.set(target.productId, known)
         for (const request of journal.requests) {

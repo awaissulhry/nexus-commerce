@@ -9,7 +9,7 @@
 | PCO-3 — fresh channel evidence | ✅ built and locally verified; 21/21 live reads in7.958s at5concurrent | `ba1ee4957` |
 | PCO-4 — Amazon sparse request | ✅ one child/root330bytes,8unchanged skipped; language-scoped accepted history; confirmed-404 create | `ba1ee4957` |
 | PCO-5 — eBay sparse request | ✅ supported narrow fields/collections; explicit authored clears; strict variation boundary | `ba1ee4957` |
-| PCO-6 — selection review | ✅ durable selection/CAS + UI/DSmirror; browser,49mutations, fresh API/web/Factory types | `949a1e574` |
+| PCO-6 — selection review | ✅ durable selection/CAS + UI/DSmirror; browser,53mutations, fresh API/web/Factory types | `949a1e574` |
 | PCO-7 — live channel proofs | ⬜ each run needs the Owner's word after read + preview | — |
 
 ## Continuation B — 2026-09-25
@@ -98,11 +98,11 @@ Subsequent guarded batches exit before any mutation unless the push check is cle
   error-free authored override proves a clear. Empty omitted create fields never become deletion baselines. Parsed ItemID/status rejects foreign
   items and description CDATA; real GetItem projection retains required SKU tracking identity. Existing-listing price/stock validation errors
   stay outside content sends while creation requirements remain. Frontend validates selected owners/SKUs and current product/destination.
-- Final mutations:20integration/UI/planner +13Amazon/selector +14eBay/parser/receipt +1realDBlanguagefold +1browser focus = **49/49**, every source SHA restored.
+- Final mutations:21integration/UI/planner +16Amazon/selector/history +14eBay/parser/receipt +1realDBlanguagefold +1browser focus = **53/53**, every source SHA restored.
   Controls83 +76 +91 (overlapping suites); separate browser green/mutant/restored-control proof. Records `pco3-6-integration-mutations-final.jsonl`, `pco3-6-amazon-mutations.jsonl`,
   `pco3-6-ebay-mutations-final.jsonl`, `pco6-focus-mutation.json`. Earlier runs stopped on Vitest rejection-stack classification or an outdated expected test name;
   assertions were strengthened to explicit refusal status/message, never relaxed. Harness infrastructure/restore guards unchanged.
-- Final broader publication/comparator/serializer regression run: **299API tests in16files passed;18web tests in5files passed**.
+- Final broader publication/comparator/serializer regression run: **304API tests in16files passed;18web tests in5files passed**.
   Existing reader fixtures log localhost Redis refusals; disposable-DB refusal tests intentionally log CHECK constraint errors.
   Fresh private API, web and Factory TypeScript checks all passed; API/web repeated after the final variation warning and preview-focus additions. No test suppression or production service code changed during mutation proof.
   The additional live variation-theme warning regression failed first and then passed, including its mutation. Final request preview receives keyboard focus and its payload can be scrolled by keyboard. Latest main production API readiness read: healthy build7103b0ad; current main's Railway and Vercel status checks both success.
@@ -141,3 +141,13 @@ adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Ro
 - Amazon IT GALE-JACKET-BLACK-MEN-S: original Italian backend search terms read; proposed append `nexuspco202609251dab4448`; Amazon validated both the sparse send and exact restore. Proposal digest `15e10266ce67ec88dd6f8f386ca02e75305ac4d0e3382ca55b509c2444dbd48d`, prepared2026-09-25T03:42Z. Per-run approval requested asynchronously; **no answer/approval yet**. No channel write.
 - Initial eBay standalone discovery found0 eligible items. Preparing one normal Trading family ItemID instead, retaining exact account/alias/participant boundaries, title-only XML and provider revision restrictions. No approval requested for eBay until its exact preview exists.
 - Core backend commit `ba1ee4957`; review UI/DS commit `949a1e574`. Release push remains authorized. Proof execution requires the receipt migration after deployment, and separate per-run word; proof tools never migrate.
+
+## Final follow-up and release preparation — 2026-09-25T04:38Z
+
+- Production family-size read found xracing50, VENTRA/REGAL/AIREON25 and MOSS22 Amazon IT listings. The fixed9.5s budget starved healthy later SKUs (new test made only35of50 reads). Scaled the finite budget by21-product groups, retaining five workers and the existing21-SKU target. Red→green fake-time regression; no quota or send expansion.
+- Accepted Amazon creation history now survives a missing local ASIN. Subsequent edits use PATCH; a propagating404 cannot authorize another full create. A matched accepted field record is evidence of prior publication, independently of local presence reconciliation. The public review labels it existing. Three regressions failed first, then passed. Foreign journal identity no longer perturbs the baseline revision.
+- Final affected mutations:29/29 in `records/pco3-6-final-transition-mutations.jsonl`, all source SHA restored; the other earlier final groups complete53 distinct source/browser mutations. Fresh API types and the full304-test publication/comparator/serializer suite passed after these changes.
+- eBay preparation initially found no standalone candidates. Read-only diagnostics corrected proof-only overfilters: product-master FBA is not eBay listing FBA; normal same-family stock memberships are allowed; membership parentSku is an operator-facing alias label. Four correctly scoped GALE Trading aliases then reached GetItem, but all failed title-test eligibility. No title write was sent.
+- Description-only eBay proposal is now concrete: item256566101420 (GALE-JACKET,21linked products), append one HTML comment `<!-- nexuspco20260925b28c8268dbeb44e48c1150d9045eb469 -->`, then restore the exact30394-byte original description (SHA256 fd8965ec403ced2b7191064801427832ed5888a4c3d588774045cb8ac3627851). No buyer-visible text change intended. Local compiled preview only; no eBay revision-validation operation exists. Proposal digest3f769bec7032aa2ce518089df88c96a5bf545419c166140426c5ab593d1ab724, prepared04:15Z, expires06:15Z. Separate per-run approval requested; **no answer/approval yet**.
+- Amazon proposal remains the validated keyword append/restore noted above. Both tools default to plan/read-only preparation, require exact proposal/digest for execution, journal before sending as publish-proof, and preserve recovery references. No probe changes Nexus content or the queue. No channel write or gate opening has occurred.
+- Owner already authorized final push/deployment. Application changes and verification are complete. Full repository pre-push checks and production deployment verification remain; live proofs stay pending their separate per-run word. Shopify stays gated and existing Shopify change-only remains deferred as approved.

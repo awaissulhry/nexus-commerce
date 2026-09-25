@@ -186,6 +186,22 @@ it('creates a new SKU atomically with its complete UPDATE, but never sends an un
   expect(sent.fieldWrites?.parent).toContainEqual({ field: 'brand', value: { state: 'value', value: entries('Brand') } })
   expect(compileAmazonChanges(plan, []).feed.messages).toEqual([])
 })
+it('uses accepted history for a new listing awaiting local identity instead of sending another full UPDATE', async () => {
+  const pub = publication(['parent']), accepted = baseline(pub), before = structuredClone(pub.feed.messages[0].attributes)
+  pub.feed.messages[0].operationType = 'UPDATE'
+  pub.feed.messages[0].attributes!.brand = entries('Changed after creation')
+  const pendingIdentity = facts(['parent']); pendingIdentity.listings[0].externalListingId = null
+  m.read.mockResolvedValue(remote(before))
+  const plan = await prepareAmazonChanges(pendingIdentity, pub, accepted)
+  expect(defaults(plan)).toEqual([publicationChangeId('parent', 'brand')])
+  expect(plan.products[0].newListing).toBe(false)
+  expect(compileAmazonChanges(plan, defaults(plan)).feed.messages).toEqual([{ messageId: 1, sku: 'SELLER-parent', operationType: 'PATCH', productType: 'COAT',
+    patches: [{ op: 'replace', path: '/attributes/brand', value: entries('Changed after creation') }] }])
+  m.read.mockResolvedValue({ success: true, sku: 'SELLER-parent', asin: null, status: null })
+  const propagating = await prepareAmazonChanges(pendingIdentity, pub, accepted)
+  expect(propagating.changes.every(change => !change.selectable)).toBe(true)
+  expect(propagating.changes.some(change => change.field === '$create')).toBe(false)
+})
 
 it('refuses atomic creation when the supposedly new seller SKU already exists on Amazon', async () => {
   const input = facts(['parent']), pub = publication(['parent'])
@@ -258,6 +274,26 @@ it('stops launching reads after the live-read budget and exposes every remaining
     expect(m.read).toHaveBeenCalledTimes(5)
     expect(new Set(plan.changes.map(c => c.productId)).size).toBe(21)
     expect(plan.changes.every(c => c.status === 'CANNOT_COMPARE' && !c.selectable && c.reason.includes('9.5-second'))).toBe(true)
+  } finally { vi.useRealTimers() }
+})
+it('lets a healthy 50-SKU family finish all reads without starving its later products', async () => {
+  vi.useFakeTimers()
+  try {
+    const ids = Array.from({ length: 50 }, (_, index) => `item-${index}`), pub = publication(ids)
+    let active = 0, maximum = 0
+    m.read.mockImplementation(async ({ sku }) => {
+      active++; maximum = Math.max(maximum, active)
+      await new Promise(resolve => setTimeout(resolve, 1_500))
+      active--
+      return remote(pub.feed.messages.find(message => message.sku === sku)!.attributes)
+    })
+    const pending = prepareAmazonChanges(facts(ids), pub, new Map())
+    await vi.advanceTimersByTimeAsync(16_000)
+    const plan = await pending
+    expect(m.read).toHaveBeenCalledTimes(50)
+    expect(maximum).toBeLessThanOrEqual(5)
+    expect(new Set(plan.changes.map(change => change.productId)).size).toBe(50)
+    expect(plan.changes.every(change => change.status === 'SAME')).toBe(true)
   } finally { vi.useRealTimers() }
 })
 

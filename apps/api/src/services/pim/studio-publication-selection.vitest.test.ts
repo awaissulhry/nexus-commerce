@@ -91,6 +91,13 @@ it('warns when an existing Amazon variation theme would change', async () => {
   m.prepare.mockImplementation(async (_facts, prepared) => ({ kind: 'amazon-changes', changes: [change('parent', 'variation_theme')], remoteRevision: 'remote-1', publication: prepared, products: [] }))
   expect((await preview()).issues).toContainEqual(expect.objectContaining({ field: 'variation_theme', severity: 'warning', message: expect.stringMatching(/variation.*relationship|regroup/i) }))
 })
+it('labels an accepted Amazon creation as existing while its local ASIN is still pending', async () => {
+  m.prepare.mockImplementation(async (_facts, prepared) => ({ kind: 'amazon-changes', changes: changes(), remoteRevision: 'remote-1', publication: prepared,
+    products: [{ productId: 'parent', sku: 'SELLER-PARENT', newListing: false }, { productId: 'child', sku: 'SELLER-CHILD', newListing: true }] }))
+  const review = await preview()
+  expect(review.action).toBe('update')
+  expect(review.rows.map(row => row.existing)).toEqual([true, false])
+})
 
 it('compiles a durable selection without rereading facts, baselines or channels', async () => {
   const review = await preview()

@@ -531,6 +531,46 @@ MUTATIONS = [(group, Mutation(**value)) for group, value in json.loads(r'''[
       "new": "if (false && changePlan.changes.some(change => change.field === 'variation_theme' && change.status !== 'SAME'",
       "test": "warns when an existing Amazon variation theme would change"
     }
+  ],
+  [
+    "amazon",
+    {
+      "name": "amazon-large-family-starves-later-skus",
+      "path": "apps/api/src/services/pim/studio-publication-amazon-changes.ts",
+      "old": "const readBudgetMs = 9_500 * Math.max(1, Math.ceil(prepared.products.length / 21))",
+      "new": "const readBudgetMs = 9_500",
+      "test": "lets a healthy 50-SKU family finish all reads without starving its later products"
+    }
+  ],
+  [
+    "amazon",
+    {
+      "name": "baseline-drops-accepted-draft",
+      "path": "apps/api/src/services/pim/studio-publication-baseline.ts",
+      "old": "facts.listings.filter(listing => included.has(listing.productId)\n",
+      "new": "facts.listings.filter(listing => included.has(listing.productId) && listing.externalListingId\n",
+      "test": "retains accepted field history while a newly created listing awaits its local external ID"
+    }
+  ],
+  [
+    "amazon",
+    {
+      "name": "amazon-recreates-accepted-draft",
+      "path": "apps/api/src/services/pim/studio-publication-amazon-changes.ts",
+      "old": "?.externalListingId && !previouslyPublished.has(product.productId)",
+      "new": "?.externalListingId",
+      "test": "uses accepted history for a new listing awaiting local identity instead of sending another full UPDATE"
+    }
+  ],
+  [
+    "selection",
+    {
+      "name": "review-labels-accepted-draft-new",
+      "path": "apps/api/src/services/pim/studio-publication.service.ts",
+      "old": "if (product.newListing === false) existingProducts.add(product.productId)",
+      "new": "if (false) existingProducts.add(product.productId)",
+      "test": "labels an accepted Amazon creation as existing while its local ASIN is still pending"
+    }
   ]
 ]''')]
 
