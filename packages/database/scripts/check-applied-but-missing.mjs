@@ -90,12 +90,13 @@ export function readMigrationFolders(migrationsDir = defaultMigrationsDir) {
  */
 export async function checkAppliedButMissing({ connectionString, migrationsDir, schema }) {
   const localFolders = readMigrationFolders(migrationsDir)
-  const client = new pg.Client({ connectionString })
-
+  let client
   try {
+    client = new pg.Client({ connectionString, connectionTimeoutMillis: 10_000, query_timeout: 30_000 })
     await client.connect()
-  } catch (err) {
-    return { status: 'unreachable', error: err.message, appliedButMissing: [], inProgress: [], pending: [], counts: null }
+  } catch {
+    await client?.end().catch(() => {})
+    return { status: 'unreachable', error: 'Database connection failed', appliedButMissing: [], inProgress: [], pending: [], counts: null }
   }
 
   try {
@@ -117,8 +118,8 @@ export async function checkAppliedButMissing({ connectionString, migrationsDir, 
       `SELECT migration_name, finished_at, rolled_back_at FROM ${schema ? `"${schema}".` : ''}"_prisma_migrations"`,
     )
     return classifyMigrations(res.rows, localFolders)
-  } catch (err) {
-    return { status: 'unreachable', error: err.message, appliedButMissing: [], inProgress: [], pending: [], counts: null }
+  } catch {
+    return { status: 'unreachable', error: 'Migration history query failed', appliedButMissing: [], inProgress: [], pending: [], counts: null }
   } finally {
     await client.end().catch(() => {})
   }
