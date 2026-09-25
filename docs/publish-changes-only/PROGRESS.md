@@ -1,10 +1,12 @@
 # PCO — progress
 
+**Released:** application code `bc39f98d96ceaddcf0990cb9b9d5b29bc62c7f70` is on main and production, verified2026-09-25T05:34Z. Railway + Vercel success, API readiness healthy onbc39f98d, GitHub CI and Deploy API successful. Receipt migration applied. Amazon/eBay live; Shopify gated. PCO-7 live writes remain pending the Owner’s per-run approvals; none were performed.
+
 | Step | Status | Commit |
 |---|---|---|
 | Plan + automatic-writer audit | ✅ written; §1b completed, production BullMQ startup verified; **Q1(a), Q2(a) approved (Owner: “go”)** | — |
 | PCO-0 — interim Publish warning | ✅ built and verified locally; historical differences, unknowns, explicit review-bound confirmation | `6431f5c67` |
-| PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration not applied to production | `302b4d787` |
+| PCO-1 — exact send / acceptance records | ✅ built, reviewed and verified locally; additive migration applied2026-09-25T05:27:31Z | `302b4d787` |
 | PCO-2 — field comparison + accepted history | ✅ 53 tests; 17/17 mutations; fresh API types | `62c42c428` |
 | PCO-3 — fresh channel evidence | ✅ built and locally verified; 21/21 live reads in7.958s at5concurrent | `ba1ee4957` |
 | PCO-4 — Amazon sparse request | ✅ one child/root330bytes,8unchanged skipped; language-scoped accepted history; confirmed-404 create | `ba1ee4957` |
@@ -165,3 +167,13 @@ adapters will supply their verdicts. Gate: tests/mutations/types/review pass. Ro
 - Retry passed all11916API tests,4850web tests, both production builds,2726mapped routes,127security tests, and all real-PostgreSQL concurrency/copy/stock suites.
 - Final profiles-enabled ratchet correctly refused two new disposable-DB fixtures that seeded data without a selected business. Added Vitest aroundAll + the real withWorkspace context in baseline/records tests; no production code or ratchet baseline changed.42/42tests pass with profiles explicitly enabled after reproducing both missing-context failures.
 - Another lane pushed3c22d9633 from an isolated worktree while this fix was queued. No files were edited during that push. Integrating its catalog-performance commit before the final retry.
+
+## Production release verified — 2026-09-25T05:34Z
+
+- Final code releasebc39f98d9 includes PCO and the other lane’s published catalog-performance commit3c22d9633, integrated without source conflicts or content changes to that lane’s files. Root working tree was fast-forwarded to the clean merge; unrelated edits remain preserved.
+- Full hook passed:4850web tests,11916API tests,127security tests,2726mapped routes with0unmapped, browser/grid/control checks, web/API builds, all real-PostgreSQL race/copy/stock suites, and profiles-enabled ratchet949files with41previously known failures/217tests and none new or worse. Existing skips remained unchanged.
+- Railway and Vercel commit checks report success. Public readiness returned `{status:healthy,build:bc39f98d,services:{database:connected,api:operational}}`.
+- GitHub CI run36098175164 and Deploy API run36098175185 both succeeded. The receipt migration20260925b_pco_publish_receipts finished2026-09-25T05:27:31Z; read-only information_schema verification confirmed outcome(text,NOTNULL,defaultUNACCEPTED) and acceptedAt(nullabletimestamp).
+- Read-only production configuration: Amazon enable=true/mode=live; eBay enable=true/mode=live; Shopify enable/mode absent, therefore gated. No production gate setting was changed.
+- Live proof proposals were prepared and presented separately. No approval response arrived and no live channel mutation was executed. Amazon keyword and eBay passive-description-comment proofs remain explicitly pending; re-read/expiry/source checks are mandatory if resumed.
+- This final record is documentation only; all application code was deployed and verified atbc39f98d9 before it was written.
