@@ -109,6 +109,11 @@ export async function catalogRows(
   languages?: Map<string, string[]>,
 ) {
   const rows: TransferRow[] = []
+  const effectiveRows: TransferRow[][] = []
+  const effectiveBatches = new Map<string, {
+    input: Parameters<typeof import('./mapping/resolve-batch.service.js').resolveBatch>[0]
+    outputs: { productId: string; identity: TransferRow; rows: TransferRow[] }[]
+  }>()
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: { in: TRANSFER_CHANNELS }, ...(input.boundary ? { id: { in: input.boundary.listings.map(l => l.id) } } : input.marketplaces ? input.marketplaces.length ? { marketplace: { in: input.marketplaces } } : {} : { marketplace: input.market }) }, include: { translations: true }, orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { aliasKey: 'asc' }] })
   if (!input.effective && (!input.boundary || input.boundary.includeShared)) for (const product of products) {
     const start = rows.length
@@ -164,10 +169,17 @@ export async function catalogRows(
     const contract = await contracts.channel(listing.channel, listing.marketplace, category)
     const listingLanguages = languages?.get(JSON.stringify([listing.channel, listing.marketplace])) ?? await marketLanguages(listing.channel, listing.marketplace)
     if (input.effective) {
-      const { resolveBatch } = await import('./mapping/resolve-batch.service.js')
       for (const locale of listingLanguages) {
-      const result = await resolveBatch({ locale, productIds: [listing.productId], channel: listing.channel, marketplace: listing.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, productType: category, includeCatalogue: false })
-      for (const value of Object.values(result.products[0]?.cells ?? {})) rows.push({ ...identity, locale, field: value.fieldKey, action: 'SET', value: value.value })
+        const key = JSON.stringify([listing.channel, listing.marketplace, listing.channelConnectionId, listing.aliasKey, category, locale])
+        let batch = effectiveBatches.get(key)
+        if (!batch) {
+          batch = { input: { locale, productIds: [], channel: listing.channel, marketplace: listing.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, productType: category, includeCatalogue: false }, outputs: [] }
+          effectiveBatches.set(key, batch)
+        }
+        const output: TransferRow[] = []
+        effectiveRows.push(output)
+        batch.input.productIds.push(listing.productId)
+        batch.outputs.push({ productId: listing.productId, identity: { ...identity, locale }, rows: output })
       }
     } else {
       rows.push({ ...identity, entity: 'Listings', field: categoryKey, action: storedCategory != null ? 'SET' : hasCategory && transferIsStore(listing.channel) ? 'CLEAR' : 'INHERIT', value: storedCategory ?? undefined })
@@ -189,6 +201,19 @@ export async function catalogRows(
       const facts = fields.filter(f => !textFields.has(f.field)), text = fields.filter(f => textFields.has(f.field))
       for (const row of rows.slice(start)) workbookMeta.set(row, { category, fields: row.locale ? text : facts, note: contract.warning })
     }
+  }
+  if (input.effective) {
+    const { resolveBatch } = await import('./mapping/resolve-batch.service.js')
+    // catalogRows receives at most one export page (100 products). Keep every
+    // destination axis in the key and preserve the original listing/language order.
+    for (const batch of effectiveBatches.values()) {
+      const result = await resolveBatch(batch.input)
+      const byProduct = new Map(result.products.map(product => [product.productId, product]))
+      for (const output of batch.outputs) for (const value of Object.values(byProduct.get(output.productId)?.cells ?? {})) {
+        output.rows.push({ ...output.identity, field: value.fieldKey, action: 'SET', value: value.value })
+      }
+    }
+    return effectiveRows.flat()
   }
   return rows
 }

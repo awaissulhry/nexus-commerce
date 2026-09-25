@@ -76,10 +76,12 @@ export const listingConflictSnapshot = (value: Record<string, unknown> | null) =
 export async function loadTransferContext(rows: TransferRow[], db = prisma, reference?: Pick<TransferContext, 'families' | 'categories' | 'accounts' | 'markets'>): Promise<TransferContext> {
   const skus = [...new Set(rows.flatMap(r => [r.sku, ...(r.entity === 'Products' && r.field === 'parentSku' && r.action === 'SET' ? [String(r.value)] : [])]))]
   if (skus.length > 5000) throw new Error('Import at most 5,000 products per file; split larger catalogs into separate files')
+  const marketCoordinates = [...new Map(rows.filter(r => r.channel && r.marketplace)
+    .map(r => [JSON.stringify([r.channel, r.marketplace]), { channel: r.channel, code: r.marketplace }])).values()]
   const [products, accounts, markets, aliases] = await Promise.all([
     db.product.findMany({ where: { OR: [{ sku: { in: skus } }, { children: { some: { sku: { in: skus } } } }] }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } }, _count: { select: { children: true } } } }),
     reference ? Promise.resolve(reference.accounts) : db.channelConnection.findMany({ where: { id: { in: [...new Set(rows.map(r => r.accountId).filter(Boolean))] } }, select: { id: true, channelType: true, marketplace: true, isActive: true } }),
-    reference ? Promise.resolve(reference.markets) : db.marketplace.findMany({ where: { isActive: true, OR: rows.filter(r => r.channel && r.marketplace).map(r => ({ channel: r.channel, code: r.marketplace })) }, select: { channel: true, code: true, language: true, languages: true } }),
+    reference ? Promise.resolve(reference.markets) : db.marketplace.findMany({ where: { isActive: true, OR: marketCoordinates }, select: { channel: true, code: true, language: true, languages: true } }),
     db.productListingAlias.findMany({ where: { id: { in: [...new Set(rows.map(r => r.aliasKey).filter(Boolean))] } }, select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, status: true } }),
   ])
   const familyIds = [...new Set(products.map(p => p.familyId).filter((id): id is string => !!id))]
