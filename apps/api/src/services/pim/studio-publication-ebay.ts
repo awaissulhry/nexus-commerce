@@ -262,7 +262,8 @@ export async function sendEbayPublication(plan: EbayPublication, accountId: stri
   try { await beforeSend?.({ operation, xml }) } catch (error) { markNotSent(error) }
   let sent: TradingCallResult
   try {
-    sent = await callTradingApi(operation, xml, ctx)
+    // Keep both operations explicit for the repository's Trading-write audit census.
+    sent = await callTradingApi(operation === 'ReviseFixedPriceItem' ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem', xml, ctx)
   } catch (error) {
     if (error instanceof TradingApiFailure && error.duplicateSubmission) {
       if (error.priorItemId) return { reference: error.priorItemId, warnings: [...validationWarnings, error.message] }

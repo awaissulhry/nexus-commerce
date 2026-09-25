@@ -4,7 +4,7 @@
     "kind": "pco7-ebay-description-proof",
     "createdAt": "2026-09-25T04:15:01.525Z",
     "expiresAt": "2026-09-25T06:15:01.525Z",
-    "sourceDigest": "dcbac0ea3f2ee98a817df3ffda45cdcf4ef077328c13251391564b1068b30b68",
+    "sourceDigest": "f6be55969c7fdd597aa17b2270e4086d58b4f849b52f3fdee685385ab862d0cf",
     "target": {
       "listingId": "cmrp2jsch001ypa013nmxrve1",
       "productId": "cmokmy3a40078pm0p1fvnu523",
@@ -301,5 +301,5 @@
     "preview": "Local compiled preview only: eBay has no VerifyReviseFixedPriceItem. This is not provider validation or acceptance.",
     "readSideEffects": "Canonical clients may refresh OAuth and record gateway calls. Discovery is BEGIN READ ONLY. No listing, Nexus content or queue mutation."
   },
-  "digest": "3f769bec7032aa2ce518089df88c96a5bf545419c166140426c5ab593d1ab724"
+  "digest": "70ea672d12f2462225464c306cc59913f92b225e7c192888e21157d8ea3b4ee5"
 }

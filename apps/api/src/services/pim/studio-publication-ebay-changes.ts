@@ -209,7 +209,7 @@ export function compileEbayChanges(plan: EbayChangePlan, selectedIds: string[]):
 }
 
 /** UUID belongs to Item; InvocationID is inherited from AbstractRequestType, beside Item. */
-export function ebayPublicationRequest(plan: EbayPublication, operationId: string): { operation: string; xml: string } {
+export function ebayPublicationRequest(plan: EbayPublication, operationId: string): { operation: 'ReviseFixedPriceItem' | 'AddFixedPriceItem'; xml: string } {
   if (!plan.xml) throw new Error('There are no selected eBay changes to send.')
   const key = escapeXml(operationId.replace(/-/g, '').toUpperCase())
   return { operation: plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem', xml: plan.itemId
