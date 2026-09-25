@@ -1,0 +1,7894 @@
+{
+ "db": "nexus_cfi_proof3_test",
+ "dir": "/Users/awais/Desktop/2026/LISTNGS",
+ "apply": "final",
+ "at": "2026-09-24T23:33:49.943Z",
+ "reports": [
+  {
+   "file": "ACCESSORIES/SLIDERS/eBay/IT/KNEE-SLIDER IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 54
+   },
+   "parse": {
+    "rows": 296,
+    "issues": 45,
+    "exclusions": 54,
+    "links": 0,
+    "ledgerEntries": 2352
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     45
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 70,
+     "cleared": 0,
+     "refused": 45,
+     "excluded": 54,
+     "unchanged": 226,
+     "alreadyEmpty": 0,
+     "newOverrides": 43,
+     "clearUnchecked": 0,
+     "pricesRecorded": 8,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 9,
+     "productsAffected": 0,
+     "preservedOverrides": 217
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     45
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 9,
+     "failed": 0,
+     "skipped": 45,
+     "excluded": 54,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "control": "caught",
+   "roundTrip": {
+    "compared": 235,
+    "equal": 235,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 8,
+     "equal": 8
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 53,
+     "equal": 53
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 3208
+  },
+  {
+   "file": "ACCESSORIES/SLIDERS/eBay/IT/NORMAL-KNEE-SLIDER IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 27
+   },
+   "parse": {
+    "rows": 296,
+    "issues": 18,
+    "exclusions": 45,
+    "links": 0,
+    "ledgerEntries": 1158
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     18
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 62,
+     "cleared": 0,
+     "refused": 18,
+     "excluded": 45,
+     "unchanged": 234,
+     "alreadyEmpty": 0,
+     "newOverrides": 43,
+     "clearUnchecked": 0,
+     "pricesRecorded": 8,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 9,
+     "productsAffected": 0,
+     "preservedOverrides": 225
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     18
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 9,
+     "failed": 0,
+     "skipped": 18,
+     "excluded": 45,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 235,
+    "equal": 235,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 8,
+     "equal": 8
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 53,
+     "equal": 53
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 2545
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/DE/DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 1,
+     "partial": 20,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 668,
+    "issues": 1,
+    "exclusions": 113,
+    "links": 0,
+    "ledgerEntries": 1336
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "SKU is required",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 14,
+     "cleared": 0,
+     "refused": 19,
+     "excluded": 113,
+     "unchanged": 6,
+     "alreadyEmpty": 0,
+     "newOverrides": 8,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 2,
+     "productsAffected": 0,
+     "preservedOverrides": 6
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     18
+    ],
+    [
+     "SKU is required",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 673
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/ES/ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 20,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 710,
+    "issues": 0,
+    "exclusions": 113,
+    "links": 0,
+    "ledgerEntries": 1309
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 20,
+     "cleared": 0,
+     "refused": 18,
+     "excluded": 113,
+     "unchanged": 6,
+     "alreadyEmpty": 0,
+     "newOverrides": 14,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 2,
+     "productsAffected": 0,
+     "preservedOverrides": 6
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 697
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/FR/FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 20,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 672,
+    "issues": 0,
+    "exclusions": 113,
+    "links": 0,
+    "ledgerEntries": 1271
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 18,
+     "cleared": 0,
+     "refused": 18,
+     "excluded": 113,
+     "unchanged": 6,
+     "alreadyEmpty": 0,
+     "newOverrides": 12,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 2,
+     "productsAffected": 0,
+     "preservedOverrides": 6
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 682
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/IT/AIRMESH Jacket IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 20,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1007,
+    "issues": 0,
+    "exclusions": 565,
+    "links": 0,
+    "ledgerEntries": 1897
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 39,
+     "excluded": 565,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     20
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     19
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 1296
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/LISTINGS/DE/AIRMESH DE - FINAL (upload this)/AIRMESH DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3442,
+    "issues": 0,
+    "exclusions": 81,
+    "links": 0,
+    "ledgerEntries": 3855
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 928,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 81,
+     "unchanged": 88,
+     "alreadyEmpty": 2426,
+     "newOverrides": 894,
+     "clearUnchecked": 0,
+     "pricesRecorded": 8,
+     "listingsCreated": 8,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 88
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 81,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2426,
+    "clearsEmpty": 2426,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11773
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/LISTINGS/ES/AIRMESH ES - FINAL (upload this)/AIRMESH ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 81,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 927,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 81,
+     "unchanged": 89,
+     "alreadyEmpty": 2384,
+     "newOverrides": 893,
+     "clearUnchecked": 0,
+     "pricesRecorded": 8,
+     "listingsCreated": 8,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 89
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 81,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2384,
+    "clearsEmpty": 2384,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 12006
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/LISTINGS/FR/AIRMESH FR - FINAL (upload this)/AIRMESH FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 81,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 939,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 81,
+     "unchanged": 77,
+     "alreadyEmpty": 2384,
+     "newOverrides": 893,
+     "clearUnchecked": 0,
+     "pricesRecorded": 8,
+     "listingsCreated": 8,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 77
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 81,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2384,
+    "clearsEmpty": 2384,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11888
+  },
+  {
+   "file": "JACKETS/AIR MESH/AMAZON/LISTINGS/IT/AIRMESH IT - FINAL (upload this)/AIRMESH IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 21,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1036,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 1449
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 32,
+     "cleared": 0,
+     "refused": 20,
+     "excluded": 102,
+     "unchanged": 4,
+     "alreadyEmpty": 0,
+     "newOverrides": 29,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 4
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     20
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "skipped": 20,
+     "excluded": 102,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 36,
+    "equal": 36,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 2230
+  },
+  {
+   "file": "JACKETS/AIR MESH/eBay/IT/AIRMESH IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 42
+   },
+   "parse": {
+    "rows": 922,
+    "issues": 21,
+    "exclusions": 252,
+    "links": 0,
+    "ledgerEntries": 2449
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     21
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 472,
+     "cleared": 0,
+     "refused": 21,
+     "excluded": 252,
+     "unchanged": 450,
+     "alreadyEmpty": 0,
+     "newOverrides": 425,
+     "clearUnchecked": 0,
+     "pricesRecorded": 20,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 429
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     21
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "skipped": 21,
+     "excluded": 252,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 755,
+    "equal": 755,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 147,
+     "equal": 147
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 7055
+  },
+  {
+   "file": "JACKETS/AIR MESH/~$AIRMESH Jacket IT.xlsm",
+   "outcome": "skipped: Excel lock file",
+   "ms": 0
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/DE/AIREON DE - FINAL (upload this)/AIREON DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6326,
+    "issues": 0,
+    "exclusions": 222,
+    "links": 0,
+    "ledgerEntries": 7031
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1796,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 222,
+     "unchanged": 124,
+     "alreadyEmpty": 4406,
+     "newOverrides": 1694,
+     "clearUnchecked": 0,
+     "pricesRecorded": 16,
+     "listingsCreated": 16,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 124
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 222,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1880,
+    "equal": 1880,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4406,
+    "clearsEmpty": 4406,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 30147
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/DE/AIREON DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 25,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 926,
+    "issues": 0,
+    "exclusions": 147,
+    "links": 0,
+    "ledgerEntries": 1713
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 49,
+     "excluded": 147,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     25
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     24
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 683
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/ES/AIREON ES - FINAL (upload this)/AIREON ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6224,
+    "issues": 0,
+    "exclusions": 222,
+    "links": 0,
+    "ledgerEntries": 6929
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1872,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 222,
+     "unchanged": 48,
+     "alreadyEmpty": 4304,
+     "newOverrides": 1795,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 29,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 48
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 222,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1880,
+    "equal": 1880,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4304,
+    "clearsEmpty": 4304,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 29704
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/ES/AIREON ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 5,
+     "partial": 25,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 851,
+    "issues": 5,
+    "exclusions": 147,
+    "links": 0,
+    "ledgerEntries": 1599
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "SKU is required",
+     5
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 54,
+     "excluded": 147,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     25
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     24
+    ],
+    [
+     "SKU is required",
+     5
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 678
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/FR/AIREON FR - FINAL (upload this)/AIREON FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6224,
+    "issues": 0,
+    "exclusions": 222,
+    "links": 0,
+    "ledgerEntries": 6929
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1872,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 222,
+     "unchanged": 48,
+     "alreadyEmpty": 4304,
+     "newOverrides": 1795,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 29,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 48
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 222,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1880,
+    "equal": 1880,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4304,
+    "clearsEmpty": 4304,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 30131
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/FR/AIREON FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 25,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 877,
+    "issues": 0,
+    "exclusions": 147,
+    "links": 0,
+    "ledgerEntries": 1620
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 55,
+     "excluded": 147,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     25
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     24
+    ],
+    [
+     "0 \u00b7 0 Go \u00b7 0 mois \u00b7 00 \u00b7 0X \u00b7 1 \u2026.",
+     6
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 662
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/GLOBAL/AIREON GLOBAL.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 25,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 481,
+    "issues": 0,
+    "exclusions": 183,
+    "links": 0,
+    "ledgerEntries": 714
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 25,
+     "excluded": 183,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     25
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 653
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/AIREON IT - FINAL (upload this)/AIREON IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 41,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 2137,
+    "issues": 0,
+    "exclusions": 262,
+    "links": 0,
+    "ledgerEntries": 3010
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 30,
+     "cleared": 0,
+     "refused": 40,
+     "excluded": 262,
+     "unchanged": 3,
+     "alreadyEmpty": 0,
+     "newOverrides": 26,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 3
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     40
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "skipped": 40,
+     "excluded": 262,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 33,
+    "equal": 33,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 3306
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON COAT+PANT NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 25,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3443,
+    "issues": 0,
+    "exclusions": 387,
+    "links": 0,
+    "ledgerEntries": 4961
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 145,
+     "excluded": 387,
+     "unchanged": 0,
+     "alreadyEmpty": 1909,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     25
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Weight",
+     24
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     24
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     24
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     24
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     24
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2031
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (English-base retag - preview reads empty, DO NOT USE).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Template",
+    "marketplace": "IT",
+    "language": "en_GB",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 4745,
+    "issues": 287,
+    "exclusions": 221,
+    "links": 0,
+    "ledgerEntries": 6008
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "This text is in en, which Amazon IT does not carry in Nexus (it)",
+     287
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 1555,
+     "cleared": 2,
+     "refused": 287,
+     "excluded": 221,
+     "unchanged": 219,
+     "alreadyEmpty": 2971,
+     "newOverrides": 1425,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 218
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "This text is in en, which Amazon IT does not carry in Nexus (it)",
+     287
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2550
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (English-values, superseded 100720).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Template",
+    "marketplace": "IT",
+    "language": "en_GB",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 41,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1522,
+    "issues": 245,
+    "exclusions": 262,
+    "links": 0,
+    "ledgerEntries": 2639
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "This text is in en, which Amazon IT does not carry in Nexus (it)",
+     245
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 1351,
+     "cleared": 0,
+     "refused": 245,
+     "excluded": 262,
+     "unchanged": 171,
+     "alreadyEmpty": 0,
+     "newOverrides": 1225,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 170
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "This text is in en, which Amazon IT does not carry in Nexus (it)",
+     245
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 1604
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (Italian-template backup).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 5635,
+    "issues": 0,
+    "exclusions": 643,
+    "links": 0,
+    "ledgerEntries": 7945
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 26,
+     "cleared": 22,
+     "refused": 200,
+     "excluded": 643,
+     "unchanged": 8,
+     "alreadyEmpty": 3117,
+     "newOverrides": 2,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 7
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Weight",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     40
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     40
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2683
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (proven-template base - also works, backup).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 5635,
+    "issues": 0,
+    "exclusions": 643,
+    "links": 0,
+    "ledgerEntries": 7945
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 31,
+     "cleared": 22,
+     "refused": 200,
+     "excluded": 643,
+     "unchanged": 8,
+     "alreadyEmpty": 2912,
+     "newOverrides": 7,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 7
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Weight",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     40
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     40
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     40
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2659
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON Jacket IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 13,
+     "partial": 0,
+     "delete": 6,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1060,
+    "issues": 6,
+    "exclusions": 950,
+    "links": 0,
+    "ledgerEntries": 2209
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-XS on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listi",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-4XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the list",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-5XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the list",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-XS on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing e",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-4XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing ",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-5XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing ",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 31,
+     "excluded": 950,
+     "unchanged": 0,
+     "alreadyEmpty": 364,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 6
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     13
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     12
+    ],
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-XS on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listi",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-4XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the list",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-CREMA-E-VINO-MEN-5XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the list",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-XS on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing e",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-4XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing ",
+     1
+    ],
+    [
+     "this row DELETES AIREON-JACKET-NERO-NEO-MEN-5XL on Amazon IT. The file can be older than the channel. Confirm deletions to mark the listing ",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2013
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/COAT_PANTS.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT",
+     "PANTS"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 13,
+     "delete": 13,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 677,
+    "issues": 13,
+    "exclusions": 1682,
+    "links": 1,
+    "ledgerEntries": 2587
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon IT SKU AIREON-PANT to Nexus AIREON? 12 of its 12 children in this file belong to AIREON in Nexus. Confirm the link to import thi",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-S on Amazon IT (it has ASIN B0F5GTK2LS). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-M on Amazon IT (it has ASIN B0F5GCSNVW). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-L on Amazon IT (it has ASIN B0F5FZWWB1). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-XL on Amazon IT (it has ASIN B0F5GFFCQZ). The file can be older than the channel. Confirm dele",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-XXL on Amazon IT (it has ASIN B0F5GJMYY6). The file can be older than the channel. Confirm del",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-3XL on Amazon IT (it has ASIN B0F5GLQ86P). The file can be older than the channel. Confirm del",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-NERO-NEO-MEN-S on Amazon IT (it has ASIN B0F5GK7T3F). The file can be older than the channel. Confirm deletions",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 38,
+     "excluded": 1682,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 1,
+    "deletes": 12
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     13
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     12
+    ],
+    [
+     "Link Amazon IT SKU AIREON-PANT to Nexus AIREON? 12 of its 12 children in this file belong to AIREON in Nexus. Confirm the link to import thi",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-S on Amazon IT (it has ASIN B0F5GTK2LS). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-M on Amazon IT (it has ASIN B0F5GCSNVW). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-L on Amazon IT (it has ASIN B0F5FZWWB1). The file can be older than the channel. Confirm delet",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-XL on Amazon IT (it has ASIN B0F5GFFCQZ). The file can be older than the channel. Confirm dele",
+     1
+    ],
+    [
+     "this row DELETES AIREON-PANT-CREMA-E-VINO-MEN-XXL on Amazon IT (it has ASIN B0F5GJMYY6). The file can be older than the channel. Confirm del",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 2755
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/_BLANK TEMPLATES (per language)/COAT_PANTS - EN (English headings).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Template",
+    "marketplace": "IT",
+    "language": "en_GB",
+    "productTypes": [],
+    "actions": {
+     "replace": 1,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 1,
+    "exclusions": 1,
+    "links": 0,
+    "ledgerEntries": 345
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "The product type is empty on this row",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 1,
+     "excluded": 1,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "The product type is empty on this row",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 348
+  },
+  {
+   "file": "JACKETS/AIREON/AMAZON/LISTINGS/_BLANK TEMPLATES (per language)/COAT_PANTS - IT (Italian, used for AIREON IT).xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [],
+    "actions": {
+     "replace": 0,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 0,
+    "exclusions": 1,
+    "links": 0,
+    "ledgerEntries": 343
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 1,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "outcome": "previewed (QUEUED)",
+   "ms": 344
+  },
+  {
+   "file": "JACKETS/AIREON/eBay/IT/AIREON IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 164
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 164,
+    "exclusions": 0,
+    "links": 0,
+    "ledgerEntries": 8229
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     123
+    ],
+    [
+     "The file's Item ID 257616716014 differs from the Item ID Nexus holds for this listing (257646289420). The file may be older than eBay; corre",
+     41
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 164,
+     "excluded": 0,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     123
+    ],
+    [
+     "The file's Item ID 257616716014 differs from the Item ID Nexus holds for this listing (257646289420). The file may be older than eBay; corre",
+     41
+    ]
+   ],
+   "outcome": "explained: nothing ready to apply (INVALID)",
+   "ms": 414
+  },
+  {
+   "file": "JACKETS/AIREON/~$AIRMESH Jacket IT.xlsm",
+   "outcome": "skipped: Excel lock file",
+   "ms": 0
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/DE/GALE DE NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 0,
+     "delete": 19,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 19,
+    "exclusions": 1160,
+    "links": 0,
+    "ledgerEntries": 1447
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "this row DELETES GALE-JACKET on Amazon DE (it has ASIN B0D8XBXM5H). The file can be older than the channel. Confirm deletions to mark the li",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XS on Amazon DE (it has ASIN B0DJ4926YX). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-S on Amazon DE (it has ASIN B0BMS5B768). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-M on Amazon DE (it has ASIN B0BMSC91YK). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-L on Amazon DE (it has ASIN B0BMSWM15B). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XL on Amazon DE (it has ASIN B0BMSH19GY). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XXL on Amazon DE (it has ASIN B0BMSCJRYD). The file can be older than the channel. Confirm deletions ",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-3XL on Amazon DE (it has ASIN B0BMS6ZZ4H). The file can be older than the channel. Confirm deletions ",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 19,
+     "excluded": 1160,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 19
+   },
+   "reviewRefusals": [
+    [
+     "this row DELETES GALE-JACKET on Amazon DE (it has ASIN B0D8XBXM5H). The file can be older than the channel. Confirm deletions to mark the li",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XS on Amazon DE (it has ASIN B0DJ4926YX). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-S on Amazon DE (it has ASIN B0BMS5B768). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-M on Amazon DE (it has ASIN B0BMSC91YK). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-L on Amazon DE (it has ASIN B0BMSWM15B). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XL on Amazon DE (it has ASIN B0BMSH19GY). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XXL on Amazon DE (it has ASIN B0BMSCJRYD). The file can be older than the channel. Confirm deletions ",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-3XL on Amazon DE (it has ASIN B0BMS6ZZ4H). The file can be older than the channel. Confirm deletions ",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 1592
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/DE/Gale JACKET DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 18,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 81,
+    "issues": 34,
+    "exclusions": 22,
+    "links": 0,
+    "ledgerEntries": 2169
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-S, GALE_JACKET_BLACK_S_FBM; ASIN B0BMS5B768). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-M, GALE_JACKET_BLACK_M_FBM; ASIN B0BMSC91YK). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-L, GALE_JACKET_BLACK_L_FBM; ASIN B0BMSWM15B). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-XL, GALE_JACKET_BLACK_XL_FBM; ASIN B0BMSH19GY). Nexus holds one listi",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-XXL, GALE_JACKET_BLACK_XXL_FBM; ASIN B0BMSCJRYD). Nexus holds one lis",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-3XL, GALE_JACKET_BLACK_3XL_FBM; ASIN B0BMS6ZZ4H). Nexus holds one lis",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-4XL, GALE_JACKET_BLACK_4XL_FBM; ASIN B0BMSJWW7L). Nexus holds one lis",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-5XL, GALE_JACKET_BLACK_5XL_FBM; ASIN B0DJ4FLPHM). Nexus holds one lis",
+     2
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 39,
+     "excluded": 22,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "ANZAHL_DER_ARTIKEL \u00b7 ANZAHL_DER_ARTIKEL/FARBE_NAME/GR\u00d6SSE_NAME \u00b7 ARTIKEL_ANZEIGE_L\u00c4NGE \u00b7 ARTIKEL_ANZEIGE_L\u00c4NGE/ARTIKEL_ANZEIGE_BREITE \u00b7 ARTI",
+     3
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-S, GALE_JACKET_BLACK_S_FBM; ASIN B0BMS5B768). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-M, GALE_JACKET_BLACK_M_FBM; ASIN B0BMSC91YK). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-L, GALE_JACKET_BLACK_L_FBM; ASIN B0BMSWM15B). Nexus holds one listing",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-XL, GALE_JACKET_BLACK_XL_FBM; ASIN B0BMSH19GY). Nexus holds one listi",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-XXL, GALE_JACKET_BLACK_XXL_FBM; ASIN B0BMSCJRYD). Nexus holds one lis",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (GALE-JACKET-BLACK-MEN-3XL, GALE_JACKET_BLACK_3XL_FBM; ASIN B0BMS6ZZ4H). Nexus holds one lis",
+     2
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 444
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/ES/Gale Jacket ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 707,
+    "issues": 0,
+    "exclusions": 236,
+    "links": 0,
+    "ledgerEntries": 1125
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 37,
+     "excluded": 236,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "CANTIDAD_DEL_PAQUETE_DEL_ART\u00cdCULO \u00b7 CANTIDAD_DEL_PAQUETE_DEL_ART\u00cdCULO/COLOR_NOMBRE \u00b7 CANTIDAD_DEL_PAQUETE_DEL_ART\u00cdCULO/TAMA\u00d1O_NOMBRE \u00b7 COLLE",
+     19
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 671
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/FR/GALE FR NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 911,
+    "issues": 0,
+    "exclusions": 201,
+    "links": 0,
+    "ledgerEntries": 1655
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 9,
+     "cleared": 0,
+     "refused": 72,
+     "excluded": 201,
+     "unchanged": 2,
+     "alreadyEmpty": 0,
+     "newOverrides": 7,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 2
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "unit \"Centim\u00e8tres\" is not one of centimeters, millimeters, meters, feet, inches, yards for Item Package Length",
+     18
+    ],
+    [
+     "unit \"Centim\u00e8tres\" is not one of centimeters, millimeters, meters, feet, inches, yards for Item Package Width",
+     18
+    ],
+    [
+     "unit \"Centim\u00e8tres\" is not one of centimeters, millimeters, meters, feet, inches, yards for Item Package Height",
+     18
+    ],
+    [
+     "unit \"Kilogrammes\" is not one of grams, kilograms, pounds, milligrams, ounces for Item Package Weight",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 668
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/FR/Gale Jacket FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 616,
+    "issues": 0,
+    "exclusions": 146,
+    "links": 0,
+    "ledgerEntries": 907
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 55,
+     "excluded": 146,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "COLLECTION_ITEM \u00b7 COULEUR \u00b7 COULEUR/MATI\u00c8RE \u00b7 COULEUR/NOMBRE_ARTICLES \u00b7 COULEUR/STYLE \u00b7 COULEUR/TAILLE \u2026.",
+     19
+    ],
+    [
+     "Femme \u00b7 Homme \u00b7 Unisexe.",
+     18
+    ],
+    [
+     "D'occasion - Acceptable \u00b7 D'occasion - Bon \u00b7 D'occasion - Comme Neuf \u00b7 D'occasion - Tr\u00e8s bon \u00b7 De collection - Acceptable \u00b7 De collection - ",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 632
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/GALE JACKET GLOBAL.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 886,
+    "issues": 0,
+    "exclusions": 452,
+    "links": 0,
+    "ledgerEntries": 1627
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 19,
+     "excluded": 452,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     19
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 974
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/GALE JACKET NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 888,
+    "issues": 0,
+    "exclusions": 201,
+    "links": 0,
+    "ledgerEntries": 1669
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 91,
+     "excluded": 201,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"COLOR_NAME/SIZE_NAME/STYLE_NAME/PATTERN_NAME\" is deprecated by the channel.",
+     19
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     18
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     18
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     18
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 669
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/GALE JACKET NEW TEMPLATE.xlsx",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "GALE JACKET NEW TEMPLATE",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 19,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 888,
+    "issues": 0,
+    "exclusions": 201,
+    "links": 0,
+    "ledgerEntries": 1669
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 91,
+     "excluded": 201,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"COLOR_NAME/SIZE_NAME/STYLE_NAME/PATTERN_NAME\" is deprecated by the channel.",
+     19
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     18
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     18
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     18
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     18
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 643
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/Gale Jacket IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 21,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 843,
+    "issues": 0,
+    "exclusions": 402,
+    "links": 0,
+    "ledgerEntries": 1485
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 41,
+     "excluded": 402,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     21
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     20
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 960
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/amazon_OUTERWEAR_IT.filled.xlsx",
+   "kind": "amazon-attribute-sheet",
+   "outcome": "explained: amazon_OUTERWEAR_IT.filled.xlsx is an Amazon attribute sheet, not an Amazon template: it names no marketplace or language. Use \"Map a source file\" to choose where its columns go.",
+   "ms": 2
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/amazon_OUTERWEAR_IT.xlsx",
+   "kind": "amazon-attribute-sheet",
+   "outcome": "explained: amazon_OUTERWEAR_IT.xlsx is an Amazon attribute sheet, not an Amazon template: it names no marketplace or language. Use \"Map a source file\" to choose where its columns go.",
+   "ms": 2
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/IT/~$Gale Jacket IT.xlsm",
+   "outcome": "skipped: Excel lock file",
+   "ms": 0
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/LISTINGS/DE/GALE DE - FINAL (upload this)/GALE DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3442,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 3855
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 938,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 102,
+     "unchanged": 78,
+     "alreadyEmpty": 2426,
+     "newOverrides": 837,
+     "clearUnchecked": 0,
+     "pricesRecorded": 2,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 78
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 102,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2426,
+    "clearsEmpty": 2426,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11367
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/LISTINGS/ES/GALE ES - FINAL (upload this)/GALE ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 936,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 102,
+     "unchanged": 80,
+     "alreadyEmpty": 2384,
+     "newOverrides": 837,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 80
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 102,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2384,
+    "clearsEmpty": 2384,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11689
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/LISTINGS/FR/GALE FR - FINAL (upload this)/GALE FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 957,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 102,
+     "unchanged": 59,
+     "alreadyEmpty": 2384,
+     "newOverrides": 838,
+     "clearUnchecked": 0,
+     "pricesRecorded": 20,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 59
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 102,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 996,
+    "equal": 996,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2384,
+    "clearsEmpty": 2384,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11788
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/LISTINGS/IT/GALE IT - FINAL (upload this)/GALE IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 954,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 102,
+     "unchanged": 83,
+     "alreadyEmpty": 2363,
+     "newOverrides": 847,
+     "clearUnchecked": 0,
+     "pricesRecorded": 20,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 83
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 102,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1017,
+    "equal": 1017,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2363,
+    "clearsEmpty": 2363,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11570
+  },
+  {
+   "file": "JACKETS/Gale/Amazon/LISTINGS/IT/GALE IT - FINAL (upload this)/GALE IT.xlsx",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 21,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 3400,
+    "issues": 0,
+    "exclusions": 102,
+    "links": 0,
+    "ledgerEntries": 3813
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 102,
+     "unchanged": 1037,
+     "alreadyEmpty": 2363,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 1016
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 0,
+     "failed": 0,
+     "excluded": 102,
+     "unchanged": 21,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1017,
+    "equal": 1017,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 2363,
+    "clearsEmpty": 2363,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 4246
+  },
+  {
+   "file": "JACKETS/Gale/eBay/IT/GALE IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 105
+   },
+   "parse": {
+    "rows": 922,
+    "issues": 84,
+    "exclusions": 250,
+    "links": 0,
+    "ledgerEntries": 5902
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     84
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 251,
+     "cleared": 0,
+     "refused": 84,
+     "excluded": 250,
+     "unchanged": 671,
+     "alreadyEmpty": 0,
+     "newOverrides": 41,
+     "clearUnchecked": 0,
+     "pricesRecorded": 20,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 651
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     84
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "skipped": 84,
+     "excluded": 250,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 755,
+    "equal": 755,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 147,
+     "equal": 147
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 7070
+  },
+  {
+   "file": "JACKETS/Misano/AMAZON/LISTING/IT.xlsx",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 16,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 321,
+    "issues": 0,
+    "exclusions": 91,
+    "links": 0,
+    "ledgerEntries": 474
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 259,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 91,
+     "unchanged": 62,
+     "alreadyEmpty": 0,
+     "newOverrides": 228,
+     "clearUnchecked": 0,
+     "pricesRecorded": 15,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 16,
+     "productsAffected": 0,
+     "preservedOverrides": 62
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "outcome": "previewed (QUEUED)",
+   "ms": 603
+  },
+  {
+   "file": "JACKETS/Misano/AMAZON/LISTINGS/DE/MISANO DE - FINAL (upload this)/MISANO DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 16,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 2623,
+    "issues": 0,
+    "exclusions": 61,
+    "links": 0,
+    "ledgerEntries": 2888
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 726,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 61,
+     "unchanged": 62,
+     "alreadyEmpty": 1835,
+     "newOverrides": 663,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 16,
+     "productsAffected": 0,
+     "preservedOverrides": 62
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 16,
+     "failed": 0,
+     "excluded": 61,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 773,
+    "equal": 773,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1835,
+    "clearsEmpty": 1835,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 15,
+     "equal": 15
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 7788
+  },
+  {
+   "file": "JACKETS/Misano/AMAZON/LISTINGS/ES/MISANO ES - FINAL (upload this)/MISANO ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 16,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 2591,
+    "issues": 0,
+    "exclusions": 61,
+    "links": 0,
+    "ledgerEntries": 2856
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 779,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 61,
+     "unchanged": 9,
+     "alreadyEmpty": 1803,
+     "newOverrides": 745,
+     "clearUnchecked": 0,
+     "pricesRecorded": 15,
+     "listingsCreated": 7,
+     "productsCreated": 0,
+     "listingsAffected": 16,
+     "productsAffected": 0,
+     "preservedOverrides": 9
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 16,
+     "failed": 0,
+     "excluded": 61,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 773,
+    "equal": 773,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1803,
+    "clearsEmpty": 1803,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 15,
+     "equal": 15
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 8009
+  },
+  {
+   "file": "JACKETS/Misano/AMAZON/LISTINGS/FR/MISANO FR - FINAL (upload this)/MISANO FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 16,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 2591,
+    "issues": 0,
+    "exclusions": 61,
+    "links": 0,
+    "ledgerEntries": 2856
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 758,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 61,
+     "unchanged": 30,
+     "alreadyEmpty": 1803,
+     "newOverrides": 683,
+     "clearUnchecked": 0,
+     "pricesRecorded": 15,
+     "listingsCreated": 1,
+     "productsCreated": 0,
+     "listingsAffected": 16,
+     "productsAffected": 0,
+     "preservedOverrides": 30
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 16,
+     "failed": 0,
+     "excluded": 61,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 773,
+    "equal": 773,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1803,
+    "clearsEmpty": 1803,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 15,
+     "equal": 15
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 9053
+  },
+  {
+   "file": "JACKETS/Misano/AMAZON/LISTINGS/IT/MISANO IT - FINAL (upload this)/MISANO IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 26,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 303,
+    "issues": 19,
+    "exclusions": 32,
+    "links": 1,
+    "ledgerEntries": 1649
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "SKU MISANO-JACKET-XS-BLACK appears in rows 8 and 25. Keep one row per SKU.",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (85-A8DQ-UNYF, MISANO-JACKET-S-BLACK; ASIN B0BSXLDDSL). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (SQ-75VQ-OZ1Q, MISANO-JACKET-M-BLACK; ASIN B0BSXL6GPC). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (AE-304M-9LSW, MISANO-JACKET-L-BLACK; ASIN B0BSXL4XN7). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (SQ-0SRL-MWT1, MISANO-JACKET-XL-BLACK; ASIN B0BSTHY8L2). Nexus holds one listing per product",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (YK-29A3-CH9D, MISANO-JACKET-XXL-BLACK; ASIN B0BSXL1DX8). Nexus holds one listing per produc",
+     2
+    ],
+    [
+     "SKU MISANO-JACKET-3XL-BLACK appears in rows 14 and 31. Keep one row per SKU.",
+     2
+    ],
+    [
+     "SKU MISANO-JACKET-4XL-BLACK appears in rows 15 and 32. Keep one row per SKU.",
+     2
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 264,
+     "cleared": 0,
+     "refused": 19,
+     "excluded": 32,
+     "unchanged": 39,
+     "alreadyEmpty": 0,
+     "newOverrides": 250,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 7,
+     "productsAffected": 0,
+     "preservedOverrides": 39
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "SKU MISANO-JACKET-XS-BLACK appears in rows 8 and 25. Keep one row per SKU.",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (85-A8DQ-UNYF, MISANO-JACKET-S-BLACK; ASIN B0BSXLDDSL). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (SQ-75VQ-OZ1Q, MISANO-JACKET-M-BLACK; ASIN B0BSXL6GPC). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (AE-304M-9LSW, MISANO-JACKET-L-BLACK; ASIN B0BSXL4XN7). Nexus holds one listing per product ",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (SQ-0SRL-MWT1, MISANO-JACKET-XL-BLACK; ASIN B0BSTHY8L2). Nexus holds one listing per product",
+     2
+    ],
+    [
+     "Amazon lists this product under two seller SKUs (YK-29A3-CH9D, MISANO-JACKET-XXL-BLACK; ASIN B0BSXL1DX8). Nexus holds one listing per produc",
+     2
+    ],
+    [
+     "SKU MISANO-JACKET-3XL-BLACK appears in rows 14 and 31. Keep one row per SKU.",
+     2
+    ],
+    [
+     "SKU MISANO-JACKET-4XL-BLACK appears in rows 15 and 32. Keep one row per SKU.",
+     2
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 7,
+     "failed": 0,
+     "skipped": 19,
+     "excluded": 32,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 297,
+    "equal": 297,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 6,
+     "equal": 6
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 3308
+  },
+  {
+   "file": "JACKETS/Misano/eBay/IT/MISANO IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 48
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 48,
+    "exclusions": 0,
+    "links": 3,
+    "ledgerEntries": 2362
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link eBay parent MISANO-JACKET to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ],
+    [
+     "Link eBay parent MISANO-JACKET-ALT1 to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ],
+    [
+     "Link eBay parent MISANO-JACKET-ALT2 to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 48,
+     "excluded": 0,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 3,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Link eBay parent MISANO-JACKET to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ],
+    [
+     "Link eBay parent MISANO-JACKET-ALT1 to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ],
+    [
+     "Link eBay parent MISANO-JACKET-ALT2 to Nexus product 3K-HP05-BH9I? Confirm the link to import this listing.",
+     16
+    ]
+   ],
+   "outcome": "explained: nothing ready to apply (INVALID)",
+   "ms": 310
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/DE/MOSS DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 22,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 798,
+    "issues": 1,
+    "exclusions": 127,
+    "links": 1,
+    "ledgerEntries": 1395
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon DE SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 21 of its 21 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 43,
+     "excluded": 127,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     21
+    ],
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     21
+    ],
+    [
+     "Link Amazon DE SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 21 of its 21 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 685
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/DE/Moss JACKET DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 0,
+     "delete": 15,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 1,
+    "exclusions": 868,
+    "links": 1,
+    "ledgerEntries": 876
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon DE SKU DE-MOSS-JACKET to Nexus IT-MOSS-JACKET? 14 of its 14 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 1,
+     "excluded": 868,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Link Amazon DE SKU DE-MOSS-JACKET to Nexus IT-MOSS-JACKET? 14 of its 14 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 1338
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/DE/~$MOSS DE.xlsm",
+   "outcome": "skipped: Excel lock file",
+   "ms": 0
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/ES/ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 13,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 456,
+    "issues": 1,
+    "exclusions": 73,
+    "links": 1,
+    "ledgerEntries": 947
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon ES SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 12 of its 12 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 13,
+     "excluded": 73,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     12
+    ],
+    [
+     "Link Amazon ES SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 12 of its 12 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 396
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/FR/MOSS FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 13,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 432,
+    "issues": 1,
+    "exclusions": 73,
+    "links": 1,
+    "ledgerEntries": 923
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon FR SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 12 of its 12 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 13,
+     "excluded": 73,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     12
+    ],
+    [
+     "Link Amazon FR SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 12 of its 12 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 376
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/IT/MOSS JACKET NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 22,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1072,
+    "issues": 0,
+    "exclusions": 229,
+    "links": 0,
+    "ledgerEntries": 1931
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 106,
+     "excluded": 229,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "\"TEAM_NAME/ATHLETE/COLOR/SIZE\" is deprecated by the channel.",
+     21
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Length",
+     21
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Width",
+     21
+    ],
+    [
+     "unit \"Centimetri\" is not one of centimeters, yards, meters, millimeters, feet, inches for Item Package Height",
+     21
+    ],
+    [
+     "unit \"Chilogrammi\" is not one of kilograms, grams, pounds, milligrams, ounces for Item Package Weight",
+     21
+    ],
+    [
+     "\"COLOR_NAME/SIZE_NAME/STYLE_NAME/PATTERN_NAME\" is deprecated by the channel.",
+     1
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 678
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/IT/Moss Jacket IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "legacy",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 2,
+     "partial": 22,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 858,
+    "issues": 2,
+    "exclusions": 275,
+    "links": 0,
+    "ledgerEntries": 1350
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "SKU is required",
+     2
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 45,
+     "excluded": 275,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "ARTICOLO_FORMA \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0 \u00b7 ARTICOLO_PACCHETTO_QUANTIT\u00c0/FORMATO_NOME \u00b7 COLLECTION_ITEM \u00b7 COLORE \u00b7 COLORE/DIMENSIONI \u2026.",
+     22
+    ],
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     21
+    ],
+    [
+     "SKU is required",
+     2
+    ]
+   ],
+   "outcome": "previewed (INVALID)",
+   "ms": 670
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/LISTINGS/DE/MOSS DE - FINAL (upload this)/MOSS DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 31,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 4911,
+    "issues": 1,
+    "exclusions": 120,
+    "links": 1,
+    "ledgerEntries": 5529
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon DE SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 1335,
+     "cleared": 0,
+     "refused": 1,
+     "excluded": 120,
+     "unchanged": 126,
+     "alreadyEmpty": 3450,
+     "newOverrides": 1263,
+     "clearUnchecked": 0,
+     "pricesRecorded": 9,
+     "listingsCreated": 9,
+     "productsCreated": 0,
+     "listingsAffected": 30,
+     "productsAffected": 0,
+     "preservedOverrides": 126
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Link Amazon DE SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 30,
+     "failed": 0,
+     "skipped": 1,
+     "excluded": 120,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1431,
+    "equal": 1431,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 3450,
+    "clearsEmpty": 3450,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 30,
+     "equal": 30
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 17207
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/LISTINGS/ES/MOSS ES - FINAL (upload this)/MOSS ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 31,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 4851,
+    "issues": 1,
+    "exclusions": 120,
+    "links": 1,
+    "ledgerEntries": 5469
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon ES SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 1382,
+     "cleared": 0,
+     "refused": 1,
+     "excluded": 120,
+     "unchanged": 79,
+     "alreadyEmpty": 3390,
+     "newOverrides": 1314,
+     "clearUnchecked": 0,
+     "pricesRecorded": 18,
+     "listingsCreated": 11,
+     "productsCreated": 0,
+     "listingsAffected": 30,
+     "productsAffected": 0,
+     "preservedOverrides": 79
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Link Amazon ES SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 30,
+     "failed": 0,
+     "skipped": 1,
+     "excluded": 120,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1431,
+    "equal": 1431,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 3390,
+    "clearsEmpty": 3390,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 30,
+     "equal": 30
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 16732
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/LISTINGS/FR/MOSS FR - FINAL (upload this)/MOSS FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 31,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 4851,
+    "issues": 1,
+    "exclusions": 120,
+    "links": 1,
+    "ledgerEntries": 5469
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Link Amazon FR SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 1387,
+     "cleared": 0,
+     "refused": 1,
+     "excluded": 120,
+     "unchanged": 74,
+     "alreadyEmpty": 3390,
+     "newOverrides": 1329,
+     "clearUnchecked": 0,
+     "pricesRecorded": 18,
+     "listingsCreated": 16,
+     "productsCreated": 0,
+     "listingsAffected": 30,
+     "productsAffected": 0,
+     "preservedOverrides": 74
+    },
+    "links": 1,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Link Amazon FR SKU MOSS-JACKET to Nexus IT-MOSS-JACKET? 30 of its 30 children in this file belong to IT-MOSS-JACKET in Nexus. Confirm the li",
+     1
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 30,
+     "failed": 0,
+     "skipped": 1,
+     "excluded": 120,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1431,
+    "equal": 1431,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 3390,
+    "clearsEmpty": 3390,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 30,
+     "equal": 30
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 16692
+  },
+  {
+   "file": "JACKETS/Moss/Amazon/LISTINGS/IT/MOSS IT - FINAL (upload this)/MOSS IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 31,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 5011,
+    "issues": 0,
+    "exclusions": 156,
+    "links": 0,
+    "ledgerEntries": 5597
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 34,
+     "cleared": 0,
+     "refused": 30,
+     "excluded": 156,
+     "unchanged": 3,
+     "alreadyEmpty": 3453,
+     "newOverrides": 30,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 3
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     30
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "skipped": 30,
+     "excluded": 156,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 37,
+    "equal": 37,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 123,
+    "clearsEmpty": 123,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 3613
+  },
+  {
+   "file": "JACKETS/Moss/eBay/IT/MOSS IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 124
+   },
+   "parse": {
+    "rows": 1362,
+    "issues": 93,
+    "exclusions": 310,
+    "links": 0,
+    "ledgerEntries": 6632
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     93
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 490,
+     "cleared": 0,
+     "refused": 93,
+     "excluded": 310,
+     "unchanged": 872,
+     "alreadyEmpty": 0,
+     "newOverrides": 393,
+     "clearUnchecked": 0,
+     "pricesRecorded": 30,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 31,
+     "productsAffected": 0,
+     "preservedOverrides": 841
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     93
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 31,
+     "failed": 0,
+     "skipped": 93,
+     "excluded": 310,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1115,
+    "equal": 1115,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 30,
+     "equal": 30
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 217,
+     "equal": 217
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 9897
+  },
+  {
+   "file": "JACKETS/REGAL/AMAZON/LISTINGS/DE/REGAL DE - FINAL (upload this)/REGAL DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6706,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7478
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1971,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 50,
+     "alreadyEmpty": 4685,
+     "newOverrides": 1856,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 16,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 50
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1981,
+    "equal": 1981,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4685,
+    "clearsEmpty": 4685,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 24871
+  },
+  {
+   "file": "JACKETS/REGAL/AMAZON/LISTINGS/ES/REGAL ES - FINAL (upload this)/REGAL ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6624,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7396
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 2006,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 15,
+     "alreadyEmpty": 4603,
+     "newOverrides": 1935,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 26,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 15
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1981,
+    "equal": 1981,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4603,
+    "clearsEmpty": 4603,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 24604
+  },
+  {
+   "file": "JACKETS/REGAL/AMAZON/LISTINGS/FR/REGAL FR - FINAL (upload this)/REGAL FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6624,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7396
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 2009,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 12,
+     "alreadyEmpty": 4603,
+     "newOverrides": 1944,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 29,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 12
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1981,
+    "equal": 1981,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4603,
+    "clearsEmpty": 4603,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 25121
+  },
+  {
+   "file": "JACKETS/REGAL/AMAZON/LISTINGS/IT/REGAL IT - FINAL (upload this)/REGAL IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6625,
+    "issues": 0,
+    "exclusions": 201,
+    "links": 0,
+    "ledgerEntries": 7437
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 35,
+     "cleared": 0,
+     "refused": 40,
+     "excluded": 201,
+     "unchanged": 3,
+     "alreadyEmpty": 4563,
+     "newOverrides": 33,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 3
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     40
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "skipped": 40,
+     "excluded": 201,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 38,
+    "equal": 38,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 123,
+    "clearsEmpty": 123,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 4049
+  },
+  {
+   "file": "JACKETS/REGAL/eBay/IT/REGAL IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 82
+   },
+   "parse": {
+    "rows": 1759,
+    "issues": 41,
+    "exclusions": 205,
+    "links": 0,
+    "ledgerEntries": 4010
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     41
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 408,
+     "cleared": 0,
+     "refused": 41,
+     "excluded": 205,
+     "unchanged": 1351,
+     "alreadyEmpty": 0,
+     "newOverrides": 163,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 1310
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     41
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "skipped": 41,
+     "excluded": 205,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1433,
+    "equal": 1433,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 286,
+     "equal": 286
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 11834
+  },
+  {
+   "file": "JACKETS/VENTRA/AMAZON/LISTINGS/DE/VENTRA DE - FINAL (upload this)/VENTRA DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6706,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7478
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1936,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 44,
+     "alreadyEmpty": 4726,
+     "newOverrides": 1839,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 16,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 44
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1940,
+    "equal": 1940,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4726,
+    "clearsEmpty": 4726,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 26585
+  },
+  {
+   "file": "JACKETS/VENTRA/AMAZON/LISTINGS/ES/VENTRA ES - FINAL (upload this)/VENTRA ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6624,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7396
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1956,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 24,
+     "alreadyEmpty": 4644,
+     "newOverrides": 1867,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 17,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 24
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1940,
+    "equal": 1940,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4644,
+    "clearsEmpty": 4644,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 26571
+  },
+  {
+   "file": "JACKETS/VENTRA/AMAZON/LISTINGS/FR/VENTRA FR - FINAL (upload this)/VENTRA FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6624,
+    "issues": 0,
+    "exclusions": 161,
+    "links": 0,
+    "ledgerEntries": 7396
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 1959,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 161,
+     "unchanged": 21,
+     "alreadyEmpty": 4644,
+     "newOverrides": 1876,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 20,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 21
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 161,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1940,
+    "equal": 1940,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 4644,
+    "clearsEmpty": 4644,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 25231
+  },
+  {
+   "file": "JACKETS/VENTRA/AMAZON/LISTINGS/IT/VENTRA IT - FINAL (upload this)/VENTRA IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 41,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 6625,
+    "issues": 0,
+    "exclusions": 201,
+    "links": 0,
+    "ledgerEntries": 7437
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 34,
+     "cleared": 0,
+     "refused": 40,
+     "excluded": 201,
+     "unchanged": 3,
+     "alreadyEmpty": 4604,
+     "newOverrides": 32,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 1,
+     "productsAffected": 0,
+     "preservedOverrides": 3
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Shipping template choices could not be verified. Check the channel connection and try again. The existing value has been kept.",
+     40
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 1,
+     "failed": 0,
+     "skipped": 40,
+     "excluded": 201,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 37,
+    "equal": 37,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 124,
+    "clearsEmpty": 124,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 4020
+  },
+  {
+   "file": "JACKETS/VENTRA/eBay/IT/VENTRA IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 123
+   },
+   "parse": {
+    "rows": 1759,
+    "issues": 82,
+    "exclusions": 205,
+    "links": 0,
+    "ledgerEntries": 6015
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     82
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 408,
+     "cleared": 0,
+     "refused": 82,
+     "excluded": 205,
+     "unchanged": 1351,
+     "alreadyEmpty": 0,
+     "newOverrides": 163,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 1310
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     82
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "skipped": 82,
+     "excluded": 205,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 1433,
+    "equal": 1433,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 286,
+     "equal": 286
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 11938
+  },
+  {
+   "file": "JACKETS/WATERPROOF/AMAZON/LISTINGS/DE/WATERPROOF DE - FINAL (upload this)/WATERPROOF DE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 11,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1799,
+    "issues": 0,
+    "exclusions": 41,
+    "links": 0,
+    "ledgerEntries": 1990
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 515,
+     "cleared": 1,
+     "refused": 0,
+     "excluded": 41,
+     "unchanged": 20,
+     "alreadyEmpty": 1264,
+     "newOverrides": 469,
+     "clearUnchecked": 0,
+     "pricesRecorded": 4,
+     "listingsCreated": 4,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 20
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "excluded": 41,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 524,
+    "equal": 524,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1265,
+    "clearsEmpty": 1265,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 4995
+  },
+  {
+   "file": "JACKETS/WATERPROOF/AMAZON/LISTINGS/ES/WATERPROOF ES - FINAL (upload this)/WATERPROOF ES.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Plantilla",
+    "marketplace": "ES",
+    "language": "es_ES",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 11,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1777,
+    "issues": 0,
+    "exclusions": 41,
+    "links": 0,
+    "ledgerEntries": 1968
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 514,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 41,
+     "unchanged": 20,
+     "alreadyEmpty": 1243,
+     "newOverrides": 470,
+     "clearUnchecked": 0,
+     "pricesRecorded": 4,
+     "listingsCreated": 4,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 20
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "excluded": 41,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 524,
+    "equal": 524,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1243,
+    "clearsEmpty": 1243,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 4926
+  },
+  {
+   "file": "JACKETS/WATERPROOF/AMAZON/LISTINGS/FR/WATERPROOF FR - FINAL (upload this)/WATERPROOF FR.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Mod\u00e8le",
+    "marketplace": "FR",
+    "language": "fr_FR",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 11,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1777,
+    "issues": 0,
+    "exclusions": 41,
+    "links": 0,
+    "ledgerEntries": 1968
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 514,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 41,
+     "unchanged": 20,
+     "alreadyEmpty": 1243,
+     "newOverrides": 469,
+     "clearUnchecked": 0,
+     "pricesRecorded": 4,
+     "listingsCreated": 4,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 20
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "excluded": 41,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 524,
+    "equal": 524,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1243,
+    "clearsEmpty": 1243,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 5261
+  },
+  {
+   "file": "JACKETS/WATERPROOF/AMAZON/LISTINGS/IT/WATERPROOF IT - FINAL (upload this)/WATERPROOF IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 11,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 1777,
+    "issues": 0,
+    "exclusions": 51,
+    "links": 0,
+    "ledgerEntries": 1978
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 516,
+     "cleared": 1,
+     "refused": 0,
+     "excluded": 51,
+     "unchanged": 19,
+     "alreadyEmpty": 1242,
+     "newOverrides": 453,
+     "clearUnchecked": 0,
+     "pricesRecorded": 10,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 19
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "excluded": 51,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 524,
+    "equal": 524,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 1243,
+    "clearsEmpty": 1243,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 5082
+  },
+  {
+   "file": "JACKETS/WATERPROOF/eBay/IT/WATERPROOF IT.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "ebay_it",
+    "marketplace": "IT",
+    "records": 22
+   },
+   "parse": {
+    "rows": 471,
+    "issues": 11,
+    "exclusions": 66,
+    "links": 0,
+    "ledgerEntries": 1085
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     11
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 109,
+     "cleared": 0,
+     "refused": 11,
+     "excluded": 66,
+     "unchanged": 362,
+     "alreadyEmpty": 0,
+     "newOverrides": 43,
+     "clearUnchecked": 0,
+     "pricesRecorded": 10,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 351
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "apps/api/scripts/pes5-adopt-shells.mts), then import again.",
+     11
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "skipped": 11,
+     "excluded": 66,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 384,
+    "equal": 384,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 77,
+     "equal": 77
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 3120
+  },
+  {
+   "file": "SUITS/XAVIA X AAA/AMAZON/LISTINGS/IT/X-RACING IT - FINAL (upload this)/X-RACING IT.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Modello",
+    "marketplace": "IT",
+    "language": "it_IT",
+    "productTypes": [
+     "APPAREL"
+    ],
+    "actions": {
+     "replace": 50,
+     "partial": 0,
+     "delete": 0,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 0,
+    "issues": 50,
+    "exclusions": 0,
+    "links": 0,
+    "ledgerEntries": 2783
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "Refresh the IT / APPAREL category schema first",
+     50
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 0,
+     "cleared": 0,
+     "refused": 50,
+     "excluded": 0,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 0,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "Refresh the IT / APPAREL category schema first",
+     50
+    ]
+   ],
+   "outcome": "explained: nothing ready to apply (INVALID)",
+   "ms": 368
+  },
+  {
+   "file": "XAVIA-eBay-IT-AIREON.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "AIREON",
+    "marketplace": "IT",
+    "records": 41
+   },
+   "parse": {
+    "rows": 1006,
+    "issues": 0,
+    "exclusions": 230,
+    "links": 0,
+    "ledgerEntries": 1437
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 555,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 230,
+     "unchanged": 451,
+     "alreadyEmpty": 0,
+     "newOverrides": 122,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 450
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 230,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 966,
+    "equal": 966,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11825
+  },
+  {
+   "file": "XAVIA-eBay-IT-AIRMESH.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "AIRMESH",
+    "marketplace": "IT",
+    "records": 21
+   },
+   "parse": {
+    "rows": 514,
+    "issues": 0,
+    "exclusions": 120,
+    "links": 0,
+    "ledgerEntries": 735
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 222,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 120,
+     "unchanged": 292,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 291
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "excluded": 120,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 494,
+    "equal": 494,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 5222
+  },
+  {
+   "file": "XAVIA-eBay-IT-MOSS.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "MOSS",
+    "marketplace": "IT",
+    "records": 31
+   },
+   "parse": {
+    "rows": 517,
+    "issues": 10,
+    "exclusions": 122,
+    "links": 0,
+    "ledgerEntries": 1065
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XXS is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XS is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-S is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-M is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-L is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XXL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-3XL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 0,
+     "changed": 245,
+     "cleared": 0,
+     "refused": 10,
+     "excluded": 122,
+     "unchanged": 272,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 20,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 21,
+     "productsAffected": 0,
+     "preservedOverrides": 271
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XXS is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XS is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-S is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-M is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-L is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-XXL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ],
+    [
+     "IT-MOSS-JACKET-GREY-MEN-3XL is not a Nexus product. Create it first (Catalog import, Create or update), then import this listing again.",
+     1
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 21,
+     "failed": 0,
+     "skipped": 10,
+     "excluded": 122,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 497,
+    "equal": 497,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 20,
+     "equal": 20
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 6013
+  },
+  {
+   "file": "XAVIA-eBay-IT-REGAL.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "REGAL",
+    "marketplace": "IT",
+    "records": 41
+   },
+   "parse": {
+    "rows": 1007,
+    "issues": 0,
+    "exclusions": 232,
+    "links": 0,
+    "ledgerEntries": 1445
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 434,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 232,
+     "unchanged": 573,
+     "alreadyEmpty": 0,
+     "newOverrides": 1,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 572
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 232,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 967,
+    "equal": 967,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11234
+  },
+  {
+   "file": "XAVIA-eBay-IT-VENTRA.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "VENTRA",
+    "marketplace": "IT",
+    "records": 41
+   },
+   "parse": {
+    "rows": 1007,
+    "issues": 0,
+    "exclusions": 232,
+    "links": 0,
+    "ledgerEntries": 1445
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 473,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 232,
+     "unchanged": 534,
+     "alreadyEmpty": 0,
+     "newOverrides": 1,
+     "clearUnchecked": 0,
+     "pricesRecorded": 40,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 41,
+     "productsAffected": 0,
+     "preservedOverrides": 533
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 41,
+     "failed": 0,
+     "excluded": 232,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 967,
+    "equal": 967,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 40,
+     "equal": 40
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 11211
+  },
+  {
+   "file": "XAVIA-eBay-IT-WATERPROOF.xlsx",
+   "kind": "ebay-workbook",
+   "meta": {
+    "sheet": "WATERPROOF",
+    "marketplace": "IT",
+    "records": 11
+   },
+   "parse": {
+    "rows": 258,
+    "issues": 0,
+    "exclusions": 64,
+    "links": 0,
+    "ledgerEntries": 364
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0,
+    "phantom": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [],
+   "preview": {
+    "state": "QUEUED",
+    "counts": {
+     "ended": 0,
+     "changed": 116,
+     "cleared": 0,
+     "refused": 0,
+     "excluded": 64,
+     "unchanged": 142,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 10,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 11,
+     "productsAffected": 0,
+     "preservedOverrides": 141
+    },
+    "links": 0,
+    "deletes": 0
+   },
+   "reviewRefusals": [],
+   "apply": {
+    "state": "COMPLETED",
+    "receipt": {
+     "saved": 11,
+     "failed": 0,
+     "excluded": 64,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 248,
+    "equal": 248,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 10,
+     "equal": 10
+    },
+    "presence": {
+     "n": 0,
+     "equal": 0
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 0,
+     "actual": 0,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (COMPLETED)",
+   "ms": 2666
+  }
+ ]
+}

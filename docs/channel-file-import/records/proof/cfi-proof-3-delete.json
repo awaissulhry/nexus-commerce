@@ -1,0 +1,180 @@
+{
+ "db": "nexus_cfi_proof3_test",
+ "dir": "/Users/awais/Desktop/2026/LISTNGS",
+ "apply": "all",
+ "at": "2026-09-24T23:34:39.473Z",
+ "reports": [
+  {
+   "file": "JACKETS/Gale/Amazon/DE/GALE DE NEW TEMPLATE.xlsm",
+   "kind": "amazon-template",
+   "meta": {
+    "grammar": "v2",
+    "sheet": "Vorlage",
+    "marketplace": "DE",
+    "language": "de_DE",
+    "productTypes": [
+     "COAT"
+    ],
+    "actions": {
+     "replace": 0,
+     "partial": 0,
+     "delete": 19,
+     "unknown": 0
+    }
+   },
+   "parse": {
+    "rows": 2,
+    "issues": 17,
+    "exclusions": 1160,
+    "links": 0,
+    "ledgerEntries": 1447
+   },
+   "ledger": {
+    "unaccounted": 0,
+    "duplicated": 0,
+    "danglingRows": 0
+   },
+   "ledgerSample": {},
+   "issueReasons": [
+    [
+     "this row DELETES GALE-JACKET on Amazon DE (it has ASIN B0D8XBXM5H). The file can be older than the channel. Confirm deletions to mark the li",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XS on Amazon DE (it has ASIN B0DJ4926YX). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-S on Amazon DE (it has ASIN B0BMS5B768). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-M on Amazon DE (it has ASIN B0BMSC91YK). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-L on Amazon DE (it has ASIN B0BMSWM15B). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XL on Amazon DE (it has ASIN B0BMSH19GY). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XXL on Amazon DE (it has ASIN B0BMSCJRYD). The file can be older than the channel. Confirm deletions ",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-5XL on Amazon DE (it has ASIN B0DJ4FLPHM). The file can be older than the channel. Confirm deletions ",
+     1
+    ]
+   ],
+   "preview": {
+    "state": "INVALID",
+    "counts": {
+     "ended": 2,
+     "changed": 2,
+     "cleared": 0,
+     "refused": 17,
+     "excluded": 1160,
+     "unchanged": 0,
+     "alreadyEmpty": 0,
+     "newOverrides": 0,
+     "clearUnchecked": 0,
+     "pricesRecorded": 0,
+     "listingsCreated": 0,
+     "productsCreated": 0,
+     "listingsAffected": 2,
+     "productsAffected": 0,
+     "preservedOverrides": 0
+    },
+    "links": 0,
+    "deletes": 19
+   },
+   "reviewRefusals": [
+    [
+     "this row DELETES GALE-JACKET on Amazon DE (it has ASIN B0D8XBXM5H). The file can be older than the channel. Confirm deletions to mark the li",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XS on Amazon DE (it has ASIN B0DJ4926YX). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-S on Amazon DE (it has ASIN B0BMS5B768). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-M on Amazon DE (it has ASIN B0BMSC91YK). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-L on Amazon DE (it has ASIN B0BMSWM15B). The file can be older than the channel. Confirm deletions to",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XL on Amazon DE (it has ASIN B0BMSH19GY). The file can be older than the channel. Confirm deletions t",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-XXL on Amazon DE (it has ASIN B0BMSCJRYD). The file can be older than the channel. Confirm deletions ",
+     1
+    ],
+    [
+     "this row DELETES GALE-JACKET-BLACK-MEN-5XL on Amazon DE (it has ASIN B0DJ4FLPHM). The file can be older than the channel. Confirm deletions ",
+     1
+    ]
+   ],
+   "apply": {
+    "state": "PARTIAL",
+    "receipt": {
+     "saved": 2,
+     "failed": 0,
+     "skipped": 17,
+     "excluded": 1160,
+     "unchanged": 0,
+     "unprocessed": 0
+    }
+   },
+   "applyFailures": [],
+   "roundTrip": {
+    "compared": 0,
+    "equal": 0,
+    "missing": 0,
+    "differs": 0,
+    "clearsCompared": 0,
+    "clearsEmpty": 0,
+    "samples": []
+   },
+   "special": {
+    "price": {
+     "n": 0,
+     "equal": 0
+    },
+    "presence": {
+     "n": 2,
+     "equal": 2
+    },
+    "sellerSku": {
+     "n": 0,
+     "equal": 0
+    },
+    "sale": {
+     "n": 0
+    },
+    "itemSpecifics": {
+     "n": 0,
+     "equal": 0
+    },
+    "endedDelta": {
+     "expected": 2,
+     "actual": 2,
+     "equal": 1,
+     "n": 1
+    }
+   },
+   "outcome": "applied (PARTIAL)",
+   "ms": 6616
+  }
+ ]
+}

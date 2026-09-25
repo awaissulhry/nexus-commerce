@@ -1,0 +1,86 @@
+id	format	flag	market	rows	issues	excl	error	file
+all-001	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	ACCESSORIES/SLIDERS/eBay/IT/KNEE-SLIDER IT.xlsx
+all-002	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	ACCESSORIES/SLIDERS/eBay/IT/NORMAL-KNEE-SLIDER IT.xlsx
+all-003	amazon-new	other	DE	0	21	0		JACKETS/AIR MESH/AMAZON/DE/DE.xlsm
+all-004	amazon-new	other	ES	634	20	188		JACKETS/AIR MESH/AMAZON/ES/ES.xlsm
+all-005	amazon-new	other	FR	596	20	188		JACKETS/AIR MESH/AMAZON/FR/FR.xlsm
+all-006	amazon-old	other	IT				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/AIR MESH/AMAZON/IT/AIRMESH Jacket IT.xlsm
+all-007	amazon-new	final	DE	950	0	168		JACKETS/AIR MESH/AMAZON/LISTINGS/DE/AIRMESH DE - FINAL (upload this)/AIRMESH DE.xlsm
+all-008	amazon-new	final	ES	950	0	168		JACKETS/AIR MESH/AMAZON/LISTINGS/ES/AIRMESH ES - FINAL (upload this)/AIRMESH ES.xlsm
+all-009	amazon-new	final	FR	950	0	168		JACKETS/AIR MESH/AMAZON/LISTINGS/FR/AIRMESH FR - FINAL (upload this)/AIRMESH FR.xlsm
+all-010	amazon-new	final	IT	954	0	205		JACKETS/AIR MESH/AMAZON/LISTINGS/IT/AIRMESH IT - FINAL (upload this)/AIRMESH IT.xlsm
+all-011	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/AIR MESH/eBay/IT/AIRMESH IT.xlsx
+all-012	amazon-new	blank-template	IT				The workbook language does not match the configured destination language	JACKETS/AIREON/AMAZON/LISTINGS/_BLANK TEMPLATES (per language)/COAT_PANTS - EN (English headings).xlsm
+all-013	amazon-new	blank-template	IT	0	0	0		JACKETS/AIREON/AMAZON/LISTINGS/_BLANK TEMPLATES (per language)/COAT_PANTS - IT (Italian, used for AIREON IT).xlsm
+all-014	amazon-new	final	DE	1790	60	333		JACKETS/AIREON/AMAZON/LISTINGS/DE/AIREON DE - FINAL (upload this)/AIREON DE.xlsm
+all-015	amazon-new	other	DE	0	25	0		JACKETS/AIREON/AMAZON/LISTINGS/DE/AIREON DE.xlsm
+all-016	amazon-new	final	ES	1816	60	307		JACKETS/AIREON/AMAZON/LISTINGS/ES/AIREON ES - FINAL (upload this)/AIREON ES.xlsm
+all-017	amazon-new	other	ES	802	30	195		JACKETS/AIREON/AMAZON/LISTINGS/ES/AIREON ES.xlsm
+all-018	amazon-new	final	FR	1816	60	307		JACKETS/AIREON/AMAZON/LISTINGS/FR/AIREON FR - FINAL (upload this)/AIREON FR.xlsm
+all-019	amazon-new	other	FR	828	25	195		JACKETS/AIREON/AMAZON/LISTINGS/FR/AIREON FR.xlsm
+all-020	amazon-old	other	IT				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/AIREON/AMAZON/LISTINGS/GLOBAL/AIREON GLOBAL.xlsm
+all-021	amazon-new	final	IT	1975	60	405		JACKETS/AIREON/AMAZON/LISTINGS/IT/AIREON IT - FINAL (upload this)/AIREON IT.xlsm
+all-022	amazon-new	old-backup	IT	1354	253	316		JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON COAT+PANT NEW TEMPLATE.xlsm
+all-023	amazon-new	old-backup	IT				The workbook language does not match the configured destination language	JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (English-base retag - preview reads empty, DO NOT USE).xlsm
+all-024	amazon-new	old-backup	IT				The workbook language does not match the configured destination language	JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (English-values, superseded 100720).xlsm
+all-025	amazon-new	old-backup	IT	2234	421	524		JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (Italian-template backup).xlsm
+all-026	amazon-new	old-backup	IT	2439	421	524		JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON IT (proven-template base - also works, backup).xlsm
+all-027	amazon-old	old-backup	IT				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/AIREON Jacket IT.xlsm
+all-028	amazon-old	old-backup	IT				Modello: replace formula and error cells with verified values before importing this Amazon template	JACKETS/AIREON/AMAZON/LISTINGS/IT/OLD - previous versions & backup/COAT_PANTS.xlsm
+all-029	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/AIREON/eBay/IT/AIREON IT.xlsx
+all-030	amazon-new	other	DE	0	19	0		JACKETS/Gale/Amazon/DE/GALE DE NEW TEMPLATE.xlsm
+all-031	amazon-old	other	DE				Vorlage: replace formula and error cells with verified values before importing this Amazon template	JACKETS/Gale/Amazon/DE/Gale JACKET DE.xlsm
+all-032	amazon-old	other	ES				Plantilla: replace formula and error cells with verified values before importing this Amazon template	JACKETS/Gale/Amazon/ES/Gale Jacket ES.xlsm
+all-033	amazon-new	other	FR	783	163	183		JACKETS/Gale/Amazon/FR/GALE FR NEW TEMPLATE.xlsm
+all-034	amazon-old	other	FR				Modèle: replace formula and error cells with verified values before importing this Amazon template	JACKETS/Gale/Amazon/FR/Gale Jacket FR.xlsm
+all-035	outerwear	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/Gale/Amazon/IT/amazon_OUTERWEAR_IT.filled.xlsx
+all-036	outerwear	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/Gale/Amazon/IT/amazon_OUTERWEAR_IT.xlsx
+all-037	amazon-old	other	IT				Modello: replace formula and error cells with verified values before importing this Amazon template	JACKETS/Gale/Amazon/IT/GALE JACKET GLOBAL.xlsm
+all-038	amazon-old	other	IT				Modello: replace formula and error cells with verified values before importing this Amazon template	JACKETS/Gale/Amazon/IT/Gale Jacket IT.xlsm
+all-039	amazon-new	other	IT	761	162	184		JACKETS/Gale/Amazon/IT/GALE JACKET NEW TEMPLATE.xlsm
+all-040	amazon-new	other	IT	761	162	184		JACKETS/Gale/Amazon/IT/GALE JACKET NEW TEMPLATE.xlsx
+all-041	amazon-new	final	DE	934	0	205		JACKETS/Gale/Amazon/LISTINGS/DE/GALE DE - FINAL (upload this)/GALE DE.xlsm
+all-042	amazon-new	final	ES	934	0	205		JACKETS/Gale/Amazon/LISTINGS/ES/GALE ES - FINAL (upload this)/GALE ES.xlsm
+all-043	amazon-new	final	FR	934	0	205		JACKETS/Gale/Amazon/LISTINGS/FR/GALE FR - FINAL (upload this)/GALE FR.xlsm
+all-044	amazon-new	final	IT	955	0	205		JACKETS/Gale/Amazon/LISTINGS/IT/GALE IT - FINAL (upload this)/GALE IT.xlsm
+all-045	amazon-new	final	IT	955	0	205		JACKETS/Gale/Amazon/LISTINGS/IT/GALE IT - FINAL (upload this)/GALE IT.xlsx
+all-046	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/Gale/eBay/IT/GALE IT.xlsx
+all-047	amazon-old	other	IT				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/Misano/AMAZON/LISTING/IT.xlsx
+all-048	amazon-new	final	DE	726	0	139		JACKETS/Misano/AMAZON/LISTINGS/DE/MISANO DE - FINAL (upload this)/MISANO DE.xlsm
+all-049	amazon-new	final	ES	740	0	125		JACKETS/Misano/AMAZON/LISTINGS/ES/MISANO ES - FINAL (upload this)/MISANO ES.xlsm
+all-050	amazon-new	final	FR	728	0	137		JACKETS/Misano/AMAZON/LISTINGS/FR/MISANO FR - FINAL (upload this)/MISANO FR.xlsm
+all-051	amazon-new	final	IT	1130	0	238		JACKETS/Misano/AMAZON/LISTINGS/IT/MISANO IT - FINAL (upload this)/MISANO IT.xlsm
+all-052	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/Misano/eBay/IT/MISANO IT.xlsx
+all-053	amazon-new	other	DE	0	22	0		JACKETS/Moss/Amazon/DE/MOSS DE.xlsm
+all-054	amazon-old	other	DE				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/Moss/Amazon/DE/Moss JACKET DE.xlsm
+all-055	amazon-new	other	ES	410	25	123		JACKETS/Moss/Amazon/ES/ES.xlsm
+all-056	amazon-new	other	FR	386	25	123		JACKETS/Moss/Amazon/FR/MOSS FR.xlsm
+all-057	amazon-old	other	IT				This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.	JACKETS/Moss/Amazon/IT/Moss Jacket IT.xlsm
+all-058	amazon-new	other	IT	926	182	214		JACKETS/Moss/Amazon/IT/MOSS JACKET NEW TEMPLATE.xlsm
+all-059	amazon-new	final	DE	1398	0	254		JACKETS/Moss/Amazon/LISTINGS/DE/MOSS DE - FINAL (upload this)/MOSS DE.xlsm
+all-060	amazon-new	final	ES	1402	0	250		JACKETS/Moss/Amazon/LISTINGS/ES/MOSS ES - FINAL (upload this)/MOSS ES.xlsm
+all-061	amazon-new	final	FR	1412	0	240		JACKETS/Moss/Amazon/LISTINGS/FR/MOSS FR - FINAL (upload this)/MOSS FR.xlsm
+all-062	amazon-new	final	IT	1454	0	291		JACKETS/Moss/Amazon/LISTINGS/IT/MOSS IT - FINAL (upload this)/MOSS IT.xlsm
+all-063	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/Moss/eBay/IT/MOSS IT.xlsx
+all-064	amazon-new	final	DE	1891	0	332		JACKETS/REGAL/AMAZON/LISTINGS/DE/REGAL DE - FINAL (upload this)/REGAL DE.xlsm
+all-065	amazon-new	final	ES	1911	0	312		JACKETS/REGAL/AMAZON/LISTINGS/ES/REGAL ES - FINAL (upload this)/REGAL ES.xlsm
+all-066	amazon-new	final	FR	1917	0	306		JACKETS/REGAL/AMAZON/LISTINGS/FR/REGAL FR - FINAL (upload this)/REGAL FR.xlsm
+all-067	amazon-new	final	IT	1932	0	372		JACKETS/REGAL/AMAZON/LISTINGS/IT/REGAL IT - FINAL (upload this)/REGAL IT.xlsm
+all-068	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/REGAL/eBay/IT/REGAL IT.xlsx
+all-069	amazon-new	final	DE	1850	0	332		JACKETS/VENTRA/AMAZON/LISTINGS/DE/VENTRA DE - FINAL (upload this)/VENTRA DE.xlsm
+all-070	amazon-new	final	ES	1852	0	330		JACKETS/VENTRA/AMAZON/LISTINGS/ES/VENTRA ES - FINAL (upload this)/VENTRA ES.xlsm
+all-071	amazon-new	final	FR	1858	0	324		JACKETS/VENTRA/AMAZON/LISTINGS/FR/VENTRA FR - FINAL (upload this)/VENTRA FR.xlsm
+all-072	amazon-new	final	IT	1891	0	372		JACKETS/VENTRA/AMAZON/LISTINGS/IT/VENTRA IT - FINAL (upload this)/VENTRA IT.xlsm
+all-073	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/VENTRA/eBay/IT/VENTRA IT.xlsx
+all-074	amazon-new	final	DE	500	0	86		JACKETS/WATERPROOF/AMAZON/LISTINGS/DE/WATERPROOF DE - FINAL (upload this)/WATERPROOF DE.xlsm
+all-075	amazon-new	final	ES	500	0	86		JACKETS/WATERPROOF/AMAZON/LISTINGS/ES/WATERPROOF ES - FINAL (upload this)/WATERPROOF ES.xlsm
+all-076	amazon-new	final	FR	500	0	86		JACKETS/WATERPROOF/AMAZON/LISTINGS/FR/WATERPROOF FR - FINAL (upload this)/WATERPROOF FR.xlsm
+all-077	amazon-new	final	IT	492	0	104		JACKETS/WATERPROOF/AMAZON/LISTINGS/IT/WATERPROOF IT - FINAL (upload this)/WATERPROOF IT.xlsm
+all-078	ebay-ours	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	JACKETS/WATERPROOF/eBay/IT/WATERPROOF IT.xlsx
+all-079	amazon-new	final	IT				These Amazon credentials do not belong to this business profile.	SUITS/XAVIA X AAA/AMAZON/LISTINGS/IT/X-RACING IT - FINAL (upload this)/X-RACING IT.xlsm
+all-080	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-AIREON.xlsx
+all-081	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-AIRMESH.xlsx
+all-082	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-MOSS.xlsx
+all-083	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-REGAL.xlsx
+all-084	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-VENTRA.xlsx
+all-085	xavia-root	other	IT				No Amazon template was detected. Use an Amazon-downloaded XLSX/XLSM workbook.	XAVIA-eBay-IT-WATERPROOF.xlsx
