@@ -112,16 +112,20 @@ this merges at once.
 
 ## 7. Watch CI
 
-CI takes about 8 minutes. Run this in the background; you are told when it ends:
+CI takes about 8 minutes. Watch the CI run for the pushed commit, not `gh pr checks --required`: `ci-ok` and
+`db-security` do not exist until the other jobs end, so that command exits at once with "no required checks
+reported" and exit code 0. Run this in the background, from the worktree; you are told when it ends:
 
 ```bash
-gh pr checks <number> --watch --required --interval 30
+sha=$(git rev-parse HEAD); run=
+until [ -n "$run" ]; do sleep 10
+  run=$(gh run list --workflow ci.yml --commit "$sha" -L 1 --json databaseId --jq '.[0].databaseId'); done
+gh run watch "$run" --exit-status --compact --interval 30; echo "ci exit=$?"
+sleep 30; gh pr view <number> --json state,mergeStateStatus,mergeCommit
 ```
 
-Then `gh pr view <number> --json state,mergeStateStatus,mergeCommit`.
-
 - **MERGED** → step 8.
-- **A check failed** → find the run with `gh pr checks <number>`, then `gh run view <run-id> --log-failed | tail -150`.
+- **A check failed** → `gh run view <run-id> --log-failed | tail -150`.
   - Your change caused it → fix it in the worktree, commit, push. Auto-merge stays on and CI runs again.
   - It is not from your change (main is red, infrastructure, a known flaky test) → run
     `gh run rerun <run-id> --failed` once. Red again → stop and report the job, the error line and why it is
