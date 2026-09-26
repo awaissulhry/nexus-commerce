@@ -22,6 +22,11 @@ export interface ListingReadinessRow {
   state: 'ready' | 'warn' | 'blocked' | 'absent' | 'notComputed'
   pct: number | null
   computedAt: string | null
+  /**
+   * P2 (docs/attributes/PLAN.md §4.7) — set while this row waits for its rebuild after a bulk edit. `state` and `pct`
+   * are then the PREVIOUS answer: show "checking…", never the old state as current. Absent = the row is current.
+   */
+  pendingSince?: string
   familyId: string | null
   issues: ListingReadinessIssue[]
   editorHref: string

@@ -6,6 +6,14 @@
   "main": "./dist/vault.js",
   "types": "./dist/vault.d.ts",
   "exports": {
+    "./attributes": {
+      "types": "./dist/attributes.d.ts",
+      "default": "./dist/attributes.js"
+    },
+    "./attribute-concepts": {
+      "types": "./dist/attribute-concepts.d.ts",
+      "default": "./dist/attribute-concepts.js"
+    },
     "./studio-publication": {
       "types": "./dist/studio-publication.d.ts",
       "default": "./dist/studio-publication.js"

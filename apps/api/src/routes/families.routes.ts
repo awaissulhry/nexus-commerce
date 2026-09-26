@@ -306,14 +306,10 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
         .code(400)
         .send({ error: 'productIds cannot exceed 200 per call' })
 
+    // P3 — one batched computation (fixed query count) instead of several queries per product in sequence.
+    const computed = await channelReadinessService.computeMany(body.productIds)
     const results: Record<string, unknown> = {}
-    for (const id of body.productIds) {
-      try {
-        results[id] = await channelReadinessService.compute(id)
-      } catch (err: any) {
-        results[id] = { error: err?.message ?? String(err) }
-      }
-    }
+    for (const id of body.productIds) results[id] = computed.get(id)
     return { results }
   })
 
@@ -377,17 +373,15 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
         | { score: number; filled: number; totalRequired: number; familyId: string | null }
         | { error: string }
       > = {}
+      // P3 — one batched computation (fixed query count) instead of one per product.
+      const computed = await familyCompletenessService.computeMany(body.productIds)
       for (const id of body.productIds) {
-        try {
-          const r = await familyCompletenessService.compute(id)
-          results[id] = {
-            score: r.score,
-            filled: r.filled,
-            totalRequired: r.totalRequired,
-            familyId: r.familyId,
-          }
-        } catch (err: any) {
-          results[id] = { error: err?.message ?? String(err) }
+        const r = computed.get(id)!
+        results[id] = 'error' in r ? r : {
+          score: r.score,
+          filled: r.filled,
+          totalRequired: r.totalRequired,
+          familyId: r.familyId,
         }
       }
       return { results }

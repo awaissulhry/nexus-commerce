@@ -60,6 +60,28 @@ export async function beforeDatabaseCommit(key: string, producer: () => Promise<
   active.producers.set(key, producer)
 }
 
+/**
+ * A transaction PostgreSQL rolled back because it lost a race — safe to run again from the start.
+ *
+ * Prisma reports the same conflict several ways: `P2034` from its own queries; `P2010` from raw SQL, with the SQLSTATE
+ * in `meta.code` (Prisma 6) or in `meta.driverAdapterError.cause` as `originalCode` and kind `TransactionWriteConflict`
+ * (Prisma 7's pg adapter maps 40001 and 40P01 to that kind); and a message carrying the code for a deadlock victim.
+ * Before P2 (docs/attributes/PLAN.md §4.7) only `P2034` was retried, so a serialization conflict raised by raw SQL
+ * failed a save that a retry would have completed (measured in readiness-pending-race.vitest.test.ts).
+ */
+export function retryableConflict(error: unknown): boolean {
+  type Cause = { originalCode?: string; code?: string; kind?: string }
+  const e = error as { code?: string; meta?: { code?: string; driverAdapterError?: { cause?: Cause } }; message?: string } | null
+  if (!e) return false
+  if (e.code === 'P2034') return true
+  if (e.code === 'P2010') {
+    const cause = e.meta?.driverAdapterError?.cause
+    const sqlstate = e.meta?.code ?? cause?.originalCode ?? cause?.code
+    if (sqlstate === '40001' || sqlstate === '40P01' || cause?.kind === 'TransactionWriteConflict') return true
+  }
+  return /code: "(40001|40P01)"|Code: `(40001|40P01)`/.test(e.message ?? '')
+}
+
 export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel: Prisma.TransactionIsolationLevel }): Promise<T> {
   const existing = context.getStore()
   if (existing) {
@@ -83,7 +105,7 @@ export async function inDatabaseTransaction<T>(client: PrismaClient, work: () =>
         isolationLevel, maxWait: 10_000, timeout: 60_000,
       })
     } catch (error) {
-      if (attempt < 2 && (error as { code?: string }).code === 'P2034') continue
+      if (attempt < 2 && retryableConflict(error)) continue
       throw error
     }
     // Derived refreshes run only after commit. A refresh cannot turn a committed write into a refusal.

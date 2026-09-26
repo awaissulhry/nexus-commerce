@@ -53,9 +53,13 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     const groupLabel = !info.definition ? info.group : info.group === 'Category Metafields' ? 'Category metafields' : info.owner === 'PRODUCTVARIANT' ? 'Variant metafields' : 'Product metafields'
     const group = { key: groupLabel.toLowerCase().replace(/ /g, '_'), label: groupLabel, channelLabel: null,
       order: ['General', 'Publishing', 'Pricing', 'Inventory', 'Shipping', 'SEO', 'Product metafields', 'Variant metafields', 'Category metafields'].indexOf(groupLabel) }
+    // P4 (docs/attributes/PLAN.md §4.2) — the definition's own rules: `choices` is Shopify's closed list, and
+    // `list.min` / `list.max` bound a list. They were enforced on write (`validateShopifyField`) but not offered.
+    const rules = shopifyDefinitionRules(info.definition?.validations)
     const entry = field(key, info.label, 'content', {
-      attribute: info.id, kind, group, shopifyField: info,
-      shape: info.cardinality, cardinality: { min: 0, max: info.cardinality === 'list' ? null : 1 },
+      attribute: info.id, kind: rules.choices ? 'select' : kind, group, shopifyField: info,
+      shape: info.cardinality, cardinality: { min: rules.listMin ?? 0, max: info.cardinality === 'list' ? rules.listMax ?? null : 1 },
+      ...(rules.choices ? { options: rules.choices, mode: 'strict' as const } : {}),
       variantEligible: info.owner === 'PRODUCTVARIANT',
       channelStore: info.definition ? pa('metafields', info.owner, info.definition.namespace, info.definition.key, info.type)
         : pa(...info.id.split('.')),
@@ -89,6 +93,23 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
   // Shopify values have dedicated typed validation; JSON/reference records are not text.
   result.validationSchema = undefined
   return result
+}
+
+/** A Shopify metafield definition's `choices`, `list.min` and `list.max`. An unreadable rule is left out, never guessed. */
+export function shopifyDefinitionRules(validations: Array<{ name: string; value: string }> | undefined): { choices?: string[]; listMin?: number; listMax?: number } {
+  const out: { choices?: string[]; listMin?: number; listMax?: number } = {}
+  for (const rule of validations ?? []) {
+    if (rule.name === 'choices') {
+      try {
+        const parsed = JSON.parse(rule.value)
+        if (Array.isArray(parsed) && parsed.every(v => typeof v === 'string') && parsed.length) out.choices = parsed
+      } catch { /* the write validator reports an unreadable list; the spec offers none */ }
+    }
+    const n = Number(rule.value)
+    if (rule.name === 'list.min' && Number.isInteger(n) && n >= 0) out.listMin = n
+    if (rule.name === 'list.max' && Number.isInteger(n) && n > 0) out.listMax = n
+  }
+  return out
 }
 
 export { etsyProductSpec } from './etsy.js'

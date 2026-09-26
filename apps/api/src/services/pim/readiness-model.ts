@@ -40,6 +40,12 @@ export interface ScopeReadiness {
   /** Rules applicable to the selected categories. Explicit listing values can
    * also supply fields without a mapping rule. `null` for Master. */
   mappingRules: number | null
+  /**
+   * P2 (docs/attributes/PLAN.md §4.7) — the earliest pending mark among this scope's rows: a bulk edit changed values
+   * and the rebuild has not run yet. `pct`, `state` and `required` are then the PREVIOUS answer — show "checking…",
+   * never the old state as current. Absent = every row is current.
+   */
+  pendingSince?: string
 }
 
 export interface ProductReadiness {
@@ -147,7 +153,7 @@ export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinat
    * `Not computed` — the R-LX-9 rule one column over: absent is not empty, and a missing key must never read as
    * a score. An empty object is therefore a legitimate value (nothing computed for this coordinate at all).
    */
-  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string; required: { filled: number; total: number }; computedAt: string | null }>
+  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string; required: { filled: number; total: number }; computedAt: string | null; pendingSince?: string }>
 }
 
 export function readinessCoordinateKey(c: ReadinessCoordinate): string {

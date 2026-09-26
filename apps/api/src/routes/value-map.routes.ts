@@ -23,6 +23,7 @@ import {
   seedValueMapsFromAI,
 } from '../services/pim/value-map.service.js'
 import { seedEbayValueMaps } from '../services/pim/ebay-value-map.service.js'
+import { autoMatchValueMaps } from '../services/pim/value-map-auto.service.js'
 
 const valueMapRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { channel?: string; marketplace?: string; attribute?: string } }>(
@@ -88,6 +89,17 @@ const valueMapRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'value-map seed-ebay failed')
         return reply.status(500).send({ error: err?.message ?? 'seed-ebay failed' })
       }
+    },
+  )
+
+  // P5 (docs/attributes/PLAN.md §4.3) — match the business's values to a channel's closed lists: same text ignoring
+  // case/accents, then the concept synonyms. Dry run unless `dryRun: false`; unmatched values come back to be mapped.
+  fastify.post<{ Body: { channel?: string; marketplace?: string; productType?: string | null; dryRun?: boolean } }>(
+    '/pim/value-maps/auto-match',
+    async (request, reply) => {
+      const b = request.body
+      if (!b?.channel || !b?.marketplace) return reply.status(400).send({ error: 'channel and marketplace are required' })
+      return reply.send(await autoMatchValueMaps({ channel: b.channel, marketplace: b.marketplace, productType: b.productType ?? null, dryRun: b.dryRun !== false }))
     },
   )
 
