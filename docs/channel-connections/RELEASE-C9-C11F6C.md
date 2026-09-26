@@ -325,15 +325,19 @@ environment, KMS, grants, erasure, cutover or activation changes are authorized 
 
 ## Recovery (only if the release fails after migrating)
 
-The pre-package serving image lacks `20260923a..h_cx_*` and its startup gate will refuse the
-expanded history. Deploy the gated/rehearsed recovery branch instead:
-`gh workflow run deploy-api.yml --ref recovery/cx-20260925`, then verify ready 200 with the
-exact recovery build `34c37611`, after verifying its approved ref was published.
-Freeze pushes to main while recovering. Never downgrade the database, add empty migration
-folders or edit the start command. This recovery preserves published main and the release's
-complete database tree but omits C11f6a/b/c application changes, including crypto cancellation,
-static crypto-error reporting and operator verify/rewrap commands. Keep processing held.
-`recovery/cx-20260923` (`fdd368e0c`) and `recovery/cx-20260924` (`64bf38e48`) are superseded
-historical artifacts; the old `a5efa0dd9` head is also superseded. Do not deploy them for this package.
+Rebuilt 2026-09-26 for the #4 architecture (pre-deploy migrations, API/worker/scheduler, restricted
+runtime login). `recovery/cx-20260925` fast-forwarded `34c376113` → `0dd468273`: main `578c3756c`'s
+application with `packages/database` identical to the release (so the pre-deploy gate accepts
+production's full history), plus the release's KMS client bounds and database-driven test fixtures.
+Deploy it with `gh workflow run deploy-api.yml --ref recovery/cx-20260925`: CI runs on that exact
+commit, the API's pre-deploy step runs `migrate-direct` (a no-op), readiness must report build
+`0dd46827`, then the worker and scheduler deploy from the same commit. Keep eBay processing off on all
+three services. While recovered: no eBay quarantine (main's receiver) and main's retention cannot
+delete inbound history (the DELETE guard refuses it; reported as a skipped key). Freeze pushes to main
+while recovering. Never downgrade the database, add empty migration folders or edit the start command.
+Rehearsed locally 11:02:52Z (base → release adds exactly the eight → base refuses → recovery, release,
+recovery each ready 200 with API, worker and scheduler as the restricted runtime login).
+`recovery/cx-20260923` (`fdd368e0c`), `recovery/cx-20260924` (`64bf38e48`) and the earlier `a5efa0dd9`
+and `34c376113` heads are superseded. Do not deploy them for this package.
 If a migration fails part-way, Prisma records the failure (P3009) and blocks every build: that needs
 its own approved `prisma migrate resolve` decision, never a manual schema edit.
