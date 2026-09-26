@@ -1,7 +1,0 @@
-[deploy]
-# A failed migration blocks the replacement deployment; restarting/scaling an API
-# never runs DDL. Production must provide a dedicated MIGRATION_DATABASE_URL.
-preDeployCommand = ["npm run db:migrate:deploy"]
-startCommand = "node apps/api/dist/index.js"
-healthcheckPath = "/api/health/ready"
-healthcheckTimeout = 300

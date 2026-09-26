@@ -73,8 +73,8 @@ for (const db of ['nexus_upgrade_a_test', 'nexus_upgrade_b_test']) await admin.q
 await admin.end()
 
 step('A: bootstrap the BASE commit', TSX, ['scripts/ci/prepare-test-database.mts', '--url', A, '--database-dir', join(BASE_DIR, 'packages', 'database'), '--no-markets'])
-// The production release command, as railway.toml runs it: `cd packages/database && node scripts/migrate-direct.mjs`.
-step('A: apply the PR\'s migrations with the production release command', process.execPath, ['scripts/migrate-direct.mjs'], { DATABASE_URL: A, MIGRATION_DATABASE_URL: A, NODE_ENV: 'test' }, join(ROOT, 'packages', 'database'))
+// The production release command, as Railway's pre-deploy step runs it: `npm run db:migrate:deploy` from the repo root.
+step('A: apply the PR\'s migrations with the production release command', process.execPath, ['packages/database/scripts/migrate-direct.mjs'], { DATABASE_URL: A, MIGRATION_DATABASE_URL: A, NODE_ENV: 'test' }, ROOT)
 step('B: bootstrap the PR head', TSX, ['scripts/ci/prepare-test-database.mts', '--url', B, '--no-markets'])
 
 const problems = []

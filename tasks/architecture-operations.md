@@ -46,8 +46,10 @@ Create the worker and scheduler services (`nexus-worker`, `nexus-scheduler`, cre
 Railway no longer lets a new service read a config file (Config as Code is deprecated),
 so their settings live in Railway: the API's build command; start `npm run start:worker`
 or `npm run start:scheduler`; health check `/health/ready`, 90 s; restart on failure;
-one replica in `europe-west4`. Only the API service runs schema migrations (its
-`railway.toml`, which Railway stops reading on 2026-12-01 — see tasks/todo.md).
+one replica in `europe-west4`. Only the API service runs schema migrations. Its settings
+live in Railway too, since `railway.toml` was removed (2026-09-26; Railway stops reading
+such files on 2026-12-01): pre-deploy `npm run db:migrate:deploy`, start
+`node apps/api/dist/index.js`, health check `/api/health/ready`, 300 s.
 Their variables reference the API's (`${{@nexus/api.NAME}}`), except the two owner
 database URLs, so a rotated key changes in one place.
 Provide the required integration variables, restricted `DATABASE_URL`, and Redis

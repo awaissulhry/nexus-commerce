@@ -437,7 +437,7 @@ This is already built in commit `8b431c322`, on the unpushed branch:
 These are Railway writes. They happen only on the Owner's word, or the Owner clicks them.
 
 - **Risk:** a failed migration stops the deploy, and the old container keeps serving. That is the wanted behaviour.
-- **Rollback:** revert `railway.toml` to migrate-then-start.
+- **Rollback:** the API's pre-deploy command is a Railway service setting (since 2026-09-26, when `railway.toml` was removed); change it in the service's settings.
 
 ### 4.1a Cutover runbook for #4 (written 2026-09-26; DEFERRED — fix the login bug in §6c first)
 
