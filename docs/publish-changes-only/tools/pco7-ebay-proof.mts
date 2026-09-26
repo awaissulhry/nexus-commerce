@@ -7,7 +7,9 @@
 // Description uses full replacement; DescriptionReviseMode is deprecated/default Replace. Keep >12h conservatively.
 // No buyer-visible text change is intended. A stripped comment fails the proof; local preview is not provider acceptance.
 // https://developer.ebay.com/devzone/xml/docs/reference/ebay/ReviseFixedPriceItem.html#Request.Item.Description
-import { readFileSync, writeFileSync } from 'node:fs'
+// On the production server (`railway ssh`, no .env; since 2026-09-26 only the server can open the KMS-sealed channel logins)
+// the service's own settings are used; the same database-target check applies, and there is no git push to wait for.
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +19,7 @@ import { parse } from 'dotenv'
 import pg from 'pg'
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url)), RECORDS = join(ROOT, 'docs/publish-changes-only/records')
+const SERVER = process.env.RAILWAY_ENVIRONMENT_NAME === 'production' && !existsSync(join(ROOT, '.env'))
 const WORKSPACE = 'nexus_legacy_workspace', TTL_MS = 2 * 60 * 60_000, DELAY_MS = 60_000
 const { values: args } = parseArgs({ options: { prepare: { type: 'boolean' }, 'execute-approved': { type: 'boolean' },
   proposal: { type: 'string' }, digest: { type: 'string' }, listing: { type: 'string' } }, strict: true })
@@ -38,6 +41,7 @@ const sourceFiles = ['apps/api/src/services/pim/studio-publication-ebay.ts', 'ap
   'apps/api/src/services/pim/studio-publication-records.ts', 'docs/publish-changes-only/tools/pco7-ebay-proof.mts']
 const sourceDigest = () => digest(sourceFiles.map(file => [file, createHash('sha256').update(readFileSync(join(ROOT, file))).digest('hex')]))
 function noPush() {
+  if (SERVER) return // the production container has no git, no push and no ps
   const ps = spawnSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' })
   if (ps.status !== 0) throw new Refusal('The required push check failed.')
   const match = spawnSync('/usr/bin/grep', ['-E', '^ *[0-9]+ (/[^ ]*/)?git push|^ *[0-9]+ /bin/bash \\.githooks/pre-push'], { input: ps.stdout, encoding: 'utf8' })
@@ -83,7 +87,7 @@ type Proposal = { version: 1; kind: 'pco7-ebay-description-proof'; createdAt: st
   providerSku: string; beforeRevision: string; title: string; oldDescription: string; temporaryDescription: string; restoreDescription: string; comment: string;
   writeId: string; restoreId: string; writeRequest: Request; restoreRequest: Request; delayMs: number; preview: string; readSideEffects: string }
 
-const env = parse(readFileSync(join(ROOT, '.env'), 'utf8')), targetUrl = new URL(env.DATABASE_URL)
+const env = SERVER ? process.env as Record<string, string> : parse(readFileSync(join(ROOT, '.env'), 'utf8')), targetUrl = new URL(env.DATABASE_URL)
 if (!/neon\.tech$/.test(targetUrl.hostname) || targetUrl.pathname !== '/neondb') throw new Refusal('Unexpected production database target.')
 for (const [key, value] of Object.entries(env)) if (/^(DATABASE_URL$|DIRECT_URL$|NEXUS_|AMAZON_|EBAY_|AWS_|REDIS_)/.test(key)) process.env[key] = value
 Object.assign(process.env, { NEXUS_WORKSPACES_ENABLED: '1', NEXUS_DATABASE_POOL_MAX: '2', NEXUS_DISABLE_BACKGROUND_JOBS: '1', ENABLE_QUEUE_WORKERS: '0',
