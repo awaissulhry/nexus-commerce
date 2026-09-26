@@ -41,13 +41,20 @@ export const AMAZON_ONLY_KEY = 'department'
 
 const CHANNELS: Record<ScopeFixtureKey, string[]> = { F1: ['EBAY'], F2: ['AMAZON'], F3: [], F4: ['EBAY', 'ETSY'] }
 
+/**
+ * A new business's own settings (not a market's currency). Currency is listed first: the market-currency gate
+ * (`apps/api/scripts/check-market-currency.mjs`) reads a market code followed by a currency literal as a
+ * market→currency decision, and this is none.
+ */
+const NEW_BUSINESS = { currency: 'EUR', timezone: 'Europe/Rome', country: 'IT' } as const
+
 export async function createScopeFixtures(client: PrismaClient): Promise<Record<ScopeFixtureKey, ScopeFixture>> {
   if (!(await client.role.findUnique({ where: { key: 'OWNER' } }))) await client.role.create({ data: { key: 'OWNER', name: 'Owner', isSystem: true } })
   const service = createWorkspaceService(client)
   const out = {} as Record<ScopeFixtureKey, ScopeFixture>
   for (const key of ['F1', 'F2', 'F3', 'F4'] as const) {
     const user = await client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active' } })
-    const created = await service.create(user.id, { name: `Scope ${key}`, country: 'IT', currency: 'EUR', timezone: 'Europe/Rome', creationKey: randomUUID() })
+    const created = await service.create(user.id, { name: `Scope ${key}`, ...NEW_BUSINESS, creationKey: randomUUID() })
     const context = (await service.membership(user.id, created.id)).context
     const { productId, familyId } = await withWorkspace(context, async () => {
       for (const channelType of CHANNELS[key]) {
