@@ -9,20 +9,22 @@ import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
-import { prepareEbayPublication, sendEbayPublication, readEbayPublication, type EbayPublication } from './studio-publication-ebay.js'
+import { prepareEbayPublication, sendEbayPublication, readEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
+import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
+import { ebayInventoryReads, sendEbayInventoryGroup } from './studio-publication-ebay-inventory.js'
 import { readPublicationOverwrite } from './studio-publication-overwrite.js'
 import { recordPublicationRequests, settlePublicationRecords, type PublicationRecordContext } from './studio-publication-records.js'
 import { readPublicationBaseline } from './studio-publication-baseline.js'
 import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
-import { compileSelection, type PublicationChangePlan } from './studio-publication-selection.js'
+import { compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 
 const KIND = 'studio-publication'
 const IN_FLIGHT = ['PUBLISHING', 'UNVERIFIED', 'SUBMITTED']
 const RECEIPT_DEADLINE_MS = 30 * 60_000
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 const publishMode = (channel: string) => channel === 'AMAZON' ? getAmazonPublishMode() : channel === 'EBAY' ? getEbayPublishMode() : channel === 'SHOPIFY' ? getShopifyPublishMode() : 'unavailable'
-type Prepared = AmazonPublication | EbayPublication | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
+type Prepared = AmazonPublication | EbayPublication | EbayInventoryPublication | EbayInventorySend | { kind: 'shopify'; revision: string; remoteRevision: string | null; initialized: boolean; draft: unknown; products: Array<{ productId: string; sku: string }> }
 
 const recordContext = (id: string, data: Record<string, any>, userId: string | null): PublicationRecordContext => ({
   reviewId: id, userId, channel: data.scope.channel, marketplace: data.scope.marketplace,
@@ -69,7 +71,7 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
   let locations: StudioPublishReview['locations'], visibility: string | undefined
   try {
     if (scope.channel === 'AMAZON') prepared = await prepareAmazonPublication(facts)
-    else if (scope.channel === 'EBAY') prepared = await prepareEbayPublication(facts)
+    else if (scope.channel === 'EBAY') prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts)
     else if (scope.channel === 'SHOPIFY') {
       if (facts.excluded) throw new Error('This Shopify family has excluded variants. Review the family selection before publishing.')
       const { previewContentSync } = await import('../shopify/content-sync.service.js')
@@ -92,7 +94,8 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
       const baseline = await readPublicationBaseline(facts, prepared.products)
       baselineRevision = baseline.revision
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values)
-        : await prepareEbayChanges(facts, prepared, baseline.values)
+        : prepared.kind === 'ebay-inventory' ? prepareEbayInventoryChanges({ owner: prepared.owner, ours: prepared.ours, live: prepared.live, destination: prepared.destination, baselineValues: baseline.values })
+        : await prepareEbayChanges(facts, prepared as EbayPublication, baseline.values)
       if (changePlan.kind === 'amazon-changes') for (const product of changePlan.products) {
         if (product.newListing === false) existingProducts.add(product.productId)
       }
@@ -164,7 +167,7 @@ export async function studioPublicationResult(productId: string, id: string, use
   if (!operation || data.kind !== KIND || data.productId !== productId) throw new WorkspaceScopeError('Publication not found.', 404)
   if (data.result) {
     const previous = data.result as StudioPublishResult
-    if (operation.status === 'UNVERIFIED' && data.scope.channel === 'EBAY' && previous.results[0]?.reference) {
+    if (operation.status === 'UNVERIFIED' && data.scope.channel === 'EBAY' && data.inventory !== true && previous.results[0]?.reference) {
       const result = await reconcileEbayReceipt(data, previous)
       await storeResult(id, data, userId, result, ['UNVERIFIED'])
       return result
@@ -223,6 +226,8 @@ export async function submitStudioPublication(productId: string, id: string, bod
   data.confirmOverwrite = !sparse && plan.review.overwrite?.requiresConfirmation === true && input.confirmOverwrite === true
   data.startedAt = new Date().toISOString()
   data.delivery = { productIds: plan.prepared.products.map(p => p.productId), aliasKey: plan.facts.destination.aliasKey ?? '' }
+  // An Inventory receipt names its group, not a Trading ItemID: a later status read must not re-verify it as one.
+  data.inventory = plan.prepared.kind === 'ebay-inventory-send'
   data.captureVersion = 1
   const claimed = await prisma.$transaction(async tx => {
     await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text', `studio-publication:${data.publicationKey}`)
@@ -295,8 +300,20 @@ export async function submitStudioPublication(productId: string, id: string, bod
         result = { id, status: 'SUBMITTED', message: `Submitted to Amazon. Feed ${reference} is awaiting processing; the listing is not yet confirmed live.`,
           results: plan.prepared.feed.messages.map(message => ({ sku: message.sku, status: 'SUBMITTED', reference, message: 'Awaiting Amazon processing' })) }
         await checkpoint(result)
+      } else if (plan.prepared.kind === 'ebay-inventory-send') {
+        // PE P3.4 — one whole-group PUT built from the fresh live group; journal first, read back after. No offer is touched.
+        const inventory = plan.prepared
+        const receipt = await sendEbayInventoryGroup({ destination: inventory.destination, groupKey: inventory.groupKey, group: inventory.group,
+          expectedRevision: inventory.expectedRevision, fields: inventory.fields, reads: ebayInventoryReads(scope.accountId, scope.marketplace, inventory.destination.itemId),
+          beforeSend: request => recordPublicationRequests(context, inventory.products.map(p => ({ ...p, request: { ...request, intentVersion: 1, writes: inventory.fieldWrites[p.productId] ?? [] } }))) })
+        result = { id, status: receipt.verified ? 'VERIFIED' : 'UNVERIFIED', warnings: receipt.warnings,
+          message: receipt.verified ? 'eBay applied the change to this Inventory listing, and the read-back matches.'
+            : 'eBay accepted the change, but the read-back did not confirm every field. Check the listing before publishing again.',
+          results: inventory.products.map(row => ({ sku: row.sku, status: receipt.verified ? 'VERIFIED' : 'ACCEPTED', reference: receipt.reference,
+            message: receipt.verified ? 'Read back from eBay' : 'Accepted by eBay; the read-back differs' })) }
+        await checkpoint(result)
       } else {
-        const ebay = plan.prepared
+        const ebay = plan.prepared as EbayPublication
         const sent = await sendEbayPublication(ebay, scope.accountId, id,
           request => recordPublicationRequests(context, ebay.products.map(p => ({ ...p, request: { ...request, intentVersion: 1, writes: ebay.fieldWrites?.[p.productId] ?? [] } }))))
         result = { id, status: 'UNVERIFIED', warnings: sent.warnings,

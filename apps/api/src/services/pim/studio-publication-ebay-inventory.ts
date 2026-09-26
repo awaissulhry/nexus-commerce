@@ -13,6 +13,7 @@ import { ebaySend } from '../gateway/ebay.js'
 import { ebayListingLanguage } from '../gateway/channels.js'
 import { readEbayInventoryListing, type EbayInventoryDestination, type EbayInventoryRaw, type EbayInventoryReads } from '../live-read/ebay-inventory.js'
 import type { ServerLiveRead } from '../live-read/types.js'
+import { ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 
 type Json = Record<string, unknown>
 export interface EbayInventorySendRequest { operation: 'PUT inventory_item_group'; groupKey: string; body: Json }
@@ -72,6 +73,13 @@ export async function sendEbayInventoryGroup(input: {
     if (field.startsWith('aspect:')) return !same((live.aspects as Json | undefined) ?? {}, (input.group.aspects as Json | undefined) ?? {})
     return !same(live[GROUP_FIELD[field] ?? field], input.group[GROUP_FIELD[field] ?? field])
   })
-  return { reference: input.groupKey, readBack, verified: !missing.length,
-    warnings: !live ? ['eBay accepted the update; the read-back failed. Check the listing.'] : missing.length ? [`eBay accepted the update, but the read-back differs for: ${missing.join(', ')}.`] : [] }
+  // What buyers see: eBay stores the group, but whether the live listing follows without a publish call is still being
+  // proven (P3.8). A title or description the listing does not show yet is never reported as verified.
+  const listing = readBack?.raw.item ?? null
+  const unseen = input.fields.filter(field => (field === 'title' || field === 'description')
+    && (!listing || ebayXmlText(listing[field === 'title' ? 'Title' : 'Description']) !== input.group[field]))
+  const warnings = !live ? ['eBay accepted the update; the read-back failed. Check the listing.']
+    : missing.length ? [`eBay accepted the update, but the read-back differs for: ${missing.join(', ')}.`] : []
+  if (live && !missing.length && unseen.length) warnings.push(`eBay stored the change, but the live listing does not show it yet for: ${unseen.join(', ')}. eBay may need a publish step; check the listing.`)
+  return { reference: input.groupKey, readBack, verified: !!live && !missing.length && !unseen.length, warnings }
 }

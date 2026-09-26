@@ -9,7 +9,7 @@ import type { LiveValue } from '@nexus/shared/live-read'
 import { planPublicationChanges, publicationChangeId, selectPublicationChanges, type PublicationChangeInput } from './studio-publication-changes.js'
 import { ebayAspectKey } from '../channel-drift/ebay-content-compare.js'
 import type { ServerLiveRead } from '../live-read/types.js'
-import type { EbayInventoryRaw } from '../live-read/ebay-inventory.js'
+import type { EbayInventoryDestination, EbayInventoryRaw } from '../live-read/ebay-inventory.js'
 
 type Identity = { productId: string; sku: string }
 type Json = Record<string, unknown>
@@ -21,6 +21,8 @@ export interface EbayInventoryOurs {
 export interface EbayInventoryChangePlan {
   kind: 'ebay-inventory-changes'; changes: StudioPublishChange[]; remoteRevision: string; ownerProductId: string
   groupKey: string | null; liveGroup: Json | null; aspectNames: Record<string, string>
+  /** Where the send re-reads before it writes, and who owns the group-level fields. */
+  destination: EbayInventoryDestination; owner: Identity
 }
 
 /** The fields an inventory_item_group carries. Any other live field would be dropped by a whole-object PUT, so it refuses. */
@@ -33,8 +35,8 @@ const pictureRefusal = (urls: string[]) => !urls.length ? 'The gallery cannot be
   : urls.length > 24 || urls.some(url => !/^https:\/\//i.test(url)) ? 'eBay requires at most 24 HTTPS picture URLs.' : undefined
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-export function prepareEbayInventoryChanges(input: { owner: Identity; ours: EbayInventoryOurs; live: ServerLiveRead<EbayInventoryRaw>; baselineValues: Map<string, StudioPublishValue> }): EbayInventoryChangePlan {
-  const { owner, ours, live, baselineValues } = input
+export function prepareEbayInventoryChanges(input: { owner: Identity; ours: EbayInventoryOurs; live: ServerLiveRead<EbayInventoryRaw>; baselineValues: Map<string, StudioPublishValue>; destination: EbayInventoryDestination }): EbayInventoryChangePlan {
+  const { owner, ours, live, baselineValues, destination } = input
   const group = live.raw.group
   const unreadReason = group ? undefined : live.errors.find(e => e.scope === 'item')?.reason ?? 'The live eBay group could not be read.'
   const channel = (field: string) => group ? fromLive(live.content[field]) : unknown(unreadReason!)
@@ -69,7 +71,7 @@ export function prepareEbayInventoryChanges(input: { owner: Identity; ours: Ebay
     add({ productId: owner.productId, sku: remote.sku }, `variation-removed:${remote.sku}`, 'Variation not in Nexus', { state: 'absent' }, known(remote.values), LATER)
 
   return { kind: 'ebay-inventory-changes', changes: planPublicationChanges(inputs), remoteRevision: live.revision ?? 'unavailable',
-    ownerProductId: owner.productId, groupKey: live.raw.groupKey, liveGroup: group, aspectNames }
+    ownerProductId: owner.productId, groupKey: live.raw.groupKey, liveGroup: group, aspectNames, destination, owner }
 }
 
 /** The exact inventory_item_group PUT: the fresh live group with only the ticked fields replaced. */

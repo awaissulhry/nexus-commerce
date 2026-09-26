@@ -18,6 +18,10 @@ import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
+import { readEbayInventoryListing, type EbayInventoryDestination, type EbayInventoryRaw } from '../live-read/ebay-inventory.js'
+import type { ServerLiveRead } from '../live-read/types.js'
+import type { EbayInventoryOurs } from './studio-publication-ebay-inventory-changes.js'
+import { ebayInventoryReads } from './studio-publication-ebay-inventory.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -103,13 +107,13 @@ const liveItem = async (itemId: string, accountId: string, market: string) => (a
  * (`4774b48ff`) `buildSharedListingInput` refuses a missing one by name (A-41, R-46). It feeds only the input's `currency`
  * field, never its title or item specifics.
  */
-export async function buildEbayListingInput(facts: PublicationFacts, options: { currency?: string } = {}) {
+export async function buildEbayListingInput(facts: PublicationFacts, options: { currency?: string; inventory?: boolean } = {}) {
   const { scope, parent, products, listings } = facts
   const ids = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id))]
   if (ids.length > 1) throw new Error('These products belong to different eBay listings. Choose one listing alias before publishing.')
   const itemId = ids[0] ?? null
   const parentListing = listings.find(l => l.productId === parent.id)
-  if (listings.some(l => object(l.platformAttributes).__offerIds || object(l.platformAttributes).offerId)) throw new Error('This listing uses the eBay Inventory model. Direct studio publication currently supports Trading listings; Inventory publication is unavailable here.')
+  if (!options.inventory && usesEbayInventory(facts)) throw new Error('This listing uses the eBay Inventory model. Direct studio publication currently supports Trading listings; Inventory publication is unavailable here.')
   if (itemId) {
     const other = await prisma.channelListing.findFirst({ where: { channel: 'EBAY', channelConnectionId: scope.accountId, externalListingId: itemId,
       OR: [{ productId: { notIn: products.map(p => p.id) } }, { aliasKey: { not: facts.destination.aliasKey ?? '' } }] }, select: { id: true } })
@@ -205,10 +209,45 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   return { shared, itemId, parentListing, settings, galleries, variants, identities }
 }
 
-export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
-  const { scope, parent, products } = facts
+function assertLiveEbay() {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw new Error('Live eBay publication is disabled for this connection.')
-  const { shared, itemId, parentListing, settings, galleries, variants, identities } = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
+}
+
+/** Nexus's marker for an eBay Inventory-model listing (P3.0 census 2026-09-26: it agrees with eBay's own offers on every live item). */
+export const usesEbayInventory = (facts: Pick<PublicationFacts, 'listings'>) =>
+  facts.listings.some(l => Object.keys(object(object(l.platformAttributes).__offerIds)).length > 0 || !!object(l.platformAttributes).offerId)
+
+export interface EbayInventoryPublication {
+  kind: 'ebay-inventory'; marketplace: string; itemId: string; destination: EbayInventoryDestination
+  owner: { productId: string; sku: string }; products: Array<{ productId: string; sku: string }>
+  ours: EbayInventoryOurs; live: ServerLiveRead<EbayInventoryRaw>
+}
+
+/** PE P3.4 — Nexus now (the same builder as Trading) and the live group, for the change-only review of an Inventory listing. */
+export async function prepareEbayInventoryPublication(facts: PublicationFacts): Promise<EbayInventoryPublication> {
+  const { scope, parent } = facts
+  assertLiveEbay()
+  const built = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined, inventory: true })
+  if (!built.itemId) throw new Error('This eBay Inventory listing has no eBay item. Create it on eBay before publishing changes.')
+  const shared = await finishEbayListingInput(facts, built)
+  const owner = built.identities.find(i => i.productId === parent.id) ?? built.identities[0]
+  if (!owner) throw new Error('No included eBay product can own this listing publication.')
+  const children = built.identities.filter(i => i.productId !== owner.productId)
+  const destination: EbayInventoryDestination = { productId: parent.id, channel: 'EBAY', marketplace: scope.marketplace, accountId: scope.accountId,
+    aliasKey: facts.destination.aliasKey ?? '', expectedSkus: children.map(c => c.sku), itemId: built.itemId, parentSku: parent.sku }
+  const live = await readEbayInventoryListing(destination, ebayInventoryReads(scope.accountId, scope.marketplace, built.itemId))
+  const bySku = new Map(built.identities.map(i => [i.sku, i.productId]))
+  const ours: EbayInventoryOurs = { title: shared.title, description: shared.description, pictures: shared.pictureUrls ?? [],
+    aspects: Object.fromEntries(Object.entries(shared.itemSpecifics ?? {}).map(([name, values]) => [name, (Array.isArray(values) ? values : [values]).map(String)])),
+    axes: shared.variationSpecificNames, order: shared.variationSpecificsSet ?? {},
+    variants: shared.variations.filter(v => bySku.has(v.sku)).map(v => ({ productId: bySku.get(v.sku)!, sku: v.sku, values: v.specifics })) }
+  return { kind: 'ebay-inventory', marketplace: scope.marketplace, itemId: built.itemId, destination, owner, products: [owner], ours, live }
+}
+
+/** Origin, pictures, policies and the rendered description — the same for a Trading and an Inventory listing. */
+async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<ReturnType<typeof buildEbayListingInput>>) {
+  const { scope, parent, products } = facts
+  const { shared, itemId, parentListing, settings, galleries, variants } = built
   const metadata = object(facts.account.connectionMetadata), defaults = object(metadata.ebayPolicies)
   const origin = object(metadata.itemLocation)
   shared.country = String(settings.itemLocationCountry ?? origin.country ?? process.env.EBAY_ITEM_COUNTRY ?? '')
@@ -247,6 +286,15 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
     aliasKey: facts.destination.aliasKey ?? '', mode: products.length > 1 ? 'group' : 'single', body: shared.description, title: shared.title })
   if (rendered.warnings.length) throw new Error(rendered.warnings.join('; '))
   shared.description = rendered.html
+  return shared
+}
+
+export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
+  const { scope, products } = facts
+  assertLiveEbay()
+  const built = await buildEbayListingInput(facts, { currency: facts.destination.currency ?? undefined })
+  const { itemId, settings, identities } = built
+  const shared = await finishEbayListingInput(facts, built)
   let liveRevision: string | null = null, liveContent: Record<string, unknown> | null = null, liveReadError: string | undefined
   if (itemId) {
     try { const live = await readLiveItem(itemId, scope.accountId, scope.marketplace); liveRevision = live.revision; liveContent = live.content }
