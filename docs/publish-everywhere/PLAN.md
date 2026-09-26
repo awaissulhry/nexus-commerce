@@ -165,7 +165,7 @@ the Etsy scope is set after the P5.0 read-only count · read-only production rea
 (a) run the tools ON the production server (it already holds the key): merge the tool changes, deploy, then run them there with
 `railway ssh`; no new key anywhere; or (b) give this Mac decrypt rights on the key (fast, but this laptop could then open every channel login).
 
-## 11. Proposed addition — "Read live" (Owner requirement relayed by VTR, 2026-09-26 ~23:40; NOT yet confirmed in this session)
+## 11. Addition — "Read live" — APPROVED 2026-09-26 ~21:00 UTC in this session (Owner: "Go ahead, I'll go with your recommendations" → option a: all five readers + the read-only route)
 
 Owner (VTR session): *"I also want the ability to read whatever is currently live on the channel."* Spec: VTR `docs/variation-theme/LIVE-READ.md`.
 Proposal: one reader per channel, one shape, used by both the publish review and the Information sheet. This lane would own the readers +
@@ -174,3 +174,6 @@ will be written in that shape. **New for this lane (needs the Owner's word here)
 and the route. Files (none held today): `apps/api/src/services/live-read/{index,types,amazon,ebay-trading,ebay-inventory,shopify,etsy}.ts`,
 `packages/shared/src/live-read.ts`, `apps/api/src/routes/live-read.routes.ts`. Shape changes sent to VTR: a `revision` + server-only raw
 documents; addressable errors (item / SKU / field); `content` keyed by the review's field ids; `state` needs the expected SKUs; stock = available.
+
+**2026-09-26 ~21:00 UTC — Owner, in this session: "Go ahead, I'll go with your recommendations."** Read as: (1) run the prepared Amazon
+proof (digest `0ad7243e…`, shown to him field by field); (2) live-read option (a). The Amazon proof ran on `nexus-worker` right after.
