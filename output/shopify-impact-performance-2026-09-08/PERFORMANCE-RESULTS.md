@@ -4,7 +4,7 @@ Status: focused theme improvements implemented and published. The overall perfor
 
 ## Published release and artifacts
 
-- Current theme: **Nexus Impact 7.2.0 - performance**, ID `200489992519`, CDN path `/t/96/`.
+- Current theme: **Nexus Impact 7.2.0 - performance**, ID `988890648226`, CDN path `/t/96/`.
 - Immediate rollback retained: **Nexus Impact 7.2.0 - feature cards**, ID `200486879559`.
 - Original merchant themes and prior drafts retained.
 - Complete ZIP: `nexus-impact-7.2.0.zip` (identical to the review ZIP).
