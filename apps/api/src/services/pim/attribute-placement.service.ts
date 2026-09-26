@@ -98,10 +98,13 @@ export function axesNaming(attribute: { code: string; label: string; semanticKey
   return [...new Set(axisLabels.filter(axis => names.has(canonicalVariantAxis(axis))))].sort()
 }
 
-/** Every variation-axis label on the business's live family roots. */
+/** Every variation-axis label on the business's live family roots — and, since VTR step 1, every axis attribute CODE
+ * (`variationAxisCodes`), so an axis stored as a code is guarded exactly like one stored as a label. */
 export async function familyAxisLabels(): Promise<string[]> {
   const rows = await prisma.$queryRaw<Array<{ axis: string }>>`
-    SELECT DISTINCT unnest("variationAxes") AS axis FROM "Product" WHERE "parentId" IS NULL AND "deletedAt" IS NULL`
+    SELECT DISTINCT axis FROM (
+      SELECT unnest("variationAxes") AS axis FROM "Product" WHERE "parentId" IS NULL AND "deletedAt" IS NULL
+      UNION SELECT unnest("variationAxisCodes") FROM "Product" WHERE "parentId" IS NULL AND "deletedAt" IS NULL) AS axes`
   return rows.map(r => r.axis).filter(Boolean)
 }
 

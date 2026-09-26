@@ -64,6 +64,17 @@ describe('on PostgreSQL — F4', () => {
     await inF4(() => undoPlacementChange(moved.auditId!))
   })
 
+  it('VTR step 1: an axis stored only as an attribute CODE (variationAxisCodes) is guarded too', async () => {
+    await inF4(() => prisma.product.update({ where: { id: fixtures.F4.productId }, data: { variationAxisCodes: ['weave_type'] } }))
+    try {
+      const weave = await attr('weave_type')
+      expect(await refusal(() => inF4(() => setAttributePlacement(weave.id, { placement: 'channel', channels: ['AMAZON'] }))))
+        .toMatchObject({ status: 409, message: expect.stringContaining('variation axis (weave_type)') })
+    } finally {
+      await inF4(() => prisma.product.update({ where: { id: fixtures.F4.productId }, data: { variationAxisCodes: [] } }))
+    }
+  })
+
   it('the S5 cleanup preview marks an axis row blocked', async () => {
     const preview = await inF4(placementProposalPreview)
     const row = preview.groups.flatMap(g => g.rows).find(r => r.code === 'department')
