@@ -60,29 +60,35 @@ production completion is tracked separately. See [plan.md](plan.md).
 ## F. Clients and boundaries
 - [x] TypeScript/AG Grid: installed TS 5.9.3 already meets AG Grid 36's floor
   (5.8.3), and both AG Grid packages pin 36.1.0 exactly. No manifest churn needed.
-- [ ] Align React/DOM/types (web and Factory declare 18; Next's app router runs its
-  own React 19). A cross-app migration with its own type fixes and browser checks:
-  **a separate PR**, not part of this reliability change.
+- [x] Align React/DOM/types: web and Factory run React 19.2 with 19 types, like the root
+  (PR #28, 2026-09-26).
 - [x] Browser/server shared-module boundary: `@nexus/shared`'s root entry is the
   server vault; no web or Factory code imports it, and a client import of `node:crypto`
   fails the Next build.
 - [x] Document N/N−1 compatibility (tasks/architecture-operations.md), auth layers,
   media authority, secrets and Factory ownership (plan.md dispositions 15–22).
-- [ ] Follow-up: the web builds some Idempotency-Keys from content
-  (`pim-attach:<parent>:<ids>`). Send one key per user intent instead.
-- [ ] Follow-up: status endpoints that read process memory (cron status, sync-worker
-  status, circuit breakers and reset) must read shared state after the split.
-- [ ] Follow-up: `CategoryTreeService` never takes its lock (pre-existing; see plan.md).
-- [ ] Follow-up: one-off scripts using `new PrismaClient()` need the adapter (Prisma 7).
+- [x] The web sends one Idempotency-Key per user intent (`apps/web/src/lib/command-key.ts`,
+  PR #26).
+- [x] Status endpoints read shared state: per-process heartbeats in Redis, cron runs from
+  the database, circuit reset reaches every process; unknown is said, never guessed (PR #30).
+- [x] `CategoryTreeService` takes its transaction and lock (PR #27). A read-only audit of
+  production found the tree consistent (14 categories, 0 problems).
+- [x] One-off scripts with an adapter-less `new PrismaClient()`: a ratchet holds the 404
+  that remain and refuses new ones (PR #25). Fix each script when it is reused.
 - [x] **Before 2026-12-01:** Railway stops reading `railway.toml` then. Done 2026-09-26: the
   API's pre-deploy migration, start command and health check are Railway service settings,
   and the file is removed.
 
 ## G. Final evidence and rollout
-- [ ] Focused suites, relevant builds, migration guards, real PG gates pass locally.
-- [ ] Independent review findings reconciled.
-- [ ] Production configuration verified: dedicated login, migration credential,
+- [x] Focused suites, relevant builds, migration guards, real PG gates pass locally.
+- [x] Independent review findings reconciled.
+- [x] Production configuration verified (2026-09-26): dedicated login, migration credential,
   service roles, CI protection, deployed health/build SHA and business-flow smoke.
+- [x] 220 pending AMAZON webhook rows stranded before the release were closed as dead
+  letters with the reason (140/144 order notices name orders Nexus holds; the other 2
+  orders are MCF fulfilment orders).
+- [x] Redis moved to europe-west4, next to every other service (2026-09-26 19:18 UTC). The
+  volume migrated with its data (1,746 keys); the apps lost Redis for about 3 seconds.
 
 Repository implementation and production rollout remain separate until evidence
 exists for both. Deferred product choices (Factory sync/SSO, removing GraphQL,
