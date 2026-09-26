@@ -344,8 +344,14 @@ export function projectionColumns(host: ProjectionCellHost, page: ProjectionPage
              engine and a page stylesheet may not address `.ag-*` at all. */
           cellClass: 'nds-cell-identity nds-cell-full-strength',
         },
-        progressOfCoordinate(host, page.coordinate.label),
       ],
+    },
+    /* The progress column has its OWN header group: inside the pinned Product group it split the group across the
+       pinned boundary and AG drew "PRODUCT" twice (measured on production, 2026-09-27). */
+    {
+      headerName: 'PROGRESS',
+      groupId: 'progress',
+      children: [progressOfCoordinate(host, page.coordinate.label)],
     },
     {
       headerName: coordinate,
