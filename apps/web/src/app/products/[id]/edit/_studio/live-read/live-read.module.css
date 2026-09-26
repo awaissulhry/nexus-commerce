@@ -1,0 +1,9 @@
+/* Read live — layout only; every control and colour comes from the design system. */
+.body { display: flex; flex-direction: column; gap: var(--nds-space-16); }
+.section { display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.heading { margin: 0; font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.meta { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.cell { display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.was { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+.loading { display: flex; align-items: center; gap: var(--nds-space-8); color: var(--nds-text-2); }
+.errors { margin: 0; padding-left: var(--nds-space-16); }

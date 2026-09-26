@@ -57,6 +57,7 @@ import { useAuth } from '@/lib/auth/AuthProvider';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
 import { readinessMeta } from '@/design-system/grid/renderers/readiness';
 import { getBackendUrl } from '@/lib/backend-url';
+import { useLiveRead } from '../../live-read/useLiveRead';
 import { channelSurfaceKey } from './persistence';
 import { exportGridCsv, GridExportRefused } from '@/design-system/grid/export/exportGrid';
 import { useLanguageChips } from '../useLanguageChips';
@@ -147,6 +148,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const surfaceKey = channelSurfaceKey(channel, marketplace);
     const [exportNote, setExportNote] = useState<string | null>(null);
     const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases)) : []), [data]);
+    // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
+    const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
         const col = data?.columns.find(column => column.key === key);
         if (!col)
@@ -824,7 +827,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [{ id: 'requirements', label: data?.meta.schemaMissing.length ? 'Requirements incomplete…' : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [liveRead.menuItem, { id: 'requirements', label: data?.meta.schemaMissing.length ? 'Requirements incomplete…' : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: data ? [{
                 tone: data.meta.schemaMissing.length ? 'warning' : 'neutral',
                 label: data.meta.schemaMissing.length ? 'Requirements incomplete' : 'Requirements',
@@ -833,7 +836,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                     : 'Requirements depend on the listing category and marketplace. Refresh them after changing categories and before publishing.',
             }] : [],
         },
-        toolbarExtra: <>    {pendingMasterWrite && (() => {
+        toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
                 const pm = pendingMasterWrite;
                 const choices = pm.row.values[pm.colId]?.contentAcknowledgement;
                 const accept = (address?: import('@nexus/shared/content-language').ContentAddress) => {
