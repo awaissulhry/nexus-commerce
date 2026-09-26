@@ -22,7 +22,7 @@ import { listManagedConnections } from './connection-resolver.service.js'
 
 export const FOOTPRINT_CHANNEL_ORDER = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'] as const
 
-export interface FootprintAccount { id: string; primary: boolean; managedBy: string; authStatus: string | null }
+export interface FootprintAccount { id: string; primary: boolean; managedBy: string; authStatus: string | null; label: string | null }
 export interface FootprintChannel { channel: string; accounts: FootprintAccount[]; markets: string[] }
 export interface ChannelFootprint {
   channels: FootprintChannel[]
@@ -34,7 +34,7 @@ export interface ChannelFootprint {
   excludedMarkets: Array<{ channel: string; market: string; reason: 'not participating' }>
 }
 
-export interface FootprintConnection { id: string; channelType: string; isActive: boolean; managedBy: string; isPrimary: boolean; authStatus: string | null }
+export interface FootprintConnection { id: string; channelType: string; isActive: boolean; managedBy: string; isPrimary: boolean; authStatus: string | null; label?: string | null }
 export interface FootprintMarket { channel: string; code: string; participationStatus: string | null }
 
 const channelRank = (channel: string) => {
@@ -48,7 +48,7 @@ export function footprintFrom(connections: readonly FootprintConnection[], marke
   const accounts = new Map<string, FootprintAccount[]>()
   for (const c of connections) {
     if (!c.isActive || (c.managedBy !== 'oauth' && c.managedBy !== 'env')) continue
-    accounts.set(c.channelType, [...(accounts.get(c.channelType) ?? []), { id: c.id, primary: c.isPrimary, managedBy: c.managedBy, authStatus: c.authStatus }])
+    accounts.set(c.channelType, [...(accounts.get(c.channelType) ?? []), { id: c.id, primary: c.isPrimary, managedBy: c.managedBy, authStatus: c.authStatus, label: c.label ?? null }])
   }
   const marketsByChannel = new Map<string, FootprintMarket[]>()
   for (const m of markets) marketsByChannel.set(m.channel, [...(marketsByChannel.get(m.channel) ?? []), m])
@@ -80,5 +80,6 @@ export async function channelFootprint(): Promise<ChannelFootprint> {
     listManagedConnections(false),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, participationStatus: true } }),
   ])
-  return footprintFrom(connections.map(c => ({ id: c.id, channelType: c.channelType, isActive: c.isActive, managedBy: c.managedBy, isPrimary: c.isPrimary, authStatus: c.authStatus ?? null })), markets)
+  return footprintFrom(connections.map(c => ({ id: c.id, channelType: c.channelType, isActive: c.isActive, managedBy: c.managedBy, isPrimary: c.isPrimary,
+    authStatus: c.authStatus ?? null, label: c.accountLabel ?? c.displayName ?? null })), markets)
 }
