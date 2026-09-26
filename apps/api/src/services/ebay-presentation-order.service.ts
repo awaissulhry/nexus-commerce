@@ -98,13 +98,19 @@ export async function readPresentationOrder(input: PresentationDestinationInput)
 }
 
 export interface PresentationOrderChange { axes?: string[] | null; values?: Record<string, string[] | null>; reset?: boolean }
+/** Restoring the inherited axes ends an own axis setup the way Information's Reset does: an 'override' mode with no
+ * axes would read as a deliberate EMPTY set (`ebayAxisSet`) and drop every eBay axis. */
+function restoreInheritedAxes(next: Record<string, unknown>) {
+  delete next._variationAxes
+  if (next._variationAxesMode === 'override') { delete next._axisNameLabels; next._variationAxesMode = 'inherit' }
+}
 export function changePresentationOrder(attrs: unknown, change: PresentationOrderChange, axes: Array<{ name: string; key: string; values: string[] }>) {
   if (!change || typeof change !== 'object' || Array.isArray(change) || !Object.keys(change).length || Object.keys(change).some(k => !['axes', 'values', 'reset'].includes(k)) || (change.reset !== undefined && typeof change.reset !== 'boolean')) throw new MappingConflict('Choose an order change or reset')
   const next = { ...bag(attrs) }
-  if (change.reset) { delete next._variationAxes; delete next._axisValueOrder; delete next._axisSortOrder; return next }
+  if (change.reset) { restoreInheritedAxes(next); delete next._axisValueOrder; delete next._axisSortOrder; return next }
   const dimensions = new Set(axes.map(a => a.key))
   if (change.axes !== undefined) {
-    if (change.axes === null) delete next._variationAxes
+    if (change.axes === null) restoreInheritedAxes(next)
     else {
       if (!Array.isArray(change.axes) || change.axes.some(a => typeof a !== 'string') || change.axes.length !== dimensions.size || new Set(change.axes.map(axisSynonymKey)).size !== dimensions.size || change.axes.some(a => !dimensions.has(axisSynonymKey(a)))) throw new MappingConflict('Reorder the existing axes without adding or removing dimensions')
       next._variationAxes = change.axes

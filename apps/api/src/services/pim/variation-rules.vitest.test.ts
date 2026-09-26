@@ -569,6 +569,73 @@ describe('Phase 5 — the three readiness items', () => {
   })
 })
 
+describe('VTR step 0 — publish re-checks what the wizard checks (deprecated theme, a variant with no value)', () => {
+  const amazonDE = { amazon: { facts: factsFor(OUTERWEAR_DE), fetchedAt: OUTERWEAR_DE.fetchedAt } }
+  const variants = (b: Record<string, string>, bIncluded = true) => [
+    { id: 'a', sku: 'GALE-NERO-M', included: true, axisValues: { Colore: 'Nero', Taglia: 'M' } },
+    { id: 'b', sku: 'GALE-ROSSO-L', included: bIncluded, axisValues: b },
+  ]
+
+  it('a deprecated Amazon theme on a DRAFT is an ERROR — the save refuses it, so publish does too', () => {
+    const cell = resolveVariationProjection(input({
+      channel: 'AMAZON', market: 'DE', schema: amazonDE, listing: listing({ variationTheme: 'SIZE_NAME/COLOR_NAME' }),
+    }))
+    expect(cell.theme?.deprecated).toBe(true)
+    const items = variationReadinessItems(cell, 'Amazon · DE')
+    expect(items.filter(i => i.kind === 'theme-deprecated')).toEqual([{
+      kind: 'theme-deprecated', coordinate: 'Amazon · DE', subjects: ['SIZE_NAME/COLOR_NAME'], severity: 'error',
+      message: 'Amazon has deprecated the variation theme SIZE_NAME/COLOR_NAME on Amazon · DE. Choose a current theme before publishing.',
+    }])
+  })
+
+  it('on a LIVE listing it is a WARNING: the listing keeps its theme, and a change needs a new parent, so other updates still go out', () => {
+    const cell = resolveVariationProjection(input({
+      channel: 'AMAZON', market: 'DE', schema: amazonDE,
+      listing: listing({ variationTheme: 'SIZE_NAME/COLOR_NAME', externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
+    }))
+    expect(cell.locked).not.toBeNull()
+    expect(variationReadinessItems(cell, 'Amazon · DE').filter(i => i.kind === 'theme-deprecated')).toEqual([{
+      kind: 'theme-deprecated', coordinate: 'Amazon · DE', subjects: ['SIZE_NAME/COLOR_NAME'], severity: 'warning',
+      message: 'Amazon has deprecated the variation theme SIZE_NAME/COLOR_NAME on Amazon · DE. The live listing keeps it; new variants and a theme change need a current theme.',
+    }])
+  })
+
+  it('positive control: a current theme raises no deprecation item', () => {
+    const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'DE', schema: amazonDE, listing: listing({ version: 13 }) }))
+    expect(cell.theme).toMatchObject({ code: 'COLOR/SIZE', deprecated: false })
+    expect(variationReadinessItems(cell, 'Amazon · DE').map(i => i.kind)).toEqual([])
+  })
+
+  it('an INCLUDED variant with no value on a delivered axis is an ERROR, naming the SKU and the axis', () => {
+    const cell = resolveVariationProjection(input({ channel: 'AMAZON', market: 'DE', schema: amazonDE, listing: listing({ version: 13 }),
+      family: { ...GALE, variants: variants({ Colore: 'Rosso' }) } }))
+    expect(cell.valueGaps).toEqual({ unresolved: 1, skus: ['GALE-ROSSO-L'], summary: '1 variant has no value for an axis on AMAZON · DE: GALE-ROSSO-L (Size).' })
+    const items = variationReadinessItems(cell, 'Amazon · DE')
+    expect(items).toEqual([{ kind: 'value-missing', coordinate: 'Amazon · DE', subjects: ['GALE-ROSSO-L'], severity: 'error', message: cell.valueGaps!.summary }])
+  })
+
+  it('an EXCLUDED variant, an axis the channel drops, and a family with no variants read raise nothing', () => {
+    const excluded = resolveVariationProjection(input({ channel: 'AMAZON', market: 'DE', schema: amazonDE, listing: listing({ version: 13 }),
+      family: { ...GALE, variants: variants({ Colore: 'Rosso' }, false) } }))
+    expect(excluded.valueGaps).toEqual({ unresolved: 0, summary: '', skus: [] })
+    expect(variationReadinessItems(excluded, 'Amazon · DE')).toEqual([])
+    const notComputed = resolveVariationProjection(input({ channel: 'AMAZON', market: 'DE', schema: amazonDE, listing: listing({ version: 13 }) }))
+    expect(notComputed.valueGaps).toBeNull()
+    // Shopify delivers 3 axes: a 4th axis is dropped, so a variant without it is complete here.
+    const dropped = resolveVariationProjection(input({ channel: 'SHOPIFY', market: 'GLOBAL', listing: listing({ version: 1 }),
+      family: { ...GALE, familyAxes: ['Colore', 'Taglia', 'Style', 'Fit'], axisLabels: { color: 'Color', size: 'Size', style: 'Style', fit: 'Fit' },
+        variants: [{ id: 'a', sku: 'A', included: true, axisValues: { Colore: 'Nero', Taglia: 'M', Style: 'Slim' } }] } }))
+    expect(dropped.dropped).toEqual(['fit'])
+    expect(dropped.valueGaps).toEqual({ unresolved: 0, summary: '', skus: [] })
+  })
+
+  it('the same rule on eBay: one definition for every channel', () => {
+    const cell = resolveVariationProjection(input({ channel: 'EBAY', market: 'IT', listing: listing({ version: 3 }),
+      family: { ...GALE, variants: variants({ Taglia: 'L' }) } }))
+    expect(variationReadinessItems(cell, 'eBay · IT').filter(i => i.severity === 'error').map(i => [i.kind, i.subjects])).toEqual([['value-missing', ['GALE-ROSSO-L']]])
+  })
+})
+
 // ------------------------------------------------------------------
 describe('VT.1b item 2 (VT.4) — fold needs a WRITABLE target cell, not merely a surviving axis', () => {
   const child = (write: unknown, reason: string | null = null) => ({

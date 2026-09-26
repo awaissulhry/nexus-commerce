@@ -105,3 +105,29 @@ it('🔴 A-32 (R-30): a DE listing whose pinned own title is the Italian product
   m.languages.mockResolvedValue(['it'])
   expect((await readPublicationFacts('child', scope)).issues.filter(i => i.field === 'title')).toEqual([])
 })
+
+it('🔴 VTR step 0: a variant with NO listing row here is not included — the answer Information shows', async () => {
+  // Information and the dock read `!!own && !excluded.has(own.id)` ("No listing record on this coordinate. Tick it to
+  // create one as a draft."). Publish used to count the rowless variant IN, and on a live Amazon family that created a listing.
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }, { id: 'listing-excluded', productId: 'excluded' }])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('parent', scope)
+  expect(facts.products.map(p => p.id)).toEqual(['parent', 'excluded'])
+  expect(facts.excluded).toBe(1)
+  expect(m.resolve.mock.calls.every(([r]) => r.productIds.join(',') === 'parent,excluded')).toBe(true)
+  // Every variant without a row: the family has nothing to publish, and says so.
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent' }])
+  const empty = await readPublicationFacts('parent', scope)
+  expect(empty.products.map(p => p.id)).toEqual(['parent'])
+  expect(empty.issues).toContainEqual(expect.objectContaining({ severity: 'error', message: 'This family has no included variants to publish.' }))
+})
+
+it('VTR step 0: the family root and a single product keep their answer — only a VARIANT needs its own row', async () => {
+  m.products.mockResolvedValue([{ id: 'solo', sku: 'SOLO' }])
+  m.destination.mockResolvedValue({ familyId: 'solo', accountId: 'account-b', aliasKey: 'summer' })
+  m.listingRead.mockResolvedValue([])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('solo', scope)
+  expect(facts.products.map(p => p.id)).toEqual(['solo'])
+  expect(facts.excluded).toBe(0)
+})
