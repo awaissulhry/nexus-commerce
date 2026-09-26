@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { MatrixSortPanel, type MatrixSortLevel, type MatrixSortField } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import {
   setDraftField,
@@ -1598,6 +1599,9 @@ function FamilySection({ product, backend }: { product: any; backend: string }) 
   const [moveOpen,      setMoveOpen]      = useState(false)
   const [demoteConfirm, setDemoteConfirm] = useState(false)
   const [addChildOpen,  setAddChildOpen]  = useState(false)
+  // One Idempotency-Key per attach intent; a retry after a lost response reuses it.
+  const attachKey    = useCommandKey()
+  const addChildKey  = useCommandKey()
 
   const fetchData = useCallback(async () => {
     try {
@@ -1676,11 +1680,12 @@ function FamilySection({ product, backend }: { product: any; backend: string }) 
             onPick={async (parentId) => {
               setBusy(true); setErr(null)
               try {
-                const res = await fetch(`${backend}/api/pim/attach-to-parent`, {
+                const { response: res, body, conflict } = await sendCommand<any>(attachKey, `${backend}/api/pim/attach-to-parent`, {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ parentId, productIds: [product.id] }),
                 })
-                if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+                if (conflict) throw new Error(commandConflictMessage(conflict, 'attach request'))
+                if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`)
                 reload()
               } catch (e: any) { setErr(e.message); setBusy(false) }
               setAttachOpen(false)
@@ -1838,11 +1843,12 @@ function FamilySection({ product, backend }: { product: any; backend: string }) 
           onPick={async (productIds) => {
             setBusy(true); setErr(null)
             try {
-              const res = await fetch(`${backend}/api/pim/attach-to-parent`, {
+              const { response: res, body, conflict } = await sendCommand<any>(addChildKey, `${backend}/api/pim/attach-to-parent`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ parentId: product.id, productIds }),
               })
-              if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+              if (conflict) throw new Error(commandConflictMessage(conflict, 'attach request'))
+              if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`)
               reload()
             } catch (e: any) { setErr(e.message); setBusy(false) }
             setAddChildOpen(false)
@@ -2005,12 +2011,13 @@ function PromoteModal({ backend, productId, onClose, onDone }: {
   const [axes, setAxes]     = useState('')
   const [saving, setSaving] = useState(false)
   const [err, setErr]       = useState<string | null>(null)
+  const promoteKey          = useCommandKey()
 
   async function handleSubmit() {
     setSaving(true); setErr(null)
     try {
       const parsedAxes = axes.split(',').map((s) => s.trim()).filter(Boolean)
-      const res = await fetch(`${backend}/api/pim/promote-to-parent`, {
+      const { response: res, body, conflict } = await sendCommand<any>(promoteKey, `${backend}/api/pim/promote-to-parent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId,
@@ -2018,7 +2025,8 @@ function PromoteModal({ backend, productId, onClose, onDone }: {
           variationAxes: parsedAxes.length ? parsedAxes : undefined,
         }),
       })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      if (conflict) throw new Error(commandConflictMessage(conflict, 'promote request'))
+      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`)
       onDone()
     } catch (e: any) {
       setErr(e.message); setSaving(false)
