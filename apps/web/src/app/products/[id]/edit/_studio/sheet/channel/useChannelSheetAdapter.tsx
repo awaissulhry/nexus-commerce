@@ -21,7 +21,8 @@ import { withShopifyColumns } from '../../shopify/unlinkedInformationColumns';
 import { channelScopeUrl } from './useChannelSheet';
 import { reloadImpact } from '../master/reloadGuard';
 import { ProductRoleChip } from '../ProductRoleChip';
-import { formulaTransfer } from '@/design-system/grid';
+import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
+import { historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { SchemaStatus } from './SchemaStatus';
 import { channelLabel, languageLabel } from '../../scopes';
 import { buildCompareTargets } from '../compareTargets';
@@ -199,6 +200,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const colIdOfRef = useCallback((name: string, fieldKey?: string) => formulaColumnId(dataRef.current?.columns ?? [], name, fieldKey, dataRef.current?.scope.locale ?? ''), []);
     const formulaLive = useRef({ candidatesFor, colIdOfRef, formulas, alternateAccount });
     formulaLive.current = { candidatesFor, colIdOfRef, formulas, alternateAccount };
+    /* Option A (2026-09-26) — the cell editor's history and "follows" context (this scope has no AI draft layer). Assigned
+       once the scope is known; read through this ref so the wiring stays one stable object. */
+    const editorContextLive = useRef<(row: ChannelSheetRow, key: string) => CellEditorContext | null>(() => null);
     useEffect(() => {
         const api = getGridApi();
         if (!api || api.isDestroyed())
@@ -218,6 +222,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         exprFor: (rowId, fieldKey) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
         errorFor: (rowId, fieldKey) => formulaLive.current.formulas.errorFor(rowId, fieldKey),
         colIdOfRef: (name, fieldKey) => formulaLive.current.colIdOfRef(name, fieldKey),
+        contextFor: (row, key) => editorContextLive.current(row, key),
     }), []);
     const formulaClipboard = useMemo(() => formulaTransfer<ChannelSheetRow>({
         exprFor: (row, key) => formulaWiring.exprFor(row.rowId, key),
@@ -603,6 +608,10 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
      * list needs the family's listing inventory, which arrives with the per-coordinate readiness
      * columns (LX.15, deferred to VT.2's file).
      */
+    editorContextLive.current = (row, key) => data ? {
+        history: historyLoaderFor(row, key, { kind: 'channel', channel: data.scope.channel, marketplace, accountId: accountId ?? undefined, aliasId: row.aliasId ?? '', label: data.scope.label, locale: data.scope.locale }),
+        inherited: inheritedContextOf(row.values?.[key], from => from === row.id ? null : rows.find(candidate => candidate.id === from)?.sku),
+    } : null;
     const compareTargets = useMemo<CompareTarget[]>(() => {
         if (!data || !accountId)
             return [];

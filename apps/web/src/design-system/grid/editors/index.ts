@@ -45,7 +45,7 @@ export { SheetWriter, DEFAULT_SHEET_FLUSH_MS, type SheetWriteCell, type SheetWri
 export { variationThemeChange, variationThemeWrite, type VariationThemeChange, type VariationThemeChangeKind, type VariationThemeWrite, type VariationThemeWriteFacts } from './sheetWriter'
 
 // PES.2 — D16 formula editing (#730). The RULES are pure and tested; the editor is wiring over them.
-export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, scalarValueEditor, scalarValueEditorSpec, type FormulaEditorParams, type FormulaWiring } from './FormulaCellEditor'
+export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, scalarValueEditor, scalarValueEditorSpec, CELL_EDITING_UNDER_CLASS, type FormulaEditorParams, type FormulaWiring, type CellEditorContext, type CellHistoryEntry } from './FormulaCellEditor'
 // R-47 / R-48 (A-42 step 1, 2026-09-24) — a number cell never loses its value to a stray letter; ONE key line for every editor.
 export { isNumberDraft, numberStart, acceptNumberEdit, numberCommitText, NUMBER_ONLY_MESSAGE, type NumberStart } from './numberEntry'
 export { EDITOR_KEY_HINT, EDITOR_KEY_HINT_FORM } from './editorHint'

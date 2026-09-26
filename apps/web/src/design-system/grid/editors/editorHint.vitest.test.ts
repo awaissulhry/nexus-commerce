@@ -19,7 +19,15 @@ describe('EDITOR_KEY_HINT — the one key line (R-48)', () => {
   it('the value editor renders the constant (positive control: the reader finds it)', () => {
     const editor = src('FormulaCellEditor.tsx')
     expect(editor).toMatch(/import \{ EDITOR_KEY_HINT \} from '\.\/editorHint'/)
-    expect(editor).toMatch(/nds-formula-actions"><span className="nds-editor-keyhint">\{EDITOR_KEY_HINT\}<\/span>/)
+    // Option A (2026-09-26): the key line leads the editor's foot, alone in its span — nothing appended to it (a field's
+    // own facts, like long text's Shift+Enter, sit on their own line).
+    expect(editor).toMatch(/nds-formula-foot">\s*<span id=\{`\$\{id\}-keys`\} className="nds-editor-keyhint">\{EDITOR_KEY_HINT\}<\/span>/)
+  })
+
+  it('the value editor offers no Cancel / Apply buttons any more (Option A: Enter saves, Esc cancels)', () => {
+    const editor = src('FormulaCellEditor.tsx')
+    expect(editor).not.toMatch(/>Apply</)
+    expect(editor).not.toMatch(/onClick=\{cancel\}>Cancel/)
   })
 
   it('the value editor carries no key wording of its own any more', () => {

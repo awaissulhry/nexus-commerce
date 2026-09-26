@@ -12,7 +12,8 @@ import { useSheetGeometry } from '../useSheetGeometry';
 import type { ProductSheetModel } from '../productSheetModel';
 import { formulaCandidates, formulaColumnId } from '../formulaColumns';
 import { sheetEmptyState } from '../sheetGridStates';
-import { formulaTransfer } from '@/design-system/grid';
+import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
+import { aiDraftContextOf, historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { Banner } from '@/design-system/components';
@@ -192,6 +193,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const colIdOfRef = useCallback((name: string, fieldKey?: string): string | null => formulaColumnId(sheet?.columns ?? [], name, fieldKey, locale), [sheet, locale]);
     const formulaLive = useRef({ candidatesFor, formulas, colIdOfRef });
     formulaLive.current = { candidatesFor, formulas, colIdOfRef };
+    /* Option A (2026-09-26) — the cell editor's AI draft, history and "follows" context. Assigned below, once the AI layer
+       and the drawer scope exist; read through this ref so the wiring stays one stable object. */
+    const editorContextLive = useRef<(row: StudioRow, key: string) => CellEditorContext | null>(() => null);
     const formulaWiring = useMemo(() => ({
         candidatesFor: (row: StudioRow, fieldKey?: string) => formulaLive.current.candidatesFor(row, fieldKey),
         preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => formulaLive.current.formulas.preview(rowId, fieldKey, expr, signal),
@@ -203,6 +207,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         exprFor: (rowId: string, fieldKey: string) => formulaLive.current.formulas.exprFor(rowId, fieldKey),
         errorFor: (rowId: string, fieldKey: string) => formulaLive.current.formulas.errorFor(rowId, fieldKey),
         colIdOfRef: (name: string, fieldKey?: string) => formulaLive.current.colIdOfRef(name, fieldKey),
+        contextFor: (row: StudioRow, key: string) => editorContextLive.current(row, key),
     }), []);
     const formulaClipboard = useMemo(() => formulaTransfer<StudioRow>({
         exprFor: (row, key) => formulaWiring.exprFor(row.id, key),
@@ -567,6 +572,13 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         return row ? ({ ...row, listings: {} } as unknown as DrawerSheetRow) : null;
     }, []);
     const drawerScope = useMemo(() => ({ kind: 'master' as const, marketplace: market, locale, label: sheet?.scope.label ?? `Master · ${market}` }), [market, locale, sheet]);
+    editorContextLive.current = (row, key) => ({
+        aiDraft: aiDraftContextOf(aiLayer.drafts.drafts.find(d => d.productId === row.id && d.columnKey === key && d.status === 'pending'),
+            { approve: ids => aiLayer.drafts.approve(ids), reject: ids => aiLayer.drafts.reject(ids), onApplied: reload }),
+        history: historyLoaderFor(row, key, drawerScope),
+        // A content cell can name its OWN row as the source (it falls back to the shared record): say "the parent".
+        inherited: inheritedContextOf(row.values[key], from => from === row.id ? null : skuById[from]),
+    });
     const onDrawerWrite = useCallback(async (req: RecordWriteRequest): Promise<RecordWriteResult> => {
         const row = rowsRef.current.find((r) => r.id === req.rowId);
         if (!row)

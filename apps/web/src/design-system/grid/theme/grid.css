@@ -746,6 +746,19 @@
   font-variant-ligatures: none;
 }
 .nds-formula-editor .nds-field input.nds-formula-input.highlighted { color: transparent; }
+/* 🔴 NO BLACK FOCUS FRAME INSIDE A CELL EDITOR (Owner, 2026-09-26: "a thick, dark black outline around the text box …
+   makes the whole pop-up editor look very bad"). Measured: the DS field draws `outline: 2px solid var(--nds-text)` on
+   focus (primitives.css `.nds-field:focus-within`), and the editor's `.nds-readable` adds a 3px one to a textarea. A
+   cell editor is a popup around ONE field that already has the caret, so its focus is drawn in the primary colour —
+   the 1px border plus a 1px ring, 2px of blue — never black. Forms elsewhere keep the DS default. */
+.nds-formula-editor .nds-field:focus-within,
+.nds-slotlist-editor .nds-field:focus-within,
+.nds-formula-editor .nds-textarea:focus-visible,
+.nds-slotlist-editor .nds-textarea:focus-visible {
+  outline: none;
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+}
 .nds-formula-overlay {
   position: absolute; pointer-events: none;
   display: flex; align-items: center;
@@ -816,7 +829,10 @@
    alone and nothing else in the product is positioned `under`. It is a PROXY and it is safe in both
    directions: a select cell opened by the `=` editor is an `over` popup that keeps its value
    painted, which the popup then covers anyway — visually identical, nothing leaks. */
-.nds-ag-wrap .ag-cell.ag-cell-popup-editing:not(.nds-cell-is-select) .nds-cell-value { visibility: hidden; }
+/* Option A (2026-09-26): the value editor now opens UNDER its cell too, and marks the cell `nds-cell-editing-under`
+   (FormulaCellEditor, only when the selector opened it under) — the same reason as the select arm: the cell is the only
+   place the saved value shows while the editor sits below it. */
+.nds-ag-wrap .ag-cell.ag-cell-popup-editing:not(.nds-cell-is-select):not(.nds-cell-editing-under) .nds-cell-value { visibility: hidden; }
 
 /* 🔴 THE ORIGIN CELL IS OUTLINED WHILE IT IS BEING EDITED (Owner's Phase 1, 2026-09-03).
    "The cell being edited is always the one you are looking at, outlined" — the constant across
@@ -1398,10 +1414,44 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
    Scroll only the body and never flex-shrink its children into overlapping rectangles. */
 .nds-formula-editor { max-height: min(440px, 75dvh); overflow: hidden; }
 .nds-formula-body {
-  display: flex; flex-direction: column; gap: var(--nds-space-8);
-  min-height: 0; overflow: auto; padding: var(--nds-space-10);
+  display: flex; flex-direction: column; gap: var(--nds-space-6);
+  min-height: 0; overflow: auto; padding: var(--nds-space-6);
 }
 .nds-formula-body > * { flex-shrink: 0; min-width: 0; }
+
+/* ── OPTION A, the one value editor (Owner, 2026-09-26) ─────────────────────────────────────────
+   One line — the field, then the context icons that apply — and a foot carrying the key line (R-48) and, for long text
+   or a capped field, the counter. No Cancel / Apply. Panels (AI draft, history, follows) open between the two. */
+.nds-formula-line { display: flex; align-items: flex-start; gap: var(--nds-space-4); min-width: 0; }
+/* The field takes what the icons leave. An `auto` grid track let the input's intrinsic width push the row ~100px past the
+   editor, and focusing an icon then scrolled the whole editor sideways (measured in the preview). */
+.nds-formula-line > .nds-formula-fieldwrap { flex: 1 1 0; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.nds-formula-editor .nds-formula-fieldwrap textarea { min-height: 104px; }
+.nds-formula-context { display: flex; flex: none; align-items: center; gap: 2px; padding-top: 1px; }
+.nds-formula-contextpanel {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8);
+  padding: var(--nds-space-6) var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken); font-size: var(--nds-font-size-sm);
+}
+.nds-formula-contextpanel-label { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-weight: 600; color: var(--nds-text); }
+.nds-formula-contextpanel-value { flex: 1 1 160px; min-width: 0; color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.nds-formula-contextpanel-actions { display: flex; gap: var(--nds-space-4); }
+.nds-formula-historyrow {
+  display: flex; width: 100%; align-items: baseline; gap: var(--nds-space-8);
+  border: 0; background: none; padding: var(--nds-space-2) 0; text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.nds-formula-historyrow:hover .nds-formula-contextpanel-value { text-decoration: underline; }
+.nds-formula-note { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+.nds-formula-note.bad, .nds-formula-count.bad { color: var(--nds-danger-text); }
+.nds-formula-foot {
+  display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--nds-space-8);
+  padding: var(--nds-space-4) var(--nds-space-6) var(--nds-space-6);
+  border-top: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-xs); color: var(--nds-text-muted);
+}
+.nds-formula-foot > .nds-editor-keyhint { min-width: 0; }
+.nds-formula-count { flex: none; font-variant-numeric: tabular-nums; }
 .nds-formula-help {
   font-size: var(--nds-font-size-sm); color: var(--nds-text);
   line-height: 1.5; overflow-wrap: anywhere;
