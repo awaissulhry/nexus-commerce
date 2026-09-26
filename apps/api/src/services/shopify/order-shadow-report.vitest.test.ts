@@ -27,6 +27,7 @@ const h = vi.hoisted(() => {
     requests: [] as Array<{ channel: string; kind: string; method: string; url: string; operation: string; connectionId: string | null; body: unknown }>,
     dbCalls: [] as string[],
     products: [] as Array<{ sku: string; deletedAt: Date | null }>,
+    scopes: [] as string[],
   }
   const call = (name: string, args: unknown) => {
     state.dbCalls.push(name)
@@ -48,7 +49,7 @@ const h = vi.hoisted(() => {
 
 vi.mock('../../db.js', () => ({ default: h.prisma }))
 vi.mock('../connection-resolver.service.js', () => ({
-  resolveConnection: vi.fn(async ({ accountId }: { accountId: string }) => ({ id: accountId, channelType: 'SHOPIFY', region: 'nexus-shadow.myshopify.com' })),
+  resolveConnection: vi.fn(async ({ accountId }: { accountId: string }) => ({ id: accountId, channelType: 'SHOPIFY', region: 'nexus-shadow.myshopify.com', grantedScopes: h.state.scopes })),
 }))
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'token-shadow'), assertWritable: vi.fn(async () => undefined) }))
 vi.mock('../gateway/gateway.js', () => ({
@@ -101,6 +102,7 @@ beforeEach(() => {
   h.state.requests = []
   h.state.dbCalls = []
   h.state.products = []
+  h.state.scopes = ['read_orders', 'read_fulfillments']
   vi.stubEnv('NEXUS_ENABLE_SHOPIFY_SHADOW_REPORT', '1')
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -172,6 +174,17 @@ describe('B. the read — paginated, bounded, rate-limit aware', () => {
     expect(result.stoppedBecause).toBe('complete')
   })
 
+  it('the page bound ends the read at once: no wait for a page it will not read', async () => {
+    const low = { requestedQueryCost: 600, actualQueryCost: 80, throttleStatus: { maximumAvailable: 2000, currentlyAvailable: 100, restoreRate: 100 } }
+    h.state.pages = [page([order()], 'c1'), page([order()], 'c2', low)]
+    const waits: number[] = []
+    const { read } = await shopifyAdminReader('acct-1')
+    const result = await readShadowOrders(read, { since: new Date('2026-07-28T12:00:00Z'), sleep: async (ms) => { waits.push(ms) }, maxPages: 2 })
+    expect(result.stoppedBecause).toBe('max_pages')
+    expect(waits).toEqual([])
+    expect(result.waitedMs).toBe(0)
+  })
+
   it('does not wait after the last page, nor when the bucket has room', async () => {
     const low = { requestedQueryCost: 600, actualQueryCost: 80, throttleStatus: { maximumAvailable: 2000, currentlyAvailable: 100, restoreRate: 100 } }
     h.state.pages = [page([order()], 'c1'), page([order()], null, low)]
@@ -241,11 +254,28 @@ describe('C. the counts', () => {
     expect(report.orders.total).toBe(3)
     expect(report.orders.outsideWindow).toBe(1)
     expect(report.orders.perWeek).toEqual([
-      { weekStart: '2026-08-31', orders: 2, units: 4 },
-      { weekStart: '2026-09-07', orders: 0, units: 0 },
-      { weekStart: '2026-09-14', orders: 0, units: 0 },
-      { weekStart: '2026-09-21', orders: 1, units: 1 },
+      { weekStart: '2026-08-31', orders: 2, units: 4, coverage: 'full' },
+      { weekStart: '2026-09-07', orders: 0, units: 0, coverage: 'full' },
+      { weekStart: '2026-09-14', orders: 0, units: 0, coverage: 'full' },
+      { weekStart: '2026-09-21', orders: 1, units: 1, coverage: 'full' },
     ])
+    expect(report.coverage).toEqual({ since: '2026-09-01T00:00:00.000Z', complete: true })
+  })
+
+  it('weeks older than the orders read are "not read", never 0; the week the read ended in is partial', () => {
+    const report = aggregateShadowReport({
+      orders: [order({ createdAt: '2026-09-22T08:00:00Z' }), order({ createdAt: '2026-09-15T08:00:00Z' })],
+      products: [{ sku: 'SKU-1', deletedAt: null }],
+      since, until,
+      coveredSince: new Date('2026-09-15T08:00:00Z'),
+    })
+    expect(report.orders.perWeek).toEqual([
+      { weekStart: '2026-08-31', orders: null, units: null, coverage: 'none' },
+      { weekStart: '2026-09-07', orders: null, units: null, coverage: 'none' },
+      { weekStart: '2026-09-14', orders: 1, units: 1, coverage: 'partial' },
+      { weekStart: '2026-09-21', orders: 1, units: 1, coverage: 'full' },
+    ])
+    expect(report.coverage).toEqual({ since: '2026-09-15T08:00:00.000Z', complete: false })
   })
 
   it('financial and fulfilment status mix, cancelled, test and POS shares', () => {
@@ -301,6 +331,14 @@ describe('C. the counts', () => {
     expect(report.locations.ordersWithoutFulfillment).toBe(1)
   })
 
+  it('fulfilments past the first 5 are not read: the order is flagged, only 5 are counted', () => {
+    const six = Array.from({ length: 6 }, () => ({ status: 'SUCCESS', location: LOC_MAIN }))
+    const report = aggregateShadowReport({ orders: [order({ fulfillments: six }), order()], products: [{ sku: 'SKU-1', deletedAt: null }], since, until })
+    expect(report.locations.ordersWithUnreadFulfilments).toBe(1)
+    expect(report.locations.used).toEqual([{ id: LOC_MAIN.id, name: LOC_MAIN.name, orders: 2, fulfillments: 6, cancelledFulfillments: 0 }])
+    expect(SHADOW_ORDERS_QUERY).toContain('fulfillments(first: 6)')
+  })
+
   it('SKU match by the order writer’s rule: exact SKU in this business; near misses and gaps named', () => {
     const lines = (...nodes: Array<{ sku: string | null; quantity: number }>) => ({ pageInfo: { hasNextPage: false }, nodes })
     const report = aggregateShadowReport({
@@ -310,7 +348,7 @@ describe('C. the counts', () => {
         order({ lineItems: lines({ sku: 'GALE-XL-01', quantity: 1 }) }), // unmatched
         order({ lineItems: lines({ sku: 'GALE-XS-02', quantity: 4 }, { sku: null, quantity: 1 }) }), // unmatched + a line without SKU
         order({ lineItems: lines({ sku: 'OLD-9', quantity: 1 }) }), // matches a deleted product: counted, and flagged
-        order({ lineItems: { pageInfo: { hasNextPage: true }, nodes: [{ sku: 'SKU-1', quantity: 1 }] } }), // more lines than read
+        order({ lineItems: { pageInfo: { hasNextPage: true }, nodes: [{ sku: 'SKU-1', quantity: 1 }] } }), // more lines than read: not fully read
       ],
       products: [{ sku: 'SKU-1', deletedAt: null }, { sku: 'SKU-2', deletedAt: null }, { sku: 'OLD-9', deletedAt: new Date('2026-01-01') }],
       since, until,
@@ -325,11 +363,12 @@ describe('C. the counts', () => {
       unmatchedLines: 3,
       nearMatchLines: 1,
       deletedProductLines: 1,
-      ordersFullyMatched: 3,
+      // The order with more lines than were read is not counted as matched, even though its read line matched.
+      ordersFullyMatched: 2,
       ordersPartlyMatched: 1,
       ordersUnmatched: 2,
       ordersWithUnreadLines: 1,
-      orderMatchRate: 0.5,
+      orderMatchRate: 2 / 6,
       lineMatchRate: 5 / 9,
     })
     // Most lines first, then most units, then the SKU.
@@ -338,6 +377,9 @@ describe('C. the counts', () => {
       { sku: 'GALE-XL-01', lines: 1, units: 1, nearMatch: false },
       { sku: 'sku-2 ', lines: 1, units: 1, nearMatch: true },
     ])
+    // The rule is stated with the numbers: exact SKU only; the webhook's title fallback is not counted.
+    expect(report.skus.matchRule).toMatch(/exact SKU/)
+    expect(report.skus.matchRule).toMatch(/title/)
     expect(report.skus.unmatchedShapes).toEqual([
       { shape: 'A-A-9', lines: 2 },
       { shape: 'a-9 ', lines: 1 },
@@ -387,6 +429,47 @@ describe('D. no buyer data', () => {
   })
 })
 
+// ── F. honest partial reads ──────────────────────────────────────────────────
+describe('F. honest partial reads', () => {
+  it('a read stopped at its page bound covers only down to the oldest order read', async () => {
+    h.state.pages = [page([order({ createdAt: '2026-09-25T10:00:00Z' }), order({ createdAt: '2026-09-20T10:00:00Z' })], 'c1')]
+    h.state.products = [{ sku: 'SKU-1', deletedAt: null }]
+    const report = await shopifyShadowReport('acct-1', { now: NOW, sleep: noSleep, maxPages: 1 })
+    expect(report.read.complete).toBe(false)
+    expect(report.coverage).toEqual({ since: '2026-09-20T10:00:00.000Z', complete: false })
+    const weeks = report.orders.perWeek
+    expect(weeks.at(-1)).toEqual({ weekStart: '2026-09-21', orders: 1, units: 1, coverage: 'full' })
+    expect(weeks.at(-2)).toEqual({ weekStart: '2026-09-14', orders: 1, units: 1, coverage: 'partial' })
+    expect(weeks.length).toBeGreaterThan(2)
+    expect(weeks.slice(0, -2).every((w) => w.orders === null && w.units === null && w.coverage === 'none')).toBe(true)
+  })
+
+  it('61–90 days without read_all_orders: limited, and the weeks before the last 60 days are not read', async () => {
+    h.state.pages = [page([order()])]
+    const report = await shopifyShadowReport('acct-1', { days: 90, now: NOW, sleep: noSleep })
+    expect(report.window.limitedByShopify).toBe(true)
+    expect(report.window.note).toEqual(expect.stringMatching(/60 days/))
+    expect(report.coverage).toEqual({ since: '2026-07-28T12:00:00.000Z', complete: false })
+    const notRead = report.orders.perWeek.filter((w) => w.coverage === 'none')
+    expect(notRead.map((w) => w.weekStart)).toEqual(['2026-06-22', '2026-06-29', '2026-07-06', '2026-07-13', '2026-07-20'])
+    expect(notRead.every((w) => w.orders === null && w.units === null)).toBe(true)
+    expect(report.orders.perWeek.find((w) => w.weekStart === '2026-07-27')?.coverage).toBe('partial')
+  })
+
+  it('with read_all_orders the 90 days are read; 60 days or less never carries the note', async () => {
+    h.state.scopes = ['read_orders', 'read_all_orders']
+    h.state.pages = [page([])]
+    const all = await shopifyShadowReport('acct-1', { days: 90, now: NOW, sleep: noSleep })
+    expect(all.window).toMatchObject({ limitedByShopify: false, note: null })
+    expect(all.coverage.complete).toBe(true)
+    h.state.scopes = ['read_orders']
+    h.state.pages = [page([])]
+    const sixty = await shopifyShadowReport('acct-1', { days: 60, now: NOW, sleep: noSleep })
+    expect(sixty.window).toMatchObject({ limitedByShopify: false, note: null })
+    expect(sixty.coverage.complete).toBe(true)
+  })
+})
+
 // ── E. no write path ─────────────────────────────────────────────────────────
 describe('E. no write path', () => {
   it('a whole run: every channel call is a Shopify READ on the current GraphQL Admin API, for the named account', async () => {
@@ -419,10 +502,28 @@ describe('E. no write path', () => {
       'query A { shop { id } } mutation B { tagsAdd(id: "x", tags: ["y"]) { node { id } } }',
       '# comment\nmutation { fulfillmentCreate(fulfillment: {}) { fulfillment { id } } }',
       'subscription { orders { id } }',
+      // Review of PR #54: `#` inside a string hid everything after it from the text check.
+      'fragment F on Mutation { productDelete(input:{id:"x#"}){deletedProductId} } mutation { ...F }',
+      'query A { orders(first: 1, query: "a#b") { nodes { id } } } mutation B { productDelete(input: {id: "x"}) { deletedProductId } }',
+      'fragment F on Mutation { productDelete(input: {id: "x"}) { deletedProductId } }',
+      'fragment F on Mutation { productDelete(input: {id: "x"}) { deletedProductId } } query { ...F }',
+      // A mutation the gateway lets through as a read (it changes nothing on the shop) is still refused here.
+      'mutation { stagedUploadsCreate(input: []) { stagedTargets { url } } }',
+      'mutation { list: productDelete(input: {id: "x"}) { deletedProductId } }',
+      'query { orders(first: 1) { nodes { id } }', // does not parse: refused, not guessed
+      '',
     ]) {
       await expect(read(document), document).rejects.toThrow(/only reads/)
     }
     expect(h.state.requests).toHaveLength(0)
+  })
+
+  it('a real query is sent even when a string in it says "mutation" or carries a `#`', async () => {
+    h.state.pages = [page([]), page([])]
+    const { read } = await shopifyAdminReader('acct-1')
+    await read('query Q { orders(first: 1, query: "tag:mutation") { nodes { id } } }')
+    await read('query Q { orders(first: 1, query: "name:#1001") { nodes { id } } }')
+    expect(h.state.requests.map((r) => r.kind)).toEqual(['read', 'read'])
   })
 
   it('the query document the report sends is a read by the gateway’s own rule', async () => {

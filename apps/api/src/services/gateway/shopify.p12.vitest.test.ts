@@ -54,6 +54,50 @@ describe('read / write / action / setup', () => {
   })
 })
 
+/**
+ * Review of PR #54 — the classifier read the document as text: it cut from `#` to the end of the line even
+ * inside a string, looked only at the FIRST definition and the FIRST root field. So a mutation hidden behind
+ * a fragment, a leading query, a `#` in a string or a harmless first field was sent as a `read`, past the
+ * publish mode. It now parses the document (graphql-js) and judges every operation and every root field.
+ */
+const BYPASS = 'fragment F on Mutation { productDelete(input:{id:"x#"}){deletedProductId} } mutation { ...F }'
+describe('the classifier parses the document — no mutation passes as a read', () => {
+  it.each([
+    ['the review document: a fragment on Mutation, `#` inside a string', BYPASS, 'write', 'productDelete'],
+    ['a query first, then a mutation', 'query A { shop { id } } mutation B { productDelete(input: {id: "x"}) { deletedProductId } }', 'write', 'productDelete'],
+    ['`#` inside a string of the query, then a mutation', 'query A { orders(first: 1, query: "tag:a#b") { nodes { id } } } mutation B { productDelete(input: {id: "x"}) { deletedProductId } }', 'write', 'productDelete'],
+    ['a comment line before the mutation', '# mutation-free, honest\nquery A { shop { id } }\n# and yet\nmutation B { productSet(input: {}) { product { id } } }', 'write', 'productSet'],
+    ['an alias named like a read mutation', 'mutation { stagedUploadsCreate: productDelete(input: {id: "x"}) { deletedProductId } }', 'write', 'productDelete'],
+    ['a read mutation first, a listing write second', 'mutation { stagedUploadsCreate(input: []) { stagedTargets { url } } productDelete(input: {id: "x"}) { deletedProductId } }', 'write', 'stagedUploadsCreate'],
+    ['a setup mutation first, a listing write second', 'mutation { webhookSubscriptionCreate(topic: ORDERS_CREATE) { userErrors { message } } productSet(input: {}) { product { id } } }', 'write', 'webhookSubscriptionCreate'],
+    ['a setup mutation first, an order action second', 'mutation { webhookSubscriptionCreate(topic: ORDERS_CREATE) { userErrors { message } } orderCancel(orderId: "1") { userErrors { message } } }', 'action', 'webhookSubscriptionCreate'],
+    ['a query that spreads a fragment on Mutation', 'fragment F on Mutation { productDelete(input: {id: "x"}) { deletedProductId } } query { ...F }', 'write', 'productDelete'],
+    ['an inline fragment at the root', 'mutation { ... on Mutation { productDelete(input: {id: "x"}) { deletedProductId } } }', 'write', 'productDelete'],
+    ['a subscription', 'subscription { productsUpdated { id } }', 'write', 'productsUpdated'],
+    ['a document that does not parse (fail closed)', 'mutation { productDelete(input: {id: "x"}) { deletedProductId }', 'write', null],
+  ])('%s → %s', (_name, query, kind, field) => {
+    expect(shopifyKind('POST', GQL, gql(query))).toBe(kind)
+    expect(graphqlRootField(query)).toEqual({ mutation: true, field })
+  })
+  it.each([
+    ['the word mutation inside a string', 'query Q { orders(first: 1, query: "tag:mutation") { nodes { id } } }', 'orders'],
+    ['a `#` inside a string', 'query Q { orders(first: 1, query: "name:#1001") { nodes { id } } }', 'orders'],
+    ['a fragment on the query root', 'fragment S on QueryRoot { shop { id } } query { ...S }', 'shop'],
+    ['an aliased query field', 'query { store: shop { name } }', 'shop'],
+  ])('a real query stays a read: %s', (_name, query, field) => {
+    expect(shopifyKind('POST', GQL, gql(query))).toBe('read')
+    expect(graphqlRootField(query)).toEqual({ mutation: false, field })
+  })
+  it('the review document through the gateway while publishing is gated: refused, nothing sent', async () => {
+    vi.stubEnv('NEXUS_ENABLE_SHOPIFY_PUBLISH', '')
+    rememberTokenAccount('shpat-A', 'shop-A')
+    const refusal = await refusalOf(shopifyTransport(null)(GQL, { method: 'POST', headers: { 'X-Shopify-Access-Token': 'shpat-A' }, body: gql(BYPASS) }))
+    expect(refusal).toMatchObject({ code: 'PUBLISH_GATED' })
+    expect(h.calls).toHaveLength(0)
+    expect(gatewayLedger.at(-1)).toMatchObject({ operation: 'graphql.productDelete', outcome: 'gated' })
+  })
+})
+
 describe('shopifyTransport — whose call it is', () => {
   it('an account token → that account; the ledger names the GraphQL field', async () => {
     rememberTokenAccount('shpat-A', 'shop-A')

@@ -11,9 +11,13 @@
  *     the last 60 without `read_all_orders`; at most 90), newest first, a page at a time, through the
  *     read-only admin reader (the channel gateway, `kind: 'read'`), pacing itself by Shopify's cost
  *     bucket and stopping at a page bound;
- *   - matches line SKUs the way the order webhook does today (the exact SKU in this business, via the
- *     workspace SKU key — a soft-deleted product still matches, and is flagged);
- *   - returns counts only.
+ *   - matches line SKUs by exact SKU in this business (the order webhook's lookup: the workspace SKU key — a
+ *     soft-deleted product still matches, and is flagged). One difference, stated in the report: for a line
+ *     WITHOUT a SKU the webhook tries the line title as the SKU; this report does not read titles (they can
+ *     carry buyer text), so those lines count as not matched;
+ *   - returns counts only, and says what it could not read: weeks before the oldest order read (a read cut
+ *     short, or Shopify's 60-day limit) are "not read", never 0; orders with more lines or fulfilments than
+ *     one read returns are flagged, not counted as matched.
  *
  * What it never does: write anything (no order, hold, stock, listing or Shopify change — the only row
  * a run adds is the gateway's own call-log row per Shopify read), ask Shopify for a buyer field, or
@@ -25,6 +29,8 @@ import { shopifyAdminReader, type ShopifyGraphqlError, type ShopifyReadGraphql }
 export const SHOPIFY_SHADOW_REPORT_SWITCH = 'NEXUS_ENABLE_SHOPIFY_SHADOW_REPORT'
 export const DEFAULT_WINDOW_DAYS = 60
 export const MAX_WINDOW_DAYS = 90
+/** Shopify's orders query returns only this many days back without the read_all_orders scope. */
+export const SHOPIFY_READABLE_DAYS = 60
 const PAGE_SIZE = 20
 const LINES_PER_ORDER = 20
 const FULFILMENTS_PER_ORDER = 5
@@ -47,8 +53,8 @@ export class ShadowReportError extends Error {
 
 /**
  * The only document this report sends. No order id, number or name, no customer, address, contact,
- * note, attribute or line title: only what the counts need. Cost ≈ 2 + 20 × (1 + 22 + 10) < 1,000,
- * Shopify's single-query cap.
+ * note, attribute or line title: only what the counts need. One fulfilment more than is counted is asked
+ * for, to know whether an order has more. Cost ≈ 2 + 20 × (1 + 22 + 12) < 1,000, Shopify's single-query cap.
  */
 export const SHADOW_ORDERS_QUERY = `query NexusShadowOrders($first: Int!, $after: String, $query: String!) {
   orders(first: $first, after: $after, sortKey: CREATED_AT, reverse: true, query: $query) {
@@ -61,7 +67,7 @@ export const SHADOW_ORDERS_QUERY = `query NexusShadowOrders($first: Int!, $after
       displayFinancialStatus
       displayFulfillmentStatus
       lineItems(first: ${LINES_PER_ORDER}) { pageInfo { hasNextPage } nodes { sku quantity } }
-      fulfillments(first: ${FULFILMENTS_PER_ORDER}) { status location { id name } }
+      fulfillments(first: ${FULFILMENTS_PER_ORDER + 1}) { status location { id name } }
     }
   }
 }`
@@ -118,7 +124,6 @@ export async function readShadowOrders(
   let locationsReadable = true
 
   for (;;) {
-    if (pages >= maxPages) return { orders, pages, stoppedBecause: 'max_pages', throttleWaits, waitedMs, locationsReadable }
     type Page = { orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: ShadowOrder[] } }
     const result = await read<Page>(SHADOW_ORDERS_QUERY, { first: PAGE_SIZE, after, query: filter })
     if (result.errors.some((e) => e.extensions?.code === 'THROTTLED')) {
@@ -139,6 +144,8 @@ export async function readShadowOrders(
     if (!connection.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) {
       return { orders, pages, stoppedBecause: 'complete', throttleWaits, waitedMs, locationsReadable }
     }
+    // The bound is checked before any wait: never wait for a page that will not be read.
+    if (pages >= maxPages) return { orders, pages, stoppedBecause: 'max_pages', throttleWaits, waitedMs, locationsReadable }
     after = connection.pageInfo.endCursor
 
     const bucket = result.cost?.throttleStatus
@@ -156,9 +163,13 @@ export async function readShadowOrders(
 // ── The counts (pure) ───────────────────────────────────────────────────────
 
 export interface CountRow { value: string; orders: number }
+export type WeekCoverage = 'full' | 'partial' | 'none'
 export interface UnmatchedSku { sku: string; lines: number; units: number; nearMatch: boolean }
 
 export interface ShadowCounts {
+  /** From when the counts are complete: the window start, or later when the read was cut short or Shopify
+   *  holds back older orders. `complete` = every order of the window was read. */
+  coverage: { since: string; complete: boolean }
   orders: {
     total: number
     /** Read (Shopify's date filter is a day wider) but created before the window: not counted. */
@@ -166,7 +177,8 @@ export interface ShadowCounts {
     cancelled: number
     test: number
     pos: number
-    perWeek: Array<{ weekStart: string; orders: number; units: number }>
+    /** `none`: no order of that week was read (null, never 0); `partial`: the read ended inside it. */
+    perWeek: Array<{ weekStart: string; orders: number | null; units: number | null; coverage: WeekCoverage }>
     financialStatus: CountRow[]
     fulfillmentStatus: CountRow[]
     sources: CountRow[]
@@ -186,19 +198,25 @@ export interface ShadowCounts {
     ordersFullyMatched: number
     ordersPartlyMatched: number
     ordersUnmatched: number
-    /** Orders with more lines than one read returns (the count covers the lines read). */
+    /** Orders with more lines than one read returns: their read lines are counted, the order is not counted
+     *  as fully, partly or not matched. */
     ordersWithUnreadLines: number
     orderMatchRate: number | null
     lineMatchRate: number | null
     unmatched: UnmatchedSku[]
     unmatchedShapes: Array<{ shape: string; lines: number }>
+    matchRule: string
   }
   locations: {
     used: Array<{ id: string; name: string; orders: number; fulfillments: number; cancelledFulfillments: number }>
     fulfillmentsWithoutLocation: number
     ordersWithoutFulfillment: number
+    /** Orders with more than FULFILMENTS_PER_ORDER fulfilments: only the first ones are counted. */
+    ordersWithUnreadFulfilments: number
   }
 }
+
+export const MATCH_RULE = 'Matched by exact SKU in this business (the order webhook\'s lookup). Lines without a SKU count as not matched here; today\'s order webhook tries the line title for those, which this report does not read.'
 
 /** A SKU's form without its value: letter runs → A / a, digit runs → 9, everything else kept. */
 export function skuShape(sku: string): string {
@@ -227,7 +245,10 @@ export function aggregateShadowReport(input: {
   products: Array<{ sku: string; deletedAt: Date | null }>
   since: Date
   until: Date
+  /** From when the orders read are complete (default: `since`). */
+  coveredSince?: Date
 }): ShadowCounts {
+  const coveredSince = new Date(Math.max(input.since.getTime(), (input.coveredSince ?? input.since).getTime()))
   const exact = new Map(input.products.map((p) => [p.sku, p.deletedAt !== null]))
   const folded = new Set(input.products.map((p) => fold(p.sku)))
   const inWindow = input.orders.filter((o) => new Date(o.createdAt).getTime() >= input.since.getTime())
@@ -250,6 +271,7 @@ export function aggregateShadowReport(input: {
   let pos = 0
   let fulfillmentsWithoutLocation = 0
   let ordersWithoutFulfillment = 0
+  let ordersWithUnreadFulfilments = 0
 
   for (const order of inWindow) {
     if (order.cancelledAt) cancelled++
@@ -261,7 +283,7 @@ export function aggregateShadowReport(input: {
     bump(fulfilment, order.displayFulfillmentStatus ?? 'UNKNOWN')
 
     const lines = order.lineItems?.nodes ?? []
-    if (order.lineItems?.pageInfo?.hasNextPage) skus.ordersWithUnreadLines++
+    const unreadLines = order.lineItems?.pageInfo?.hasNextPage === true
     let matched = 0
     let orderUnits = 0
     for (const line of lines) {
@@ -287,14 +309,17 @@ export function aggregateShadowReport(input: {
       row.units += units
       unmatched.set(sku, row)
     }
-    if (lines.length > 0 && matched === lines.length) skus.ordersFullyMatched++
+    if (unreadLines) skus.ordersWithUnreadLines++
+    else if (lines.length > 0 && matched === lines.length) skus.ordersFullyMatched++
     else if (matched > 0) skus.ordersPartlyMatched++
     else skus.ordersUnmatched++
 
     const week = weeks.get(isoDate(weekStart(new Date(order.createdAt))))
     if (week) { week.orders++; week.units += orderUnits }
 
-    const fulfilments = order.fulfillments ?? []
+    const all = order.fulfillments ?? []
+    if (all.length > FULFILMENTS_PER_ORDER) ordersWithUnreadFulfilments++
+    const fulfilments = all.slice(0, FULFILMENTS_PER_ORDER)
     if (fulfilments.length === 0) ordersWithoutFulfillment++
     const seen = new Set<string>()
     for (const f of fulfilments) {
@@ -311,14 +336,24 @@ export function aggregateShadowReport(input: {
   const shapes = new Map<string, number>()
   for (const row of unmatchedRows) bump(shapes, skuShape(row.sku), row.lines)
 
+  const perWeek = [...weeks.entries()].map(([start, w]) => {
+    const from = Math.max(new Date(`${start}T00:00:00Z`).getTime(), input.since.getTime())
+    const to = Math.min(new Date(`${start}T00:00:00Z`).getTime() + 7 * DAY_MS, input.until.getTime())
+    const coverage: WeekCoverage = coveredSince.getTime() <= from ? 'full' : coveredSince.getTime() >= to ? 'none' : 'partial'
+    return coverage === 'none'
+      ? { weekStart: start, orders: null, units: null, coverage }
+      : { weekStart: start, orders: w.orders, units: w.units, coverage }
+  })
+
   return {
+    coverage: { since: coveredSince.toISOString(), complete: coveredSince.getTime() <= input.since.getTime() },
     orders: {
       total: inWindow.length,
       outsideWindow: input.orders.length - inWindow.length,
       cancelled,
       test,
       pos,
-      perWeek: [...weeks.entries()].map(([start, w]) => ({ weekStart: start, orders: w.orders, units: w.units })),
+      perWeek,
       financialStatus: countRows(financial),
       fulfillmentStatus: countRows(fulfilment),
       sources: countRows(sources, 10),
@@ -329,11 +364,13 @@ export function aggregateShadowReport(input: {
       lineMatchRate: skus.lines ? skus.matchedLines / skus.lines : null,
       unmatched: unmatchedRows.slice(0, LIST_LIMIT),
       unmatchedShapes: countRows(shapes, 10).map((row) => ({ shape: row.value, lines: row.orders })),
+      matchRule: MATCH_RULE,
     },
     locations: {
       used: [...locations.values()].sort((a, b) => b.fulfillments - a.fulfillments || (a.name < b.name ? -1 : 1)),
       fulfillmentsWithoutLocation,
       ordersWithoutFulfillment,
+      ordersWithUnreadFulfilments,
     },
   }
 }
@@ -359,7 +396,8 @@ export interface ShopifyShadowReport extends ShadowCounts {
   readOnly: true
   accountId: string
   generatedAt: string
-  window: { days: number; since: string; until: string; note: string }
+  /** `limitedByShopify`: the window reaches past the 60 days Shopify returns without read_all_orders. */
+  window: { days: number; since: string; until: string; limitedByShopify: boolean; note: string | null }
   read: Omit<ShadowRead, 'orders'> & { complete: boolean; ordersRead: number; pageSize: number; linesPerOrder: number }
 }
 
@@ -376,10 +414,16 @@ export async function shopifyShadowReport(
   }
   const until = opts.now ?? new Date()
   const since = new Date(until.getTime() - days * DAY_MS)
-  const { read } = await shopifyAdminReader(accountId)
+  const { read, grantedScopes } = await shopifyAdminReader(accountId)
+  // Without read_all_orders Shopify returns only the last 60 days: older weeks are not read, not empty.
+  const readableSince = grantedScopes.includes('read_all_orders') ? since : new Date(Math.max(since.getTime(), until.getTime() - SHOPIFY_READABLE_DAYS * DAY_MS))
+  const limitedByShopify = readableSince.getTime() > since.getTime()
   const result = await readShadowOrders(read, { since, sleep: opts.sleep, maxPages: opts.maxPages })
+  // Newest first: a read cut short is complete only from the oldest order it read.
+  const oldestRead = result.orders.reduce((min, o) => Math.min(min, new Date(o.createdAt).getTime()), until.getTime())
+  const coveredSince = result.stoppedBecause === 'complete' ? readableSince : new Date(Math.max(readableSince.getTime(), oldestRead))
   const products = await nexusProductsFor(result.orders)
-  const counts = aggregateShadowReport({ orders: result.orders, products, since, until })
+  const counts = aggregateShadowReport({ orders: result.orders, products, since, until, coveredSince })
   return {
     readOnly: true,
     accountId,
@@ -388,7 +432,10 @@ export async function shopifyShadowReport(
       days,
       since: since.toISOString(),
       until: until.toISOString(),
-      note: 'Shopify returns only the last 60 days of orders unless the app holds the read_all_orders permission.',
+      limitedByShopify,
+      note: limitedByShopify
+        ? `Shopify returns only the last ${SHOPIFY_READABLE_DAYS} days of orders without the read_all_orders permission, which this connection does not hold.`
+        : null,
     },
     read: {
       pages: result.pages,

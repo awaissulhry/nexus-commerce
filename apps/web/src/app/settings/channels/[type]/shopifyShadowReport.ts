@@ -10,12 +10,14 @@
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface CountRow { value: string; orders: number }
+export type WeekCoverage = 'full' | 'partial' | 'none'
 
 export interface ShopifyShadowReport {
   readOnly: true
   accountId: string
   generatedAt: string
-  window: { days: number; since: string; until: string; note: string }
+  window: { days: number; since: string; until: string; limitedByShopify: boolean; note: string | null }
+  coverage: { since: string; complete: boolean }
   read: {
     pages: number
     stoppedBecause: 'complete' | 'max_pages' | 'throttled'
@@ -33,7 +35,7 @@ export interface ShopifyShadowReport {
     cancelled: number
     test: number
     pos: number
-    perWeek: Array<{ weekStart: string; orders: number; units: number }>
+    perWeek: Array<{ weekStart: string; orders: number | null; units: number | null; coverage: WeekCoverage }>
     financialStatus: CountRow[]
     fulfillmentStatus: CountRow[]
     sources: CountRow[]
@@ -56,11 +58,13 @@ export interface ShopifyShadowReport {
     lineMatchRate: number | null
     unmatched: Array<{ sku: string; lines: number; units: number; nearMatch: boolean }>
     unmatchedShapes: Array<{ shape: string; lines: number }>
+    matchRule: string
   }
   locations: {
     used: Array<{ id: string; name: string; orders: number; fulfillments: number; cancelledFulfillments: number }>
     fulfillmentsWithoutLocation: number
     ordersWithoutFulfillment: number
+    ordersWithUnreadFulfilments: number
   }
 }
 
@@ -96,11 +100,30 @@ export function readSentence(report: ShopifyShadowReport): string {
   const why = read.stoppedBecause === 'max_pages'
     ? `stopped at the ${read.pages}-page limit`
     : 'Shopify’s rate limit ended the read'
-  return `Incomplete: ${why} after ${read.ordersRead} orders. The counts cover only those orders.`
+  return `Incomplete: ${why} after ${read.ordersRead} orders.`
 }
 
 export function matchSentence(report: ShopifyShadowReport): string {
   const { skus, orders } = report
   if (orders.total === 0) return 'No orders in this window.'
-  return `${skus.ordersFullyMatched} of ${orders.total} orders (${percent(skus.orderMatchRate)}) have every line matched to a Nexus SKU; ${skus.matchedLines} of ${skus.lines} lines (${percent(skus.lineMatchRate)}).`
+  return `${skus.ordersFullyMatched} of ${orders.total} orders (${percent(skus.orderMatchRate)}) have every line matched to a Nexus product by exact SKU; ${skus.matchedLines} of ${skus.lines} lines (${percent(skus.lineMatchRate)}).`
+}
+
+/** Today's order webhook looks a line without a SKU up by its title; this report does not read titles. */
+export const NO_SKU_ROW = {
+  label: 'Lines without a SKU (not matched here)',
+  hint: 'today’s order webhook tries the line title for these; this report does not read titles',
+} as const
+
+/** A week's count: never 0 for a week that was not read. */
+export function weekCell(value: number | null, coverage: WeekCoverage): string {
+  if (coverage === 'none' || value === null) return 'Not read'
+  return coverage === 'partial' ? `${value} (partly read)` : String(value)
+}
+
+/** Null when every order of the window was read; otherwise from when the counts hold, and why. */
+export function coverageSentence(report: ShopifyShadowReport): string | null {
+  if (report.coverage.complete) return null
+  const from = `Counts cover orders created from ${report.coverage.since.slice(0, 10)} on; older weeks show "Not read".`
+  return report.window.note ? `${from} ${report.window.note}` : from
 }

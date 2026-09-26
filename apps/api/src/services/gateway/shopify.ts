@@ -5,8 +5,8 @@
 import { gatewayFetch, type GatewayBody, type GatewayRequest } from './gateway.js'
 import { operationOfPath } from './channels.js'
 import { accountOfToken } from './token-accounts.js'
-import { graphqlRootField } from './graphql-root-field.js'
-export { graphqlRootField } from './graphql-root-field.js'
+import { graphqlDocumentInfo, graphqlRootField } from './graphql-root-field.js'
+export { graphqlDocumentInfo, graphqlRootField } from './graphql-root-field.js'
 
 /** REST: event subscriptions are connection setup; orders, fulfilments and refunds have their own switch. */
 const SETUP_REST = /\/webhooks(\/|\.json)/
@@ -21,12 +21,16 @@ export function shopifyKind(method: string, url: string, body?: GatewayBody): Ga
   if (/\/graphql\.json$/.test(path)) {
     let query = ''
     try { query = typeof body === 'string' ? String(JSON.parse(body)?.query ?? '') : '' } catch { /* not JSON */ }
-    const root = graphqlRootField(query)
-    if (!root.mutation) return 'read'
-    if (root.field && READ_MUTATIONS.test(root.field)) return 'read'
-    if (root.field && SETUP_MUTATIONS.test(root.field)) return 'setup'
-    if (root.field && ACTION_MUTATIONS.test(root.field)) return 'action'
-    return 'write'
+    // Every root field of every change in the document counts, not only the first (review of PR #54): one
+    // listing write among harmless fields makes the whole document a write. A document that does not parse
+    // is a change with no known field — a write (fail closed).
+    const doc = graphqlDocumentInfo(query)
+    if (doc.readOnly) return 'read'
+    const changes = doc.fields.filter((field) => !READ_MUTATIONS.test(field))
+    if (doc.fields.length > 0 && changes.length === 0) return 'read'
+    if (changes.length === 0 || changes.some((field) => !SETUP_MUTATIONS.test(field) && !ACTION_MUTATIONS.test(field))) return 'write'
+    if (changes.some((field) => ACTION_MUTATIONS.test(field))) return 'action'
+    return 'setup'
   }
   if (method.toUpperCase() === 'GET') return 'read'
   if (SETUP_REST.test(path)) return 'setup'

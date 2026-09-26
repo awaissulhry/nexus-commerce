@@ -14,10 +14,13 @@ import { useCallback, useState } from 'react'
 import { Banner, Card, KeyValue, MetricStrip, SummaryTable, type KeyValueItem } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import {
+  NO_SKU_ROW,
+  coverageSentence,
   fetchShopifyShadowReport,
   matchSentence,
   percent,
   readSentence,
+  weekCell,
   type CountRow,
   type ShadowReportResult,
   type ShopifyShadowReport,
@@ -70,6 +73,7 @@ export function ShopifyShadowReportCard({ accountId }: { accountId: string }) {
 
 function ShadowReportBody({ report }: { report: ShopifyShadowReport }) {
   const { orders, skus, locations, read } = report
+  const coverage = coverageSentence(report)
   const share = (n: number) => (orders.total ? percent(n / orders.total) : '—')
   const lineItems: KeyValueItem[] = [
     { label: 'Lines matched', value: `${skus.matchedLines} of ${skus.lines}`, hint: `${skus.matchedUnits} of ${skus.units} units` },
@@ -78,14 +82,19 @@ function ShadowReportBody({ report }: { report: ShopifyShadowReport }) {
       value: skus.unmatchedLines,
       hint: skus.nearMatchLines ? `${skus.nearMatchLines} differ from a Nexus SKU only in case or spaces` : undefined,
     },
-    { label: 'Lines without a SKU', value: skus.linesWithoutSku },
+    { label: NO_SKU_ROW.label, value: skus.linesWithoutSku, hint: skus.linesWithoutSku ? NO_SKU_ROW.hint : undefined },
     { label: 'Lines on a deleted product', value: skus.deletedProductLines, hint: skus.deletedProductLines ? 'matched, but the product is deleted' : undefined },
     { label: 'Orders partly matched', value: skus.ordersPartlyMatched },
     { label: 'Orders not matched', value: skus.ordersUnmatched },
     {
       label: `Orders with over ${read.linesPerOrder} lines`,
       value: skus.ordersWithUnreadLines,
-      hint: skus.ordersWithUnreadLines ? `only the first ${read.linesPerOrder} lines are counted` : undefined,
+      hint: skus.ordersWithUnreadLines ? `not fully read: not counted as matched; only the first ${read.linesPerOrder} lines are counted` : undefined,
+    },
+    {
+      label: 'Orders with over 5 fulfilments',
+      value: locations.ordersWithUnreadFulfilments,
+      hint: locations.ordersWithUnreadFulfilments ? 'not fully read: only the first 5 fulfilments are counted' : undefined,
     },
     { label: 'Orders with no fulfilment', value: locations.ordersWithoutFulfillment },
     { label: 'Fulfilments with no location', value: locations.fulfillmentsWithoutLocation },
@@ -93,23 +102,22 @@ function ShadowReportBody({ report }: { report: ShopifyShadowReport }) {
 
   return (
     <div style={stack('var(--nds-space-14)')}>
-      {read.complete ? (
-        <p style={muted}>
-          {readSentence(report)} Read {new Date(report.generatedAt).toLocaleString()}. {report.window.note}
-        </p>
-      ) : (
-        <Banner tone="warning" title="Partial read">
-          {readSentence(report)}
+      <p style={muted}>
+        {read.ordersRead} orders read in {read.pages} page{read.pages === 1 ? '' : 's'}, {new Date(report.generatedAt).toLocaleString()}.
+      </p>
+      {coverage && (
+        <Banner tone="warning" title={read.complete ? 'Shopify holds back part of this window' : 'Partial read'}>
+          {read.complete ? coverage : `${readSentence(report)} ${coverage}`}
         </Banner>
       )}
       {!read.locationsReadable && (
         <Banner tone="warning" title="Fulfilment locations not shown">
-          Shopify did not show the fulfilment locations: the app needs the read_locations or read_inventory permission. The other counts are complete.
+          Shopify did not show the fulfilment locations: the app needs the read_locations permission. The other counts are unaffected.
         </Banner>
       )}
       <MetricStrip
         metrics={[
-          { label: 'Orders', value: orders.total, hint: `last ${report.window.days} days` },
+          { label: 'Orders', value: orders.total, hint: report.coverage.complete ? `last ${report.window.days} days` : `created from ${report.coverage.since.slice(0, 10)} on` },
           { label: 'Every line matched', value: percent(skus.orderMatchRate), hint: `${skus.ordersFullyMatched} of ${orders.total} orders` },
           { label: 'Test orders', value: orders.test, hint: share(orders.test) },
           { label: 'POS orders', value: orders.pos, hint: share(orders.pos) },
@@ -123,7 +131,7 @@ function ShadowReportBody({ report }: { report: ShopifyShadowReport }) {
           <SummaryTable
             label="Orders per week"
             columns={['Week of', 'Orders', 'Units']}
-            rows={orders.perWeek.map((w) => ({ id: w.weekStart, cells: [w.weekStart, w.orders, w.units] }))}
+            rows={orders.perWeek.map((w) => ({ id: w.weekStart, cells: [w.weekStart, weekCell(w.orders, w.coverage), weekCell(w.units, w.coverage)] }))}
           />
         </Titled>
         <div style={stack('var(--nds-space-14)')}>

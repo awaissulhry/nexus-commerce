@@ -4,10 +4,13 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import {
+  NO_SKU_ROW,
+  coverageSentence,
   fetchShopifyShadowReport,
   matchSentence,
   percent,
   readSentence,
+  weekCell,
   type ShopifyShadowReport,
 } from './shopifyShadowReport'
 
@@ -16,20 +19,28 @@ function fakeFetch(body: unknown, status = 200) {
   return fn as unknown as typeof fetch & ReturnType<typeof vi.fn>
 }
 
-function report(over: { read?: Partial<ShopifyShadowReport['read']>; skus?: Partial<ShopifyShadowReport['skus']>; total?: number } = {}): ShopifyShadowReport {
+function report(over: {
+  read?: Partial<ShopifyShadowReport['read']>
+  skus?: Partial<ShopifyShadowReport['skus']>
+  total?: number
+  window?: Partial<ShopifyShadowReport['window']>
+  coverage?: ShopifyShadowReport['coverage']
+} = {}): ShopifyShadowReport {
   return {
     readOnly: true,
     accountId: 'conn_1',
     generatedAt: '2026-09-26T12:00:00.000Z',
-    window: { days: 60, since: '2026-07-28T12:00:00.000Z', until: '2026-09-26T12:00:00.000Z', note: 'Shopify returns only the last 60 days.' },
+    window: { days: 60, since: '2026-07-28T12:00:00.000Z', until: '2026-09-26T12:00:00.000Z', limitedByShopify: false, note: null, ...over.window },
+    coverage: over.coverage ?? { since: '2026-07-28T12:00:00.000Z', complete: true },
     read: { pages: 2, stoppedBecause: 'complete', complete: true, throttleWaits: 0, waitedMs: 0, locationsReadable: true, ordersRead: 31, pageSize: 20, linesPerOrder: 20, ...over.read },
     orders: { total: over.total ?? 30, outsideWindow: 1, cancelled: 1, test: 2, pos: 0, perWeek: [], financialStatus: [], fulfillmentStatus: [], sources: [] },
     skus: {
       lines: 40, units: 45, linesWithoutSku: 1, matchedLines: 36, matchedUnits: 40, unmatchedLines: 3, unmatchedUnits: 4, nearMatchLines: 1,
       deletedProductLines: 0, ordersFullyMatched: 27, ordersPartlyMatched: 1, ordersUnmatched: 2, ordersWithUnreadLines: 0,
-      orderMatchRate: 0.9, lineMatchRate: 0.9, unmatched: [], unmatchedShapes: [], ...over.skus,
+      orderMatchRate: 0.9, lineMatchRate: 0.9, unmatched: [], unmatchedShapes: [],
+      matchRule: 'Exact SKU in this business. Lines without a SKU count as not matched.', ...over.skus,
     },
-    locations: { used: [], fulfillmentsWithoutLocation: 0, ordersWithoutFulfillment: 3 },
+    locations: { used: [], fulfillmentsWithoutLocation: 0, ordersWithoutFulfillment: 3, ordersWithUnreadFulfilments: 0 },
   }
 }
 
@@ -72,18 +83,40 @@ describe('the sentences', () => {
     expect(percent(null)).toBe('—')
   })
 
-  it('readSentence: a complete read says so; an incomplete one says why and that the counts are partial', () => {
+  it('readSentence: a complete read says so; an incomplete one says why (coverageSentence says from when)', () => {
     expect(readSentence(report())).toBe('Complete: 31 orders read in 2 pages.')
     expect(readSentence(report({ read: { stoppedBecause: 'max_pages', complete: false, pages: 25, ordersRead: 500 } }))).toBe(
-      'Incomplete: stopped at the 25-page limit after 500 orders. The counts cover only those orders.',
+      'Incomplete: stopped at the 25-page limit after 500 orders.',
     )
     expect(readSentence(report({ read: { stoppedBecause: 'throttled', complete: false, pages: 3, ordersRead: 60 } }))).toBe(
-      'Incomplete: Shopify’s rate limit ended the read after 60 orders. The counts cover only those orders.',
+      'Incomplete: Shopify’s rate limit ended the read after 60 orders.',
     )
   })
 
-  it('matchSentence: what the order webhook would match today', () => {
-    expect(matchSentence(report())).toBe('27 of 30 orders (90%) have every line matched to a Nexus SKU; 36 of 40 lines (90%).')
+  it('matchSentence: exact SKU, and it says so', () => {
+    expect(matchSentence(report())).toBe('27 of 30 orders (90%) have every line matched to a Nexus product by exact SKU; 36 of 40 lines (90%).')
     expect(matchSentence(report({ total: 0, skus: { orderMatchRate: null, lineMatchRate: null, lines: 0, matchedLines: 0, ordersFullyMatched: 0 } }))).toBe('No orders in this window.')
+  })
+
+  it('the no-SKU row states how it differs from today’s webhook (which tries the line title)', () => {
+    expect(NO_SKU_ROW.label).toBe('Lines without a SKU (not matched here)')
+    expect(NO_SKU_ROW.hint).toMatch(/webhook tries the line title/)
+  })
+
+  it('weekCell: a week not read is "Not read", never 0; a partly read week says so', () => {
+    expect(weekCell(null, 'none')).toBe('Not read')
+    expect(weekCell(3, 'partial')).toBe('3 (partly read)')
+    expect(weekCell(0, 'full')).toBe('0')
+  })
+
+  it('coverageSentence: null when every order in the window was read; otherwise from when, and why', () => {
+    expect(coverageSentence(report())).toBeNull()
+    expect(coverageSentence(report({ coverage: { since: '2026-09-20T10:00:00.000Z', complete: false }, read: { complete: false, stoppedBecause: 'max_pages' } }))).toBe(
+      'Counts cover orders created from 2026-09-20 on; older weeks show "Not read".',
+    )
+    expect(coverageSentence(report({
+      window: { days: 90, limitedByShopify: true, note: 'Shopify returns only the last 60 days of orders without the read_all_orders permission.' },
+      coverage: { since: '2026-07-28T12:00:00.000Z', complete: false },
+    }))).toBe('Counts cover orders created from 2026-07-28 on; older weeks show "Not read". Shopify returns only the last 60 days of orders without the read_all_orders permission.')
   })
 })
