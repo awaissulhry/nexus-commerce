@@ -75,6 +75,15 @@ export function channelCategoryField(channel: string | null | undefined): string
   return channel ? CHANNEL_CATEGORY_FIELD[channel.toUpperCase()] ?? null : null
 }
 
+/**
+ * The mapped category as the value of the channel's category field. A category id is held as text; a NUMBER field
+ * (Etsy's `taxonomy_id`, an integer in Etsy's schema) gets it as a number when it is all digits. Anything else is
+ * returned unchanged, so validation still names a bad id.
+ */
+export function categoryFieldValue(kind: string | null | undefined, categoryId: string | null | undefined): string | number | null | undefined {
+  return kind === 'number' && typeof categoryId === 'string' && /^\d+$/.test(categoryId) ? Number(categoryId) : categoryId
+}
+
 /** Existing listings can pin their own category. Amazon product types are never eBay category ids. */
 export function categoryForListing(
   category: ResolvedCategory | undefined,

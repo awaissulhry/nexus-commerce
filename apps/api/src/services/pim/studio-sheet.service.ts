@@ -71,7 +71,7 @@ import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
 import { completenessFor, decimalToNumber, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
-import { channelCategoryField } from './mapping/category-mapping.service.js'
+import { categoryFieldValue, channelCategoryField } from './mapping/category-mapping.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types — the contract PES.2 / PES.3 / PES.4 consume
@@ -1344,7 +1344,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         // The mapped category fills only the coordinate channel's own category field (`CHANNEL_CATEGORY_FIELD`), never
         // another channel's key — Shopify's free-text `productType` is not its category.
         if (!base && coordinate && col.key === channelCategoryField(coordinate.channel) && effectiveCategory) {
-          base = { value: effectiveCategory, source: 'master', inheritedFrom: rootId, inherited: true }
+          base = { value: categoryFieldValue(col.kind, effectiveCategory), source: 'master', inheritedFrom: rootId, inherited: true }
         }
         const empty: SheetCellValue = { value: contentWireValue(null, col.slot ? undefined : col.shape), source: null, inheritedFrom: null, inherited: false }
         const cell = base ?? empty
