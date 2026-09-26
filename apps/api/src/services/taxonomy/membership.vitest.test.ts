@@ -3,7 +3,8 @@ const m=vi.hoisted(()=>({db:{$executeRaw:vi.fn(),category:{count:vi.fn()},produc
 vi.mock('../../db.js',()=>({default:m.db}))
 vi.mock('../product-event.service.js',()=>({productEventService:{emitTx:m.emit,notifyCommitted:m.notify}}))
 import { CategoryTreeService } from '../category-tree.service.js'
-const service=new CategoryTreeService(m.db as never)
+// The instance withLock hands out: already inside the locked transaction, so writes run inline.
+const service=new CategoryTreeService(m.db as never, true)
 beforeEach(()=>{vi.resetAllMocks();m.db.category.count.mockResolvedValue(2);m.db.product.updateMany.mockResolvedValue({count:1})})
 it('stores one primary membership, bumps the product revision and records the event in the same transaction',async()=>{
  await service.assign('product',['a','b','a'],{primaryId:'b'})
