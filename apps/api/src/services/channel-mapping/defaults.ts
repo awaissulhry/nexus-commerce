@@ -78,6 +78,16 @@ export const AMAZON_FLAT_FILE_KEYS: Readonly<Record<string, string>> = {
 }
 
 /** Our eBay listing workbook (the eBay flat-file page's export, current and legacy layouts): what each fixed column is. */
+/**
+ * CHMAP M7 — where a listing keeps its Amazon seller SKU, in reading order: the import's identity match
+ * (`catalog-amazon-workbook.ts`) and the product-sheet push (`studio-publication-amazon.ts`) read the same places;
+ * each adds its own offers (all offers on import, active offers on push).
+ */
+export const AMAZON_LISTING_SKU_KEYS = {
+  platformAttributes: ['sellerSku', 'seller_sku', 'sku', 'item_sku'],
+  flatFileSnapshot: ['item_sku'],
+} as const
+
 export const EBAY_WORKBOOK_COLUMNS = {
   /** Fixed listing columns → the eBay channel spec field they carry. */
   fixedFields: {

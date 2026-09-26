@@ -59,6 +59,13 @@ describe('legacy eBay workbook import identities and values', () => {
     expect(result.exclusions.filter(r => r.field === 'Price (€)')).toHaveLength(5)
     expect(result.exclusions.filter(r => r.field === 'Qty')).toHaveLength(105)
   })
+  it('names a custom specific without the header\'s marks or its "(English name)"', () => {
+    const input = fixture(), col = headers.length + 1
+    input.sheet.getCell(1, col).value = 'Colore esterno (Outer colour) ⚠'
+    input.sheet.getCell(2, col).value = 'Nero'
+    const result = parse(input)
+    expect(result.rows.find(r => r.row === 2 && r.field.startsWith('itemSpecifics.'))?.field).toBe('itemSpecifics.Colore esterno')
+  })
   it.each(['wrong item', 'wrong parent', 'wrong listing', 'missing target', 'ambiguous account'])('refuses %s without falling back to the primary listing', kind => {
     const input = fixture()
     if (kind === 'wrong item') set(input.sheet, 24, 'Item ID', ids[0])
