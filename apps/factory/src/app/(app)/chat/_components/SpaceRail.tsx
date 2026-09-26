@@ -33,7 +33,7 @@ export function SpaceRail({
   canCreate,
   onCreate,
 }: {
-  railRef: React.RefObject<HTMLDivElement>;
+  railRef: React.RefObject<HTMLDivElement | null>;
   spaces: SpaceItem[] | null;
   /** FC3 — followed threads with unread activity (server-bounded to 20) */
   threads: FollowedThread[];

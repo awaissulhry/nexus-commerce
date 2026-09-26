@@ -12,7 +12,7 @@ export function ReferencePicker({ path, type, schema, metaobjectType, excluded =
   const [query, setQuery] = useState(''), [entryType, setEntryType] = useState(metaobjectType ?? '')
   const [items, setItems] = useState<ShopifyReference[]>([]), [cursor, setCursor] = useState<string | null>(null)
   const [busy, setBusy] = useState(true), [error, setError] = useState(''), [refresh, setRefresh] = useState(0)
-  const generation = useRef(0), abort = useRef<AbortController>()
+  const generation = useRef(0), abort = useRef<AbortController | undefined>(undefined)
   const needsType = type.includes('metaobject_reference') || type.includes('mixed_reference') || type === 'disclosure_reference'
   async function fetchPage(after?: string) {
     abort.current?.abort(); const controller = new AbortController(); abort.current = controller
