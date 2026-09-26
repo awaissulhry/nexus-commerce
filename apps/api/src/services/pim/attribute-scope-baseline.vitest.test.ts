@@ -9,7 +9,8 @@
  *   B2 (S4)    — a product with no family sees none of the business's dictionary on Shared, not even the starter one.
  *   B3 (S4)    — an Amazon-only key in the shared bag comes back on Shared as an "Additional saved attributes" column.
  *   B4 (S3/S5) — a Motovento-shaped family shows every one of the 242 attributes on Shared, the Amazon-only ones too.
- *   B5 (S2)    — readiness writes Amazon rows for an eBay-only business: "No active account for this destination."
+ *   B5 (S2 ✓)  — FLIPPED by S2: readiness follows the channel footprint. An eBay-only business gets eBay rows only (no
+ *               "No active account" rows); a business with no channel gets the Shared rows only.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -79,14 +80,21 @@ describe('P3b S0 — today, pinned', () => {
     expect(study.filter(a => a.class === 'channel-specific').length).toBe(74)
   }, 120_000)
 
-  it('B5: readiness writes Amazon rows for an eBay-only business, marked "No active account"', async () => {
-    await inFixture('F1', () => reconcileFamilyReadiness(fixtures.F1.productId))
-    const rows = await inFixture('F1', () => prisma.readinessIndex.findMany({ where: { productId: fixtures.F1.productId }, select: { channel: true, state: true, note: true } }))
-    const amazon = rows.filter(r => r.channel === 'AMAZON')
-    expect(amazon.length).toBeGreaterThan(0)
-    expect(amazon.every(r => r.state === 'absent' && r.note === 'No active account for this destination.')).toBe(true)
-    // Control: the eBay rows are computed (an account exists), and the shared rows exist per language.
-    expect(rows.some(r => r.channel === 'EBAY' && r.note !== 'No active account for this destination.')).toBe(true)
-    expect(rows.some(r => r.channel === null)).toBe(true)
+  it('B5 (flipped by S2): readiness follows the footprint — eBay rows only for F1, Shared rows only for F3', async () => {
+    const rowsOf = async (key: 'F1' | 'F3') => {
+      await inFixture(key, () => reconcileFamilyReadiness(fixtures[key].productId))
+      return inFixture(key, () => prisma.readinessIndex.findMany({ where: { productId: fixtures[key].productId }, select: { channel: true, accountId: true, language: true, note: true } }))
+    }
+    const f1 = await rowsOf('F1')
+    expect([...new Set(f1.map(r => r.channel))].sort()).toEqual(['EBAY', null].sort())
+    expect(f1.some(r => r.note === 'No active account for this destination.')).toBe(false)
+    expect(f1.filter(r => r.channel === 'EBAY').every(r => r.accountId !== null)).toBe(true)
+    const f3 = await rowsOf('F3')
+    expect(f3.length).toBeGreaterThan(0)
+    expect(f3.every(r => r.channel === null)).toBe(true)
+    // The Shared rows are unchanged by S2: one per language of every switched-on market, for both businesses.
+    const sharedLanguages = (rows: typeof f1) => rows.filter(r => r.channel === null).map(r => r.language).sort()
+    expect(sharedLanguages(f1)).toEqual(sharedLanguages(f3))
+    expect(sharedLanguages(f3).length).toBeGreaterThan(1)
   }, 180_000)
 })
