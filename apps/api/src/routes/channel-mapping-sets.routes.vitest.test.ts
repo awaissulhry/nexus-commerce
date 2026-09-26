@@ -3,6 +3,7 @@
  * permission every route needs (`pim.manage`).
  */
 import Fastify, { type FastifyInstance } from 'fastify'
+import multipart from '@fastify/multipart'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { permissionForRoute } from '../lib/auth/permissions-manifest.js'
 import { withWorkspace } from '../lib/workspace-context.js'
@@ -25,6 +26,7 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
   beforeAll(async () => {
     const { default: routes } = await import('./channel-mapping-sets.routes.js')
     app = Fastify()
+    await app.register(multipart)
     app.addHook('preHandler', (_request, _reply, done) => { if (PROFILES_ON) withWorkspace(scope, done); else done() })
     await app.register(routes, { prefix: '/api' })
     await app.ready()
@@ -40,7 +42,8 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
 
   it('every route needs pim.manage', () => {
     for (const [method, url] of [['GET', '/api/pim/channel-mapping-sets'], ['GET', '/api/pim/channel-mapping-sets/:id'], ['PATCH', '/api/pim/channel-mapping-sets/:id/fields'],
-      ['POST', '/api/pim/channel-mapping-sets/:id/activate'], ['POST', '/api/pim/channel-mapping-sets/:id/versions'], ['GET', '/api/pim/channel-mapping-sets/:id/push-impact']] as const) {
+      ['POST', '/api/pim/channel-mapping-sets/:id/activate'], ['POST', '/api/pim/channel-mapping-sets/:id/versions'], ['GET', '/api/pim/channel-mapping-sets/:id/push-impact'],
+      ['GET', '/api/pim/channel-mapping-sets/shopify-stores'], ['POST', '/api/pim/channel-mapping-sets/shopify-files']] as const) {
       expect(permissionForRoute(method, url)).toBe(permissionForRoute('POST', '/api/pim/channel-mapping/:channel/:code/impact'))
       expect(permissionForRoute(method, url)).toBeTruthy()
     }
@@ -98,9 +101,34 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
     const draft = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/export`, payload: { skus: ['X'] } })
     expect(draft.statusCode).toBe(409)
     expect(draft.json().error).toBe('Activate version 1 before exporting with it.')
+    // The Shopify push follows no file version: activating one changes nothing it sends, and says so.
+    expect((await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${set.id}/push-impact` })).json().impact).toEqual({ stops: [], starts: [], kept: [], listings: 0, replaces: null,
+      note: 'Nexus’s Shopify push does not follow file mapping versions; this version only decides how Shopify’s product file is read and written.' })
     expect((await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/activate` })).json().set.status).toBe('ACTIVE')
     const none = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/export`, payload: { skus: [] } })
     expect(none.statusCode).toBe(400)
     expect(none.json().error).toBe('Choose the products to export')
   })
+
+  it('NCF — reads a Shopify file for its preview only, and refuses Shopify’s inventory CSV word for word', async () => {
+    const { csvOf, SHOPIFY_INVENTORY_HEADERS, shopifySampleCsv } = await import('../services/pim/catalog-transfer-test/shopify-csv-fixtures.js')
+    const upload = (filename: string, bytes: Buffer) => {
+      const boundary = 'ncf-boundary'
+      const payload = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: text/csv\r\n\r\n`), bytes, Buffer.from(`\r\n--${boundary}--\r\n`)])
+      return app.inject({ method: 'POST', url: '/api/pim/channel-mapping-sets/shopify-files', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
+    }
+    const none = await upload('products_export_1.csv', shopifySampleCsv())
+    expect(none.statusCode).toBe(400)
+    expect(none.json().error).toBe('No Shopify store is connected. Connect the store first.')
+    const { default: prisma } = await import('../db.js')
+    await inBusiness(() => prisma.channelConnection.create({ data: { channelType: 'SHOPIFY', displayName: 'ACME store', isActive: true } }))
+    expect((await app.inject({ method: 'GET', url: '/api/pim/channel-mapping-sets/shopify-stores' })).json().stores).toEqual([{ id: expect.any(String), label: 'ACME store' }])
+    const read = await upload('products_export_1.csv', shopifySampleCsv())
+    expect(read.statusCode).toBe(201)
+    expect(read.json().preview).toMatchObject({ status: 'DRAFT', created: true, store: { label: 'ACME store' }, counts: { rows: 7, products: 3, written: 0, linkProposals: 0 } })
+    expect(read.json().preview.counts.refused + read.json().preview.counts.excluded).toBe(read.json().preview.counts.cells)
+    const inventory = await upload('inventory_export_1.csv', csvOf(SHOPIFY_INVENTORY_HEADERS, [{ Handle: 'a', SKU: 'b', Location: 'Shop' }]))
+    expect(inventory.statusCode).toBe(400)
+    expect(inventory.json().error).toBe('inventory_export_1.csv is Shopify’s inventory CSV (quantities by location). Nexus never imports stock from a file: the stock ledger owns it. To import product information, export Products (Shopify admin → Products → Export) and import that file.')
+  }, 60_000)
 })

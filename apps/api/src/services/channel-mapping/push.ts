@@ -122,6 +122,12 @@ export function pushStops(channel: string, fields: readonly MappingFieldRow[]): 
 export async function pushImpact(setId: string, on: 'activate' | 'retire' = 'activate'): Promise<MappingPushImpact | null> {
   const set = await prisma.channelMappingSet.findUnique({ where: { id: setId }, include: { fields: true } })
   if (!set) return null
+  // NCF — the Shopify push follows no file version: a Shopify product-CSV version only decides how that file is read and written.
+  if (set.channel === 'SHOPIFY') {
+    const current = on === 'activate' ? await prisma.channelMappingSet.findFirst({ where: { channel: set.channel, marketplace: set.marketplace, formKind: set.formKind, formKey: set.formKey, status: 'ACTIVE', id: { not: set.id } }, select: { version: true } }) : null
+    return { stops: [], starts: [], kept: [], listings: 0, replaces: current?.version ?? null,
+      note: 'Nexus’s Shopify push does not follow file mapping versions; this version only decides how Shopify’s product file is read and written.' }
+  }
   const none = { stops: new Map<string, string>(), kept: [] as string[] }
   const current = on === 'retire' ? (set.status === 'ACTIVE' ? set : null)
     : await prisma.channelMappingSet.findFirst({ where: { channel: set.channel, marketplace: set.marketplace, formKind: set.formKind, formKey: set.formKey, status: 'ACTIVE', id: { not: set.id } }, include: { fields: true } })

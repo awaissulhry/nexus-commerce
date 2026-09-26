@@ -27,7 +27,7 @@ import {
   type MappingUse,
 } from './api'
 import {
-  changedKeys, DECIDED_BY_WORD, DIRECTION_WORD, exportBlocker, filterCounts, filterRows, formLabel, isLocked, pageOf, pushImpactReview, requirementWord, siblingsOf,
+  changedKeys, DECIDED_BY_WORD, DIRECTION_WORD, exportBlocker, filterCounts, filterRows, formLabel, formSourceWord, isLocked, pageOf, pushImpactReview, requirementWord, siblingsOf,
   STATE_WORD, stateTone, STATUS_TONE, STATUS_WORD, targetLabel, transformSummary, USE_WORD, useCount, versionName,
   type FieldFilter,
 } from './model'
@@ -44,9 +44,11 @@ const FILTER_WORD: Record<Exclude<FieldFilter, 'changed'>, string> = {
 interface Loaded { set: MappingSetDetail; uses: MappingUse[] }
 type BaseDiff = { status: 'none' } | { status: 'loading' } | { status: 'ready'; diff: MappingDiff } | { status: 'error'; error: string }
 
-export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
+export function VersionDetail({ setId, sets, stores = [], onSelect, onListChanged }: {
   setId: string
   sets: MappingSetSummary[]
+  /** NCF — the connected Shopify stores, to name a Shopify version's store. */
+  stores?: { id: string; label: string }[]
   onSelect: (id: string | null) => void
   onListChanged: () => void
 }) {
@@ -286,7 +288,7 @@ export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
           <Pill tone={STATUS_TONE[set.status]} size="sm">{STATUS_WORD[set.status]}</Pill>
         </div>
         <div className={styles.meta}>
-          <span>Template version {set.templateVersion ?? 'not stated'}</span>
+          <span>{set.channel === 'SHOPIFY' ? formSourceWord(set, stores) : `Template version ${set.templateVersion ?? 'not stated'}`}</span>
           {set.templateIdentifier && <span>Template ID <span className={styles.key}>{set.templateIdentifier}</span></span>}
           {set.language && <span>Language {set.language}</span>}
           <span>{num(c.fields)} columns</span>

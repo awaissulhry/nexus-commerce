@@ -91,6 +91,37 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
     catch (error) { if (error instanceof MappingError) throw error; return reply.status(400).send({ error: error instanceof Error ? error.message : String(error) }) }
   }))
 
+  /** NCF — the connected Shopify stores (a Shopify product CSV names none; the page chooses one when there are several). */
+  fastify.get('/pim/channel-mapping-sets/shopify-stores', async () => {
+    const { shopifyStores } = await import('../services/pim/catalog-shopify-csv.js')
+    return { stores: await shopifyStores() }
+  })
+
+  /**
+   * NCF — read Shopify's own product CSV for its PREVIEW: the mapping version it reads with (found, or made as a DRAFT)
+   * and what an import would write, exclude and refuse. Nothing else is saved; the import itself is applied from the
+   * Catalog page or a product's sheet. Read on the parse worker, like every channel file.
+   */
+  fastify.post('/pim/channel-mapping-sets/shopify-files', async (request, reply) => guard(reply, async () => {
+    const part = await request.file({ limits: { files: 1, fileSize: 10 * 1024 * 1024 } })
+    if (!part) return reply.status(400).send({ error: 'Choose the product CSV you exported from Shopify (Products → Export)' })
+    const accountField = (part.fields as Record<string, { value?: unknown } | undefined>)?.accountId
+    const accountId = typeof accountField?.value === 'string' && accountField.value ? accountField.value : undefined
+    const bytes = await part.toBuffer()
+    const [{ openWorkbookParser }, { resolveShopifyCsv, shopifyFilePreview }] = await Promise.all([import('../services/pim/workbook-parse.js'), import('../services/pim/catalog-shopify-csv.js')])
+    const session = openWorkbookParser({ resolveBaseline: async () => { throw new Error('An editing workbook belongs to its product sheet.') } })
+    try {
+      const outcome = await session.read(part.filename, bytes, 128 * 1024 * 1024)
+      if (outcome.kind !== 'shopify') return reply.status(400).send({ error: `${part.filename} is not Shopify’s product CSV. Export it from Shopify (Products → Export → All products → Plain CSV file).` })
+      const result = await resolveShopifyCsv(outcome.table, { accountId })
+      if (!result.mapping) return reply.status(500).send({ error: 'The mapping version for this file could not be read; nothing was saved.' })
+      return reply.code(201).send({ preview: { ...result.mapping, ...shopifyFilePreview(outcome.table, result, { id: result.accountId, label: result.storeLabel }) } })
+    } catch (error) {
+      if (error instanceof MappingError) throw error
+      return reply.status(400).send({ error: error instanceof Error ? error.message : String(error) })
+    } finally { await session.close() }
+  }))
+
   /**
    * Write Amazon's own template from what Nexus holds, through an ACTIVE version. Always a PARTIAL update: a blank
    * cell keeps Amazon's value (stock, fulfilment and every column Nexus does not carry stay untouched on upload).
@@ -105,7 +136,7 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('Content-Type', 'text/csv; charset=utf-8')
       reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
       reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows.length, products: out.products, gaps: out.refused.length, blankColumns: out.omitted.length, mapping: out.set.label,
-        omitted: out.omitted.map(o => o.header), refused: out.refused.map(r => r.sku) })))
+        omitted: out.omitted.map(o => o.header), refused: out.refused.slice(0, 10).map(r => ({ sku: r.sku, reason: r.reason })) })))
       return reply.send(out.bytes)
     }
     if (set.formKind === 'EBAY_WORKBOOK') {

@@ -470,7 +470,7 @@ export async function shopifyStoreSpec(accountId: string): Promise<{ spec: Chann
  * Read Shopify's product CSV against what Nexus holds (preview input; nothing is written here). `productId` = the
  * product sheet: its product group only, in its own store. `accountId` = the store chosen on the Catalog page.
  */
-export async function resolveShopifyCsv(table: ShopifyCsvTable, options: { accountId?: string; productId?: string; links?: Record<string, string> } = {}): Promise<ShopifyCsvResult & { accountId: string }> {
+export async function resolveShopifyCsv(table: ShopifyCsvTable, options: { accountId?: string; productId?: string; links?: Record<string, string> } = {}): Promise<ShopifyCsvResult & { accountId: string; storeLabel: string }> {
   const { default: prisma } = await import('../../db.js')
   const store = await chooseStore(prisma, options.accountId, options.productId)
   const skuHeader = table.headers.find(h => shopifyChannelKeyOf(h) === 'Variant SKU')
@@ -500,5 +500,37 @@ export async function resolveShopifyCsv(table: ShopifyCsvTable, options: { accou
     ...(chmap ? [`Read with the mapping ${chmap.info.label}.`, ...chmap.warnings] : []),
     ...(mappingProblem ? [`The mapping versions could not be read (${mappingProblem}); this file was read with the built-in rules only, and no Owner decision was applied.`] : []),
   )
-  return { ...result, accountId: store.id }
+  return { ...result, accountId: store.id, storeLabel: store.label }
+}
+
+// ── The File mappings page: a Shopify file read for its preview only ─────────────────────────────────────────────
+
+export interface ShopifyFilePreview {
+  setId: string; version: number; status: string; label: string; created: boolean
+  store: { id: string; label: string }
+  /** Filled cells of the file, and what an import would do with each (the reader's ledger). */
+  counts: { rows: number; products: number; cells: number; written: number; excluded: number; refused: number; linkProposals: number }
+  /** The most common reasons, with how many cells each covers. */
+  refused: { reason: string; cells: number }[]
+  excluded: { reason: string; cells: number }[]
+  warnings: string[]
+}
+
+/** Pure: the preview the File mappings page shows for a read file (no write happened; the version was found or made). */
+export function shopifyFilePreview(table: ShopifyCsvTable, result: ShopifyCsvResult, store: { id: string; label: string }, top = 8): Omit<ShopifyFilePreview, 'setId' | 'version' | 'status' | 'label' | 'created'> {
+  const group = (outcomes: ShopifyLedgerEntry['outcome'][]) => [...result.ledger.filter(e => outcomes.includes(e.outcome)).reduce((acc, e) => acc.set(e.reason ?? '', (acc.get(e.reason ?? '') ?? 0) + 1), new Map<string, number>())]
+    .sort((a, b) => b[1] - a[1]).slice(0, top).map(([reason, cells]) => ({ reason, cells }))
+  const count = (outcomes: ShopifyLedgerEntry['outcome'][]) => result.ledger.filter(e => outcomes.includes(e.outcome)).length
+  return {
+    store,
+    counts: { rows: table.records.length, products: shopifyCsvShape(table).products, cells: result.ledger.length, written: count(['row']), excluded: count(['excluded', 'skipped-row']), refused: count(['refused']), linkProposals: result.links.length },
+    refused: group(['refused']), excluded: group(['excluded', 'skipped-row']), warnings: result.warnings,
+  }
+}
+
+/** The active Shopify stores, for the File mappings page's store choice. */
+export async function shopifyStores(): Promise<{ id: string; label: string }[]> {
+  const { default: prisma } = await import('../../db.js')
+  const stores = await prisma.channelConnection.findMany({ where: { channelType: 'SHOPIFY', isActive: true }, select: { id: true, displayName: true, accountLabel: true }, orderBy: { id: 'asc' } })
+  return stores.map(s => ({ id: s.id, label: s.displayName ?? s.accountLabel ?? 'Shopify store' }))
 }

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MappingDiff, MappingFieldRow, MappingSetSummary } from '@nexus/shared/channel-mapping'
 import {
-  changedKeys, decisionBody, decisionSentence, DIRECTION_WORD, exportBlocker, exportSummarySentence, filenameFromDisposition,
-  filterCounts, filterRows, filterSets, formLabel, groupByForm, initialDraft, isLocked, marketsOf, matchesSearch,
-  needsTemplateUpload, pageOf, parseExportSummary, parseSkus, pushImpactReview, requirementWord, sharedTarget, siblingsOf, stateTone,
-  targetLabel, templateResultSentence, transformSummary, useCount, versionName,
+  changedKeys, decisionBody, decisionSentence, DIRECTION_WORD, exportBlocker, exportSummarySentence, filenameFromDisposition, filterCounts, filterRows, filterSets, formLabel, groupByForm, initialDraft, isLocked, marketsOf, matchesSearch, needsTemplateUpload, pageOf, parseExportSummary, parseSkus, pushImpactReview, requirementWord, sharedTarget, siblingsOf, stateTone, targetLabel, templateResultSentence, transformSummary, useCount, versionName, exportExtension, formSourceWord, shopifyExportSummarySentence, shopifyPreviewSentence,
 } from './model'
 import { fileSetHref, mappingViewHref, readMappingView } from './urls'
 
@@ -303,5 +300,34 @@ describe('the Activate confirmation — what the push sends (CHMAP M4)', () => {
     expect(pushImpactReview({ channel: 'EBAY', marketplace: 'IT', fields: [] }, null, 'Service unavailable'))
       .toEqual({ consequences: [], findings: [{ label: 'What Nexus sends to eBay IT (Service unavailable)', severity: 'unknown' }] })
     expect(pushImpactReview({ channel: 'AMAZON', marketplace: 'DE', fields }, { ...impact, listings: 3 }).consequences[0]).toBe('The next publish to Amazon DE changes for 3 listings of this form.')
+  })
+})
+
+describe('NCF — Shopify product CSV on the File mappings page', () => {
+  const shop = { channel: 'SHOPIFY' as const, marketplace: 'GLOBAL', formKind: 'SHOPIFY_PRODUCT_CSV' as const, formKey: 'acct-1', templateVersion: null }
+  it('names the form without a market, and its store instead of a template version', () => {
+    expect(formLabel(shop)).toBe('Shopify · product CSV')
+    expect(formSourceWord(shop, [{ id: 'acct-1', label: 'ACME store' }])).toBe('Store ACME store')
+    expect(formSourceWord(shop, [])).toBe('Store not connected')
+    expect(formSourceWord({ channel: 'AMAZON', formKey: 'COAT', templateVersion: '2026.0713' })).toBe('Template 2026.0713')
+  })
+  it('writes a .csv, and says what the file holds and what it left out', () => {
+    expect(exportExtension(shop)).toBe('.csv')
+    expect(exportExtension({ channel: 'AMAZON' })).toBe('.xlsm')
+    expect(exportExtension({ channel: 'EBAY' })).toBe('.xlsx')
+    const header = encodeURIComponent(JSON.stringify({ rows: 28, products: 4, gaps: 1, blankColumns: 59, mapping: 'Shopify · product CSV · v2 (active)', omitted: ['Body (HTML)'], refused: [{ sku: 'X', reason: 'Why' }] }))
+    const summary = parseExportSummary(header)!
+    expect(summary).toEqual({ rows: 28, products: 4, gaps: 1, blankColumns: 59, mapping: 'Shopify · product CSV · v2 (active)', omitted: ['Body (HTML)'], refused: [{ sku: 'X', reason: 'Why' }] })
+    expect(shopifyExportSummarySentence(summary)).toBe('28 variant rows of 4 products written with Shopify · product CSV · v2 (active). 1 product was not written; 59 columns were left out, so Shopify keeps its values there.')
+    // A header without the Shopify extras still parses (Amazon, eBay), and a malformed extra is dropped, never guessed.
+    expect(parseExportSummary(encodeURIComponent(JSON.stringify({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm', refused: [1] })))).toEqual({ rows: 1, gaps: 0, blankColumns: 0, mapping: 'm' })
+  })
+  it('says what reading a Shopify file would do', () => {
+    expect(shopifyPreviewSentence({ label: 'Shopify · product CSV · v1 (draft)', store: { id: 'a', label: 'ACME store' }, created: true,
+      counts: { rows: 333, products: 43, cells: 5045, written: 198, excluded: 338, refused: 4509, linkProposals: 0 } }))
+      .toBe('Read with Shopify · product CSV · v1 (draft), for ACME store. Of 5045 filled cells, 198 would be imported, 338 excluded and 4509 refused. That version is new: review it before activating.')
+  })
+  it('names Shopify without GLOBAL in the activation review', () => {
+    expect(pushImpactReview({ channel: 'SHOPIFY', marketplace: 'GLOBAL', fields: [] }, { stops: [], starts: [], kept: [], listings: 0, replaces: null, note: 'n' }).consequences).toEqual(['What Nexus sends to Shopify does not change.'])
   })
 })

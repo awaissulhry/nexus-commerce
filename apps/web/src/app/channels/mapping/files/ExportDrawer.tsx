@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * CHMAP — write a channel file (Amazon's own `.xlsm` template, or our eBay `.xlsx` workbook) for chosen
- * products, through an ACTIVE mapping version. The server re-checks everything; its refusal is shown
+ * CHMAP — write a channel file (Amazon's own `.xlsm` template, our eBay `.xlsx` workbook, or — NCF — Shopify's own
+ * product `.csv`) for chosen products, through an ACTIVE mapping version. The server re-checks everything; its refusal is shown
  * word for word, and a refusal that an uploaded template answers offers the upload right here.
  */
 import { useState } from 'react'
@@ -11,7 +11,7 @@ import { Button, Textarea, Toggle } from '@/design-system/primitives'
 import { Banner, Drawer, Field, useToast } from '@/design-system/components'
 import { num } from '@/design-system/lib/format'
 import { errorText, exportMappingSet, saveFile } from './api'
-import { exportSummarySentence, formLabel, needsTemplateUpload, parseSkus, type TemplateUploadResult } from './model'
+import { exportExtension, exportSummarySentence, formLabel, needsTemplateUpload, parseSkus, shopifyExportSummarySentence, type ExportSummary, type TemplateUploadResult } from './model'
 import { TemplateUpload } from './TemplateUpload'
 import styles from './files.module.css'
 
@@ -22,11 +22,13 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
 }) {
   const { toast } = useToast()
   const amazon = set.channel === 'AMAZON'
+  const shopify = set.channel === 'SHOPIFY'
+  const extension = exportExtension(set)
   const [text, setText] = useState('')
   const [includePrices, setIncludePrices] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ file: string; summary: string } | null>(null)
+  const [done, setDone] = useState<{ file: string; summary: string; details: ExportSummary | null } | null>(null)
   // Stays offered once a refusal asked for the template, so the upload's own answer stays on screen.
   const [offerUpload, setOfferUpload] = useState(false)
   const skus = parseSkus(text)
@@ -34,13 +36,13 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
   const run = async () => {
     setBusy(true); setError(null); setDone(null)
     try {
-      const out = await exportMappingSet(set.id, amazon ? { skus, includePrices } : { skus })
-      const file = out.filename ?? `${formLabel(set)} v${set.version}.${amazon ? 'xlsm' : 'xlsx'}`
+      const out = await exportMappingSet(set.id, amazon || shopify ? { skus, includePrices } : { skus })
+      const file = out.filename ?? `${formLabel(set)} v${set.version}${extension}`
       saveFile(out.blob, file)
       const summary = out.summary
-        ? exportSummarySentence(out.summary, num)
+        ? (shopify ? shopifyExportSummarySentence(out.summary, num) : exportSummarySentence(out.summary, num))
         : 'The file was written; the server sent no summary of what it holds.'
-      setDone({ file, summary })
+      setDone({ file, summary, details: out.summary })
       toast(summary, 'success', { duration: 8000 })
     } catch (e) {
       const message = errorText(e)
@@ -54,7 +56,7 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
       footer={<>
         <Button onClick={onClose}>Close</Button>
         <Button variant="primary" disabled={busy || skus.length === 0} onClick={() => void run()}>
-          {busy ? 'Writing the file…' : `Export ${amazon ? '.xlsm' : '.xlsx'}`}
+          {busy ? 'Writing the file…' : `Export ${extension}`}
         </Button>
       </>}>
       <div className={styles.drawerBody}>
@@ -68,6 +70,14 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
             <Toggle checked={includePrices} onChange={setIncludePrices} />
           </Field>
         )}
+        {shopify && (
+          <>
+            <Field label="Include prices" hint="Price and compare-at price, as Nexus recorded them. Off: the columns are left out and Shopify keeps its prices.">
+              <Toggle checked={includePrices} onChange={setIncludePrices} />
+            </Field>
+            <p className={styles.plain}>Only products Nexus links to Shopify are written. A column Nexus cannot fill for every product is left out, so Shopify keeps its values; handle, title, status and every option are always written. Upload it in Shopify with “Overwrite products with matching handles” ticked.</p>
+          </>
+        )}
         {error && <Banner tone="danger" title="The export was refused">{error}</Banner>}
         {offerUpload && (
           <section className={styles.section} aria-label="Upload the Amazon template">
@@ -76,6 +86,11 @@ export function ExportDrawer({ set, onClose, onTemplateUploaded }: {
           </section>
         )}
         {done && <Banner tone="success" title={`Downloaded ${done.file}`}>{done.summary}</Banner>}
+        {done?.details?.refused && done.details.refused.length > 0 && (
+          <Banner tone="warning" title={`Not written (${num(done.details.gaps)})`}>
+            <ul className={styles.keyList}>{done.details.refused.map((r, i) => <li key={i}>{r.sku}: {r.reason}</li>)}</ul>
+          </Banner>
+        )}
       </div>
     </Drawer>
   )

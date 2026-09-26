@@ -9,7 +9,7 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import type { MappingDiff, MappingPushImpact, MappingSetDetail, MappingSetSummary } from '@nexus/shared/channel-mapping'
 import { json } from '../_shared/api'
-import { filenameFromDisposition, parseExportSummary, type DecisionBody, type ExportSummary, type TemplateUploadResult } from './model'
+import { filenameFromDisposition, parseExportSummary, type DecisionBody, type ExportSummary, type ShopifyFilePreview, type TemplateUploadResult } from './model'
 
 const base = () => `${getBackendUrl()}/api/pim/channel-mapping-sets`
 const id = (value: string) => encodeURIComponent(value)
@@ -99,6 +99,23 @@ export async function uploadAmazonTemplate(file: File): Promise<TemplateUploadRe
   const r = await fetch(`${base()}/templates`, { method: 'POST', credentials: 'include', body: form })
   if (!r.ok) throw await refusal(r)
   return ((await r.json()) as { template: TemplateUploadResult }).template
+}
+
+/** NCF — the connected Shopify stores (a Shopify product CSV names none). */
+export const listShopifyStores = (signal?: AbortSignal) =>
+  json<{ stores: { id: string; label: string }[] }>(`${base()}/shopify-stores`, { signal }).then(r => r.stores)
+
+/**
+ * NCF — read Shopify's product CSV for its preview: the version it reads with and what an import would do. Nothing
+ * else is saved. `accountId` is sent BEFORE the file, so the server sees it with the file part.
+ */
+export async function uploadShopifyFile(file: File, accountId?: string): Promise<ShopifyFilePreview> {
+  const form = new FormData()
+  if (accountId) form.append('accountId', accountId)
+  form.append('file', file)
+  const r = await fetch(`${base()}/shopify-files`, { method: 'POST', credentials: 'include', body: form })
+  if (!r.ok) throw await refusal(r)
+  return ((await r.json()) as { preview: ShopifyFilePreview }).preview
 }
 
 /** Hand a file to the browser's download. Feature-local: this branch has no shared download helper. */
