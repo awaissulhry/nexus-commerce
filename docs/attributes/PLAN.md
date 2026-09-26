@@ -331,6 +331,7 @@ these only through the shared contract, and I tell the sheet session before each
 | P4 | ✅ built 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
 | P5 | ✅ built 2026-09-26 (not pushed) | §10.5 |
 | P6 | ✅ API built 2026-09-26 (not pushed); the screens are the product-sheet session's (§11) | §10.6 |
+| Ship | PR #18 opened 2026-09-26; the Owner turned auto-merge on. First CI run failed the migration upgrade check: `prisma/baseline.sql` (a fresh database's schema) was not regenerated with the two migrations — fixed with `generate-baseline.mjs` (+4 columns, +2 indexes), checked locally on a throwaway server first | https://github.com/awaissulhry/nexus-commerce/pull/18 |
 | P7 | ⬜ not started — touches readiness/sheet files shared with the product-sheet session | — |
 | P8 | ⬜ not started — same, plus the resolvers every surface reads | — |
 
