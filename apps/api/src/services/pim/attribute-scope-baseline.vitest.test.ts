@@ -6,8 +6,10 @@
  *
  *   B1 (S1/S2) — which channels a business "has" does not depend on what it connected: every business has the same
  *               switched-on markets.
- *   B2 (S4)    — a product with no family sees none of the business's dictionary on Shared, not even the starter one.
- *   B3 (S4)    — an Amazon-only key in the shared bag comes back on Shared as an "Additional saved attributes" column.
+ *   B2 (S4 ✓)  — FLIPPED by S4: a product with no family sees the business's core on Shared (the concept-linked
+ *               attributes: the starter set for a new business).
+ *   B3 (S4 ✓)  — FLIPPED by S4: an Amazon-only key in the shared bag no longer comes back on Shared; a real old key
+ *               (in no dictionary and no channel schema) still does.
  *   B4 (S3/S5) — a Motovento-shaped family shows every one of the 242 attributes on Shared, the Amazon-only ones too.
  *   B5 (S2 ✓)  — FLIPPED by S2: readiness follows the channel footprint. An eBay-only business gets eBay rows only (no
  *               "No active account" rows); a business with no channel gets the Shared rows only.
@@ -25,7 +27,7 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 import prisma from '../../db.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 import { customAttributeConcepts } from '@nexus/shared/attribute-concepts'
-import { AMAZON_ONLY_KEY, createScopeFixtures, studyAttributes, type ScopeFixture, type ScopeFixtureKey } from '../../test-support/attribute-scope-fixtures.js'
+import { AMAZON_ONLY_KEY, OLD_KEY, createScopeFixtures, studyAttributes, type ScopeFixture, type ScopeFixtureKey } from '../../test-support/attribute-scope-fixtures.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { reconcileFamilyReadiness } from './readiness-index.service.js'
 
@@ -54,22 +56,23 @@ describe('P3b S0 — today, pinned', () => {
     expect(markets.F3.some(m => m.startsWith('AMAZON:')) && markets.F3.some(m => m.startsWith('EBAY:'))).toBe(true)
   })
 
-  it('B2: a product with no family sees none of the dictionary on Shared — not even the starter attributes', async () => {
+  it('B2 (flipped by S4): a product with no family sees the business\'s core on Shared — the starter set', async () => {
     const starter = new Set(customAttributeConcepts().map(c => c.key))
     for (const key of ['F1', 'F3'] as const) {
       const dictionary = await inFixture(key, () => prisma.customAttribute.count())
-      expect(dictionary).toBe(starter.size)                                   // the business HAS the starter dictionary…
+      expect(dictionary).toBe(starter.size)
       const columns = await sharedColumns(key)
-      expect(columns.length).toBeGreaterThan(0)
-      expect(columns.filter(c => starter.has(c.key))).toEqual([])             // …and Shared shows none of it
+      expect([...starter].filter(code => !columns.some(c => c.key === code))).toEqual([])   // every starter attribute is on Shared
     }
   }, 120_000)
 
-  it('B3: an Amazon-only key in the shared bag comes back on Shared as "Additional saved attributes"', async () => {
-    const leaked = (await sharedColumns('F2')).find(c => c.key === AMAZON_ONLY_KEY)
-    expect(leaked).toMatchObject({ group: 'Additional saved attributes' })
-    // Control: the business without that key has no such column.
-    expect((await sharedColumns('F1')).some(c => c.key === AMAZON_ONLY_KEY)).toBe(false)
+  it('B3 (flipped by S4): an Amazon-only bag key stays off Shared; a real old key is still shown', async () => {
+    const columns = await sharedColumns('F2')
+    expect(columns.some(c => c.key === AMAZON_ONLY_KEY)).toBe(false)
+    expect(columns.find(c => c.key === OLD_KEY)).toMatchObject({ group: 'Additional saved attributes' })
+    // The value itself is untouched: the Amazon scope reads the same key.
+    const bag = await inFixture('F2', () => prisma.product.findUniqueOrThrow({ where: { id: fixtures.F2.productId }, select: { categoryAttributes: true } }))
+    expect((bag.categoryAttributes as Record<string, unknown>)[AMAZON_ONLY_KEY]).toBe('Uomo')
   }, 120_000)
 
   it('B4: a Motovento-shaped family shows all 242 attributes on Shared, the Amazon-only ones too', async () => {

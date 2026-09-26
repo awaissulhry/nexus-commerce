@@ -1118,6 +1118,11 @@ export interface GetSheetColumnsInput {
 
   familyIds?: string[]
   savedFields?: FieldDefinition[]
+  /**
+   * P3b S4 — `'shared'`: drop the saved keys that do not belong on Shared (channel-placed, archived or channel-only;
+   * `sharedSavedFields`). Default `'all'` keeps every key (the export).
+   */
+  savedFieldsFor?: 'shared' | 'all'
   market: string
   /**
    * Accept a market this business does not have. Only for values that belong to ANOTHER business: a
@@ -1234,8 +1239,17 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   const etsyCategoryIds = [...new Set((input.etsyCategoryIds ?? []).map(String).filter(Boolean))].sort()
   const scopeKind: 'master' | 'channel' = input.scopeKind ?? ((input.onlyChannels?.length ?? 0) === 1 ? 'channel' : 'master')
 
+  // P3b S4 (docs/attributes/PLAN.md §10.9) — the dictionary's version: a new attribute, a placement move or an archive
+  // shows at once instead of up to COLUMN_SET_TTL_MS later.
+  const dictionary = await (await import('./dictionary-version.js')).dictionaryVersion()
+  // P3b S4 — the Shared views ask for only the saved keys that belong on Shared; the export keeps every key.
+  if (input.savedFieldsFor === 'shared' && input.savedFields?.length) {
+    input = { ...input, savedFields: await (await import('./family-sheet-schema.js')).sharedSavedFields(input.savedFields) }
+  }
   // ⚠ EVERY input that changes the RESULT must be in this key.
   const cacheKey = JSON.stringify([
+    dictionary,
+    input.savedFieldsFor ?? 'all',
     market,
     productTypes.slice().sort(),
     axes,
@@ -1330,7 +1344,10 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   const registry = (await getAvailableFields({ productTypes: familySchema ? [] : productTypes, channels })).filter(f =>
     !familySchema || !['amazonAsin', 'parentAsin', 'ebayItemId', 'buyBoxPrice', 'competitorPrice', 'shippingTemplate', 'fulfillmentChannel', 'productType'].includes(f.id),
   )
-  const familyFields = familySchema ? await (await import('./family-sheet-schema.js')).familySheetFields(input.familyIds!, input.locale) : []
+  // P3b S4 — a product with no family shows the business's core (the concept-linked Shared attributes).
+  const familyFields = !familySchema ? []
+    : input.familyIds!.length ? await (await import('./family-sheet-schema.js')).familySheetFields(input.familyIds!, input.locale)
+    : await (await import('./family-sheet-schema.js')).coreSheetFields(input.locale)
   const canonical = new Set([...registry, ...familyFields].map(f => f.id.replace(/^attr_/, '')))
   const saved = familySchema ? (input.savedFields ?? []).filter(f => !canonical.has(f.id.replace(/^attr_/, '')) && !(f.id === 'attr_country_of_origin' && canonical.has('countryOfOrigin'))) : []
   const fields = [...new Map([...registry, ...SHEET_CONTENT_FIELDS, ...saved, ...familyFields].map(f => [f.id, f])).values()]

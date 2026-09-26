@@ -709,7 +709,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           }
         }
         for (const mk of marketFree ? ['GLOBAL'] : markets) {
-          const set = await getSheetColumns({ market: mk, ...(marketFree ? { allowUnknownMarket: true } : {}), productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), includeEmptyChannels: true })
+          const set = await getSheetColumns({ market: mk, ...(marketFree ? { allowUnknownMarket: true } : {}), productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), savedFieldsFor: 'shared', includeEmptyChannels: true })
           const { columnApplies } = await import('@nexus/shared/master-sheet')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
