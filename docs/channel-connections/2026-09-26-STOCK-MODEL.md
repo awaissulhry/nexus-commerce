@@ -1,6 +1,9 @@
 # One stock model for every channel (2026-09-26)
 
-Status: built on branch `cx/stock-model-20260926`, not pushed, not deployed. Approved direction:
+Status: **deployed 2026-09-26** in release B+C (PR #32, `93215463f`), built on branch
+`cx/stock-model-20260926`. No switch gates the eBay, Amazon, Shopify and cancellation rules (they run
+now); Etsy ingest stays behind its OFF switches. No real-event proof is recorded yet; current state:
+[COMPLETION-MATRIX](COMPLETION-MATRIX.md). Approved direction:
 "fix the wrong designs, drop parts that are not needed" (Owner, 2026-09-26). Builds on the hotfix in
 PR #14 (R1). Fitted to current main (#4, #14, #15, #18). Real-PostgreSQL suites prove each rule; the
 review round of 2026-09-26 (items A, B1–B5, C1–C7, D) is folded in below.
@@ -122,7 +125,8 @@ on its first product, Etsy scan resume and reconciliation.
 
 ## Migrations
 
-Never deployed, named to sort after everything on main (#18's `20260926a`/`20260926b`, #22's `20260926m`):
+Applied in production with PR #32 on 2026-09-26 (pre-deploy step). They were named to sort after
+the main migrations present at the time (#18's `20260926a`/`20260926b`, #22's `20260926m`):
 `20260926n_cx_order_stock_locks` (the lock door; sources of every link),
 `20260926o_cx_pool_order_history` (pool restore detector counts ORDER_PLACED only; adds
 `nexus_pool_order_hold`, `nexus_pool_order_taken`, `nexus_pool_order_shipped`),
@@ -130,9 +134,10 @@ Never deployed, named to sort after everything on main (#18's `20260926a`/`20260
 under `lock_timeout = 5s`), `20260926q_cx_etsy_scan_resume`, `20260926r_cx_etsy_reconciliation`,
 `20260926u_cx_order_lock_pool_holds` (the lock door also locks the sources of an order's open pool holds;
 a two-argument form, the one-argument form kept and delegating), `20260926v_cx_pool_lender_release` (the
-lender's release of a kept pool hold). They apply on a database in main's state (CI's expand/contract gate
-and migration upgrade check pass). No migration on main or in PR #15 was edited. A later main migration
-dated 2026-09-26 would need these renamed again.
+lender's release of a kept pool hold). They applied on a database in main's state (CI's expand/contract
+gate and migration upgrade check passed). No migration on main or in PR #15 was edited. Now applied,
+they are never renamed; later migrations on `main` that sort before them are applied out of order by
+Prisma as usual.
 
 Runbook (P3009) — three of these migrations bound their locks: `SET LOCAL lock_timeout = '5s'` (and
 `statement_timeout = '60s'` for s and t). Each is wrapped in one transaction, so a timeout applies nothing

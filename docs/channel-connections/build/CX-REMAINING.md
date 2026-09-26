@@ -1,73 +1,22 @@
 # Remaining channel work — active implementation
 
-## Latest checkpoint — 2026-09-25 11:38 UTC
+## Status — 2026-09-26
 
-**Package A code/recovery APPROVED, fully gated and locally rehearsed. No package or
-recovery ref has been pushed by this session; nothing new is deployed or enabled.**
-Final documentation signoff/publication remain pending. The Owner has approved reviewed,
-gated, rehearsed deployment with every new switch OFF. The existing CI eBay consent-page
-GET probes still need the separate narrow exception already requested; no yes received.
+**Every slice in this record (C9–C11f6c, I1, I2, U1, U2, R1) shipped in Package A: PR #15
+(`c5597f776`), merged 2026-09-26 12:26 UTC and deployed.** eBay inbound processing stays OFF
+(`NEXUS_ENABLE_EBAY_INBOUND_PROCESSING` unset), no operator login has been granted the quarantine
+roles, and none of the operator tools has run in production. So each slice's state is **deployed**
+(not enabled, not production-verified). Current status of the whole programme:
+[COMPLETION-MATRIX](../COMPLETION-MATRIX.md).
 
-Published main is `2459bf52fe85e1ffe0b5f0c510994e019cb3eed4` (refetched11:37Z; docs after
-bc39). Public readiness re-read before that fetch reports healthy serving **bc39f98d**.
-Release source is **`3be0a62e1344626db7f8adf4e49351880cae6725`**; recovery branch
-`recovery/cx-20260925` is **`34c376113380f4c803d4f91190f94c06126c56a2`**. Metadata commits
-may follow the reviewed source. Recovery preserves published main and the exact release
-DB tree; application differences are C11f6a/b/c only. Its PCO fixture correction has an
-independent APPROVE; no assertion, timeout, ratchet or hook was weakened.
-
-Clean source full hook: DB33, **API12220/359 existing skips**, **web4887/13**, both builds,
-security127, RBAC2728/zero unmapped, **realPG328 in25 suites/zero skips**; profiles977 files,
-41 known-failing/217 tests, none new or worse. Clean recovery full hook: **API12129/340**,
-web4887/13, DB33/security127/builds, **realPG309 in23 suites/zero skips**; profiles971 files,
-same41/217 unchanged baseline. Contrast at these heads: web92/factory106 pairs, zero below7:1.
-Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
-`package-a-recovery-gate-34c376113.log`; archived sublogs under their helpers' build/evidence
-`package-a-3be0a62e1/` and `recovery-34c376113/`.
-
-HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
-recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
-migration history/checksums and role/object invariants. Jobs initialized with processing
-held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
-Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the source-equivalent
-pre-checkout pass are preserved but are not substituted for the clean3be gate.
-
-Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
-on the IT market (some follow the master price); the active eBay sellers have default
-warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
-unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
-No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
-shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
-with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
-findings; healthy readiness is not a blanket operational verdict.
-
-Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
-eBay orders68fcc9f36 APPROVED. Etsy ingest c621418e and SKU identity da1de249 APPROVED;
-pooled line foundation61cbe88bc is under review and terminal writer integration remains open.
-Its offset-ceiling history limit remains an explicit hold, not unrestricted completeness.
-Package C: listing issues16945532a and Tag contrast e738e4531 APPROVED; privacy census
-6e6687952 APPROVED, candidate records in verification; cancellation parity b77db1bd3 APPROVED,
-terminal follow-up b382fb7ba required fixes (recovery65bda8b72 committed, atomic-state fix in
-progress). Contract follow-up330395766 and teardown87406ac23 await independent review.
-The latter proves/fixes a setup-client shutdown race consistent with the original57P01;
-it does not explain recoveryf9's separate PGlite socket loss. Remaining engineering,
-activation preparations and Phase5 audit remain open under the structured plan.
-
-
-Scope remains Amazon, eBay and Etsy; preserve connected Shopify. Last detailed business/flag
-release proof is `439d9e3d3` (2026-09-22). Earlier public serving observation was `a22f2fc3`,
-healthy200 at 2026-09-24T23:49:30.532Z; the latest serving/census evidence is above. The Owner approved
-reviewed, gated, rehearsed package pushes/deployments with new switches OFF on 2026-09-25.
-Activation and other Phase 4 actions still require separate explicit approval. Slice records
-below retain their dated implementation-time status; see R1 and the completion matrix for
-current release/recovery state.
+The slice sections below keep their implementation-time wording ("locally", "not deployed") as
+history. The release record is [RELEASE-C9-C11F6C](../RELEASE-C9-C11F6C.md); the recovery branch for
+this release is `recovery/cx-20260925`. The Package B/C lanes this record mentions were reworked
+after the 2026-09-26 approach review and shipped as release B+C (PR #32).
 
 ## C9 — atomic receipt identity
 
-**Implemented and independently reviewed locally; not deployed.**
+**Deployed 2026-09-26 (PR #15).** At implementation time: implemented and independently reviewed locally.
 
 The old `recordInbound` checked for a row before inserting it. A barrier-controlled
 real PostgreSQL test forced two first deliveries to reach insertion together: the
@@ -118,7 +67,7 @@ PostgreSQL; no production operation or vendor call was made for this slice.
 
 ## C10 — durable eBay claims and atomic completion
 
-**Implemented, tested and independently reviewed locally; not deployed or wired to receivers.**
+**Deployed 2026-09-26 (PR #15).** At implementation time: implemented, tested and independently reviewed locally; not yet wired to receivers.
 
 A verified eBay receipt can now opt in to an initial retry time in its insert. Other
 channels and unverified receipts remain unscheduled. The additive migration adds a
@@ -182,7 +131,7 @@ introspection or activation is implied or performed by this amendment.
 
 ## C11a — grant versions and stale credential maintenance
 
-**Implemented, tested and independently reviewed locally; not deployed.**
+**Deployed 2026-09-26 (PR #15).** At implementation time: implemented, tested and independently reviewed locally.
 
 `storeGrant` now advances a dedicated monotonic `grantVersion` in the same database
 update as credential replacement. Ordinary access-token refresh and representation-only
@@ -293,7 +242,7 @@ owners is an explicit durable audit disposition, not proof notification was deli
 
 ## C11c — atomic eBay revocation domain transaction
 
-**Implemented, tested and independently reviewed locally; not deployed or wired to ingress.**
+**Deployed 2026-09-26 (PR #15).** At implementation time: implemented, tested and independently reviewed locally; not yet wired to ingress.
 
 The transaction-only domain handler receives the authoritative stored receipt plus
 current-grant evidence. It verifies the account/profile, locks the owned account,
@@ -345,7 +294,7 @@ replaces their execution path. No eBay topic has been declared ready or activate
 
 ## C11d1 — database scheduling and fenced manual replay
 
-**Implemented, tested and independently reviewed locally; not deployed.**
+**Deployed 2026-09-26 (PR #15).** At implementation time: implemented, tested and independently reviewed locally.
 
 Initial verified eBay scheduling now reads database time before its atomic receipt
 insert (one extra scalar read per scheduled arrival). The application clock cannot
@@ -375,7 +324,7 @@ from this slice alone.
 
 ## C11d2 — atomic unresolved-event warnings
 
-**Implemented, tested and independently reviewed locally; not deployed or activated.**
+**Deployed 2026-09-26 (PR #15), not activated.** At implementation time: implemented, tested and independently reviewed locally.
 
 Both eBay dead-letter paths—an exhausted processing attempt and five abandoned claims—
 can now persist their required warning inside the receipt transaction. The callback
@@ -414,8 +363,8 @@ required before a deployment package may activate this protocol.
 
 ## C11d3 — verified admission, original ownership and private quarantine
 
-**Implemented, tested and independently reviewed locally.
-Not deployed, enabled or production-verified.**
+**Deployed 2026-09-26 (PR #15); not enabled or production-verified.**
+At implementation time: implemented, tested and independently reviewed locally.
 
 Admission owns a raw-byte snapshot and signature verification. It reads the official
 `notification.notificationId` and `notification.data.userId`; mutable username and
@@ -505,11 +454,11 @@ role, or hook was weakened. No broader rerun is warranted after the successful g
 
 ## C11d4 — seller identity fencing across connection rows
 
-**Implemented, tested and independently reviewed locally. Not deployed or enabled.**
+**Deployed 2026-09-26 (PR #15); not enabled.** At implementation time: implemented, tested and independently reviewed locally.
 
 Audit found that grantVersion protects only one row. OAuth can reconnect an inactive
 same-seller row or create a new connection while a previously bound receipt still
-references the old terminal row. The protected live/inactive Xavia rows actually share
+references the old terminal row. The protected live/inactive main-business rows actually share
 one external seller ID in dated read-only census evidence. Partial active uniqueness
 includes marketplace and does not establish a permanent canonical connection.
 
@@ -580,7 +529,7 @@ or credentials. `c11d4-canonical-postgres.log` remains a failed run.
 
 ## C11d5 — stored receipt execution and route/worker integration
 
-**Implemented, tested and independently reviewed locally. Not deployed or enabled.**
+**Deployed 2026-09-26 (PR #15); not enabled.** At implementation time: implemented, tested and independently reviewed locally.
 The receiver now acknowledges only durable admission and returns no internal routing
 IDs. Verified unresolved topics enter recoverable quarantine; acknowledgement does
 not claim erasure or order ingestion. Failed storage/encryption/conflicting ownership
@@ -654,7 +603,7 @@ PES history or touch its working changes. Quarantine recovery/key maintenance/ar
 transactional order/erasure handlers and all other matrix dependencies remain open.
 
 
-## I1 — integration with published main0a563d6d (local)
+## I1 — integration with published main0a563d6d (deployed in PR #15)
 
 The isolated branch merges only the already-published/main-serving0a563d6d snapshot;
 no unpublished PES work or shared working change is included. Git reported no conflicts.
@@ -708,7 +657,7 @@ honest archived/deleted counters and privacy wording. Quarantine resolvedAt mean
 routing handoff, not successful processing; key maintenance/recovery remain open.
 
 
-## C11d6 — retain inbound history and fence archival/replay (local)
+## C11d6 — retain inbound history and fence archival/replay (deployed in PR #15)
 
 The default-on retention job dynamically dispatched WebhookEvent to deleteMany;
 its privacy GET could create the90-day policy. New archiveCompletedInbound uses the
@@ -772,7 +721,7 @@ single guard. Removing archive locks caused the deterministic second archiver to
 has no failures/skips. Evidence: c11d6-*-mutation.log and c11d6-final-regressions.log.
 
 
-## C11d7 — mixed-version eBay admission and atomic activation (local)
+## C11d7 — mixed-version eBay admission and atomic activation (deployed in PR #15)
 
 Review of published0a563d6d proved its old worker selects any due pending/failed row,
 finds no eBay handler, and unconditionally dead-letters it. A flag in the new binary
@@ -819,7 +768,7 @@ Required rollout/rollback order (approval and actual observation still pending):
    OFF does not make rollback to0a safe: already scheduled retries remain old-visible.
 
 
-## I2 — faithful account fixtures after full-package verification (local)
+## I2 — faithful account fixtures after full-package verification (deployed in PR #15)
 
 C11d7 is committed asf8f87e8af. The first whole-package hook passed23 database tests,
 policy/schema/security source gates and4603 web tests (13 skips), then correctly failed
@@ -846,7 +795,7 @@ they are not represented as default-suite passes. Full evidence c11-i2-prepush.l
 c11-i2-full-api.log and c11-i2-profiles-on.log. No push followed the manually invoked
 hook (its final “pushing” text is generic). All continuation code remains local.
 
-## U1 — shared retention controls and exact day entry (local)
+## U1 — shared retention controls and exact day entry (deployed in PR #15)
 
 AGENTS.md requires shared design-system controls for changed UI. The retention card
 now composes existing Card/Field/Input/Button; no shared DS file changes or factory
@@ -883,7 +832,7 @@ Correct that display with response-contract regression/browser proof before rele
 Quarantine recovery/operator visibility/key maintenance and all matrix work remain.
 
 
-## U2 — truthful replay feedback and retained keyboard focus (local)
+## U2 — truthful replay feedback and retained keyboard focus (deployed in PR #15)
 
 Ingress previously rendered every2xx replay as completed, including the new eBay
 202/queued response. A response-contract helper now renders queued work as info/Queued,
@@ -913,7 +862,7 @@ production build pass (c11-u2-final-regressions.log, c11-u2-final-build.log); th
 also completes its TypeScript gate. No production or provider call was performed.
 
 
-## C11e1 — owner-scoped quarantine recovery API (local)
+## C11e1 — owner-scoped quarantine recovery API (deployed in PR #15)
 
 GET /api/cx/connections/:id/ebay-quarantine lists only verified, unresolved revocation
 metadata matching that exact owned account's immutable subject/environment and
@@ -955,7 +904,7 @@ Evidence under /private/tmp/cx-completion-20260922/:
   hooks will run again before an approved push; no deployment or production write.
 
 
-## C11e2 — owner recovery UI and profile-safe parent reads (local)
+## C11e2 — owner recovery UI and profile-safe parent reads (deployed in PR #15)
 
 C11e1 is committed as c2eb15a99. The new Ingress recovery card uses existing DS
 Card/Field/Listbox/Modal/Button components. It includes inactive OAuth eBay identities
@@ -1063,7 +1012,7 @@ https://www.postgresql.org/docs/17/sql-createfunction.html
 No KMS, provider or production mutation was performed by this audit.
 
 
-## C11f1 — contain unsafe credential maintenance (local)
+## C11f1 — contain unsafe credential maintenance (deployed in PR #15)
 
 C11e2 is committed as41393b908. This next slice makes the existing rotation job
 explicitly select/update only connections owned by its current workspace; readable
@@ -1117,7 +1066,7 @@ Same-resource KMS material rotation is transparent; v1 env-key replacement is no
 supported by this maintenance interface. No production credential was touched.
 
 
-## C11f2 — pinned, cold, lossless maintenance crypto (local)
+## C11f2 — pinned, cold, lossless maintenance crypto (deployed in PR #15)
 
 C11f1 is committed9bb761f16. A resolved KMS resource ARN now selects strict
 reencryption: decrypt the source with KMS cache bypass, send GenerateDataKey to that
@@ -1164,7 +1113,7 @@ migration completeness. Other channel handlers/financial/stock/publishing accept
 and their earlier approval/policy dependencies remain unchanged.
 
 
-## C11f3 — quarantine integrity independent of adoptability (local)
+## C11f3 — quarantine integrity independent of adoptability (deployed in PR #15)
 
 C11f2 is committed396469275. A private shared crypto helper now verifies the sealed
 binding, raw-byte digest, canonical base64/size, version and stored envelope-key
@@ -1194,7 +1143,7 @@ complete fresh traversal and actual key-retirement approval remain. This slice d
 not certify any production envelope, change a key, grant a role or activate processing.
 
 
-## C11f4 — private quarantine CAS and mandatory audit (local; reviewed and tested)
+## C11f4 — private quarantine CAS and mandatory audit (deployed in PR #15)
 
 C11f3 is committede67d8c85e. New additive20260923f creates application-scoped,
 append-only EbayQuarantineMaintenanceAudit and a restricted database CAS. The caller
@@ -1274,7 +1223,7 @@ Profiles-ON measures927files:41known failing/217tests,none new/worse. This was a
 normal-hook invocation, not a push despite its final generic “pushing” output.
 
 Authorized read-only compatibility observation at18:14:49Z used a pinned Neon target,
-READ ONLY transaction and known Motovento business marker. PostgreSQL170011;
+READ ONLY transaction and a known second-business marker. PostgreSQL170011;
 neondb_owner is NOSUPERUSER/BYPASSRLS/CREATEDB/CREATEROLE; public schema has no PUBLIC
 CREATE; new maintenance roles absent; no20260923 migrations applied. No credential
 was decrypted or printed. Evidence c11-f4-production-compatibility-read.json.
@@ -1292,7 +1241,7 @@ e67d8c85e application code plus exact final history; this is still only a candid
 not a built/rehearsed artifact, and it retains the new ingress foundations. After any activation, retain the protocol-aware requirement as well.
 
 
-## C11f5 — restricted global metadata inventory (local; reviewed and tested)
+## C11f5 — restricted global metadata inventory (deployed in PR #15)
 
 C11f4 is committed16a6e7e48. New20260923g adds a bounded metadata-only global
 inventory function under the same dedicated maintenance authority. Runtime/PUBLIC
@@ -1355,7 +1304,7 @@ A reviewed/rehearsed migration-complete protocol-aware fallback remains a releas
 prerequisite; no new deployment approval has been requested yet.
 
 
-## C11f6a — cancellation and private crypto failures (local; reviewed and tested)
+## C11f6a — cancellation and private crypto failures (deployed in PR #15)
 
 C11f5 is committed38c99a7af. Operator cryptography needs one cancellation signal
 through source opens, GenerateDataKey and replacement verification. Optional signals
@@ -1408,7 +1357,7 @@ implementation constraint, not a claim that the command or retirement procedure 
 Complete recovery-artifact rehearsal and deployment approval still remain.
 
 
-## C11f6b — operator cold verification (local; reviewed and tested)
+## C11f6b — operator cold verification (deployed in PR #15)
 
 Committed a333c131f. `cx-quarantine-verify --target-key-arn <arn>` proves that every
 retained verified quarantine body in the FINAL observed state cold-opens (no key
@@ -1449,7 +1398,7 @@ owner); c11-f6bc-postgres-after-review-2.log (maintenance 33, admission 32);
 c11-f6bc-mutations-summary.json; c11-f6bc-typecheck-final.log; database gate 33.
 Unit: 129 focused regressions across verify/rewrap/inventory/crypto/CLI.
 
-## C11f6c — operator rewrap (local; reviewed and tested)
+## C11f6c — operator rewrap (deployed in PR #15)
 
 Committed 4f3c10d4f. `cx-quarantine-rewrap --apply --target-key-arn <arn>` moves
 every verified body to one resolved KMS key through the reviewed helper and the
@@ -1485,7 +1434,11 @@ followed from these slices.
 
 ## R1 — release gate and migration-complete recovery artifact
 
-### Current source4e/recoveryf9 gate checkpoint — 2026-09-25
+### Historical source4e/recoveryf9 gate checkpoint — 2026-09-25
+
+R1 is closed: Package A shipped as PR #15 and the recovery branch was rebuilt for the PR #4
+architecture as `recovery/cx-20260925` at `0dd468273` (see RELEASE-C9-C11F6C → Recovery).
+
 
 Integration/recovery review APPROVE. Source4e normal hook PASSexit0 after rebuilding stale shared
 declarations:33DB,12003API/359existing skips,4875web/13,bothbuilds,127security,
@@ -1558,7 +1511,7 @@ or redundant manual gate. Old recovery branches are historical. No package/ref i
 Public health at 2026-09-24T23:49:30.532Z: HTTP200/healthy/build a22f2fc3; existing five
 quantity mismatches and critical Ads alerts remain. No private switch/runtime proof follows.
 A 2026-09-25 Railway CLI read (MCP unavailable) confirms base deployment
-674bf97f-fd44-438d-b662-7348a810ccba SUCCESS at GitHub a22f2fc361488c3620d6c8110344e8200c46ebb2;
+deployment SUCCESS at GitHub a22f2fc361488c3620d6c8110344e8200c46ebb2;
 remote main was rechecked unchanged at2026-09-25 00:15Z. This is baseline deployment proof only.
 Production census permission is saved; its attempt stopped before queries because the isolated
 root `.env` URL has no username/password. Owner asked for an existing approved credential source

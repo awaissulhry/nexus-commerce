@@ -1,8 +1,10 @@
 # eBay account deletion (privacy)
 
 Status: reworked 2026-09-26 after the approach review (acknowledge first, records that can
-finish, notice expiry, immutable-ID matching). Implemented and locally verified in the privacy
-lane only. Not integrated, deployed, enabled or production-verified. Every switch stays OFF.
+finish, notice expiry, immutable-ID matching). **Deployed 2026-09-26** in release B+C (PR #32,
+migrations `20260926s`/`20260926t`). Not enabled or production-verified:
+`NEXUS_ENABLE_EBAY_PRIVACY_REVIEW` (exactly `1`; worker and scheduler) is OFF, and no eBay deletion
+notice has reached Nexus yet. Current state: [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
 No business data is anonymised or deleted. The only deletion is the expiry of deletion notices
 that no business still needs, and it is dormant behind the same switch.
 
