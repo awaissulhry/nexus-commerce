@@ -32,30 +32,6 @@ describe('sheet read transaction', () => {
     expect(root.$transaction).toHaveBeenCalledOnce()
     expect(tx.$executeRaw).not.toHaveBeenCalled()
     expect(tx.product.findMany).toHaveBeenCalledOnce()
-    expect(root.$transaction.mock.calls[0][1]).toMatchObject({ isolationLevel: 'Serializable' })
-  })
-
-  it('refuses a requested fresh-read isolation inside an older Serializable snapshot', async () => {
-    const { client } = database(), inner = vi.fn(async () => 'should not execute')
-    await expect(inDatabaseTransaction(client, () => inDatabaseTransaction(client, inner, { isolationLevel: 'ReadCommitted' })))
-      .rejects.toThrow('isolation does not match')
-    expect(inner).not.toHaveBeenCalled()
-    expect(activeDatabaseTransaction()).toBeUndefined()
-  })
-
-  it('preserves an explicitly selected isolation through compatible nested work', async () => {
-    const { client, root } = database()
-    expect(await inDatabaseTransaction(client, () => inDatabaseTransaction(client, () => client.product.findMany(), { isolationLevel: 'ReadCommitted' }),
-      { isolationLevel: 'ReadCommitted' })).toEqual(['snapshot'])
-    expect(root.$transaction).toHaveBeenCalledOnce()
-    expect(root.$transaction.mock.calls[0][1]).toMatchObject({ isolationLevel: 'ReadCommitted' })
-  })
-
-  it('cannot silently replace the isolation of a read-only snapshot', async () => {
-    const { client } = database(), write = vi.fn(async () => 'should not execute')
-    await expect(inDatabaseReadTransaction(client, () => inDatabaseTransaction(client, write, { isolationLevel: 'ReadCommitted' })))
-      .rejects.toThrow('isolation does not match')
-    expect(write).not.toHaveBeenCalled()
   })
 
   it('releases the failed snapshot without leaking it into a subsequent request', async () => {

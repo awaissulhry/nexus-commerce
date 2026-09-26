@@ -456,38 +456,6 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
 
 ---
 
-### 2026-09-23 implementation amendments (acceptance remains open)
-
-- Application-wide eBay notices with unresolved ownership use an encrypted,
-  system-only quarantine. They must not place another business's payload in the
-  ordinary legacy profile. Signature failures retain bounded metadata/digest only;
-  verified unresolved bodies remain recoverable. Explicit owner adoption is atomic
-  and preserves first ownership/proof. Operational visibility, key maintenance and
-  archive support remain required before activation; the archive-never-delete rule
-  is unchanged.
-- Revocation must fence both same-row reconsent and a newer grant on a different
-  connection for the same immutable eBay seller. Per-row grantVersion plus a shared
-  seller lock/fresh committed reads provide that fence. A current active sibling
-  keeps the old receipt unresolved; it is never silently retargeted. Username-only
-  identity cannot authorize a grant, even when profile mode is off.
-- D8 initially archives completed receipts in place, preserving payload, identity and
-  proof; unfinished/retry/DLQ work is excluded. Database DELETE/TRUNCATE guards also
-  protect quarantine. This bounds each pass but does not reclaim storage or settle
-  fiscal/erasure policy. Automatic policy-based archival must be included explicitly
-  in the next deployment approval and production verification.
-- Quarantine encryption maintenance uses a separate restricted operator role and a
-  two-column CAS with mandatory atomic audit. Tenant cron is not elevated; sealed
-  binding/digest checks remain separate from account adoption. Global inventory and
-  cold recovery proof are still required. Same-resource KMS material rotation does
-  not require rewriting stored envelopes; key-resource migration does.
-- Rollback artifacts must carry every applied migration folder, even before new
-  processing is enabled; the startup applied-but-missing gate rejects old images
-  that omit them. A protocol-aware rollback build must be tested before deployment.
-- These amendments are local implementation, not deployment or live proof. Sources,
-  tradeoffs, failures, race tests and review evidence are in
-  [CX-REMAINING](build/CX-REMAINING.md), C11d3/C11d4. Channel activation and destructive
-  cleanup retain their approval/observation requirements.
-
 ## 7. The quality bar ("AAA") — every call must pass this
 
 ### 7.1 Every outgoing call
@@ -708,12 +676,6 @@ Sources: the 08-29 research (R1 Amazon, R2 eBay, R3 Shopify, R4 Etsy, R8 Nango, 
 ## 2026-09-22 continuation amendments
 
 [COMPLETION-MATRIX](COMPLETION-MATRIX.md) is the current acceptance audit.
-The Owner subsequently approved deployment. Final code `439d9e3d3` is on main and
-serving; both GitHub workflows and Railway completed successfully. Production checks
-at 2026-09-22 21:58 UTC verified the migration, exclusive Motovento Etsy routing and
-connection preservation. [Release evidence](build/RELEASE-2026-09-22-EVIDENCE.json).
-This closes the reviewed safety release, not the remaining implementation/activation
-requirements in the matrix.
 [CX-COMPLETION](build/CX-COMPLETION.md) records C1–C8, official contracts, failure
 reproductions, tests, mutations and independent reviews. Old BUILT labels below
 remain historical. Material amendments: unverified replay is never executable;

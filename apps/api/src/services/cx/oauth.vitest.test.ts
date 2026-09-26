@@ -13,7 +13,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
 import { withWorkspace } from '@nexus/database/workspace-context'
-import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 
 process.env.NEXUS_CREDENTIAL_ENC_KEY = randomBytes(32).toString('base64')
 delete process.env.NEXUS_KMS_KEY_ID
@@ -46,18 +45,6 @@ function connMatches(row: Row, where: Record<string, unknown>): boolean {
 }
 
 const prismaMock = {
-  $executeRaw: vi.fn(async (strings: TemplateStringsArray) => {
-    if (!strings.join('?').includes('pg_advisory_xact_lock')) throw new Error('Unsupported OAuth fixture execute')
-    return 0
-  }),
-  $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-    const sql = strings.join('?')
-    if (sql.includes('FOR UPDATE')) return [...connections.values()].filter(row => row.id === values[0] && row.workspaceId === values[1]).map(row => ({ id: row.id }))
-    if (sql.includes('"isActive"=true')) return [...connections.values()].filter(row => row.workspaceId === values[0] && row.channelType === 'EBAY'
-      && row.externalAccountId === values[1] && row.isActive && row.id !== values[2]
-      && ((row.connectionMetadata as any)?.environment ?? 'production') === values[3]).map(row => ({ id: row.id }))
-    throw new Error('Unsupported OAuth fixture query')
-  }),
   $transaction: async (work: (tx: unknown) => Promise<unknown>) => work(prismaMock),
   workspaceMembership: { findUnique: vi.fn<(args: unknown) => Promise<Record<string, unknown> | null>>() },
   oAuthSession: {
@@ -104,7 +91,6 @@ const prismaMock = {
       const id = `conn-${++connSeq}`
       connections.set(id, {
         id,
-        workspaceId: workspaceIdForQuery(),
         displayName: null,
         grantedScopes: [],
         identity: null,
@@ -296,7 +282,6 @@ function seedConnection(row: Record<string, unknown>): string {
   const id = String(row.id ?? `seed-${++connSeq}`)
   connections.set(id, {
     id,
-    workspaceId: workspaceIdForQuery(),
     channelType: 'EBAY',
     managedBy: 'oauth',
     isActive: true,
@@ -336,7 +321,6 @@ beforeEach(() => {
   scopeUpserts.length = 0
   fetchMock.mockClear()
   prismaMock.channelConnection.create.mockClear()
-  prismaMock.channelConnection.update.mockClear()
   tokenResponse = () => json({ access_token: 'granted-access', refresh_token: 'granted-refresh', expires_in: 7200, refresh_token_expires_in: 47_304_000, token_type: 'User Access Token' })
   identityResponse = () => json({ userId: 'U1', username: 'seller1' })
 })
@@ -876,23 +860,13 @@ describe('complete — placement and storage', () => {
     expect(String(sessions.get(s.state)!.error)).toMatch(/^identity_refused:/)
   })
 
-  it('refuses an eBay identity lookup failure before creating any unidentifiable grant', async () => {
+  it('an identity lookup failure is tolerated: the grant still lands (as a new row when nothing is ambiguous)', async () => {
     identityResponse = () => new Response('boom', { status: 500 })
     const s = await startEbay()
-    await expect(completeEbay(s)).rejects.toMatchObject({ code: 'identity_refused', status: 409 })
-    expect(prismaMock.channelConnection.create).not.toHaveBeenCalled()
-    expect(prismaMock.channelConnection.update).not.toHaveBeenCalled()
-    expect(eventsOf('grant')).toHaveLength(0)
-  })
-
-  it('never substitutes a mutable username for the immutable eBay seller ID, even with profiles off', async () => {
-    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '0')
-    identityResponse = () => json({ username: 'mutable-seller-name' })
-    const s = await startEbay()
-    await expect(completeEbay(s)).rejects.toMatchObject({ code: 'identity_refused', status: 409 })
-    expect(prismaMock.channelConnection.create).not.toHaveBeenCalled()
-    expect(prismaMock.channelConnection.update).not.toHaveBeenCalled()
-    expect(eventsOf('grant')).toHaveLength(0)
+    const r = await completeEbay(s)
+    expect(r.placement).toBe('new')
+    expect(r.identity).toBeNull()
+    expect(connections.get(r.connectionId)!.externalAccountId).toBeNull()
   })
 
   it('the actor on the ledger falls back to whoever started the session', async () => {

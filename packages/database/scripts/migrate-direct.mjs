@@ -18,35 +18,23 @@
  * On a DIRECT connection there is no pooler in between, so the session ends when this
  * process ends and Postgres releases the lock automatically.
  *
- * WHY NOT `directUrl = env("DIRECT_DATABASE_URL")`
- * -----------------------------------------------
- * That variable exists on Railway but is referenced nowhere in this repo, so its value
- * cannot be verified from here — and a stale one (after the pending Neon password
- * rotation, say) would fail the boot outright rather than merely lose the benefit.
- * Deriving from DATABASE_URL keeps ONE credential in play and tracks rotations for free.
- *
- * Degrades safely: if DATABASE_URL has no `-pooler` (local Postgres, direct Neon), the
- * URL is passed through unchanged.
+ * Production requires MIGRATION_DATABASE_URL, an administrative credential separate
+ * from the restricted runtime DATABASE_URL. Development may use DATABASE_URL.
+ * This is a release command, never an application startup command.
  */
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { checkAppliedButMissing, reportAndExitCode } from './check-applied-but-missing.mjs'
+import { migrationConnection } from './migration-connection.mjs'
 
-const url = process.env.DATABASE_URL ?? ''
-if (!url) {
-  console.error('[migrate] DATABASE_URL is not set')
+let direct
+try { direct = migrationConnection() } catch (error) {
+  console.error('[migrate]', error.message)
   process.exit(1)
 }
-
-// Neon's pooled host is the direct host with `-pooler` appended to the endpoint id:
-//   ep-x-y-pooler.c-3.eu-central-1.aws.neon.tech -> ep-x-y.c-3.eu-central-1.aws.neon.tech
-const direct = url.replace('-pooler', '')
-const host = (u) => (u.split('@')[1] ?? '').split('/')[0]
-
-if (direct === url) {
-  console.log('[migrate] DATABASE_URL is already a direct endpoint — using it as-is')
-} else {
-  console.log(`[migrate] stripping pooler for migrations: ${host(url)} -> ${host(direct)}`)
-}
+process.chdir(fileURLToPath(new URL('..', import.meta.url)))
+console.log('[migrate] checking history before applying migrations on the direct endpoint')
 
 // ── Applied-but-missing gate (PLAN Step 0.1 / amendment A-2) ──────
 //
@@ -67,9 +55,11 @@ if (gateExit !== 0) {
   process.exit(gateExit)
 }
 
-const res = spawnSync('npx', ['prisma', 'migrate', 'deploy'], {
+const require = createRequire(import.meta.url)
+const res = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'], {
   stdio: 'inherit',
-  env: { ...process.env, DATABASE_URL: direct },
+  timeout: 300_000,
+  env: { ...process.env, DATABASE_URL: direct, MIGRATION_DATABASE_URL: direct },
 })
 
 if (res.error) {

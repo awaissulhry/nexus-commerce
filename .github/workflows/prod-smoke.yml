@@ -1,0 +1,48 @@
+# Production smoke for the web app — docs/ci-plan.md §2.4 (Tier D).
+#
+# Runs when Vercel reports a successful PRODUCTION deployment, or by hand. Read-only: the sign-in page,
+# the web proxy's view of API health, and the page's own static assets. Nothing signs in or writes.
+# The API's own post-deploy checks live in deploy-api.yml.
+
+name: Production smoke
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Production deployment URL (https://….vercel.app)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web production smoke (read-only)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha || github.sha }}
+      - uses: ./.github/actions/setup
+      - name: Playwright browser
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-prod-${{ runner.os }}-1.60.0
+      - run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+      - name: '@prod checks'
+        working-directory: apps/web
+        env:
+          PROD_BASE_URL: ${{ github.event.deployment_status.environment_url || inputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npx playwright test -c smoke/prod.config.ts

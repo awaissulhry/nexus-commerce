@@ -93,7 +93,7 @@ beforeAll(async () => {
     await prisma.marketplace.create({ data: { channel, code: marketplace, name: `${channel} ${marketplace}`, region: ['ETSY', 'SHOPIFY'].includes(channel) ? 'GLOBAL' : 'EU', currency: 'EUR', language: ['ETSY', 'SHOPIFY'].includes(channel) ? 'en' : 'it' } })
     for (const account of ['a', 'b']) {
       const accountId = `${channel.toLowerCase()}-${account}`
-      await prisma.channelConnection.create({ data: { id: accountId, externalAccountId: accountId, channelType: channel, isPrimary: account === 'a', isActive: true } })
+      await prisma.channelConnection.create({ data: { id: accountId, channelType: channel, isPrimary: account === 'a', isActive: true } })
       for (const position of [0, 1, 2]) {
         const aliasKey = position ? `${accountId}-${position}` : ''
         if (aliasKey) await prisma.productListingAlias.create({ data: { id: aliasKey, productId: 'store-demo', channel: channel as any, marketplace, channelConnectionId: accountId, label: `Listing ${position}`, position } })

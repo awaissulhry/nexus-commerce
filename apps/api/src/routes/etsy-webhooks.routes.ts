@@ -22,7 +22,8 @@ import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
 import { verifyStandardWebhook } from '../services/cx/ingress/standard-webhooks.js'
-import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { recordInbound } from '../services/cx/ingress/ledger.js'
+import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 
 /**
@@ -179,6 +180,7 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
         externalId: verdict.webhookId ?? null,
         rawBody: body ?? null, payload: payload ?? {},
         signatureOk: true, verifiedBy: 'none', connectionId: route.connectionId, status: 'pending',
+        headers: request.headers,
       })
       if (!written.id) {
         logger.error('[etsy-webhooks] inbound ledger unavailable — not acked', { eventType })
@@ -187,20 +189,20 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
       if (written.duplicate && written.existingStatus === 'done') {
         return reply.send({ success: true, message: 'Already processed' })
       }
+      const claim = await claimInbound(written.id)
+      if (!claim) return reply.send({ success: true, queued: true })
       if (!ETSY_ORDER_EVENTS[eventType]) {
         // Not a failure. An event we have no use for is recorded and acknowledged; the
         // ledger row is how its real name and shape get learned.
-        await completeInbound(written.id, true)
+        await runWithInboundClaim(claim, async () => {})
         logger.info('[etsy-webhooks] recorded an event with no handler', { eventType })
         return reply.send({ success: true, message: 'Recorded' })
       }
       try {
-        await handleEtsyOrderEvent(payload ?? {}, { connectionId: route.connectionId })
-        await completeInbound(written.id, true)
+        await runWithInboundClaim(claim, stored => handleEtsyOrderEvent(stored.payload, { connectionId: stored.connectionId }))
         return reply.send({ success: true })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        await completeInbound(written.id, false, message)
         logger.error('[etsy-webhooks] handling failed', { eventType, error: message })
         return reply.status(500).send({ error: message })
       }

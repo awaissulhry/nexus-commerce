@@ -16,7 +16,7 @@ beforeAll(async () => {
   await prisma.product.create({ data: { id: 'history-product', sku: 'HISTORY', name: 'Source', basePrice: 10, status: 'DRAFT' } })
   await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
   for (const accountId of ['history-a', 'history-b']) {
-    await prisma.channelConnection.create({ data: { id: accountId, externalAccountId: accountId, channelType: 'EBAY', isActive: true } })
+    await prisma.channelConnection.create({ data: { id: accountId, channelType: 'EBAY', isActive: true } })
     await prisma.channelListing.create({ data: { id: accountId, productId: 'history-product', channel: 'EBAY', marketplace: 'IT', region: 'IT', channelMarket: 'EBAY_IT', channelConnectionId: accountId } })
   }
   await prisma.productListingAlias.create({ data: { id: 'history-alt', productId: 'history-product', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'history-b', label: 'Alternate', status: 'ACTIVE' } })

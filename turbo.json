@@ -4,7 +4,17 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "env": ["NEXT_PUBLIC_*", "NEXT_DIST_DIR", "NODE_ENV"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["@nexus/shared#build", "@nexus/events#build"],
+      "cache": false,
+      "outputs": []
     },
     "dev": {
       "cache": false,

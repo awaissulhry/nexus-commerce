@@ -1,88 +1,110 @@
-/** Durable HTTP admission is distinct from completing a business effect. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-const receive = vi.fn()
-class AdmissionError extends Error { constructor(readonly reason: string) { super('Static admission refusal') } }
-vi.mock('../services/cx/ingress/ebay-admission.js', () => ({ receiveEbayNotice: receive, EbayAdmissionError: AdmissionError }))
-vi.mock('../services/cx/ingress/ebay-signature.js', () => ({ verifyEbayNotification: async () => ({ ok: true }), ebayChallengeResponse: () => 'stub-response' }))
-// Negative control for the old receiver: persistence failed but it still acknowledged completion.
-vi.mock('../services/cx/ingress/ledger.js', () => ({ recordInbound: async () => ({ id: null, duplicate: false }) }))
-vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: async () => [] }))
-vi.mock('../db.js', () => ({ default: {} }))
+/**
+ * P2.3 — an eBay lifecycle notification must be answered, not routed.
+ *
+ * `MARKETPLACE_ACCOUNT_DELETION` carries a `username`, never a seller object, so the
+ * receiver's seller extraction yields undefined and `verifiedChannelWorkspace('EBAY')`
+ * is left to pick one row out of however many eBay accounts are connected. With two it
+ * raises `ingress_account_ambiguous` and the endpoint answers **503**.
+ *
+ * Measured against the real routing index before this fix, with a control:
+ *   no seller id     -> ingress_account_ambiguous, statusCode 503
+ *   known seller id  -> resolves to nexus_legacy_workspace
+ *
+ * eBay requires a 200 for that topic, marks an endpoint that fails it as down, and
+ * answering it is a condition of holding production keys. So the more eBay accounts are
+ * connected, the more certainly the erasure notice was refused.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const recorded: any[] = []
+let routingThrows = true
+
+vi.mock('../services/cx/ingress/ebay-signature.js', () => ({
+  verifyEbayNotification: async () => ({ ok: true }),
+  ebayChallengeResponse: () => 'stub-response',
+}))
+vi.mock('../services/cx/ingress/ledger.js', () => ({
+  recordInbound: async (rec: any) => { recorded.push(rec); return { id: 'row-1', duplicate: false } },
+}))
+vi.mock('../lib/workspace-ingress.js', () => ({
+  legacyIngress: (work: any) => work(),
+  withIngressWorkspace: (_id: string, work: any) => work(),
+  verifiedChannelWorkspace: async () => {
+    if (routingThrows) {
+      const e: any = new Error('The verified notification does not identify one connected seller.')
+      e.code = 'ingress_account_ambiguous'; e.statusCode = 503
+      throw e
+    }
+    return { workspaceId: 'ws-1', connectionId: 'conn-1' }
+  },
+}))
+vi.mock('../services/connection-resolver.service.js', () => ({
+  resolveConnection: async () => ({ id: 'conn-1' }),
+  tryResolveConnection: async () => ({ id: 'conn-1' }),
+  listActiveConnections: async () => [],
+}))
+vi.mock('../db.js', () => ({ default: new Proxy({}, { get: () => new Proxy({}, { get: () => async () => null }) }) }))
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
+vi.mock('@nexus/database/workspace-context', () => ({ workspaceKey: (k: object) => k }))
+
 const Fastify = (await import('fastify')).default
 const routes = (await import('./ebay-notification.routes.js')).default
-const { logger } = await import('../utils/logger.js')
-const body = { metadata: { topic: 'AUTHORIZATION_REVOCATION', schemaVersion: '1.0' }, notification: { notificationId: 'n-1', data: { userId: 'synthetic-seller', revocationDate: '2026-09-23T01:02:03Z' } } }
-async function post(payload = JSON.stringify(body), url = '/webhooks/ebay-notification') {
+
+async function post(body: unknown) {
   const app = Fastify()
   await app.register(routes as any)
-  try { return await app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json', 'x-ebay-signature': 'synthetic-signature' }, payload }) }
-  finally { await app.close() }
+  const payload = JSON.stringify(body)
+  const res = await app.inject({
+    method: 'POST', url: '/webhooks/ebay-notification',
+    headers: { 'content-type': 'application/json', 'x-ebay-signature': 'stub' },
+    payload,
+  })
+  await app.close()
+  return res
 }
-beforeEach(() => { vi.clearAllMocks(); receive.mockResolvedValue({ kind: 'accepted', receiptId: 'private-receipt', workspaceId: 'private-profile', duplicate: false }); vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1') })
-afterEach(() => vi.unstubAllEnvs())
 
-describe('eBay durable receiver contract', () => {
-  it('acknowledges only durable receipt without exposing internal routing IDs', async () => {
-    const result = await post()
-    expect(result.statusCode).toBe(200)
-    expect(result.json()).toEqual({ received: true })
-    expect(receive).toHaveBeenCalledWith({ rawBody: Buffer.from(JSON.stringify(body)), header: 'synthetic-signature' })
+beforeEach(() => {
+  recorded.length = 0
+  routingThrows = true
+  vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+})
+
+describe('lifecycle topics are answered before any account routing', () => {
+  it('answers 200 to MARKETPLACE_ACCOUNT_DELETION even when no single account can be identified', async () => {
+    const res = await post({
+      metadata: { topic: 'MARKETPLACE_ACCOUNT_DELETION', notificationId: 'n-1' },
+      notification: { data: { username: 'someone', userId: 'u-1' } },
+    })
+    // This was a 503 before P2.3, and a 503 here costs production keys.
+    expect(res.statusCode).toBe(200)
   })
-  it('acknowledges recoverable quarantine without claiming an account action or erasure', async () => {
-    receive.mockResolvedValueOnce({ kind: 'quarantined', quarantineId: 'private-quarantine', reason: 'subject_or_topic_unresolved' })
-    const result = await post(JSON.stringify({ ...body, metadata: { topic: 'MARKETPLACE_ACCOUNT_DELETION', schemaVersion: '1.0' } }))
-    expect(result.statusCode).toBe(200)
-    expect(result.json()).toEqual({ received: true })
+
+  it('answers AUTHORIZATION_REVOCATION rather than refusing it', async () => {
+    const res = await post({
+      metadata: { topic: 'AUTHORIZATION_REVOCATION', notificationId: 'n-2' },
+      notification: { data: { username: 'someone' } },
+    })
+    // It is about the grant, not an order, so it names no seller to route by either.
+    expect(res.statusCode).toBe(204)
   })
-  it('rejects a failed signature after recording metadata, without accepting the event', async () => {
-    receive.mockResolvedValueOnce({ kind: 'rejected', quarantineId: 'private-quarantine', reason: 'signature_mismatch' })
-    const result = await post()
-    expect(result.statusCode).toBe(412)
-    expect(result.json()).toEqual({ error: 'Signature verification failed.' })
+
+  it('STILL refuses an ordinary notification it cannot attribute — the fix is narrow', async () => {
+    const res = await post({
+      metadata: { topic: 'ITEM_SOLD', notificationId: 'n-3' },
+      notification: { data: { orderId: '12-345' } },
+    })
+    // A sale that cannot be attributed to a business must not be handled in the
+    // platform's workspace. 503 keeps it on eBay's retry schedule.
+    expect(res.statusCode).toBe(503)
   })
-  it.each(['app_token_unavailable', 'public_key_forbidden', 'public_key_not_found'])('requests redelivery when verification is unavailable: %s', async reason => {
-    receive.mockResolvedValueOnce({ kind: 'rejected', quarantineId: 'private-quarantine', reason })
-    const result = await post()
-    expect(result.statusCode).toBe(503)
-    expect(result.json()).toEqual({ error: 'Notification verification is temporarily unavailable.' })
-  })
-  it.each(['storage_unavailable', 'cipher_unavailable', 'identity_conflict', 'owner_unavailable'])('never acknowledges failed durable admission: %s', async reason => {
-    receive.mockRejectedValueOnce(new AdmissionError(reason))
-    const result = await post()
-    expect(result.statusCode).toBe(503)
-    expect(result.json()).toEqual({ error: 'Notification could not be stored safely. Retry delivery.' })
-  })
-  it('does not expose arbitrary storage errors, request data or internal identifiers in errors/logs', async () => {
-    receive.mockRejectedValueOnce(new Error('sensitive-provider-body synthetic-private-token'))
-    const result = await post()
-    expect(result.statusCode).toBe(503)
-    expect(result.body).not.toContain('sensitive')
-    expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain('sensitive')
-  })
-  it('refuses an oversized body before starting provider verification', async () => {
-    const result = await post(JSON.stringify({ padding: 'x'.repeat(1_048_576) }))
-    expect(result.statusCode).toBe(413)
-    expect(receive).not.toHaveBeenCalled()
-  })
-  it('sends malformed JSON bytes through admission and returns only a static verification refusal', async () => {
-    const raw = '{"sensitive-private-field":'
-    receive.mockResolvedValueOnce({ kind: 'rejected', quarantineId: 'private', reason: 'body_unparseable' })
-    const result = await post(raw)
-    expect(result.statusCode).toBe(412)
-    expect(result.json()).toEqual({ error: 'Signature verification failed.' })
-    expect(receive).toHaveBeenCalledWith({ rawBody: Buffer.from(raw), header: 'synthetic-signature' })
-    expect(result.body).not.toContain('sensitive')
-  })
-  it('keeps storage failure mapping static even when the original JSON is malformed', async () => {
-    receive.mockRejectedValueOnce(new AdmissionError('storage_unavailable'))
-    const result = await post('{"sensitive-private-field":')
-    expect(result.statusCode).toBe(503)
-    expect(result.body).not.toContain('sensitive')
-  })
-  it('retains normal JSON validation on admin routes in the same plugin', async () => {
-    const result = await post('{"invalid":', '/admin/setup-ebay-notifications')
-    expect(result.statusCode).toBe(400)
-    expect(receive).not.toHaveBeenCalled()
+
+  it('handles an ordinary notification normally once routing succeeds', async () => {
+    routingThrows = false
+    const res = await post({
+      metadata: { topic: 'ITEM_SOLD', notificationId: 'n-4' },
+      notification: { data: { orderId: '12-345' } },
+    })
+    expect(res.statusCode).toBe(204)
+    expect(recorded.some((r) => r.channel === 'EBAY' && r.signatureOk === true)).toBe(true)
   })
 })

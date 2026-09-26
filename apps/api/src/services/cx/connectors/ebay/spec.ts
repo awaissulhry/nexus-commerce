@@ -39,10 +39,8 @@ async function identity(handle: ConnectionHandle) {
   })
   if (!res.ok) return null
   const data = (await res.json()) as { userId?: string; username?: string }
-  // Identity API userId is immutable; username can change and is display-only.
-  if (typeof data?.userId !== 'string' || !data.userId || data.userId.length > 1024
-    || data.userId !== data.userId.trim() || /[\u0000-\u001f\u007f-\u009f]/.test(data.userId)) return null
-  return { userId: data.userId, username: typeof data.username === 'string' ? data.username : data.userId }
+  if (!data?.userId && !data?.username) return null
+  return { userId: data.userId ?? data.username!, username: data.username ?? data.userId! }
 }
 
 async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {

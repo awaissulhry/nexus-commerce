@@ -30,10 +30,11 @@ import prisma from '../db.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
 
 // ─── Retention defaults ──────────────────────────────────────────
-// Existing configured order floor. Orders are outside the automatic sweep;
-// fiscal/erasure policy needs its separate review before destructive processing.
+// Italian fiscal law mandates 7 years (~2555 days) for invoiced
+// orders. We bake that as a floor server-side; the UI exposes a
+// slider that can't go lower.
 const DEFAULT_POLICIES: Record<string, number> = {
-  orders: 2555, // Existing configured minimum; not a legal-compliance assertion.
+  orders: 2555, // 7y — IT fiscal minimum
   auditLog: 730, // 2y
   loginEvents: 180,
   webhookEvents: 90,
@@ -273,7 +274,8 @@ const settingsPrivacyRoutes: FastifyPluginAsync = async (fastify) => {
       const current = (row.policies as Record<string, number>) ?? {}
       // Validate + clamp each incoming value. Unknown keys are
       // dropped quietly to avoid letting clients seed arbitrary
-      // policies; floors + ceilings enforce configured bounds.
+      // policies; floors + ceilings enforce the fiscal/security
+      // minimums.
       const next: Record<string, number> = { ...current }
       const fieldErrors: Record<string, string> = {}
       for (const [k, v] of Object.entries(incoming)) {

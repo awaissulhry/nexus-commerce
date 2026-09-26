@@ -472,31 +472,3 @@ https://nodejs.org/api/os.html#osavailableparallelism . Evidence:
 `worker-config-smoke.log`, `deployment-db-first-release.json`,
 `public-first-release.json`, `deployment-db-verification.json` and
 `public-release-verification.json` in the session evidence directory.
-
-
-## Final approved production verification — 21:58 UTC
-
-Final released code is **439d9e3d34ed79a09d76981da08de5d2ca0190e2**, on main. The
-normal hook passed for the worker-cap package, including all 106 real PostgreSQL
-checks. Actual GitHub CI **35788316974 is SUCCESS**: one worker on two CPUs,
-**1,904 API passes / four existing skips** and **3,093 web passes**. The formerly
-failing tests all pass; their assertions and timeouts are unchanged. Deploy API
-**35788316766 is SUCCESS**, including its exact-build smoke test.
-
-Final Railway deployment **0f89aa53-ce89-4518-91b6-76a5c2d68507 is SUCCESS**. Its CLI
-message records the exact GitHub SHA; `/api/health` and `/api/health/ready` independently
-serve `439d9e3d` with HTTP 200. Protected diagnostics return 401. At 21:58 UTC the
-read-only database verification again passed the migration checksum/finished state,
-exclusive Motovento shop alias, all 18 pre-existing connections' compared fields and
-non-Etsy route sets/aliases. Shopify remains connected. Runtime startup confirms
-no automatic eBay setup and no automatic Amazon rotation without a configured queue.
-Independent review accepted the final native-release evidence; the same-commit CLI
-release and its smoke test subsequently passed as well. No rollback was needed.
-
-Sanitized, durable snapshot: **RELEASE-2026-09-22-EVIDENCE.json** beside this record.
-Raw local evidence remains under `/private/tmp/cx-completion-20260922/`. Existing Ads
-integrity findings and five quantity mismatches remain visible; these results do not
-prove a zero-error service, complete SLO compliance, valid token contents or complete
-channel operations. The wider implementation gaps and separate approvals remain in
-COMPLETION-MATRIX.md. No separately prepared vendor probe, connection deletion,
-new channel activation or P7 drop was executed.

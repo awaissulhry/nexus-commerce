@@ -20,9 +20,8 @@
  * hours arriving at the same answer, so they are dead-lettered on the first sweep with
  * a reason that names exactly what is missing.
  *
- * Every event is handled inside its stored workspace. The cron wrapper visits active
- * profiles; each selection remains scoped to that profile. eBay has a separate
- * four-receipt batch and owns its claim/completion protocol.
+ * Every event is handled INSIDE its own workspace, read from the row. The sweep itself
+ * reads across all of them, because it runs as the platform rather than as a member.
  *
  * Cadence: every minute. The backoff decides when an event is actually due; a tight
  * cadence only decides how soon after that moment the worker notices.
@@ -35,9 +34,9 @@ import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { withIngressWorkspace } from '../lib/workspace-ingress.js'
-import { completeInbound, deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
+import { deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
 import { canReplayInbound, inboundHandlerFor } from '../services/cx/ingress/handlers.js'
-import { dueEbayInboundEvents, processEbayInbound, ebayInboundProcessingEnabled } from '../services/cx/ingress/ebay-processing.js'
+import { claimInbound, inboundDatabaseNow, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 
 const BATCH = 50
 
@@ -46,45 +45,27 @@ export interface InboundRetryStats {
   succeeded: number
   failed: number
   unreplayable: number
-  deferred: number
-  skipped: number
 }
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
-let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 }
+let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
 
 /** One sweep. Exported so a test can run it without a scheduler. */
-export async function runInboundRetrySweep(now: Date = new Date()): Promise<InboundRetryStats> {
-  const stats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 }
-  const [events, ebayEvents] = await Promise.all([dueInboundEvents(BATCH, now, { excludeVerifiedEbay: true }), dueEbayInboundEvents()])
-  stats.due = events.length + ebayEvents.length
-
-  // At most four remote inspections per profile/sweep; claims fence overlapping
-  // workers. Each receipt owns its completion, so never call the legacy finisher.
-  const ebayWork = Promise.all(ebayEvents.map(event => withIngressWorkspace(event.workspaceId, async () => {
-    try {
-      const outcome = await processEbayInbound(event.id)
-      if (outcome.kind === 'done') stats.succeeded++
-      else if (outcome.kind === 'retry') stats.failed++
-      else if (outcome.kind === 'dead_letter') stats.unreplayable++
-      else if (outcome.kind === 'deferred') stats.deferred++
-      else stats.skipped++
-    } catch {
-      stats.failed++
-      logger.warn('[inbound-retry] stored eBay processing could not persist its outcome', { id: event.id })
-    }
-  })))
+export async function runInboundRetrySweep(now?: Date): Promise<InboundRetryStats> {
+  now ??= await inboundDatabaseNow()
+  const stats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
+  const events = await dueInboundEvents(BATCH, now)
+  stats.due = events.length
 
   for (const event of events) {
-    if (!isVerifiedInbound(event) || (event.channel === 'EBAY' && event.verifiedBy !== 'ebay_ecdsa')) {
+    if (!isVerifiedInbound(event)) {
       await withIngressWorkspace(event.workspaceId, () =>
         deadLetterInbound(event.id, 'This delivery has no successful verification record and cannot be replayed.'),
       )
       stats.unreplayable++
       continue
     }
-    if (event.channel === 'EBAY') { stats.skipped++; continue }
     // Checked before the workspace is entered and before anything is loaded: an event
     // nothing can replay must not consume an attempt, and must not look like a
     // handler that threw.
@@ -100,31 +81,35 @@ export async function runInboundRetrySweep(now: Date = new Date()): Promise<Inbo
     }
 
     try {
-      await withIngressWorkspace(event.workspaceId, async () => {
-        const handler = await inboundHandlerFor(event.channel, event.eventType)
-        // canReplayInbound just said yes, so a null here means the registry and the
-        // module disagree — a wrong export name. Say so rather than reporting the
-        // TypeError that calling null would raise.
-        if (!handler) throw new Error(`The replay registry lists ${event.channel}/${event.eventType} but its handler could not be loaded.`)
-        // The account comes from the LEDGER ROW, not from the payload and not from a
-        // lookup: the stored payload is the channel's own body and names no Nexus
-        // account, and deducing one means "the only connected account" — the ambient
-        // resolution the MAP.3 ratchet forbids.
-        await handler(event.payload, { connectionId: event.connectionId, eventType: event.eventType, channel: event.channel })
-        await completeInbound(event.id, true)
+      const ran = await withIngressWorkspace(event.workspaceId, async () => {
+        // Claimed at the database's current time, not the sweep's start: a slow batch
+        // would otherwise hand later events a lease that has already expired.
+        const claim = await claimInbound(event.id)
+        if (!claim) return false // another worker holds it, or it changed since it was selected
+        await runWithInboundClaim(claim, async (stored, signal) => {
+          const handler = await inboundHandlerFor(stored.channel, stored.eventType)
+          // canReplayInbound just said yes, so a null here means the registry and the
+          // module disagree — a wrong export name. Say so rather than reporting the
+          // TypeError that calling null would raise.
+          if (!handler) throw new Error(`The replay registry lists ${event.channel}/${event.eventType} but its handler could not be loaded.`)
+          // The account and payload come from the CLAIMED LEDGER ROW, not from the
+          // selection above and not from a lookup: the stored payload is the channel's
+          // own body and names no Nexus account, and deducing one means "the only
+          // connected account" — the ambient resolution the MAP.3 ratchet forbids.
+          signal.throwIfAborted()
+          await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
+        })
+        return true
       })
-      stats.succeeded++
+      if (ran) stats.succeeded++
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      // `completeInbound` decides between another backoff and dead letters; it is the
-      // one place that knows the attempt budget.
-      await withIngressWorkspace(event.workspaceId, () => completeInbound(event.id, false, message))
+      // The claim owner has scheduled retry or dead-lettered the exhausted attempt.
       stats.failed++
       logger.warn('[inbound-retry] replay failed', { id: event.id, channel: event.channel, eventType: event.eventType, error: message })
     }
   }
 
-  await ebayWork
   lastRunAt = now
   lastStats = stats
   return stats
@@ -147,12 +132,12 @@ export function startInboundRetryCron(): void {
   scheduledTask = cron.schedule(schedule, async () => {
     await recordCronRun('inbound-retry', async () => {
       const stats = await runInboundRetrySweep()
-      return `due=${stats.due} succeeded=${stats.succeeded} failed=${stats.failed} unreplayable=${stats.unreplayable} deferred=${stats.deferred} skipped=${stats.skipped}`
+      return `due=${stats.due} succeeded=${stats.succeeded} failed=${stats.failed} unreplayable=${stats.unreplayable}`
     }).catch((err) => {
       logger.error('inbound-retry cron: failure', { error: err instanceof Error ? err.message : String(err) })
     })
   })
-  logger.info('inbound-retry cron started', { schedule, ebayProcessingEnabled: ebayInboundProcessingEnabled() })
+  logger.info('inbound-retry cron started', { schedule })
 }
 
 export function inboundRetryStatus() {

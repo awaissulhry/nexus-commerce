@@ -17,10 +17,39 @@ const handled: any[] = []
 let nextWrite: any = { id: 'row-1', duplicate: false }
 let routeThrowsFor: string | null = null
 let handlerThrows = false
+const storedRecords = new Map<string, any>()
+const activeClaims = new Set<string>()
+let claimDue = true
+let handlerPause: Promise<void> | undefined
+let handlerEntered: (() => void) | undefined
 
 vi.mock('../services/cx/ingress/ledger.js', () => ({
-  recordInbound: vi.fn(async (rec: any) => { recorded.push(rec); return nextWrite }),
+  recordInbound: vi.fn(async (rec: any) => {
+    recorded.push(rec)
+    if (nextWrite.id && !storedRecords.has(nextWrite.id)) storedRecords.set(nextWrite.id, rec)
+    return nextWrite
+  }),
   completeInbound: vi.fn(async (id: any, ok: boolean, error?: string) => { completed.push({ id, ok, error }) }),
+}))
+// Lease timing/CAS is covered by claims.vitest.test.ts. The receiver double keeps
+// the original arrival and one active owner so routing and duplicate behavior stay observable.
+vi.mock('../services/cx/ingress/claims.js', () => ({
+  claimInbound: async (id: string) => {
+    const stored = storedRecords.get(id)
+    if (!stored || !claimDue || activeClaims.has(id)) return null
+    activeClaims.add(id)
+    return { ...stored, id, token: `claim-${id}`, attempt: 1, connectionId: stored.connectionId ?? null }
+  },
+  runWithInboundClaim: async (claim: any, work: any) => {
+    try {
+      const result = await work(claim, new AbortController().signal)
+      completed.push({ id: claim.id, ok: true })
+      return result
+    } catch (error) {
+      completed.push({ id: claim.id, ok: false, error: error instanceof Error ? error.message : String(error) })
+      throw error
+    } finally { activeClaims.delete(claim.id) }
+  },
 }))
 vi.mock('../lib/workspace-ingress.js', () => ({
   legacyIngress: (work: any) => work(),
@@ -40,11 +69,23 @@ vi.mock('../services/cx/apps.service.js', () => ({
   getChannelApp: async () => (appSecret === null ? null : { clientSecret: appSecret }),
 }))
 vi.mock('../services/shopify/schema-sync.service.js', () => ({ registerShopifySchemaWebhook: () => {} }))
+// These receiver cases exercise product/lifecycle handlers. Do not initialize the
+// unrelated order-stock dependency graph and its Redis clients at import time.
+vi.mock('../services/stock-level.service.js', () => ({
+  reserveOpenOrder: vi.fn(() => { throw new Error('Unexpected order reservation in product/lifecycle receiver test') }),
+  consumeOpenOrder: vi.fn(() => { throw new Error('Unexpected order consumption in product/lifecycle receiver test') }),
+  resolveLocationByCode: vi.fn(() => { throw new Error('Unexpected stock lookup in product/lifecycle receiver test') }),
+}))
+vi.mock('../services/shopify-locations.service.js', () => ({
+  resolveByShopifyId: vi.fn(() => { throw new Error('Unexpected inventory lookup in product/lifecycle receiver test') }),
+}))
 // The route calls the REAL handler, so the handler's own first call is what tells us
 // it ran. `recordManagedContentChange` is the first thing handleProductUpdate does.
 vi.mock('../services/shopify/content-webhook.service.js', () => ({
   recordManagedContentChange: async (id: string) => {
     handled.push(id)
+    handlerEntered?.()
+    await handlerPause
     if (handlerThrows) throw new Error('handler exploded')
     return false
   },
@@ -104,6 +145,11 @@ beforeEach(() => {
   nextWrite = { id: 'row-1', duplicate: false }
   routeThrowsFor = null
   handlerThrows = false
+  storedRecords.clear()
+  activeClaims.clear()
+  claimDue = true
+  handlerPause = undefined
+  handlerEntered = undefined
   appSecret = SECRET
   dbCalls.length = 0
   revoked.length = 0
@@ -179,15 +225,47 @@ describe('duplicate deliveries', () => {
     await app.close()
   })
 
-  it('handles a redelivery of an event that FAILED — that is the retry we asked for', async () => {
+  it('acknowledges a failed redelivery while its durable retry is not due', async () => {
+    nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'failed' }
+    claimDue = false
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ success: true, queued: true })
+    expect(handled).toHaveLength(0)
+    expect(completed).toHaveLength(0)
+    await app.close()
+  })
+
+  it('processes a due duplicate using its stored payload, not the arriving replacement', async () => {
+    storedRecords.set('row-1', { channel: 'SHOPIFY', eventType: 'product/update', payload: { id: 'stored-product' }, connectionId: 'stored-account' })
     nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'failed' }
     const app = await buildApp()
     const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
     expect(res.statusCode).toBe(200)
-    // Shopify resends the same delivery id when we answered with a failure. Treating
-    // that as "already processed" would drop it for good.
+    expect(recorded[0].payload.id).toBe('555')
+    expect(handled).toEqual(['stored-product'])
+    expect(completed).toEqual([{ id: 'row-1', ok: true }])
+    await app.close()
+  })
+
+  it('acknowledges an overlapping delivery without starting a second handler', async () => {
+    const entered = new Promise<void>(resolve => { handlerEntered = resolve })
+    let resume!: () => void
+    handlerPause = new Promise<void>(resolve => { resume = resolve })
+    const app = await buildApp()
+    const first = app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
+    const running = first.then(response => response)
+    await entered
+    nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'pending' }
+    const replacement = JSON.stringify({ id: 'replacement-product' })
+    const second = await app.inject({ method: 'POST', url: PATH, headers: headers({ 'x-shopify-hmac-sha256': sign(replacement) }), payload: replacement })
+    expect(second.statusCode).toBe(200)
+    expect(second.json()).toMatchObject({ queued: true })
     expect(handled).toEqual(['555'])
-    expect(completed[0].ok).toBe(true)
+    resume()
+    expect((await running).statusCode).toBe(200)
+    expect(completed).toEqual([{ id: 'row-1', ok: true }])
     await app.close()
   })
 })
@@ -282,6 +360,25 @@ describe('P2.4 — the app lifecycle and privacy topics', () => {
     const res = await lifecycle('/webhooks/shopify/app/uninstalled', body)()
     expect(res.statusCode).toBe(200)
     expect(revoked).toEqual([{ connectionId: 'conn-1', source: 'shopify_app_uninstalled' }])
+  })
+
+  it('uses the persisted account when a due lifecycle delivery is repeated', async () => {
+    storedRecords.set('row-1', { channel: 'SHOPIFY', eventType: 'app/uninstalled', payload: { id: 1 }, connectionId: 'stored-account' })
+    nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'failed' }
+    const res = await lifecycle('/webhooks/shopify/app/uninstalled', JSON.stringify({ id: 2 }))()
+    expect(res.statusCode).toBe(200)
+    expect(recorded[0].connectionId).toBe('conn-1')
+    expect(revoked).toEqual([{ connectionId: 'stored-account', source: 'shopify_app_uninstalled' }])
+  })
+
+  it('refuses a no-route lifecycle notice when the ledger cannot persist it', async () => {
+    routeThrowsFor = '*'
+    nextWrite = { id: null, duplicate: false }
+    const res = await lifecycle('/webhooks/shopify/app/uninstalled', JSON.stringify({ id: 1 }))()
+    expect(res.statusCode).toBe(503)
+    expect(recorded).toHaveLength(1)
+    expect(revoked).toHaveLength(0)
+    expect(completed).toHaveLength(0)
   })
 
   it('hands the revoke NO account when no shop routed, rather than guessing one', async () => {

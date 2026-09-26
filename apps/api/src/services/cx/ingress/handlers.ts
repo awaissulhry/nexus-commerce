@@ -29,17 +29,13 @@ export interface InboundHandlerContext {
   connectionId: string | null
   eventType: string
   channel: string
+  /** Aborted when the processing lease is lost; another worker now owns the event. */
+  signal?: AbortSignal
 }
 
 export type InboundHandler = (payload: unknown, context?: InboundHandlerContext) => Promise<unknown>
 
 type Loader = () => Promise<InboundHandler>
-export type InboundReceiptHandler = (id: string) => Promise<import('./ebay-processing.js').EbayProcessingOutcome>
-const RECEIPT_REGISTRY: Record<string, Record<string, () => Promise<InboundReceiptHandler>>> = {
-  EBAY: {
-    'AUTHORIZATION_REVOCATION': async () => (await import('./ebay-processing.js')).processEbayInbound,
-  },
-}
 
 const SHOPIFY_WEBHOOKS = '../../../routes/shopify-webhooks.js'
 const ETSY_WEBHOOKS = '../../../routes/etsy-webhooks.routes.js'
@@ -84,10 +80,10 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
 
 /** True when this event has a handler — without loading it. */
 export function canReplayInbound(channel: string, eventType: string): boolean {
-  return Boolean(REGISTRY[channel]?.[eventType] || RECEIPT_REGISTRY[channel]?.[eventType])
+  return Boolean(REGISTRY[channel]?.[eventType])
 }
 
-/** Legacy payload handlers. Claimed receipts use inboundReceiptHandlerFor instead. */
+/** The handler for this event, or null when nothing can replay it. */
 export async function inboundHandlerFor(channel: string, eventType: string): Promise<InboundHandler | null> {
   const loader = REGISTRY[channel]?.[eventType]
   if (!loader) return null
@@ -98,15 +94,9 @@ export async function inboundHandlerFor(channel: string, eventType: string): Pro
   return fn
 }
 
-/** Stored-receipt handlers own claim acquisition and atomic completion themselves. */
-export async function inboundReceiptHandlerFor(channel: string, eventType: string): Promise<InboundReceiptHandler | null> {
-  const loader = RECEIPT_REGISTRY[channel]?.[eventType]
-  return loader ? loader() : null
-}
-
 /** Every channel and event type that can be replayed. Used by the tests and the API. */
 export function replayableEventTypes(): Array<{ channel: string; eventType: string }> {
-  return Object.entries({ ...REGISTRY, ...RECEIPT_REGISTRY }).flatMap(([channel, types]) =>
+  return Object.entries(REGISTRY).flatMap(([channel, types]) =>
     Object.keys(types).map((eventType) => ({ channel, eventType })),
   )
 }

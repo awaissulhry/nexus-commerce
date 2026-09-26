@@ -57,8 +57,6 @@
  */
 
 import prisma from '../../db.js'
-import { createHash } from 'node:crypto'
-import type { Prisma } from '@prisma/client'
 import { requireWorkspace } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 
@@ -81,8 +79,6 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-deprecation',
   'channel-write-drift',
   'channel-data-stale',
-  'channel-authorization-revoked',
-  'channel-notification-unresolved',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]
@@ -118,11 +114,7 @@ export interface RaiseResult {
  * business in context. Never every user on the system.
  */
 export async function alertRecipients(workspaceId: string, actorUserId: string | null): Promise<string[]> {
-  return alertRecipientsInTx(prisma, workspaceId, actorUserId)
-}
-
-export async function alertRecipientsInTx(tx: Pick<Prisma.TransactionClient, 'workspaceMembership'>, workspaceId: string, actorUserId: string | null): Promise<string[]> {
-  const owners = await tx.workspaceMembership.findMany({
+  const owners = await prisma.workspaceMembership.findMany({
     where: {
       workspaceId, status: 'active', user: { status: 'active' },
       roles: { some: { role: { key: 'OWNER' } } },
@@ -141,57 +133,46 @@ export async function alertRecipientsInTx(tx: Pick<Prisma.TransactionClient, 'wo
  */
 export async function raiseChannelAlert(alert: ChannelAlert): Promise<RaiseResult> {
   try {
-    return await raiseChannelAlertInTx(prisma, alert)
+    const { workspaceId, actorUserId } = requireWorkspace()
+    const recipients = await alertRecipients(workspaceId, actorUserId)
+    if (recipients.length === 0) {
+      // Not an error: a business with no active owner is a real state. Said out loud,
+      // because an alert that silently reaches nobody is the defect this file exists
+      // to fix — repeating it quietly would be worse than the original.
+      logger.warn('[channel-alerts] no active owner to tell', { kind: alert.kind, workspaceId })
+      return { created: 0, deduped: 0, recipients: 0 }
+    }
+
+    let created = 0
+    let deduped = 0
+    for (const userId of recipients) {
+      const unread = await prisma.notification.findFirst({
+        where: {
+          userId, type: alert.kind, entityType: alert.entityType, entityId: alert.entityId, readAt: null,
+        },
+        select: { id: true },
+      })
+      if (unread) { deduped++; continue }
+      await prisma.notification.create({
+        data: {
+          userId,
+          type: alert.kind,
+          severity: alert.severity,
+          title: alert.title,
+          body: alert.body,
+          entityType: alert.entityType,
+          entityId: alert.entityId,
+          href: alert.href ?? null,
+          meta: (alert.meta ?? {}) as never,
+        },
+      })
+      created++
+    }
+    return { created, deduped, recipients: recipients.length }
   } catch (err: any) {
     logger.warn('[channel-alerts] could not raise', { kind: alert.kind, error: err?.message })
     return { created: 0, deduped: 0, recipients: 0 }
   }
-}
-
-/** Strict writes for atomic domain effects; an occurrence dedupes even after a notice is read. */
-export async function raiseChannelAlertInTx(
-  tx: Pick<Prisma.TransactionClient, 'notification' | 'workspaceMembership'>,
-  alert: ChannelAlert,
-  options: { occurrenceId?: string; actorUserId?: string | null } = {},
-): Promise<RaiseResult> {
-  const context = requireWorkspace()
-  const { workspaceId } = context
-  const actorUserId = options.actorUserId === undefined ? context.actorUserId : options.actorUserId
-  const recipients = await alertRecipientsInTx(tx, workspaceId, actorUserId)
-  if (recipients.length === 0) {
-    // Not an error: a business with no active owner is a real state. Said out loud,
-    // because an alert that silently reaches nobody is the defect this file exists
-    // to fix — repeating it quietly would be worse than the original.
-    logger.warn('[channel-alerts] no active owner to tell', { kind: alert.kind, workspaceId })
-    return { created: 0, deduped: 0, recipients: 0 }
-  }
-
-  const dataFor = (userId: string) => ({
-    userId, type: alert.kind, severity: alert.severity, title: alert.title, body: alert.body,
-    entityType: alert.entityType, entityId: alert.entityId, href: alert.href ?? null,
-    meta: (alert.meta ?? {}) as Prisma.InputJsonValue,
-  })
-  if (options.occurrenceId !== undefined) {
-    const created = await tx.notification.createMany({ skipDuplicates: true, data: recipients.map(userId => ({
-      ...dataFor(userId),
-      id: `channel-${createHash('sha256').update(JSON.stringify([workspaceId, alert.kind, alert.entityType, alert.entityId, options.occurrenceId, userId])).digest('hex')}`,
-    })) })
-    return { created: created.count, deduped: recipients.length - created.count, recipients: recipients.length }
-  }
-  let created = 0
-  let deduped = 0
-  for (const userId of recipients) {
-    const unread = await tx.notification.findFirst({
-      where: {
-        userId, type: alert.kind, entityType: alert.entityType, entityId: alert.entityId, readAt: null,
-      },
-      select: { id: true },
-    })
-    if (unread) { deduped++; continue }
-    await tx.notification.create({ data: dataFor(userId) })
-    created++
-  }
-  return { created, deduped, recipients: recipients.length }
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay inbound notifications — the receiver, the ownership challenge, and setup.
  *
@@ -19,18 +21,21 @@
  *                                              records every arrival and every
  *                                              rejection, then routes by topic.
  *
- * The receiver acknowledges only a durable verified receipt/quarantine. Business
- * effects run through the stored-receipt processor; unknown topics remain visible
- * and recoverable. A successful acknowledgement does not claim successful erasure.
+ * The lifecycle topics (account deletion, authorization revocation) are answered BEFORE
+ * account routing — see the comment at that branch; routing them was returning 503 on
+ * the one topic eBay requires a 200 for.
  */
 
 import type { FastifyInstance } from 'fastify'
+import crypto from 'crypto'
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { registerRawJsonParser } from '../utils/webhook.js'
 import type { RawBodyRequest } from '../utils/webhook.js'
-import { listActiveConnections } from '../services/connection-resolver.service.js'
-import { ebayChallengeResponse } from '../services/cx/ingress/ebay-signature.js'
-import { receiveEbayNotice, EbayAdmissionError } from '../services/cx/ingress/ebay-admission.js'
+import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
+import { verifyEbayNotification, ebayChallengeResponse } from '../services/cx/ingress/ebay-signature.js'
+import { ebayTopicAction } from '../services/cx/ingress/ebay-topics.js'
+import { recordInbound } from '../services/cx/ingress/ledger.js'
 
 // P2.3 — the Trading API helpers that stood here are gone.
 //
@@ -41,9 +46,29 @@ import { receiveEbayNotice, EbayAdmissionError } from '../services/cx/ingress/eb
 // lives in services/ebay-trading-api.service.ts — only this file's private copies of
 // the plumbing are removed.
 
+// P4 — legacy Trading-API sale topics.
+//
+// P2.3 — the comment here used to say these are "what setup-ebay-notifications
+// subscribes to". That route no longer subscribes anything through the Trading API, so
+// these arrive only if the old delivery preferences are still configured in eBay's
+// developer portal from before. The branch stays because it works and costs nothing
+// when nothing arrives; removing it would drop real sales if those preferences are
+// still live.
+//
+// They are deliberately NOT in the topic table: `ItemSold` (Trading) and `ITEM_SOLD`
+// (Notification API) are different strings for different systems, and folding them
+// together would make one sale fire two syncs.
+//
+// Module-scope so the hot webhook handler doesn't re-allocate per request.
+const LEGACY_SALE_TOPICS = new Set([
+  'AuctionCheckoutComplete',
+  'FixedPriceTransaction',
+  'ItemSold',
+])
+
 export default async function ebayNotificationRoutes(app: FastifyInstance): Promise<void> {
   // CX.0 (S9): eBay signs the raw bytes; capture them for this plugin only.
-  registerRawJsonParser(app, { rawBodyOnly: request => request.method === 'POST' && request.routeOptions.url.endsWith('/webhooks/ebay-notification') })
+  registerRawJsonParser(app)
 
   // ── GET /api/admin/ebay-token-status ──────────────────────────────
   // Shows the current access-token expiry for every active eBay connection.
@@ -283,25 +308,373 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     return reply.send({ challengeResponse: ebayChallengeResponse(challengeCode, token, endpoint) })
   })
 
-  // Durable acceptance is separate from claim-aware background processing.
-  app.post('/webhooks/ebay-notification', { bodyLimit: 1_048_576 }, async (req, reply) => {
-    const rawBody = (req as RawBodyRequest).rawBody
-    if (!rawBody) return reply.status(400).send({ error: 'Raw body unavailable.' })
-    const signature = req.headers['x-ebay-signature']
-    try {
-      const result = await receiveEbayNotice({ rawBody, header: typeof signature === 'string' ? signature : undefined })
-      if (result.kind === 'rejected') {
-        const unavailable = ['app_token_unavailable', 'public_key_forbidden', 'public_key_not_found'].includes(result.reason)
-        return reply.status(unavailable ? 503 : 412).send({ error: unavailable
-          ? 'Notification verification is temporarily unavailable.' : 'Signature verification failed.' })
-      }
-      // A quarantine acknowledgement means only that the verified body is durable.
-      // It does not claim erasure, lifecycle change or successful order ingestion.
-      return reply.status(200).send({ received: true })
-    } catch (error) {
-      const reason = error instanceof EbayAdmissionError ? error.reason : 'storage_unavailable'
-      logger.error('[eBay notification] durable admission failed', { reason })
-      return reply.status(reason === 'invalid_body' ? 400 : 503).send({ error: 'Notification could not be stored safely. Retry delivery.' })
+  // POST /api/webhooks/ebay-notification — receives push events from eBay.
+  app.post('/webhooks/ebay-notification', async (req, reply) => {
+    const body = (req as RawBodyRequest).rawBody
+
+    if (!body) {
+      return reply.status(400).send({ error: 'raw body unavailable' })
     }
+
+    // CX.4a — eBay's real scheme: an ECC signature over the payload, verified with a
+    // public key fetched by the key id in the header. What stood here checked an
+    // HMAC of the verification token, which eBay never sends, so every genuine
+    // notification failed it. Still fail-closed: an unfetchable key is a rejection.
+    const sig = req.headers['x-ebay-signature'] as string | undefined
+    const verdict = await verifyEbayNotification({ rawBody: body, header: sig })
+    if (!verdict.ok) {
+      // The old path returned 204 and wrote nothing, so a rejected notification and a
+      // notification that never arrived were indistinguishable afterwards. Record it.
+      const rejected = req.body as any
+      const claimedId = rejected?.metadata?.notificationId ?? null
+      // P2.1 — this write used to be skipped whenever business profiles were on,
+      // which is how production runs. So the one mode where a rejected notification
+      // mattered was the one mode that recorded nothing, and `signatureOk = false`
+      // could not occur in production however many forged notifications arrived.
+      //
+      // The reason it was switched off rather than fixed is real: an unverified body
+      // names no seller, so there is no workspace to route it to and the write threw.
+      // The platform's own workspace is the honest home for it — the same choice the
+      // Amazon credential path makes for a message no business owns. It is also the
+      // only safe one: attributing an unverified body to a business would let anyone
+      // who can reach the endpoint write rows into that business's ledger.
+      await legacyIngress(() => recordInbound({
+        channel: 'EBAY',
+        eventType: rejected?.metadata?.topic ?? 'unverified',
+        // NOT the notificationId the payload claims. Nothing about an unverified
+        // body is trustworthy, and `(channel, externalId)` is a UNIQUE key: a forged
+        // notification naming a real id would sit in that slot and make the genuine
+        // delivery look like a duplicate, suppressing it. Passing null keys the row on
+        // the body digest instead, which no attacker can use to collide with a
+        // verified event. The claimed id is still kept — in the payload and in the
+        // reason — it just cannot occupy the identity.
+        externalId: null,
+        rawBody: body,
+        payload: rejected ?? {},
+        signatureOk: false,
+        verifiedBy: 'ebay_ecdsa',
+        status: 'failed',
+        lastError: `signature rejected: ${verdict.reason}${verdict.kid ? ` (kid ${verdict.kid})` : ''}${claimedId ? ` (claimed id ${String(claimedId).slice(0, 60)})` : ''}`,
+      }))
+      logger.warn('[eBay notification] signature rejected', { reason: verdict.reason, kid: verdict.kid })
+      // 412 is what eBay's own SDK answers on a failed check. The 204 that stood here
+      // told eBay the notification had been accepted.
+      return reply.status(412).send({ error: 'signature verification failed' })
+    }
+
+    const processVerified = async () => {
+    const payload = req.body as any
+    const topic: string = payload?.metadata?.topic ?? ''
+    const notifData = payload?.notification?.data ?? payload?.notification ?? {}
+    const ebayOrderId: string = notifData.orderId ?? notifData.orderId ?? ''
+    const notificationId: string =
+      payload?.metadata?.notificationId ?? payload?.notification?.notificationId ?? ''
+    // P2.3 — one topic table (services/cx/ingress/ebay-topics.ts) instead of four topic
+    // strings written inline here, three of which were not eBay topic ids at all.
+    const { action: topicAction, via: topicVia } = ebayTopicAction(topic, payload)
+
+    logger.info('[eBay notification] received', { topic, ebayOrderId })
+
+    // RT.1 — persist the receipt as a WebhookEvent so push-health and
+    // /sync-logs/webhooks can see eBay traffic. externalId prefers
+    // eBay's notificationId; if missing we fall back to a deterministic
+    // composite so the unique (channel, externalId) constraint still
+    // bounces duplicate retries from eBay.
+    //
+    // RT.3 — eBay's notification envelope carries metadata.publishDate
+    // (the moment eBay queued the notification). Capture it as
+    // providerTimestamp so /api/admin/push-latency can chart eBay
+    // push latency alongside Amazon + Shopify.
+    const externalId = notificationId || `${topic}:${ebayOrderId}:${Date.now()}`
+    const publishDateRaw = payload?.metadata?.publishDate ?? null
+    const providerTimestamp =
+      typeof publishDateRaw === 'string' && !Number.isNaN(Date.parse(publishDateRaw))
+        ? new Date(publishDateRaw)
+        : null
+    // CX.4a — through the shared ledger writer, so an accepted notification and a
+    // rejected one are the same kind of record and can be counted together.
+    // `recordInbound` swallows its own failures for the reason the old try/catch
+    // gave: eBay retries forever if we stop answering.
+    await recordInbound({
+      channel: 'EBAY',
+      eventType: topic || 'unknown',
+      externalId: externalId || null,
+      rawBody: body,
+      payload: payload ?? {},
+      signatureOk: true,
+      verifiedBy: 'ebay_ecdsa',
+      status: 'done',
+      providerTimestamp,
+    })
+
+    // MARKETPLACE_ACCOUNT_DELETION — eBay's erasure notice, and a condition of
+    // holding production keys. Acknowledging it is mandatory and is done here.
+    // Carrying out the erasure is NOT done here: it deletes real customer data, so it
+    // is the Owner's decision and its own unit, and doing it as a side effect of an
+    // inbound message would be the most destructive thing in this codebase.
+    // Logged at error level so it cannot pass unseen while that decision is pending.
+    if (topicAction === 'account_deletion') {
+      logger.error('[eBay notification] MARKETPLACE_ACCOUNT_DELETION received — acknowledged and recorded; erasure is NOT automated', {
+        notificationId: notificationId || null,
+        username: notifData?.username ?? null,
+      })
+      return reply.status(200).send()
+    }
+
+    // RT.10 — ItemRevised carries quantity changes (operator edits in
+    // eBay UI, batch upload via API, third-party stock app). Each
+    // change becomes one ChannelStockEvent so /fulfillment/stock/
+    // channel-drift surfaces the drift in ~30s instead of waiting
+    // for the CS-series eBay ingester sweep.
+    //
+    // Topic shapes seen:
+    //   Trading API (legacy): ItemRevised (XML notification)
+    //   REST notification API: marketplace.inventory_item.updated
+    if (topicAction === 'listing_changed') {
+      void (async () => {
+        try {
+          const data = payload?.notification?.data ?? payload?.notification ?? payload
+          // Trading API ItemRevised → ItemID + Quantity
+          // REST inventory → sku + availability
+          const sku: string =
+            data?.sku ??
+            data?.SKU ??
+            data?.Item?.SKU ??
+            data?.itemSku ??
+            ''
+          const qty = Number(
+            data?.availability?.shipToLocationAvailability?.quantity ??
+              data?.Item?.Quantity ??
+              data?.Quantity ??
+              data?.quantity ??
+              -1,
+          )
+          if (!sku || qty < 0) {
+            logger.info('[eBay notification] item revision missing sku/qty — skipping', {
+              topic,
+              sku,
+              qty,
+            })
+            return
+          }
+          const { recordChannelStockEvent } = await import(
+            '../services/channel-stock-event.service.js'
+          )
+          await recordChannelStockEvent({
+            channel: 'EBAY',
+            channelEventId: externalId,
+            sku,
+            channelReportedQty: qty,
+            rawPayload: data,
+          })
+          logger.info('[eBay notification] item revision recorded', { sku, qty })
+        } catch (err) {
+          logger.warn('[eBay notification] item revision handler failed', {
+            topic,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+      return reply.status(204).send()
+    }
+
+    // P4 — legacy Trading-API sale notifications (AuctionCheckoutComplete /
+    // FixedPriceTransaction / ItemSold) are exactly what setup-ebay-notifications
+    // subscribes to, but they don't carry a REST `orderId`, so without this they'd
+    // fall through the `!ebayOrderId` guard below and never drive ingestion —
+    // eBay sales would only decrement stock on the 15-min poll. Trigger the same
+    // idempotent recent-window sync the REST `marketplace.order.created` branch
+    // uses, so a sale decrements stock in real time on the legacy path too.
+    if (LEGACY_SALE_TOPICS.has(topic)) {
+      void (async () => {
+        try {
+          // MAP.3 — a sale notification does not say which account it belongs to,
+          // so every account is polled and the idempotent order service dedupes.
+          // That is correct for N accounts, and it is what the loop below already did.
+          const connections = await listActiveConnections('EBAY')
+          const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
+          for (const conn of connections) {
+            try {
+              // RT.3 — the notification is about an order from moments ago;
+              // a 30-min ranged sync ingests it in one page instead of the
+              // old full 7-day resync per webhook (idempotent either way).
+              await ebayOrdersService.syncEbayOrdersInRange(
+                conn.id,
+                new Date(Date.now() - 30 * 60_000),
+                new Date(Date.now() + 60_000),
+              )
+            } catch (err) {
+              logger.warn('[eBay notification] legacy-sale order sync failed for connection', {
+                connectionId: conn.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
+          logger.info('[eBay notification] legacy sale notification → order sync complete', { topic })
+        } catch (err) {
+          logger.warn('[eBay notification] legacy-sale handling failed', {
+            topic,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+      return reply.status(204).send()
+    }
+
+    if (!ebayOrderId) {
+      return reply.status(204).send()
+    }
+
+    if (topicAction === 'order_created') {
+      // Trigger an immediate eBay orders sync scoped to a short window.
+      // The service is idempotent on (channel, channelOrderId) so re-running
+      // it is safe even if the cron already picked up the same order.
+      void (async () => {
+        try {
+          // MAP.3 — a sale notification does not say which account it belongs to,
+          // so every account is polled and the idempotent order service dedupes.
+          // That is correct for N accounts, and it is what the loop below already did.
+          const connections = await listActiveConnections('EBAY')
+          const { ebayOrdersService } = await import('../services/ebay-orders.service.js')
+          for (const conn of connections) {
+            try {
+              // RT.3 — ranged (30-min) instead of the full 7-day resync.
+              await ebayOrdersService.syncEbayOrdersInRange(
+                conn.id,
+                new Date(Date.now() - 30 * 60_000),
+                new Date(Date.now() + 60_000),
+              )
+            } catch (err) {
+              logger.warn('[eBay notification] order sync failed for connection', {
+                connectionId: conn.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+            }
+          }
+          logger.info('[eBay notification] order sync complete', { ebayOrderId })
+        } catch (err) {
+          logger.warn('[eBay notification] order.created handling failed', {
+            ebayOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+    } else if (topicAction === 'order_cancelled') {
+      void (async () => {
+        try {
+          const order = await prisma.order.findUnique({
+            where: {
+              channel_channelOrderId: workspaceKey({
+                channel: 'EBAY',
+                channelOrderId: ebayOrderId,
+              }),
+            },
+            select: { id: true, status: true },
+          })
+          if (!order) {
+            logger.info('[eBay notification] order.cancelled for unknown order — skipping', { ebayOrderId })
+            return
+          }
+          if (order.status === 'CANCELLED') {
+            logger.info('[eBay notification] order already cancelled — skipping', { ebayOrderId })
+            return
+          }
+
+          // Mark as cancelled
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'CANCELLED', cancelledAt: new Date() },
+          })
+
+          const { handleOrderCancelled } = await import('../services/order-cancellation/index.js')
+          const result = await handleOrderCancelled(order.id)
+          logger.info('[eBay notification] cancellation cascade complete', { ebayOrderId, ...result })
+        } catch (err) {
+          logger.warn('[eBay notification] order.cancelled handling failed', {
+            ebayOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      })()
+    } else if (topicAction === 'authorization_revoked') {
+      // P2.6 — act on it.
+      //
+      // The notification names the eBay USERNAME, not the user id the connection is
+      // keyed by, so P2.6's migration added the username to `inboundAliases` and the
+      // routing index answers with the exact connection. That matters more here than
+      // anywhere: a revoke that has to work out WHICH account it means cuts off the
+      // wrong seller the day a second one is connected, and this endpoint is reachable
+      // by anyone who can forge a signature — which is why the revoke only happens on
+      // the VERIFIED path, inside the routed workspace.
+      const revokedUser = String(notifData?.username ?? notifData?.userId ?? '')
+      await (async () => {
+        try {
+          const target = await verifiedChannelWorkspace('EBAY', revokedUser || undefined)
+          const { revokeChannelConnection } = await import('../services/cx/account-lifecycle.service.js')
+          const outcome = await withIngressWorkspace(target.workspaceId, () =>
+            revokeChannelConnection(
+              target.connectionId,
+              `eBay reported AUTHORIZATION_REVOCATION for ${revokedUser || 'this seller'}.`,
+              'ebay_authorization_revocation',
+            ),
+          )
+          logger.error('[eBay notification] AUTHORIZATION_REVOCATION — the account is revoked and writes are held', {
+            notificationId: notificationId || null, username: revokedUser || null,
+            connectionId: target.connectionId, outcome: outcome.skipped ?? 'revoked',
+          })
+        } catch (error) {
+          // Recorded, never thrown: eBay must still get its 204, and the ledger row
+          // already holds the payload for an operator to act on by hand.
+          logger.error('[eBay notification] AUTHORIZATION_REVOCATION could not be attributed to a connection', {
+            notificationId: notificationId || null, username: revokedUser || null,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      })()
+    } else {
+      // `topicVia` matters as much as the topic: 'none' means nothing in the payload
+      // identified it either, which is the only case that is genuinely unhandled.
+      logger.info('[eBay notification] unhandled topic', { topic, via: topicVia })
+    }
+
+    // eBay expects 204 for successful receipt — always return quickly.
+    return reply.status(204).send()
+    }
+    if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return processVerified()
+    const event = req.body as any
+
+    // P2.3 — the lifecycle topics are answered BEFORE any account routing, and this is
+    // not a tidiness point.
+    //
+    // MARKETPLACE_ACCOUNT_DELETION carries a `username`, never a seller object, so the
+    // seller extraction below yields undefined and `verifiedChannelWorkspace('EBAY')`
+    // is left to pick one row out of however many eBay accounts are connected. With
+    // two it raises `ingress_account_ambiguous` and the endpoint answers **503**.
+    // Measured, with a control: no seller id -> throws 503; a known seller id ->
+    // resolves. eBay requires a 200 for this topic, marks an endpoint that fails it as
+    // down, and answering it is a condition of holding production keys — so the more
+    // eBay accounts are connected, the more certainly the erasure notice is refused.
+    //
+    // AUTHORIZATION_REVOCATION has the same shape: it is about the grant, not about an
+    // order, so it cannot name a seller to route by either.
+    //
+    // Both are handled in the platform's own workspace, which is the honest home for a
+    // notification no single business owns — the same choice the rejected-signature row
+    // above makes.
+    const lifecycle = ebayTopicAction(event?.metadata?.topic, event).action
+    if (lifecycle === 'account_deletion' || lifecycle === 'authorization_revoked') {
+      return await legacyIngress(processVerified)
+    }
+
+    const data = event?.notification?.data
+    const seller = data?.seller?.userId ?? data?.sellerUser?.userId ?? data?.user?.userId ?? data?.sellerId
+    try {
+      const route = await verifiedChannelWorkspace('EBAY', typeof seller === 'string' ? seller : undefined)
+      return await withIngressWorkspace(route.workspaceId, processVerified)
+    } catch (error) {
+      logger.error('[eBay notification] verified event needs account routing', { error: error instanceof Error ? error.message : String(error) })
+      return reply.code(503).send({ error: 'Notification account could not be resolved.' })
+    }
+
   })
 }

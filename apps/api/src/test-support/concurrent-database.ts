@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { auditRuntimeRole } from '@nexus/database/runtime-role'
 
 /**
  * AE.1 — a disposable MULTI-CONNECTION PostgreSQL for concurrency tests.
@@ -37,61 +38,63 @@ export async function concurrentDatabase(options: { maxConnections?: number } = 
   const server = concurrentDatabaseUrl()
   if (!server) throw new Error(`${CONCURRENT_PG_ENV} is not set.`)
   const root = fileURLToPath(new URL('../../../../', import.meta.url))
-  const schemaSql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+  const schemaSql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--config', `${root}/packages/database/prisma.config.ts`, '--from-empty', '--to-schema', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
 
   const name = `ae_test_${randomBytes(6).toString('hex')}`
+  const runtimeLogin = `runtime_${name}`
+  const runtimePassword = randomBytes(24).toString('hex')
   const admin = new Pool({ connectionString: server.toString(), max: 1 })
-  await admin.query(`CREATE DATABASE ${name}`)
-
   const target = new URL(server.toString())
   target.pathname = `/${name}`
-  const setup = new Pool({ connectionString: target.toString(), max: 1 })
-  try {
-    await setup.query(schemaSql)
-    // Same deployed-only column formulaDatabase() adds; see the note there.
-    await setup.query('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false')
-    await setup.query(`INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
-      VALUES ('nexus_legacy_workspace', 'Test business', 'active', true, 'test-bootstrap', 'test-bootstrap', CURRENT_TIMESTAMP)`)
-    await setup.query(workspacePolicySql())
-  } finally {
-    await setup.end()
-  }
-
   const pool = new Pool({ connectionString: target.toString(), max: options.maxConnections ?? 12, connectionTimeoutMillis: 10_000 })
-  // Post-commit work under test is fire-and-forget (read-cache refresh, stockout hook), so a
-  // connection can still be open when the suite ends. Dropping the database terminates it
-  // (57P01); that one error, during close only, is the teardown and not a finding.
-  let closing = false
-  pool.on('error', (error: Error & { code?: string }) => {
+  const runtimeTarget = new URL(target.toString())
+  runtimeTarget.username = runtimeLogin
+  runtimeTarget.password = runtimePassword
+  const runtimePool = new Pool({ connectionString: runtimeTarget.toString(), max: options.maxConnections ?? 12, connectionTimeoutMillis: 10_000 })
+  const client = workspacePrisma(runtimePool)
+  let databaseCreated = false, roleCreated = false, closing = false
+  // Only teardown termination of this disposable database is an expected idle error.
+  for (const connectionPool of [pool, runtimePool]) connectionPool.on('error', (error: Error & { code?: string }) => {
     if (closing && error.code === '57P01') return
     throw error
   })
-  const client = workspacePrisma(pool)
-  return {
-    client,
-    /** Superuser access to the disposable database, for seeding and read-backs only. */
-    pool,
-    name,
-    async close() {
-      closing = true
+  const close = async () => {
+    if (closing) return
+    closing = true
+    try {
       await client.$disconnect()
-      await pool.end()
-      try {
-        for (let attempt = 0; ; attempt++) {
-          try { await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); break } catch (error) {
-            const remaining = await admin.query('SELECT pid,usename,backend_type,application_name,state FROM pg_stat_activity WHERE datname=$1', [name]).catch(() => null)
-            const failure = error as { code?: string; detail?: string }
-            // An autovacuum worker runs with no role (usename NULL to us), so a NOSUPERUSER
-            // owner may not terminate it (42501); it finishes on its own. Wait briefly for
-            // that case only: any backend with a visible user is a real leaked connection.
-            if (failure.code === '42501' && attempt < 40 && remaining?.rows.length && remaining.rows.every(row => row.usename === null)) {
-              await new Promise(resolve => setTimeout(resolve, 250)); continue
-            }
-            console.error('[real-pg] disposable database cleanup failed', { code: failure.code, detail: failure.detail, attempts: attempt + 1, backends: remaining?.rows ?? 'unavailable' })
-            throw error
-          }
-        }
-      } finally { await admin.end() }
-    },
+      await Promise.all([runtimePool.end(), pool.end()])
+      if (databaseCreated) await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
+      if (roleCreated) await admin.query(`DROP ROLE IF EXISTS ${runtimeLogin}`)
+    } finally { await admin.end() }
+  }
+  try {
+    await admin.query(`CREATE DATABASE ${name}`)
+    databaseCreated = true
+    await pool.query(schemaSql)
+    // Same deployed-only column formulaDatabase() adds; see the note there.
+    await pool.query('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false')
+    await pool.query(`INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
+      VALUES ('nexus_legacy_workspace', 'Test business', 'active', true, 'test-bootstrap', 'test-bootstrap', CURRENT_TIMESTAMP)`)
+    await pool.query(workspacePolicySql())
+    // Identifiers and password are generated hexadecimal, never caller input or logged.
+    await pool.query(`CREATE ROLE ${runtimeLogin} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '${runtimePassword}'`)
+    roleCreated = true
+    // The production grant (tasks/architecture-operations.md): inherited, because
+    // connections that never SET ROLE (the web's session reader) need table access.
+    await pool.query(`GRANT nexus_workspace_runtime TO ${runtimeLogin} WITH INHERIT TRUE, SET TRUE`)
+    // The fixture owner observes/terminates only its own child login's sessions.
+    // Membership points owner -> runtime login, never runtime login -> owner.
+    await pool.query(`GRANT ${runtimeLogin} TO CURRENT_USER WITH INHERIT TRUE`)
+    const probe = await runtimePool.connect()
+    try { await auditRuntimeRole(probe) } finally { probe.release() }
+    const identity = await client.$queryRaw<Array<{ login: string; role: string }>>`SELECT session_user::text AS login, current_user::text AS role`
+    if (identity[0]?.login !== runtimeLogin || identity[0]?.role !== 'nexus_workspace_runtime') {
+      throw new Error('Concurrent fixture application client is not using the restricted login and runtime role')
+    }
+    return { client, pool, name, close }
+  } catch (error) {
+    try { await close() } catch (cleanupError) { throw Object.assign(new Error('Disposable database setup and cleanup failed'), { errors: [error, cleanupError] }) }
+    throw error
   }
 }

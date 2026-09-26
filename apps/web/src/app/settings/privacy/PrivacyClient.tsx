@@ -9,7 +9,7 @@
  *      exports with re-download (server regenerates idempotently;
  *      links auto-expire after 7 days).
  *   2. Data retention — per-data-type retention windows. Orders are
- *      configured with a 7y minimum and excluded from the automatic sweep.
+ *      floor-locked at 7y for IT fiscal compliance.
  *   3. Consent log — DPA / TOS / cookie / marketing toggles. Each
  *      change appends a new row (append-only audit).
  *   4. Delete account — dry-run only in this phase. Lists the
@@ -34,10 +34,6 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
-import { Card as DesignCard } from '@/design-system/components/Card'
-import { Field } from '@/design-system/components/Field'
-import { Button as DesignButton } from '@/design-system/primitives/Button'
-import { Input as DesignInput } from '@/design-system/primitives/Input'
 
 export interface ExportRow {
   id: string
@@ -117,7 +113,7 @@ const CONSENT_KINDS = [
 const RETENTION_LABELS: Record<string, { label: string; description: string }> = {
   orders: {
     label: 'Orders',
-    description: 'Configured minimum: 7 years. Orders are not deleted by this retention job.',
+    description: 'Pinned at 7 years minimum by Italian fiscal law.',
   },
   auditLog: {
     label: 'Audit log',
@@ -129,7 +125,7 @@ const RETENTION_LABELS: Record<string, { label: string; description: string }> =
   },
   webhookEvents: {
     label: 'Inbound webhook events',
-    description: 'Completed deliveries are archived after this window. Payloads and delivery history remain stored; nothing is deleted.',
+    description: 'Channel-to-Nexus webhook deliveries.',
   },
   stockLogs: {
     label: 'Stock movements',
@@ -370,11 +366,6 @@ function formatBytes(n: number): string {
 
 // ─── Retention card ──────────────────────────────────────────────
 
-function validRetentionDays(raw: string, floor: number, ceiling: number): boolean {
-  const days = Number(raw)
-  return raw.trim() !== '' && Number.isSafeInteger(days) && days >= floor && days <= ceiling
-}
-
 function RetentionCard({
   state,
   onSaved,
@@ -384,25 +375,21 @@ function RetentionCard({
   onSaved: (next: Record<string, number>) => void
   onError: (msg: string) => void
 }) {
-  const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(Object.entries(state?.policies ?? {}).map(([key, days]) => [key, String(days)])),
+  const [draft, setDraft] = useState<Record<string, number>>(
+    state?.policies ?? {},
   )
   const [busy, setBusy] = useState(false)
-
-  const valid = !!state && Object.keys(RETENTION_LABELS).every(key =>
-    validRetentionDays(draft[key] ?? String(state.defaults[key]), state.floors[key], state.ceilings[key]),
-  )
 
   const dirty = useMemo(() => {
     if (!state) return false
     for (const k of Object.keys(draft)) {
-      if (Number(draft[k]) !== state.policies[k]) return true
+      if (draft[k] !== state.policies[k]) return true
     }
     return false
   }, [draft, state])
 
   const save = async () => {
-    if (!state || !valid || busy) return
+    if (!state) return
     setBusy(true)
     try {
       const res = await fetch(
@@ -410,7 +397,7 @@ function RetentionCard({
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ policies: Object.fromEntries(Object.entries(draft).map(([key, days]) => [key, Number(days)])) }),
+          body: JSON.stringify({ policies: draft }),
         },
       )
       if (!res.ok) {
@@ -427,62 +414,83 @@ function RetentionCard({
   }
 
   const reset = () => {
-    if (state) setDraft(Object.fromEntries(Object.entries(state.defaults).map(([key, days]) => [key, String(days)])))
+    if (state) setDraft(state.defaults)
   }
 
   if (!state) {
     return (
-      <DesignCard header="Data retention" headingLevel={3}>
-        <p className="text-sm text-[var(--nds-text-muted)]">
+      <Card title="Data retention" icon={<AlertTriangle size={14} />}>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Retention policy could not be loaded.
         </p>
-      </DesignCard>
+      </Card>
     )
   }
 
   return (
-    <DesignCard
-      header={<span className="inline-flex items-center gap-2"><History size={14} aria-hidden />Data retention</span>}
-      headingLevel={3}
-      description="Choose retention windows for each data type. Completed webhook deliveries are archived in place; pending work and retries remain available."
+    <Card
+      title="Data retention"
+      description="How long we keep each kind of data. The retention cron sweeps rows past their window. Orders are floor-locked at 7 years for Italian fiscal compliance."
+      icon={<History size={14} />}
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="space-y-3">
         {Object.entries(RETENTION_LABELS).map(([key, def]) => {
-          const current = draft[key] ?? String(state.defaults[key])
+          const current = draft[key] ?? state.defaults[key]
           const floor = state.floors[key]
           const ceil = state.ceilings[key]
           return (
-            <Field key={key} label={def.label} className="min-w-0"
-              hint={`${def.description} Use a whole number from ${floor} to ${ceil} days.`}>
-              <DesignInput
-                type="number"
-                aria-invalid={!validRetentionDays(current, floor, ceil) || undefined}
+            <div
+              key={key}
+              className="grid grid-cols-[1fr_auto_auto] gap-3 items-center"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {def.label}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {def.description}
+                </div>
+              </div>
+              <input
+                type="range"
                 min={floor}
                 max={ceil}
-                step={1}
+                step={key === 'orders' ? 365 : 30}
                 value={current}
-                disabled={busy}
-                suffix="days"
-                onChange={(event) => {
-                  const value = event.target.value
-                  setDraft((d) => ({ ...d, [key]: value }))
-                }}
-                fieldClassName="self-start w-40"
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, [key]: Number(e.target.value) }))
+                }
+                className="w-32 sm:w-40 accent-blue-600"
               />
-            </Field>
+              <span className="text-xs font-mono tabular-nums text-slate-700 dark:text-slate-300 w-20 text-right">
+                {current >= 365
+                  ? `${Math.round(current / 365)}y`
+                  : `${current}d`}
+              </span>
+            </div>
           )
         })}
+        <div className="flex items-center gap-2 pt-2 border-t border-subtle dark:border-slate-800">
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <RotateCcw size={12} /> Reset to defaults
+          </button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || busy}
+            className="inline-flex items-center gap-2 h-8 px-3 rounded-md bg-slate-900 dark:bg-slate-800 text-white text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50"
+          >
+            {busy && <Loader2 size={13} className="animate-spin" />}
+            Save retention
+          </button>
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2 mt-4">
-        <DesignButton onClick={reset} disabled={busy} size="sm" variant="quiet">
-          <RotateCcw size={12} /> Reset to defaults
-        </DesignButton>
-        <DesignButton onClick={save} disabled={!dirty || !valid || busy} size="sm" variant="primary">
-          {busy && <Loader2 size={13} className="animate-spin" />}
-          Save retention
-        </DesignButton>
-      </div>
-    </DesignCard>
+    </Card>
   )
 }
 

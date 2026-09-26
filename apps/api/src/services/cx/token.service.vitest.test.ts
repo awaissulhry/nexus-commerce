@@ -52,14 +52,6 @@ function pick(row: Row, select?: Record<string, boolean>): Row {
 }
 
 const prismaMock = {
-  $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-    const sql = strings.join('?')
-    if (sql.includes('FOR UPDATE')) return [...rows.values()].filter(row => row.id === values[0] && row.workspaceId === values[1]).map(row => ({ id: row.id }))
-    if (sql.includes('"isActive"=true')) return [...rows.values()].filter(row => row.workspaceId === values[0] && row.channelType === 'EBAY'
-      && row.externalAccountId === values[1] && row.isActive && row.id !== values[2]
-      && ((row.connectionMetadata as any)?.environment ?? 'production') === values[3]).map(row => ({ id: row.id }))
-    throw new Error('Unsupported token fixture query')
-  }),
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<void>) => {
     const snapshot = structuredClone(rows)
     try {
@@ -78,10 +70,7 @@ const prismaMock = {
     update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const r = rows.get(where.id)
       if (!r) throw new Error(`fake prisma: no row ${where.id}`)
-      for (const [k, v] of Object.entries(data)) if (v !== undefined) {
-        r[k] = typeof v === 'object' && v !== null && 'increment' in v
-          ? Number(r[k] ?? 0) + Number(v.increment) : v
-      }
+      for (const [k, v] of Object.entries(data)) if (v !== undefined) r[k] = v
       updates.push({ id: where.id, data })
       return { ...r }
     }),
@@ -101,7 +90,6 @@ const prismaMock = {
   },
   $executeRaw: vi.fn(async (strings: TemplateStringsArray) => {
     const sql = strings.join('?')
-    if (sql.includes('pg_advisory_xact_lock')) return 0
     if (sql.includes('make_interval')) {
       acquireCalls++
       return acquireResults.length ? acquireResults.shift()! : 1
@@ -262,8 +250,6 @@ async function seedRow(opts: { creds?: Creds | null; plaintext?: Record<string, 
   const blob = creds ? (await encryptCredentials(creds as Record<string, unknown>)).blob : null
   rows.set(id, {
     id,
-    workspaceId: 'nexus_legacy_workspace',
-    externalAccountId: 'seller-test',
     channelType: 'EBAY',
     managedBy: 'oauth',
     authStatus: 'connected',
@@ -285,7 +271,6 @@ async function seedRow(opts: { creds?: Creds | null; plaintext?: Record<string, 
     refreshTokenExpiresAt: creds?.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : null,
     refreshLeaseUntil: null,
     refreshLeaseOwner: null,
-    grantVersion: 0,
     lastRefreshAt: null,
     lastError: null,
     lastErrorAt: null,
@@ -949,7 +934,7 @@ describe('writeCredentials (via refresh / storeGrant)', () => {
   })
 
   it('storeGrant persists the grant, identity columns, scopes and the ledger rows', async () => {
-    const id = await seedRow({ creds: null, row: { authStatus: 'unknown', isActive: false, managedBy: 'oauth', region: null, externalAccountId: null } })
+    const id = await seedRow({ creds: null, row: { authStatus: 'unknown', isActive: false, managedBy: 'oauth', region: null } })
     const before = Date.now()
     await storeGrant(
       id,

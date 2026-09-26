@@ -24,12 +24,15 @@
 //
 //   node apps/api/scripts/profiles-on-ratchet.mjs                    check
 //   node apps/api/scripts/profiles-on-ratchet.mjs --write            rewrite the baseline from this run
-//   … --report=<file.json>    judge an existing vitest JSON report instead of running the suite
+//   … --report=<a.json,b.json> judge existing vitest JSON reports (CI shards) instead of running the suite
 //   … --baseline=<file.json>  compare against another baseline (both exist so every branch of this
 //                             script can be proven without editing the real baseline or the code)
 //
-// Runs where the developer catalogue exists (the pre-push hook), not in CI: CI has no local
-// database, so the catalogue suites would report different numbers there.
+// Two baselines, because the two places measure different things:
+//   profiles-on-baseline.json     the developer machine: the whole scope, catalogue suites included
+//   profiles-on-baseline.ci.json  CI (docs/ci-plan.md §2.3): the whole API suite on a clean runner,
+//                                 without the 4 catalogue suites and the real-PostgreSQL files
+// A baselined file the run did not include is "not measured", never "fixed".
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -52,8 +55,10 @@ function fail(lines) {
 let report
 const given = arg('report')
 if (given) {
-  if (!existsSync(given)) fail([`--report=${given} does not exist.`])
-  report = JSON.parse(readFileSync(given, 'utf8'))
+  // CI shards the suite: several reports, comma-separated, are judged as one run.
+  const paths = given.split(',').map(p => p.trim()).filter(Boolean)
+  for (const p of paths) if (!existsSync(p)) fail([`--report=${p} does not exist.`])
+  report = { testResults: paths.flatMap(p => JSON.parse(readFileSync(p, 'utf8')).testResults ?? []) }
 } else {
   const dir = mkdtempSync(join(tmpdir(), 'profiles-on-'))
   const reportPath = join(dir, 'report.json')
@@ -114,9 +119,19 @@ for (const [file, count] of Object.entries(now)) {
   if (count > before) worse.push(`  WORSE ${file} — ${before} → ${count} failing`)
   else if (count < before) improved.push(`  ${file}: ${before} → ${count}`)
 }
-for (const file of Object.keys(baseline)) if (!(file in now)) fixed.push(`  ${file}`)
+// "Fixed" means it RAN and passed. A baselined file this run did not include (a CI shard, a
+// scoped run) was not measured, and absence of a measurement is not a pass.
+const ran = new Set(files.map(f => relative(apiRoot, f.name)))
+const gone = []
+for (const file of Object.keys(baseline)) {
+  if (!existsSync(join(apiRoot, file))) gone.push(`  ${file}`)
+  else if (ran.has(file) && !(file in now)) fixed.push(`  ${file}`)
+}
 
 const lines = []
+if (gone.length) {
+  lines.push('These baseline entries name files that no longer exist — remove them:', ...gone, '')
+}
 if (worse.length) {
   lines.push('Something that works with profiles OFF now breaks with profiles ON, or got worse:', ...worse, '',
     '  Production runs with profiles on. Give the code a business to run in — the real callers do:',

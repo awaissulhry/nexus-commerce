@@ -18,15 +18,14 @@ let failNext = false
 const prismaMock = {
   webhookEvent: {
     findUnique: vi.fn(async () => existingRow),
-    createMany: vi.fn(async (args: any) => {
+    create: vi.fn(async (args: any) => {
       if (failNext) throw new Error('database unavailable')
-      if (existingRow) return { count: 0 }
       created.push(args.data)
-      return { count: 1 }
+      return { id: `row-${created.length}` }
     }),
     update: vi.fn(async (args: any) => {
       updated.push(args)
-      return args.where.channel_externalId ? existingRow : args
+      return args
     }),
   },
 }

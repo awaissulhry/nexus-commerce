@@ -2,7 +2,7 @@
  * Phase H follow-up — data retention sweep.
  *
  * Reads DataRetentionPolicy.policies (set in /settings/privacy) and
- * deletes eligible non-webhook rows and archives completed inbound deliveries.
+ * deletes rows past their window in each registered data-type table.
  *
  * Schedule: '0 3 * * *' UTC (03:00). Same nightly window as the
  * other purge jobs; after Neon's maintenance, before the morning
@@ -20,7 +20,6 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { archiveCompletedInbound } from '../services/cx/ingress/archive.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -31,9 +30,6 @@ interface SweepSummary {
   deletedByKey: Record<string, number>
   skippedKeys: string[]
   totalDeleted: number
-  archivedByKey: Record<string, number>
-  totalArchived: number
-  archiveLimitReached: boolean
 }
 
 /**
@@ -45,14 +41,32 @@ interface SweepSummary {
  */
 const SWEEP_TABLES: Record<
   string,
-  { model: string; ts: 'createdAt' | 'updatedAt' }
+  { model: string; ts: 'createdAt' | 'updatedAt'; only?: Record<string, unknown> }
 > = {
   auditLog: { model: 'auditLog', ts: 'createdAt' },
   loginEvents: { model: 'loginEvent', ts: 'createdAt' },
+  // A row the retry worker holds or will retry is live work, whatever its age.
+  // Everything else past the window goes, including rejected and stranded arrivals.
+  webhookEvents: { model: 'webhookEvent', ts: 'createdAt', only: { processingToken: null, nextAttemptAt: null } },
   stockLogs: { model: 'stockLog', ts: 'createdAt' },
   // exports retention sweeps the DataExportRequest table by
   // completedAt (so freshly-queued requests don't get yanked).
   exports: { model: 'dataExportRequest', ts: 'createdAt' },
+}
+
+/**
+ * Rows whose lifetime the code that writes them fixes, not the privacy policy. They
+ * are swept even when no policy row exists.
+ */
+async function sweepExpiredOperationalRows(summary: SweepSummary): Promise<void> {
+  try {
+    // Idempotency receipts (lib/command-idempotency.ts) are useless once expired.
+    const r = await prisma.commandReceipt.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    summary.deletedByKey.commandReceipts = r.count
+    summary.totalDeleted += r.count
+  } catch (err) {
+    summary.skippedKeys.push(`commandReceipts (error: ${err instanceof Error ? err.message : String(err)})`)
+  }
 }
 
 export async function runRetentionSweepOnce(): Promise<SweepSummary> {
@@ -61,15 +75,14 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
     deletedByKey: {},
     skippedKeys: [],
     totalDeleted: 0,
-    archivedByKey: {},
-    totalArchived: 0,
-    archiveLimitReached: false,
   }
   if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0') {
     lastRunAt = new Date()
     lastSummary = summary
     return summary
   }
+
+  await sweepExpiredOperationalRows(summary)
 
   // Single-row policy table; read once.
   const policyRow = await (prisma as any).dataRetentionPolicy.findFirst()
@@ -80,21 +93,6 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
     return summary
   }
   const policies = (policyRow.policies as Record<string, unknown>) ?? {}
-
-  // D8: completed inbound history is retained in place. Never send this model
-  // through the generic deletion delegate, even if archive persistence fails.
-  summary.scannedKeys++
-  const inboundDays = policies.webhookEvents
-  if (typeof inboundDays === 'number' && Number.isSafeInteger(inboundDays) && inboundDays >= 0) {
-    try {
-      const result = await archiveCompletedInbound(inboundDays)
-      summary.archivedByKey.webhookEvents = result.archived
-      summary.totalArchived = result.archived
-      summary.archiveLimitReached = result.limitReached
-    } catch {
-      summary.skippedKeys.push('webhookEvents (archive unavailable; history retained)')
-    }
-  } else summary.skippedKeys.push('webhookEvents (no valid archive policy)')
 
   for (const [key, def] of Object.entries(SWEEP_TABLES)) {
     summary.scannedKeys++
@@ -112,7 +110,7 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
         continue
       }
       const r = await delegate.deleteMany({
-        where: { [def.ts]: { lt: cutoff } },
+        where: { [def.ts]: { lt: cutoff }, ...def.only },
       })
       summary.deletedByKey[key] = r.count
       summary.totalDeleted += r.count
@@ -144,7 +142,7 @@ export function startRetentionSweepCron(): void {
     if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0') return
     await recordCronRun('retention-sweep', async () => {
       const r = await runRetentionSweepOnce()
-      return `keys=${r.scannedKeys} deleted=${r.totalDeleted} archived=${r.totalArchived} archiveLimitReached=${r.archiveLimitReached} skipped=${r.skippedKeys.length}`
+      return `keys=${r.scannedKeys} deleted=${r.totalDeleted} skipped=${r.skippedKeys.length}`
     }).catch((err) => {
       logger.error('retention-sweep: top-level failure', {
         error: err instanceof Error ? err.message : String(err),

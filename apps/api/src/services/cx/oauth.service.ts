@@ -26,7 +26,7 @@ import { CredentialsDecryptError } from '../../lib/crypto.js'
 import { getChannelSpec, scopeDriftOf, type ChannelKey, type ConnectionIdentity } from './catalog.js'
 import { recordConnectionEvent, type Actor } from './events.service.js'
 import { IdentityRefusal, placeGrant } from './identity.service.js'
-import { handleOf, storeGrant, withEbayGrantTransaction, type GrantResult } from './token.service.js'
+import { handleOf, storeGrant, type GrantResult } from './token.service.js'
 import { shopifyShopDomain, verifyShopifyCallbackHmac } from './connectors/shopify/auth.js'
 import { parseTokenResponse, tokenLifetime, TOKEN_REQUEST_TIMEOUT_MS } from './token-response.js'
 
@@ -409,10 +409,45 @@ export async function complete(input: {
   } catch (err) {
     logger.warn('[cx-oauth] identity lookup failed', { channelKey: input.channelKey, error: err instanceof Error ? err.message : String(err) })
   }
-  if (!identity?.userId && (input.channelKey === 'EBAY' || spec.auth.identityRequired || process.env.NEXUS_WORKSPACES_ENABLED === '1')) {
+  if (!identity?.userId && (spec.auth.identityRequired || process.env.NEXUS_WORKSPACES_ENABLED === '1')) {
     throw await fail('identity_refused', 'The provider could not verify this account identity. No connection was changed.', 409)
   }
   if (identity && metadata.selling_partner_id && !identity.userId) identity.userId = String(metadata.selling_partner_id)
+
+  // ── where the grant goes ──
+  const saved = await inDatabaseTransaction(prisma, async () => {
+  let placement
+  try {
+    placement = await placeGrant({
+      channelType: spec.channelType,
+      channelLabel: spec.displayName,
+      identity,
+      targetConnectionId: session.targetConnectionId,
+      region: session.region,
+    })
+  } catch (err) {
+    if (err instanceof IdentityRefusal) {
+      throw await fail('identity_refused', err.message, 409, { code: err.code, identity: err.identityUsername ?? null })
+    }
+    throw err
+  }
+
+  let connectionId: string
+  let eventType: 'grant' | 'reconsent' | 'adopt'
+  if (placement.kind === 'new') {
+    const created = await prisma.channelConnection.create({
+      data: { channelType: spec.channelType, managedBy: 'oauth', isActive: false, authStatus: 'unknown', region: session.region, connectionMetadata: { environment } },
+      select: { id: true },
+    })
+    connectionId = created.id
+    eventType = 'grant'
+  } else {
+    connectionId = placement.connectionId
+    eventType = placement.kind
+    const existing = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { connectionMetadata: true } })
+    const storedEnvironment = (existing?.connectionMetadata as { environment?: string } | null)?.environment ?? 'production'
+    if (storedEnvironment !== environment) throw await fail('identity_refused', 'Reconnect this account in its original environment.', 409)
+  }
 
   const grant: GrantResult = {
     accessToken,
@@ -425,51 +460,12 @@ export async function complete(input: {
     tokenResponseMetadata: metadata,
   }
   const actor: Actor = { kind: 'operator', userId: input.actorUserId ?? session.startedByUserId ?? null }
-
-  // ── where the grant goes ──
-  const persistPlacement = async (persist: (id: string, actor: Actor, event: 'grant' | 'reconsent' | 'adopt') => Promise<void>) => {
-    let placement
-    try {
-      placement = await placeGrant({
-        channelType: spec.channelType,
-        channelLabel: spec.displayName,
-        identity,
-        targetConnectionId: session.targetConnectionId,
-        region: session.region,
-      })
-    } catch (err) {
-      if (err instanceof IdentityRefusal) {
-        throw await fail('identity_refused', err.message, 409, { code: err.code, identity: err.identityUsername ?? null })
-      }
-      throw err
-    }
-
-    let connectionId: string
-    let eventType: 'grant' | 'reconsent' | 'adopt'
-    if (placement.kind === 'new') {
-      const created = await prisma.channelConnection.create({
-        data: { channelType: spec.channelType, managedBy: 'oauth', isActive: false, authStatus: 'unknown', region: session.region, connectionMetadata: { environment } },
-        select: { id: true },
-      })
-      connectionId = created.id
-      eventType = 'grant'
-    } else {
-      connectionId = placement.connectionId
-      eventType = placement.kind
-      const existing = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { connectionMetadata: true } })
-      const storedEnvironment = (existing?.connectionMetadata as { environment?: string } | null)?.environment ?? 'production'
-      if (storedEnvironment !== environment) throw await fail('identity_refused', 'Reconnect this account in its original environment.', 409)
-    }
-
-    await persist(connectionId, actor, eventType)
-    const stored = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { connectionMetadata: true } })
-    const previousMetadata = stored?.connectionMetadata && typeof stored.connectionMetadata === 'object' && !Array.isArray(stored.connectionMetadata) ? stored.connectionMetadata : {}
-    await prisma.channelConnection.update({ where: { id: connectionId }, data: { connectionMetadata: { ...previousMetadata, environment } } })
-    return { connectionId, placement }
-  }
-  const saved = await (input.channelKey === 'EBAY'
-    ? withEbayGrantTransaction({ grant, environment }, persistPlacement)
-    : inDatabaseTransaction(prisma, () => persistPlacement((id, actor, event) => storeGrant(id, grant, actor, event)))).catch(async error => {
+  await storeGrant(connectionId, grant, actor, eventType)
+  const stored = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { connectionMetadata: true } })
+  const previousMetadata = stored?.connectionMetadata && typeof stored.connectionMetadata === 'object' && !Array.isArray(stored.connectionMetadata) ? stored.connectionMetadata : {}
+  await prisma.channelConnection.update({ where: { id: connectionId }, data: { connectionMetadata: { ...previousMetadata, environment } } })
+  return { connectionId, placement }
+  }).catch(async error => {
     if ((error as { code?: string }).code === 'P2002') throw await fail('identity_refused', 'This seller account already belongs to a business profile. Reconnect it from that profile.', 409)
     throw error
   })

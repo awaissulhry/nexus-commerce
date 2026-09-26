@@ -18,7 +18,6 @@ vi.mock('../services/listing-images/image-resolution.service.js', () => ({ Image
 vi.mock('../services/ai/listing-content.service.js', () => ({ ListingContentService: class {}, BudgetExceededError: class extends Error {} }))
 vi.mock('../services/ai/budget.service.js', () => ({ readBudgetLimits: vi.fn() }))
 vi.mock('../services/ai/usage-logger.service.js', () => ({ logUsage: vi.fn() }))
-vi.mock('../services/idempotency.service.js', () => ({ idempotencyService: {} }))
 vi.mock('../services/listing-events.service.js', () => ({ publishListingEvent: vi.fn() }))
 vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: vi.fn() }))
 import routes from './listing-wizard.routes.js'

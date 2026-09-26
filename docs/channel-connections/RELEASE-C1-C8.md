@@ -1,25 +1,12 @@
 # Reviewed safety release — C1 through C8
 
-Final serving deployment: `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
-commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
-smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
-[Sanitized release evidence](build/RELEASE-2026-09-22-EVIDENCE.json). This supersedes
-older pending-deployment notes; the full channel plan remains open.
-
-**Approved and deployed.** The Owner instructed: “Deploy it all and push to production.”
-Final release commit: `439d9e3d34ed79a09d76981da08de5d2ca0190e2` on main. It contains
-C1–C8 through `571371bfc`, compiler-memory repair `c54406b47` and CPU-aware test-worker
-repair `439d9e3d3`. Each package passed independent review and normal push hooks.
-At 21:54Z the native Railway deployment was SUCCESS and served `439d9e3d`; public
-health/readiness returned 200 and protected diagnostics returned 401. GitHub CI is
-SUCCESS. The Deploy API workflow and its final smoke test are also SUCCESS.
-Full production evidence and remaining limitations are recorded below and in the
-completion matrix.
+**Prepared, not deployed or approved.** Code is committed through `571371bfc` on
+`fix/channel-connections-20260922`. Documentation may follow without code changes.
 The deployable range starts after `7c70556ea` and includes the inherited guarded
 connection-delete package. Review/test detail: [CX-COMPLETION](build/CX-COMPLETION.md).
 The full plan remains open in [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
 
-## Approved action (executed)
+## Concrete action for approval
 
 Recheck both worktrees and remote main, verify a fast-forward from the recorded base,
 then make **one normal push from the isolated worktree to origin/main** with hooks.
@@ -59,28 +46,20 @@ and independent reviews are recorded per slice. The final canonical gate **passe
 124 security tests, 106 real PostgreSQL tests/zero skips, RBAC2724/zero unmapped,
 and profiles-ON887files/41known failing/217tests, none new or worse. That last ratchet
 retains existing unrelated failures; it is not an all-green profiles-ON claim.
-All three normal pushes passed the unchanged hook. Actual GitHub CI on the final
-commit also passed: 1,904 API regressions with four existing skips and 3,093 web
-regressions. The runner reported one file worker for two CPUs. The earlier failed
-runs are retained in CX-COMPLETION; no timeouts or assertions were relaxed.
+The normal push will rerun the same hook. No push has occurred.
 
-The following production checks passed on the final commit at 21:54Z;
-the existing `/api/health/ready` gate also passed. Read-only evidence:
+After an approved push, verify Railway SUCCESS and the exact commit from `/api/health`;
+the existing `/api/health/ready` deployment health gate must pass. Then read-only:
 
-1. The migration is finished with its exact committed checksum, and shop alias `57783036` maps exclusively to
+1. Confirm the migration is finished and shop alias `57783036` maps exclusively to
    Motovento connection `cmubtwtad00ctmu01w4qsruxt`.
-2. All 18 pre-existing connections retain their compared ownership, activity,
-   primary/management state, external IDs, scopes, key IDs, auth state and encrypted
-   credential-presence booleans. Non-Etsy route sets and aliases are unchanged.
-   Shopify remains connected. All ten deletion candidates remain.
-3. Protected diagnostic GET refuses anonymous access. Startup confirms automatic
-   eBay setup disabled and Amazon rotation off because no credential queue is
-   configured. No event or controlled failure was injected; actual replay/recovery/
-   owner-notification outcomes still require observation or approved tests.
-4. Browser-based interaction, Etsy publishing mode/signing-secret presence, real
-   webhook delivery, stock/publication round trips and complete SLO evidence remain
-   unverified. The database checks prove presence/state preservation, not token
-   contents or validity. Existing Ads integrity alerts remain visible.
+2. Confirm Xavia Shopify and both profiles' existing connections/credential-presence
+   booleans retain their owners and state; all ten deletion candidates remain.
+3. Check authorization on protected diagnostic reads, the eBay setup hold, new
+   runtime errors, inbound outcomes and outbound recovery without injecting an event
+   or invoking a vendor operation.
+4. Record unavailable browser/runtime-switch observations explicitly. Database proof
+   and health do not substitute for webhook delivery, publication or complete SLO proof.
 
 The baseline still served `7c70556e` at **20:49:11Z**, with existing critical Ads
 integrity findings. Those are not a new-package regression or proof of complete health.

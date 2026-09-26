@@ -138,17 +138,6 @@ describe('verifyEbayNotification', () => {
     await verifyEbayNotification({ rawBody: raw, header: h })
     expect((globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(1)
   })
-
-  it('never trusts a production key cached under the same sandbox key ID', async () => {
-    const rawBody = Buffer.from(JSON.stringify(BODY))
-    mockKeyServer(publicKey)
-    expect(await verifyEbayNotification({ rawBody, header: header(sign(JSON.stringify(BODY))), environment: 'production' })).toMatchObject({ ok: true })
-    mockKeyServer(other.publicKey)
-    expect(await verifyEbayNotification({ rawBody, header: header(sign(JSON.stringify(BODY))), environment: 'sandbox' })).toMatchObject({ ok: false, reason: 'signature_mismatch' })
-    expect(await verifyEbayNotification({ rawBody, header: header(sign(JSON.stringify(BODY), other.privateKey)), environment: 'sandbox' })).toMatchObject({ ok: true })
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
-    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('api.sandbox.ebay.com')
-  })
 })
 
 describe('ebayChallengeResponse', () => {

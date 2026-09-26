@@ -7,8 +7,7 @@
  * available or not). Both are honest server facts; nothing here derives state.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
+import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { AccountRow } from '@/design-system/components/AccountSwitcher'
 import { accountDisplayName, channelDisplayName } from '@/design-system/lib'
@@ -62,61 +61,46 @@ interface Loadable<T> {
   reload: () => Promise<void>
 }
 
-function useJson<T>(path: string, reloadSignal: unknown, pick: (raw: unknown) => T, workspaceId?: string | null): Loadable<T> {
-  const scoped = WORKSPACES_ENABLED && workspaceId !== undefined
-  const key = JSON.stringify([path, scoped ? workspaceId : 'legacy'])
-  const [state, setState] = useState<{ key: string; data: T | null; loading: boolean; error: string | null } | null>(null)
-  const request = useRef<{ sequence: number; controller?: AbortController }>({ sequence: 0 })
+function useJson<T>(path: string, reloadSignal: unknown, pick: (raw: unknown) => T): Loadable<T> {
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const reload = useCallback(async () => {
-    const sequence = ++request.current.sequence
-    request.current.controller?.abort()
-    if (scoped && !workspaceId) { setState({ key, data: null, loading: false, error: null }); return }
-    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15_000)
-    request.current.controller = controller
-    setState({ key, data: null, loading: true, error: null })
+    setLoading(true)
+    setError(null)
     try {
-      const headers: Record<string, string> = scoped && workspaceId ? { 'x-nexus-workspace-id': workspaceId } : {}
-      const res = await fetch(`${getBackendUrl()}${path}`, { credentials: 'include', cache: 'no-store', headers, signal: controller.signal })
+      const res = await fetch(`${getBackendUrl()}${path}`, { credentials: 'include', cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = pick(await res.json())
-      if (request.current.sequence === sequence) setState({ key, data, loading: false, error: null })
+      setData(pick(await res.json()))
     } catch (err) {
-      if (request.current.sequence === sequence) setState({ key, data: null, loading: false,
-        error: err instanceof Error && err.name !== 'AbortError' ? err.message : 'The request timed out. Refresh to try again.' })
-    } finally { clearTimeout(timeout) }
-  }, [path, key, pick, scoped, workspaceId])
+      setError(err instanceof Error ? err.message : 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path])
   useEffect(() => {
     void reload()
-    return () => { request.current.sequence++; request.current.controller?.abort() }
   }, [reload, reloadSignal])
-  const current = state?.key === key ? state : null
-  return { data: current?.data ?? null, loading: current?.loading ?? true, error: current?.error ?? null, reload }
+  return { data, loading, error, reload }
 }
 
-const pickAccounts = (raw: unknown) => {
-  const r = raw as { accounts?: AccountRow[]; notConnected?: string[] }
-  if (!r || !Array.isArray(r.accounts) || !r.accounts.every(row => row && typeof row.id === 'string' && typeof row.channel === 'string' && typeof row.managedBy === 'string')) {
-    throw new Error('The account list could not be verified.')
-  }
-  return { accounts: r.accounts.map(account => ({ ...account, label: accountDisplayName(account) })), notConnected: r.notConnected ?? [] }
-}
-const pickCatalogue = (raw: unknown) => (raw as { channels?: CatalogueChannel[] }).channels ?? []
-const pickAds = (raw: unknown) => {
-  const r = raw as { items?: AdsConnection[]; adsMode?: string }
-  if (!r || !Array.isArray(r.items)) throw new Error('The advertising accounts could not be verified.')
-  return { items: r.items, adsMode: r.adsMode ?? 'sandbox' }
-}
-
-export function useAccounts(reloadSignal: unknown, includeDisconnected = false, workspaceId: string | null = null) {
-  return useJson(`/api/accounts${includeDisconnected ? '?includeDisconnected=1' : ''}`, reloadSignal, pickAccounts, workspaceId)
+export function useAccounts(reloadSignal: unknown, includeDisconnected = false) {
+  return useJson(`/api/accounts${includeDisconnected ? '?includeDisconnected=1' : ''}`, reloadSignal, (raw) => {
+    const r = raw as { accounts?: AccountRow[]; notConnected?: string[]; canSwitch?: boolean }
+    return { accounts: (r.accounts ?? []).map((a) => ({ ...a, label: accountDisplayName(a) })), notConnected: r.notConnected ?? [] }
+  })
 }
 
 export function useCatalogue(reloadSignal: unknown = 0) {
-  return useJson('/api/cx/channels', reloadSignal, pickCatalogue)
+  return useJson('/api/cx/channels', reloadSignal, (raw) => (raw as { channels?: CatalogueChannel[] }).channels ?? [])
 }
 
-export function useAdsConnections(reloadSignal: unknown, workspaceId: string | null = null) {
-  return useJson('/api/advertising/connections', reloadSignal, pickAds, workspaceId)
+export function useAdsConnections(reloadSignal: unknown) {
+  return useJson('/api/advertising/connections', reloadSignal, (raw) => {
+    const r = raw as { items?: AdsConnection[]; adsMode?: string }
+    return { items: r.items ?? [], adsMode: r.adsMode ?? 'sandbox' }
+  })
 }
 
 /** The one place channel display names live on this page (the catalogue carries them for its own keys). */

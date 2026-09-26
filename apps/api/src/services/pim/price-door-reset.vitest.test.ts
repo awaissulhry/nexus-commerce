@@ -214,7 +214,7 @@ it('the sheet set, pin and reset use the price door and report the listing versi
 it.each(['ebay_price', 'attr_price'])('reset stays on the selected account and alias, with a primary-listing control: %s', field => scoped(async () => {
   const product = await prisma.product.create({ data: { sku: `scope-${field}`, name: 'Scope control', basePrice: 10 } })
   const accounts = await Promise.all(['a', 'b'].map(suffix => prisma.channelConnection.create({
-    data: { channelType: 'EBAY', accountLabel: `scope-${field}-${suffix}`, externalAccountId: `scope-${field}-${suffix}`,  isActive: true },
+    data: { channelType: 'EBAY', accountLabel: `scope-${field}-${suffix}`, isActive: true },
   })))
   const aliases = await Promise.all(accounts.map(account => prisma.productListingAlias.create({ data: {
     productId: product.id, channel: 'EBAY', marketplace: 'DE', channelConnectionId: account.id, label: 'Second offer',
@@ -241,7 +241,7 @@ it.each(['ebay_price', 'attr_price'])('reset stays on the selected account and a
 
 it('one request over two aliases of the same account writes each alias listing once', () => scoped(async () => {
   const product = await prisma.product.create({ data: { sku: 'two-alias', name: 'Two aliases', basePrice: 10 } })
-  const account = await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'two-alias', externalAccountId: 'two-alias', isActive: true } })
+  const account = await prisma.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'two-alias', isActive: true } })
   const alias = await prisma.productListingAlias.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'DE',
     channelConnectionId: account.id, label: 'Second offer' } })
   const rows = []

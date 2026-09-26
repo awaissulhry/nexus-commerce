@@ -23,7 +23,7 @@ beforeEach(() => { state.sheets.length = 0 })
 beforeAll(async () => {
   await prisma.product.create({ data: { id: 'autosave-parent', sku: 'AUTOSAVE-PARENT', name: 'Parent', basePrice: 10, isParent: true, status: 'DRAFT' } })
   await prisma.product.create({ data: { id: 'autosave-child', sku: 'AUTOSAVE-CHILD', name: 'Child', basePrice: 10, parentId: 'autosave-parent', status: 'DRAFT' } })
-  for (const id of ['autosave-a', 'autosave-b']) await prisma.channelConnection.create({ data: { id, externalAccountId: id, channelType: 'EBAY', isActive: true } as any })
+  for (const id of ['autosave-a', 'autosave-b']) await prisma.channelConnection.create({ data: { id, channelType: 'EBAY', isActive: true } as any })
   for (const [code, languages] of [['IT', ['it']], ['DE', ['de']], ['BE', ['nl', 'fr']]] as const) {
     await prisma.marketplace.create({ data: { channel: 'EBAY', code, name: code, currency: 'EUR', region: 'EU', language: languages[0], languages: [...languages] } })
     for (const accountId of ['autosave-a', 'autosave-b']) for (const productId of ['autosave-parent', 'autosave-child']) {

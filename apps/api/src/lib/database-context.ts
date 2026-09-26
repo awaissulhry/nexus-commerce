@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
-type Context = { client: Prisma.TransactionClient; isolationLevel: Prisma.TransactionIsolationLevel; effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>> }
+type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>> }
 const context = new AsyncLocalStorage<Context>()
 
 /** Formula operations reuse the ordinary writers inside one outer transaction. */
@@ -30,7 +30,7 @@ export async function inDatabaseReadTransaction<T>(client: PrismaClient, work: (
   if (context.getStore()) return work()
   return client.$transaction(async tx => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`
-    return context.run({ client: tx, isolationLevel: 'RepeatableRead', effects: new Map(), producers: new Map() }, work)
+    return context.run({ client: tx, effects: new Map(), producers: new Map() }, work)
   }, { isolationLevel: 'RepeatableRead', maxWait: 5_000, timeout: 20_000 })
 }
 
@@ -60,19 +60,14 @@ export async function beforeDatabaseCommit(key: string, producer: () => Promise<
   active.producers.set(key, producer)
 }
 
-export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>, options?: { isolationLevel: Prisma.TransactionIsolationLevel }): Promise<T> {
-  const existing = context.getStore()
-  if (existing) {
-    if (options && options.isolationLevel !== existing.isolationLevel) throw new Error('The requested transaction isolation does not match the current transaction.')
-    return work()
-  }
-  const isolationLevel = options?.isolationLevel ?? 'Serializable'
+export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
+  if (context.getStore()) return work()
   for (let attempt = 0; ; attempt++) {
     const effects = new Map<string, () => Promise<unknown>>()
     const producers = new Map<string, () => Promise<unknown>>()
     let result: T
     try {
-      result = await client.$transaction(tx => context.run({ client: tx, isolationLevel, effects, producers }, async () => {
+      result = await client.$transaction(tx => context.run({ client: tx, effects, producers }, async () => {
         const value = await work()
         while (producers.size) {
           const pending = [...producers.values()]; producers.clear()
@@ -80,7 +75,7 @@ export async function inDatabaseTransaction<T>(client: PrismaClient, work: () =>
         }
         return value
       }), {
-        isolationLevel, maxWait: 10_000, timeout: 60_000,
+        isolationLevel: 'Serializable', maxWait: 10_000, timeout: 60_000,
       })
     } catch (error) {
       if (attempt < 2 && (error as { code?: string }).code === 'P2034') continue

@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# Tier A pre-commit (docs/ci-plan.md §2.1) — the fast repo gates for the staged file types, < 10 s.
+# The rules live in lint-staged.config.mjs.
+#
+# --no-stash: lint-staged's default backup stash hides unstaged work while it runs. In this shared
+# checkout that is other sessions' work, and the repo rule is "never stash". None of the gates edit
+# files, so there is nothing to restore either.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -x node_modules/.bin/lint-staged ]; then
+  echo "pre-commit: no node_modules here — skipped (CI still checks). Run npm ci to enable it."
+  exit 0
+fi
+exec node_modules/.bin/lint-staged --no-stash --quiet
