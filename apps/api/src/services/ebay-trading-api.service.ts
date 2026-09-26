@@ -242,6 +242,12 @@ export interface TradingCallContext {
    * named one — so it is passed to the gateway ledger from here too.
    */
   listingId?: string | null
+  /** CX (review 2026-09-26) — a bounded read (the variation price check): the caller's deadline/cancel signal, the
+   *  gateway timeout and its retry counts. Omitted → the gateway's defaults, as before. */
+  signal?: AbortSignal
+  timeoutMs?: number
+  maxTransientRetries?: number
+  max429Retries?: number
 }
 export interface TradingCallResult {
   ack: string
@@ -388,6 +394,10 @@ export async function callTradingApi(
     modeAppliedByCaller: true,
     answerOk: tradingAnswerOk,
     ledger: { listingId: ledgerListingIds.length === 1 ? ledgerListingIds[0] : (ctx.listingId ?? null) },
+    ...(ctx.signal ? { signal: ctx.signal } : {}),
+    ...(ctx.timeoutMs !== undefined ? { timeoutMs: ctx.timeoutMs } : {}),
+    ...(ctx.maxTransientRetries !== undefined ? { maxTransientRetries: ctx.maxTransientRetries } : {}),
+    ...(ctx.max429Retries !== undefined ? { max429Retries: ctx.max429Retries } : {}),
   })
 
   if (!res.ok) throw new Error(`eBay ${callName} HTTP ${res.status}`)
@@ -522,6 +532,7 @@ export function buildGetItemQuantitiesXml(itemId: string): string {
   <OutputSelector>Item.Quantity</OutputSelector>
   <OutputSelector>Item.SellingStatus</OutputSelector>
   <OutputSelector>Item.Variations</OutputSelector>
+  <OutputSelector>Item.StartPrice</OutputSelector>
 </GetItemRequest>`
 }
 
@@ -534,6 +545,9 @@ function unescapeXml(s: string): string {
     .replace(/&amp;/g, '&')
 }
 
+/** A StartPrice as eBay sent it: `value` null when absent or not a plain decimal — never 0 for "absent". */
+export interface TradingStartPrice { value: number | null; currency: string | null }
+
 export interface ItemQuantityReadback {
   listingStatus: string | null
   /** SKU → remaining available. eBay's GetItem Quantity is the LIFETIME total
@@ -541,6 +555,30 @@ export interface ItemQuantityReadback {
   variations: Array<{ sku: string; available: number }>
   /** Item-level remaining for non-variation listings; null when variations exist. */
   itemAvailable: number | null
+  /** P4.4 (CX) — StartPrice per variation (its own block) and for the item. On a variation listing eBay
+   *  sets Item.StartPrice to the LOWEST variation price, so the item price is a single-SKU listing's only.
+   *  Absent when the answer holds no <Item> (a dry-run's empty raw). `hasVariations`: a <Variations> block
+   *  exists, whether or not a SKU was parsed from it — the item price is then never a SKU's. */
+  prices?: { item: TradingStartPrice | null; variations: Array<{ sku: string } & TradingStartPrice>; hasVariations: boolean }
+}
+
+/**
+ * CX (review 2026-09-26) — THE StartPrice parser: the first <StartPrice currencyID="…">…</StartPrice> of a GetItem
+ * block, or null when there is none. `value` is null unless the text is a plain decimal (never 0 or NaN for
+ * "unreadable"); `text` is eBay's text as sent, for a caller that must echo it back unchanged (the axis rename).
+ * The Trading sweep, the SKU-less adoption and the axis rename all read through it.
+ */
+export function parseStartPrice(block: string): (TradingStartPrice & { text: string }) | null {
+  const m = block.match(/<StartPrice\b([^>]*)>([^<]*)<\/StartPrice>/)
+  if (!m) return null
+  const currency = m[1].match(/currencyID\s*=\s*["']([A-Za-z]{3})["']/)?.[1]?.toUpperCase() ?? null
+  const trimmed = m[2].trim()
+  return { value: /^\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : null, currency, text: m[2] }
+}
+
+function startPriceOf(block: string): TradingStartPrice | null {
+  const parsed = parseStartPrice(block)
+  return parsed && { value: parsed.value, currency: parsed.currency }
 }
 
 /** Pure XML extraction — exported for tests. Variation blocks are parsed
@@ -570,12 +608,23 @@ export function parseGetItemQuantities(rawXml: string): ItemQuantityReadback {
       itemAvailable = Math.max(0, qty - sold)
     }
   }
-  return { listingStatus, variations, itemAvailable }
+  // P4.4 (CX) — prices beside, never inside, the quantity parse above. Each variation's price comes from
+  // ITS block; the item's from `rest` (variations removed), so a variation price can never be read as it.
+  if (!/<Item\b/.test(rawXml)) return { listingStatus, variations, itemAvailable }
+  const variationPrices: Array<{ sku: string } & TradingStartPrice> = []
+  if (varBlock) {
+    for (const v of varBlock[1].matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)) {
+      const sku = v[1].match(/<SKU>([^<]*)<\/SKU>/)?.[1]
+      if (!sku) continue
+      variationPrices.push({ sku: unescapeXml(sku), ...(startPriceOf(v[1]) ?? { value: null, currency: null }) })
+    }
+  }
+  return { listingStatus, variations, itemAvailable, prices: { item: startPriceOf(rest), variations: variationPrices, hasVariations: !!varBlock } }
 }
 
 export async function getItemQuantities(
   itemId: string,
-  ctx: { oauthToken: string; market: string; connectionId: string },
+  ctx: { oauthToken: string; market: string; connectionId: string } & Pick<TradingCallContext, 'signal' | 'timeoutMs' | 'maxTransientRetries' | 'max429Retries'>,
 ): Promise<ItemQuantityReadback> {
   const siteId = siteIdForMarket(ctx.market)
   const res = await callTradingApi('GetItem', buildGetItemQuantitiesXml(itemId), {
@@ -583,6 +632,10 @@ export async function getItemQuantities(
     siteId,
     connectionId: ctx.connectionId,
     market: ctx.market,
+    signal: ctx.signal,
+    timeoutMs: ctx.timeoutMs,
+    maxTransientRetries: ctx.maxTransientRetries,
+    max429Retries: ctx.max429Retries,
   })
   return parseGetItemQuantities(res.raw)
 }

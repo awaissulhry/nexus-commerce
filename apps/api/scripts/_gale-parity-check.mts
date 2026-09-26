@@ -4,7 +4,7 @@ import { ebayAuthService } from '../src/services/ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket } from '../src/services/ebay-trading-api.service.js'
 import { parseLiveVariations } from '../src/services/ebay-membership-reconcile.service.js'
 
-const PRIMARY = '257584954808'
+const PRIMARY = '938554736087'
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 if (!conn) throw new Error('no connection')
 const token = await ebayAuthService.getValidToken(conn.id)

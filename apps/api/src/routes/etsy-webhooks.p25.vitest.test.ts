@@ -13,10 +13,41 @@ const routed: unknown[][] = []
 let nextWrite: any = { id: 'row-1', duplicate: false }
 let routingThrows = false
 let receiptExists = true
+const storedRecords = new Map<string, any>()
+const activeClaims = new Set<string>()
+let claimDue = true
+let receiptPause: Promise<void> | undefined
+let receiptEntered: (() => void) | undefined
 
-vi.mock('../services/cx/ingress/ledger.js', () => ({
-  recordInbound: async (rec: any) => { recorded.push(rec); return nextWrite },
+vi.mock('../services/cx/ingress/ledger.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/cx/ingress/ledger.js')>()),
+  inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
+  recordInbound: async (rec: any) => {
+    recorded.push(rec)
+    if (nextWrite.id && !storedRecords.has(nextWrite.id)) storedRecords.set(nextWrite.id, rec)
+    return nextWrite
+  },
   completeInbound: async (id: any, ok: boolean, error?: string) => { completed.push({ id, ok, error }) },
+}))
+// Real claim/CAS behavior has its own database suite; this double preserves the
+// original arrival and active ownership while the real receiver and handler run.
+vi.mock('../services/cx/ingress/claims.js', () => ({
+  claimInbound: async (id: string) => {
+    const stored = storedRecords.get(id)
+    if (!stored || !claimDue || activeClaims.has(id)) return null
+    activeClaims.add(id)
+    return { ...stored, id, token: `claim-${id}`, attempt: 1, connectionId: stored.connectionId ?? null }
+  },
+  runWithInboundClaim: async (claim: any, work: any) => {
+    try {
+      const result = await work(claim, new AbortController().signal)
+      completed.push({ id: claim.id, ok: true })
+      return result
+    } catch (error) {
+      completed.push({ id: claim.id, ok: false, error: error instanceof Error ? error.message : String(error) })
+      throw error
+    } finally { activeClaims.delete(claim.id) }
+  },
 }))
 vi.mock('../lib/workspace-ingress.js', () => ({
   legacyIngress: (work: any) => work(),
@@ -31,6 +62,8 @@ vi.mock('../services/etsy/receipts.service.js', () => ({
   pullEtsyReceipt: async (accountId: string, receiptId: string, expectedShopId?: string) => {
     pulled.push({ accountId, receiptId })
     expectedShops.push(expectedShopId)
+    receiptEntered?.()
+    await receiptPause
     return receiptExists ? { receipt_id: Number(receiptId), status: 'Paid', is_paid: true, transactions: [] } : null
   },
 }))
@@ -70,6 +103,11 @@ beforeEach(() => {
   nextWrite = { id: 'row-1', duplicate: false }
   routingThrows = false
   receiptExists = true
+  storedRecords.clear()
+  activeClaims.clear()
+  claimDue = true
+  receiptPause = undefined
+  receiptEntered = undefined
   vi.stubEnv('ETSY_WEBHOOK_SIGNING_SECRET', SECRET)
 })
 
@@ -174,11 +212,43 @@ describe('duplicate deliveries', () => {
     expect((await post(body())).statusCode).toBe(200)
     expect(pulled).toHaveLength(0)
 
-    // A redelivery of something that FAILED is the retry we asked for.
+    // The durable retry remains queued while its backoff is not due.
     recorded.length = 0; pulled.length = 0
     nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'failed' }
-    expect((await post(body())).statusCode).toBe(200)
-    expect(pulled).toHaveLength(1)
+    claimDue = false
+    const deferred = await post(body())
+    expect(deferred.statusCode).toBe(200)
+    expect(deferred.json()).toMatchObject({ success: true, queued: true })
+    expect(pulled).toHaveLength(0)
+    expect(completed).toHaveLength(0)
+  })
+
+  it('uses the stored receipt and account for a due duplicate', async () => {
+    storedRecords.set('row-1', { channel: 'ETSY', eventType: 'order.paid', payload: { shop_id: 98765, receipt_id: 112233 }, connectionId: 'stored-account' })
+    nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'failed' }
+    const res = await post(body())
+    expect(res.statusCode).toBe(200)
+    expect(recorded[0].connectionId).toBe('conn-etsy')
+    expect(recorded[0].payload.receipt_id).toBe(RECEIPT)
+    expect(pulled).toEqual([{ accountId: 'stored-account', receiptId: '112233' }])
+    expect(expectedShops).toEqual(['98765'])
+    expect(completed).toEqual([{ id: 'row-1', ok: true }])
+  })
+
+  it('acknowledges an overlapping delivery without reading a second receipt', async () => {
+    const entered = new Promise<void>(resolve => { receiptEntered = resolve })
+    let resume!: () => void
+    receiptPause = new Promise<void>(resolve => { resume = resolve })
+    const first = post(body())
+    await entered
+    nextWrite = { id: 'row-1', duplicate: true, existingStatus: 'pending' }
+    const second = await post(JSON.stringify({ event: 'order.paid', shop_id: 12345, receipt_id: 999 }))
+    expect(second.statusCode).toBe(200)
+    expect(second.json()).toMatchObject({ queued: true })
+    expect(pulled).toEqual([{ accountId: 'conn-etsy', receiptId: String(RECEIPT) }])
+    resume()
+    expect((await first).statusCode).toBe(200)
+    expect(completed).toEqual([{ id: 'row-1', ok: true }])
   })
 })
 

@@ -16,6 +16,28 @@ export function storedVariationValues(product: { categoryAttributes: unknown; va
   }))
 }
 
+/**
+ * VTR step 0 — the CHANNEL value of each included axis, taken from the resolved cells a publisher already holds (pins,
+ * value maps): the value the Information sheet shows (`axisValuesFromCells`). A cell the resolver did not map keeps the
+ * stored value; a mapped blank is a missing value, never a silent fallback to Shared.
+ */
+export function channelAxisValues(
+  stored: Record<string, string>,
+  axes: Array<{ axisKey: string; familyKey: string; included: boolean }>,
+  cells: Record<string, { value?: unknown; status?: string } | undefined>,
+  fields: Array<{ fieldKey: string; sheetKey?: string | null }>,
+): Record<string, string> {
+  const values = { ...stored }
+  for (const axis of axes.filter(a => a.included)) {
+    const field = fields.find(f => canonicalVariantAxis(f.sheetKey ?? f.fieldKey) === axis.axisKey)
+    const cell = field ? cells[field.fieldKey] : undefined
+    if (cell?.status !== 'mapped') continue
+    const value = cell.value
+    values[axis.familyKey] = (typeof value === 'string' && value.trim()) || typeof value === 'number' || typeof value === 'boolean' ? String(value) : ''
+  }
+  return values
+}
+
 /** Exact listing context for non-sheet consumers. Ambiguous accounts are an error, never first-row wins. */
 export async function loadStoredVariationProjection(address: { productId: string; channel: string; market: string; listingId?: string; accountId?: string | null; aliasKey?: string }, rule?: ResolveVariationInput['rule']) {
   const family = await prisma.product.findUniqueOrThrow({ where: { id: address.productId }, select: { id: true, version: true, variationAxes: true, variationTheme: true, productType: true,

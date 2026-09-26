@@ -22,6 +22,7 @@ import { logger } from "../utils/logger.js";
 import { writeSettingsAudit } from "../utils/settings-audit.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { connectionLabel } from "../services/connection-label.js";
+import { channelFootprint } from "../services/channel-footprint.service.js";
 
 type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 type IsManagedBy = "oauth" | "env" | "pending";
@@ -147,6 +148,10 @@ function pendingRow(channel: Channel): ConnectionRow {
 }
 
 const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
+  // P3b S1 (docs/attributes/PLAN.md §10.9) — the business's channel footprint: the channels with an active account
+  // (oauth or env; an expired token still counts) and their switched-on markets. Read-only; the rule lives in the service.
+  fastify.get("/channel-footprint", async () => channelFootprint());
+
   fastify.get("/connections", async (request, reply) => {
     try {
       // Pull every real row (oauth + env). Order: active first, then

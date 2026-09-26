@@ -224,6 +224,8 @@ export interface FetchOrdersOptions {
   // call. Wins precedence over `marketplaceId` when set. Each returned
   // order carries its own MarketplaceId for mapping back to country code.
   marketplaceIds?: string[]
+  /** CX A0 — read through this Amazon account (the one the caller stamps on each order). */
+  accountId?: string
 }
 
 /** Rich product details aligned with the Prisma Product schema. */
@@ -292,7 +294,7 @@ export class AmazonService {
   /**
    * Obtain a client pinned to the managed connection; each request rechecks access.
    */
-  private async getClient(): Promise<SellingPartner> { return amazonSpClient() }
+  private async getClient(accountId?: string): Promise<SellingPartner> { return amazonSpClient(accountId) }
 
   /**
    * Check whether an unambiguous, usable Amazon account is configured.
@@ -892,7 +894,7 @@ export class AmazonService {
    * in `amazon-orders.service.ts`.
    */
   async fetchOrders(options: FetchOrdersOptions = {}): Promise<AmazonOrderRaw[]> {
-    const sp = await this.getClient()
+    const sp = await this.getClient(options.accountId)
     // MS.1 — multi-market support. `marketplaceIds` wins over single.
     const marketplaceIds: string[] = (() => {
       if (options.marketplaceIds && options.marketplaceIds.length > 0) return options.marketplaceIds
@@ -1029,8 +1031,9 @@ export class AmazonService {
    * Returns null if Amazon reports the order does not exist (404),
    * throws on other errors.
    */
-  async fetchOrderById(amazonOrderId: string): Promise<AmazonOrderRaw | null> {
-    const sp = await this.getClient()
+  async fetchOrderById(amazonOrderId: string, accountId?: string): Promise<AmazonOrderRaw | null> {
+    // Review #9 — an order sync reads every part of one order through the account it stamps.
+    const sp = await this.getClient(accountId)
     try {
       if (amazonOrders2026Enabled()) {
         // P5.1 — `getOrder` exists in both versions, so the version must be
@@ -1215,8 +1218,8 @@ export class AmazonService {
    * Order item arrays are usually small (<10) — pagination only kicks
    * in for bulk B2B shipments.
    */
-  async fetchOrderItems(amazonOrderId: string): Promise<AmazonOrderItemRaw[]> {
-    const sp = await this.getClient()
+  async fetchOrderItems(amazonOrderId: string, accountId?: string): Promise<AmazonOrderItemRaw[]> {
+    const sp = await this.getClient(accountId)
 
     if (amazonOrders2026Enabled()) {
       // P5.1 — Orders 2026-01-01 has NO getOrderItems. The items come attached

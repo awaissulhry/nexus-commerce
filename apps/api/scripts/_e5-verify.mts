@@ -21,7 +21,7 @@ ok('gate open → live', w.currentWriteMode() === 'live')
 const created = await w.createCampaign(ctx, { name: 'NEXUS E5 LIVE VALIDATION — safe test, ends immediately', marketplace: 'EBAY_IT', fundingModel: 'COST_PER_SALE', adRateStrategy: 'FIXED', ratePct: 2 })
 ok('live campaign created (real eBay id)', created.mode === 'live' && /^\d+$/.test(created.externalCampaignId), created.externalCampaignId)
 
-const listingId = '256566112769' // knee sliders, €21.99 — cheapest live listing
+const listingId = '961409849221' // knee sliders, €21.99 — cheapest live listing
 const promo = await w.promoteListings(ctx, { campaignId: created.campaignId, items: [{ listingId, ratePct: 2 }] })
 ok('live ad created at 2% minimum', promo.mode === 'live' && !!promo.results.find((r) => r.key === listingId && r.ok), JSON.stringify(promo.results))
 

@@ -16,7 +16,8 @@ const m = vi.hoisted(() => ({
 vi.mock('../db.js', () => ({
   default: {
     order: { findFirst: m.orderFind },
-    financialTransaction: { findFirst: m.txFindFirst, create: m.txCreate },
+    // CX A2: the dry run now also READS v0's rows for cents parity (findMany); no assertion changed.
+    financialTransaction: { findFirst: m.txFindFirst, findMany: vi.fn(async () => []), create: m.txCreate },
   },
 }))
 vi.mock('./gateway/amazon-sdk.js', () => ({ amazonSellerFetch: m.sellerFetch }))

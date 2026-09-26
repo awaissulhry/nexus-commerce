@@ -41,6 +41,19 @@ export function isAmsSqsConfigured(): boolean {
   return !!(amsQueueUrl() && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
 }
 
+/** Why the AMS poller is or is not active, as THIS process sees it. The worker publishes it (it runs the poller). */
+export function amsPollerFacts() {
+  return {
+    destinationArnSet: !!process.env.NEXUS_AMS_DESTINATION_ARN,
+    destinationArnIsSqs: process.env.NEXUS_AMS_DESTINATION_ARN ? !!sqsUrlFromArn(process.env.NEXUS_AMS_DESTINATION_ARN) : false,
+    explicitQueueUrlSet: !!process.env.NEXUS_AMS_SQS_QUEUE_URL,
+    queueUrlResolved: !!amsQueueUrl(),
+    hasAwsAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+    hasAwsSecret: !!process.env.AWS_SECRET_ACCESS_KEY,
+    pollerActive: isAmsSqsConfigured(),
+  }
+}
+
 function buildClient(): SQSClient | null {
   if (!isAmsSqsConfigured()) return null
   return new SQSClient({ region: amsRegion() })

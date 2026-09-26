@@ -113,7 +113,8 @@ export function clearEbayPublicKeyCache(): void {
  * one level down, exactly the ambiguity this whole unit exists to remove.
  */
 async function publicKeyFor(kid: string, environment: EbayEnvironment): Promise<{ pem: string } | { error: VerifyReason }> {
-  const hit = keyCache.get(kid)
+  const cacheKey = JSON.stringify([environment, kid])
+  const hit = keyCache.get(cacheKey)
   if (hit && Date.now() - hit.at < KEY_TTL_MS) return { pem: hit.pem }
 
   let token: string
@@ -144,7 +145,7 @@ async function publicKeyFor(kid: string, environment: EbayEnvironment): Promise<
     const body = (await res.json()) as { key?: string }
     if (typeof body.key !== 'string' || body.key === '') return { error: 'public_key_not_found' }
     const pem = toPublicKeyPem(body.key)
-    keyCache.set(kid, { pem, at: Date.now() })
+    keyCache.set(cacheKey, { pem, at: Date.now() })
     return { pem }
   } catch (err) {
     logger.warn('[cx-ingress] eBay public key fetch threw', { kid, error: err instanceof Error ? err.message : String(err) })

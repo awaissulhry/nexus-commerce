@@ -81,6 +81,15 @@ describe('editor, preview and validation share channel inheritance', () => {
     expect(result.products[0].cells.brand.value).toBe('Pinned destination')
     expect((await resolveBatch(input)).products[0].cells.item_name.value).not.toBe('Proposed title')
   })
+  it('reads a pending Master attribute edit in every field of the product, not only content fields (P7 shared view)', async () => {
+    // P7 builds the per-product lookups once and shares them across fields; they must include the edit being checked.
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('fabric', { rule: { source: 'material' } }),
+      field('label', { rule: { source: 'material', transforms: [{ type: 'expr', expr: 'concat($material, " / ", $brand)' }] } })] })
+    const result = await resolveBatch({ ...input, masterChangesByProduct: { p: { material: 'Proposed suede' } } })
+    expect(result.products[0].cells.fabric.value).toBe('Proposed suede')
+    expect(result.products[0].cells.label.value).toBe('Proposed suede / Master brand')
+    expect((await resolveBatch(input)).products[0].cells.fabric.value).toBe('Leather')
+  })
   it('reconciliation removes only mapped overrides while retaining listing-owned settings', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('fabric', { rule: { source: 'material' } }),
       field('policy', { rule: null, sourceOwner: { kind: 'listing', label: 'Policies', path: 'policy' } })] })

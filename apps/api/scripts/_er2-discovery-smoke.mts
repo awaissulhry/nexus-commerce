@@ -12,7 +12,7 @@ let campId = ''
 try {
   const r = await app.inject({ method: 'POST', url: '/api/ebay-ads/builder/launch', payload: {
     goal: 'catch_all', name: 'zz-er2-discovery', marketplace: 'EBAY_IT',
-    items: [{ listingId: '256566101420', ratePct: 4, resolution: 'include' }, { listingId: '256566103703', ratePct: 4, resolution: 'include' }],
+    items: [{ listingId: '949285812839', ratePct: 4, resolution: 'include' }, { listingId: '950640873955', ratePct: 4, resolution: 'include' }],
     rateDiscovery: { floorPct: 3, capPct: 5, stepPct: 1, dwellDays: 7 },
     rulePacks: [],
   } })

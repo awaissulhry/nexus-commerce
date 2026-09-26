@@ -319,7 +319,7 @@ const DOCK_PAGE = {
   ],
   freeform: false,
   theme: null,
-  locked: { reason: 'Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not.', externalId: '257584954808', setChangeIs: 'relist' as const, orderChangeAllowed: true },
+  locked: { reason: 'Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not.', externalId: '938554736087', setChangeIs: 'relist' as const, orderChangeAllowed: true },
   axes: [{ key: 'color', label: 'Color' }, { key: 'size', label: 'Size' }],
 }
 const DOCK_DRAFT = {
@@ -579,7 +579,7 @@ const DOCK_PAGE_FULL = {
   limits: { axes: 5, variants: 250, source: { axes: null, variants: null } },
   /* VT.1b's unified lock, as `GET …/studio/projection` answered on GALE eBay·IT (measured 09-13):
      both axes published, a SET change relists, and a REORDER is a revise. */
-  locked: { reason: REASON, lockedAxisKeys: ['color'], setChangeIs: 'relist' as const, orderChangeAllowed: true, externalId: '257584954808' },
+  locked: { reason: REASON, lockedAxisKeys: ['color'], setChangeIs: 'relist' as const, orderChangeAllowed: true, externalId: '938554736087' },
   order: { axes: ['color', 'size'], valueOrder: {}, editorUrl: '/x', writableHere: false, reason: 'The order is written in the eBay Variation order editor.', token: 'tok' },
   split: { mode: 'single' as const, listings: [], creatable: false },
   children: [],
@@ -773,7 +773,7 @@ describe('R-VT-8 · agPopupHostOf', () => {
 
 /* ── A5 · one function feeds both hosts: `lockedAxisKeys` + `addableAxes` on the SHEET cell ───────── */
 describe('VT.F A5 · axisLockReason matches an axis across all three of its spellings', () => {
-  /* The real payload, copied from the wire (GALE-JACKET eBay·IT, item 257584954808, 2026-09-13):
+  /* The real payload, copied from the wire (GALE-JACKET eBay·IT, item 938554736087, 2026-09-13):
      `lockedAxisKeys` are the eBay ASPECT names and `axes[].axisKey` is canonical. */
   const cell = {
     axes: [
@@ -789,8 +789,8 @@ describe('VT.F A5 · axisLockReason matches an axis across all three of its spel
     dropped: [],
     collisions: null,
     locked: {
-      reason: 'Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not.',
-      externalId: '257584954808',
+      reason: 'Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not.',
+      externalId: '938554736087',
       setChangeIs: 'relist' as const,
       orderChangeAllowed: true,
       lockedAxisKeys: ['Colore', 'Taglia'],
@@ -803,8 +803,8 @@ describe('VT.F A5 · axisLockReason matches an axis across all three of its spel
   } as unknown as VariationThemeCell
 
   it('🔴 matches a CANONICAL axisKey against the channel-spelled published names', () => {
-    expect(axisLockReason(cell, 'color')).toContain('257584954808')
-    expect(axisLockReason(cell, 'size')).toContain('257584954808')
+    expect(axisLockReason(cell, 'color')).toContain('938554736087')
+    expect(axisLockReason(cell, 'size')).toContain('938554736087')
   })
 
   it('and leaves an axis that was never published alone — the positive control for the match', () => {
@@ -818,7 +818,7 @@ describe('VT.F A5 · axisLockReason matches an axis across all three of its spel
 
   it('still matches on the FAMILY spelling — the dock host, where axisKey IS the family key', () => {
     const dockShaped = { ...cell, axes: cell.axes.map((a) => ({ ...a, axisKey: a.familyKey })) } as VariationThemeCell
-    expect(axisLockReason(dockShaped, 'Colore')).toContain('257584954808')
+    expect(axisLockReason(dockShaped, 'Colore')).toContain('938554736087')
   })
 })
 

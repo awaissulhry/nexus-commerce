@@ -217,7 +217,7 @@ export const COLUMNS: readonly BulksheetColumn[] = [
 
   { header: 'Daily budget', type: 'money', editable: true, definition: 'Campaign daily budget in the campaign currency.', example: '20.00', unit: 'currency', aliases: ['Budget'] },
   { header: 'SKU', type: 'id', editable: false, definition: 'Seller SKU advertised by a product ad. Text — leading zeros are preserved.', example: '0012345' },
-  { header: 'ASIN (Informational only)', type: 'id', editable: false, definition: 'ASIN advertised by this product ad.', example: 'B0BMSH19GY', aliases: ['ASIN'] },
+  { header: 'ASIN (Informational only)', type: 'id', editable: false, definition: 'ASIN advertised by this product ad.', example: 'B0FXFA789A', aliases: ['ASIN'] },
   { header: 'Eligibility status (Informational only)', type: 'text', editable: false, definition: 'Whether Amazon considers this ad eligible to serve.', example: 'Eligible' },
   { header: 'Reason for ineligibility (Informational only)', type: 'text', editable: false, definition: 'Why an ineligible ad is not serving.' },
 

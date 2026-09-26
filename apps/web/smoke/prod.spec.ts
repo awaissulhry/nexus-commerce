@@ -15,12 +15,14 @@ test.describe('@prod', () => {
   })
 
   test('the page\'s own scripts and styles load', async ({ page }) => {
-    const failed: string[] = []
+    const assets: { url: string; status: number }[] = []
     page.on('response', response => {
-      if (new URL(response.url()).pathname.startsWith('/_next/static/') && response.status() >= 400) failed.push(`${response.status()} ${response.url()}`)
+      if (new URL(response.url()).pathname.startsWith('/_next/static/')) assets.push({ url: response.url(), status: response.status() })
     })
-    await page.goto('/login')
-    await page.waitForLoadState('networkidle')
-    expect(failed).toEqual([])
+    // 'load', not 'networkidle': the sign-in page keeps a request open, so the network never goes idle
+    // (measured on the first production run, 2026-09-26: three 30 s timeouts).
+    await page.goto('/login', { waitUntil: 'load' })
+    expect(assets.length, 'no /_next/static asset was requested — the check would measure nothing').toBeGreaterThan(0)
+    expect(assets.filter(asset => asset.status >= 400)).toEqual([])
   })
 })

@@ -116,8 +116,8 @@ export async function publishEvent<T extends EventType>(
 }
 
 /**
- * Record several events in one round trip. Order is preserved per subject
- * because the relay drains by occurredAt, and these share a transaction.
+ * Record several events atomically in one round trip. Concurrent relay claims
+ * and consumer retries may reorder delivery; array position is not a sequence.
  */
 export async function publishEvents(
   db: OutboxWriter,

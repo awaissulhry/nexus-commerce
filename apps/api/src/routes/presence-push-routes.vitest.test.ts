@@ -92,7 +92,9 @@ beforeEach(() => {
   s.job.mockResolvedValue({ id: 'job' })
   s.feed.mockResolvedValue('task')
   s.upload.mockResolvedValue(undefined)
-  s.send.mockImplementation(async (url: string) => ({ ok: true, status: 200, text: async () => '', json: async () => url.includes('?sku=') ? { offers: [{ offerId: 'offer', availableQuantity: 2 }] } : { listingId: 'remote' } }))
+  // A getOffers answer as eBay sends it: every offer names its format and marketplace (the routes take the
+  // FIXED_PRICE offer of the market, CX 2026-09-26).
+  s.send.mockImplementation(async (url: string) => ({ ok: true, status: 200, text: async () => '', json: async () => url.includes('?sku=') ? { offers: [{ offerId: 'offer', availableQuantity: 2, format: 'FIXED_PRICE', marketplaceId: 'EBAY_IT' }] } : { listingId: 'remote' } }))
 })
 
 const row = { sku: 'SKU', title: 'Fixture', brand: 'Fixture', price: 20, quantity: 2 }

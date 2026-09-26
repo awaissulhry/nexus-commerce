@@ -53,7 +53,13 @@ interface JobPayload {
   /** CFI-7 (D6) — the Owner applied only the ready records of an INVALID review; the refused ones were skipped. */
   readyOnly?: boolean
 }
-interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null }
+/**
+ * `ignoreParent` (PSIE) — compare this dependency WITHOUT its embedded parent. Set when the parent is saved by the same
+ * job and is itself a dependency of the record: a changes-only import sends no record for an unchanged variant, and
+ * that variant's snapshot embeds the parent the job just changed. The parent is still checked on its own.
+ */
+interface Dependency { sku: string; key?: string; before?: Record<string, unknown> | null; ignoreParent?: true }
+const withoutParent = (snapshot: Record<string, unknown> | null) => snapshot ? (({ parent: _parent, ...rest }) => rest)(snapshot) : snapshot
 interface RecordPayload {
   changed?: boolean
   rows: TransferRow[]; declaredParent?: boolean; target?: TransferTarget; dependencies?: Dependency[]
@@ -261,38 +267,8 @@ export async function runTransferJob(id: string) {
               const tx = prisma
               const claim = await tx.bulkOperation.updateMany({ where: { id, status: 'RUNNING', processed }, data: { processed: item.rowIndex, expiresAt: new Date(Date.now() + LEASE_MS) } })
               if (!claim.count) throw new TransferConflict('Job checkpoint already advanced')
-              const target = record.target
-              if (payload.boundary) await checkProductTransferBoundary(payload.boundary, record.rows, tx)
-              if (target) {
-                // Read dependent shared/parent records in the same serializable transaction.
-                for (const dependency of record.dependencies ?? []) {
-                  let expected = dependency.before
-                  if (dependency.key) {
-                    const prior = await tx.importJobRow.findFirst({ where: { jobId: id, targetId: dependency.key, status: { in: ['SUCCESS', 'EXCLUDED'] } }, select: { afterState: true } })
-                    if (!prior?.afterState) throw new TransferConflict('A required shared/parent update did not complete')
-                    expected = prior.afterState as Record<string, unknown>
-                  }
-                  const current = await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: dependency.sku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
-                  if (fingerprint(safeSnapshot(current)) !== fingerprint(expected)) throw new TransferConflict('Shared or parent data changed since preview')
-                }
-                const context = await loadTransferContext(target.rows, tx as typeof prisma, reference)
-                // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
-                const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false, declaredProductSkus, sharedCopy: payload.sharedCopy === true })
-                const current = check.targets[0]
-                if (current?.create && current.identity.entity === 'Products' && record.declaredParent) current.patch.isParent = true
-                if (!current || check.issues.length || current.contractHash !== target.contractHash || targetWriteFingerprint(current) !== targetWriteFingerprint(target)) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')
-                // A parent saved earlier in this same run is an authorized dependency.
-                // Compare the child's own snapshot unchanged, with that verified parent
-                // projection; otherwise its newly hydrated parent would look like a race.
-                const owner = context.products.get(target.identity.sku)
-                const parentVerified = target.identity.entity === 'Products' && target.before?.parentId && record.dependencies?.some(dependency => context.products.get(dependency.sku)?.id === target.before!.parentId)
-                const applying = parentVerified ? { ...target, before: { ...target.before!, parent: owner?.parent ?? null } } : target
-                if (target.create || target.cells.some(c => c.verdict === 'changed')) await applyTransferTarget(tx, applying, id, job.userId)
-              }
-              const sharedSku = target?.identity.entity === 'Products' ? target.identity.sku : record.rows[0]?.entity === 'Products' ? record.rows[0].sku : null
-              const after = sharedSku ? await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sharedSku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } }) : null
-              if (!target && record.sharedBefore !== undefined && fingerprint(safeSnapshot(after)) !== fingerprint(record.sharedBefore)) throw new TransferConflict('Excluded shared data changed since preview; review its dependent updates again')
-              await tx.importJobRow.update({ where: { id: item.id }, data: { status: target ? 'SUCCESS' : 'EXCLUDED', completedAt: new Date(), ...(after ? { afterState: json(safeSnapshot(after)) } : {}) } })
+              await applyTransferRecord({ jobId: id, item, boundary: payload.boundary, mode: payload.boundary ? 'update' : 'upsert', policy: payload.mapping?.policy, sharedCopy: payload.sharedCopy === true,
+                contracts, reference, declaredProductSkus, userId: job.userId })
             }))
           } catch (error) {
             // Infrastructure failures leave the checkpoint untouched for lease recovery.
@@ -359,6 +335,54 @@ export async function runTransferJob(id: string) {
     }
   }
 }
+/**
+ * One reviewed record, saved inside the CALLER's transaction: dependencies checked, the record re-planned and compared
+ * with the review, the target written, its checkpoint row marked. Shared by the catalog runner (one transaction per
+ * record) and the product sheet's import (PSIE: many records per transaction). `options` reach `applyTransferTarget`.
+ */
+export async function applyTransferRecord(input: {
+  jobId: string; item: { id: string; parsedValues: unknown }; boundary?: ProductTransferBoundary; mode: TransferMode; policy?: SourceMapping['policy']; sharedCopy: boolean
+  contracts: ReturnType<typeof transferContracts>; reference?: Awaited<ReturnType<typeof loadTransferContext>>; declaredProductSkus: ReadonlySet<string>; userId: string | null
+  options?: Parameters<typeof applyTransferTarget>[4]
+}) {
+  const { jobId: id, item, contracts, reference, declaredProductSkus } = input
+  const record = item.parsedValues as unknown as RecordPayload
+  const tx = prisma
+  const target = record.target
+  if (input.boundary) await checkProductTransferBoundary(input.boundary, record.rows, tx)
+  if (target) {
+    // Read dependent shared/parent records in the same serializable transaction.
+    for (const dependency of record.dependencies ?? []) {
+      let expected = dependency.before
+      if (dependency.key) {
+        const prior = await tx.importJobRow.findFirst({ where: { jobId: id, targetId: dependency.key, status: { in: ['SUCCESS', 'EXCLUDED'] } }, select: { afterState: true } })
+        if (!prior?.afterState) throw new TransferConflict('A required shared/parent update did not complete')
+        expected = prior.afterState as Record<string, unknown>
+      }
+      const current = await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: dependency.sku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
+      const compare = dependency.ignoreParent ? withoutParent : (value: Record<string, unknown> | null) => value
+      if (fingerprint(compare(safeSnapshot(current))) !== fingerprint(compare(expected ?? null))) throw new TransferConflict('Shared or parent data changed since preview')
+    }
+    const context = await loadTransferContext(target.rows, tx as typeof prisma, reference)
+    // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
+    const check = await buildTransferPlan(target.rows, input.mode, context, contracts, input.policy, { revalidateDeclaredVersion: false, declaredProductSkus, sharedCopy: input.sharedCopy })
+    const current = check.targets[0]
+    if (current?.create && current.identity.entity === 'Products' && record.declaredParent) current.patch.isParent = true
+    if (!current || check.issues.length || current.contractHash !== target.contractHash || targetWriteFingerprint(current) !== targetWriteFingerprint(target)) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')
+    // A parent saved earlier in this same run is an authorized dependency.
+    // Compare the child's own snapshot unchanged, with that verified parent
+    // projection; otherwise its newly hydrated parent would look like a race.
+    const owner = context.products.get(target.identity.sku)
+    const parentVerified = target.identity.entity === 'Products' && target.before?.parentId && record.dependencies?.some(dependency => context.products.get(dependency.sku)?.id === target.before!.parentId)
+    const applying = parentVerified ? { ...target, before: { ...target.before!, parent: owner?.parent ?? null } } : target
+    if (target.create || target.cells.some(c => c.verdict === 'changed')) await applyTransferTarget(tx, applying, id, input.userId, input.options)
+  }
+  const sharedSku = target?.identity.entity === 'Products' ? target.identity.sku : record.rows[0]?.entity === 'Products' ? record.rows[0].sku : null
+  const after = sharedSku ? await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sharedSku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } }) : null
+  if (!target && record.sharedBefore !== undefined && fingerprint(safeSnapshot(after)) !== fingerprint(record.sharedBefore)) throw new TransferConflict('Excluded shared data changed since preview; review its dependent updates again')
+  await tx.importJobRow.update({ where: { id: item.id }, data: { status: target ? 'SUCCESS' : 'EXCLUDED', completedAt: new Date(), ...(after ? { afterState: json(safeSnapshot(after)) } : {}) } })
+}
+
 /** R-AE-17 — every shared product this job declares, whatever its outcome (see `buildTransferPlan`). */
 async function jobProductSkus(jobId: string) {
   const skus = new Set<string>()

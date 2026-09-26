@@ -34,12 +34,12 @@ describe('isLiveOnChannel — the external id decides, never the status', () => 
 describe('classifyListings', () => {
   it('splits live from local and names the id rather than counting', () => {
     const impact = classifyListings([
-      row({ channel: 'amazon', marketplace: 'DE', externalListingId: 'B0F7J163XJ', listingStatus: 'ACTIVE' }),
+      row({ channel: 'amazon', marketplace: 'DE', externalListingId: 'B0FXD0620C', listingStatus: 'ACTIVE' }),
       row({ channel: 'shopify', marketplace: 'GLOBAL', externalListingId: null, listingStatus: 'DRAFT' }),
     ])
     expect(impact.live).toHaveLength(1)
     expect(impact.local).toHaveLength(1)
-    expect(impact.live[0].label).toBe('amazon · DE — ACTIVE, B0F7J163XJ')
+    expect(impact.live[0].label).toBe('amazon · DE — ACTIVE, B0FXD0620C')
     expect(impact.local[0].label).toBe('shopify · GLOBAL — DRAFT, no marketplace id on this record')
   })
 

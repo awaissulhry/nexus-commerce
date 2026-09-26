@@ -57,13 +57,13 @@ export function ContactHistory({ history }: { history?: ContactHistoryData }) {
       {sub === "quotes" && (h.quotes.length ? h.quotes.map((q) => (
         <Row key={q.id} href={`/quotes?q=${q.id}`}
           left={<span style={{ fontSize: 13, fontWeight: 700, color: "var(--nds-text-link)" }}>{q.number}</span>}
-          right={<>{q.netCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5, fontWeight: 600 }}>{eur(q.netCents)}</span>}<Pill tone={q.state === "ACCEPTED" ? "success" : q.state === "REJECTED" ? "danger" : q.state === "SENT" ? "info" : "neutral"}>{q.state.toLowerCase()}</Pill></>} />
+          right={<>{q.netCents != null && <span style={{ fontFamily: "var(--nds-font-mono)", fontSize: 12.5, fontWeight: 600 }}>{eur(q.netCents)}</span>}<Pill tone={q.state === "ACCEPTED" ? "success" : q.state === "REJECTED" ? "danger" : q.state === "SENT" ? "info" : "neutral"}>{q.state.toLowerCase()}</Pill></>} />
       )) : <Empty what="quotes" />)}
 
       {sub === "orders" && (h.orders.length ? h.orders.map((o) => (
         <Row key={o.id} href={`/orders?o=${o.id}`}
           left={<span style={{ fontSize: 13, fontWeight: 700, color: "var(--nds-text-link)" }}>{o.number}</span>}
-          right={<>{o.netCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5, fontWeight: 600 }}>{eur(o.netCents)}</span>}<Pill tone={o.state === "DELIVERED" || o.state === "CLOSED" ? "success" : o.state === "CANCELLED" ? "danger" : "info"}>{o.state.replace("_", " ").toLowerCase()}</Pill></>} />
+          right={<>{o.netCents != null && <span style={{ fontFamily: "var(--nds-font-mono)", fontSize: 12.5, fontWeight: 600 }}>{eur(o.netCents)}</span>}<Pill tone={o.state === "DELIVERED" || o.state === "CLOSED" ? "success" : o.state === "CANCELLED" ? "danger" : "info"}>{o.state.replace("_", " ").toLowerCase()}</Pill></>} />
       )) : <Empty what="orders" />)}
 
       {sub === "reviews" && (h.reviews.length ? h.reviews.map((r) => (

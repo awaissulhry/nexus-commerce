@@ -26,6 +26,8 @@ import {
   type AmazonFeeComponent,
 } from './marketplaces/amazon.service.js'
 import { logger } from '../utils/logger.js'
+import { mapFinances2024, type Finances2024Mapping } from './amazon-finances-2024-mapping.js'
+import { CentsParity, FinancesCensus, supersedes, type CentsParityReport, type FinancesCensusReport } from './amazon-finances-census.js'
 
 const amazonService = new AmazonService()
 
@@ -76,7 +78,8 @@ interface FinancialSyncSummary {
   txSkipped: number
   durationMs: number
   /**
-   * P5.2 dry run — true when NOTHING was written. `txCreated` is then **0**, which is
+   * P5.2 dry run — true when no FINANCE row was written (review #11: the channel gateway still records
+   * its own call-ledger/audit rows for each Amazon page read). `txCreated` is then **0**, which is
    * the truth, and `txWouldCreate` carries the count. A field named `txCreated` holding
    * a number of rows that were not created is a claim that does not match its
    * measurement, and every existing reader of `txCreated` sums writes.
@@ -89,8 +92,18 @@ interface FinancialSyncSummary {
   /** Counts above assess identity/order overlap, not equivalence of financial amounts. */
   comparisonScope?: 'identity_and_order_overlap_only'
   transactionsWithoutOrderId?: number
+  /** Transactions whose ORDER_ID we do not hold at all. */
   unmatchedTransactions?: number
+  /** CX A2 — ORDER_IDs we DO hold, but with no account link: not unmatched, unattributed. */
+  unattributedTransactions?: number
+  unattributedOrders?: number
+  /** ORDER_IDs held but linked to a different Amazon account than the one compared. */
+  otherAccountTransactions?: number
   duplicateTransactions?: number
+  /** CX A2 — counts by type/status/breakdown path and mapping outcome; no amounts, no ids. */
+  census?: FinancesCensusReport
+  /** CX A2 — exact per-column comparison with v0 for matched orders; a measurement only. */
+  parity?: CentsParityReport
   accountId?: string
   marketplaceId?: string | null
   /** DA-RT.17 — diagnostics: first 10 AmazonOrderIds from fetched
@@ -422,6 +435,7 @@ interface NewRelatedId {
 interface NewTransaction {
   transactionId?: string
   transactionType?: string
+  transactionStatus?: string
   postedDate?: string
   totalAmount?: NewMoney
   description?: string
@@ -479,14 +493,23 @@ function transactionOrderId(tx: NewTransaction): string | undefined {
 /** Identity-only overlap assessment. No money mapping or write is implied by a candidate. */
 async function assessNewTransaction(tx: NewTransaction, accountId: string, amazonOrderId?: string): Promise<{
   created: number; skipped: number; wouldDuplicateV0: number; orderId?: string;
-  reason?: 'without_order' | 'unmatched_order' | 'existing';
+  reason?: 'without_order' | 'unmatched_order' | 'unattributed_order' | 'other_account_order' | 'existing';
 }> {
   if (!amazonOrderId) return { created: 0, skipped: 1, wouldDuplicateV0: 0, reason: 'without_order' }
   const order = await prisma.order.findFirst({
     where: { channel: 'AMAZON', channelOrderId: amazonOrderId, channelConnectionId: accountId },
     select: { id: true },
   })
-  if (!order) return { created: 0, skipped: 1, wouldDuplicateV0: 0, reason: 'unmatched_order' }
+  if (!order) {
+    // CX A2 — an order we hold without an account link is not an order we lack: the fix for it
+    // is attribution (A5), not ingestion, so the two must never share a counter.
+    const held = await prisma.order.findFirst({
+      where: { channel: 'AMAZON', channelOrderId: amazonOrderId },
+      select: { id: true, channelConnectionId: true },
+    })
+    const reason = !held ? 'unmatched_order' : held.channelConnectionId == null ? 'unattributed_order' : 'other_account_order'
+    return { created: 0, skipped: 1, wouldDuplicateV0: 0, reason }
+  }
   const transactionType = tx.transactionType === 'Shipment' ? 'Order' : tx.transactionType!
   const existing = await prisma.financialTransaction.findFirst({
     where: { orderId: order.id, transactionType, amazonTransactionId: tx.transactionId },
@@ -589,7 +612,9 @@ export function financialsDryRunRefusal(body: { useV0?: boolean; dryRun?: boolea
 }
 
 /**
- * P5.2 — bounded identity/order-overlap measurement, with no financial writes.
+ * P5.2 — bounded identity/order-overlap measurement, with no financial writes. Not zero writes: each
+ * Amazon page is read through the channel gateway, which records its ordinary call-ledger, rate-limit
+ * and credential bookkeeping (review #11). No FinancialTransaction or Order row is written.
  * Provider transaction IDs do not bridge v0's order-level money records. Until that
  * reconciliation and monetary mapping are proved, the new writer is deliberately held.
  */
@@ -658,19 +683,38 @@ export async function syncFinancialTransactions(
   let ordersMatched = 0
   let txWouldDuplicateV0 = 0
   let transactionsWithoutOrderId = 0, unmatchedTransactions = 0, duplicateTransactions = 0
-  const transactionIds = new Map<string, string>()
-  const matchedOrders = new Set<string>()
+  let unattributedTransactions = 0, otherAccountTransactions = 0
+  const unattributedOrderIds = new Set<string>()
+  const census = new FinancesCensus()
+  const parity = new CentsParity()
+  // One entry per transactionId (A1 identity): a later status for the same id supersedes the
+  // earlier one, so a transaction released mid-pagination is counted once, as released.
+  const unique = new Map<string, { tx: NewTransaction; mapping: Finances2024Mapping; identity: string; orderId?: string }>()
   for (const tx of collected) {
     if (!tx || typeof tx.transactionId !== 'string' || !tx.transactionId.trim()) throw new Error('Finances transaction has no valid transactionId.')
     if (typeof tx.transactionType !== 'string' || !tx.transactionType.trim()) throw new Error('Finances transaction has no valid transactionType.')
     if (tx.relatedIdentifiers !== undefined && !Array.isArray(tx.relatedIdentifiers)) throw new Error('Finances transaction has invalid relatedIdentifiers.')
     const orderId = transactionOrderId(tx)
     const identity = JSON.stringify([tx.transactionType, orderId ?? null])
-    if (transactionIds.has(tx.transactionId)) {
-      if (transactionIds.get(tx.transactionId) !== identity) throw new Error('Finances pagination returned conflicting identities for one transactionId.')
-      txSkipped++; duplicateTransactions++; continue
+    const mapping = mapFinances2024(tx)
+    const seen = unique.get(tx.transactionId)
+    if (seen) {
+      if (seen.identity !== identity) throw new Error('Finances pagination returned conflicting identities for one transactionId.')
+      // Every observation must be valid and financially identical before status deduplication.
+      if (seen.mapping.kind === 'refused' || mapping.kind === 'refused') throw new Error('Finances pagination returned an invalid observation for one transactionId.')
+      if (seen.mapping.kind !== mapping.kind) throw new Error('Finances pagination returned conflicting identities for one transactionId.')
+      if (seen.mapping.moneyFingerprint !== mapping.moneyFingerprint) throw new Error('Finances pagination returned conflicting money for one transactionId.')
+      txSkipped++; duplicateTransactions++
+      if ((seen.tx.transactionStatus ?? null) !== (tx.transactionStatus ?? null)) {
+        census.statusChanged()
+        if (supersedes(tx.transactionStatus, seen.tx.transactionStatus)) { seen.tx = tx; seen.mapping = mapping }
+      }
+      continue
     }
-    transactionIds.set(tx.transactionId, identity)
+    unique.set(tx.transactionId, { tx, mapping, identity, orderId })
+  }
+  const matchedOrders = new Set<string>()
+  for (const { tx, mapping, orderId } of unique.values()) {
     const r = await assessNewTransaction(tx, account.id, orderId)
     txWouldCreate += r.created
     txSkipped += r.skipped
@@ -678,11 +722,25 @@ export async function syncFinancialTransactions(
     if (r.orderId) matchedOrders.add(r.orderId)
     if (r.reason === 'without_order') transactionsWithoutOrderId++
     if (r.reason === 'unmatched_order') unmatchedTransactions++
+    if (r.reason === 'unattributed_order') { unattributedTransactions++; unattributedOrderIds.add(orderId!) }
+    if (r.reason === 'other_account_order') otherAccountTransactions++
+    census.add(mapping)
+    if (mapping.kind === 'row' && r.orderId) parity.addNew(r.orderId, mapping.row)
   }
   ordersMatched = matchedOrders.size
+  // v0's side of the parity: its rows for the matched orders, identified by v0's own key shape
+  // (amazonTransactionId = the bare Amazon order id). Read only.
+  const matched = [...matchedOrders]
+  for (let i = 0; i < matched.length; i += 500) {
+    const rows = await prisma.financialTransaction.findMany({
+      where: { orderId: { in: matched.slice(i, i + 500) }, transactionType: { in: ['Order', 'Refund'] } },
+      select: { orderId: true, transactionType: true, currencyCode: true, amazonTransactionId: true, amount: true, grossRevenue: true, netRevenue: true, amazonFee: true, fbaFee: true, otherFees: true, order: { select: { channelOrderId: true } } },
+    })
+    for (const row of rows) if (row.amazonTransactionId !== null && row.amazonTransactionId === row.order.channelOrderId) parity.addV0(row)
+  }
 
   if (dryRun) {
-    logger.info('[fin-tx-2024] DRY RUN — nothing written', {
+    logger.info('[fin-tx-2024] DRY RUN — no finance rows written', {
       txWouldCreate, txSkipped, txWouldDuplicateV0, transactions: collected.length,
     })
   }
@@ -705,5 +763,8 @@ export async function syncFinancialTransactions(
     comparisonScope: 'identity_and_order_overlap_only',
     accountId: account.id, marketplaceId: mid,
     transactionsWithoutOrderId, unmatchedTransactions, duplicateTransactions,
+    unattributedTransactions, unattributedOrders: unattributedOrderIds.size, otherAccountTransactions,
+    census: census.toJSON(),
+    parity: parity.toJSON(),
   }
 }

@@ -4,6 +4,7 @@ import { workspacePrisma } from '@nexus/database/workspace-router'
 import { Pool } from 'pg'
 import { existsSync, readFileSync } from 'node:fs'
 import { applyFormulaSchema, PGLITE_SNAPSHOT_ENV } from './formula-schema.js'
+import { fixExtendedQueryReady } from './pglite-protocol.js'
 
 /** Disposable real PostgreSQL + the generated production Prisma client. No catalog connection. */
 export async function formulaDatabase(options: { maxConnections?: number; port?: number } = {}) {
@@ -13,6 +14,7 @@ export async function formulaDatabase(options: { maxConnections?: number; port?:
   const snapshot = process.env.NEXUS_TEST_NO_TEMPLATE === '1' ? undefined : process.env[PGLITE_SNAPSHOT_ENV]
   const fromSnapshot = Boolean(snapshot && existsSync(snapshot))
   const db = fromSnapshot ? await PGlite.create({ loadDataDir: new Blob([readFileSync(snapshot!)]) }) : await PGlite.create()
+  fixExtendedQueryReady(db) // the pg driver talks to it through the socket bridge below
   if (!fromSnapshot) await applyFormulaSchema(db)
   const server = new PGLiteSocketServer({ db, host: '127.0.0.1', port: options.port ?? 0, maxConnections: options.maxConnections ?? 1 })
   let port = 0

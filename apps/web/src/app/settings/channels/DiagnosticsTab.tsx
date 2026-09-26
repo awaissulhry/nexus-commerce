@@ -23,6 +23,7 @@ import { channelName, relativeTime, STATUS_LABEL, type AccountRow } from './chan
 import { LedgerGrid, InboundGrid, CallsGrid, type LedgerRow, type InboundRow, type CallRow } from './ChannelEventsGrid'
 import { readableAccountText } from './channel-event-details'
 import { AppSecretsCard } from './AppSecretsCard'
+import { ListingIssuesCard } from './ListingIssuesCard'
 
 /**
  * P3.3 — what `GET /api/cx/connections/:id/calls` answers. Mirrors
@@ -59,12 +60,13 @@ interface HeartbeatResult {
 }
 
 export interface DiagnosticsTabProps {
+  workspaceId?: string | null
   accounts: AccountRow[]
   loading: boolean
   onChanged: () => void
 }
 
-export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabProps) {
+export function DiagnosticsTab({ accounts, loading, onChanged, workspaceId }: DiagnosticsTabProps) {
   const api = getBackendUrl()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const account = accounts.find((a) => a.id === selectedId) ?? accounts.find((a) => a.isPrimary) ?? accounts[0] ?? null
@@ -243,6 +245,8 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
         </Pill>
         {account.region && <Tag>{account.region}</Tag>}
       </div>
+
+      <ListingIssuesCard connectionId={account.id} workspaceId={workspaceId} />
 
       <Card header="Live checks" description="Each button makes a real call against the channel and writes what happened to the ledger.">
         <div className="nds-diag-actions">

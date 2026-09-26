@@ -34,12 +34,44 @@ import { logger } from '../utils/logger.js'
 import { recordOrderItem } from './sales-aggregate.service.js'
 import {
   reserveOpenOrder,
+  unitsPerProduct,
   consumeOpenOrder,
   resolveLocationByCode,
 } from './stock-level.service.js'
-import { recascadeProduct } from './stock-movement.service.js'
+import { InsufficientStockError, recascadeProduct } from './stock-movement.service.js'
+import { amazonAccount } from '../lib/amazon-sp-client.js'
 
 const amazonService = new AmazonService()
+
+// An FBM order already in one of these before a read had its stock given back, or its stock belongs to
+// the returns flow: a re-read must not hold stock again. SHIPPED/DELIVERED are deliberately absent — a
+// re-read is how a line that could not be held at ingest (oversold) is taken once stock is there, and
+// the hold/consume guards in stock-level.service keep every re-read to what the line still owes.
+const FBM_NO_HOLD_ON_REREAD = new Set(['CANCELLED', 'REFUNDED', 'RETURNED'])
+// A shipped FBM order never goes back to a pre-shipment status on a stale read (status only).
+const FBM_PRE_SHIPMENT_STATUSES = new Set(['PENDING', 'PROCESSING', 'PARTIALLY_SHIPPED'])
+
+/**
+ * CX A0 — the Amazon account an order was imported through. A new order is created with the
+ * pinned account (upsert `create`); an existing order gains it only while unattributed, by a
+ * compare-and-set on NULL, so a concurrent import or the attribution backfill that linked it
+ * first is never overwritten. A DIFFERENT account is a conflict to report: an Amazon order id
+ * belongs to one seller, and re-pointing it would move its money to another account's books.
+ */
+export async function linkAmazonOrderAccount(
+  order: { id: string; channelConnectionId: string | null },
+  accountId: string,
+): Promise<{ outcome: 'linked' | 'attributed' | 'conflict'; linkedConnectionId: string | null }> {
+  if (order.channelConnectionId === accountId) return { outcome: 'linked', linkedConnectionId: accountId }
+  if (order.channelConnectionId == null) {
+    const { count } = await prisma.order.updateMany({ where: { id: order.id, channelConnectionId: null }, data: { channelConnectionId: accountId } })
+    if (count === 1) return { outcome: 'attributed', linkedConnectionId: accountId }
+    const current = await prisma.order.findUnique({ where: { id: order.id }, select: { channelConnectionId: true } })
+    if (current?.channelConnectionId === accountId) return { outcome: 'linked', linkedConnectionId: accountId }
+    return { outcome: 'conflict', linkedConnectionId: current?.channelConnectionId ?? null }
+  }
+  return { outcome: 'conflict', linkedConnectionId: order.channelConnectionId }
+}
 
 /** Map Amazon's status strings to our `OrderStatus` enum (extended in O.1). */
 type MappedOrderStatus =
@@ -271,6 +303,8 @@ interface SyncSummary {
   fbmReservationsCreated: number
   fbmReservationsConsumed: number
   fbmInsufficientStock: number
+  /** CX A0 — orders already linked to a different Amazon account; the link was kept. */
+  accountConflicts?: number
   errors: Array<{ orderId: string; error: string }>
 }
 
@@ -588,12 +622,15 @@ export class AmazonOrdersService {
     }
 
     try {
-      const orders = await amazonService.fetchOrders(fetchOpts)
+      // CX A0 — resolve the account once and read through it, so the account stamped on
+      // each order is the one its data came from.
+      const account = await amazonAccount()
+      const orders = await amazonService.fetchOrders({ ...fetchOpts, accountId: account.id })
       summary.ordersFetched = orders.length
 
       for (const raw of orders) {
         try {
-          await this.upsertOrder(raw, summary)
+          await this.upsertOrder(raw, summary, account.id)
           summary.ordersUpserted++
         } catch (err) {
           summary.ordersFailed++
@@ -634,7 +671,7 @@ export class AmazonOrdersService {
     return summary
   }
 
-  private async upsertOrder(raw: AmazonOrderRaw, summary: SyncSummary): Promise<void> {
+  private async upsertOrder(raw: AmazonOrderRaw, summary: SyncSummary, accountId: string): Promise<void> {
     const purchaseDate = new Date(raw.PurchaseDate)
     let totalPrice = raw.OrderTotal?.Amount ? Number(raw.OrderTotal.Amount) : 0
     let currencyCode = raw.OrderTotal?.CurrencyCode ?? 'EUR'
@@ -649,7 +686,7 @@ export class AmazonOrdersService {
     // 0.5 req/sec burst 30 — incremental sync is well inside this.
     if (status === 'PENDING' && totalPrice === 0) {
       try {
-        const full = await amazonService.fetchOrderById(raw.AmazonOrderId)
+        const full = await amazonService.fetchOrderById(raw.AmazonOrderId, accountId)
         if (full?.OrderTotal?.Amount) {
           const fetchedAmount = Number(full.OrderTotal.Amount)
           if (Number.isFinite(fetchedAmount) && fetchedAmount > 0) {
@@ -668,139 +705,162 @@ export class AmazonOrdersService {
       }
     }
 
-    // O.45: track the previous status so we can detect the
-    // transition to CANCELLED (vs re-ingesting an already-cancelled
-    // order, which shouldn't re-trigger the cleanup cascade).
-    const existing = await prisma.order.findUnique({
-      where: {
-        channel_channelOrderId: workspaceKey({
-          channel: 'AMAZON',
-          channelOrderId: raw.AmazonOrderId,
-        }),
-      },
-      select: { id: true, status: true, deliveredAt: true, deliveredAtSource: true, shippedAt: true },
-    })
     const fulfillmentMethod = mapFulfillmentMethod(raw.FulfillmentChannel)
     const marketplace = mapMarketplaceCode(raw.MarketplaceId)
     const shippingAddress = (raw.ShippingAddress ?? {}) as object
-
-    // O.1: Lifecycle-timestamp gate accepts SHIPPED *or* PARTIALLY_SHIPPED
-    // for shippedAt — Amazon's PartiallyShipped is still "ship clock
-    // started" from the customer's perspective.
-    const isShippedLike = status === 'SHIPPED' || status === 'PARTIALLY_SHIPPED'
-
-    // O.7: terminal-status downgrade guard. If the local row is
-    // already in a terminal state (operator cancelled before the
-    // channel-cancel pushback completed) and SP-API still reports a
-    // non-terminal status, preserve the local status + lifecycle
-    // timestamps. Metadata still refreshes.
     const { shouldPreserveTerminalStatus } = await import(
       './order-status-guards.js'
     )
-    const preserveStatus = shouldPreserveTerminalStatus(
-      existing?.status,
-      status,
-    )
-    if (preserveStatus) {
-      logger.info('amazon-orders: preserving local terminal status (channel still reports non-terminal)', {
+    // Serialize the state decision with its write, including an order not yet inserted.
+    // Locks end before vendor item reads and stock work: neither belongs under this row lock.
+    const { order, created, newlyCancelled, newlyShipped, previousStatus } = await prisma.$transaction(async tx => {
+      const [scope] = await tx.$queryRaw<Array<{ workspaceId: string | null }>>`SELECT NULLIF(current_setting('nexus.workspace_id', true), '') AS "workspaceId"`
+      const workspaceId = scope?.workspaceId
+      if (!workspaceId) throw new Error('Amazon orders require a business profile.')
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify(['nexus-amazon-order-state', workspaceId, raw.AmazonOrderId])}, 0))`
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE "workspaceId"=${workspaceId} AND channel='AMAZON' AND "channelOrderId"=${raw.AmazonOrderId} FOR NO KEY UPDATE`
+      // O.45: track the previous status so we can detect the
+      // transition to CANCELLED (vs re-ingesting an already-cancelled
+      // order, which shouldn't re-trigger the cleanup cascade).
+      const existing = await tx.order.findUnique({
+        where: {
+          channel_channelOrderId: workspaceKey({
+            channel: 'AMAZON',
+            channelOrderId: raw.AmazonOrderId,
+          }),
+        },
+        select: { id: true, status: true, deliveredAt: true, deliveredAtSource: true, shippedAt: true },
+      })
+
+      // O.1: Lifecycle-timestamp gate accepts SHIPPED *or* PARTIALLY_SHIPPED
+      // for shippedAt — Amazon's PartiallyShipped is still "ship clock
+      // started" from the customer's perspective.
+      const isShippedLike = status === 'SHIPPED' || status === 'PARTIALLY_SHIPPED'
+
+      // O.7: terminal-status downgrade guard. If the local row is
+      // already in a terminal state (operator cancelled before the
+      // channel-cancel pushback completed) and SP-API still reports a
+      // non-terminal status, preserve the local status + lifecycle
+      // timestamps. Metadata still refreshes.
+      const preserveStatus = shouldPreserveTerminalStatus(
+        existing?.status,
+        status,
+      ) || (fulfillmentMethod === 'FBM' && existing?.status === 'SHIPPED' && FBM_PRE_SHIPMENT_STATUSES.has(status))
+      if (preserveStatus) {
+        logger.info('amazon-orders: preserving local terminal status (channel still reports non-terminal)', {
+          orderId: raw.AmazonOrderId,
+          localStatus: existing?.status,
+          channelStatus: status,
+        })
+      }
+
+      const updateData = {
+        status: preserveStatus ? (existing!.status as any) : status,
+        totalPrice,
+        currencyCode,
+        customerName: pickCustomerName(raw),
+        customerEmail: pickCustomerEmail(raw),
+        shippingAddress,
+        fulfillmentMethod,
+        marketplace,
+        purchaseDate,
+        shippedAt:
+          !preserveStatus && isShippedLike
+            ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+            : undefined,
+        cancelledAt:
+          !preserveStatus && status === 'CANCELLED'
+            ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+            : undefined,
+        // RV.2.2 — deliveredAt resolution:
+        //   1. SP-API explicitly says Delivered → authoritative AMAZON_API source.
+        //   2. Existing higher-authority value present → leave it alone.
+        //   3. FBA + shippedAt + 3 business days in the past → heuristic guess.
+        //   4. Otherwise leave undefined (no write).
+        // The review pipeline keys entirely off deliveredAt; (3) is what
+        // unblocks it for FBA orders since SP-API rarely returns Delivered.
+        ...(() => {
+          if (!preserveStatus && status === 'DELIVERED') {
+            return {
+              deliveredAt: new Date(raw.LastUpdateDate ?? raw.PurchaseDate),
+              deliveredAtSource: 'AMAZON_API' as const,
+            }
+          }
+          if (!canOverwriteWithHeuristic(existing?.deliveredAtSource)) {
+            return {}
+          }
+          const shippedAt = !preserveStatus && isShippedLike
+            ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
+            : existing?.shippedAt ?? null
+          if (fulfillmentMethod === 'FBA' && shippedAt) {
+            const projected = addBusinessDays(shippedAt, 3)
+            if (projected.getTime() <= Date.now()) {
+              return {
+                deliveredAt: projected,
+                deliveredAtSource: 'HEURISTIC_FBA_3D' as const,
+              }
+            }
+          }
+          return {}
+        })(),
+        // O.1: ship-by deadline + Prime SFP gating. SP-API delivers all of
+        // these as ISO-8601 strings — parse defensively so a malformed
+        // value doesn't fail the whole upsert.
+        shipByDate: parseAmazonDate(raw.LatestShipDate),
+        earliestShipDate: parseAmazonDate(raw.EarliestShipDate),
+        latestDeliveryDate: parseAmazonDate(raw.LatestDeliveryDate),
+        isPrime: raw.IsPrime ?? null,
+        amazonMetadata: raw as object,
+      }
+
+      // O.45: did we just transition to CANCELLED?
+      const newlyCancelled =
+        status === 'CANCELLED'
+        && existing != null
+        && existing.status !== 'CANCELLED'
+
+      // S.2: did we just transition to SHIPPED? Only the SHIPPED status
+      // (not PARTIALLY_SHIPPED) consumes reservations — partials stay
+      // reserved until the order completes, since we don't know which
+      // line items shipped from the order-level status alone. Operators
+      // can manually consume via the drawer if a partial drags.
+      const newlyShipped =
+        !preserveStatus && status === 'SHIPPED'
+        && (existing == null || existing.status !== 'SHIPPED')
+
+      const order = await tx.order.upsert({
+        where: {
+          channel_channelOrderId: workspaceKey({
+            channel: 'AMAZON',
+            channelOrderId: raw.AmazonOrderId,
+          }),
+        },
+        // The update arm never names an account; linkAmazonOrderAccount fills a NULL below.
+        update: updateData,
+        create: {
+          ...updateData,
+          channel: 'AMAZON',
+          channelOrderId: raw.AmazonOrderId,
+          channelConnectionId: accountId,
+        },
+      })
+      return { order, created: existing == null, newlyCancelled, newlyShipped, previousStatus: existing?.status ?? null }
+    }, { isolationLevel: 'ReadCommitted', maxWait: 5_000, timeout: 30_000 })
+    // CX A0 — after the state transaction: the link is its own compare-and-set on the global client,
+    // which inside the transaction would wait on the row lock that transaction holds.
+    const link = await linkAmazonOrderAccount(order, accountId)
+    if (link.outcome === 'conflict') {
+      summary.accountConflicts = (summary.accountConflicts ?? 0) + 1
+      logger.warn('amazon-orders: order is linked to a different Amazon account — link kept', {
         orderId: raw.AmazonOrderId,
-        localStatus: existing?.status,
-        channelStatus: status,
+        linkedConnectionId: link.linkedConnectionId,
+        importingConnectionId: accountId,
       })
     }
 
-    const updateData = {
-      status: preserveStatus ? (existing!.status as any) : status,
-      totalPrice,
-      currencyCode,
-      customerName: pickCustomerName(raw),
-      customerEmail: pickCustomerEmail(raw),
-      shippingAddress,
-      fulfillmentMethod,
-      marketplace,
-      purchaseDate,
-      shippedAt:
-        !preserveStatus && isShippedLike
-          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
-          : undefined,
-      cancelledAt:
-        !preserveStatus && status === 'CANCELLED'
-          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
-          : undefined,
-      // RV.2.2 — deliveredAt resolution:
-      //   1. SP-API explicitly says Delivered → authoritative AMAZON_API source.
-      //   2. Existing higher-authority value present → leave it alone.
-      //   3. FBA + shippedAt + 3 business days in the past → heuristic guess.
-      //   4. Otherwise leave undefined (no write).
-      // The review pipeline keys entirely off deliveredAt; (3) is what
-      // unblocks it for FBA orders since SP-API rarely returns Delivered.
-      ...(() => {
-        if (!preserveStatus && status === 'DELIVERED') {
-          return {
-            deliveredAt: new Date(raw.LastUpdateDate ?? raw.PurchaseDate),
-            deliveredAtSource: 'AMAZON_API' as const,
-          }
-        }
-        if (!canOverwriteWithHeuristic(existing?.deliveredAtSource)) {
-          return {}
-        }
-        const shippedAt = !preserveStatus && isShippedLike
-          ? new Date(raw.LastUpdateDate ?? raw.PurchaseDate)
-          : existing?.shippedAt ?? null
-        if (fulfillmentMethod === 'FBA' && shippedAt) {
-          const projected = addBusinessDays(shippedAt, 3)
-          if (projected.getTime() <= Date.now()) {
-            return {
-              deliveredAt: projected,
-              deliveredAtSource: 'HEURISTIC_FBA_3D' as const,
-            }
-          }
-        }
-        return {}
-      })(),
-      // O.1: ship-by deadline + Prime SFP gating. SP-API delivers all of
-      // these as ISO-8601 strings — parse defensively so a malformed
-      // value doesn't fail the whole upsert.
-      shipByDate: parseAmazonDate(raw.LatestShipDate),
-      earliestShipDate: parseAmazonDate(raw.EarliestShipDate),
-      latestDeliveryDate: parseAmazonDate(raw.LatestDeliveryDate),
-      isPrime: raw.IsPrime ?? null,
-      amazonMetadata: raw as object,
-    }
-
-    // O.45: did we just transition to CANCELLED?
-    const newlyCancelled =
-      status === 'CANCELLED'
-      && existing != null
-      && existing.status !== 'CANCELLED'
-
-    // S.2: did we just transition to SHIPPED? Only the SHIPPED status
-    // (not PARTIALLY_SHIPPED) consumes reservations — partials stay
-    // reserved until the order completes, since we don't know which
-    // line items shipped from the order-level status alone. Operators
-    // can manually consume via the drawer if a partial drags.
-    const newlyShipped =
-      status === 'SHIPPED'
-      && (existing == null || existing.status !== 'SHIPPED')
-
-    const order = await prisma.order.upsert({
-      where: {
-        channel_channelOrderId: workspaceKey({
-          channel: 'AMAZON',
-          channelOrderId: raw.AmazonOrderId,
-        }),
-      },
-      update: updateData,
-      create: {
-        ...updateData,
-        channel: 'AMAZON',
-        channelOrderId: raw.AmazonOrderId,
-      },
-    })
-
     // O.6: emit lifecycle event so OrdersWorkspace auto-refreshes
     // without polling. Created vs. updated mirrors the upsert path —
-    // existing == null means we just created, otherwise the row was
+    // `created` comes from the locked state read; otherwise the row was
     // touched (status / metadata refresh).
     void (async () => {
       try {
@@ -809,7 +869,7 @@ export class AmazonOrdersService {
         // update tile totals without a server round-trip.
         const totalPriceCents = Math.round(totalPrice * 100)
         publishOrderEvent(
-          existing == null
+          created
             ? {
                 type: 'order.created',
                 orderId: order.id,
@@ -825,7 +885,8 @@ export class AmazonOrdersService {
                 type: 'order.updated',
                 orderId: order.id,
                 channel: 'AMAZON',
-                status,
+                // The stored status: a preserved one is what subscribers must see, not the stale read.
+                status: order.status,
                 marketplace,
                 ts: Date.now(),
               },
@@ -881,7 +942,7 @@ export class AmazonOrdersService {
     // refund-on-return both arrive within a 15-min cron window).
     // Same-SKU-on-multiple-lines is still allowed because the unique
     // key is the line id, not the SKU.
-    const items = await amazonService.fetchOrderItems(raw.AmazonOrderId)
+    const items = await amazonService.fetchOrderItems(raw.AmazonOrderId, accountId)
     const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = []
     for (const item of items) {
       try {
@@ -901,7 +962,10 @@ export class AmazonOrdersService {
     // S.2: FBM stock lifecycle. FBA never touched here. Cancellations
     // are handled by the existing handleOrderCancelled cascade above
     // (which now also releases open reservations — see order-cancellation).
-    if (fulfillmentMethod === 'FBM') {
+    // Never for a cancelled order, nor a re-read of one already cancelled, refunded or returned. A
+    // re-read of a shipped order still runs: reserveOpenOrder holds only what the line still owes
+    // (nothing once taken — before, every re-read held the units again and the reconcile took them).
+    if (fulfillmentMethod === 'FBM' && order.status !== 'CANCELLED' && !FBM_NO_HOLD_ON_REREAD.has(previousStatus ?? '')) {
       await this.applyFbmStockLifecycle({
         orderId: order.id,
         rawAmazonOrderId: raw.AmazonOrderId,
@@ -913,9 +977,10 @@ export class AmazonOrdersService {
   }
 
   /**
-   * S.2 — FBM reserve-then-consume lifecycle. Always tries to reserve
-   * (idempotent: skipped if a reservation already exists for this
-   * orderId+productId). If the order has just transitioned to SHIPPED,
+   * S.2 — FBM reserve-then-consume lifecycle. Tries to reserve on every
+   * read that reaches it (idempotent: an open reservation for this
+   * orderId+productId is reused, units already consumed are never held
+   * again). If the order has just transitioned to SHIPPED,
    * consume every open reservation for the order.
    *
    * Insufficient-stock errors are logged + counted but never throw —
@@ -937,8 +1002,9 @@ export class AmazonOrdersService {
       return
     }
 
-    for (const it of args.items) {
-      if (!it.productId || it.quantity <= 0) continue
+    // R10 — one hold per product, for the units of all its lines.
+    for (const { lines, ...it } of unitsPerProduct(args.items)) {
+      const sku = lines.map((line) => line.sku).join(',')
       try {
         const before = await prisma.stockReservation.count({
           where: {
@@ -966,19 +1032,19 @@ export class AmazonOrdersService {
         if (after > before) args.summary.fbmReservationsCreated++
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (msg.includes('insufficient available')) {
+        if (err instanceof InsufficientStockError) {
           args.summary.fbmInsufficientStock++
           logger.warn('amazon-orders: FBM oversell — order accepted but insufficient stock to reserve', {
             orderId: args.orderId,
             productId: it.productId,
-            sku: it.sku,
+            sku,
             quantity: it.quantity,
           })
         } else {
           logger.warn('amazon-orders: FBM reserve failed', {
             orderId: args.orderId,
             productId: it.productId,
-            sku: it.sku,
+            sku,
             error: msg,
           })
         }
@@ -1093,9 +1159,17 @@ export class AmazonOrdersService {
         quantity: item.QuantityOrdered,
         price: unitPrice,
         amazonMetadata: item as object,
-        ...(productId ? { productId } : {}),
       },
     })
+
+    // A line keeps the product it was first linked to: the ordered quantity per product is what the
+    // stock guards count, so re-pointing a line after a SKU change would owe (and take) it twice. An
+    // unlinked line is filled only while still null; the stored winner is what stock uses.
+    let linkedProductId = upserted.productId
+    if (linkedProductId === null && productId) {
+      await prisma.orderItem.updateMany({ where: { id: upserted.id, productId: null }, data: { productId } })
+      linkedProductId = (await prisma.orderItem.findUnique({ where: { id: upserted.id }, select: { productId: true } }))?.productId ?? null
+    }
 
     // F.1 — keep DailySalesAggregate current for the forecasting layer.
     // Best-effort: a refresh failure must never block order ingestion.
@@ -1108,7 +1182,7 @@ export class AmazonOrdersService {
       })
     }
 
-    return { productId, quantity: item.QuantityOrdered, sku }
+    return { productId: linkedProductId, quantity: item.QuantityOrdered, sku }
   }
 }
 

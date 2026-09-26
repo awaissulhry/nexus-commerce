@@ -2693,6 +2693,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   gap: 6px;
   flex: none;
 }
+/* Stacked: the body takes its own full-width line under the label (`order` keeps the actions on the
+   label's line, before it). The overlay still covers both lines, so the whole row stays one target. */
+.nds-prow.is-stacked { flex-wrap: wrap; row-gap: var(--nds-space-4); }
+.nds-prow.is-stacked .nds-prow-body { order: 1; flex: 1 0 100%; flex-wrap: wrap; }
 
 /* Shell-anchored secondary navigation uses the shared drawer behavior. */
 .nds-drawer.from-left { left: 0; right: auto; animation-name: nds-slidein-left; }
@@ -2976,3 +2980,25 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-change-review-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nds-space-8); }
 .nds-change-review-note { margin: 0; color: var(--nds-text-2); }
 .nds-change-review-item .nds-kv dd { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+/* FileRow (PSIE, 2026-09-26) — the one picked file: type icon, name (truncated; whole name in `title`) + size, a status
+   line, sm actions (28px). Danger = a refused file; the status text says why. Text: --nds-text / --nds-text-muted, and
+   --nds-danger-text for a refusal (9.67:1 light, 8.85:1 dark on --nds-surface). */
+.nds-filerow { display: flex; align-items: center; gap: var(--nds-space-10); min-width: 0; padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface); color: var(--nds-text); }
+.nds-filerow-icon { flex: none; display: inline-flex; color: var(--nds-text-2); }
+.nds-filerow-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.nds-filerow-line { display: flex; align-items: baseline; gap: var(--nds-space-8); min-width: 0; }
+.nds-filerow-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-base); font-weight: 600; }
+.nds-filerow-size { flex: none; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nds-filerow-status { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.nds-filerow-actions { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.nds-filerow.danger { border-color: var(--nds-danger); }
+.nds-filerow.danger .nds-filerow-icon, .nds-filerow.danger .nds-filerow-status { color: var(--nds-danger-text); }
+/* JobProgress (PSIE, 2026-09-26) — label + elapsed, ProgressBar, a polite count line (always mounted; collapses while
+   empty), a muted note. Tabular numerals so a changing count or clock does not move the line. */
+.nds-jobprogress { display: block; min-width: 0; color: var(--nds-text); }
+.nds-jobprogress > * + *:not(:empty) { margin-top: var(--nds-space-8); }
+.nds-jobprogress-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nds-space-12); min-width: 0; }
+.nds-jobprogress-label { min-width: 0; font-size: var(--nds-font-size-base); font-weight: 600; }
+.nds-jobprogress-elapsed { flex: none; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nds-jobprogress-detail { font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.nds-jobprogress-note { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }

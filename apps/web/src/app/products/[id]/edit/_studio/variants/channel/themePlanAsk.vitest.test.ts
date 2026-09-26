@@ -32,8 +32,8 @@ const ebayLive = (over: Partial<VariationThemeCell> = {}): VariationThemeCell =>
   dropped: [],
   collisions: null,
   locked: {
-    reason: 'Item 257584954808 is live with Colore and Taglia. Adding or removing a specific relists it; reordering and adding values do not.',
-    externalId: '257584954808',
+    reason: 'Item 938554736087 is live with Colore and Taglia. Adding or removing a specific relists it; reordering and adding values do not.',
+    externalId: '938554736087',
     setChangeIs: 'relist',
     orderChangeAllowed: true,
   },
@@ -51,8 +51,8 @@ const amazonLive = (over: Partial<VariationThemeCell> = {}): VariationThemeCell 
   theme: { code: 'COLOR_NAME/SIZE_NAME', label: 'Colore / Taglia', deprecated: false },
   candidates: { kind: 'theme-enum', items: [], limit: 2, schemaFetchedAt: null, state: 'ok' },
   locked: {
-    reason: 'ASIN B0F7J163XJ is live on Amazon · IT with 20 children. Changing the theme needs a new parent.',
-    externalId: 'B0F7J163XJ',
+    reason: 'ASIN B0FXD0620C is live on Amazon · IT with 20 children. Changing the theme needs a new parent.',
+    externalId: 'B0FXD0620C',
     setChangeIs: 'new-parent',
     orderChangeAllowed: false,
   },
@@ -190,7 +190,7 @@ const DOCK_EBAY: ProjectionPage = {
   freeform: false,
   theme: null,
   split: { mode: 'single' as const, listings: [], creatable: false },
-  locked: { reason: 'live', lockedAxisKeys: ['Colore', 'Taglia'], setChangeIs: 'relist' as const, orderChangeAllowed: true, externalId: '257584954808' },
+  locked: { reason: 'live', lockedAxisKeys: ['Colore', 'Taglia'], setChangeIs: 'relist' as const, orderChangeAllowed: true, externalId: '938554736087' },
   children: [],
   axes: [{ key: 'Colore', label: 'Colore', values: [] }, { key: 'Taglia', label: 'Taglia', values: [] }],
   order: { axes: ['Colore', 'Taglia'], valueOrder: {}, editorUrl: '/x', writableHere: false, reason: 'own editor' },
@@ -199,7 +199,7 @@ const DOCK_AMAZON: ProjectionPage = {
   ...DOCK_EBAY,
   coordinate: { ...DOCK_EBAY.coordinate, channel: 'AMAZON', label: 'Amazon · IT' },
   theme: { value: 'COLOR_NAME/SIZE_NAME', options: [{ code: 'COLOR_NAME/SIZE_NAME', label: 'Colore / Taglia' }] },
-  locked: { reason: 'live', lockedAxisKeys: ['Colore', 'Taglia'], setChangeIs: 'new-parent', orderChangeAllowed: false, externalId: 'B0F7J163XJ' },
+  locked: { reason: 'live', lockedAxisKeys: ['Colore', 'Taglia'], setChangeIs: 'new-parent', orderChangeAllowed: false, externalId: 'B0FXD0620C' },
 }
 const draftOf = (page: ProjectionPage): ProjectionDraft => ({ mapping: page.mapping, split: { mode: 'single' } })
 /** The dock's own reorder RENUMBERS `order`; the adapter sorts by it, so a swap that does not is a no-op. */

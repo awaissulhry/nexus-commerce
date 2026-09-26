@@ -15,7 +15,7 @@ import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared
  * fields differ.
  *
  * Measured on prod 2026-09-01, this is not hypothetical — it is a workaround already in the data.
- * `GALE-JACKET` holds 20 children and eBay ItemID 257584954808, while `GALE-JACKET-ALT1/2/3` and
+ * `GALE-JACKET` holds 20 children and eBay ItemID 938554736087, while `GALE-JACKET-ALT1/2/3` and
  * `IT-GALE-JACKET` are CHILDLESS parent Products each carrying one more real ItemID at quantity 0
  * and price 0. 22 such shells exist (6 ACTIVE, 16 DRAFT), all eBay·IT. They are the aliases this
  * scope makes first-class; adopting them onto the real parent is a separate, Owner-gated decision,

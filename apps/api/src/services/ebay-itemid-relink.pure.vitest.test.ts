@@ -18,8 +18,8 @@ const FAMILY = ['VENTRA-JACKET-ALT1', 'ventra-alt1-s', 'ventra-alt1-m', 'ventra-
 
 describe('normalizeItemId', () => {
   it('accepts a real 12-digit eBay ItemID', () => {
-    expect(normalizeItemId('257629964897')).toBe('257629964897')
-    expect(normalizeItemId('  257629964897  ')).toBe('257629964897')
+    expect(normalizeItemId('920071994703')).toBe('920071994703')
+    expect(normalizeItemId('  920071994703  ')).toBe('920071994703')
   })
   it('rejects anything that is not a plain number', () => {
     for (const bad of ['', '   ', 'abc', '2576-2996', '25762996489x', null, undefined, '12345678']) {

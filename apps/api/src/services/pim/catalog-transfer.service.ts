@@ -229,8 +229,17 @@ export async function startCatalogTransfer(jobId: string, userId: string | null)
   return { ...catalogTransferStatus(loaded), state: 'RUNNING' }
 }
 
-/** Each target and its checkpoint commit together. A restart cannot replay a committed target. */
-export async function applyTransferTarget(tx: Prisma.TransactionClient, target: TransferTarget, jobId: string, userId: string | null) {
+/**
+ * Each target and its checkpoint commit together. A restart cannot replay a committed target.
+ *
+ * PSIE options (both absent = exactly the old behaviour):
+ *  - `queueOutbound: false` — shared content still cascades to following listings, but no channel update is queued
+ *    (the product sheet's import saves Nexus only; the Owner's D1 (a), 2026-09-26).
+ *  - `readCacheIds` — collect the products whose read cache needs a refresh instead of refreshing per target; the
+ *    caller refreshes them once for the whole transaction.
+ */
+export async function applyTransferTarget(tx: Prisma.TransactionClient, target: TransferTarget, jobId: string, userId: string | null,
+  options: { queueOutbound?: boolean; readCacheIds?: Set<string> } = {}) {
   if (target.contentWrites?.length && !activeDatabaseTransaction()) throw new Error('Content imports require the shared transactional write boundary')
   if (target.categories) await lockCategoryTree(tx)
   const id = target.identity
@@ -306,9 +315,12 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       channelFacts.price = { outcome: outcome.outcome, version: outcome.version }
     }
   }
-  for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed' })
+  for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed',
+    ...(options.queueOutbound === false ? { queueOutbound: false } : {}) })
   await produceReadiness(id.entity === 'Products' ? entityId : product!.id, id.entity === 'Products' ? undefined : { channel: id.channel, market: id.marketplace, accountId: id.accountId })
-  await productReadCacheService.refreshInTransaction(tx, [id.entity === 'Products' ? entityId : product!.id, ...(product?.parentId ? [product.parentId] : [])])
+  const cacheIds = [id.entity === 'Products' ? entityId : product!.id, ...(product?.parentId ? [product.parentId] : [])]
+  if (options.readCacheIds) cacheIds.forEach(cacheId => options.readCacheIds!.add(cacheId))
+  else await productReadCacheService.refreshInTransaction(tx, cacheIds)
   await tx.auditLog.create({ data: { userId, entityType: id.entity === 'Products' ? 'Product' : 'ChannelListing', entityId, action: target.create ? 'create' : 'update',
     before: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.before, state: c.beforeState }))) as Prisma.InputJsonValue,
     after: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.after, state: c.afterState }))) as Prisma.InputJsonValue,

@@ -5,7 +5,7 @@ import { loadEbaySpec } from './channel-specs/index.js'
 import { buildFlatRow } from '../ebay-variation-push.service.js'
 import { buildSharedListingInput } from '../ebay-shared-listing-push.service.js'
 import { buildAddFixedPriceItemXml, callTradingApi, escapeXml, siteIdForMarket, TradingApiFailure, type AddFixedPriceItemInput, type TradingCallResult } from '../ebay-trading-api.service.js'
-import { loadStoredVariationProjection } from './stored-variation-projection.js'
+import { channelAxisValues, loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
@@ -17,6 +17,7 @@ import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
+import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -120,6 +121,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   const identities: Array<{ productId: string; sku: string }> = []
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
+  const exclusionsFor = pushExclusionsCache()
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     if (listing?.fulfillmentMethod === 'FBA') throw new Error('This eBay listing uses Amazon fulfillment. Its fulfillment publication workflow is required.')
@@ -136,6 +138,13 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
       if (!cell || cell.value === undefined || !field.channelStore) continue
       if (field.channelStore.kind === 'platformAttributes') setPath(effective.platformAttributes, field.channelStore.path, cell.value)
       else effective[field.channelStore.column] = cell.value
+    }
+    // CHMAP M4 — item specifics the Owner chose not to send in the ACTIVE mapping version (a live listing keeps eBay's value).
+    const excluded = await exclusionsFor('EBAY', scope.marketplace, category)
+    if (excluded.fieldKeys.size || excluded.specifics.size) {
+      const names = new Set([...excluded.specifics, ...spec.fields.filter(f => excluded.fieldKeys.has(f.key) && f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics')
+        .map(f => foldName((f.channelStore as { path: string[] }).path[1]))])
+      effective.platformAttributes.itemSpecifics = Object.fromEntries(Object.entries(object(effective.platformAttributes.itemSpecifics)).filter(([name]) => !names.has(foldName(name))))
     }
     const pa = effective.platformAttributes
     // These saved fields require transport support; silently omitting them would publish a different product.
@@ -175,17 +184,20 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   }
   const parentRow = rows[0], variants = products.length > 1 ? rows.slice(1) : rows
   if (products.length > 1) {
-    const { input } = await loadStoredVariationProjection({ productId: parent.id, channel: 'EBAY', market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
-    input.family.variants = input.family.variants?.map(v => ({ ...v, included: products.some(p => p.id === v.id) }))
+    const { input, cell } = await loadStoredVariationProjection({ productId: parent.id, channel: 'EBAY', market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
+    // VTR step 0 — the channel cells (pins, value maps) the Information sheet shows, not the Shared values.
+    input.family.variants = input.family.variants?.map(v => ({ ...v, included: products.some(p => p.id === v.id),
+      axisValues: channelAxisValues(v.axisValues, cell.axes, facts.resolved[0]?.products.find(p => p.productId === v.id)?.cells ?? {}, facts.resolved[0]?.catalogue?.fields ?? []) }))
     const projection = resolveVariationProjection(input)
+    // A live re-publish is validated like a first one: the review must not compare a structure that could not be sent.
     const problems = variationReadinessItems(projection, `EBAY ${scope.marketplace}`).filter(i => i.severity === 'error')
-    if (!itemId && problems.length) throw new Error(problems.map(i => i.message).join('; '))
+    if (problems.length) throw new Error(problems.map(i => i.message).join('; '))
     const axes = projection.axes.filter(a => a.included)
-    if (!itemId && (!axes.length || axes.some(a => !a.channelName))) throw new Error('Set the eBay variation theme in Information before publishing.')
+    if (!axes.length || axes.some(a => !a.channelName)) throw new Error('Set the eBay variation theme in Information before publishing.')
     parentRow.variation_theme = axes.map(a => a.channelName).join(',')
     for (const row of variants) for (const axis of axes) {
       const value = input.family.variants?.find(v => v.id === row._productId)?.axisValues[axis.familyKey]
-      if (!value && !itemId) throw new Error(`${row.sku}: ${axis.familyKey} is missing.`)
+      if (!value) throw new Error(`${row.sku}: ${axis.familyKey} is missing.`)
       if (axis.channelName) row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value ?? ''
     }
   }

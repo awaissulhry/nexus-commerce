@@ -4,7 +4,7 @@ const { default: routes } = await import('../src/routes/ebay-flat-file.routes.js
 const app = Fastify({ logger: false })
 await app.register(routes)
 await app.ready()
-const r = await app.inject({ method: 'POST', url: '/ebay/flat-file/reconcile-item', payload: { itemId: '257584954808', marketplace: 'IT' } })
+const r = await app.inject({ method: 'POST', url: '/ebay/flat-file/reconcile-item', payload: { itemId: '938554736087', marketplace: 'IT' } })
 const d = r.json() as any
 console.log(`primary: live=${d.liveVariations} matched=${d.matched} rewired=${d.rewritten} staleRemoved=${d.removedStale}${d.unmatched?.length ? ` unmatched=[${d.unmatched.join(', ')}]` : ''}`)
 const { default: prisma } = await import('../src/db.js')

@@ -154,7 +154,7 @@ describe('routeRecords — three families, three consumers', () => {
 
 describe('amsRecordAdvertiser — the one routing key both AMS paths use', () => {
   it('reads the live sp-traffic field and the other spellings', () => {
-    expect(amsRecordAdvertiser({ dataset_id: 'sp-traffic', advertiser_id: 'A1VRHKTGYO1JNU' })).toBe('A1VRHKTGYO1JNU')
+    expect(amsRecordAdvertiser({ dataset_id: 'sp-traffic', advertiser_id: 'AFXSELLER8BC38' })).toBe('AFXSELLER8BC38')
     expect(amsRecordAdvertiser({ profileId: 123456789 })).toBe('123456789')
     expect(amsRecordAdvertiser({ profile_id: ' 42 ' })).toBe('42')
     expect(amsRecordAdvertiser({ advertiserId: 'ENTITY1' })).toBe('ENTITY1')

@@ -16,6 +16,7 @@ import { cachedSchemasOnly } from './cached-schema-context.js'
 import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { TtlCache } from '../../utils/ttl-cache.js'
 import { getSheetColumns, lacksShopifyStoreFields, type SheetColumnSet } from './sheet-columns.service.js'
+import { dictionaryVersion } from './dictionary-version.js'
 
 const cache = new TtlCache<Promise<SheetColumnSet>>({ ttlMs: 5 * 60_000, maxEntries: 128 })
 
@@ -27,6 +28,8 @@ export interface StudioColumnsInput {
 
   familyIds?: string[]
   savedFields?: import('./field-registry.service.js').FieldDefinition[]
+  /** P3b S4 — see `GetSheetColumnsInput.savedFieldsFor`. */
+  savedFieldsFor?: 'shared' | 'all'
   market: string
   productTypes: string[]
   variationAxes?: string[]
@@ -47,8 +50,10 @@ export interface StudioColumnsInput {
  * last. A rejected promise is evicted so a transient failure is not remembered
  * for five minutes.
  */
-export function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumnSet> {
+export async function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumnSet> {
   const key = [
+    // P3b S4 (docs/attributes/PLAN.md §10.9) — the dictionary's version, so an edit shows at once.
+    await dictionaryVersion(),
     workspaceIdForQuery(), cachedSchemasOnly() ? 'cached-only' : 'interactive',
     input.accountId ?? '',
     input.market,
@@ -63,6 +68,7 @@ export function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumn
     input.scopeKind ?? '',
     (input.familyIds ?? []).slice().sort().join(','),
     JSON.stringify(input.savedFields ?? []),
+    input.savedFieldsFor ?? 'all',
   ].join('|')
 
   const hit = cache.get(key)

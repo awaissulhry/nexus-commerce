@@ -1,10 +1,23 @@
 import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 
+/**
+ * The business's warehouses do not name one place for stock. Raised after reads only, so a caller
+ * that owns a transaction may record the refusal and continue; the message is for a person.
+ */
+export class StockLocationUnresolved extends Error {
+  constructor(readonly code: 'default_location_ambiguous' | 'default_location_missing') {
+    super(code === 'default_location_ambiguous'
+      ? 'Choose one default warehouse for this business.'
+      : 'Choose a default warehouse in this business before changing stock.')
+    this.name = 'StockLocationUnresolved'
+  }
+}
+
 /** The business chooses its default warehouse; geography is not a global constant. */
 export async function defaultStockLocation(db: Pick<Prisma.TransactionClient, 'stockLocation'> = prisma) {
   const defaults = await db.stockLocation.findMany({ where: { isActive: true, type: 'WAREHOUSE', warehouse: { isActive: true, isDefault: true } }, select: { id: true, code: true }, take: 2 })
-  if (defaults.length > 1) throw new Error('Choose one default warehouse for this business.')
+  if (defaults.length > 1) throw new StockLocationUnresolved('default_location_ambiguous')
   if (defaults.length === 1) return defaults[0]
   // Existing businesses may predate the default flag. A sole location is unambiguous.
   const locations = await db.stockLocation.findMany({ where: { isActive: true, type: 'WAREHOUSE' }, select: { id: true, code: true }, take: 2 })

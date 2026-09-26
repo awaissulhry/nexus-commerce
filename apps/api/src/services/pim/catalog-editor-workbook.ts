@@ -20,7 +20,11 @@ const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonVa
 interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND; boundary: ProductTransferBoundary }
 /** CFI-4 — an identity the file suggests but the Owner must confirm (BUILD.md §1, D4). */
 export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string }
-interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[] }
+interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[]
+  /** PSIE — what each part was (the parse worker's verdict), in upload order. */
+  kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon')[]
+  /** PSIE — the editing baseline the file was checked against, when it is a Nexus editing file. */
+  exportId?: string }
 /**
  * CFI-4 / D1 — the Owner's confirmations, sent with an upload: `links` maps a file SKU to the Nexus SKU it is,
  * `confirmDeletes` lets a file's delete rows end their listings — `true` for every delete row, or the list of file
@@ -30,11 +34,35 @@ export interface ChannelFileDecisions { links?: Record<string, string>; confirmD
 /** Stage timing for the import. The 2026-09-16 handler emitted nothing and was unreadable. */
 export type ImportLog = (event: string, detail: Record<string, unknown>) => void
 
-/** The workbook is only a reference to this user-owned, immutable export snapshot. */
-export async function writeEditorWorkbook(scopes: WorkbookScope[], boundary: ProductTransferBoundary, userId: string | null) {
+const CHANNEL_NAMES: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy' }
+/**
+ * PSIE — tab names a person reads: `Shared`, `Shared · DE`, `Amazon IT`, `Amazon IT · de`, `eBay DE · 11450`. Excel allows
+ * 31 characters and no `[]:*?/\`; a repeated name gets ` 2`, ` 3`. The manifest, not the name, says where a tab goes.
+ */
+export function sheetTabNames(scopes: Pick<WorkbookScope, 'entity' | 'channel' | 'marketplace' | 'locale' | 'category'>[]): string[] {
+  const used = new Set<string>()
+  const clean = (name: string) => name.replace(/[[\]:*?/\\]/g, ' ').replace(/\s+/g, ' ').trim()
+  return scopes.map(scope => {
+    const base = scope.entity === 'Products'
+      ? scope.locale ? `Shared · ${scope.locale.toUpperCase()}` : 'Shared'
+      : [`${CHANNEL_NAMES[scope.channel] ?? scope.channel} ${scope.marketplace}`, scope.locale, scope.category].filter(Boolean).join(' · ')
+    const trimmed = clean(base).slice(0, 28).trim()
+    let name = trimmed, n = 2
+    while (used.has(name.toLowerCase())) name = `${trimmed} ${n++}`
+    used.add(name.toLowerCase())
+    return name
+  })
+}
+
+/**
+ * The workbook is only a reference to this user-owned, immutable export snapshot.
+ * `options.style: 'sheet'` (PSIE) — the product sheet's file: readable tab names, no action columns, short instructions.
+ */
+export async function writeEditorWorkbook(scopes: WorkbookScope[], boundary: ProductTransferBoundary, userId: string | null, options: { style?: 'sheet' } = {}) {
   const exportedAt = new Date(), expiresAt = new Date(exportedAt.getTime() + 30 * 24 * 60 * 60_000)
+  if (options.style === 'sheet') sheetTabNames(scopes).forEach((name, i) => { scopes[i].sheet = name })
   const baseline: SavedExport = { kind: EXPORT_KIND, id: randomUUID(), scopes, boundary, exportedAt: exportedAt.toISOString(), expiresAt: expiresAt.toISOString(), aliasLabels: Object.fromEntries(boundary.listings.map(l => [l.aliasKey, l.aliasLabel ?? (l.aliasKey || 'Primary listing')])) }
-  const bytes = await writeCatalogWorkbook(scopes, true, baseline)
+  const bytes = await writeCatalogWorkbook(scopes, true, baseline, options.style === 'sheet' ? 'sheet' : 'catalog')
   await prisma.bulkOperation.create({ data: { id: baseline.id, userId, status: 'COMPLETED', productCount: boundary.products.length, changeCount: 0,
     changes: json(baseline), expiresAt, completedAt: new Date() }, select: { id: true } })
   return bytes
@@ -52,19 +80,19 @@ const EXPANDED_BATCH_BYTES = 128 * 1024 * 1024
  * review.
  */
 async function readEditorPart(session: ParseSession, buffer: Buffer, filename: string, productId: string, expanded: { bytes: number },
-  baselineOf: () => SavedExport | undefined, decisions: ChannelFileDecisions = {}, ebayMarket?: string): Promise<ParsedInput> {
-  const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES - expanded.bytes, ebayMarket ? { market: ebayMarket } : undefined)
+  baselineOf: () => SavedExport | undefined, decisions: ChannelFileDecisions = {}, ebayMarket?: string, changesOnly = false): Promise<ParsedInput> {
+  const outcome = await session.read(filename, buffer, EXPANDED_BATCH_BYTES - expanded.bytes, { ...(ebayMarket ? { market: ebayMarket } : {}), ...(changesOnly ? { changesOnly } : {}) })
   expanded.bytes += outcome.expandedBytes
   if (outcome.kind === 'editing') {
     const baseline = baselineOf()
     if (!baseline) throw new TransferConflict('This workbook baseline is unavailable, expired or belongs to another product or user. Download a new editing workbook.')
-    return { ...outcome.parsed, boundary: baseline.boundary, editing: true }
+    return { ...outcome.parsed, boundary: baseline.boundary, editing: true, kinds: ['editing'], exportId: baseline.id }
   }
-  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true }
+  if (outcome.kind === 'ebay') return { ...await resolveEbayWorkbook(outcome.table, productId, { links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['ebay'] }
   // CFI-1 — Amazon's own template, scoped to this product group; account and marketplace resolve from the
   // file and the group's listings (BUILD.md D5). Like the eBay export its rows carry verified coordinates.
-  if (outcome.kind === 'amazon') return { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { productId, mode: 'update', links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true }
-  return outcome.parsed
+  if (outcome.kind === 'amazon') return { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { productId, mode: 'update', links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['amazon'] }
+  return { ...outcome.parsed, kinds: [outcome.kind] }
 }
 
 /**
@@ -78,7 +106,9 @@ async function drawerEbayMarket(productId: string): Promise<string | undefined> 
 }
 
 /** ZIPs are staged as one complete review. No partial archive can quietly become an import. */
-export async function readEditorTransfer(buffer: Buffer, filename: string, productId: string, userId: string | null, log?: ImportLog, decisions: ChannelFileDecisions = {}): Promise<ParsedInput> {
+/** `options.changesOnly` (PSIE): an editing workbook returns only the cells the user changed (see `readCatalogWorkbook`). */
+export async function readEditorTransfer(buffer: Buffer, filename: string, productId: string, userId: string | null, log?: ImportLog, decisions: ChannelFileDecisions = {},
+  options: { changesOnly?: boolean } = {}): Promise<ParsedInput> {
   if (!buffer.length || buffer.length > PRODUCT_TRANSFER_MAX_BYTES) throw new Error('Choose a file up to 50 MB; individual workbooks may contain at most 10 MB')
   const parts: { name: string; bytes: Buffer }[] = []
   if (/\.zip$/i.test(filename)) {
@@ -101,7 +131,7 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
     }
     if (entries.some(e => !names.has(e.name) && !['manifest.json', 'README.txt'].includes(e.name))) throw new Error('The archive contains an undeclared file')
   } else parts.push({ name: filename, bytes: buffer })
-  const out: ParsedInput = { rows: [], issues: [], exclusions: [], editing: true, warnings: [] }
+  const out: ParsedInput = { rows: [], issues: [], exclusions: [], editing: true, warnings: [], kinds: [] }
   const ebayMarket = parts.some(part => /\.xls[xm]$/i.test(part.name)) ? await drawerEbayMarket(productId) : undefined
   const targets = new Set<string>()
   const expanded = { bytes: 0 }
@@ -125,7 +155,9 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
   })
   try {
     for (const part of parts) {
-      const parsed = await readEditorPart(session, part.bytes, part.name, productId, expanded, () => baselineUsed, decisions, ebayMarket)
+      const parsed = await readEditorPart(session, part.bytes, part.name, productId, expanded, () => baselineUsed, decisions, ebayMarket, options.changesOnly === true)
+      out.kinds!.push(...parsed.kinds ?? [])
+      if (parsed.exportId) out.exportId = parsed.exportId
       if (!parsed.editing) out.editing = false
       // Edits may remove columns/rows intentionally. Completeness is the declared part list,
       // not a requirement that every original attribute must still be present.

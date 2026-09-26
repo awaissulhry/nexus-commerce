@@ -5,7 +5,7 @@
  *   B0H8QTNY62 — advertised in all 11 AIREON campaigns, 7.8k impressions/30d, and NOT
  *                in our Product catalogue. If the one visible AIREON child is one we do
  *                not even track, the catalogue-derived widen missed the story.
- *   B0F4NTV47B — NERO-NEO XXL, the other colourway's top impression child (6.5k/30d).
+ *   B0FXA82507 — NERO-NEO XXL, the other colourway's top impression child (6.5k/30d).
  *                If it is also zero, the colourway does not matter and the remaining
  *                five reports would only confirm what is already measured.
  *
@@ -13,7 +13,7 @@
  */
 import '../src/env.js'
 
-const ASINS = ['B0H8QTNY62', 'B0F4NTV47B']
+const ASINS = ['B0H8QTNY62', 'B0FXA82507']
 
 const { default: prisma } = await import('../src/db.js')
 const { periodWindow, ingestSqp } = await import('../src/services/advertising/sqp.service.js')

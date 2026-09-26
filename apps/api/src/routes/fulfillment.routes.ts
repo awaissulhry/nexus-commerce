@@ -57,13 +57,11 @@ import {
   recomputeLeadTimeStatsForSupplier,
   getLeadTimeStatsStatus,
 } from '../services/lead-time-stats.service.js'
-import { getLeadTimeStatsCronStatus } from '../jobs/lead-time-stats.job.js'
 import {
   runStockoutSweep,
   getStockoutSummary,
   listStockoutEvents,
 } from '../services/stockout-detector.service.js'
-import { getStockoutDetectorCronStatus } from '../jobs/stockout-detector.job.js'
 import {
   rolloutChallenger,
   pinSkuToModel,
@@ -112,12 +110,12 @@ import {
   setPreferredSupplier,
 } from '../services/supplier-comparison.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
-import { getFbaRestockCronStatus } from '../jobs/fba-restock-ingestion.job.js'
 import {
   runAutoPoSweep,
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
-import { getAutoPoCronStatus } from '../jobs/auto-po-replenishment.job.js'
+import { CRON_JOBS, flagIs, leadingCount, readCronCard, readCronJobStatus, schedulerFlagEnabled, summaryCount } from '../services/runtime-status/cron-status.service.js'
+import { readLiveProcesses } from '../lib/runtime-status/process-snapshot.js'
 import { runForecastTick } from '../jobs/forecast.job.js'
 import {
   runForecastAccuracyCronOnce,
@@ -132,10 +130,7 @@ import {
   seedAutomationRuleTemplates,
   TEMPLATES as AUTOMATION_RULE_TEMPLATES,
 } from '../services/automation-rule-templates.service.js'
-import {
-  runAutomationRuleEvaluatorOnce,
-  getAutomationRuleCronStatus,
-} from '../jobs/automation-rule-evaluator.job.js'
+import { runAutomationRuleEvaluatorOnce } from '../jobs/automation-rule-evaluator.job.js'
 import { executeScenarioRun } from '../services/scenario-planner.service.js'
 import { detectPanEuImbalances } from '../services/pan-eu-distribution.service.js'
 import { estimateNewListingDemand } from '../services/new-listing-demand.service.js'
@@ -191,10 +186,7 @@ import {
   // F.6.6: fbaPutTransport + FbaShipmentType removed — v0 putTransport
   // route is now a 410 Gone stub pointing to /fulfillment/inbound/v2.
 } from '../services/fba-inbound.service.js'
-import {
-  runFbaStatusPoll,
-  getFbaStatusPollStatus,
-} from '../jobs/fba-status-poll.job.js'
+import { runFbaStatusPoll } from '../jobs/fba-status-poll.job.js'
 import { lookupFnskus } from '../services/fnsku-lookup.service.js'
 import {
   listTemplates as listFnskuTemplates,
@@ -5415,8 +5407,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // H.8d — FBA status polling. POST trigger for manual reconcile;
-  // GET returns the cron's last-run snapshot. The cron itself runs
-  // every 15 min from index.ts on startup.
+  // GET returns the cron's last recorded run (CronRun) and whether the
+  // scheduler process has it registered (runtime-status/cron-status.service.ts).
   fastify.post('/fulfillment/fba/poll-status', async (_request, reply) => {
     try {
       if (!(await isFbaInboundConfigured())) {
@@ -5433,7 +5425,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.get('/fulfillment/fba/poll-status', async () => {
-    return { ok: true, ...getFbaStatusPollStatus() }
+    return {
+      ok: true,
+      ...await readCronCard(CRON_JOBS.fbaStatusPoll, {
+        fields: (status) => ({ lastUpdatedCount: summaryCount(status.lastSuccess?.outputSummary, 'updated') }),
+      }),
+    }
   })
 
   // ═══════════════════════════════════════════════════════════════════
@@ -11517,15 +11514,30 @@ Return ONLY valid JSON, no prose:
       return { triggered: true }
     })
 
-    await runStep('forecast-accuracy', async () => {
-      await runForecastAccuracyCronOnce()
-      return getForecastAccuracyCronStatus()
-    })
+    // The cron wrappers log and swallow a failure, so the run's recorded CronRun row decides whether the
+    // step failed; `scheduled` is the scheduler's (this process registers no crons).
+    async function recordedStep(spec: (typeof CRON_JOBS)[keyof typeof CRON_JOBS], run: () => Promise<void>, local: () => Record<string, unknown>) {
+      const before = (await readCronJobStatus(spec)).lastRun?.id ?? null
+      await run()
+      const status = await readCronJobStatus(spec)
+      const thisRun = status.lastRun && status.lastRun.id !== before ? status.lastRun : null
+      if (thisRun?.status === 'FAILED') throw new Error(thisRun.errorMessage ?? `${spec.jobName} failed`)
+      // This process's in-memory values describe THIS run only when it recorded one.
+      if (!thisRun) {
+        return {
+          scheduled: status.scheduled,
+          lastRun: null,
+          unknown: [...status.unknown, { field: 'lastRun', owner: 'api', reason: 'this run recorded no CronRun row (it was skipped, or the row could not be written)' }],
+        }
+      }
+      return { ...local(), scheduled: status.scheduled, lastRun: thisRun, unknown: status.unknown }
+    }
 
-    await runStep('abc-classification', async () => {
-      await runAbcCronOnce()
-      return getAbcClassificationCronStatus()
-    })
+    await runStep('forecast-accuracy', () =>
+      recordedStep(CRON_JOBS.forecastAccuracy, runForecastAccuracyCronOnce, getForecastAccuracyCronStatus))
+
+    await runStep('abc-classification', () =>
+      recordedStep(CRON_JOBS.abcClassification, runAbcCronOnce, getAbcClassificationCronStatus))
 
     const totalDurationMs = Date.now() - startedAt
     const ok = steps.every((s) => s.ok)
@@ -12807,7 +12819,10 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/replenishment/auto-po/status', async () => {
     return {
       ...await getAutoPoStatus(),
-      cron: getAutoPoCronStatus(),
+      cron: await readCronCard(CRON_JOBS.autoPo, {
+        fieldPrefix: 'cron.',
+        fields: (status) => ({ lastPosCreated: leadingCount(status.lastSuccess?.outputSummary, /^(\d+) POs from/) }),
+      }),
     }
   })
 
@@ -12819,6 +12834,12 @@ Return ONLY valid JSON, no prose:
   //     opt-in-disabled vs failing
   // Cheap reads (count + max + last CronRun row); 30s cache header.
   fastify.get('/fulfillment/replenishment/pipeline/health', async (_request, reply) => {
+    // The flags gate crons in the SCHEDULER process; its published flags decide, not this process's env.
+    const live = await readLiveProcesses()
+    const flag = (name: string, isEnabled: (raw: string | null) => boolean, cron: string) => {
+      const reading = schedulerFlagEnabled(live, name, isEnabled, `crons.${cron}.enabledFlag`)
+      return { enabledFlag: reading.value, unknown: reading.unknown ? [reading.unknown] : [] }
+    }
     const [
       dsaAgg,
       forecastAgg,
@@ -12887,15 +12908,15 @@ Return ONLY valid JSON, no prose:
       crons: {
         forecast: {
           lastRun: forecastCron,
-          enabledFlag: process.env.NEXUS_ENABLE_FORECAST_CRON === '1',
+          ...flag('NEXUS_ENABLE_FORECAST_CRON', flagIs.one, 'forecast'),
         },
         'forecast-accuracy': {
           lastRun: accuracyCron,
-          enabledFlag: process.env.NEXUS_ENABLE_FORECAST_ACCURACY_CRON !== '0',
+          ...flag('NEXUS_ENABLE_FORECAST_ACCURACY_CRON', flagIs.notZero, 'forecast-accuracy'),
         },
         'abc-classification': {
           lastRun: abcCron,
-          enabledFlag: process.env.NEXUS_ENABLE_ABC_CRON !== '0',
+          ...flag('NEXUS_ENABLE_ABC_CRON', flagIs.notZero, 'abc-classification'),
         },
       },
     }
@@ -14041,13 +14062,21 @@ Return ONLY valid JSON, no prose:
   // W4.8 — Cron status for the automation evaluator. Mirrors the
   // shape of the other cron status getters so the workspace can
   // render a "next tick at HH:MM, last ran X ago" hint without a
-  // separate query.
+  // separate query. The schedule and the flag are the scheduler
+  // process's; runs come from CronRun. null + `unknown` = cannot know.
   fastify.get(
     '/fulfillment/replenishment/automation/cron-status',
     async () => {
+      const live = await readLiveProcesses()
+      const card = await readCronCard(CRON_JOBS.automationRuleEvaluator, {
+        live,
+        fields: (status) => ({ lastSummary: status.lastSuccess?.outputSummary ?? null }),
+      })
+      const flag = schedulerFlagEnabled(live, 'NEXUS_ENABLE_AUTOMATION_RULE_CRON', flagIs.one, 'enabledFlag')
       return {
-        ...getAutomationRuleCronStatus(),
-        enabledFlag: process.env.NEXUS_ENABLE_AUTOMATION_RULE_CRON === '1',
+        ...card,
+        enabledFlag: flag.value,
+        unknown: [...card.unknown, ...(flag.unknown ? [flag.unknown] : [])],
       }
     },
   )
@@ -14157,7 +14186,7 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/replenishment/lead-time-stats/status', async () => {
     return {
       ...await getLeadTimeStatsStatus(),
-      cron: getLeadTimeStatsCronStatus(),
+      cron: await readCronCard(CRON_JOBS.leadTimeStats, { fieldPrefix: 'cron.', memoryOnly: ['lastSummary'] }),
     }
   })
 
@@ -14198,7 +14227,7 @@ Return ONLY valid JSON, no prose:
   })
 
   fastify.get('/fulfillment/replenishment/stockouts/status', async () => {
-    return { cron: getStockoutDetectorCronStatus() }
+    return { cron: await readCronCard(CRON_JOBS.stockoutDetector, { fieldPrefix: 'cron.', memoryOnly: ['lastSummary'] }) }
   })
 
   // R.16 — forecast model A/B routing.
@@ -14481,13 +14510,9 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/replenishment/fba-restock/status', async (_req, reply) => {
     try {
       const summary = await getFbaRestockStatus()
-      const cron = getFbaRestockCronStatus()
       return {
         ...summary,
-        cron: {
-          scheduled: cron.scheduled,
-          lastRunAt: cron.lastRunAt,
-        },
+        cron: await readCronCard(CRON_JOBS.fbaRestock, { fieldPrefix: 'cron.' }),
       }
     } catch (err: any) {
       fastify.log.error({ err }, '[fba-restock:status] failed')

@@ -27,7 +27,7 @@ for (const sku of ['MISANO-JACKET-5XL-BLACK', 'AE-304M-9LSW']) {
 
 // eBay membership drift: readback says eBay shows 62, pool intends 31
 const mems = await prisma.sharedListingMembership.findMany({
-  where: { sku: 'GALE-JACKET-YELLOW-MEN-XXS', itemId: '257584954808' },
+  where: { sku: 'GALE-JACKET-YELLOW-MEN-XXS', itemId: '938554736087' },
   select: { sku: true, itemId: true, marketplace: true, followPool: true, stockBuffer: true, lastQtyPushed: true, status: true, productId: true },
 })
 for (const m of mems) {

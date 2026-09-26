@@ -2,6 +2,7 @@ import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
+import { ebayFixedPriceOfferOf } from '../services/ebay-price-readback.service.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -41,6 +42,7 @@ import {
   getTaskStatus,
   type EbayFlatRow,
 } from '../services/ebay-feed.service.js';
+import { amazonListingBullets } from '../services/amazon/listing-bullets.js';
 import {
   startEbayPullPreviewJob,
   getEbayPullPreviewJobStatus,
@@ -57,6 +59,7 @@ import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.ser
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { applyVariationOrderForFamily } from '../services/ebay-variation-order-apply.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
+import { flatFileListingAttributes } from '../services/ebay-flat-file-attributes.js';
 import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode, ebayWriteRefusal, ebayHostOf } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
@@ -1025,8 +1028,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // markets keep their platformAttributes VERBATIM; only genuinely
           // new listings (no existing attributes) seed from the active market.
           const existingAttrs = (existing?.platformAttributes ?? null) as Record<string, unknown> | null;
+          // VTR step 0b — the row wins on its own fields; every other key on the listing (offer ids, variation setup,
+          // publish receipts) survives the save.
           const marketPlatformAttributes = isActiveMp
-            ? sharedPacked.platformAttributes
+            ? flatFileListingAttributes(existingAttrs, sharedPacked.platformAttributes as Record<string, unknown>)
             : (existingAttrs && Object.keys(existingAttrs).length > 0
                 ? existingAttrs
                 : sharedPacked.platformAttributes);
@@ -1171,7 +1176,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const region = activeMp === 'UK' ? 'GB' : activeMp;
           const existing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
-            select: { id: true, title: true, description: true },
+            select: { id: true, title: true, description: true, platformAttributes: true },
           });
           if (existing) {
             await prisma.channelListing.update({
@@ -1179,7 +1184,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               data: {
                 title: sharedPacked.title,
                 description: sharedPacked.description,
-                platformAttributes: sharedPacked.platformAttributes,
+                platformAttributes: flatFileListingAttributes(existing.platformAttributes, sharedPacked.platformAttributes as Record<string, unknown>) as Prisma.InputJsonValue,
                 updatedAt: new Date(),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 flatFileSnapshot: flatFileSnapshot as any,
@@ -2034,8 +2039,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           } else {
             // Child row → end just this variation's offer.
             const gr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
-            const gj = gr.ok ? (await gr.json() as { offers?: Array<{ offerId?: string }> }) : {};
-            const offerId = gj.offers?.[0]?.offerId;
+            // CX — the variation's FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+            const gj = gr.ok ? (await gr.json() as { offers?: unknown }) : {};
+            const offerId = ebayFixedPriceOfferOf((gj as { offers?: unknown }).offers, marketplaceId)?.offerId as string | undefined;
             if (!offerId) {
               perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'no live offer on this market — nothing to end' });
               continue;
@@ -2743,8 +2749,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
             let offerId: string | null = null;
             if (getOfferRes.ok) {
-              const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
-              offerId = offerData.offers?.[0]?.offerId ?? null;
+              // CX — the FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+              const offerData = (await getOfferRes.json()) as { offers?: unknown };
+              offerId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.offerId ?? null;
             }
 
             if (offerId) {
@@ -3491,7 +3498,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string; availableQuantity?: number; pricingSummary?: { price?: { value?: string; currency?: string } }; listingPolicies?: unknown; merchantLocationKey?: string; categoryId?: string; format?: string }> };
-          const existingOffer = offerData.offers?.[0];
+          // CX — the FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+          const existingOffer = ebayFixedPriceOfferOf(offerData.offers, marketplaceId) as NonNullable<typeof offerData.offers>[number] | null;
           const offerId = existingOffer?.offerId;
 
           if (!offerId) {
@@ -3664,8 +3672,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
-          const offerId = offerData.offers?.[0]?.offerId;
+          // CX — the FIXED_PRICE offer of this market, never `offers[0]`: an auction offer is never deleted here.
+          const offerData = (await getOfferRes.json()) as { offers?: unknown };
+          const offerId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.offerId as string | undefined;
 
           if (!offerId) {
             // No offer on eBay — reset DB status if stale
@@ -3823,7 +3832,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
       const rows = amazonListings.map((l) => {
         const attrs = (l.platformAttributes ?? {}) as Record<string, unknown>;
-        const bulletPoints = (attrs.bullet_points ?? attrs.bulletPoints ?? []) as string[];
+        const bulletPoints = amazonListingBullets(l);
         const imageUrls = (attrs.main_product_image_locator ?? attrs.imageUrls ?? []) as string[];
 
         return {

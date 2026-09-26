@@ -23,6 +23,8 @@ import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-ax
 import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
 import { ebayTransport } from './gateway/ebay.js'
+import { ebayFixedPriceOfferOf } from './ebay-price-readback.service.js'
+import { confirmVariationPrices, type WrittenVariationPrice } from './ebay-variation-price-confirmation.js'
 import { ebayListingLanguage } from './gateway/channels.js'
 
 type EbaySend = ReturnType<typeof ebayTransport>
@@ -1488,8 +1490,9 @@ export async function pushVariationGroup(
           )
           let offerId: string | null = null
           if (getBySku.ok) {
-            const od = await getBySku.json().catch(() => ({})) as { offers?: Array<{ offerId?: string }> }
-            offerId = od.offers?.[0]?.offerId ?? null
+            // CX — the parked FIXED_PRICE offer of this market, never `offers[0]` (possibly the auction).
+            const od = await getBySku.json().catch(() => ({})) as { offers?: unknown }
+            offerId = ebayFixedPriceOfferOf(od.offers, marketplaceId)?.offerId ?? null
           }
           if (offerId) {
             // updateOffer is a FULL replacement: GET the complete offer so every
@@ -1821,6 +1824,8 @@ export async function pushVariationGroup(
   const variantSkusList = variantRows.map(r => r.sku as string).filter(Boolean)
   const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
   const collectedOfferIds = new Map<string, string>()
+  // CX — the prices eBay accepted, confirmed after a successful publication only (never read when it failed).
+  const writtenPrices: WrittenVariationPrice[] = []
   let anyOfferFailed = results.some(r => r.status === 'ERROR')
   for (const row of variantRows) {
     const sku   = row.sku as string
@@ -1872,8 +1877,10 @@ export async function pushVariationGroup(
         { headers: headers },
       )
       if (getOfferRes.ok) {
-        const od = await getOfferRes.json() as { offers?: Array<{ offerId: string }> }
-        offerId = od.offers?.[0]?.offerId ?? null
+        // CX — the FIXED_PRICE offer of this market; none (or several) → a fixed-price offer is created, and eBay
+        // refuses a duplicate. `offers[0]` rewrote the auction offer whenever eBay listed it first.
+        const od = await getOfferRes.json() as { offers?: unknown }
+        offerId = ebayFixedPriceOfferOf(od.offers, marketplaceId)?.offerId ?? null
       }
     }
 
@@ -1909,6 +1916,7 @@ export async function pushVariationGroup(
       const creBody = await cre.json().catch(() => ({})) as { offerId?: string }
       if (creBody.offerId) collectedOfferIds.set(sku, creBody.offerId)
     }
+    writtenPrices.push({ sku, price, currency, productId: (row._productId as string | undefined) || null })
   }
 
   // If any offer failed, skip publish and return per-variant results so the
@@ -1956,8 +1964,9 @@ export async function pushVariationGroup(
         try {
           const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${marketplaceId}`, { headers })
           if (!or.ok) { issues.push(`${s}: offer GET ${or.status}`); allZeroQty = false; continue }
-          const oj = await or.json() as { offers?: Array<{ status?: string; availableQuantity?: number; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string }> }
-          const o = oj.offers?.[0]
+          // CX — the FIXED_PRICE offer of this market is the one the group publishes, never `offers[0]`.
+          const oj = await or.json() as { offers?: unknown }
+          const o = ebayFixedPriceOfferOf(oj.offers, marketplaceId) as { status?: string; availableQuantity?: number; listingPolicies?: { fulfillmentPolicyId?: string }; merchantLocationKey?: string } | null
           if (!o) { issues.push(`${s}: no offer`); allZeroQty = false }
           else if (!o.listingPolicies?.fulfillmentPolicyId) { issues.push(`${s}: no fulfillment policy`); allZeroQty = false }
           else if (!o.merchantLocationKey) { issues.push(`${s}: no merchant location`); allZeroQty = false }
@@ -1991,8 +2000,9 @@ export async function pushVariationGroup(
             try {
               const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
               if (!or.ok) continue
-              const oj = await or.json() as { offers?: Array<{ status?: string }> }
-              if (oj.offers?.[0]?.status === 'UNPUBLISHED') { orphans.push(otherId); break }
+              // CX — a fixed-price draft of that market; an auction offer is never swept.
+              const oj = await or.json() as { offers?: unknown }
+              if (ebayFixedPriceOfferOf(oj.offers, otherId)?.status === 'UNPUBLISHED') { orphans.push(otherId); break }
             } catch { /* best-effort probe */ }
           }
         }
@@ -2009,8 +2019,8 @@ export async function pushVariationGroup(
               try {
                 const or = await send(`${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(s)}&marketplace_id=${otherId}`, { headers: otherHeaders })
                 if (!or.ok) continue
-                const oj = await or.json() as { offers?: Array<{ offerId?: string; status?: string }> }
-                const o = oj.offers?.[0]
+                const oj = await or.json() as { offers?: unknown }
+                const o = ebayFixedPriceOfferOf(oj.offers, otherId) as { offerId?: string; status?: string } | null
                 if (o?.offerId && o.status === 'UNPUBLISHED') {
                   const dr = await send(`${apiBase}/sell/inventory/v1/offer/${o.offerId}`, { method: 'DELETE', headers: otherHeaders })
                   if (dr.ok || dr.status === 204) removed++
@@ -2070,8 +2080,9 @@ export async function pushVariationGroup(
         { headers },
       )
       if (offerLookup.ok) {
-        const offerData = await offerLookup.json().catch(() => ({})) as { offers?: Array<{ listing?: { listingId?: string } }> }
-        listingId = offerData.offers?.[0]?.listing?.listingId
+        // CX — the FIXED_PRICE offer's listing, not whichever offer eBay lists first.
+        const offerData = await offerLookup.json().catch(() => ({})) as { offers?: unknown }
+        listingId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.listing?.listingId
       }
     } catch { /* non-fatal — listingId stays undefined */ }
   }
@@ -2179,9 +2190,29 @@ export async function pushVariationGroup(
     }
   }
 
+  // CX (review 2026-09-26) — the publication succeeded: ONE GetItem of the listing confirms every accepted price.
+  // Report-only; a finding is recorded, never re-sent.
+  const priceMessages = await confirmVariationPrices({ connectionId, oauthToken: token, market: mp, marketplaceId, itemId: listingId ?? null, writes: writtenPrices })
+
   // Preserve step-1 errors even on successful publish — a SKU that failed
   // inventory_item PUT was not actually pushed, even though the group published.
-  return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId })
+  return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: `pushed as variation group${priceMessages.has(r.sku) ? `. ${priceMessages.get(r.sku)}` : ''}`, itemId: listingId })
+}
+
+/** CX — the published ItemID each SKU's own listing holds (this account, this market's region); none or several → null. */
+async function publishedItemIdsBySku(connectionId: string, region: string, skus: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  if (skus.length === 0) return out
+  const rows = await prisma.channelListing.findMany({
+    where: { channel: 'EBAY', channelConnectionId: connectionId, region, product: { sku: { in: skus } } },
+    select: { externalListingId: true, region: true, channelConnectionId: true, product: { select: { sku: true } } },
+  }).catch(() => [] as Array<{ externalListingId: string | null; region: string; channelConnectionId: string | null; product: { sku: string } | null }>)
+  for (const sku of skus) {
+    const ids = new Set(rows.filter(r => r.product?.sku === sku && r.channelConnectionId === connectionId && r.region === region
+      && typeof r.externalListingId === 'string' && /^\d+$/.test(r.externalListingId)).map(r => r.externalListingId as string))
+    out.set(sku, ids.size === 1 ? [...ids][0] : null)
+  }
+  return out
 }
 
 // ── P2: Offer-only fast path ───────────────────────────────────────────
@@ -2290,6 +2321,7 @@ export async function pushOffersOnly(
 
   const cachedOfferIds = await loadCachedOfferIds(variantSkusList, region, marketplaceId)
   const collectedOfferIds = new Map<string, string>()
+  const writtenPrices: WrittenVariationPrice[] = [] // CX — accepted price writes, confirmed below
   const results: Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }> = []
 
   for (const row of variantRows) {
@@ -2309,8 +2341,9 @@ export async function pushOffersOnly(
         { headers },
       )
       if (getRes.ok) {
-        const od = await getRes.json() as { offers?: Array<{ offerId: string }> }
-        offerId = od.offers?.[0]?.offerId ?? null
+        // CX — the FIXED_PRICE offer of this market; none or several → refused below (never `offers[0]`).
+        const od = await getRes.json() as { offers?: unknown }
+        offerId = ebayFixedPriceOfferOf(od.offers, marketplaceId)?.offerId ?? null
       }
     }
 
@@ -2350,11 +2383,25 @@ export async function pushOffersOnly(
     }
 
     collectedOfferIds.set(sku, offerId)
+    writtenPrices.push({ sku, price, currency, productId: (row._productId as string | undefined) || null })
     results.push({ sku, market: mp, status: 'PUSHED', message: 'offer updated (price/qty only — live immediately)' })
   }
 
   if (collectedOfferIds.size > 0) void saveOfferIds(collectedOfferIds, region, marketplaceId)
-  return results
+  // CX (review 2026-09-26) — ONE GetItem per published listing confirms the accepted prices (report-only).
+  const priceMessages = new Map<string, string>()
+  if (writtenPrices.length > 0) {
+    const itemIds = await publishedItemIdsBySku(connectionId, region, writtenPrices.map(w => w.sku))
+    const byItem = new Map<string | null, WrittenVariationPrice[]>()
+    for (const w of writtenPrices) {
+      const itemId = itemIds.get(w.sku) ?? null
+      byItem.set(itemId, [...(byItem.get(itemId) ?? []), w])
+    }
+    for (const [itemId, writes] of byItem) {
+      for (const [sku, sentence] of await confirmVariationPrices({ connectionId, oauthToken: token, market: mp, marketplaceId, itemId, writes })) priceMessages.set(sku, sentence)
+    }
+  }
+  return results.map(r => priceMessages.has(r.sku) ? { ...r, message: `${r.message}. ${priceMessages.get(r.sku)}` } : r)
 }
 
 // ── Market constants ───────────────────────────────────────────────────

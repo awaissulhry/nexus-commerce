@@ -49,14 +49,14 @@ describe('parseSqp', () => {
    * fallbacks), but treat a CAPTURED payload as the only source of truth about shape.
    */
   /**
-   * VERBATIM from a payload Amazon returned on 2026-08-05 (IT, ASIN B0BMSH19GY, week of
+   * VERBATIM from a payload Amazon returned on 2026-08-05 (IT, ASIN B0FXFA789A, week of
    * 2026-07-19), captured by `scripts/_acr02-sqp-shape.mts`. Not hand-written — this is the
    * only fixture in this file whose shape is evidence rather than assumption.
    */
   it('reads the metric-prefixed ASIN keys Amazon actually returns', () => {
     const rows = parseSqp({
       dataByAsin: [{
-        startDate: '2026-07-19', endDate: '2026-07-25', asin: 'B0BMSH19GY',
+        startDate: '2026-07-19', endDate: '2026-07-25', asin: 'B0FXFA789A',
         searchQueryData: { searchQuery: 'giubbotto moto uomo estivo', searchQueryScore: 6, searchQueryVolume: 816 },
         impressionData: { totalQueryImpressionCount: 20110, asinImpressionCount: 230, asinImpressionShare: 1.14 },
         clickData: { totalClickCount: 542, asinClickCount: 5, asinClickShare: 0.92 },

@@ -23,7 +23,7 @@ interface Target { id: string; text: string; kind: string; bidCents: number; sta
 
 /** Alignment inverts between the two grids — Bid was the only column with no `.l`. */
 const CONQUEST_COLUMNS: Array<Column<Target>> = [
-  { key: 'asin', label: 'Competitor ASIN', render: (t) => <span style={{ fontWeight: 500, fontFamily: 'monospace' }}>{t.text || '—'}</span> },
+  { key: 'asin', label: 'Competitor ASIN', render: (t) => <span style={{ fontWeight: 500, fontFamily: 'var(--nds-font-mono)' }}>{t.text || '—'}</span> },
   { key: 'campaign', label: 'Campaign · ad group', render: (t) => (<>
       <a className="cn" href={campaignHref(t.campaignId)} target="_blank" rel="noopener noreferrer">{t.campaignName}</a>
       <div className="az-cell-sub">{t.adGroupName}</div>

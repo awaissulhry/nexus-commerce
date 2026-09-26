@@ -8,11 +8,11 @@ const { ebayAuthService } = await import('../src/services/ebay-auth.service.js')
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
 const CASES: Array<{ itemId: string; sku: string; expect: number; label: string }> = [
-  { itemId: '257629891728', sku: 'VENTRA-JACKET-4XL-YELLOW-MEN', expect: 0, label: 'oversell (pool 0, was 5)' },
-  { itemId: '257629891728', sku: 'VENTRA-JACKET-L-YELLOW-MEN', expect: 0, label: 'oversell (pool 0, was 5)' },
-  { itemId: '257629891728', sku: 'VENTRA-JACKET-M-YELLOW-MEN', expect: 2, label: 'lost sales (pool 2, was 0)' },
-  { itemId: '256566112769', sku: 'xavia-knee-slider-white', expect: 25, label: 'double drift (was 60)' },
-  { itemId: '257608449467', sku: 'WATERPROOF-OVERJACKET-BLACK-MEN-XL', expect: 8, label: 'stamp drift (stamp said 16)' },
+  { itemId: '983802912991', sku: 'VENTRA-JACKET-4XL-YELLOW-MEN', expect: 0, label: 'oversell (pool 0, was 5)' },
+  { itemId: '983802912991', sku: 'VENTRA-JACKET-L-YELLOW-MEN', expect: 0, label: 'oversell (pool 0, was 5)' },
+  { itemId: '983802912991', sku: 'VENTRA-JACKET-M-YELLOW-MEN', expect: 2, label: 'lost sales (pool 2, was 0)' },
+  { itemId: '961409849221', sku: 'xavia-knee-slider-white', expect: 25, label: 'double drift (was 60)' },
+  { itemId: '922402495702', sku: 'WATERPROOF-OVERJACKET-BLACK-MEN-XL', expect: 8, label: 'stamp drift (stamp said 16)' },
 ]
 const byItem = new Map<string, typeof CASES>()
 for (const c of CASES) { const a = byItem.get(c.itemId) ?? []; a.push(c); byItem.set(c.itemId, a) }

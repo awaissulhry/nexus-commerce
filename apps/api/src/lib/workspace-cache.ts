@@ -15,9 +15,9 @@ export class WorkspaceCache<K, V> implements Map<K, V> {
    * per-user or per-product parts therefore grew without limit for the life of the process.
    *
    * `maxEntriesPerWorkspace` bounds ONE workspace's bucket, and it is opt-in: the default keeps
-   * every existing caller byte-identical. It is opt-in on purpose — `idempotency.service.ts`
-   * already carries its own, much larger bound, and for that caller a dropped entry is a repeated
-   * write, not a slower read. A cap must be chosen by the caller that knows the cost of a miss.
+   * every existing caller byte-identical. It is opt-in on purpose: for some callers a dropped
+   * entry is a repeated write, not a slower read. A cap must be chosen by the caller that knows
+   * the cost of a miss.
    */
   constructor(readonly maxEntriesPerWorkspace: number = Number.POSITIVE_INFINITY) {}
   private bucket(): Map<K, V> {

@@ -16,6 +16,7 @@
  *            pair), and `--nds-primary` (link/accent text)          × surfaces `--nds-bg`, `--nds-surface`, `--nds-surface-*`
  *   status   every `--nds-X-text` that has a `--nds-X-soft`         (X-text on X-soft)
  *   pill     every `--nds-pill-X-fg` that has a `--nds-pill-X-bg`   (fg on bg)
+ *   tag      foreground/background token pair in each actual `.nds-tag.X` CSS rule
  *   inverse  `--nds-text-inverse` on `--nds-primary`                (button labels)
  *   hover    `--nds-text-inverse` on `--nds-primary-hover`          (the same label on the hover fill — R-65)
  *
@@ -37,6 +38,7 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 const argv = process.argv.slice(2)
@@ -47,6 +49,8 @@ const opt = (name) => {
   return argv[i + 1]
 }
 const TOKENS_CSS = opt('--tokens') ?? `${ROOT}/apps/web/src/design-system/styles/tokens.css`
+// Token scratch copies use web's component rules unless explicitly overridden.
+const PRIMITIVES_CSS = opt('--primitives') ?? `${ROOT}/apps/${resolve(TOKENS_CSS).includes('/apps/factory/') ? 'factory' : 'web'}/src/design-system/styles/primitives.css`
 const JSON_OUT = argv.includes('--json')
 const intOpt = (name) => {
   const v = opt(name)
@@ -165,6 +169,15 @@ const PAIRS = []
 for (const t of TEXT) for (const s of SURFACES) PAIRS.push({ group: 'text', fg: t, bg: s })
 for (const n of NAMES) { const m = n.match(/^--nds-([a-z0-9]+)-text$/); if (m && has(`--nds-${m[1]}-soft`)) PAIRS.push({ group: 'status', fg: n, bg: `--nds-${m[1]}-soft` }) }
 for (const n of NAMES) { const m = n.match(/^--nds-pill-([a-z0-9-]+)-fg$/); if (m && has(`--nds-pill-${m[1]}-bg`)) PAIRS.push({ group: 'pill', fg: n, bg: `--nds-pill-${m[1]}-bg` }) }
+// A status text token passing is insufficient if the component actually uses a different token.
+const tagRules = [...readFileSync(PRIMITIVES_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\.nds-tag\.([a-z]+)\s*\{([^{}]*)\}/g)]
+if (!tagRules.length) throw new Error(`No Tag tone rules in ${PRIMITIVES_CSS}`)
+for (const [, tone, rule] of tagRules) {
+  const foreground = /(?:^|;)\s*color:\s*var\((--nds-[a-z0-9-]+)\)\s*(?:;|$)/.exec(rule)?.[1]
+  const background = /(?:^|;)\s*background:\s*var\((--nds-[a-z0-9-]+)\)\s*(?:;|$)/.exec(rule)?.[1]
+  if (!foreground || !background) throw new Error(`Unmeasured Tag tone ${tone} in ${PRIMITIVES_CSS}`)
+  PAIRS.push({ group: `tag:${tone}`, fg: foreground, bg: background })
+}
 if (has('--nds-text-inverse') && has('--nds-primary')) PAIRS.push({ group: 'inverse', fg: '--nds-text-inverse', bg: '--nds-primary' })
 // R-65 (A-51 §3): the hover fill carries the same label. Paired whenever a primary exists, so a hover token that is MISSING
 // resolves to null and counts as a failure; a theme with no hover of its own falls back to :root's (dark text on the light
@@ -206,6 +219,7 @@ const rows = [...measure('light'), ...measure('dark')]
 const summary = (sel) => ({ pairs: sel.length, belowAAA: sel.filter((r) => r.belowAAA).length, belowAA: sel.filter((r) => r.belowAA).length })
 const result = {
   tokens: TOKENS_CSS,
+  primitives: PRIMITIVES_CSS,
   controls,
   light: summary(rows.filter((r) => r.mode === 'light')),
   dark: summary(rows.filter((r) => r.mode === 'dark')),

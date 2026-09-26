@@ -51,11 +51,11 @@ describe('P3.3 — one account’s calls, headroom and last error', () => {
     database = await formulaDatabase()
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
     svc = await import('./account-calls.service.js')
-    await q(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "isActive", "isPrimary", "authStatus", "updatedAt") VALUES
-      ($1,'shop-A','SHOPIFY',true,true,'connected',CURRENT_TIMESTAMP),
-      ($1,'ebay-A','EBAY',true,true,'connected',CURRENT_TIMESTAMP),
-      ($1,'ebay-B','EBAY',true,false,'connected',CURRENT_TIMESTAMP),
-      ($1,'quiet-A','ETSY',true,true,'connected',CURRENT_TIMESTAMP)`, [LEGACY])
+    await q(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "externalAccountId", "isActive", "isPrimary", "authStatus", "updatedAt") VALUES
+      ($1,'shop-A','SHOPIFY','fixture-shop-A',true,true,'connected',CURRENT_TIMESTAMP),
+      ($1,'ebay-A','EBAY','fixture-ebay-A',true,true,'connected',CURRENT_TIMESTAMP),
+      ($1,'ebay-B','EBAY','fixture-ebay-B',true,false,'connected',CURRENT_TIMESTAMP),
+      ($1,'quiet-A','ETSY','fixture-quiet-A',true,true,'connected',CURRENT_TIMESTAMP)`, [LEGACY])
 
     // Shopify: three good calls, the newest carrying a real headroom reading.
     await call({ id: 'c1', conn: 'shop-A', channel: 'SHOPIFY', op: 'graphql.node', ok: true, at: ago(30), remaining: 1990, limit: 2000 })

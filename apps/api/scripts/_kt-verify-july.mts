@@ -89,7 +89,7 @@ async function main() {
 
   // ── C · the named ASINs ──────────────────────────────────────────────────
   h('C · The three ASINs SQP.5 named, week by week (IT)')
-  for (const asin of ['B0BMSH19GY', 'B0BMSWM15B', 'B0BMSJWW7L']) {
+  for (const asin of ['B0FXFA789A', 'B0FXE444C9', 'B0FX71011D']) {
     line(`${asin}:`)
     for (const w of weeks.slice(0, 7)) {
       const rows = sqp.filter((r) => r.marketplace === 'IT' && +r.startDate === w && r.asin === asin)

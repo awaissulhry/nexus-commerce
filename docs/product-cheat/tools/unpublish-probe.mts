@@ -15,8 +15,8 @@ if (mode === 'plan' || ((mode === 'ebay-test' || mode === 'amazon-test') && !exe
 // The publish gates are closed in this machine's env; opened ONLY for an Owner-approved live test (R-37).
 if (execute && mode === 'ebay-test') { process.env.NEXUS_ENABLE_EBAY_PUBLISH = 'true'; process.env.EBAY_PUBLISH_MODE = 'live' }
 if (execute && mode === 'amazon-test') { process.env.NEXUS_ENABLE_AMAZON_PUBLISH = 'true'; process.env.AMAZON_PUBLISH_MODE = 'live' }
-const EBAY_TEST = { itemId: '256564203510', sku: 'GALE-JACKET-BLACK-MEN-M' }
-const AMAZON_TEST = { sku: 'xracingbxn48', asin: 'B0BTCBPVTS', marketplaceId: 'APJ6JRA9NG5V4', productType: 'APPAREL' }
+const EBAY_TEST = { itemId: '913270132587', sku: 'GALE-JACKET-BLACK-MEN-M' }
+const AMAZON_TEST = { sku: 'xracingbxn48', asin: 'B0FX4B2941', marketplaceId: 'APJ6JRA9NG5V4', productType: 'APPAREL' }
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const deadline = setTimeout(() => { console.error('Probe stopped at its bound; no result claimed — RE-READ the listing before concluding (an UNKNOWN outcome).'); process.exit(1) }, mode === 'read' ? 120_000 : 420_000)

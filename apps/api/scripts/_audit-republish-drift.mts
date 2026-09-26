@@ -7,8 +7,8 @@ const { ebayAuthService } = await import('../src/services/ebay-auth.service.js')
 const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-trading-api.service.js')
 
 const TARGETS = [
-  { sku: 'AIRMESH-JACKET', itemId: '257611257473' },
-  { sku: 'GALE-JACKET', itemId: '257584954808' },
+  { sku: 'AIRMESH-JACKET', itemId: '978166641275' },
+  { sku: 'GALE-JACKET', itemId: '938554736087' },
 ]
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)

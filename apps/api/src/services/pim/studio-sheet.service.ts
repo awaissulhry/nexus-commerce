@@ -1009,6 +1009,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     productTypes,
     familyIds: [...new Set(family.map(p => p.familyId).filter((v): v is string => !!v))],
     savedFields: savedAttributeFields(family.map(p => p.categoryAttributes)),
+    // P3b S4 — only the saved keys that belong on Shared (not channel-placed, archived or channel-only).
+    savedFieldsFor: 'shared',
     variationAxes,
     ebayCategoryIds,
     etsyCategoryIds: wantChannel === 'ETSY' ? context!.categories : [],

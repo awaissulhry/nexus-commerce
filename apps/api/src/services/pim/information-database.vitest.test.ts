@@ -93,7 +93,7 @@ beforeAll(async () => {
     await prisma.marketplace.create({ data: { channel, code: marketplace, name: `${channel} ${marketplace}`, region: ['ETSY', 'SHOPIFY'].includes(channel) ? 'GLOBAL' : 'EU', currency: 'EUR', language: ['ETSY', 'SHOPIFY'].includes(channel) ? 'en' : 'it' } })
     for (const account of ['a', 'b']) {
       const accountId = `${channel.toLowerCase()}-${account}`
-      await prisma.channelConnection.create({ data: { id: accountId, channelType: channel, isPrimary: account === 'a', isActive: true } })
+      await prisma.channelConnection.create({ data: { id: accountId, externalAccountId: accountId, channelType: channel, isPrimary: account === 'a', isActive: true } })
       for (const position of [0, 1, 2]) {
         const aliasKey = position ? `${accountId}-${position}` : ''
         if (aliasKey) await prisma.productListingAlias.create({ data: { id: aliasKey, productId: 'store-demo', channel: channel as any, marketplace, channelConnectionId: accountId, label: `Listing ${position}`, position } })
@@ -269,9 +269,16 @@ it('validates and saves eBay category options on an additional-account alias wit
   const reread = await sheet('EBAY', 'ebay-b')
   expect(reread.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-1').values[column.key].value).toBe('Red')
   expect(reread.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-2').values[column.key].value).toBe('Black')
-  const invalid = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ ...payload.changes[0], value: 'Unlisted colour' }] })
-  expect(invalid.json().errors.length, invalid.body).toBeGreaterThan(0)
-  expect((await sheet('EBAY', 'ebay-b')).rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-1').values[column.key].value).toBe('Red')
+  // P6 (docs/attributes/PLAN.md §4.4, approved 2026-09-26) — a value off eBay's closed list is SAVED and FLAGGED by the
+  // channel, never refused on save. It used to be refused here.
+  const offList = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ ...payload.changes[0], value: 'Unlisted colour' }] })
+  expect(offList.json().errors ?? [], offList.body).toEqual([])
+  const after = await sheet('EBAY', 'ebay-b')
+  const flagged = after.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-1').values[column.key]
+  expect(flagged.value).toBe('Unlisted colour')
+  expect(JSON.stringify(flagged)).toMatch(/unaccepted value|allowed values/)
+  // The sibling alias is untouched.
+  expect(after.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'ebay-b-2').values[column.key].value).toBe('Black')
 })
 
 it('creates no history for refused legacy translations and retains exact listing attribution', async () => {

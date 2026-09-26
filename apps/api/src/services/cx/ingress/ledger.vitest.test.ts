@@ -12,20 +12,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const created: Array<Record<string, any>> = []
 const updated: Array<Record<string, any>> = []
-let existingRow: { id: string; status?: string } | null = null
+let existingRow: Record<string, unknown> | null = null
 let failNext = false
 
 const prismaMock = {
   webhookEvent: {
     findUnique: vi.fn(async () => existingRow),
-    create: vi.fn(async (args: any) => {
+    createMany: vi.fn(async (args: any) => {
       if (failNext) throw new Error('database unavailable')
+      if (existingRow) return { count: 0 }
       created.push(args.data)
-      return { id: `row-${created.length}` }
+      return { count: 1 }
     }),
     update: vi.fn(async (args: any) => {
       updated.push(args)
-      return args
+      return args.where.channel_externalId ? existingRow : args
     }),
   },
 }
@@ -88,7 +89,8 @@ describe('recordInbound verdicts', () => {
 
 describe('recordInbound redelivery', () => {
   it('counts a repeat without rewriting the original verdict', async () => {
-    existingRow = { id: 'row-existing', status: 'pending' }
+    // The stored receipt of the same delivery: same event type, trust verdict and (no) account.
+    existingRow = { id: 'row-existing', status: 'pending', eventType: 'x', signatureOk: true, verifiedBy: 'ebay_ecdsa', connectionId: null }
     const r = await recordInbound({ channel: 'EBAY', eventType: 'x', externalId: 'id', payload: {}, signatureOk: true, verifiedBy: 'ebay_ecdsa' })
     expect(r.id).toBe('row-existing')
     expect(r.duplicate).toBe(true)
@@ -105,7 +107,7 @@ describe('recordInbound redelivery', () => {
     // A channel resends the same delivery id both when it never heard an answer and
     // when we answered with a failure. Without this, the retry it sent BECAUSE we
     // failed reads as "already handled" and is dropped.
-    existingRow = { id: 'row-existing', status: 'failed' }
+    existingRow = { id: 'row-existing', status: 'failed', eventType: 'x', signatureOk: true, verifiedBy: 'shopify_hmac', connectionId: null }
     const r = await recordInbound({ channel: 'SHOPIFY', eventType: 'x', externalId: 'id', payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac' })
     expect(r.existingStatus).toBe('failed')
   })

@@ -49,8 +49,9 @@ export interface ReadinessIssue {
    *
    * VT.1b widened it with the three variation kinds for the same reason: the catalogue's
    * `variation-mapping:unset|collides` filter narrows on `missing[].kind`, never on the sentence.
+   * VTR step 0 added the two publish re-checks (`theme-deprecated`, `value-missing`).
    */
-  kind?: 'language-fallback' | 'theme-unset' | 'collision' | 'attribute-unbound'
+  kind?: 'language-fallback' | 'theme-unset' | 'collision' | 'attribute-unbound' | 'theme-deprecated' | 'value-missing'
 }
 
 export interface SheetReadiness {
@@ -498,6 +499,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     // Every attribute these products already hold a value for stays a column (as in the editor),
     // so the family owning the columns never hides a stored value.
     savedFields: (await import('./family-sheet-schema.js')).savedAttributeFields(flat.map((r) => r.categoryAttributes)),
+    savedFieldsFor: 'shared', // P3b S4 — only the saved keys that belong on Shared
   })
   const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed } = columnSet
 

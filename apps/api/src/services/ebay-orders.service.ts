@@ -1,87 +1,42 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay Orders Service (audit fix #2 — TECH_DEBT #33)
  *
- * Fetches orders from eBay's Fulfillment API and writes them to the
- * Phase 26 unified `Order` model. Inventory deduction routes through
- * applyStockMovement so the cross-channel cascade (StockLevel ledger,
- * ChannelListing.masterQuantity, OutboundSyncQueue push) fires for
- * every eBay sale.
+ * Fetches orders from eBay's Fulfillment API. Writing them is the ONE transactional writer in
+ * ebay-order-writer.ts (shared with stored notification replay): the order, its unseen lines and
+ * their stock effect commit together, and the post-commit hooks run after it.
  *
- * Phase 26 mapping (replaces the legacy salesChannel/ebayOrderId/...
- * field names that broke this service against the post-Phase-26
- * schema):
+ * Phase 26 mapping:
  *   eBay orderId            → Order.channelOrderId (with channel='EBAY')
  *   pricingSummary.total    → Order.totalPrice (Decimal)
  *   pricingSummary.currency → Order.currencyCode
- *   buyer.username          → Order.customerName
- *   buyer.email             → Order.customerEmail (or fabricated stub
- *                             when eBay omits it; the schema requires
- *                             a value)
+ *   buyer.username          → Order.customerName, and exactly in Order.ebayMetadata.buyer.username
+ *   buyer.email             → Order.customerEmail (or a .invalid placeholder when eBay omits it)
  *   creationDate            → Order.purchaseDate
- *   orderStatus / fulfillmentStatus / lastModifiedDate
- *                           → Order.ebayMetadata (JSON)
+ *   orderStatus / fulfillmentStatus / lastModifiedDate → Order.ebayMetadata (JSON)
  *
- * Idempotency: upsert on the (channel, channelOrderId) compound
- * unique. OrderItem rows are uniquely identified by their eBay
- * lineItemId stored in `ebayMetadata.lineItemId`; we only insert (and
- * deduct inventory for) line items we haven't seen on a prior sync.
- * Re-running the cron is safe — quantities never double-deduct.
+ * Idempotency: the (channel, channelOrderId) and (order, externalLineItemId) unique keys, read
+ * under the writer's locks. Re-running the cron is safe — quantities never double-deduct.
  */
 
-import { ebaySend } from './gateway/ebay.js'
+import { ebaySend, ebayTransport } from './gateway/ebay.js'
+import { GatewayRefusal } from './gateway/gateway.js'
+import { retryAfterMs } from './cx/ebay-grant-introspection.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
-import { applyStockMovement } from './stock-movement.service.js'
-import { takeForOrder } from './stock-pool/order-routing.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
-import { recordOrderItem } from './sales-aggregate.service.js'
+import { ebayAmountCurrency, ebayOrderConnectionLink, ingestEbayOrder, parseEbayAmount, type EbayAmountLike } from './ebay-order-writer.js'
 
-/** eBay money fields: the live Fulfillment API sends { value, currency };
- *  older code/fixtures assumed bare strings. */
-export type EbayAmountLike = string | number | { value?: string | number; currency?: string } | null | undefined
-
-/**
- * MAP.2 — the store an eBay order came from. Until 2026-09-16 `processOrder` received the
- * connection id and ignored it, so every eBay order imported after the MAP.2 backfill was saved
- * with no store link: invisible to per-account views and to the profile move guard.
- * A new order takes the importing store. An existing order gains the link only when it has none —
- * an eBay order id belongs to one seller, so a DIFFERENT existing link is a conflict to report,
- * never one to overwrite. Pure; exported for tests.
- */
-export function ebayOrderConnectionLink(
-  existingConnectionId: string | null | undefined,
-  importingConnectionId: string,
-): { data: { channelConnectionId?: string }; conflict: boolean } {
-  if (!existingConnectionId) return { data: { channelConnectionId: importingConnectionId }, conflict: false }
-  return { data: {}, conflict: existingConnectionId !== importingConnectionId }
-}
-
-/** Pure — returns a finite number or null (never NaN). Exported for tests. */
-export function parseEbayAmount(raw: EbayAmountLike): number | null {
-  if (raw === null || raw === undefined) return null
-  const candidate =
-    typeof raw === 'object' ? (raw as { value?: string | number }).value : raw
-  if (candidate === null || candidate === undefined || candidate === '') return null
-  const n = Number(candidate)
-  return Number.isFinite(n) ? n : null
-}
-
-/** Currency code from an Amount-like, when present. */
-export function ebayAmountCurrency(raw: EbayAmountLike): string | null {
-  if (raw && typeof raw === 'object' && typeof raw.currency === 'string' && raw.currency) {
-    return raw.currency
-  }
-  return null
-}
+// Pure helpers moved with the writer; re-exported for existing importers.
+export { ebayAmountCurrency, ebayOrderConnectionLink, parseEbayAmount }
+export type { EbayAmountLike }
 
 interface EbayOrder {
   orderId: string
   creationDate: string
   // AS.3c — these four were imagined; live Fulfillment API payloads carry
   // orderFulfillmentStatus / orderPaymentStatus / cancelStatus and ship-to
-  // under fulfillmentStartInstructions (normalized in processOrder).
+  // under fulfillmentStartInstructions (normalized in ebay-order-writer.ts).
   lastModifiedDate?: string
   orderStatus?: string
   fulfillmentStatus?: string
@@ -109,7 +64,7 @@ interface EbayOrder {
   lineItems: Array<{
     lineItemId: string
     /** Absent on non-SKU/pre-relabel listings — resolved via legacyItemId
-     *  membership lookup in processOrder (AS.3d). */
+     *  membership lookup in ebay-order-writer.ts (AS.3d). */
     sku?: string
     legacyItemId?: string
     title: string
@@ -122,6 +77,43 @@ interface EbayOrder {
       discountAmount: EbayAmountLike
     }>
   }>
+}
+
+/** Why one order could not be read; the stored receipt maps it to defer / retry. */
+export class EbayOrderFetchError extends Error {
+  constructor(readonly reason: 'rate_limited' | 'auth_required' | 'not_found' | 'remote_error' | 'transport' | 'invalid_response', readonly retryAfterMs?: number) {
+    super('The eBay order could not be read.')
+    this.name = 'EbayOrderFetchError'
+  }
+}
+
+/**
+ * One order, one account — the stored notice's read. GET /sell/fulfillment/v1/order/{orderId} on
+ * the same gateway sender as polling (kind 'read', the account's own token from the token service).
+ * Never lists orders and never touches another account. One attempt: the receipt owns the retry
+ * budget, so the gateway neither sleeps on a 429 nor repeats a 5xx. Call it outside every lock.
+ */
+export async function fetchEbayOrderById(connectionId: string, orderId: string, options: { environment?: 'production' | 'sandbox' } = {}): Promise<unknown> {
+  const host = options.environment === 'sandbox' ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com'
+  const url = `${host}/sell/fulfillment/v1/order/${encodeURIComponent(orderId)}`
+  return recordApiCall<unknown>({ channel: 'EBAY', operation: 'getOrder', endpoint: '/sell/fulfillment/v1/order/{orderId}', method: 'GET', triggeredBy: 'webhook' }, async () => {
+    let response: Response
+    try {
+      response = await ebayTransport(connectionId, { maxTransientRetries: 0, max429Retries: 0, timeoutMs: 30_000 })(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
+    } catch (error) {
+      if (error instanceof GatewayRefusal) {
+        throw new EbayOrderFetchError(error.code === 'RATE_LIMITED_LOCAL' ? 'rate_limited' : error.outcome === 'held' ? 'auth_required' : 'remote_error')
+      }
+      throw new EbayOrderFetchError('transport')
+    }
+    if (response.status !== 200) {
+      await response.body?.cancel().catch(() => {})
+      throw new EbayOrderFetchError(
+        response.status === 429 ? 'rate_limited' : response.status === 401 ? 'auth_required' : response.status === 404 ? 'not_found' : 'remote_error',
+        response.status === 429 || response.status === 503 ? retryAfterMs(response.headers) : undefined)
+    }
+    try { return await response.json() } catch { throw new EbayOrderFetchError('invalid_response') }
+  })
 }
 
 interface SyncResult {
@@ -277,489 +269,17 @@ export class EbayOrdersService {
   }
 
   /**
-   * Resolve an eBay SKU back to a Nexus Product. Tries (in order):
-   *   1. VariantChannelListing keyed on externalSku / externalListingId
-   *      — the canonical cross-channel link.
-   *   2. Product.sku exact match — for products with no variant set.
-   *   3. ProductVariation.sku exact match — for legacy data.
-   * Returns null when nothing matches; the caller still creates the
-   * OrderItem (with productId=null) so the line stays auditable.
-   */
-  private async findProductBySku(sku: string, ebayItemId?: string) {
-    try {
-      const listing = await (prisma as any).variantChannelListing.findFirst({
-        where: {
-          OR: [
-            { externalSku: sku },
-            ebayItemId ? { externalListingId: ebayItemId } : undefined,
-          ].filter(Boolean),
-        },
-        include: {
-          variant: { include: { product: true } },
-        },
-      })
-      if (listing?.variant?.product) return listing.variant.product
-
-      const product = await prisma.product.findFirst({ where: { sku } })
-      if (product) return product
-
-      const variation = await (prisma as any).productVariation.findFirst({
-        where: { sku },
-        include: { product: true },
-      })
-      return variation?.product ?? null
-    } catch (error) {
-      logger.error('Error finding product by SKU', { sku, error })
-      return null
-    }
-  }
-
-  /**
-   * Map eBay's order status to our unified OrderStatus enum (extended
-   * in O.1: PROCESSING for paid-but-unshipped). eBay's status taxonomy
-   * is coarser than ours; we lean conservative and default ambiguous
-   * states to PENDING. fulfillmentStatus from the API takes precedence
-   * when it's a more specific delivery state.
-   */
-  private mapOrderStatus(
-    ebayStatus: string,
-    fulfillmentStatus: string,
-  ): 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
-    if (ebayStatus === 'CANCELLED' || ebayStatus === 'INACTIVE') {
-      return 'CANCELLED'
-    }
-    if (fulfillmentStatus === 'FULFILLED') return 'DELIVERED'
-    if (fulfillmentStatus === 'IN_PROGRESS') return 'SHIPPED'
-    // O.1: COMPLETED + NOT_STARTED = paid, ready to fulfill — that's
-    // PROCESSING in our taxonomy. Previously coerced to SHIPPED, which
-    // broke ship-by urgency math.
-    if (ebayStatus === 'COMPLETED' && fulfillmentStatus === 'NOT_STARTED') {
-      return 'PROCESSING'
-    }
-    if (ebayStatus === 'COMPLETED') return 'SHIPPED'
-    return 'PENDING'
-  }
-
-  /**
-   * Process one eBay order: upsert the Order row, then for each line
-   * item we haven't seen before, create the OrderItem and deduct
-   * inventory through applyStockMovement (so ChannelListing.master
-   * Quantity and the cross-channel sync queue both update).
+   * Process one eBay order through the transactional writer. A thin wrapper so the cron, the
+   * backfill and existing callers keep their shape; stats come from what the writer committed.
    */
   private async processOrder(order: EbayOrder, connectionId: string) {
-    const totalPrice = parseEbayAmount(order.pricingSummary.total)
-    if (totalPrice === null) {
-      throw new Error(
-        `eBay order ${order.orderId}: invalid pricingSummary.total ${JSON.stringify(order.pricingSummary.total)}`,
-      )
-    }
-
-    // AS.3c — the REAL Fulfillment API carries ship-to + statuses under
-    // fulfillmentStartInstructions[0].shippingStep.shipTo and
-    // orderFulfillmentStatus / orderPaymentStatus / cancelStatus.cancelState;
-    // the imagined top-level orderStatus / fulfillmentStatus /
-    // shippingAddress fields are absent on live payloads. shippingAddress is
-    // a REQUIRED Json column, so it must never reach Prisma as undefined —
-    // that was the `Invalid prisma.order.create()` failure on the first
-    // parseable tick.
-    const raw = order as unknown as {
-      orderFulfillmentStatus?: string
-      orderPaymentStatus?: string
-      cancelStatus?: { cancelState?: string }
-      fulfillmentStartInstructions?: Array<{
-        shippingStep?: {
-          shipTo?: { fullName?: string; email?: string; contactAddress?: Record<string, unknown> }
-        }
-      }>
-    }
-    const shipTo = raw.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo
-    const cancelState = raw.cancelStatus?.cancelState ?? ''
-    const statusForMap =
-      order.orderStatus ??
-      (/^CANCEL/i.test(cancelState) && !/^NONE/i.test(cancelState)
-        ? 'CANCELLED'
-        : raw.orderPaymentStatus === 'PAID'
-          ? 'COMPLETED'
-          : 'PENDING')
-    const fulfillmentForMap = order.fulfillmentStatus ?? raw.orderFulfillmentStatus ?? ''
-    const shippingAddress: object =
-      (order.shippingAddress as unknown as object | undefined) ??
-      (shipTo ? { fullName: shipTo.fullName ?? null, ...(shipTo.contactAddress ?? {}) } : {})
-
-    // eBay's Fulfillment API sometimes omits buyer.email (anonymized
-    // for guest checkout). The Order schema requires customerEmail,
-    // so synthesise a placeholder using the public username — kept
-    // distinct from real addresses with the .invalid suffix.
-    const customerEmail =
-      (order.buyer.email ?? '').trim() ||
-      (shipTo?.email ?? '').trim() ||
-      `${(order.buyer.username || 'unknown').replace(/[^a-zA-Z0-9._-]/g, '')}@buyer.ebay.invalid`
-
-    const orderData = {
-      channel: 'EBAY' as const,
-      // eBay doesn't have per-marketplace splits like Amazon;
-      // 'EBAY-GLOBAL' keeps the column non-null without faking a
-      // marketplace code that doesn't exist.
-      marketplace: 'EBAY-GLOBAL',
-      channelOrderId: order.orderId,
-      status: this.mapOrderStatus(statusForMap, fulfillmentForMap),
-      totalPrice,
-      currencyCode:
-        ebayAmountCurrency(order.pricingSummary.total) ?? order.pricingSummary.currency ?? 'EUR',
-      customerName: order.buyer.username || shipTo?.fullName || 'eBay Buyer',
-      customerEmail,
-      shippingAddress,
-      purchaseDate: new Date(order.creationDate),
-      // eBay is always merchant-fulfilled.
-      fulfillmentMethod: 'MFN',
-      // O.1: eBay default handling time = 1 day. Per-listing override
-      // lives in the seller account and isn't exposed on the order
-      // payload here — when that wires up, replace this with the
-      // listing-level value. shipByDate is computed downstream from
-      // (purchaseDate + fulfillmentLatency days).
-      fulfillmentLatency: 1,
-      shipByDate: new Date(new Date(order.creationDate).getTime() + 24 * 60 * 60 * 1000),
-      ebayMetadata: {
-        orderStatus: statusForMap,
-        fulfillmentStatus: fulfillmentForMap,
-        orderPaymentStatus: raw.orderPaymentStatus ?? null,
-        cancelState: cancelState || null,
-        lastModifiedDate: order.lastModifiedDate ?? null,
-      },
-    }
-
-    // Look up existing on the (channel, channelOrderId) compound
-    // unique so the upsert stays idempotent across sync runs.
-    const existing = await prisma.order.findUnique({
-      where: {
-        channel_channelOrderId: workspaceKey({
-          channel: 'EBAY' as any,
-          channelOrderId: order.orderId,
-        }),
-      },
-      include: {
-        items: {
-          select: { id: true, sku: true, ebayMetadata: true, productId: true, quantity: true },
-        },
-      },
-    })
-
-    // O.7: terminal-status downgrade guard. Same race as Amazon —
-    // operator cancels locally; ebay-cancel pushback in flight; next
-    // ebay-orders cron tick reads pre-cancel state from the
-    // Fulfillment API; without this guard, channel-state regression
-    // silently overwrites the local CANCELLED.
-    const { shouldPreserveTerminalStatus } = await import(
-      './order-status-guards.js'
-    )
-    if (shouldPreserveTerminalStatus(existing?.status, orderData.status)) {
-      logger.info('ebay-orders: preserving local terminal status (channel still reports non-terminal)', {
-        orderId: order.orderId,
-        localStatus: existing?.status,
-        channelStatus: orderData.status,
-      })
-      orderData.status = existing!.status as any
-    }
-
-    let dbOrder
-    // O.45: did we just transition to CANCELLED?
-    const newlyCancelled =
-      orderData.status === 'CANCELLED'
-      && existing != null
-      && existing.status !== 'CANCELLED'
-
-    const link = ebayOrderConnectionLink(existing ? existing.channelConnectionId : undefined, connectionId)
-    if (link.conflict) {
-      logger.warn('ebay-orders: order is already linked to a different store — link kept', {
-        orderId: order.orderId,
-        linkedConnectionId: existing?.channelConnectionId,
-        importingConnectionId: connectionId,
-      })
-    }
-    if (existing) {
-      dbOrder = await prisma.order.update({
-        where: { id: existing.id },
-        data: { ...orderData, ...link.data },
-      })
-      this.stats.ordersUpdated++
-    } else {
-      dbOrder = await prisma.order.create({ data: { ...orderData, ...link.data } })
-      this.stats.ordersCreated++
-    }
-
-    // O.6: lifecycle event for /orders SSE subscribers. Same created-
-    // vs-updated split as Amazon: `existing == null` means the upsert
-    // just inserted.
-    void (async () => {
-      try {
-        const { publishOrderEvent } = await import('./order-events.service.js')
-        publishOrderEvent(
-          existing == null
-            ? {
-                type: 'order.created',
-                orderId: dbOrder.id,
-                channel: 'EBAY',
-                channelOrderId: order.orderId,
-                ts: Date.now(),
-              }
-            : {
-                type: 'order.updated',
-                orderId: dbOrder.id,
-                channel: 'EBAY',
-                status: orderData.status,
-                ts: Date.now(),
-              },
-        )
-      } catch {
-        // bus failure must not break ingestion
-      }
-    })()
-
-    // O.21a: customer FK + cache refresh. Fire-and-forget per the
-    // amazon-orders pattern.
-    void (async () => {
-      try {
-        const { linkAndRefreshCustomerForOrder } = await import(
-          './customer-cache.service.js'
-        )
-        await linkAndRefreshCustomerForOrder(dbOrder.id)
-      } catch (err) {
-        logger.warn('ebay-orders: customer cache refresh failed', {
-          orderId: dbOrder.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    })()
-
-    // O.45: cascade cancellation cleanup. Best-effort + non-blocking.
-    if (newlyCancelled) {
-      void (async () => {
-        try {
-          const { handleOrderCancelled } = await import(
-            './order-cancellation/index.js'
-          )
-          const cleanup = await handleOrderCancelled(dbOrder.id)
-          logger.info('ebay-orders: cancellation cascade', {
-            orderId: dbOrder.id,
-            ...cleanup,
-          })
-        } catch (err) {
-          logger.warn('ebay-orders: cancellation cascade failed', {
-            orderId: dbOrder.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      })()
-    }
-
-    // Inventory deduction is one-shot per (orderId, lineItemId) — track
-    // which line items we've already booked so re-running this sync
-    // doesn't double-deduct.
-    const seenLineItemIds = new Set<string>(
-      (existing?.items ?? [])
-        .map((it) => (it.ebayMetadata as any)?.lineItemId)
-        .filter((id): id is string => typeof id === 'string'),
-    )
-
-    const sales: Array<{ productId: string; quantity: number; lineItemId: string }> = []
-    for (const lineItem of order.lineItems) {
-      this.stats.itemsProcessed++
-      const isNewLine = !seenLineItemIds.has(lineItem.lineItemId)
-      if (!isNewLine) continue // already booked on a prior sync
-
-      const itemPrice = parseEbayAmount(lineItem.lineItemCost)
-      if (itemPrice === null) {
-        // AS.3b — this branch used to swallow EVERY real line item (Amount
-        // object → NaN → skip), which also skipped the stock deduction. The
-        // parser now handles all shapes; hitting this means a genuinely
-        // malformed payload, so it must stay loud.
-        logger.warn('eBay line item: non-numeric lineItemCost — skipping', {
-          orderId: order.orderId,
-          lineItemId: lineItem.lineItemId,
-          raw: JSON.stringify(lineItem.lineItemCost)?.slice(0, 120),
-        })
-        continue
-      }
-
-      // AS.3d — real line items may carry NO sku (pre-relabel listings /
-      // non-SKU lines); OrderItem.sku is a required column and the product
-      // link + stock deduction need a real identity. legacyItemId (the eBay
-      // ItemID) resolves via SharedListingMembership when unambiguous
-      // (exactly one ACTIVE membership). Ambiguous/unknown lines are
-      // recorded product-less with a loud warn — never a guessed deduction.
-      const legacyItemId = (lineItem as { legacyItemId?: string }).legacyItemId
-      let effectiveSku = lineItem.sku ?? null
-      let membershipProductId: string | null = null
-      if (!effectiveSku && legacyItemId) {
-        const members = await (prisma as any).sharedListingMembership.findMany({
-          where: { itemId: legacyItemId, status: 'ACTIVE' },
-          select: { sku: true, productId: true },
-          take: 2,
-        })
-        if (members.length === 1) {
-          effectiveSku = members[0].sku
-          membershipProductId = members[0].productId ?? null
-          logger.info('eBay line item without sku resolved via shared membership', {
-            orderId: order.orderId,
-            legacyItemId,
-            sku: effectiveSku,
-          })
-        }
-      }
-      if (!effectiveSku) {
-        effectiveSku = legacyItemId ? `EBAY-ITEM-${legacyItemId}` : `EBAY-LINE-${lineItem.lineItemId}`
-        logger.warn('eBay line item has no sku and no unambiguous membership — recorded without product link', {
-          orderId: order.orderId,
-          lineItemId: lineItem.lineItemId,
-          legacyItemId: legacyItemId ?? null,
-          title: lineItem.title?.slice(0, 80),
-        })
-      }
-
-      const product = membershipProductId
-        ? await (prisma as any).product.findUnique({ where: { id: membershipProductId } })
-        : await this.findProductBySku(effectiveSku, lineItem.lineItemId)
-      const taxesRaw = lineItem.taxes
-      const taxAmount = Array.isArray(taxesRaw)
-        ? taxesRaw.reduce((sum, t) => sum + (parseEbayAmount(t.amount ?? t.taxAmount) ?? 0), 0)
-        : (parseEbayAmount(taxesRaw?.taxAmount) ?? 0)
-      const discountAmount = lineItem.discounts
-        ? lineItem.discounts.reduce(
-            (sum, d) => sum + (parseEbayAmount(d.discountAmount) ?? 0),
-            0,
-          )
-        : 0
-
-      // O.5: persist externalLineItemId top-level so the (orderId,
-      // externalLineItemId) compound unique enforces dedup at the DB
-      // level, not just via this service's in-memory `seenLineItemIds`
-      // Set. Belt-and-braces: the Set short-circuits the work + the
-      // constraint backstops re-runs from a different process.
-      const created = await prisma.orderItem.create({
-        data: {
-          orderId: dbOrder.id,
-          productId: product?.id ?? null,
-          externalLineItemId: lineItem.lineItemId,
-          sku: effectiveSku,
-          quantity: lineItem.quantity,
-          price: itemPrice,
-          ebayMetadata: {
-            lineItemId: lineItem.lineItemId,
-            legacyItemId: legacyItemId ?? null,
-            rawSku: lineItem.sku ?? null,
-            title: lineItem.title,
-            taxAmount,
-            discountAmount,
-          },
-        },
-      })
-
-      // F.1 — keep DailySalesAggregate current for the forecasting layer.
-      // Best-effort: refresh failure must never block order ingestion.
-      try {
-        await recordOrderItem(created.id)
-      } catch (err) {
-        logger.warn('sales-aggregate refresh failed for OrderItem', {
-          orderItemId: created.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-
-      if (!product) {
-        logger.warn('Could not link eBay line item to a Nexus product', {
-          sku: effectiveSku,
-          ebayItemId: lineItem.lineItemId,
-          orderId: order.orderId,
-        })
-        continue
-      }
-      this.stats.itemsLinked++
-
-      // AS.3d — an order that ARRIVES already cancelled never shipped; its
-      // units never left the pool, so deducting would be a phantom sale
-      // (there is no prior deduction for the cancellation cascade to undo).
-      // Live orders that cancel AFTER ingestion keep the existing
-      // newlyCancelled → handleOrderCancelled path.
-      if (orderData.status === 'CANCELLED') {
-        logger.info('eBay order arrived already CANCELLED — line recorded, no stock deduction', {
-          orderId: order.orderId,
-          lineItemId: lineItem.lineItemId,
-          sku: effectiveSku,
-        })
-        continue
-      }
-
-      sales.push({ productId: product.id, quantity: lineItem.quantity, lineItemId: lineItem.lineItemId })
-    }
-
-    // Stock leaves once per product, for all of its new lines together. Shared stock step 4: a product
-    // that sells from a pool takes the sale from the pool (door 4b), which takes ONE sale per order and
-    // product — and one variant can sit in two eBay listings bought in one order. A refusal is an
-    // oversell: nothing is taken anywhere and the owners are told (the bell). Own stock is used only
-    // when the product does not sell from a pool, line by line as before.
-    const salesByProduct = new Map<string, typeof sales>()
-    for (const sale of sales) salesByProduct.set(sale.productId, [...(salesByProduct.get(sale.productId) ?? []), sale])
-    for (const [productId, lines] of salesByProduct) {
-      const quantity = lines.reduce((sum, line) => sum + line.quantity, 0)
-      const routed = await takeForOrder({ productId, quantity, orderId: dbOrder.id, actor: 'ebay-orders-sync' })
-      if (routed.via === 'pool') { this.stats.inventoryDeducted += lines.length; continue }
-      if (routed.via === 'refused') {
-        logger.error('Shared stock refused the eBay sale', { productId, quantity, orderId: order.orderId, code: routed.refusal.code, error: routed.refusal.error })
-        continue
-      }
-      for (const line of lines) {
-        // Inventory deduction routes through applyStockMovement so the
-        // StockLevel ledger, ChannelListing.masterQuantity, and the
-        // OutboundSyncQueue (cross-channel push) all update atomically.
-        try {
-          await applyStockMovement({
-            productId,
-            change: -line.quantity,
-            reason: 'ORDER_PLACED',
-            referenceType: 'ORDER',
-            referenceId: dbOrder.id,
-            orderId: dbOrder.id,
-            actor: 'ebay-orders-sync',
-            notes: `eBay order ${order.orderId} line ${line.lineItemId}`,
-          })
-          this.stats.inventoryDeducted++
-        } catch (err) {
-          // A stock-movement failure shouldn't roll back the order
-          // ingestion (we don't want to lose the order record). Log
-          // and continue; the audit reads stockMovement separately.
-          logger.error('Stock-movement deduction failed for eBay line', {
-            productId,
-            quantity: line.quantity,
-            orderId: order.orderId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-    }
-
-    // FCF.5b — auto-submit Amazon MCF for newly-ingested eBay orders whose
-    // listings are MCF-backed (FBA). Runs only for brand-new orders, after
-    // OrderItems exist. Double-gated (NEXUS_EBAY_AUTO_MCF=1 here + AMAZON_MCF_LIVE
-    // in the service) and fire-and-forget so it never blocks or fails ingestion.
-    if (existing == null && process.env.NEXUS_EBAY_AUTO_MCF === '1') {
-      const newOrderId = dbOrder.id
-      void (async () => {
-        try {
-          const { autoSubmitMcfForEbayOrder } = await import('./ebay-auto-mcf.service.js')
-          const r = await autoSubmitMcfForEbayOrder(newOrderId)
-          if (r.submitted) {
-            logger.info('ebay-orders: auto-MCF submitted', { orderId: newOrderId, mcfShipmentId: r.mcfShipmentId })
-          }
-        } catch (err) {
-          logger.warn('ebay-orders: auto-MCF submit failed', {
-            orderId: newOrderId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      })()
-    }
-
-    return dbOrder
+    const result = await ingestEbayOrder(order, connectionId, { actor: 'ebay-orders-sync' })
+    if (result.created) this.stats.ordersCreated++
+    else this.stats.ordersUpdated++
+    this.stats.itemsProcessed += result.stats.itemsProcessed
+    this.stats.itemsLinked += result.stats.itemsLinked
+    this.stats.inventoryDeducted += result.stats.inventoryDeducted
+    return result.order
   }
 
   /**

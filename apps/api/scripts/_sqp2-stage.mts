@@ -213,8 +213,8 @@ async function main() {
   // fault, because SQP.1 proved these reports are not empty". SQP.1 proved they reached DONE — and
   // separately measured that **25 of 40 come back genuinely empty every night**, because the ASIN
   // selection asks about ASINs Brand Analytics holds nothing on (docs/2026-08-12-sqp-feed.md §6.2).
-  // Confirmed on the first document staged here: report 115405020677 for B0BVQLQY1D is a literal
-  // `"dataByAsin": []`, 334 bytes, and B0BVQLQY1D is one of the six IT ASINs SQP.1 measured as never
+  // Confirmed on the first document staged here: report 115405020677 for B0FXEB65CC is a literal
+  // `"dataByAsin": []`, 334 bytes, and B0FXEB65CC is one of the six IT ASINs SQP.1 measured as never
   // having produced a row. So SOME zeros are the expected majority outcome and prove nothing.
   //
   // The condition that would actually implicate the parser is ALL of them parsing to zero — that

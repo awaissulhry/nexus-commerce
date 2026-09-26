@@ -28,7 +28,7 @@ function buildSrcDoc(bodyHtml: string, allowImages: boolean): string {
   return `<!doctype html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src ${img}">
 <style>
-  body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px; color: #1c2530; word-break: break-word; }
+  body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, system-ui, sans-serif; font-size: 13px; color: #1c2530; word-break: break-word; }
   img { max-width: 100%; height: auto; }
   ${hideImages}
   blockquote { border-left: 3px solid #d8dde4; margin: 6px 0; padding-left: 10px; color: #5b6573; }

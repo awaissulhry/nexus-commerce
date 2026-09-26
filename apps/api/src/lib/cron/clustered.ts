@@ -60,6 +60,25 @@ export type ClusteredOptions = Parameters<typeof nodeCron.schedule>[2] & { lockT
  *  file get distinct keys. Deterministic: every replica loads the same modules
  *  in the same order, so the same job gets the same index everywhere. */
 const registrationCounts = new Map<string, number>()
+const scheduledTasks = new Set<ScheduledTask>()
+const activeTicks = new Set<Promise<void>>()
+/** The module that registered each live schedule, without its .ts/.js extension (e.g. `jobs/auto-po-replenishment.job`). */
+const registeredModules = new Map<ScheduledTask, string>()
+
+export async function stopScheduledTasks(): Promise<void> {
+  await Promise.all([...scheduledTasks].map(task => task.stop()))
+  scheduledTasks.clear()
+  registeredModules.clear()
+  await Promise.allSettled([...activeTicks])
+}
+
+/**
+ * Which modules have a schedule registered in THIS process. The scheduler publishes it (lib/runtime-status)
+ * so the API can say whether a cron is scheduled — the API registers none of them itself.
+ */
+export function registeredCronModules(): string[] {
+  return [...new Set(registeredModules.values())].sort()
+}
 
 /**
  * Identify the registering module from the call stack.
@@ -136,9 +155,10 @@ function schedule(
   const jobId = jobIdFor(file, expression, index)
   const registeredScope = workspaceContext()
 
-  return nodeCron.schedule(
+  const task = nodeCron.schedule(
     expression,
-    async (...args: never[]) => {
+    (...args: never[]) => {
+      const tick = (async () => {
       if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
         const scheduledAt = Date.now()
         const { redis } = await import('../queue.js')
@@ -159,15 +179,31 @@ function schedule(
         } while (after)
         return
       }
+      if (process.env.NEXUS_REQUIRE_CRON_LEASE === '1') {
+        try {
+          const { redis } = await import('../queue.js')
+          await runWorkspaceTick(redis.connection, `${jobId}:legacy`, Date.now(), async () => { await handler(...args) })
+        } catch (error) {
+          logger.error('automation tick skipped: coordination unavailable', { jobId, error: String(error) })
+        }
+        return
+      }
       if (!(await claimTick(jobId, options?.lockTtlMs))) {
         // Another replica has this minute. Not an error, and not worth a log
         // line 117 times a minute.
         return
       }
       await handler(...args)
+      })()
+      activeTicks.add(tick)
+      void tick.then(() => activeTicks.delete(tick), () => activeTicks.delete(tick))
+      return tick
     },
     options,
   )
+  scheduledTasks.add(task)
+  registeredModules.set(task, file.replace(/\.(ts|js)$/, ''))
+  return task
 }
 
 /** Unchanged passthrough — validation is local and has nothing to coordinate. */

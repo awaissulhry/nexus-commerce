@@ -17,11 +17,13 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
-import { resolvePrice } from './pricing-engine.service.js'
+import { isPriceRefusal, resolvePrice } from './pricing-engine.service.js'
 import { logger } from '../utils/logger.js'
 
 interface RefreshResult {
   rowsRefreshed: number
+  /** CX — cells the engine refused (no FX rate): not written, their old snapshot dropped. */
+  refused: number
   skusProcessed: number
   durationMs: number
 }
@@ -42,7 +44,7 @@ export async function refreshSnapshotsForSkus(
 ): Promise<RefreshResult> {
   const startedAt = Date.now()
   if (skus.length === 0) {
-    return { rowsRefreshed: 0, skusProcessed: 0, durationMs: 0 }
+    return { rowsRefreshed: 0, refused: 0, skusProcessed: 0, durationMs: 0 }
   }
 
   // Resolve every SKU to its parent Product so we can pull
@@ -63,6 +65,7 @@ export async function refreshSnapshotsForSkus(
   if (productIds.length === 0) {
     return {
       rowsRefreshed: 0,
+      refused: 0,
       skusProcessed: 0,
       durationMs: Date.now() - startedAt,
     }
@@ -107,6 +110,7 @@ export async function refreshSnapshotsForSkus(
   }
 
   let rowsRefreshed = 0
+  let refused = 0
   for (const sku of skus) {
     const productId = productIdBySku.get(sku)
     if (!productId) continue
@@ -122,12 +126,24 @@ export async function refreshSnapshotsForSkus(
         for (const fm of fmOverrides) fmsToMaterialize.push(fm)
       }
       for (const fm of fmsToMaterialize) {
-        const resolution = await resolvePrice(prisma, {
-          sku,
-          channel: cell.channel,
-          marketplace: cell.marketplace,
-          fulfillmentMethod: fm,
-        })
+        let resolution: Awaited<ReturnType<typeof resolvePrice>>
+        try {
+          resolution = await resolvePrice(prisma, {
+            sku,
+            channel: cell.channel,
+            marketplace: cell.marketplace,
+            fulfillmentMethod: fm,
+          })
+        } catch (err) {
+          if (!isPriceRefusal(err)) throw err
+          // CX (review 2026-09-26) — refused (no FX rate, or no market currency): this cell is not priced. Its old
+          // snapshot was computed the same wrong way (1:1, or as EUR), so it is dropped — a wrong price never stays
+          // on screen or reaches a push. The other cells go on.
+          await prisma.pricingSnapshot.deleteMany({ where: { sku, channel: cell.channel, marketplace: cell.marketplace, fulfillmentMethod: fm } })
+          refused++
+          logger.warn('pricing snapshot refused (configuration)', { sku, channel: cell.channel, marketplace: cell.marketplace, error: (err as Error).message })
+          continue
+        }
         // Prisma's compound-unique can't accept null on `fulfillmentMethod`;
         // the SQL migration uses two partial unique indexes (one with the
         // column NOT NULL and one WHERE the column IS NULL). At the
@@ -184,6 +200,7 @@ export async function refreshSnapshotsForSkus(
 
   return {
     rowsRefreshed,
+    refused,
     skusProcessed: skus.length,
     durationMs,
   }

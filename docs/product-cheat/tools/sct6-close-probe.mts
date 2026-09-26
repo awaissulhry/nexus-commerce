@@ -10,7 +10,7 @@ import { parse } from 'dotenv'
 
 const ROOT = '/Users/awais/nexus-commerce'
 const SKU = 'xracingbxn48'
-const ASIN = 'B0BTCBPVTS'
+const ASIN = 'B0FX4B2941'
 const MARKET = 'IT'
 const argv = process.argv.slice(2)
 const flag = (name: string) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined }

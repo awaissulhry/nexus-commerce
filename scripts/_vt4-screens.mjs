@@ -107,7 +107,7 @@ const footerBefore = await page.evaluate(() => {
   const f = document.querySelector('.nds-vp-dock-footer')
   return { primary: (f?.querySelector('button:last-of-type')?.textContent ?? '').trim() }
 })
-/* Uncheck one specific: on eBay that is a SET change, and the coordinate is LIVE (item 257584954808). */
+/* Uncheck one specific: on eBay that is a SET change, and the coordinate is LIVE (item 938554736087). */
 const unchecked = await page.evaluate(() => {
   const boxes = [...document.querySelectorAll('.nds-vp-dock-section input[type="checkbox"]')]
   const first = boxes.find((b) => b.checked && !b.disabled)

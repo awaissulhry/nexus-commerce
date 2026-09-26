@@ -276,7 +276,7 @@
   display: block;
   font-size: 11px;
   color: var(--nds-grey-450);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
 }
 
 /* dial + cap, rendered as one honest pair */
@@ -551,7 +551,7 @@
   padding: 11px 13px;
 }
 .acr-pg-planneeds code, .acr-pg-planfoot code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   font-size: 11.5px;
   background: var(--nds-grey-100);
   padding: 1px 5px;

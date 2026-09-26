@@ -131,13 +131,13 @@ describe('buildSharedPicturePayload', () => {
 describe('buildReviseItemPicturesXml', () => {
   it('builds gallery + variation picture sets in the Trading shape', () => {
     const xml = buildReviseItemPicturesXml({
-      itemId: '256566101420',
+      itemId: '949285812839',
       galleryUrls: ['https://c/cover.jpg'],
       axisName: 'Colore',
       byValue: { Nero: ['https://c/nero1.jpg', 'https://c/nero2.jpg'] },
     })
     expect(xml).toContain('<ReviseFixedPriceItemRequest')
-    expect(xml).toContain('<ItemID>256566101420</ItemID>')
+    expect(xml).toContain('<ItemID>949285812839</ItemID>')
     expect(xml).toContain('<PictureDetails>')
     expect(xml).toContain('<PictureURL>https://c/cover.jpg</PictureURL>')
     expect(xml).toContain('<VariationSpecificName>Colore</VariationSpecificName>')

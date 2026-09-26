@@ -11,8 +11,8 @@
     "sku": "GALE-JACKET-BLACK-MEN-S",
     "marketplace": "IT",
     "marketplaceId": "APJ6JRA9NG5V4",
-    "sellerId": "A1VRHKTGYO1JNU",
-    "asin": "B0BMS5B768",
+    "sellerId": "AFXSELLER8BC38",
+    "asin": "B0FX06FC3A",
     "productType": "COAT"
   },
   "attribute": "generic_keyword",
@@ -35,7 +35,7 @@
   ],
   "send": {
     "kind": "amazon",
-    "sellerId": "A1VRHKTGYO1JNU",
+    "sellerId": "AFXSELLER8BC38",
     "marketplaceId": "APJ6JRA9NG5V4",
     "products": [
       {
@@ -45,7 +45,7 @@
     ],
     "feed": {
       "header": {
-        "sellerId": "A1VRHKTGYO1JNU",
+        "sellerId": "AFXSELLER8BC38",
         "version": "2.0",
         "issueLocale": "it_IT"
       },
@@ -91,7 +91,7 @@
   },
   "restore": {
     "kind": "amazon",
-    "sellerId": "A1VRHKTGYO1JNU",
+    "sellerId": "AFXSELLER8BC38",
     "marketplaceId": "APJ6JRA9NG5V4",
     "products": [
       {
@@ -101,7 +101,7 @@
     ],
     "feed": {
       "header": {
-        "sellerId": "A1VRHKTGYO1JNU",
+        "sellerId": "AFXSELLER8BC38",
         "version": "2.0",
         "issueLocale": "it_IT"
       },

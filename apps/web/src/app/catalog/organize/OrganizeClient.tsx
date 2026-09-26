@@ -61,6 +61,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -1090,6 +1091,7 @@ function AttachModal({
     Record<string, Record<string, string>>
   >({})
   const [submitting, setSubmitting] = useState(false)
+  const attachKey = useCommandKey()
   const lastTermRef = useRef('')
 
   // Search parents.
@@ -1224,14 +1226,12 @@ function AttachModal({
     if (!selected) return
     setSubmitting(true)
     try {
-      const res = await fetch(
+      const { response: res, body, conflict } = await sendCommand<any>(
+        attachKey,
         `${getBackendUrl()}/api/pim/attach-to-parent`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': `pim-attach:${selected.id}:${productIds.sort().join(',')}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             parentId: selected.id,
             productIds,
@@ -1239,7 +1239,11 @@ function AttachModal({
           }),
         },
       )
-      const json = await res.json().catch(() => ({}))
+      if (conflict) {
+        onError(commandConflictMessage(conflict, 'attach request'))
+        return
+      }
+      const json = body ?? {}
       if (!res.ok || json?.success === false) {
         onError(json?.error ?? `Attach failed (HTTP ${res.status})`)
         return
@@ -1518,6 +1522,8 @@ function PromoteModal({
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null)
   const [customTheme, setCustomTheme] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // Single promote only: bulk-promote-to-parent is not deduplicated by the API.
+  const promoteKey = useCommandKey()
   const isBulk = !!products && products.length > 0
   const targets = isBulk ? products! : product ? [product] : []
   const titleSku =
@@ -1685,14 +1691,12 @@ function PromoteModal({
                 }
                 onPromoted(json.promoted ?? targets.length)
               } else {
-                const res = await fetch(
+                const { response: res, body, conflict } = await sendCommand<any>(
+                  promoteKey,
                   `${getBackendUrl()}/api/pim/promote-to-parent`,
                   {
                     method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Idempotency-Key': `pim-promote:${targets[0]!.id}`,
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       productId: targets[0]!.id,
                       variationTheme: effectiveTheme || undefined,
@@ -1700,7 +1704,11 @@ function PromoteModal({
                     }),
                   },
                 )
-                const json = await res.json().catch(() => ({}))
+                if (conflict) {
+                  onError(commandConflictMessage(conflict, 'promote request'))
+                  return
+                }
+                const json = body ?? {}
                 if (!res.ok || json?.success === false) {
                   onError(
                     json?.error ?? `Promote failed (HTTP ${res.status})`,

@@ -1535,7 +1535,7 @@ column ids and column-GROUP ids in ONE namespace, and my identity column was `pr
 `.click()` on one left `checked` unchanged. Words across the 105 cells: `Listed` 40 (20 children × 2
 live channels), `Excluded` 42 (20 × Shopify+Etsy, plus the parent's two), `Not set up` 21
 (WooCommerce, every row) — 40 + 42 + 21 + 2 parent identity cells = 105, which reconciles. Parent
-identity cells read `B0F7J163XJ · Parent ASIN` and `257584954808 · 1 listing`, verbatim from the
+identity cells read `B0FXD0620C · Parent ASIN` and `938554736087 · 1 listing`, verbatim from the
 canvas.
 
 **Gates green, run bare:** web `tsc` 0 · vitest 64/64 in 3 files (coverage · projections ·
@@ -2111,7 +2111,7 @@ nil — but it is not nil for anything that consumes that field.
 
 **AIREON is its own finding and it is not a UI one.** 40 children, `Colore` and `Taglia` DECLARED on
 the parent, `Product.variationTheme` = `"Colore,Taglia"`, zero children carrying a value in either
-store — and the family is LIVE on eBay·IT as ItemID `257646289420` with no `_variationAxes` and no
+store — and the family is LIVE on eBay·IT as ItemID `940709435074` with no `_variationAxes` and no
 `_axisValueOrder` on the parent listing. It sells as a multi-variation listing while our record holds
 no axis data at all. GALE-JACKET was "three stores disagree"; AIREON is "the stores are empty and the
 channel is live anyway". VP.2 has it with the Owner as part of the same ruling.
@@ -5257,7 +5257,7 @@ before their fix. The numbers above are from after it.
    `readAxisValues(variantAttributes)` reads the right store, and the store is empty — not #700's
    shape; nothing to fix in the read. **🔴 LIVE consequence: all 20 Amazon·IT child listings are
    `ACTIVE`; the parent declares `variationAxes ['Colore','Taglia']`, `variationTheme 'Colore,Taglia'`,
-   ASIN B0F7J163XJ; 0 of the 20 children carry a `variationTheme` — twenty live variants publish with
+   ASIN B0FXD0620C; 0 of the 20 children carry a `variationTheme` — twenty live variants publish with
    no structured variation attributes; colour and size exist only as text inside the SKU, which
    nothing parses.** **🔴 The "2 of 20" is probably not data:** both populated rows were last written at
    exactly `2026-09-02T04:04:55.866Z` (identical to the millisecond — one batch write; the rows were
@@ -6477,7 +6477,7 @@ before their fix. The numbers above are from after it.
 685. **🔴 DISCLOSURE, 14:11 — A PROBE STRING SAT ON A LIVE ACTIVE PRODUCT'S `brand` FOR ~8 MINUTES ON THE
    PRODUCTION DATABASE, OUTSIDE THE FIXTURE FAMILY (found by 9f read-only while doing item (5); hub
    read both paths 12:10:17Z / 12:10:38Z).** AIREON parent `cmr1b1yxl0000s4rcvopsqv42` (`status
-   ACTIVE`, `amazonAsin B0F7RTV2BD`, real listing copy; `brand` is on the hand-off's list of columns
+   ACTIVE`, `amazonAsin B0FX10086B`, real listing copy; `brand` is on the hand-off's list of columns
    WITH a push path). AuditLog, immutable, UTC: 11:48:10 `"PES2-READBACK-1788349674"` → 11:48:25
    `"Xavia"` (restored) → **12:00:37 `"Xavia PES2 409 probe"`, `bulkOperationId
    cmtk1oczx000cnjesmgqstfp0`, NOT restored** — 5f's #662 409 probe; 5f reported the API went `PATCH
@@ -9603,7 +9603,7 @@ before their fix. The numbers above are from after it.
    write bumps the version, or the CAS token is a fiction on half the writes
    (#reference_product_version_not_row_version). **(c) THE HUB'S CRITERION WAS WRONG — `isPublished:
    false` is NOT a safe-target test.** #513 routed SC.1 to an "UNPUBLISHED Amazon coordinate"; the row
-   carries a real ASIN (B0DJ4926YX, `listingStatus: DISCOVERABLE`, shared with FR and ES) — the flag
+   carries a real ASIN (B0FX8ACE1B, `listingStatus: DISCOVERABLE`, shared with FR and ES) — the flag
    is local, the ASIN is live. The write was safe because NO PUSH PATH exists (verified: no sync item
    created; `BULK_OP_APPLIED` → SSE + read-cache only; reconciliation PULLS), not because of the flag.
    Rule for every lane: a safe target is proven by the ABSENCE OF A PUSH PATH from that write,
@@ -10091,7 +10091,7 @@ before their fix. The numbers above are from after it.
      `"SC1-VERIFY"` → key REMOVED, verified absent — the Owner's own field) are APPROVED as disclosed;
      the write path takes no `reason` (measured — the marker rides in the sentinel value); residue
      4 `BulkOperation` + 4 `AuditLog` rows accepted (item 28). **W3 (master → prefixed column, the
-     `title` of a PUBLISHED Amazon listing, ASIN B0F7J163XJ) is NOT approved by the hub** — SC.1
+     `title` of a PUBLISHED Amazon listing, ASIN B0FXD0620C) is NOT approved by the hub** — SC.1
      verified no marketplace path fires, and the hub believes them, but "never touch a live
      marketplace listing" is the Owner's rule and a published listing's title is that listing;
      → SC.1 looks for an UNPUBLISHED Amazon coordinate in the XAVIA family that takes the prefixed
@@ -13813,7 +13813,7 @@ before their fix. The numbers above are from after it.
          policy question. Recommend: confirm it is a mistake and PES.5 clears the one
          `categoryAttributes.brand` on GALE-JACKET's parent on your word.**
      30. **(#513, 07:02) SC.1's third verification write (W3) would edit the `title` of a
-         PUBLISHED Amazon listing (ASIN B0F7J163XJ) and restore it byte-identical.** SC.1 verified
+         PUBLISHED Amazon listing (ASIN B0FXD0620C) and restore it byte-identical.** SC.1 verified
          no marketplace path fires from the bulk PATCH; the hub still declined under "never touch a
          live listing". If no unpublished coordinate takes the prefixed route, this needs your word
          or stays NOT MEASURED. Related: eBay has no channel write route at all (item 21 grows).
@@ -13830,7 +13830,7 @@ before their fix. The numbers above are from after it.
          the front.
      33. **(#542, 07:23) DISCLOSURE — a rehearsal write touched a row with a LIVE ASIN.** #513
          routed SC.1's W3 to an "unpublished" Amazon·DE coordinate (`GALE-JACKET-BLACK-MEN-XXS`,
-         `isPublished: false`); that row carries ASIN B0DJ4926YX, `listingStatus: DISCOVERABLE`,
+         `isPublished: false`); that row carries ASIN B0FX8ACE1B, `listingStatus: DISCOVERABLE`,
          shared with FR and ES — the flag is local, the ASIN is live. `ChannelListing.title` was
          changed and restored byte-identical; **nothing left the database** (verified: no sync
          item created, `BULK_OP_APPLIED` reaches SSE + read-cache only, reconciliation pulls). The
@@ -13849,7 +13849,7 @@ before their fix. The numbers above are from after it.
          sync item was created is pending. And one fixture child's live Amazon·IT listing
          (`GALE-JACKET-BLACK-MEN-3XL`) had its version move v81 → v82 by a raw-SQL path outside the
          API that no lane accounts for — no data changed, `updatedAt` untouched; writer unknown.
-         **(grown #693/#699/#701/#735, 14:4x–17:12)** GALE-JACKET parent `Product.version` 26 → **44** (several lanes' rehearsals; PES.5's formula saves added two `CellFormula` rows, deleted — 0 catalogue-wide — and a transient `manufacturer` write cleared and read back null) from PES.2's #662 rehearsal (two deliberate stale-token bumps, one write-and-restore pair) — values all restored on two paths, the counter cannot be. **(grown #685, 14:11)** A rehearsal write sat on a LIVE ACTIVE product OUTSIDE the fixture family for ~8 minutes: AIREON parent (`cmr1b1yxl0000s4rcvopsqv42`, ASIN B0F7RTV2BD) `brand` = `"Xavia PES2 409 probe"` from 12:00:37Z to 12:08:56Z (the outgoing PES.2 session's 409 probe; its PATCH returned a transport `000` and it stopped without READING). Restored to `"Xavia"`, both read paths agree, one contaminated row database-wide, delayed re-reads in progress. Whether anything drained outbound is NOT MEASURED: the sync queue produced 0 rows for ANY product since 10:15Z, so the clean count is vacuous (item 24 again). You should know because `brand` is a column an Amazon mapping reads.
+         **(grown #693/#699/#701/#735, 14:4x–17:12)** GALE-JACKET parent `Product.version` 26 → **44** (several lanes' rehearsals; PES.5's formula saves added two `CellFormula` rows, deleted — 0 catalogue-wide — and a transient `manufacturer` write cleared and read back null) from PES.2's #662 rehearsal (two deliberate stale-token bumps, one write-and-restore pair) — values all restored on two paths, the counter cannot be. **(grown #685, 14:11)** A rehearsal write sat on a LIVE ACTIVE product OUTSIDE the fixture family for ~8 minutes: AIREON parent (`cmr1b1yxl0000s4rcvopsqv42`, ASIN B0FX10086B) `brand` = `"Xavia PES2 409 probe"` from 12:00:37Z to 12:08:56Z (the outgoing PES.2 session's 409 probe; its PATCH returned a transport `000` and it stopped without READING). Restored to `"Xavia"`, both read paths agree, one contaminated row database-wide, delayed re-reads in progress. Whether anything drained outbound is NOT MEASURED: the sync queue produced 0 rows for ANY product since 10:15Z, so the clean count is vacuous (item 24 again). You should know because `brand` is a column an Amazon mapping reads.
      34. **(#540/#555, 07:26) PICK THE CHROME — `http://localhost:3000/design/chrome`.** Option A
          (delete the 56px header band, rehouse search/profile/theme/notifications in the rail —
          returns 56px to four of five pages, one chrome region before content, ≈75 files) vs
@@ -13942,7 +13942,7 @@ before their fix. The numbers above are from after it.
      43. **ANSWERED by your 15:35 "get to the fixes" — every parked fix is assigned in #708, fix-then-report mode.** ~~(#703, 15:18; updated #705 15:28) YOUR "grid first, then the rest" — the grid queue is PES.2's three items** (your 15:33 screenshot — the select cell's chevron wrapping under the value, #707, taken first; master stamping "Saved" at queue time, #705; the lab sheet misreading a no-op as a failure, #706 — PES.5's alias save #704 and PES.3's screen proof #705 are done), after which every grid item opened today is closed: D11 met at 1440 on every coordinate (#698), the studio header's unclearable count fixed (#699), the channel sheet's title/description writes now version-guarded against the right row with the returned version and a working no-op check (#702), the media-tile glyph no longer clipped (#701), the reason-first tooltip and Reload confirm on screen (#693). **Decision for you: which of the parked non-grid items resume, and in what order** — P1 the token-resolution gate (one guard, wired), P2/P3 factory light tokens + the dead `--nds-z-modal`, P4 `--nds-text-1` on the ads console (measured first), P5 #649 forced-tile verification, P8 done, P9 `--nds-radius-pill` = 4 px, P10 `BulkOperation` records the token, P11 axis marker on the contract, P12 the images header counter, P15 (DS.2) certify the tag/identity swatches against the GRID's row grounds (odd stripe + selected tint, both themes) not only the page grounds (#737), P13 `BulkOperationModal.tsx:296` reads `updated > 0` as success against `bulk-schema-update` (latent until that endpoint gains a no-op branch; the `bulk-attach-family` `changed/noOp/skipped` shape is the precedent, #706) — plus the stood-down sessions you may want to reopen for them. Nothing resumes on the hub's word alone.
      44. **ANSWERED by your 15:55 "It must all be the same exactly, visually and all" — the unified band is being built in the engine (#710); the selection checkbox ALREADY exists on master and was missing on the CHANNEL scopes (your Amazon·DE screenshot) — PES.3 is enabling the same column there now (#711); readiness moves INTO the band as its pill; say stop if that is not what you meant.** ~~(#709, 15:44) YOUR DECISION — one identity band on every scope?~~ Recommended: [chevron][thumbnail][SKU + a secondary line][state pills right] as ONE component with one content-derived width on master, Amazon and eBay; images kept on every scope (the channel is where they are published); it retires master's three identity columns (346 px locked) for the channel's narrower band and improves the 1440 budget. Meanwhile the two parity defects you saw (P/C pills clipped on master; no thumbnails on the channel) are being fixed now without waiting. Say "yes" and the band is built; say nothing and the two fixes stand alone. ~~REOPENED 2026-09-04 13:17 (#778)~~ **RETRACTED 13:19: the editor session's probe read the grid without scrolling to the restored column (AG does not draw off-screen columns); measured properly, the arrangement persists and restores. STAYS CLOSED. The residual is CLEARED (#781): the restored arrangement is present in the first paint sample on every reload, both sheets — no flash.**
      45. **(#717, 16:23) LOCAL DEV HAS NO REDIS — the `REDIS_URL` host in `.env` (`active-gannet-107885.upstash.io`) does not resolve (NXDOMAIN; other hosts resolve).** The local API runs and answers, but every queue-backed path is inert (mapping enrichment, tool registry), so derived channel columns show "could not be derived" on the local studio. Likely the Upstash instance was deleted or renamed: check the Upstash console and update `REDIS_URL` in `.env` (and Railway if prod shares it — prod's value is in Railway variables, not this file). Until then, lanes read mapped columns as a queue-less build.
-     46. **(#718/#721, 16:31) CATALOGUE GAP — the CATALOGUE, not one family: 227 of 228 ACTIVE Amazon child listings across 9 families carry NO variation theme of their own in OUR data (exactly one does); GALE-JACKET's 20 are a twentieth of it.** Whether Amazon itself holds the children's variation data (from an earlier feed, or derived from the parent at publish) is NOT measured — the listings are active, so Amazon accepted something; one "Check Amazon" read-back on a child would say — **but NOT from a plain laptop process: the SP-API refresh token is revoked there (`invalid grant parameter : refresh_token`), the error is caught per ASIN, and the run summarises as clean — a FALSE NEGATIVE that reads exactly like "Amazon has no theme either". The working form is `cd apps/api && railway run --service "/api" env -u REDIS_URL npx tsx scripts/<probe>.mts` (the service name is literally `/api`; PES.5, #721).** Original, one family: — the parent declares the theme (Colore,Taglia; ASIN B0F7J163XJ), 0 of 20 children carry a `variationTheme`, `categoryAttributes` holds no colour/size on any row, and the Amazon override bag carries only `country_of_origin`; colour and size exist only as text in the SKU. This is a listing defect on the marketplace side, not a UI one — and it is why the studio's axis columns and the new identity band's axis line are empty on this family. Decision: is this one family or the catalogue? (PES.5 is counting, read-only.)
+     46. **(#718/#721, 16:31) CATALOGUE GAP — the CATALOGUE, not one family: 227 of 228 ACTIVE Amazon child listings across 9 families carry NO variation theme of their own in OUR data (exactly one does); GALE-JACKET's 20 are a twentieth of it.** Whether Amazon itself holds the children's variation data (from an earlier feed, or derived from the parent at publish) is NOT measured — the listings are active, so Amazon accepted something; one "Check Amazon" read-back on a child would say — **but NOT from a plain laptop process: the SP-API refresh token is revoked there (`invalid grant parameter : refresh_token`), the error is caught per ASIN, and the run summarises as clean — a FALSE NEGATIVE that reads exactly like "Amazon has no theme either". The working form is `cd apps/api && railway run --service "/api" env -u REDIS_URL npx tsx scripts/<probe>.mts` (the service name is literally `/api`; PES.5, #721).** Original, one family: — the parent declares the theme (Colore,Taglia; ASIN B0FXD0620C), 0 of 20 children carry a `variationTheme`, `categoryAttributes` holds no colour/size on any row, and the Amazon override bag carries only `country_of_origin`; colour and size exist only as text in the SKU. This is a listing defect on the marketplace side, not a UI one — and it is why the studio's axis columns and the new identity band's axis line are empty on this family. Decision: is this one family or the catalogue? (PES.5 is counting, read-only.)
      47. **(#718/#721, 16:31) A CLEAN-UP, not an incident: two GALE-JACKET children (BLACK-MEN-XXS, YELLOW-MEN-XXS) carry `"variantAttributes": "[object Object]"` in BOTH `variantAttributes` and `categoryAttributes`; nothing else in the catalogue; author and date UNKNOWN (the 04:04:55 timestamp was a `manufacturer` cascade touching all 15 children — PES.5 retracted its batch inference).** Decision: restore both bags on those two rows (a fixture write, announced, by value), or leave. Original: (`{"Size":"XS","Color":"Nero","variantAttributes":"[object Object]"}`, both written at exactly 04:04:55.866Z today — one batch, a rehearsal shape, author not provable). Decision: restore those two rows to `{}` like their 18 siblings (a fixture write, announced, by value), or leave as evidence until the writer is found. PES.5 is counting whether the same shape exists elsewhere in the catalogue.
      48. **(#747, 18:18) STATUS, no decision needed: your 15:55 "must all be the same exactly" is LANDED and MEASURED — one identity band component on master, Amazon and eBay, its width derived from the rendered variant band (404 px, 0 of 21 SKUs truncated on all four coordinates), the selection checkbox column on every scope, pinned = checkbox + band at 447 px everywhere, no product name under the SKU (your 16:43), C chip on variants and P chip on the band row on both scopes.** The layout suite's first clean full run today confirms 7 of 7 required Amazon columns fit at 1440 on every counted coordinate with 15 px to spare (the band spent the rest); at 1280 — below the ruled bar — 5 of 7 fit (was 6), recorded as the new floor. One regression from the wider band is in fix: at 1280 the cell reveal leaves `bullet_point` covered by the detail panel by 24 px (PES.2, `revealCell.ts`). The formula editor you asked for at 16:58 (#730) is IN BUILD per your 18:43 "the reveal can wait" (#753); the 1280 reveal regression is parked with its diagnosis recorded (#752).
      49. **(#754, 19:24) FORMULA EDITOR — the guided authoring you asked for at 16:58 is BUILT and verified on screen; SAVING a formula does not work yet.** On screen now, on the XAVIA family: the `ƒ` mark, coloured references as you type with the referenced cell outlined in the same row, the function hint with the active argument in bold, autocomplete showing each field's current value, a live preview of the result, and the server's error pointed at the exact character. What is not there yet: pressing Enter ends the edit but the formula is not saved (no request leaves the browser) — PES.2 is diagnosing that now and it is the only thing on their plate. Two limitations to know: ↑/↓ cannot walk the completion list (Tab or click picks one) because the shared list panel does not yet take an external active index — parked for the design-system lane; and one separate defect found on the way, Customise → tick manufacturer → Save does not add the column, is with PES.3. Nothing written to prod; every rehearsal read back clean. **UPDATE 19:52 (#762) + 19:57 (#763): SAVING NOW WORKS AND IS PROVEN ON THE XAVIA FIXTURE — Enter sent the save, the server evaluated `=upper($brand)` to `XAVIA`, wrote it, stored the formula, and the fixture was restored and verified on two paths after a delay; one display change ruled from your 16:58 words (the cell shows the RESULT at rest, the formula only while editing); the cause was the grid library's React adapter, which only accepts a value the editor pushes to it. The same cause means the SELECT cells (status, country of origin, the yes/no fields) have never saved through the grid in the rebuilt sheet — found from source, being fixed next with a before/after measurement; nothing is in production, so no operator is affected today.** **UPDATE 20:28 (#766/#767): the display change is LANDED — a cell with a formula shows the RESULT with a small ƒ mark at rest and the formula only while editing, verified on screen; the select cells now save (they never had through the grid in the rebuilt sheet); every formula save now leaves an audit entry with who, from where, and the version before and after, which no formula save did until tonight. Since then (#770): the = editor now declines the columns a formula cannot write and opens on the ones it can, verified both ways on screen; the hover text that explains a refusal is now SEEN on screen: "Formulas are not available on this column — only some master fields can hold one. Type a value instead." (#770). Customise on master (#771): the dialog no longer asks the grid for two columns that stopped existing (the SKU and readiness moved into the identity band), and the "reveal the new column" step now runs on a background tab too; The one remaining Customise defect is now ISOLATED (#772) and pre-existing: on every reload the sheet re-applied its default "landing" view over the arrangement you had saved, so a saved column never survived a reload. CORRECTION 21:31 (#773): that explanation was wrong — PES.2 landed the guard as ruled (it stays; it is correct on its own terms) and then showed by A/B that the landing view is NOT what discards your saved columns; the real cause is next door (the saved arrangement either never reaches the grid on load, or the scope-chip logic re-imposes its own column set after it) and is being isolated one variable at a time. **FIXED 21:41 (#774):** the grid was being created before its columns loaded, so the saved arrangement was handed to a grid with nothing to apply it to and every column fell back to its default — nothing was overwriting it. Now the saved arrangement is re-applied once the columns are real; verified on screen across a reload at 2, 5 and 10 seconds. Your Customise complaint from 15:44 is closed on screen.** **UPDATE 20:48 (#768/#769): one defect found and fixed tonight that you should know about — merely OPENING a cell that already held a formula armed a save of the formula text, and one such save landed on the XAVIA test row with no operator action (restored within minutes, fully recorded by the new audit row). The state is fixed and proven; what exactly triggered that one save was not reproduced and stays open in the ledger.**
@@ -14864,7 +14864,7 @@ when the freeze lifts.
      `draggable`; SR.1 did not drag — a write) · (7) the readiness numbers look like one idea and
      are four — `Master 71%` and `Amazon 71%` are the same numeral for "warnings, publishable" and
      "blocked"; on master·PL every row reads `Ready` while the chip reads `—` → lead with the
-     state word · (8) the Listings pane has NO time reference at all and its `↗ B0BMS6ZZ4H` is a
+     state word · (8) the Listings pane has NO time reference at all and its `↗ B0FX4F79EF` is a
      plain `<div>` with no href — the one thing that looks like "go see the real listing" is
      inert; ASIN printed twice · (9) `Restore record`'s datetime has empty `min`/`max` and with a
      browser-valid value the button stays disabled saying "Pick a date and time first" → the
@@ -20218,7 +20218,7 @@ when the freeze lifts.
      ItemID would settle it, and that call has not been made (it needs someone authorised
      for live eBay reads).
    - **🔴 The row to look at first is NOT one of the 13:**
-     `WATERPROOF-OVERJACKET-BLACK-MEN`, ItemID `257608449467` — **quantity 10, price
+     `WATERPROOF-OVERJACKET-BLACK-MEN`, ItemID `922402495702` — **quantity 10, price
      0.00.** The 13 at 0/0 have nothing to sell; this one **has ten and no price.**
    - **🟢 A HYPOTHESIS FORMED AND KILLED BY CHECKING THE BASE RATE — the method worth
      copying:** all 13 are `followMasterPrice = true` with `masterPrice IS NULL`, "a tidy
@@ -21042,7 +21042,7 @@ when the freeze lifts.
      listing LIVE AND SELLING on eBay while the local record is not being pushed to it.**
      Collapsed into one "active?" field — "exactly what I would have built without that
      ruling" — it would have reported one and hidden the other, and **either reading would
-     have been wrong.** (Channel ref 257584954808, readiness Missing, both GPSR issues
+     have been wrong.** (Channel ref 938554736087, readiness Missing, both GPSR issues
      itemised.)
    - **→ OWNER, data observation (not a defect):** at least one GALE child is live and
      selling on eBay·IT while its local record is not being pushed — **local edits to that
@@ -23136,7 +23136,7 @@ when the freeze lifts.
      future sources ALLOWED, only 'data' denied — and undo-by-construction).
    - **PES.3's reading of the XAVIA rule is RATIFIED:** verification writes are sanctioned;
      touching a LIVE marketplace listing is not — a channel-scope write lands on GALE's live
-     eBay listing (ItemID 257584954808) and prod's outbound sync is running
+     eBay listing (ItemID 938554736087) and prod's outbound sync is running
      (reference_engine_undoes_operator_pause is the history here). Correctly held.
    - **HUB AUTHORIZATION: the deliberate-409 rehearsal is APPROVED as non-mutating
      verification** — a stale `expectedVersion` exercises the entire write path and conflict
@@ -25790,8 +25790,8 @@ Evidence from prod (read-only probes, 2026-09-01): `ProductVariation` = 0 rows,
 `VariantChannelListing` = 0 rows, `ChannelListingOverride` = 0 rows, and NO product has >1
 `ChannelListing` per channel×marketplace. 22 "alias shells" exist today as CHILDLESS parent Products
 each holding one eBay·IT listing (6 ACTIVE / 16 DRAFT, all quantity 0, price 0) — GALE-JACKET-ALT1/2/3
-+ IT-GALE-JACKET carry real ItemIDs 256566101420 / 256566102729 / 256566103703 / 256564203510 while
-GALE-JACKET holds all 20 children and ItemID 257584954808.
++ IT-GALE-JACKET carry real ItemIDs 949285812839 / 910932382515 / 950640873955 / 913270132587 while
+GALE-JACKET holds all 20 children and ItemID 938554736087.
 
 1. **Alias lives on `ChannelListing`, not `VariantChannelListing`.** Layout doc §3 routes
    per-alias-per-variant values through `VariantChannelListing`, which hangs off the deprecated,
@@ -26257,7 +26257,7 @@ reference_networkidle_gate_hung_request).
 
 **3.7 VERIFIED ON SCREEN** at /products/<id>/edit/studio?scope=EBAY&market=IT, with a temporary
 in-page fetch shim rewriting only the HOSTNAME (exactly what the env fix does; no app code changed):
-alias band renders `★ Primary · ACTIVE · 257584954808 · 20 variants · 100%`; 21 rows (1 band + 20
+alias band renders `★ Primary · ACTIVE · 938554736087 · 20 variants · 100%`; 21 rows (1 band + 20
 children); the 🔗 inherited mark renders on 20 child cells and **zero on the band** (ruling #33's
 "inherits from itself" confirmed fixed ON SCREEN); tooltip "Inherited — the master record"; the
 readiness bar is **`nds-alias-readiness-warning` at 100% width** — ruling #43's exact case, colour
@@ -26347,7 +26347,7 @@ The pool cleared (hub closed 4 stale SSE tabs), so the caveat on the earlier pas
 Loaded `/products/<id>/edit/studio?scope=EBAY&market=IT&tab=sheet` on a fresh tab, NO shim:
 
 - `shimPresent: false`; two real `/studio/sheet` round-trips to `127.0.0.1:8091` (1862ms, 4691ms).
-- 21 rows · 1 alias band `★ ACTIVE · 257584954808 · 20 variants`.
+- 21 rows · 1 alias band `★ ACTIVE · 938554736087 · 20 variants`.
 - Readiness bar `nds-alias-readiness-warning` at **100%** — ruling #43's exact case: colour from
   STATE, and a percent threshold would have painted it green.
 - **100 `nds-cell-prov-inherited` marks + 100 tinted cells, and `bandRowMarks: 0`** — ruling #33's
@@ -26379,7 +26379,7 @@ all ALLOWED; only `'data'` denied) and that undo/redo round-trip by construction
 ⚠ **The one behaviour still unproven end-to-end: a real cell WRITE.** Every read, render, chip,
 filter, provenance and preflight path is verified on real data, but no cell edit has actually
 round-tripped to the server from this lane. I am not doing that on my own initiative: a channel-scope
-write lands on GALE's **live eBay listing** (ItemID 257584954808), and while my local API has crons
+write lands on GALE's **live eBay listing** (ItemID 938554736087), and while my local API has crons
 disabled, the PROD API's outbound sync is running and could propagate it. That is outward-facing and
 not cleanly reversible, so it needs the Owner's word even though GALE is inside the sanctioned XAVIA
 fixture family. A master-scope attribute write would be safe, but that is PES.2's surface, not mine.
@@ -26599,7 +26599,7 @@ bar 48px ≈ 187px of 240px, no truncation on the current data, no overflow.
 - The **empty-shell marker also stays on screen** (`empty`, amber): a live listing with nothing
   behind it is the single most important thing a band can say, so it never moves to a hover.
 - Only the ItemID and the variant count moved to the band's title, exactly as #77 sanctioned:
-  `"Primary · Listing 257584954808 · 20 variants · Missing — 100% of required fields filled"`.
+  `"Primary · Listing 938554736087 · 20 variants · Missing — 100% of required fields filled"`.
 - The readiness bar went 96px → 48px, deliberately: at 240px it was competing with the listing's
   NAME, and a name an operator cannot read is worse than a bar they read less precisely. The exact
   percentage is in the title, and the COLOUR still comes from state, never pct (#43).
@@ -26736,7 +26736,7 @@ one shared EventSource), not per-pass tab hygiene.
 ### PES.3 — 6.27 witness: feasibility CHECKED, declined (ruling #93)
 No safe target exists. All 40 eBay·IT listings in the XAVIA families are ACTIVE + published with real
 ItemIDs; widening to all 20 non-ACTIVE eBay·IT rows, every one still has a real ItemID and
-`isPublished: true` (closest: `xavia-knee-slider`, DRAFT, 8 kids, ItemID 256550369887). The bulk
+`isPublished: true` (closest: `xavia-knee-slider`, DRAFT, 8 kids, ItemID 910792398942). The bulk
 route does not itself enqueue an outbound push, but prod crons are running and a pinned test value
 would sit on a real listing meanwhile.
 
@@ -26761,7 +26761,7 @@ which is how I saturated the pool in the first place earlier tonight.
 ### PES.1 — five on-screen passes + the origin-pool fix (rulings #91, #94)
 
 **4 of 5 passes VERIFIED on screen** (child GALE-JACKET-BLACK-MEN-3XL, market IT, live `:8091`):
-- **1.6 ASIN** — header reads `GALE-JACKET-BLACK-MEN-3XL | B0BMS6ZZ4H | Active | Variation of GALE-JACKET`.
+- **1.6 ASIN** — header reads `GALE-JACKET-BLACK-MEN-3XL | B0FX4F79EF | Active | Variation of GALE-JACKET`.
 - **1.24 tabpanel pairing** — `aria-controls="studio-panel-sheet"` resolves to the panel whose
   `aria-labelledby` points back at the tab. Both directions.
 - **1.29 family link** — real anchor "Variation of GALE-JACKET" → the parent's studio.
@@ -27713,7 +27713,7 @@ on 8092 with it set rather than restarting 8091, which other lanes may be using.
 - **Jump-to-row is scope-only** (`setTab('sheet')`), labelled "Open sheet" for what it does. Precise
   jump needs a productId → rowId resolution (a sheet row id is `alias:productId`, and the queue row
   carries no alias); guessing `primary:` is right today and silently wrong when ② exists.
-- **All 36 dead rows on this coordinate share one `externalListingId`** (257584954808) across 21
+- **All 36 dead rows on this coordinate share one `externalListingId`** (938554736087) across 21
   products — consistent with one multi-variation eBay listing, but it makes the column useless for
   triage. Flagging as a data observation, not acting on it.
 
@@ -28088,7 +28088,7 @@ that configuration**, while 208 of them carry a non-zero price. So the follow-ma
 distinguish the 14 at all, and the explanation is wrong. Testing the base rate is the whole reason
 this is a correction rather than a second wrong claim.
 
-**The sharpest row is not one of the 13.** `WATERPROOF-OVERJACKET-BLACK-MEN`, ItemID 257608449467:
+**The sharpest row is not one of the 13.** `WATERPROOF-OVERJACKET-BLACK-MEN`, ItemID 922402495702:
 **quantity 10, price 0.00** — the one with stock to sell. The 13 at 0/0 cannot transact; this one
 could. If it is what the Owner acts on, it should be this row first.
 
@@ -28476,7 +28476,7 @@ is a `useCallback` depending on the **stable inner callbacks** rather than on th
 `deriveScopeOptions` is called inside the provider's `useMemo`, which owns the identity.
 
 Re-verified on screen after the change (child · IT): header reads
-`GALE-JACKET-BLACK-MEN-3XL | B0BMS6ZZ4H | Active | Variation of GALE-JACKET`, chips 71/71/—, sheet
+`GALE-JACKET-BLACK-MEN-3XL | B0FX4F79EF | Active | Variation of GALE-JACKET`, chips 71/71/—, sheet
 21 rows, `⋯` trigger present, 14 API calls completed.
 
 **PES.7 P5 — the schedule surface (2026-09-01 ~22:00).** Scheduling CRUD works; **the cron that
@@ -28920,13 +28920,13 @@ on the DS, types transcribed from live responses.
 
 🔴 **The finding that shaped both:** a **parent row has no figures of its own**. Measured across the
 full set of 20 children — parent `byChannel: []` at 30/60/90 days and **0 ads for every identifier
-it has** (incl. its own ASIN B0F7J163XJ), while children hold **427 units across 17 of 20** and
+it has** (incl. its own ASIN B0FXD0620C), while children hold **427 units across 17 of 20** and
 **93–107 ads / 70–76 campaigns each**. `totalUnits` is the sum of an empty list, so "0 units · £0
 revenue" and "No ads are running against this product" are the opposite of the truth, stated
 confidently. Both halves now name where the figures live and say explicitly that this is **not a
 measurement of zero**. Aggregating children would be feature invention, so it is not done.
 
-Related: the ad rows reference ASIN **B0BMSH19GY**, which belongs to one CHILD, not the parent — so
+Related: the ad rows reference ASIN **B0FXFA789A**, which belongs to one CHILD, not the parent — so
 the query sends every identifier the product has. (The old AdsTab already did; no bug there.)
 
 Other rules, each tested: **ACOS `null` ≠ 0%** (measured 759¢ spent, 0 sales → reads "No sales", and
@@ -33428,7 +33428,7 @@ shape: the coordinate-wide hook, and `formulaWritable` on my client mirror.
 `GALE-JACKET` (XAVIA GALE, OUTERWEAR), 21 rows / 1 alias, one VARIANT row — never the parent.
 
 🔴 **First, the safety reading, because these are live listings.** All 21 rows carry a real ACTIVE
-Amazon listing with an ASIN (`B0F7J163XJ` on the parent, `B0BMS…`/`B0D8…` on the children,
+Amazon listing with an ASIN (`B0FXD0620C` on the parent, `B0BMS…`/`B0D8…` on the children,
 `isPublished: true`). Strictly, **no channel column on my scope has "no push path"** in the sense the
 rehearsal rule words it: every formula-writable Amazon column merges into `overrideData`, and the
 resolver reads that layer when something publishes. What I DID verify is narrower and is the thing
@@ -36195,7 +36195,7 @@ Colore/Taglia columns show as empty, and that difference is real, not a renderin
 - VP.5 · **nexus-commerce-79** · 2026-09-11 · **P1 DONE — the three pieces are exported. VP.3 / VP.4: this is the prop contract; code against it and delete your stubs.** Nothing committed.
   **`AxisChip`** — `@/design-system/primitives`. `{ label, count?, pressed?, dragHandleProps?, grip?, ...buttonProps }`. A `<button type="button" class="nds-axischip">`; a string/number `count` is wrapped in `Tag neutral` for you, a node is passed through. `dragHandleProps` is spread onto the GRIP span (`draggable`, `onDragStart`, …) — never a nested button. `grip={false}` for an axis that cannot be reordered. Measured against canvas artboard 1: 28px `--nds-control-h-sm`, radius 8 `--nds-radius-lg`, border `--nds-border`, padding 0/9/0/6, gap 7, label 12.5/600 `--nds-text-strong`, grip `GripVertical` 13px `--nds-text-3`, count = `.nds-tag.neutral` (11px/600, pill, 2px 8px) — every one of those is the canvas's own value, and every canvas hex resolves to the token (`#d8dde4`=border, `#3a4452`=text-strong, `#eef1f5`=surface-sunken, `#7e8796`=text-3).
   **`MappingChip`** — `@/design-system/primitives`. `{ from, to?, title?, className? }`. A static `<span class="nds-mapchip">`, deliberately NOT a button: §4.1 gives the band one control (`Edit mapping`) and a clickable chip would be a second way into a surface the band already reaches (layout doc D9). `to` omitted renders `—`. Canvas artboard 2: 28px, radius 8, padding 0 9px, from 12.5/**500** `--nds-text-2`, `ArrowRight` 12px `--nds-text-3`, to 12.5/600.
-  **`ProjectionCell`** — `@/design-system/grid/renderers`. 🔴 **The cell VALUE is `boolean | null | undefined` — the include flag and NOTHING else.** AG's fill handle copies the value; if the value were the projection object, dragging "Listed · B0F7J163XJ" down twenty rows would stamp one variant's ASIN and state onto nineteen others. Everything else arrives through `cellRendererParams`: `{ facts(params) → { state?, detail?, note?, heldReason? } | null, onToggle?(next, params), label?(params), readOnlyReason? }`. `value === null` = no tick at all → that is the PARENT row (mono id + note). Two things only the COLUMN can do: `valueSetter` must MUTATE `params.data` and return true, or AG discards the filled value; and `cellRendererParams` must be a STABLE object — an inline literal re-runs the column model on every render. Canvas: gap 6, tick 15px, dot 7px (`solid` fill / `hollow` = 1.5px inset ring, never a pale fill), word 13/500, mono detail 12px, note 11px `--nds-text-muted` on the right edge.
+  **`ProjectionCell`** — `@/design-system/grid/renderers`. 🔴 **The cell VALUE is `boolean | null | undefined` — the include flag and NOTHING else.** AG's fill handle copies the value; if the value were the projection object, dragging "Listed · B0FXD0620C" down twenty rows would stamp one variant's ASIN and state onto nineteen others. Everything else arrives through `cellRendererParams`: `{ facts(params) → { state?, detail?, note?, heldReason? } | null, onToggle?(next, params), label?(params), readOnlyReason? }`. `value === null` = no tick at all → that is the PARENT row (mono id + note). Two things only the COLUMN can do: `valueSetter` must MUTATE `params.data` and return true, or AG discards the filled value; and `cellRendererParams` must be a STABLE object — an inline literal re-runs the column model on every render. Canvas: gap 6, tick 15px, dot 7px (`solid` fill / `hollow` = 1.5px inset ring, never a pale fill), word 13/500, mono detail 12px, note 11px `--nds-text-muted` on the right edge.
   **The projection vocabulary, and the one thing the Owner may want to move.** New pure module `design-system/grid/renderers/projection.ts`: `projectionMeta(state)`, `PROJECTION_STATES`, `isProjectionState()`. The five §9 words are literal; **every tone is READ from `readinessMeta()`** through a declared counterpart the meta carries in `from`, so nothing anywhere picks a colour (ruling #3/#11 kept, without a converter between the two existing vocabularies):
 
     | state | word (§9) | tone comes from | dot | tick |
@@ -36336,7 +36336,7 @@ VERDICT`):
    `axisSynonymKey` (`apps/api/src/services/ebay-theme-axes.ts`; group 0 is `colore ≡ color ≡ colour ≡ …`).
    🔴 That file's comment says the group ARRAY ORDER is load-bearing because `__dimN__` keys are
    position-derived — append-only.
-3. The fixture coordinate has a LIVE listing (ItemID `257584954808` on all 21 rows) and `explicitAxes: true`,
+3. The fixture coordinate has a LIVE listing (ItemID `938554736087` on all 21 rows) and `explicitAxes: true`,
    so §4.4.4's lock banner is on a REAL arm here rather than a synthetic one. Useful when you build `locked`.
 
 **My fixture, so your contract and my surface can be diffed on the same data.** `./fixtures.ts` is transcribed
@@ -36619,7 +36619,7 @@ the count says so instead of hiding it.
 
 **eBay·IT projection, measured:** `noun=specific`, `limits 5/250`, mapping `Colore→Colore · Taglia→Taglia`
 (from `Product.variationTheme` + `_axisNameLabels`, NOT from `variationMapping`), **3 target options**
-(`Colore` taken · `Taglia` taken · `Scollatura` free), `locked: YES` — *"Item 257584954808 is live with Colore
+(`Colore` taken · `Taglia` taken · `Scollatura` free), `locked: YES` — *"Item 938554736087 is live with Colore
 and Taglia. Adding or removing a specific relists it; reordering and adding values do not."* — `creatable:
 false` with the PES.5-ii reason, account label `xaviaracing`, 20 of 21 rows included, 0 mapping errors.
 **Amazon·IT:** `noun=theme`, `limits 4/null` — the 4 is DERIVED from the widest combination the product type's
@@ -36680,7 +36680,7 @@ Predictions were written BEFORE each write (a read-back alone only confirms); re
   queue rows. Restored by deleting that id: 0 rows before, 0 after.
 - **(C) 🔴 The arm (A) could NOT exercise, forced.** In (A) `isPublished` was ALREADY false, so "exclude lowers
   `isPublished`" was asserted by a field that could not move — the arm that would have failed is the one never
-  run. Forced on eBay·IT listing `cmqrogyvn0005njpku3qdechl`, which is `ACTIVE` with ItemID 257584954808 and
+  run. Forced on eBay·IT listing `cmqrogyvn0005njpku3qdechl`, which is `ACTIVE` with ItemID 938554736087 and
   `isPublished: true`: after the write `isPublished true→false`, `variationExcluded false→true`, **the ItemID
   was kept** (excluding never deletes a row), `syncPaused` untouched on an existing row. Restored by value on
   both fields; queue rows 1 before, 1 after.
@@ -36833,7 +36833,7 @@ PES.2's stylesheet for a cosmetic number.
 | pinned cells with the 7% primary tint | **40**, `.nds-cell-is-pinned`, `color(srgb … / 0.07)` | 0 |
 | `SourceIndicator` kind | `override` (pin glyph) ×40 | `master` (link glyph) ×40 |
 | listing state word | `Listed` + ItemID | `Draft` |
-| §4.4.4 lock banner | shown, real item 257584954808 | absent (`locked: null`) — correct |
+| §4.4.4 lock banner | shown, real item 938554736087 | absent (`locked: null`) — correct |
 | locked axis listboxes | 2 disabled, lock reason on the element | 2 live |
 | dock popup vs the track's `overflow: hidden` | — | **WITNESSED**: `position: fixed`, portalled to `<body>`, and `elementFromPoint` at its centre returns the popup itself. Not reasoned from the CSS. |
 
@@ -36854,7 +36854,7 @@ session, and the logged-in tab is the control that separates the two.
    20, and the MASTER sheet reports `color = null` and `axisValues = {}`. So that field is the
    family's axis TUPLE — which combination a variant is — and not anything inherited, which is also
    why all 40 cells are `pinned`. A one-click reset labelled *"Reset … to the shared value Nero"*
-   would have deleted a Colore specific from item **257584954808**, which is LIVE. **Nothing was
+   would have deleted a Colore specific from item **938554736087**, which is LIVE. **Nothing was
    written** — the hold was in place before any run touched the control. The reset now waits on
    `cell.inheritedValue` (VP.2 REQUEST A7, the server's statement of where it would land) and states
    that on the control; `undefined` ("not answered") holds with a different sentence from `null`
@@ -36940,15 +36940,15 @@ They built a reset against `sharedAxisValues` and held it when this read said `C
 children while the master sheet said `color: null` on the same children at the same minute. `sharedAxisValues`
 is the family's axis TUPLE; nothing inherits it. **Measured now that the field exists: `inheritedValue` is
 `null` on every normal row — a reset EMPTIES the cell.** So a one-click "restore Nero" would have cleared a
-Colore specific on live item 257584954808. The hold was correct and can now be lifted onto a real answer.
+Colore specific on live item 938554736087. The hold was correct and can now be lifted onto a real answer.
 Derived from the master sheet's cell for the same column (clearing a channel override uncovers the
 master-derived base, `studio-sheet.service.ts:1202-1213`). **Absent ≠ null, as VP.4 asked:** the field is
 OMITTED when it cannot be computed, with `inheritedValueUnknownReason` — measured on eBay·DE, *"This
 coordinate has no column for Colore, so a reset has no target here."* A `mapped` cell is deliberately left
 unanswered rather than answered with the master value, which would be a confident wrong answer.
 
-**A6 `parent` landed**, and read rather than inferred: eBay·IT `externalId 257584954808`, Amazon·IT
-`B0F7J163XJ`, `listings: 1`, `state: 'listed'`, with its own reason sentence. `counts.rows` 21 now has the
+**A6 `parent` landed**, and read rather than inferred: eBay·IT `externalId 938554736087`, Amazon·IT
+`B0FXD0620C`, `listings: 1`, `state: 'listed'`, with its own reason sentence. `counts.rows` 21 now has the
 21st row to point at.
 
 **The "shared-value folding bug" is DATA, and it is now named instead of asserted.** VP.4's witness is exact:
@@ -37000,7 +37000,7 @@ whole page to Next's error boundary. Cause: VP.2 shipped `parent` between my run
 server would have left the page dead on every load.
 
 **3. A6 and A7 landed and both holds now consume real data.** The parent row is the server's, with
-the PARENT listing's own external id — the row reads `● Listed · 257584954808 · 1 listing`, and the
+the PARENT listing's own external id — the row reads `● Listed · 938554736087 · 1 listing`, and the
 lane's "show only the count" fallback survives for a coordinate that answers without one. The reset
 reads `inheritedValue`: **4 of 40 cells are actionable** — exactly the two clobbered XXS rows ×
 two axes, the only cells where a reset has somewhere to land. The other 36 are held with the
@@ -37021,7 +37021,7 @@ inference, and VP.2 declines it for the same reason.
 | bands | subheader **49** · scope bar **40** · mapping band **40** · sheet toolbar **41** (40 + rule) · strip **30** · header **28** · row **36** · footer **36** |
 | widths | identity **380** · Included **90** · axis **150**/**130** · Listing fills · dock track **420**, panel **419**, sheet **1374 → 954** |
 | controls | **28**, every one, in all three regions |
-| rows | **21** (parent + 20); parent reads `Listed 257584954808 1 listing` |
+| rows | **21** (parent + 20); parent reads `Listed 938554736087 1 listing` |
 | state | 40 pinned cells tinted · 2 suspect marks · 4 of 40 resets actionable |
 | console | zero errors in the logged-in browser; the probe's `401 /api/auth/me` is its own unauthenticated session |
 
@@ -37275,8 +37275,8 @@ run would have recorded `1 listing` with no `Listed` and no ItemID as a finding 
 when it was really one contract revision of lag.
 
 Re-verified at 1440×900 after the change:
-- parent row: `P GALE-JACKET …` · `The listing` · **`Listed 257584954808 1 listing`** ✅
-- child row: `Listed 257584954808` ✅
+- parent row: `P GALE-JACKET …` · `The listing` · **`Listed 938554736087 1 listing`** ✅
+- child row: `Listed 938554736087` ✅
 - bands unchanged: band **40** · toolbar **41** · strip **30** · header **28** · row **36** · footer **36**
 - 2 suspect marks, 4 of 40 resets actionable, zero console errors but the probe's own 401.
 
@@ -38130,7 +38130,7 @@ family has no axes, and saying it twice in a way that reads as a fault is worse 
 **🔴 AND FOR THE OWNER — AIREON makes the store question bigger than GALE-JACKET showed.** Measured:
 40 children · declared axes `["Colore","Taglia"]` · `Product.variationTheme` `"Colore,Taglia"` ·
 **0 of 40 children carry an axis value in `categoryAttributes.variations`** · **0 of 40 in
-`Product.variantAttributes`** · and the family is **LIVE on eBay·IT with ItemID `257646289420`**. Its SKUs
+`Product.variantAttributes`** · and the family is **LIVE on eBay·IT with ItemID `940709435074`**. Its SKUs
 carry the values (`AIREON-JACKET-CREMA-E-VINO-MEN-3XL` — a multi-segment colour), and its parent listing has
 no `_variationAxes` and no `_axisValueOrder`. So this is a family selling as a multi-variation listing on eBay
 while our local record holds **no axis data at all**. The GALE-JACKET finding was "three stores disagree";
@@ -41123,11 +41123,11 @@ LOCAL URL:
 **(T16 on LOCAL, the resolver's override tier has live data here.)** `GALE-JACKET-BLACK-MEN-XS` · AMAZON·DE · ACTIVE ·
 `"SIZE/COLOR"`; the same child · AMAZON·IT · ACTIVE · `""` (empty string, len 0) — the `'' ⇒ null` rule is exercised on
 local too. eBay·IT carries `"Color,Size"` on the PARENT `GALE-JACKET` listing **and on all 19 child rows** (ACTIVE, item
-257584954808). AIREON·DE holds the one `variationMapping` row (DRAFT, null theme).
+938554736087). AIREON·DE holds the one `variationMapping` row (DRAFT, null theme).
 
 **GALE's coordinates on local** (parent listing rows, with the listing `version` the projection CASes on):
-AMAZON·DE ACTIVE v13 (B0D8XBXM5H) · AMAZON·ES ACTIVE v15 · AMAZON·FR DISCOVERABLE v9 · **AMAZON·IT ACTIVE v87
-(B0F7J163XJ)** · EBAY·DE DRAFT v7 · **EBAY·IT ACTIVE v18 (item 257584954808)** · ETSY·GLOBAL DRAFT v1 ·
+AMAZON·DE ACTIVE v13 (B0FX4BC696) · AMAZON·ES ACTIVE v15 · AMAZON·FR DISCOVERABLE v9 · **AMAZON·IT ACTIVE v87
+(B0FXD0620C)** · EBAY·DE DRAFT v7 · **EBAY·IT ACTIVE v18 (item 938554736087)** · ETSY·GLOBAL DRAFT v1 ·
 SHOPIFY·GLOBAL DRAFT v4. eBay category `177104` appears on the CHILD rows' `platformAttributes.categoryId`; the eBay·IT
 PARENT row carries none.
 
@@ -41808,7 +41808,7 @@ verbatim**; the first rehearsal failed on all four channel arms for exactly this
 **eBay precedence (VX D1/M3, D-VT5), measured over EVERY eBay parent listing row (38) before the change:**
 the PUSH's declared axes are **byte-identical on 38 of 38** (2 rows carry both stores and agree, 35 carry only
 `Product.variationTheme`, 1 carries neither, **0 differ**). The family-axes READ changes on exactly **1 of 38** —
-`GALE-JACKET` eBay·IT, ACTIVE, item 257584954808: it read `["Color","Size"]` off the retired listing COLUMN while
+`GALE-JACKET` eBay·IT, ACTIVE, item 938554736087: it read `["Color","Size"]` off the retired listing COLUMN while
 the push has been sending `["Colore","Taglia"]`; after the change the read agrees with what ships. That is design
 Appendix C's disagreement, closed, with its number. Characterisation test:
 **`variation-ebay-precedence.vitest.test.ts`** — it re-derives the BEFORE rule verbatim from the code it replaced
@@ -42390,8 +42390,8 @@ artboard 7 (`ChangePlan.dc.html`). **Nothing committed. Plans are DRY-RUN ONLY (
   one AMAZON·IT + one SHOPIFY·GLOBAL row per child, all `listingStatus DRAFT`, `variationExcluded false`.
   Child axis tuples: `-1 M/Nero/Slim`, `-2 M/Nero/Regular`, `-3 L/Nero/Slim`, `-4 L/Nero/Regular` — so dropping
   `Fit Type` or `Taglia` collides 4-in-2-groups and dropping `Colore` collides 0 (my negative control).
-  **GALE-JACKET is READ-ONLY for me** on every channel coordinate (its eBay·IT item 257584954808 and Amazon
-  B0F7J163XJ/B0D8XBXM5H are LIVE).
+  **GALE-JACKET is READ-ONLY for me** on every channel coordinate (its eBay·IT item 938554736087 and Amazon
+  B0FXD0620C/B0FX4BC696 are LIVE).
 
 **Browser-gate etiquette:** every browser run is announced here as `VT.4 gate starting <what>` / `VT.4 gate finished
 <what> exit N`, run alone, preceded by a check of this file's last 80 lines for an unfinished `VT.2 gate starting` /
@@ -42541,7 +42541,7 @@ probe on the same URL read the same 59. Local Docker confirmed; **no Neon connec
 `cmtz1ae4s000bnjixmkixqz36` — status DRAFT, **0 `ChannelListing` rows**, 0 `ProductTranslation`, 0 `ReadinessIndex`. Measured
 reason: `master-content.service.ts:141` only enqueues `OutboundSyncQueue` when `CONTENT_CHANNELS.has(listing.channel) &&
 ctx.reviewed !== false`, and it only touches `ChannelListingTranslation` / `lastSyncStatus` for listings of the product — with
-zero listings the cascade has nothing to write, so GALE's live ASINs (B0F7J163XJ …) and eBay item 257584954808 cannot be
+zero listings the cascade has nothing to write, so GALE's live ASINs (B0FXD0620C …) and eBay item 938554736087 cannot be
 reached. Arms: Translate preview (HTTP) · the dark `translate/apply` 409 · one synthetic German draft through
 `applyCatalogTranslationDrafts` (the internal boundary — there is NO HTTP path, `catalog-transfer.routes.ts:86`) · D7 refusal
 · revert-as-a-run · one `key@channel:market:locale` workbook cell flipped and restored. Every read-back ≥ 8 s, restore by
@@ -42905,7 +42905,7 @@ LIVE eBay·IT, the `/products/next` Variation mapping filter), then the three R-
 recorded before its own run, so those two lines are written-late, not open. The wrapper refuses to start if one
 reappears, so aloneness is enforced by the instrument as well as by this check. **READ-ONLY on the web:** the script
 captures every PATCH/PUT/DELETE/POST it issues and prints the list, which must be empty — a plan is a read, and GALE's
-eBay·IT item 257584954808 and Amazon B0F7J163XJ are LIVE. I hold every `apps/**` save until I announce `gate finished`.
+eBay·IT item 938554736087 and Amazon B0FXD0620C are LIVE. I hold every `apps/**` save until I announce `gate finished`.
 
 🔴 **VT.3 CORRECTION — a claim of mine three sections above is FALSE and is retracted here, loudly**
 (`reference_a_banked_rule_can_go_false`; a correction below does not retract a claim above unless it says so, so:
@@ -43052,8 +43052,8 @@ and read the dock; **pass 3** moved the GROUPS state off Shopify·GLOBAL, whose 
 `{"error":"studio_request_failed","message":"Shopify requirements are not cached for this account."}`** — a PRE-EXISTING
 defect (the same family as the 8 failing `services/shopify` suites LX recorded), not this lane's, and the sole console
 error in pass 2. **0 mutations** captured across all three passes (PATCH/PUT/DELETE = none; the only POSTs were
-`/api/products/grid`, which is the grid's READ, and one Next stack-frame request). GALE's eBay·IT item 257584954808 and
-Amazon B0F7J163XJ were read and never written. `apps/**` save hold released.
+`/api/products/grid`, which is the grid's READ, and one Next stack-frame request). GALE's eBay·IT item 938554736087 and
+Amazon B0FXD0620C were read and never written. `apps/**` save hold released.
 
 VT.4 gate starting the R-GATE-1 browser set through the wrapper — `check-editor-open.mjs --strict` (EDITOR_ONLY=parity),
 `check-control-census.mjs`, `check-layout-v2.mjs`, and one re-read of the Collisions section after capping its group
@@ -43256,7 +43256,7 @@ checked BEFORE any read, so no argument reaches an executor. **All three plans r
 | plan | coordinate | steps (verb · target · reversible) | evidence |
 |---|---|---|---|
 | `amazon-new-parent` | `VX-TEST-3AX` Amazon·IT, v3 | `PUT · VX-TEST-3AX-P2 · yes` → `PATCH ×4 · every child · yes` → `WAIT 8 s · read-back · —` → `DELETE · VX-TEST-3AX · no` | step 2 payload = `{parentage_level, child_parent_sku_relationship→VX-TEST-3AX-P2, variation_theme→COLOR/SIZE, size:M, color:Nero, "fit type_name":Slim}` all stamped `marketplace_id: APJ6JRA9NG5V4`; `meta.adapter = AmazonPublishAdapter#buildChildAttributes`, `tookMs 256`, `providerCalls 0` |
-| `ebay-relist` | `GALE-JACKET` eBay·IT, **v18, LIVE item 257584954808** | `END · item 257584954808 · no` → `RELIST · Primary listing · no` → `WAIT 8 s · read-back · —` → `PATCH · this listing record · yes` | RELIST payload = `{"variesBy":{"specifications":[{"name":"Colore","values":["Nero","Giallo"]}]}}`; `meta.adapter = ebay-variation-push.service#resolveVariationAxes + buildVariesBySpecifications`, `tookMs 402`. eBay·IT listing version **18 → 18** across the run |
+| `ebay-relist` | `GALE-JACKET` eBay·IT, **v18, LIVE item 938554736087** | `END · item 938554736087 · no` → `RELIST · Primary listing · no` → `WAIT 8 s · read-back · —` → `PATCH · this listing record · yes` | RELIST payload = `{"variesBy":{"specifications":[{"name":"Colore","values":["Nero","Giallo"]}]}}`; `meta.adapter = ebay-variation-push.service#resolveVariationAxes + buildVariesBySpecifications`, `tookMs 402`. eBay·IT listing version **18 → 18** across the run |
 | `shopify-in-place` | `VX-TEST-3AX` Shopify·GLOBAL, v1 | `productOptionsCreate ×3 (Size · Colour · Fit) · yes` → `WAIT 8 s · read-back · —` | `Fit` payload = `{"name":"Fit","position":3,"values":[{"name":"Slim"},{"name":"Regular"}]}`; `meta.adapter = shopify/content-publisher#buildShopifyProductOptions`, `tookMs 3766` |
 
 Refusals exercised live: `dryRun:false` → **400** `"dryRun must be true. There is no live theme-change executor…"`; an
@@ -43574,7 +43574,7 @@ mine to move), R-GATE-1 + amendment (every browser gate through `scripts/studio-
 
 **Database discriminator, read BEFORE any write (AAA bar #3):** recorded in this section under "item 0" before the first
 write. Prod (Neon, GALE `Product.version` 51) receives NOTHING. `GALE-JACKET` is READ-ONLY on every channel coordinate
-(eBay·IT item 257584954808 and Amazon B0F7J163XJ are LIVE); the only write is a reorder on `VX-TEST-3AX` through the dock,
+(eBay·IT item 938554736087 and Amazon B0FXD0620C are LIVE); the only write is a reorder on `VX-TEST-3AX` through the dock,
 restored by value.
 
 **Browser-gate etiquette:** every browser run is announced here as `VT.2c gate starting <what>` / `VT.2c gate finished
@@ -43695,9 +43695,9 @@ stays beside it as the extra fact only that store can answer (WHICH axes are pub
 gains `setChangeIs` / `orderChangeAllowed` / `externalId`.
 **PARITY, live, every coordinate** (`apps/api/scripts/_vt1b-lock-parity.mts`): **10 of 10 AGREE** — GALE AMAZON·DE/ES/
 FR/IT all `{locked, new-parent, order false}` with their real ASINs (these four were the disagreement), EBAY·IT
-`{locked, relist, order true, 257584954808}`, EBAY·DE / ETSY / SHOPIFY unlocked, and both `VX-TEST-3AX` coordinates
+`{locked, relist, order true, 938554736087}`, EBAY·DE / ETSY / SHOPIFY unlocked, and both `VX-TEST-3AX` coordinates
 unlocked (DRAFT, no id). The eBay REASON strings still differ by design and the probe prints both: the projection names
-the published axes ("Item 257584954808 is live with Colore and Taglia…"), the cell speaks Appendix A's copy.
+the published axes ("Item 938554736087 is live with Colore and Taglia…"), the cell speaks Appendix A's copy.
 ⚠ **A behaviour change to report:** `writeProjectionMapping` refuses `axes_locked` when `current.locked` is set and the
 axis SET changed — so an Amazon set change through `PATCH /studio/projection` is now refused where it previously went
 through. That is design VT.6/D-VT6 ("a live SET change is a plan, never a cell write") and the safe direction, but it is
@@ -43845,7 +43845,7 @@ versions and legacy bags are untouched") and the ordinary write path runs it con
 - **59 == 59 ⇒ `:8091` is the LOCAL Docker DB**, not Neon prod (51 / 338 products). Every write of mine lands there.
 - `VX-TEST-3AX` is at **version 4**, not the 2 VT.2b left: VT.4's correction at 08:49 records the same (another lane's
   witness script wrote and reset that coordinate). The reorder below is measured against 4, not against a remembered 2.
-- **GALE-JACKET is READ-ONLY for me** on every coordinate: eBay·IT item 257584954808 and Amazon B0F7J163XJ are LIVE. The
+- **GALE-JACKET is READ-ONLY for me** on every coordinate: eBay·IT item 938554736087 and Amazon B0FXD0620C are LIVE. The
   only thing I do there is a plan, which is a dry RUN — a POST that the route refuses with 400 unless `dryRun: true`.
 
 VT.2c gate starting the screens pass through `scripts/studio-gate-session.mjs` — (a) the eBay·IT dock before/after at 1440
@@ -43942,7 +43942,7 @@ the column by matching a product that has provenance and no collision). Full rea
 **VT.1b — final state of everything VT.1b touched, and one thing that is NOT mine.** Read at 09:31 local:
 - `VX-TEST-3AX`: 10 listings, **0 carrying a `variationTheme`**, **0 with an external id**, all `DRAFT` — the index
   proof's write is fully restored.
-- `GALE-JACKET` AMAZON·IT: `variationTheme null`, `version 87`, ASIN `B0F7J163XJ` — untouched by every VT.1b write.
+- `GALE-JACKET` AMAZON·IT: `variationTheme null`, `version 87`, ASIN `B0FXD0620C` — untouched by every VT.1b write.
 - `Marketplace` AMAZON·IT overlay `byProductType.AUTO_ACCESSORY`: md5 **`fab5f685ad1abac6bbd2ceb37855dc27`**, **65
   keys** — byte-identical to the BEFORE I captured, so both of my rehearsals restored cleanly.
 - 🔴 **But the document now carries a top-level `variationsByProductType.AUTO_ACCESSORY` and `version 13`, and it is
@@ -44389,9 +44389,9 @@ so the pre-swap row was created inside the live dock, measured, and removed — 
 `oldRowsStillRendered: 0` — no `.nds-vp-dock-specific` survives in section 1, so there is one implementation, not two.
 
 **The state the old section could not express, now on screen (GALE · Amazon·IT · a LIVE ASIN, READ-ONLY).** Wire:
-`locked {lockedAxisKeys: [], setChangeIs: 'new-parent', orderChangeAllowed: false, externalId: B0F7J163XJ}`,
+`locked {lockedAxisKeys: [], setChangeIs: 'new-parent', orderChangeAllowed: false, externalId: B0FXD0620C}`,
 `order {writableHere: false, reason: ''}`. Screen: **both grips `disabled: true`** with the server's sentence rendered
-beside them — `Live on Amazon IT (B0F7J163XJ) — changing the theme creates a new parent and relinks 20 children. Commit
+beside them — `Live on Amazon IT (B0FXD0620C) — changing the theme creates a new parent and relinks 20 children. Commit
 opens the plan.` Before the swap those grips were LIVE on a live ASIN and nothing on screen said otherwise, because VP.4's
 gate read `channel === 'EBAY' && !order.writableHere` and never looked at the lock. `lockedAxisKeys: []` correctly locks no
 individual row (only eBay can say which axes are published), so the per-axis arm is OFF there — the discriminating arm.
@@ -44414,7 +44414,7 @@ nothing to map: `GET …/studio/projection` answers **`targetOptions: []`** on E
 (`VX-TEST-3AX` v5, GALE·IT v87, GALE·DE v13), with `targetOptionsState: 'ok'` and `theme: null | {value:null,options:[]}`.
 So a reorder of three unmapped axes serialises to "drop every axis", which the server correctly refuses. The 200 arm needs a
 coordinate with ≥2 MAPPED axes that this lane may write, and there is none: GALE eBay·IT has them (and would ACCEPT the
-reorder — `orderChangeAllowed: true`, `order.writableHere: true`, token present) but item 257584954808 is LIVE and read-only
+reorder — `orderChangeAllowed: true`, `order.writableHere: true`, token present) but item 938554736087 is LIVE and read-only
 here; the only DRAFT eBay·IT parent with two axes is `AIR-MESH-JACKET-MEN`, another family's row, which the fixture rule
 forbids. → **REQUEST TO VT.F:** run this arm on a fixture eBay·IT coordinate whose category aspects are cached, or accept
 the pair above. → **QUESTION FOR THE OWNER (a):** `targetOptions: []` with `targetOptionsState: 'ok'` on every Amazon
@@ -44434,7 +44434,7 @@ opens VT.4's Modal. Nothing is written on that path — the decision to send not
 | sub-line | `GALE-JACKET · 20 variations · Colore · Taglia → Colore` | `GALE-JACKET · 20 children · — → SIZE/COLOR` |
 | dry-run `Banner warning` | `Dry run — nothing is sent. eBay cannot change a variation set in place: the item is ended and relisted under a new ItemID. The live run is a separate approval and the Owner runs the first one.` | `… Amazon does not change a theme in place: the parent is replaced and the children relinked. …` |
 | steps table columns | **`# · Verb · Target · Detail · Reversible`** | same |
-| steps | 4: `END item 257584954808` (no) · `RELIST Primary listing` (no) · `WAIT 8 s read-back` (—) · `PATCH this listing record` (yes) | 4: `PUT GALE-JACKET-P2` (yes) · `PATCH ×20 every child` (yes) · `WAIT 8 s` (—) · `DELETE GALE-JACKET (B0F7J163XJ)` (no) |
+| steps | 4: `END item 938554736087` (no) · `RELIST Primary listing` (no) · `WAIT 8 s read-back` (—) · `PATCH this listing record` (yes) | 4: `PUT GALE-JACKET-P2` (yes) · `PATCH ×20 every child` (yes) · `WAIT 8 s` (—) · `DELETE GALE-JACKET (B0FXD0620C)` (no) |
 | Keeps / Loses | Keeps 3 · Loses 3 (ItemID+URL, watchers+sales history, best-match age) | Keeps 3 · Loses 3 (parent ASIN+URL, A+ content, ads targeting) |
 | warnings | — | 1: the theme was not checked against the PT enum (VT.4's P0 at `amazon-publish.adapter.ts:291`, still open) |
 | footer `Close` · `Copy plan` | **`Close` + `Copy plan` (primary)** + the Modal `×` | same |
@@ -44498,7 +44498,7 @@ them). Nothing committed.
 
 **Fixture state at hand-off, re-read after the last run:** `VX-TEST-3AX` `Product.version` **4**, AMAZON·IT parent listing
 **v5**, `variationMapping` still the jsonb `null`, 4 children — the same three readings as before my pass, so there was
-nothing to restore. `GALE-JACKET` `Product.version` **59**, eBay·IT listing **v18**, item `257584954808` — read only, never
+nothing to restore. `GALE-JACKET` `Product.version` **59**, eBay·IT listing **v18**, item `938554736087` — read only, never
 written. `apps/factory` mirror of `grid/theme/grid.css`: `diff` exit **0**.
 
 #### VT.2c — ASSUMED · what I did NOT do
@@ -44866,8 +44866,8 @@ and re-ran once. **REQUEST TO VT.2 (the wrapper's author): add `studio-gate-sess
 
 **Fixture at hand-off:** `VX-TEST-3AX` — every listing `theme=NULL`, `variationExcluded=false`, 4 of 4 included; AMAZON·IT
 index row back to `{"src":"derived","kinds":"attribute-unbound"}`; AMAZON parent listing v5, SHOPIFY v9, children -2/-4 v3
-(versions are monotonic). `GALE-JACKET` read-only throughout: `Product.version` **59**, eBay·IT item 257584954808 and
-Amazon `B0F7J163XJ` untouched. Nothing committed. No Neon connection. No provider call.
+(versions are monotonic). `GALE-JACKET` read-only throughout: `Product.version` **59**, eBay·IT item 938554736087 and
+Amazon `B0FXD0620C` untouched. Nothing committed. No Neon connection. No provider call.
 
 LX.F2 — `npx prisma generate` announced BEFORE running (shared `node_modules`, so this regenerates the client every
 concurrent lane imports): 10:29 local. Cause: `ReadinessIndex.sortTitle` / `sortDescription` (R-LX-17) were applied to
@@ -44901,7 +44901,7 @@ restore` on this shared tree — baselines by `cp` to my scratch dir). **Nothing
   connection, no provider call.
 - Fixture at hand-off, re-read: `VX-TEST-3AX` `cmtzci5kf0000njr9f8yhrsxm` **v4**, PT `SUIT`, DRAFT, + 4 children
   (`-1`…`-4`, v1 each, DRAFT). **The only coordinate I write.** `GALE-JACKET` is READ-ONLY on every channel coordinate
-  (eBay·IT item 257584954808 and Amazon `B0F7J163XJ` are LIVE).
+  (eBay·IT item 938554736087 and Amazon `B0FXD0620C` are LIVE).
 - Web `:3000` 200, API `:8091` 200 — both belong to other sessions; I never restart either.
 
 **Paths I own (everything every VT lane owned — 67 files, verified present on this tree at claim time):**
@@ -45325,7 +45325,7 @@ axes with `target: null` and the read served it with `collisions.unresolved: 4`;
 (`reference_fixture_must_be_writer_produced` — "ask which writer created the fixture"). The refusal is CORRECT (VX.4
 keys-the-variants); the disclosure is that `VX-TEST-3AX` cannot be put back to it from the outside. **The fixture is left
 at listing v7 with the three targets bound and is DELETED at item A11**, so nothing durable rests on it. `GALE-JACKET`
-untouched throughout: `Product.version` 59, AMAZON·IT listing v87, eBay·IT item 257584954808 unread-and-unwritten.
+untouched throughout: `Product.version` 59, AMAZON·IT listing v87, eBay·IT item 938554736087 unread-and-unwritten.
 
 LX.F2 gate starting the **editor-open parity closer** — `EDITOR_ONLY=parity node scripts/studio-gate-session.mjs --
 node scripts/check-editor-open.mjs --strict`, 10:59 local. `ps` 0, lock file absent, no unfinished `gate starting` in
@@ -45787,14 +45787,14 @@ the open gesture is AG's `dblclick` at 40% of the cell width, never the corner, 
 **420 × 311**, `inPopup: true`. 18 lines, verbatim: `Variation theme` · `· eBay · IT` · `Esc discards · ⏎ saves` ·
 `Overridden here` · `Reset to rule` · `VARIATION SPECIFICS` · `2 of 5` · `Color` `Colore` `(Colore)` · `Size` `Taglia`
 `(Taglia)` · `Add a specific` · *"Every shared axis is already a specific. Add an axis on the shared product first."* ·
-*"Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not."* ·
+*"Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not."* ·
 `0 collisions on this coordinate` · `no change`. Width **420 = design §3.5's `┌ … 420 ┐`**, Δ0. Esc discarded (the editor
 was gone, and nothing was written — 0 PATCH/PUT/DELETE captured across every pass). Two HELD controls, each rendered with
 its reason on the control (C(7)): `Add a specific`, and both target Listboxes.
 
 🔴 **A5, witnessed on screen — and this is the reading that proves the spelling fix.** Both target Listboxes are
 `disabled`, each carrying the lock's own sentence in its accessible name:
-`aria-label="Color is the eBay specific Colore, locked: Live on eBay IT (item 257584954808) — changing the set relists it.
+`aria-label="Color is the eBay specific Colore, locked: Live on eBay IT (item 938554736087) — changing the set relists it.
 Reordering does not."` (and the same for `Size`/`Taglia`). Before this pass the SHEET cell served no `lockedAxisKeys` at
 all, and the moment it did, the literal `includes(axisKey)` compare matched nothing — a LIVE control over a published axis.
 
@@ -46196,7 +46196,7 @@ A held control is RENDERED and says why — never hidden. Each row was read on s
 | the **alias split** | Variants dock, `Listing split` | `Listing split is unavailable until listing aliases are enabled.` (`ALIAS_HELD_REASON`) and the route answers **409** `AliasCreationBlockedError` — 409, not 500, because the request is well-formed and will succeed once the work ships | **PES.5-ii** |
 | the **live theme-change executor** | the cell's and the dock's locked commit | the plan Modal opens with the dry-run; `POST …/projection/theme-change` **refuses `dryRun: false`** with *"dryRun must be true. There is no live theme-change executor in this programme — the plan is what this endpoint returns."* | **D-VT6 / VX D8** — the Owner's call |
 | `fold` as a collision resolver | Variants dock, Collisions | `available: false` + *"Folding writes a value on each variant's Colore cell, and no included variant has a writable Colore cell on this coordinate."* — VT.1b made availability require a WRITABLE cell, so `fold` is honestly unavailable rather than offered and then failing | a coordinate where the axis cell is writable |
-| the two target **`Listbox`es** on GALE eBay·IT | the cell editor | `disabled` + `aria-label="Color is the eBay specific Colore, locked: Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not."` | the axis is unpublished, or the operator takes the relist plan |
+| the two target **`Listbox`es** on GALE eBay·IT | the cell editor | `disabled` + `aria-label="Color is the eBay specific Colore, locked: Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not."` | the axis is unpublished, or the operator takes the relist plan |
 | **`+ Add a specific`** | the cell editor | *"Every shared axis is already a specific. Add an axis on the shared product first."* | a family axis exists that this coordinate does not deliver |
 | the axis **grips** on Amazon | the cell editor and the dock | `writableHere: false` + *"Amazon's variation theme fixes the order of its segments, so the order cannot be changed on Amazon · IT. Choose a different theme to change it."* (NEW this pass — it was an empty string, which the web read as "the server did not look" and then contradicted) | a theme change |
 | the axis **grips** on Shopify/Etsy | the same | *"Shopify · GLOBAL stores this mapping without an order, so a reorder here would not reach the channel."* (NEW this pass) | `variationMapping` gains an order — the Owner's call, FINDING 1 under A2 |
@@ -46265,7 +46265,7 @@ A held control is RENDERED and says why — never hidden. Each row was read on s
     the timing pass, and that is disclosed in the timing table rather than smoothed out.
 
 **VT.F ends here. Nothing committed. 0 Neon connections. 0 provider calls. `GALE-JACKET` `Product.version` 59, eBay·IT item
-257584954808 and Amazon `B0F7J163XJ` untouched throughout. `VX-TEST-3AX`: 0 rows.**
+938554736087 and Amazon `B0FXD0620C` untouched throughout. `VX-TEST-3AX`: 0 rows.**
 
 
 LX.FIN item 4 — **R-LX-24 / R-LX-12 DONE: the seller reference labels now have a DURABLE cache, so a cold page load
@@ -49293,7 +49293,7 @@ PR.6 interim guards — focus-visible2 remaining (both Matrix sync buttons); tok
 | **8(b)** `Not listed` sentence | `columns.tsx:97` and `:221` said `no account is connected` for EVERY unlisted coordinate — false for the ten `connected: true, cells: []` ones | `MATRIX_COPY.noListingYet = 'No listing on this coordinate yet'` · `noAccountConnected = 'No account is connected'` (shared contract, Appendix A vocabulary), ONE `notListedTitle(coord)` in `columns.tsx` feeding the strip title AND the header tooltip. On GALE's DOM (all 22 groups swept through `.ag-body-horizontal-scroll-viewport`, 17 positions, back to 0): **10 titles `… — No listing on this coordinate yet`** (Amazon NL BE PL SE IE UK TR, eBay FR ES UK) and **1 `WooCommerce — No account is connected`**; every `Not listed` column 120 px |
 | **8(c)** `absent[].cell` | `MatrixCellKind` only; MX.1 served NOTHING for the derived B2B absence | `MatrixAbsentCellKind = MatrixCellKind \| 'businessPrice' \| 'businessTiers'` + `MATRIX_ABSENT_CELL_LABELS` (`B2B price` · `Tiers`, Appendix A) in the shared contract, the DS copy and the factory mirror (byte-identical, `cmp`); parity test: the widened kind `bothWays`, the label table `toEqual` + key order + `[...MATRIX_CELL_KINDS, 'businessPrice', 'businessTiers']`. API: `matrix-cells.ts` `businessAbsence()` (pure; three honest sentences — a cached schema without B2B → MX.1's `absentBusiness(pt, market)`; no cached schema → NEW `absentBusinessUnchecked(market)` (never a false "checked against"); a schema WITH B2B → NEW `absentBusinessNotBuilt(pt, market)`) + `flattenAudience()`, pinned by 4 new tests (**matrix-cells 30/30**); `matrix.service.ts` ONE narrow wave-1 read — `jsonb_path_query_array("schemaDefinition", '$.properties.purchasable_offer.**.audience.**.enum')` on the NEWEST active `CategorySchema` per market for the family's product type (a SELECT on the cache table, no schema service, no live SP-API path; **15 ms for 7 markets** measured on the local copy, positive control `fulfillment_channel_code` enum `["AMAZON_EU","DEFAULT"]`) → the absence on every LISTED Amazon market coordinate. GALE live read after: `AMAZON:IT/DE/FR/ES.absent` = `businessPrice` + `businessTiers` with `Amazon has not enabled business pricing for this account (checked against the OUTERWEAR schema on IT)` (every cached OUTERWEAR schema: audience `["ALL"]`); `AMAZON:EU` / the `Not listed` singles carry none; `meta.tookMs` **88**, `queries` **19** (was 18), 95,436 B. Page: `MatrixSurface.tsx` Customise hint reads `MATRIX_ABSENT_CELL_LABELS[a.cell]` so the two render greyed in the ONE `PreferencesModal`'s hint line (the DS list has no per-row absent slot — MX.P's mechanism, unchanged) |
 | **8(d)** the two other reds | — | measured on a clean run, NOT mine: `check-route-prisma-ratchet --check` **exit 1** — `assets.routes.ts 62→64`, `brand-story.routes.ts 32→33`, `catalog-transfer.routes.ts 0→2` (all three ` M` in `git status`, uncommitted edits by other lanes since `f212c2348`; no Matrix file named); `packages/database check:column-drift` **exit 1** — `ReadinessIndex.variationSource/sortTitle/sortDescription` declared in `schema.prisma` with no migration (LX.5/VT.1b's). Not fixed, by mandate |
-**Item 9 — live facts asserted on GALE (own tab, `source: 'live'`, `version 59`, 21 rows, `Everything (60)`):** **20 coordinates in D-MX12 order** on screen — `AMAZON:EU · IT · DE · FR · ES · EBAY:IT · EBAY:DE · SHOPIFY:GLOBAL · ETSY:GLOBAL` then the singles `AMAZON:NL BE PL SE IE UK TR · EBAY:FR ES UK · WOOCOMMERCE:GLOBAL` (the ordered set from the header sweep); `AMAZON:EU` strip `AMAZON EU · INVENTORY · IT DE FR ES`, title `… — 5 cells · Shared by IT DE FR ES — one quantity per SKU on Amazon EU`, and the five inventory kinds render ONCE (the per-market Amazon groups carry `Listing · Price · Sale` only — `Amazon · IT — 3 cells`); every Amazon variant row `FBA_EXCLUDED`: **16 `FBA ✎`** rows and **4 `FBM ✎ ⚠`** rows (BLACK-MEN-S, BLACK-5XL, YELLOW-3XL, YELLOW-5XL) whose ⚠ carries `Guard reads FBA — the quantity is not pushed`, Mode/Qty/Buffer **`— [locked]` on 20/20** variants; BLACK-MEN-S's `syncState` cell is the fact cell (`—`, title `Never — open Needs attention for this listing`) — its `writeBlockedReason.syncState` EU-conflict sentence is on the WIRE (MX.1's read, re-read at 18:0x) and reaches the screen as the held cell's toast, not a mark; **the parent row**: every EU cell `— [locked]`, `AMAZON:IT.price` `— [locked]` (mark `Follows the base price —`), sale locked, Listing `Listed B0F7J163XJ 1 listing` (eBay: `Listed 257584954808 1 listing`), Stock 403, Base price 0, Status ACTIVE; `Not listed` singles: **11** on screen (MX.1's text said "ten" but listed eleven — 7 Amazon + 3 eBay + WooCommerce; the DOM count is 11); FR **16 `not buyable`** of 20 listed, DE 2, ES 1 (the DISCOVERABLE rows, `Listed` + the mono detail); eBay·IT 20 listed · 20 `FBM ✎` · 20 `Follow 🔗` (inherited tint) · Qty = that row's `Stock` (42/29/53/9…) · Buffer 0 ×20 · Sync **`✗ Dead` ×17** (refused tint) + `✓ n d` ×3 · `€105.00 🔗` ×20; eBay·DE `Draft` ×20; chips `Pinned 0 · Paused 1 · Oversold 0 · Sync issues 17 · Suppressed 0`; footer `21 rows · 20 variants · Amazon EU: quantity is shared by 4 markets`; no banner (`data-matrix-source="live"`).
+**Item 9 — live facts asserted on GALE (own tab, `source: 'live'`, `version 59`, 21 rows, `Everything (60)`):** **20 coordinates in D-MX12 order** on screen — `AMAZON:EU · IT · DE · FR · ES · EBAY:IT · EBAY:DE · SHOPIFY:GLOBAL · ETSY:GLOBAL` then the singles `AMAZON:NL BE PL SE IE UK TR · EBAY:FR ES UK · WOOCOMMERCE:GLOBAL` (the ordered set from the header sweep); `AMAZON:EU` strip `AMAZON EU · INVENTORY · IT DE FR ES`, title `… — 5 cells · Shared by IT DE FR ES — one quantity per SKU on Amazon EU`, and the five inventory kinds render ONCE (the per-market Amazon groups carry `Listing · Price · Sale` only — `Amazon · IT — 3 cells`); every Amazon variant row `FBA_EXCLUDED`: **16 `FBA ✎`** rows and **4 `FBM ✎ ⚠`** rows (BLACK-MEN-S, BLACK-5XL, YELLOW-3XL, YELLOW-5XL) whose ⚠ carries `Guard reads FBA — the quantity is not pushed`, Mode/Qty/Buffer **`— [locked]` on 20/20** variants; BLACK-MEN-S's `syncState` cell is the fact cell (`—`, title `Never — open Needs attention for this listing`) — its `writeBlockedReason.syncState` EU-conflict sentence is on the WIRE (MX.1's read, re-read at 18:0x) and reaches the screen as the held cell's toast, not a mark; **the parent row**: every EU cell `— [locked]`, `AMAZON:IT.price` `— [locked]` (mark `Follows the base price —`), sale locked, Listing `Listed B0FXD0620C 1 listing` (eBay: `Listed 938554736087 1 listing`), Stock 403, Base price 0, Status ACTIVE; `Not listed` singles: **11** on screen (MX.1's text said "ten" but listed eleven — 7 Amazon + 3 eBay + WooCommerce; the DOM count is 11); FR **16 `not buyable`** of 20 listed, DE 2, ES 1 (the DISCOVERABLE rows, `Listed` + the mono detail); eBay·IT 20 listed · 20 `FBM ✎` · 20 `Follow 🔗` (inherited tint) · Qty = that row's `Stock` (42/29/53/9…) · Buffer 0 ×20 · Sync **`✗ Dead` ×17** (refused tint) + `✓ n d` ×3 · `€105.00 🔗` ×20; eBay·DE `Draft` ×20; chips `Pinned 0 · Paused 1 · Oversold 0 · Sync issues 17 · Suppressed 0`; footer `21 rows · 20 variants · Amazon EU: quantity is shared by 4 markets`; no banner (`data-matrix-source="live"`).
 🔴 **Width finding for the Owner (measured, not changed):** at the contract's `listing` 130 px EVERY `Listed <ASIN>` cell clips its ASIN (the mono span needs 72 px, gets 0–53 — `itClipped 21/21`) and `Listed <ASIN> not buyable` needs 124 px in a 110 px box. The doc's own §3.3 line says `Listing 150` while `MATRIX_CELL_WIDTHS.listing` is 130 — a doc/contract mismatch MX.C shipped. **Recommendation:** 150 (the doc's number) so `Listed <ASIN>` fits; `not buyable` still needs the tooltip. Not ruled here.
 🔴 **Copy finding (measured, not changed):** `channelShape()` (MX.1, `matrix-cells.ts:68`) gives EVERY non-Amazon/eBay channel the verbatim Appendix-A sentence `Shopify has no fulfilment method` — on GALE Customise's hint reads `Etsy · Fulfilment — Shopify has no fulfilment method` (and `WooCommerce · …`). Appendix A pins the sentence, so a channel-aware wording is a copy ruling: recommend `<Channel> has no fulfilment method`.
 
