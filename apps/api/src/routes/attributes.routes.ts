@@ -36,6 +36,7 @@
  *                                              all-or-nothing, per-row errors (dryRun supported)
  *     GET    /attributes/concepts            the concept catalogue + this business's link plan
  *     POST   /attributes/concepts/apply      link/create concept attributes (dryRun by default)
+ *     POST   /attributes/concepts/options    add the colour/size concept values as options (dryRun by default)
  *   P6 (§4.4) — the open dropdown:
  *     GET    /attributes/:code/choices       the business's options + each channel's values, merged, with sources
  */
@@ -46,7 +47,7 @@ import prisma from '../db.js'
 import { CODE_NOT_LOCALIZABLE, CODE_TYPES, localizableRefusalFor } from '../services/pim/attribute-rules.js'
 import { parseAttributeRules } from '@nexus/shared/attributes'
 import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION } from '@nexus/shared/attribute-concepts'
-import { applyConceptDictionary, conceptDictionaryPlan } from '../services/pim/attribute-concepts.service.js'
+import { applyConceptDictionary, applyConceptOptions, conceptDictionaryPlan, ConceptOptionsError } from '../services/pim/attribute-concepts.service.js'
 import { attributeChoices, ChoicesError } from '../services/pim/attribute-choices.service.js'
 import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
 import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
@@ -548,6 +549,18 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
     const body = (request.body ?? {}) as { dryRun?: boolean }
     // A write only on an explicit `dryRun: false`: linking changes what every channel reads.
     return applyConceptDictionary({ dryRun: body.dryRun !== false })
+  })
+
+  // The concept value lists as business options (colour and size by default). A write only on an explicit
+  // `dryRun: false`; an existing option is never changed.
+  fastify.post('/attributes/concepts/options', async (request, reply) => {
+    const body = (request.body ?? {}) as { dryRun?: boolean; concepts?: unknown }
+    const concepts = Array.isArray(body.concepts) ? body.concepts.filter((c): c is string => typeof c === 'string') : undefined
+    try { return await applyConceptOptions({ concepts, dryRun: body.dryRun !== false }) }
+    catch (error) {
+      if (error instanceof ConceptOptionsError) return reply.code(400).send({ error: error.message })
+      throw error
+    }
   })
 
   fastify.delete('/attribute-options/:id', async (request, reply) => {
