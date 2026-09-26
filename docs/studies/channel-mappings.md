@@ -651,8 +651,11 @@ modelling "piece of a set" as a real concept (§7.1).
 ## 11. Progress
 
 Branch `feat/channel-mappings` (worktree `/private/tmp/nexus-channel-mappings`), local only: private DB copy
-`nexus_chmap_test`. Nothing is pushed. Rebased onto `origin/main` `c5597f776` (Prisma 7). Commits: `a203424f6` (M1+M2),
-`249f77e5a` (M3+M5), `871f41e29` (M4 check 4), `376b1840a` (M6), `567bef732` (Prisma 7 metadata), then the M4 switch.
+`nexus_chmap_test`. Rebased onto `origin/main` `71888bd6d` (#18). Commits: `98ccce9f8` (M1+M2), `65a3fcb59` (M3+M5),
+`e10ce3569` (M4 check 4), `df5792570` (M6), `4bf79e38d` (Prisma 7 metadata), `0ab407dce` (M4 switch). Before the first
+push, a privacy scan of every commit found real ids in two tests and one fixture (the anonymiser missed the old flat
+file's `external_product_id`) and a local path in this study; the history was rewritten without them, and the
+anonymiser now also flags any ASIN that is not one of its fakes.
 
 ### 11.1 Steps
 
