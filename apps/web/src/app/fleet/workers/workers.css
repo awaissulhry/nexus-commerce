@@ -102,7 +102,7 @@
   display: block;
   font-size: 10.5px;
   color: var(--nds-grey-450);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
 }
 
 /* ── scope cell ───────────────────────────────────────────────────────────
@@ -348,7 +348,7 @@ button.acr-pg-stat {
   font-weight: 600;
 }
 .sbw-cadence {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   font-size: 11px;
   color: #46525f;
 }

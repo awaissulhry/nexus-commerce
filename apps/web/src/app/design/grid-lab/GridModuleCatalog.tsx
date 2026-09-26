@@ -342,8 +342,8 @@ export function GridModuleCatalog() {
           padding: 14px 0; border-top: 1px solid var(--nds-border-subtle); align-items: start; }
         .gmc-name { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 4px; }
         .gmc-name strong { font-size: 14.5px; color: var(--nds-text); }
-        .gmc-id { font-size: 11px; color: var(--nds-text-3); font-family: ui-monospace, monospace; }
-        .gmc-opt { font-size: 11px; color: var(--nds-primary); font-family: ui-monospace, monospace; }
+        .gmc-id { font-size: 11px; color: var(--nds-text-3); font-family: var(--nds-font-mono); }
+        .gmc-opt { font-size: 11px; color: var(--nds-primary); font-family: var(--nds-font-mono); }
         .gmc-what { margin: 0 0 4px; font-size: 13px; color: var(--nds-text-2); max-width: 78ch; }
         .gmc-here { margin: 0; font-size: 13px; color: var(--nds-text-3); max-width: 78ch; font-style: italic; }
         .gmc-demo { text-align: right; }

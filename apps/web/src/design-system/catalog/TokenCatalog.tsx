@@ -133,7 +133,7 @@ const ramps: Array<[string, Record<string, string>]> = [
   ['Cyan', palette.cyan],
 ]
 
-const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace"
+const mono = 'var(--nds-font-mono)'
 
 /**
  * A catalog specimen of a grid cell. `ProjectionCell` takes AG's own `ICellRendererParams`, which
@@ -1064,7 +1064,7 @@ export function TokenCatalog() {
             title="GALE Pro Racing Suit"
             meta={
               <>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>GALE-KAN-PRO</span>
+                <span style={{ fontFamily: 'var(--nds-font-mono)' }}>GALE-KAN-PRO</span>
                 <Pill tone="success" dot>Active</Pill>
               </>
             }

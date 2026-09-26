@@ -48,7 +48,7 @@ function AsinBox({ image }: { image: string | null }) {
       <div className="box">
         {image ? <img src={image} alt="" /> : <span className="ph" />}
         <span className="tag">
-          <svg viewBox="0 0 28 16" width="26" height="15" aria-hidden><text x="3" y="12" fontSize="12" fontWeight="700" fill="#fff" fontFamily="Arial, sans-serif">a</text><path d="M3 13c3.4 2 7.6 2 10.8-.2" stroke="#ff9900" strokeWidth="1.3" fill="none" strokeLinecap="round" /></svg>
+          <svg viewBox="0 0 28 16" width="26" height="15" aria-hidden><text x="3" y="12" fontSize="12" fontWeight="700" fill="#fff">a</text><path d="M3 13c3.4 2 7.6 2 10.8-.2" stroke="#ff9900" strokeWidth="1.3" fill="none" strokeLinecap="round" /></svg>
         </span>
       </div>
     </div>

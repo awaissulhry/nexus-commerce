@@ -128,7 +128,7 @@
 .nds-diag-pre {
   margin: 0;
   white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   font-size: var(--nds-font-size-xs);
   line-height: 1.5;
 }

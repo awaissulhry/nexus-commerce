@@ -21,5 +21,5 @@ export function StageTimer({ cur }: { cur: CurrentStage }) {
   const timing: StageTiming = { startedAt: cur.startedAt, pausedMs: cur.pausedMs, pausedAt: cur.pausedAt, finishedAt: null };
   const active = elapsedMs(timing, Date.now());
   const color = cur.status === "running" ? "var(--nds-primary)" : cur.status === "paused" ? "var(--nds-warning, #9a6700)" : "var(--nds-text-3)";
-  return <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 700, color }}>{cur.status === "not_started" ? "—" : fmt(active)}</span>;
+  return <span style={{ fontFamily: "var(--nds-font-mono)", fontSize: 12, fontWeight: 700, color }}>{cur.status === "not_started" ? "—" : fmt(active)}</span>;
 }

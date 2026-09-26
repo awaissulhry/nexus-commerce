@@ -68,7 +68,7 @@ export function OrderItems({ orderId, state, lines, canEdit, onChanged }: { orde
           {rows.map((r, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 28px", gap: 6, alignItems: "center" }}>
               <input value={r.size} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)))} placeholder="Size (e.g. 50)" style={inp} />
-              <input type="number" min="0" value={r.qty} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} placeholder="Qty" style={{ ...inp, fontFamily: "ui-monospace, monospace" }} />
+              <input type="number" min="0" value={r.qty} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} placeholder="Qty" style={{ ...inp, fontFamily: "var(--nds-font-mono)" }} />
               <button type="button" onClick={() => setRows((xs) => xs.filter((_, j) => j !== i))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, background: "var(--nds-surface)", cursor: "pointer", height: 30, display: "grid", placeItems: "center", color: "var(--nds-text-3)" }}><X size={13} /></button>
             </div>
           ))}

@@ -29,7 +29,7 @@ function RailRow({ label, children, tone }: { label: string; children: React.Rea
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, padding: "3px 0" }}>
       <span style={{ color: "var(--nds-text-3)" }}>{label}</span>
-      <span style={{ fontWeight: 600, color: tone ?? "var(--nds-text)", fontFamily: "ui-monospace, monospace" }}>{children}</span>
+      <span style={{ fontWeight: 600, color: tone ?? "var(--nds-text)", fontFamily: "var(--nds-font-mono)" }}>{children}</span>
     </div>
   );
 }
@@ -302,7 +302,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
                   <div key={iv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, gap: 6 }}>
                     <a href={`/api/invoices/${iv.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: "var(--nds-text-link)", textDecoration: "none" }} title="Open PDF">{iv.number}</a>
                     <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
-                      {iv.amountCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{eur(iv.amountCents)}</span>}
+                      {iv.amountCents != null && <span style={{ fontFamily: "var(--nds-font-mono)", fontSize: 12 }}>{eur(iv.amountCents)}</span>}
                       <Pill tone={iv.paidAt ? "success" : iv.sentAt ? "info" : "neutral"}>{iv.paidAt ? "paid" : iv.sentAt ? "sent" : "draft"}</Pill>
                       {canInvoice && !iv.paidAt && (
                         <button type="button" onClick={() => void invoiceAction(iv.id, iv.sentAt ? "paid" : "send")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11.5, color: "var(--nds-text-link)" }}>
@@ -430,7 +430,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Amount (€)</div>
-            <input type="number" step="0.01" min="0" value={payEuros} onChange={(e) => setPayEuros(e.target.value)} placeholder="0,00" style={{ width: "100%", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "7px 9px", fontSize: 13, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+            <input type="number" step="0.01" min="0" value={payEuros} onChange={(e) => setPayEuros(e.target.value)} placeholder="0,00" style={{ width: "100%", border: "1px solid var(--nds-border)", borderRadius: 8, padding: "7px 9px", fontSize: 13, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
           </div>
           <div>
             <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginBottom: 3 }}>Method (optional)</div>
@@ -450,8 +450,8 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
           {o.lines.map((l) => (
             <div key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 64px 88px", gap: 6, alignItems: "center", fontSize: 12.5 }}>
               <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} title={l.description}>{l.description}</span>
-              <input type="number" min="1" placeholder={String(l.qty)} value={amendEdits[l.id]?.qty ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: e.target.value, price: p[l.id]?.price ?? "" } }))} aria-label={`New quantity for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
-              <input type="number" min="0" step="0.01" placeholder={l.netPriceCents != null ? (l.netPriceCents / 100).toFixed(2) : "€"} value={amendEdits[l.id]?.price ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", price: e.target.value } }))} aria-label={`New unit price for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+              <input type="number" min="1" placeholder={String(l.qty)} value={amendEdits[l.id]?.qty ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: e.target.value, price: p[l.id]?.price ?? "" } }))} aria-label={`New quantity for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+              <input type="number" min="0" step="0.01" placeholder={l.netPriceCents != null ? (l.netPriceCents / 100).toFixed(2) : "€"} value={amendEdits[l.id]?.price ?? ""} onChange={(e) => setAmendEdits((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", price: e.target.value } }))} aria-label={`New unit price for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
             </div>
           ))}
           <textarea value={amendReason} onChange={(e) => setAmendReason(e.target.value)} rows={2} placeholder="Why is this order changing? (required)" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 12.5, fontFamily: "inherit", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
@@ -467,7 +467,7 @@ export function OrderDetail({ orderId, onBack }: { orderId: string; onBack: () =
             <div key={l.id} style={{ display: "grid", gap: 4 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600 }}>{l.description} <span style={{ color: "var(--nds-text-3)", fontWeight: 400 }}>×{l.qty}</span></div>
               <div style={{ display: "grid", gridTemplateColumns: "64px 1fr 1fr", gap: 6 }}>
-                <input type="number" min="0" max={l.qty} placeholder="0" value={returnLines[l.id]?.qty ?? ""} onChange={(e) => setReturnLines((p) => ({ ...p, [l.id]: { qty: e.target.value, outcome: p[l.id]?.outcome ?? "REPAIR", note: p[l.id]?.note ?? "" } }))} aria-label={`Return quantity for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+                <input type="number" min="0" max={l.qty} placeholder="0" value={returnLines[l.id]?.qty ?? ""} onChange={(e) => setReturnLines((p) => ({ ...p, [l.id]: { qty: e.target.value, outcome: p[l.id]?.outcome ?? "REPAIR", note: p[l.id]?.note ?? "" } }))} aria-label={`Return quantity for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
                 <Listbox ariaLabel={`Outcome for ${l.description}`} options={[{ value: "REPAIR", label: "Repair" }, { value: "REMAKE", label: "Remake" }, { value: "CREDIT", label: "Credit" }]} value={returnLines[l.id]?.outcome ?? "REPAIR"} onChange={(v) => setReturnLines((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", outcome: v, note: p[l.id]?.note ?? "" } }))} />
                 <input placeholder="Note (optional)" value={returnLines[l.id]?.note ?? ""} onChange={(e) => setReturnLines((p) => ({ ...p, [l.id]: { qty: p[l.id]?.qty ?? "", outcome: p[l.id]?.outcome ?? "REPAIR", note: e.target.value } }))} aria-label={`Note for ${l.description}`} style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: "5px 7px", fontSize: 12.5, background: "var(--nds-surface)", color: "var(--nds-text)" }} />
               </div>

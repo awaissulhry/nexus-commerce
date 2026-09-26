@@ -56,7 +56,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
               <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--nds-text)" }}>
                   {e.label}
-                  {e.amountCents != null && <span style={{ marginLeft: 8, fontFamily: "ui-monospace, monospace", fontWeight: 700 }}>{eur(e.amountCents)}</span>}
+                  {e.amountCents != null && <span style={{ marginLeft: 8, fontFamily: "var(--nds-font-mono)", fontWeight: 700 }}>{eur(e.amountCents)}</span>}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--nds-text-3)", marginTop: 1 }}>{formatDate(e.at)} · {new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
               </div>

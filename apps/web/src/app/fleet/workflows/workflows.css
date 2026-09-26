@@ -1016,7 +1016,7 @@
 .wf-vbadge {
   font-size: 11.5px;
   font-weight: 700;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   color: #2f6096;
   background: var(--nds-blue-50);
   border: 1px solid #d3e2f4;
@@ -1306,7 +1306,7 @@
 .wf-cronfield { width: 190px; }
 .wf-cronfield.is-bad { border-color: #c2453f; background: #fdf6f5; }
 .wf-cronfield > input.wf-croninput {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   font-size: 12.5px;
   color: var(--nds-grey-700);
   padding: 6px 9px;
@@ -1335,7 +1335,7 @@
 .wf-difflist { margin: 0 0 8px; padding: 0; list-style: none; }
 .wf-difflist li {
   font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   padding: 2px 0;
 }
 .wf-difflist li.add { color: #14764f; }

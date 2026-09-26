@@ -47,7 +47,7 @@ export default async function PositiveLandingPage({
   // from a phone in 2 seconds after a customer clicks. No nav, no chrome.
   return (
     <main style={{
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      fontFamily: 'var(--nds-font-sans)',
       maxWidth: '480px',
       margin: '0 auto',
       padding: '48px 24px',
