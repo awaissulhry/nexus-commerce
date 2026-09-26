@@ -60,6 +60,7 @@ const EXCEPTIONS: Array<[string, string, string]> = [
   ['services/shopify/content-workspace.service.ts', 'variationBag({ categoryAttributes: p.categoryAttributes, variantAttributes:', 'into the helper'],
   ['services/pim/family-variations-core.ts', 'legacy: bag(v.variantAttributes)', 'VTR step 1: the backfill REPORT lists every store, the legacy one included, and writes nothing'],
   ['services/pim/family-variations.service.ts', 'legacy = bag(child.variantAttributes)', 'VTR step 1: the one writer drops the legacy copy of the axis it writes'],
+  ['services/pim/family-variations-backfill.ts', 'legacy = bagOf(child.variantAttributes)', 'VTR step 1b: the backfill sends a value only while a legacy copy of its axis still exists'],
   // The AI prompt builder reads through variationBag; these pass both stores to it.
   ['routes/listing-wizard.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through (categoryAttributes passed too)'],
   ['routes/products-ai.routes.ts', 'variantAttributes: product.variantAttributes,', 'AI prompt pass-through'],

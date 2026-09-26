@@ -90,3 +90,12 @@ after the Owner's word (it changes what Etsy/Shopify receive) — **Owner chose 
 **~23:00:** the category map landed as attributes PR #48 (`channelCategoryField()` in `pim/mapping/category-mapping.service.ts`; auto-merge on). VTR step 4 uses it for the source label; publish lane told. The Owner approved removing the old `output/` run folders, but VTR did NOT delete them: `output/shopify-impact-2026-09-08/` is the built Shopify theme the `integrations/shopify/impact` tools write and read, and `output/shopify-family-migration-2026-09-09/` is the evidence the 09-09 audit doc links to.
 
 **~23:20:** PR #45 merged (074c1cf54). Owner picked (a) in the PE session: proof/probe tools run ON the production server (railway ssh) after merge + deploy; no decrypt key on a laptop (channel logins are KMS-sealed since ~06:20 UTC). PE: look-only ssh check, then a small PR (server mode for the proof tools).
+
+**~20:45 UTC:** full deploy 98d6b4ce — API live 20:19, worker 20:26, scheduler building. PE: PR #58 (proof-tool workspace fix + P3.0
+census record; VTR checked: no channel ids, only `nexus_legacy_workspace`). P3.0 census eBay IT (production, read only): 14 live items,
+7 Inventory + 6 Trading agree with the `__offerIds` marker, 0 mismatches (step 0b's concern did not bite); GALE-JACKET main item: 1 of
+20 SKUs has no eBay offer (MIXED). Amazon one-listing proof PREPARED on the worker (expires 22:32 UTC) — the Owner decides in the PE session.
+
+**~20:55 UTC:** step 0 is LIVE on all three services (build 98d6b4ce: API 20:19, worker 20:26, scheduler 20:33; scheduler jobs run,
+0 errors). PR #56 (step 1a) — every check green; waiting for the Owner's merge word.
+

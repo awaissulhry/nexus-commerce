@@ -155,3 +155,48 @@ export async function setFamilyVariationValues(familyId: string, input: { expect
     return { version: input.expectedVersion + 1, changed, createdOptions }
   }, { isolationLevel: 'Serializable' })
 }
+
+/**
+ * VTR step 1 — THE writer of a family's axes: an ordered list of dictionary attribute CODES (`variationAxisCodes`). The label mirror
+ * `variationAxes` keeps each axis's existing spelling ("Colore") so today's readers see no change; a new axis takes the attribute label.
+ * Compare-and-set on the family root; open coordinate editors are invalidated (their listing versions bump), as the studio axes save does.
+ */
+export async function setFamilyAxes(familyId: string, input: { expectedVersion: number; codes: string[]; labels?: string[] }) {
+  if (input.labels !== undefined && (!Array.isArray(input.labels) || input.labels.length !== input.codes?.length || input.labels.some(l => typeof l !== 'string' || !l.trim())))
+    throw new FamilyVariationError('Send one label per axis code, or none.', 400)
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new FamilyVariationError('An observed family version is required.', 400)
+  if (!Array.isArray(input.codes) || input.codes.length > 10 || input.codes.some(code => typeof code !== 'string' || !code.trim()))
+    throw new FamilyVariationError('Send up to 10 attribute codes.', 400)
+  const repeated = input.codes.find((code, i) => input.codes.indexOf(code) !== i)
+  if (repeated) throw new FamilyVariationError(`${repeated} twice. A family varies by each attribute once.`, 400)
+
+  return inDatabaseTransaction(prisma, async () => {
+    const root = await prisma.product.findFirst({ where: { id: familyId, deletedAt: null }, select: { id: true, sku: true, parentId: true, version: true,
+      variationAxes: true, variationAxisCodes: true, children: { where: { deletedAt: null }, select: { id: true } } } })
+    if (!root) throw new FamilyVariationError('This family no longer exists.', 404)
+    if (root.parentId) throw new FamilyVariationError('Set axes on the family parent.', 400)
+    if (root.version !== input.expectedVersion) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409, { current: root.version })
+    const attributes = await dictionary()
+    const names = (label: string, code: string) => { const found = attributeForAxis(label, attributes); return !('reason' in found) && found.attribute.code === code }
+    const mirror = input.codes.map((code, i) => {
+      const attribute = attributes.find(a => a.code === code)
+      if (!attribute) throw new FamilyVariationError(`${code} is not an attribute of the dictionary.`, 400)
+      // A given spelling (the backfill keeps a theme text's "Colore") must name the same attribute.
+      const given = input.labels?.[i]
+      if (given !== undefined && !names(given, code)) throw new FamilyVariationError(`"${given}" does not name the ${code} attribute.`, 400)
+      return given ?? root.variationAxes.find(label => names(label, code)) ?? attribute.label
+    })
+    if (JSON.stringify(input.codes) === JSON.stringify(root.variationAxisCodes) && JSON.stringify(mirror) === JSON.stringify(root.variationAxes)) return { version: root.version }
+    const won = await prisma.product.updateMany({ where: { id: root.id, version: input.expectedVersion },
+      data: { variationAxisCodes: input.codes, variationAxes: mirror, version: { increment: 1 } } })
+    if (won.count !== 1) throw new FamilyVariationError('This family changed. Reload and review the change again.', 409)
+    await prisma.channelListing.updateMany({ where: { productId: root.id }, data: { version: { increment: 1 } } })
+    await productEventService.emitTx(prisma as unknown as Prisma.TransactionClient, { aggregateId: root.id, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED',
+      data: { variationAxisCodes: input.codes, variationAxes: mirror, previousVariationAxisCodes: root.variationAxisCodes, previousVariationAxes: root.variationAxes },
+      metadata: { source: 'OPERATOR', writer: 'family-variations' } })
+    const ids = [root.id, ...root.children.map(c => c.id)]
+    await produceReadinessForProducts(ids)
+    await afterDatabaseCommit(`product-cache:${[...ids].sort().join(',')}`, () => productReadCacheService.refreshMany(ids))
+    return { version: input.expectedVersion + 1 }
+  }, { isolationLevel: 'Serializable' })
+}
