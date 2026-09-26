@@ -9,11 +9,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { parse } from 'dotenv'
 import pg from 'pg'
 
-const ROOT = '/Users/awais/nexus-commerce', WORKSPACE = 'nexus_legacy_workspace'
+// The checkout this tool lives in, so the proof runs the code beside it (a fixed path ran a stale checkout).
+const ROOT = fileURLToPath(new URL('../../..', import.meta.url)).replace(/\/$/, ''), WORKSPACE = 'nexus_legacy_workspace'
 const SKU = 'GALE-JACKET-BLACK-MEN-S', MARKET = 'IT', MARKETPLACE_ID = 'APJ6JRA9NG5V4', ATTRIBUTE = 'generic_keyword', LANGUAGE = 'it_IT'
 const args = process.argv.slice(2), prepare = args.includes('--prepare'), execute = args.includes('--execute-approved')
 const arg = (key: string) => { const index = args.indexOf(`--${key}`); return index < 0 ? undefined : args[index + 1] }
