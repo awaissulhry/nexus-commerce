@@ -228,6 +228,7 @@ import { startEventInfrastructure, stopEventInfrastructure } from "./workers/eve
 // PH.3 — the read-only product graph at /graphql.
 import { registerProductGraph } from "./graph/index.js";
 import prisma from "./db.js";
+import { registerCommandIdempotency } from './lib/command-idempotency.js';
 
 process.env.NEXUS_PROCESS_ROLE = 'api';
 
@@ -518,6 +519,9 @@ app.addHook('preHandler', rbacHook);
 // too) and is a no-op in shadow mode. SSE + export writers bypass this and
 // call filterFinancialPayload() directly (S2 follow-up).
 app.addHook('preSerialization', financialFilterHook);
+// After the workspace and RBAC hooks (a replay is served only to callers they
+// admit) and after the financial filter (a receipt stores the filtered response).
+registerCommandIdempotency(app);
 
 // HTTP routes — all queue references are lazy (see lib/queue.ts), so registering
 // these does not open Redis connections. Workers/jobs remain disabled (Phase 2).

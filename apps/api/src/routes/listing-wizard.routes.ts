@@ -58,7 +58,6 @@ import {
   legacyFirstChannel,
   normalizeChannels,
 } from '../services/listing-wizard/channels.js'
-import { idempotencyService } from '../services/idempotency.service.js'
 import { publishListingEvent } from '../services/listing-events.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 
@@ -2633,22 +2632,6 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // idempotency-cache hits return without polluting the analytics.
       const submitStartedAt = Date.now()
 
-      // NN.2 — idempotency: a double-clicked Submit must not run the
-      // publish orchestration twice. We dedup by Idempotency-Key
-      // header (RFC 7240–style); when missing, we fall back to the
-      // wizardId so accidental retries within the 10-minute window
-      // still get the cached result instead of a second publish.
-      const idempotencyKey =
-        (request.headers['idempotency-key'] as string | undefined) ??
-        `wizard:${request.params.id}`
-      const cached = idempotencyService.lookup(
-        'wizard-submit',
-        idempotencyKey,
-      )
-      if (cached) {
-        return cached
-      }
-
       const wizard = await prisma.listingWizard.findUnique({
         where: { id: request.params.id },
       })
@@ -2834,13 +2817,6 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         validation,
         payloads,
       }
-      // NN.2 — store the full response under the idempotency key so
-      // a duplicate submit within 10 min returns identical bytes.
-      idempotencyService.store(
-        'wizard-submit',
-        idempotencyKey,
-        responseBody,
-      )
       return responseBody
     },
   )

@@ -2091,6 +2091,10 @@
       ]
     },
     {
+      "name": "CommandReceipt",
+      "fields": []
+    },
+    {
       "name": "WebhookEvent",
       "fields": []
     },

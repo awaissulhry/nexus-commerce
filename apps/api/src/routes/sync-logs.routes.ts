@@ -39,8 +39,9 @@ import {
   listKnownCrons,
 } from '../jobs/cron-registry.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { inboundHandlerFor, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
+import { canReplayInbound, inboundHandlerFor, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
 import { completeInbound, deadLetterInbound, replayInbound } from '../services/cx/ingress/ledger.js'
+import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 
@@ -1127,6 +1128,19 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.code(queued.reason === 'not_found' ? 404 : 409).send({ error: message })
         }
 
+        // Stored-payload channels execute through the same durable claimant as
+        // normal delivery. Manual replay cannot race an inline handler.
+        if (canReplayInbound(event.channel, event.eventType)) {
+          const claim = await claimInbound(event.id)
+          if (!claim) return reply.code(202).send({ success: true, queued: true })
+          await runWithInboundClaim(claim, async (stored, signal) => {
+            const handler = await inboundHandlerFor(stored.channel, stored.eventType)
+            if (!handler) throw new ReplayUnsupported('The stored event has no replay handler.')
+            await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
+          })
+          return reply.send({ success: true })
+        }
+
         const replay = async (): Promise<void> => {
           // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
           if (event.channel === 'AMAZON') {
@@ -1199,7 +1213,8 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!row) {
           return reply.code(404).send({ error: 'Webhook event not found' })
         }
-        return reply.send(row)
+        const { rawBody, verificationHeaders, processingToken, processingUntil, ...visible } = row
+        return reply.send(visible)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         fastify.log.error({ err }, '[sync-logs/webhooks/:id] failed')

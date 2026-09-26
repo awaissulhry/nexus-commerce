@@ -41,15 +41,32 @@ interface SweepSummary {
  */
 const SWEEP_TABLES: Record<
   string,
-  { model: string; ts: 'createdAt' | 'updatedAt' }
+  { model: string; ts: 'createdAt' | 'updatedAt'; only?: Record<string, unknown> }
 > = {
   auditLog: { model: 'auditLog', ts: 'createdAt' },
   loginEvents: { model: 'loginEvent', ts: 'createdAt' },
-  webhookEvents: { model: 'webhookEvent', ts: 'createdAt' },
+  // A row the retry worker holds or will retry is live work, whatever its age.
+  // Everything else past the window goes, including rejected and stranded arrivals.
+  webhookEvents: { model: 'webhookEvent', ts: 'createdAt', only: { processingToken: null, nextAttemptAt: null } },
   stockLogs: { model: 'stockLog', ts: 'createdAt' },
   // exports retention sweeps the DataExportRequest table by
   // completedAt (so freshly-queued requests don't get yanked).
   exports: { model: 'dataExportRequest', ts: 'createdAt' },
+}
+
+/**
+ * Rows whose lifetime the code that writes them fixes, not the privacy policy. They
+ * are swept even when no policy row exists.
+ */
+async function sweepExpiredOperationalRows(summary: SweepSummary): Promise<void> {
+  try {
+    // Idempotency receipts (lib/command-idempotency.ts) are useless once expired.
+    const r = await prisma.commandReceipt.deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    summary.deletedByKey.commandReceipts = r.count
+    summary.totalDeleted += r.count
+  } catch (err) {
+    summary.skippedKeys.push(`commandReceipts (error: ${err instanceof Error ? err.message : String(err)})`)
+  }
 }
 
 export async function runRetentionSweepOnce(): Promise<SweepSummary> {
@@ -64,6 +81,8 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
     lastSummary = summary
     return summary
   }
+
+  await sweepExpiredOperationalRows(summary)
 
   // Single-row policy table; read once.
   const policyRow = await (prisma as any).dataRetentionPolicy.findFirst()
@@ -91,7 +110,7 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
         continue
       }
       const r = await delegate.deleteMany({
-        where: { [def.ts]: { lt: cutoff } },
+        where: { [def.ts]: { lt: cutoff }, ...def.only },
       })
       summary.deletedByKey[key] = r.count
       summary.totalDeleted += r.count
