@@ -108,6 +108,13 @@ export interface MissingReadinessField {
   requiredBy?: string[]
 }
 
+/**
+ * Progress columns (2026-09-26, colour rule A) — one EMPTY attribute that applies here and is NOT required, from the row's
+ * `completeness.optional.missing`. Kept apart from `missing[]` on purpose: that list is readiness ISSUES (the "Has gaps"
+ * filter, the listing page, the catalogue's SQL read it), and an empty optional field is not an issue.
+ */
+export interface OptionalEmptyField { productId: string; field: string; label: string }
+
 /** The fallback reason for a required field no validator named (e.g. rule-required, conditional). */
 export const REQUIRED_EMPTY_REASON = 'Required and empty'
 
@@ -175,6 +182,13 @@ export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinat
   language: string
   coordinateKey: string
   missing: MissingReadinessField[]
+  /**
+   * Progress columns — the optional side, summed over this entry's rows. `null` = NOT RECORDED: at least one row was
+   * written before `ReadinessIndex.optional*` existed (or its destination was unavailable), so a sum would be a guess.
+   */
+  optional: { filled: number; total: number } | null
+  /** The empty optional fields by name; `[]` when `optional` is null (not recorded is not "none empty"). */
+  optionalMissing: OptionalEmptyField[]
   computedAt: string | null
   /**
    * VT.4b — `ReadinessIndex.variationSource` for this coordinate, relayed so the reader of the index can answer
@@ -199,7 +213,7 @@ export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinat
    * `Not computed` — the R-LX-9 rule one column over: absent is not empty, and a missing key must never read as
    * a score. An empty object is therefore a legitimate value (nothing computed for this coordinate at all).
    */
-  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string; required: { filled: number; total: number }; computedAt: string | null; pendingSince?: string }>
+  byProduct: Record<string, { state: ScopeState; pct: number | null; note?: string; required: { filled: number; total: number }; optional: { filled: number; total: number } | null; computedAt: string | null; pendingSince?: string }>
 }
 
 export function readinessCoordinateKey(c: ReadinessCoordinate): string {

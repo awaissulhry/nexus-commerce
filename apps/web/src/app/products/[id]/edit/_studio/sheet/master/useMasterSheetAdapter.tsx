@@ -21,14 +21,11 @@ import { Button, InfoTip, Pill } from '@/design-system/primitives';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
 import { FormulaBulkDialog } from '../FormulaBulkDialog';
 import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
-import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, CompletenessPill, ProvenanceMark, ReadinessCell, ScopeReadinessCell, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions, type ReadinessValue, type ScopeReadinessValue, type ScopeReadinessState, type ValueGetterParams } from '@/design-system/grid';
+import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions, type ScopeReadinessState } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
-import { cellDetailKeys } from '@/design-system/grid/cellDetail';
-import { readinessMeta } from '@/design-system/grid';
-import type { ScopeReadinessCellParams } from '@/design-system/grid/renderers/cells';
-import { readinessDetailModel, readinessDetailTriggerLabel, filledAllFieldsTip, type ColumnPresence, type DetailEntry } from './readinessDetail';
-import { ReadinessDetailCard } from './ReadinessDetailCard';
+import type { DetailEntry } from './readinessDetail';
+import { SCOPE_PROGRESS_COLUMN, coordinateProgressValue, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
 import { useStudioScope, useSaveReporter, useStudioRecord, useScopeReadiness, useViewChips, viewChipHasCell } from '../../contracts';
 import { type RecordWriteRequest, type RecordWriteResult, type SheetRow as DrawerSheetRow } from '../../drawer';
 import { AiDraftReview, useAiDraftLayer } from '../../ai';
@@ -46,7 +43,7 @@ import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
 import { cellOf, editRefusalReason } from './columnRules';
-import type { RowReadiness, SheetColumn, StudioRow } from './types';
+import type { SheetColumn, StudioRow } from './types';
 import { useMasterSheet } from './useMasterSheet';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { productMediaColumn, useProductMediaEditor, withProductMediaColumn, PRODUCT_MEDIA_COLUMN } from '../../media/productMediaColumn';
@@ -80,13 +77,19 @@ export interface CoordinateReadinessColumn {
   label: string
   language: string
   computedAt: string | null
-  byProduct: Readonly<Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; computedAt?: string | null }>>
+  byProduct: Readonly<Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null }>>
   /** A-45 — each product's OWN entries (issues + flagged required-empty fields), for its completeness card. */
   missingByProduct: Readonly<Record<string, DetailEntry[]>>
+  /** Progress columns (2026-09-26) — each product's EMPTY optional fields, when its optional side is recorded. */
+  optionalByProduct: Readonly<Record<string, Array<{ field: string; label: string }>>>
+  channel: string | null
+  market: string | null
+  accountId: string | null
+  aliasId: string | null
 }
 
 export function coordinateReadinessColumns(
-  matrix: ReadonlyArray<{ channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; coordinateKey: string; language: string; label: string; computedAt: string | null; byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; computedAt?: string | null }>; missing?: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }> }> | undefined,
+  matrix: ReadonlyArray<{ channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; coordinateKey: string; language: string; label: string; computedAt: string | null; byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null }>; missing?: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }>; optionalMissing?: ReadonlyArray<{ productId: string; field: string; label: string }> }> | undefined,
   language: string | null | undefined,
 ): CoordinateReadinessColumn[] {
   if (!matrix?.length || !language) return []
@@ -100,7 +103,19 @@ export function coordinateReadinessColumns(
       computedAt: entry.computedAt,
       byProduct: entry.byProduct ?? {},
       missingByProduct: groupMissingByProduct(entry.missing),
+      optionalByProduct: groupOptionalByProduct(entry.optionalMissing),
+      channel: entry.channel,
+      market: entry.market,
+      accountId: entry.accountId,
+      aliasId: entry.aliasId,
     }))
+}
+
+/** Progress columns — a coordinate's empty optional fields split by product, like `missing[]` below. */
+function groupOptionalByProduct(missing: ReadonlyArray<{ productId: string; field: string; label: string }> | undefined): Record<string, Array<{ field: string; label: string }>> {
+  const out: Record<string, Array<{ field: string; label: string }>> = {}
+  for (const m of missing ?? []) (out[m.productId] ??= []).push({ field: m.field, label: m.label })
+  return out
 }
 
 /** A-45 — a coordinate's `missing[]` split by product, so a row's card never shows a sibling's fields. */
@@ -111,6 +126,12 @@ function groupMissingByProduct(missing: ReadonlyArray<{ productId: string; field
   }
   return out
 }
+
+/** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
+const progressKeyOf = (readyColId: string) => `progress:${readyColId.slice('ready:'.length)}`;
+const SHARED_PROGRESS_TIP = 'Progress of the shared product: filled ÷ every field that applies here, required and optional. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Hover or click a bar to see what is missing. Completeness, not publish readiness.';
+const marketProgressTip = (label: string, language: string, computedAt: string | null) =>
+    `Progress on ${label} in ${language}: filled ÷ every field ${label} applies, required and optional, from the readiness index${computedAt ? ` (computed ${new Date(computedAt).toLocaleString()})` : ''}. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`;
 
 export interface MasterSheetProps {
     productId: string;
@@ -134,7 +155,7 @@ function ProductCell(p: ICellRendererParams<StudioRow> & {
     const expander = parent && d.childCount > 0 ? (<ExpandButton expanded={expanded} onToggle={() => p.node.setExpanded(!expanded)} labels={['Expand children', 'Collapse children']}/>) : (<ExpandSlot />);
     const role = <ProductRoleChip product={d}/>;
     const line = p.secondaryRef ? identitySecondary(d, p.secondaryRef.current) : d.name;
-    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`} trailing={<CompletenessPill pct={d.completeness.overall.pct} tip={filledAllFieldsTip(d.completeness.overall.pct)}/>}/>);
+    return (<IdentityBand expand={expander} role={role} image={d.imageUrl} photoCount={d.imageInherited ? undefined : d.photoCount} noImage={!d.imageUrl} imageMark={d.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={d.sku} secondary={line} secondaryTitle={line ?? undefined} menuItems={p.rowMenuRef?.current(d)} menuLabel={`Actions for ${d.sku}`}/>);
 }
 interface SheetPageState {
     search: string;
@@ -286,7 +307,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm]);
     const mediaEditor = useProductMediaEditor(refresh, locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
-    const schemaColumns = useMemo(() => withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never)), [sheet]);
+    /* Progress columns (2026-09-26) — members of the column model (Customise, views, locks), built by `progressColumns`
+       below. The per-market ones follow the readiness index for the pressed language. */
+    const coordinateColumns = useMemo(() => coordinateReadinessColumns(readinessMatrix, locale), [readinessMatrix, locale]);
+    const progressSpecs = useMemo<SheetColumn[]>(() => (sheet ? [
+        progressSheetColumn<SheetColumn>(SCOPE_PROGRESS_COLUMN, 'Shared product', SHARED_PROGRESS_TIP),
+        ...coordinateColumns.map((c) => progressSheetColumn<SheetColumn>(progressKeyOf(c.colId), c.label, marketProgressTip(c.label, languageLabel(c.language), c.computedAt))),
+    ] : []), [sheet, coordinateColumns]);
+    const schemaColumns = useMemo(() => [...progressSpecs, ...withProductMediaColumn(sheet?.columns ?? []).filter((c) => !RESERVED_COLUMN_IDS.includes(c.key as never))], [sheet, progressSpecs]);
     const viewCtx = useMemo(() => ({
         variationAxes: sheet?.family.variationAxes?.length ? sheet.family.variationAxes : variationAxes,
         locale,
@@ -346,126 +374,75 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             api.refreshCells({ force: true });
     }, [activeChip]);
     const visibleRows = useMemo(() => activeChip ? filterProductSheetRows(scopeRows, row => (activeChip.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, activeChip]);
-    const attributeColumns = useMemo(() => (sheet ? buildSheetColumns('master', { columns: schemaColumns.filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring]);
+    const attributeColumns = useMemo(() => (sheet ? buildSheetColumns('master', { columns: withoutProgressColumns(schemaColumns).filter(column => column.key !== PRODUCT_MEDIA_COLUMN), tracker, locale, market, reservedColumnIds: RESERVED_COLUMN_IDS, isChipCell, draftFor: aiLayer.draftFor, formula: formulaWiring }, rowsRef) : []), [sheet, schemaColumns, tracker, locale, market, isChipCell, aiLayer.draftFor, formulaWiring]);
     const identityColumns = useMemo<ColDef<StudioRow>[]>(() => [], []);
-    /* A-45 (Step 4.3 #4) — what the completeness card's actions call. Read through refs: the column set is
-       built before `openCustomise` exists in this render, and a card is opened long after either is current. */
+    /* Progress columns (2026-09-26) — what the card's actions call. Read through refs: the column set is built before
+       the grid exists, and a card is opened long after either is current. */
     const presenceRef = useRef<(field: string) => ColumnPresence>(() => 'absent');
     const goToFieldRef = useRef<(productId: string, field: string) => void>(() => undefined);
-    const customiseRef = useRef<() => void>(() => undefined);
     presenceRef.current = (field) => {
         const col = getGridApi()?.getColumn(field);
         return !col ? 'absent' : col.isVisible() ? 'visible' : 'hidden';
     };
     goToFieldRef.current = (productId, field) => {
         const api = getGridApi();
-        const node = api?.getRowNode(productId);
-        if (!api || !node) return;
-        // A child row sits under its parent in the tree: open the family first, or there is no row to focus.
-        if (node.parent && node.parent.level >= 0 && !node.parent.expanded) node.parent.setExpanded(true);
-        revealCell(field, 'reveal');
-        requestAnimationFrame(() => {
-            if (node.rowIndex == null) return;
-            api.ensureIndexVisible(node.rowIndex);
-            api.setFocusedCell(node.rowIndex, field);
-        });
+        if (!api) return;
+        // The engine's landing: open the family, scroll the row to the middle, put the cursor in the cell, mark it.
+        // The sheet's own reveal keeps the column clear of an open record panel.
+        landOnCell(api, { rowId: productId, colId: field, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
     };
-    const readinessColumns = useMemo<ColDef<StudioRow>[]>(() => {
-        const toValue = (r: RowReadiness | undefined): ReadinessValue | null => r ? { state: r.state, issues: r.issues.map((i) => i.message), ref: r.ref } : null;
-        const rowValue = (row: StudioRow | undefined): ReadinessValue | null => {
-            if (!row)
-                return null;
-            const edits = (sheet?.columns ?? []).map(col => tracker.get(row.id, col.key)).filter(Boolean);
-            const failures = edits.filter(edit => edit?.state === 'refused' || edit?.state === 'unknown');
-            if (failures.length)
-                return { state: 'errors', issues: [...new Set(failures.map(edit => edit?.reason || 'An edit has not been saved.'))] };
-            if (edits.some(edit => edit?.state === 'saving'))
-                return null;
-            return toValue(row.readiness);
-        };
-        const readinessText = (v: ReadinessValue | null | undefined): string => {
-            if (!v)
-                return '';
-            const state = v.state ? v.state.charAt(0).toUpperCase() + v.state.slice(1) : '';
-            const n = v.issues?.length ?? 0;
-            return n > 0 ? `${state} · ${n}` : state;
-        };
-        /**
-         * LX.FIN (R-LX-22) — the per-coordinate columns, fed from `ReadinessIndex` through the readiness
-         * contract this frame already reads for the scope chips. ONE request, one authority: the chip
-         * above the sheet and the column inside it cannot disagree about a coordinate.
-         *
-         * They render `ScopeReadinessCell` (the DS's scope-vocabulary cell) and NOT `ReadinessCell`,
-         * which is hard-wired to the row vocabulary — pointing the row cell at a scope state would print
-         * `Blocked` through the wrong table and come out as an unrecognised state on exactly the rows an
-         * operator most needs to see. Measured on GALE-JACKET on 2026-09-13: eBay·IT·xaviaracing·it is
-         * `blocked` as a COORDINATE while its 21 rows are 1 × `ready` (the parent) + 20 × `blocked`, so a
-         * column fed with the coordinate summary would have painted the one ready row red.
-         */
-        const coordinateColumns = coordinateReadinessColumns(readinessMatrix, locale);
-        if (coordinateColumns.length) {
-            return coordinateColumns.map((c) => ({
-                colId: c.colId,
-                headerName: `Readiness · ${c.label}`,
-                width: 170,
-                sortable: false,
-                editable: false,
-                cellClass: 'nds-ag-cell nds-cell-is-locked',
-                headerTooltip: `Scope readiness for ${c.label} in ${languageLabel(c.language)}, from the readiness index${c.computedAt ? ` (computed ${new Date(c.computedAt).toLocaleString()})` : ''}. A row with no index entry reads “Not computed”, which is not a score. This is the SCOPE vocabulary, not the row vocabulary the Readiness column uses, and neither is publication eligibility.`,
-                valueGetter: (p: ValueGetterParams<StudioRow>): ScopeReadinessValue | null => (p.data ? c.byProduct[p.data.id] ?? { state: 'notComputed', pct: null } : null),
-                valueFormatter: (p) => { const v = p.value as ScopeReadinessValue | null; return v ? `${v.state}${v.pct === null ? '' : ` · ${v.pct}%`}` : ''; },
-                cellRenderer: ScopeReadinessCell,
-                /* A-45 (Step 4.3 #4) — the pill opens this product's completeness card: what is required and
-                   empty here, the other issues, and a way to reach each field. Enter / Space on the locked cell
-                   opens it (`cellDetailKeys`); Esc returns focus to the cell. */
-                suppressKeyboardEvent: cellDetailKeys,
-                cellRendererParams: {
-                    detailLabels: (_v: ScopeReadinessValue | null, p: ICellRendererParams) => {
-                        const value = p.data ? c.byProduct[(p.data as StudioRow).id] ?? null : null;
-                        return {
-                            trigger: readinessDetailTriggerLabel(c.label, languageLabel(c.language), value, readinessMeta(value?.state ?? 'notComputed', 'scope').label),
-                            panel: `Completeness for ${c.label}, ${languageLabel(c.language)}`,
-                        };
-                    },
-                    detail: (_v: ScopeReadinessValue | null, p: ICellRendererParams) => {
-                        const row = p.data as StudioRow | undefined;
-                        if (!row) return null;
-                        const model = readinessDetailModel({
-                            coordinateLabel: c.label, languageLabel: languageLabel(c.language),
-                            value: c.byProduct[row.id] ?? null, entries: c.missingByProduct[row.id] ?? [],
-                            presence: (field) => presenceRef.current(field), now: Date.now(),
-                        });
-                        return ({ close }: { close: (options?: { returnFocus?: boolean }) => void }) => <ReadinessDetailCard model={model} close={close}
-                            onGoTo={(field) => goToFieldRef.current(row.id, field)} onCustomise={() => customiseRef.current()} />;
-                    },
-                } satisfies ScopeReadinessCellParams,
-            }));
-        }
-        if (!sheet)
-            return [];
-        return [
-            {
-                colId: 'ready:scope',
-                headerName: 'Readiness',
-                width: 170,
-                sortable: false,
-                editable: false,
-                cellClass: 'nds-ag-cell nds-cell-is-locked',
-                headerTooltip: `Saved Information against ${sheet.scope.label}; unsaved errors take priority. This is not publication eligibility.`,
-                valueGetter: (p: ValueGetterParams<StudioRow>): ReadinessValue | null => rowValue(p.data),
-                valueFormatter: (p) => readinessText(p.value as ReadinessValue | null),
-                cellRenderer: ReadinessCell,
+    /**
+     * The PROGRESS COLUMNS (2026-09-26) — they replace the "Readiness · <label>" columns and the grey bar in the Product
+     * cell. One for the shared product (this sheet's own rows, measured live), then one per channel · market the
+     * readiness index has rows for in the pressed language (the same read the scope chips use — one request, one
+     * authority). Built by the ONE builder both scopes use (`../progressColumns`).
+     */
+    const progressColumns = useMemo<ColDef<StudioRow>[]>(() => {
+        if (!sheet) return [];
+        const subjectOf = (p: ICellRendererParams) => (p.data as StudioRow | undefined)?.sku ?? null;
+        const own = progressColumn<StudioRow>({
+            colId: SCOPE_PROGRESS_COLUMN,
+            headerName: 'Shared product',
+            headerTooltip: SHARED_PROGRESS_TIP,
+            value: (row) => rowProgressValue(row),
+            cell: {
+                scopeLabel: 'Shared product',
+                subjectOf,
+                actionFor: (field, label) => sheetFieldAction(presenceRef.current(field), label, 'Not a column on this sheet'),
+                onGoTo: (field, p) => { const row = p.data as StudioRow | undefined; if (row) goToFieldRef.current(row.id, field); },
+                footerLink: () => ({ label: 'All products for the shared product', href: listingsHref({ channel: null, language: locale }) }),
             },
-        ];
-    }, [sheet, tracker, pending, refused, offline, readinessMatrix, locale]);
+        });
+        const perMarket = coordinateColumns.map((c) => progressColumn<StudioRow>({
+            colId: progressKeyOf(c.colId),
+            headerName: c.label,
+            headerTooltip: marketProgressTip(c.label, languageLabel(c.language), c.computedAt),
+            value: (row) => coordinateProgressValue(c.byProduct[row.id], c.missingByProduct[row.id] ?? [], c.optionalByProduct[row.id] ?? []),
+            cell: {
+                scopeLabel: c.label,
+                subjectOf,
+                // A channel field is edited in its own scope: the link opens that scope at this row and field.
+                actionFor: (field, _label, p) => {
+                    const row = p.data as StudioRow | undefined;
+                    if (!row || !c.channel) return { kind: 'none', text: 'Edit it on the shared product.' };
+                    return { kind: 'link', label: `Open in ${c.label}`, href: studioFieldHref(window.location, {
+                        scope: c.channel, market: c.market, locale: c.language, accountId: c.accountId, aliasId: c.aliasId,
+                        rowId: `${c.aliasId ?? 'primary'}:${row.id}`, field }) };
+                },
+                onGoTo: () => undefined,
+                footerLink: () => ({ label: `All products for ${c.label}`, href: listingsHref({ channel: c.channel, market: c.market, language: c.language }) }),
+            },
+        }));
+        return [own, ...perMarket];
+    }, [sheet, coordinateColumns, locale]);
     const columnDefs = useMemo(() => {
         const rank = new Map(orderColumnKeys(schemaColumns, viewCtx).map((k, i) => [k, i]));
         const ordered = attributeColumns
             .map((c, i) => ({ c, r: rankOfColumn(c, rank), i }))
             .sort((a, b) => a.r - b.r || a.i - b.i)
             .map((x) => x.c);
-        return [...identityColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered, ...readinessColumns];
-    }, [identityColumns, attributeColumns, readinessColumns, schemaColumns, viewCtx, mediaEditor.open, mediaEditor.actions]);
+        return [...identityColumns, ...progressColumns, productMediaColumn<StudioRow>(mediaEditor.open, mediaEditor.actions), ...ordered];
+    }, [identityColumns, attributeColumns, progressColumns, schemaColumns, viewCtx, mediaEditor.open, mediaEditor.actions]);
     const getRowId = useCallback((p: {
         data: StudioRow;
     }) => p.data.id, []);
@@ -549,7 +526,6 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onCollectVariation: setNewVariation,
     });
     const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
-    customiseRef.current = openCustomise;
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
         const api = getGridApi();

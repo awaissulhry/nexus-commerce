@@ -125,6 +125,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-amber-600', value: palette.amber[600] },
   { name: '--nds-amber-700', value: palette.amber[700] },
   { name: '--nds-amber-text', value: palette.amber.text },
+  { name: '--nds-signal-red', value: palette.signal.red },
+  { name: '--nds-signal-red-dark', value: palette.signal.redDark },
+  { name: '--nds-signal-yellow', value: palette.signal.yellow },
+  { name: '--nds-signal-yellow-edge', value: palette.signal.yellowEdge },
+  { name: '--nds-signal-yellow-dark', value: palette.signal.yellowDark },
+  { name: '--nds-signal-green-dark', value: palette.signal.greenDark },
+  { name: '--nds-signal-track-dark', value: palette.signal.trackDark },
   { name: '--nds-purple-bg', value: palette.purple.bg },
   { name: '--nds-purple-600', value: palette.purple[600] },
   { name: '--nds-purple-700', value: palette.purple[700] },
@@ -302,6 +309,21 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // `:root` and never in `.dark` — the third instance of the same class in one night. The light
   // value is unchanged (5.98 / 4.94 / 5.45); only dark was ever broken.
   { name: '--nds-prov-inherited-fg', value: '#1a60c4' },  // surface 5.98 · ai-tint 4.94 · pinned 5.45
+
+  // PROGRESS BARS (2026-09-26, the sheet's progress columns — colour rule A). Bright on purpose (Owner: "bright
+  // green / red / yellow"). The colour says WHAT is missing, never how much: missing = a required field is empty,
+  // partial = only optional fields are empty, complete = nothing is missing (#43, #727). A fill is a graphical object
+  // (WCAG 1.4.11, 3:1 on the ground it meets), so each tone has an EDGE: the 1px inset line the ground actually
+  // touches. Bright yellow is 1.69:1 and green-600 2.91:1 on the variation row (#eef1f5), so their edges are darker;
+  // red clears 3:1 alone. Measured by scripts/check-progress-contrast.mjs on every plain grid row ground, both themes.
+  { section: 'Progress bars', name: '--nds-progress-complete', value: 'var(--nds-green-600)' },
+  { name: '--nds-progress-complete-edge', value: 'var(--nds-green-700)' },   // 4.43 worst light row ground
+  { name: '--nds-progress-partial', value: 'var(--nds-signal-yellow)' },
+  { name: '--nds-progress-partial-edge', value: 'var(--nds-signal-yellow-edge)' },                 // 4.35 worst light row ground
+  { name: '--nds-progress-missing', value: 'var(--nds-signal-red)' },
+  { name: '--nds-progress-missing-edge', value: 'var(--nds-progress-missing)' }, // 4.26 worst light row ground
+  // What is left of the bar. Not a meaning of its own — the number beside the bar carries the value.
+  { name: '--nds-progress-track', value: 'var(--nds-grey-200)' },
 
   // status pills
   // TONAL — a tinted fill with a tinted border and dark tinted text. Tier 2, because two
@@ -701,6 +723,16 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-warning-strong', value: '#f0b46a' },
   { name: '--nds-danger-strong', value: '#f79289' },
   { name: '--nds-text-link', value: '#9cc2f3' }, // R-49 (A-51): 7.31 worst dark ground (was #8ab6f0, 6.42)
+
+  // Progress bars on the dark canvas: the bright tones clear 3:1 on every dark row ground without an edge
+  // (worst: complete 6.20, partial 9.23, missing 5.11), so each edge is its fill.
+  { section: 'Dark progress bars', name: '--nds-progress-complete', value: 'var(--nds-signal-green-dark)' },
+  { name: '--nds-progress-complete-edge', value: 'var(--nds-progress-complete)' },
+  { name: '--nds-progress-partial', value: 'var(--nds-signal-yellow-dark)' },
+  { name: '--nds-progress-partial-edge', value: 'var(--nds-progress-partial)' },
+  { name: '--nds-progress-missing', value: 'var(--nds-signal-red-dark)' },
+  { name: '--nds-progress-missing-edge', value: 'var(--nds-progress-missing)' },
+  { name: '--nds-progress-track', value: 'var(--nds-signal-track-dark)' },
 
   // Dark rail palette (consumed only when the rail is NOT under .h10-shell —
   // i.e. the app-wide rail; standalone shells pin these light).

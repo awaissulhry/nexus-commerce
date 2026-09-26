@@ -85,6 +85,10 @@ const GATES = {
   'contrast checker self-test': nodeTest('scripts/check-nds-contrast.test.mjs'),
   'contrast 7:1 (web)': node('scripts/check-nds-contrast.mjs', '--max-failures', '0', '--max-aa-failures', '0'),
   'contrast 7:1 (factory)': node('scripts/check-nds-contrast.mjs', '--tokens', 'apps/factory/src/design-system/styles/tokens.css', '--max-failures', '0', '--max-aa-failures', '0'),
+  // Progress columns (2026-09-26) — every progress-bar tone at 3:1 on every grid row ground, both themes, both apps.
+  'progress bar contrast self-test': node('scripts/check-progress-contrast.mjs', '--self-test'),
+  'progress bar contrast (web)': node('scripts/check-progress-contrast.mjs', '--check'),
+  'progress bar contrast (factory)': node('scripts/check-progress-contrast.mjs', '--check', '--tokens', 'apps/factory/src/design-system/styles/tokens.css'),
   'browser gate runner self-tests': nodeTest('scripts/run-browser-gates.test.mjs', 'scripts/lib/gate-write-guard.test.mjs', 'scripts/lib/gate-aloneness.test.mjs'),
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),

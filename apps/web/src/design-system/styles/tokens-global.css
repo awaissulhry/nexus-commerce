@@ -60,6 +60,13 @@
   --nds-amber-600: #b87503;
   --nds-amber-700: #c2410c;
   --nds-amber-text: #6b4800;
+  --nds-signal-red: #dc2626;
+  --nds-signal-red-dark: #f87171;
+  --nds-signal-yellow: #eab308;
+  --nds-signal-yellow-edge: #a16207;
+  --nds-signal-yellow-dark: #facc15;
+  --nds-signal-green-dark: #22c55e;
+  --nds-signal-track-dark: #3a4758;
   --nds-purple-bg: #f3e8ff;
   --nds-purple-600: #7400bc;
   --nds-purple-700: #6d28d9;
@@ -125,6 +132,15 @@
   --nds-prov-ai-fg: #6d28d9;
   --nds-prov-formula-fg: #094b5e;
   --nds-prov-inherited-fg: #1a60c4;
+
+  /* ── Progress bars ── */
+  --nds-progress-complete: var(--nds-green-600);
+  --nds-progress-complete-edge: var(--nds-green-700);
+  --nds-progress-partial: var(--nds-signal-yellow);
+  --nds-progress-partial-edge: var(--nds-signal-yellow-edge);
+  --nds-progress-missing: var(--nds-signal-red);
+  --nds-progress-missing-edge: var(--nds-progress-missing);
+  --nds-progress-track: var(--nds-grey-200);
 
   /* ── Tonal ── */
   --nds-tonal-bg: var(--nds-blue-50);
@@ -498,6 +514,15 @@
   --nds-warning-strong: #f0b46a;
   --nds-danger-strong: #f79289;
   --nds-text-link: #9cc2f3;
+
+  /* ── Dark progress bars ── */
+  --nds-progress-complete: var(--nds-signal-green-dark);
+  --nds-progress-complete-edge: var(--nds-progress-complete);
+  --nds-progress-partial: var(--nds-signal-yellow-dark);
+  --nds-progress-partial-edge: var(--nds-progress-partial);
+  --nds-progress-missing: var(--nds-signal-red-dark);
+  --nds-progress-missing-edge: var(--nds-progress-missing);
+  --nds-progress-track: var(--nds-signal-track-dark);
 
   /* ── Dark rail palette (app-wide rail only; shells pin light) ── */
   --nds-rail-text: #aab6c2;

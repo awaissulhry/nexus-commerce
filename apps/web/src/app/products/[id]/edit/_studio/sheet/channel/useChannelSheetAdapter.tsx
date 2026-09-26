@@ -32,18 +32,19 @@ import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { isSlotListKey } from '@/design-system/grid/editors/slotList';
 import { expandSlotListKeys, queuePendingEdit, revertPendingEdit, slotFanOut, slotListKeyOfSlot, slotListRefusal, withSlotListColumns } from '../slotListColumns';
-import { CellSaveTracker, CompletenessPill, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
+import { CellSaveTracker, IdentityBand, ProvenanceMark, SheetWriter, bandColSpan, landOnCell, type ColDef, type ICellRendererParams, type SheetWriteRequest, type ValueGetterParams, exprOf, isFormulaDraft, composeCellTooltip, longTextTooltipLine, shapeTooltipLine, type FormulaCandidate, type FormulaWiring } from '@/design-system/grid';
 import { SkuTag } from '@/design-system/grid';
 import { Button } from '@/design-system/primitives';
 import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
+import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
 import { resetSourceLabel } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
 import { useActionConfirm } from '@/design-system/grid/actions/ActionConfirm';
 import { wholeListWriteField } from './provenance';
-import { rowReadinessPill, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, variantRowsOf } from './rows';
+import { rowProgressUnscorable, channelWriteIdentity, channelWriteGate, dataPathFor, withMappingRun, distinctVariantCount, isCellEditable, offersCascade, orderRows, rowIdOf, summariseAlias, withRowIdentity, cellHoverNote, crossChannelColumnCount, variantRowsOf } from './rows';
 import { aliasMark, cascadeIntent, cascadeOf, type CascadeIntent } from './provenance';
 import { studioAccountAccess } from '../../accountScope';
 import type { AliasGroup as PreflightAlias } from './types';
@@ -451,7 +452,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }
         writer.set(e.data.rowId, colId, e.newValue, { row: e.data, intent: 'set' });
     }, [writer, formulas, reload, channel, marketplace, accountId, locale, writeInstanceId]);
-    const bandSpan = useMemo(() => bandColSpan<ChannelSheetRow>({ isBand: (d) => d?.rowKind === 'parent' }), []);
+    /* The band stops before the progress column (2026-09-26): the listing row keeps its own progress cell there, as
+       master's parent row does. */
+    const bandSpan = useMemo(() => bandColSpan<ChannelSheetRow>({ isBand: (d) => d?.rowKind === 'parent', stopBefore: isProgressColumn }), []);
     const auth = useAuth();
     const permission: PermissionState = auth.status === 'loading' ? 'checking'
         : auth.status === 'anon' ? 'no-session'
@@ -547,6 +550,36 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         refusedReasonFor, tracker, activeCellsRef, viewCtx, mediaEditor, shopifyEditor, shopifySchema, auth,
     }), [data, gridColumns, formulaWiring, accountId, openCellDetails, productLevelOnly, refusedReasonFor,
         tracker, viewCtx, mediaEditor.open, mediaEditor.actions, shopifyEditor.open, shopifySchema, auth]);
+    /**
+     * The scope's PROGRESS COLUMN (2026-09-26) — the bar left the Product cell. The same builder as master
+     * (`../progressColumns`), fed by this sheet's own rows: `completeness` is measured against THIS channel's fields.
+     */
+    const progressColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
+        if (!data) return [];
+        const label = data.scope.label;
+        const presence = (field: string): ColumnPresence => {
+            const col = getGridApi()?.getColumn(field);
+            return !col ? 'absent' : col.isVisible() ? 'visible' : 'hidden';
+        };
+        return [progressColumn<ChannelSheetRow>({
+            colId: SCOPE_PROGRESS_COLUMN,
+            headerName: label,
+            headerTooltip: `Progress on ${label}: filled ÷ every field ${label} applies here, required and optional. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — this listing cannot be scored yet. Hover or click a bar to see what is missing. Completeness, not publish readiness.`,
+            value: (row) => rowProgressValue(row, rowProgressUnscorable(row, dataRef.current?.aliases.find(alias => aliasKeyOf(alias.id) === aliasKeyOf(row.aliasId)))),
+            cell: {
+                scopeLabel: label,
+                subjectOf: (p) => (p.data as ChannelSheetRow | undefined)?.sku ?? null,
+                actionFor: (field, fieldLabel) => sheetFieldAction(presence(field), fieldLabel, 'Not a column on this sheet'),
+                onGoTo: (field, p) => {
+                    const row = p.data as ChannelSheetRow | undefined;
+                    const api = getGridApi();
+                    if (row && api) landOnCell(api, { rowId: rowIdOf(row), colId: field, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
+                },
+                footerLink: () => ({ label: `All products for ${label}`, href: listingsHref({ channel: data.scope.channel, market: marketplace, language: data.scope.locale }) }),
+            },
+        })];
+    }, [data, marketplace, getGridApi, revealCell]);
+    const allColumnDefs = useMemo(() => [...progressColumns, ...columnDefs], [progressColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
     const matchesSearch = useCallback((r: ChannelSheetRow) => {
@@ -571,11 +604,14 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         getGridApi()?.refreshCells({ force: true });
     }, [activeId]);
     const crossChannelCols = useMemo(() => crossChannelColumnCount(rows.find((r) => r.rowKind === 'variant')), [rows]);
-    const schemaColumns = useMemo(() => gridColumns as never as StudioSheetColumn[], [gridColumns]);
+    /* Progress column (2026-09-26) — a member of the column model (Customise, views, locks), built above by the shared
+       builder; the channel builder never sees it. */
+    const modelColumns = useMemo(() => data ? [progressSheetColumn<typeof gridColumns[number]>(SCOPE_PROGRESS_COLUMN, data.scope.label, `Progress on ${data.scope.label}: filled ÷ every field it applies here, required and optional.`), ...gridColumns] : gridColumns, [data, gridColumns]);
+    const schemaColumns = useMemo(() => modelColumns as never as StudioSheetColumn[], [modelColumns]);
     const prefsBridge = useMemo<PrefsBridgeOptions>(() => ({
-        columns: [{ key: '__identity', locked: true }, ...gridColumns.map((c) => ({ key: c.key }))],
+        columns: [{ key: '__identity', locked: true }, ...modelColumns.map((c) => ({ key: c.key }))],
         treeColumnKey: '__identity',
-    }), [gridColumns]);
+    }), [modelColumns]);
     const sheetColumns = useSheetColumns<ChannelSheetRow, null>({
         apiRef,
         gridReady,
@@ -671,7 +707,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             }
             const axes = familyShowsAxesRef.current ? Object.values(row.axisValues ?? {}).filter(Boolean) : [];
             const axisTitle = Object.entries(row.axisValues ?? {}).map(([axis, value]) => `${axis}: ${value}`).join(' · ');
-            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? <SkuTag>{row.sku}</SkuTag> : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} trailing={<CompletenessPill {...rowReadinessPill(row, dataRef.current?.aliases.find(alias => aliasKeyOf(alias.id) === aliasKeyOf(row.aliasId)))}/>} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
+            return (<IdentityBand expand={<BandExpander node={p.node}/>} role={<ProductRoleChip product={row}/>} image={row.imageUrl} noImage={!row.imageUrl} photoCount={row.imageInherited ? undefined : row.photoCount} imageMark={row.imageInherited ? (<ProvenanceMark provenance="inherited" from="the family's picture — this variation has none of its own"/>) : null} sku={row.sku ? <SkuTag>{row.sku}</SkuTag> : null} secondary={axes.length > 0 ? axes.join(' · ') : null} secondaryTitle={axisTitle || undefined} menuItems={menuItemsRef.current(row)} menuLabel={`Actions for ${row.sku ?? row.rowId}`}/>);
         },
         headerTooltip: 'One group per listing alias; the child SKUs beneath it are shared by every alias',
         headerName: 'Product',
@@ -879,7 +915,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
             rowData: visibleRows,
-            columnDefs: columnDefs,
+            columnDefs: allColumnDefs,
             getDataPath: getDataPath,
             getRowId: getRowId,
             autoGroupColumnDef: autoGroupColumnDef,

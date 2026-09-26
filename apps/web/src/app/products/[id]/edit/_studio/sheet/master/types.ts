@@ -38,7 +38,8 @@ export interface SheetColumn {
   localizable?: boolean
   /** Set on a <key>@<locale> column in the saved Languages view. */
   locale?: string
-  managedBy?: 'productMedia'
+  /** `productMedia`: the gallery column. `progress`: a progress column (2026-09-26) — built by `progressColumns.ts`, never a server column. */
+  managedBy?: 'productMedia' | 'progress'
   familyRules?: Record<string, { required: boolean; sortOrder: number }>
   validation?: Record<string, unknown>
   /**
@@ -204,6 +205,8 @@ export interface RowReadiness {
 export interface MasterCompleteness {
   overall: { filled: number; total: number; pct: number }
   required: { filled: number; total: number; missing: Array<{ key: string; label: string }> }
+  /** Progress columns (2026-09-26) — the applicable fields that are NOT required; absent on an older payload = not recorded. */
+  optional?: { filled: number; total: number; missing: Array<{ key: string; label: string }> }
   byGroup: Array<{ group: string; filled: number; total: number }>
 }
 

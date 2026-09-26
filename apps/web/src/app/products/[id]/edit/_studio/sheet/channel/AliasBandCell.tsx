@@ -29,7 +29,7 @@
  */
 import { memo } from 'react'
 
-import { CompletenessPill, ExpandButton, ExpandSlot, IdentityBand, ProvenanceMark, readinessMeta, useExpanded, type ICellRendererParams, type IRowNode } from '@/design-system/grid'
+import { ExpandButton, ExpandSlot, IdentityBand, ProvenanceMark, readinessMeta, useExpanded, type ICellRendererParams, type IRowNode } from '@/design-system/grid'
 import { ProductRoleChip } from '../ProductRoleChip'
 import type { MenuItemDef } from '@/design-system/components'
 
@@ -173,12 +173,10 @@ export const AliasBandCell = memo(function AliasBandCell(
       secondaryTitle={multi ? title : undefined}
       menuItems={p.menuItems}
       menuLabel={`Actions for ${sku}`}
-      trailing={
-        /* #727 — the TONE is the caller's, from the listing's readiness STATE, never from the
-           percentage (#43). The full sentence (label · listing status · variants · readiness ·
-           blocked) is this pill's tooltip, so nothing the band used to print is out of reach. */
-        <CompletenessPill pct={pct} state={alias?.readiness?.state} tip={title} />
-      }
+      /* The readiness pill left the band for the sheet's progress column (2026-09-26). Its tooltip was the band's
+         whole sentence (label · listing status · variants · readiness · blocked), so the sentence moves onto the
+         band itself — nothing the band used to say is out of reach. */
+      title={title}
     />
   )
 })

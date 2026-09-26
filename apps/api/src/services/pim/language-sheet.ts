@@ -36,7 +36,9 @@ export function widenLanguageSheets(sheets: StudioSheet[]): StudioSheet {
           .map(column => ({ ...column, group: textKeys.has(column.key) ? column.label : column.group }))
         const completeness = completenessFor(included, source, source.values)
         return [{ completeness: { ...completeness, required: { ...completeness.required,
-          missing: completeness.required.missing.map(missing => ({ ...missing, key: qualify(missing.key) })) } },
+          missing: completeness.required.missing.map(missing => ({ ...missing, key: qualify(missing.key) })) },
+          optional: { ...completeness.optional,
+            missing: completeness.optional.missing.map(missing => ({ ...missing, key: qualify(missing.key) })) } },
           issues: (source.readiness?.issues ?? []).filter(issue => index === 0 || textKeys.has(issue.key)).map(issue => ({ ...issue, key: qualify(issue.key) })) }]
       })
       const filled = parts.reduce((sum, part) => sum + part.completeness.overall.filled, 0)
@@ -50,6 +52,8 @@ export function widenLanguageSheets(sheets: StudioSheet[]): StudioSheet {
         completeness: { overall: { filled, total, pct: total ? Math.round(filled / total * 100) : 100 },
           required: { filled: parts.reduce((sum, part) => sum + part.completeness.required.filled, 0),
             total: parts.reduce((sum, part) => sum + part.completeness.required.total, 0), missing: parts.flatMap(part => part.completeness.required.missing) },
+          optional: { filled: parts.reduce((sum, part) => sum + part.completeness.optional.filled, 0),
+            total: parts.reduce((sum, part) => sum + part.completeness.optional.total, 0), missing: parts.flatMap(part => part.completeness.optional.missing) },
           byGroup: [...groups.values()] } }
     }),
     groups: columns.reduce<StudioSheet['groups']>((groups, column) => {

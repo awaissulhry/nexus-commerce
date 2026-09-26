@@ -388,6 +388,21 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   }
 }
 
+/* ProgressBar `tone` (the sheet's progress columns, 2026-09-26 — colour rule A). The fill is the tone; the 1px inset
+   EDGE is the colour the ground actually meets, measured at 3:1 on every grid row ground in both themes by
+   scripts/check-progress-contrast.mjs. The tone is the caller's (what is missing), never the percentage (#43, #727). */
+.nds-progress[class*='tone-'] { background: var(--nds-progress-track); }
+.nds-progress.tone-complete > .bar { background: var(--nds-progress-complete); box-shadow: inset 0 0 0 1px var(--nds-progress-complete-edge); }
+.nds-progress.tone-partial > .bar { background: var(--nds-progress-partial); box-shadow: inset 0 0 0 1px var(--nds-progress-partial-edge); }
+.nds-progress.tone-missing > .bar { background: var(--nds-progress-missing); box-shadow: inset 0 0 0 1px var(--nds-progress-missing-edge); }
+/* Not measurable: an empty grey track and `—`. Grey is "cannot say", never a quiet green. */
+.nds-progress.tone-unknown > .bar { background: var(--nds-text-muted); }
+/* The meter: bar + number. The number has a fixed slot so a column of them lines up (100% is the widest). */
+.nds-progress-meter { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; }
+.nds-progress-meter > .nds-progress { flex: 1 1 auto; min-width: 40px; }
+.nds-progress-num { flex: none; min-width: 4ch; text-align: right; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums; color: var(--nds-text-strong); }
+
 /* ── Modal ───────────────────────────────────────────────────────── */
 .nds-backdrop {
   position: fixed;
@@ -2907,6 +2922,58 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-detailpop-reason, .nds-detailpop-note, .nds-detailpop-foot { color: var(--nds-text); }
 .nds-detailpop-note { margin: 8px 0 0; }
 .nds-detailpop-foot { margin-top: 10px; font-size: var(--nds-font-size-xs); }
+/* DetailPopover `panelClassName="nds-detailpop-scroll"` — a panel with a long list is capped to the room
+   usePopoverPosition publishes on the chosen side; its own children decide what scrolls (the progress card's list). */
+.nds-detailpop.nds-detailpop-scroll { display: flex; flex-direction: column; max-height: min(520px, var(--nds-popover-room, 520px)); overflow: hidden; }
+
+/* The PROGRESS CARD (grid/renderers/ProgressDetailCard.tsx, 2026-09-26). The Owner found the first card "a bit light":
+   title and field names are --nds-text-strong at the body size, each group is headed in its tone's TEXT colour
+   (7:1, never the bright fill as text), and every field is a full-width row that reads as a control — like a menu. */
+.nds-detailpop.nds-progress-pop { min-width: 300px; max-width: 380px; padding: 0; }
+.nds-progress-card { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; font-size: var(--nds-font-size-base); color: var(--nds-text-strong); }
+.nds-progress-card-head { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-12) var(--nds-space-14) var(--nds-space-4); }
+.nds-progress-card-swatch { flex: none; width: 22px; height: 8px; border-radius: var(--nds-radius-full); background: var(--nds-progress-track); }
+.nds-progress-card-swatch.tone-complete { background: var(--nds-progress-complete); box-shadow: inset 0 0 0 1px var(--nds-progress-complete-edge); }
+.nds-progress-card-swatch.tone-partial { background: var(--nds-progress-partial); box-shadow: inset 0 0 0 1px var(--nds-progress-partial-edge); }
+.nds-progress-card-swatch.tone-missing { background: var(--nds-progress-missing); box-shadow: inset 0 0 0 1px var(--nds-progress-missing-edge); }
+.nds-progress-card-title { font-weight: var(--nds-font-weight-bold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nds-progress-card-word { margin-left: auto; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); white-space: nowrap; color: var(--nds-text-2); }
+.nds-progress-card-word.tone-missing, .nds-progress-card-gh.tone-missing { color: var(--nds-danger-text); }
+.nds-progress-card-word.tone-partial, .nds-progress-card-gh.tone-partial { color: var(--nds-warning-text); }
+.nds-progress-card-word.tone-complete { color: var(--nds-success-text); }
+.nds-progress-card-summary { margin: 0; padding: 0 var(--nds-space-14) var(--nds-space-8); font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.nds-progress-card-subject { font-family: var(--nds-font-mono); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+/* The list: the only part that scrolls. overscroll-behavior keeps a wheel at its end from scrolling the sheet behind. */
+.nds-progress-card-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--nds-border-subtle);
+  padding: 0 var(--nds-space-6) var(--nds-space-6); }
+.nds-progress-card-group + .nds-progress-card-group { border-top: 1px solid var(--nds-border-subtle); }
+/* The group heading stays in view while its fields scroll under it. */
+.nds-progress-card-gh { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: var(--nds-space-6); padding: var(--nds-space-8) var(--nds-space-8) var(--nds-space-4);
+  background: var(--nds-surface); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-2); }
+.nds-progress-card-dot { flex: none; width: 8px; height: 8px; border-radius: var(--nds-radius-full); background: var(--nds-text-muted); }
+.nds-progress-card-dot.tone-missing { background: var(--nds-progress-missing); box-shadow: inset 0 0 0 1px var(--nds-progress-missing-edge); }
+.nds-progress-card-dot.tone-partial { background: var(--nds-progress-partial); box-shadow: inset 0 0 0 1px var(--nds-progress-partial-edge); }
+.nds-progress-card-items { list-style: none; margin: 0; padding: 0; }
+.nds-progress-card-item { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-10);
+  width: 100%; min-height: 32px; padding: var(--nds-space-5) var(--nds-space-8); border-radius: var(--nds-radius-md); cursor: pointer; color: var(--nds-text-strong); }
+.nds-progress-card-item:hover { background: var(--nds-surface-hover); }
+.nds-progress-card-item:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; background: var(--nds-surface-hover); }
+.nds-progress-card-item.is-static { cursor: default; }
+.nds-progress-card-item.is-static:hover { background: none; }
+.nds-progress-card-what { display: flex; flex-direction: column; min-width: 0; }
+.nds-progress-card-label { font-weight: var(--nds-font-weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-progress-card-reason { font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.nds-progress-card-act { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-link); }
+.nds-progress-card-done, .nds-progress-card-note { margin: 0; padding: var(--nds-space-8) var(--nds-space-14); font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.nds-progress-card-done { border-top: 1px solid var(--nds-border-subtle); color: var(--nds-success-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-progress-card-foot { flex: none; display: flex; flex-direction: column; gap: var(--nds-space-4); padding: var(--nds-space-8) var(--nds-space-14) var(--nds-space-10);
+  border-top: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-xs); color: var(--nds-text); }
+.nds-progress-card-link { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-link); text-decoration: none; }
+.nds-progress-card-link:hover { text-decoration: underline; }
+.nds-progress-card-link:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-sm); }
+
 /* ChangeReview — selectable comparisons; field text stays readable when its choice is disabled. */
 .nds-change-review { display: grid; gap: var(--nds-space-12); min-width: 0; }
 .nds-change-review-item { display: grid; gap: var(--nds-space-10); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); background: var(--nds-surface); color: var(--nds-text); overflow-wrap: anywhere; }

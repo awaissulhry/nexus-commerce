@@ -5,7 +5,7 @@ import { resolveWorkspaceDestination } from './workspace-destination.js'
 import { coordinatesFor } from './sheet-columns.service.js'
 import { normalizeLanguage } from './content-language.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
-import { readinessLanguages, readinessCoordinateKey, type ProductReadiness, type ReadinessCoordinate, type ReadinessMatrixEntry, type MissingReadinessField, type ScopeReadiness } from './readiness-model.js'
+import { readinessLanguages, readinessCoordinateKey, type ProductReadiness, type ReadinessCoordinate, type ReadinessMatrixEntry, type MissingReadinessField, type OptionalEmptyField, type ScopeReadiness } from './readiness-model.js'
 export { readinessFromSheet } from './readiness-model.js'
 export type { ScopeReadiness, ScopeState, ProductReadiness, ReadinessMatrixEntry } from './readiness-model.js'
 
@@ -19,6 +19,9 @@ export function summarizeReadinessIndex(rows: ReadinessIndex[], c: ReadinessCoor
   const required = rows.reduce((sum, r) => ({ filled: sum.filled + r.requiredFilled, total: sum.total + r.requiredTotal }), { filled: 0, total: 0 })
   const unscorable = !rows.length || rows.some(r => r.pct === null) || !required.total
   const notes = [...new Set(rows.filter(r => r.pct === null).map(r => r.note).filter((n): n is string => !!n))]
+  // Progress columns — one row without the optional counts makes the whole sum unknown, never a smaller known number.
+  const optionalRecorded = rows.length > 0 && rows.every(r => r.optionalTotal != null && r.optionalFilled != null)
+  const optional = optionalRecorded ? rows.reduce((sum, r) => ({ filled: sum.filled + (r.optionalFilled ?? 0), total: sum.total + (r.optionalTotal ?? 0) }), { filled: 0, total: 0 }) : null
   return { channel: c.channel, market: c.market, accountId: c.accountId, aliasId: c.aliasId, coordinateKey: readinessCoordinateKey(c), language, id: c.channel ?? 'master', label, required,
     pct: unscorable ? null : Math.round(100 * required.filled / required.total),
     // R-LX-9: no rows for this coordinate and language is NOT computed. It used
@@ -30,6 +33,9 @@ export function summarizeReadinessIndex(rows: ReadinessIndex[], c: ReadinessCoor
     aliasCount: new Set(rows.map(r => r.aliasId).filter(Boolean)).size,
     mappingRules: c.channel ? Math.max(0, ...rows.map(r => r.mappingRules ?? 0)) : null,
     missing: rows.flatMap(r => r.missing as unknown as MissingReadinessField[]),
+    optional,
+    optionalMissing: optionalRecorded ? rows.flatMap(r => ((r.optionalMissing ?? []) as unknown as Array<{ field: string; label: string }>)
+      .map((m): OptionalEmptyField => ({ productId: r.productId, field: m.field, label: m.label }))) : [],
     computedAt: rows.length ? new Date(Math.min(...rows.map(r => r.computedAt.getTime()))).toISOString() : null,
     // P2 — any pending row makes the whole verdict provisional; the earliest mark says since when.
     ...(rows.some(r => r.pendingSince) ? { pendingSince: new Date(Math.min(...rows.filter(r => r.pendingSince).map(r => r.pendingSince!.getTime()))).toISOString() } : {}),
@@ -71,7 +77,7 @@ export async function getProductReadiness(input: { productId: string; market: st
     Object.fromEntries([...new Set(group.map(row => row.productId))].map(productId => {
       const one = summarizeReadinessIndex(group.filter(row => row.productId === productId), c, language, label)
       // A-45 — the product's own required counts and age, so its completeness card can say "18 of 22" and "computed 6 h ago".
-      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}), required: one.required, computedAt: one.computedAt, ...(one.pendingSince ? { pendingSince: one.pendingSince } : {}) }]
+      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}), required: one.required, optional: one.optional, computedAt: one.computedAt, ...(one.pendingSince ? { pendingSince: one.pendingSince } : {}) }]
     }))
   const matrix = [...groups.values()].map(group => ({
     ...summarizeReadinessIndex(group, group[0], group[0].language, group[0].label),

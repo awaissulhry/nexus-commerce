@@ -55,17 +55,27 @@ const sectionOf = (c: SpanColumnLike): 'left' | 'right' | null => {
  * Returns 1 when the column is not in the list (a column being removed as the grid re-renders):
  * spanning a column the grid does not have is how a band ends up overlapping its neighbours.
  */
-export function spanWithinSection(displayed: readonly SpanColumnLike[], column: SpanColumnLike): number {
+export function spanWithinSection(displayed: readonly SpanColumnLike[], column: SpanColumnLike, stopBefore?: (colId: string) => boolean): number {
   const section = sectionOf(column)
   const sameSection = displayed.filter((c) => sectionOf(c) === section)
   const index = sameSection.findIndex((c) => c.getColId() === column.getColId())
   if (index < 0) return 1
-  return Math.max(1, sameSection.length - index)
+  if (!stopBefore) return Math.max(1, sameSection.length - index)
+  // A column the band must NOT cover (the progress columns, 2026-09-26) ends the span: the band row keeps its own
+  // cell there. Counted from the cell onward, so a stop column BEFORE the band changes nothing.
+  let span = 1
+  while (index + span < sameSection.length && !stopBefore(sameSection[index + span].getColId())) span++
+  return span
 }
 
 export interface BandRowOptions<T> {
   /** Is THIS row a band? A row that is not spans one column, like any other. */
   isBand: (data: T | undefined) => boolean
+  /**
+   * A column the band stops before — it keeps its own cell on the band row. The channel sheet's progress column is
+   * pinned beside the band, and the band row (the listing) has a progress of its own to show there.
+   */
+  stopBefore?: (colId: string) => boolean
 }
 
 /**
@@ -91,6 +101,6 @@ export function bandColSpan<T>(options: BandRowOptions<T>) {
     if (!options.isBand(params.data ?? undefined)) return 1
     const displayed = params.api?.getAllDisplayedColumns?.()
     if (!displayed || !params.column) return 1
-    return spanWithinSection(displayed, params.column)
+    return spanWithinSection(displayed, params.column, options.stopBefore)
   }
 }

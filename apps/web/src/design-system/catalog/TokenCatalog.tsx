@@ -15,6 +15,7 @@ import { PresenceExample } from './PresenceExample'
 import { ScrollingTabsExample } from './ScrollingTabsExample'
 import { DateTimeFieldExample } from './DateTimeFieldExample'
 import { DetailPopoverExample } from './DetailPopoverExample'
+import { ProgressExample } from './ProgressExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
@@ -830,6 +831,7 @@ export function TokenCatalog() {
           <ProgressBar value={64} />
             <ProgressBar indeterminate />
           </div>
+          <div style={{ marginTop: 12 }}><ProgressExample /></div>
           <div style={{ marginTop: 18, color: 'var(--nds-text)', fontWeight: 600 }}>Value sources · compact container</div>
           <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 16px', maxWidth: 320 }} aria-label="Value source indicators">
             <SourceIndicator showLabel kind="master" label="Follows Master" description="Uses the resolved Master value through the channel mapping" />

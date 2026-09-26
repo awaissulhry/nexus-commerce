@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
 import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
@@ -16,6 +16,20 @@ import { logger } from '../../utils/logger.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
+
+/**
+ * Progress columns (2026-09-26) — `ReadinessIndex.optional*` from a sheet row's completeness. Pure. A row whose completeness
+ * has no optional side (an older producer) writes NULL = not recorded, never zero.
+ */
+export function optionalColumns(completeness: { optional?: { filled: number; total: number; missing: Array<{ key: string; label: string }> } } | undefined) {
+  const optional = completeness?.optional
+  if (!optional) return { optionalFilled: null, optionalTotal: null, optionalMissing: Prisma.DbNull }
+  return {
+    optionalFilled: optional.filled,
+    optionalTotal: optional.total,
+    optionalMissing: optional.missing.map(m => ({ field: m.key, label: m.label })) as unknown as Prisma.InputJsonValue,
+  }
+}
 
 const producerKey = (rootId: string, scope?: ReadinessScope) => `readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`
 
@@ -350,6 +364,8 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
       if (!sheet) {
         for (const product of products) rows.push({ productId: product.id, ...coordinate, coordinateKey: readinessCoordinateKey(coordinate), language, label,
           pct: null, state: 'absent', requiredFilled: 0, requiredTotal: 0, missing: [], note: unavailable, mappingRules: null,
+          // Progress columns — nothing was measured, so the optional side is NOT RECORDED (null), never "0 of 0".
+          optionalFilled: null, optionalTotal: null, optionalMissing: Prisma.DbNull,
           // R-LX-17 — the sort key does not depend on the sheet, so an unavailable destination still sorts.
           ...sortProjection(product.id, language), computedAt })
         continue
@@ -381,6 +397,8 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         rows.push({ productId: row.id, ...c, coordinateKey: readinessCoordinateKey(c), language, label: row.aliasId ? `${label} · ${sheet.aliases.find(a => a.id === row.aliasId)?.label ?? 'Listing customization'}` : label,
           pct: summary.pct, state: summary.state, requiredFilled: summary.required.filled, requiredTotal: summary.required.total,
           missing: missing as unknown as Prisma.InputJsonValue, note: summary.note, mappingRules: summary.mappingRules, variationSource,
+          // Progress columns (colour rule A) — the row's optional side, from the same `completeness` as the required counts.
+          ...optionalColumns(row.completeness),
           ...sortProjection(row.id, language), computedAt })
       }
     }

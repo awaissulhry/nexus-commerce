@@ -236,3 +236,22 @@ describe('A-45 — the matrix carries the required-empty flag and each product\'
   })
 })
 
+
+describe('progress columns (2026-09-26) — the optional side of the matrix', () => {
+  const entry = (extra: Record<string, unknown>) => parseReadinessMatrix({ matrix: [{ coordinateKey: 'k', channel: 'AMAZON', market: 'IT', accountId: 'a', aliasId: null,
+    language: 'it', label: 'Amazon · IT', state: 'blocked', pct: 50, required: { filled: 1, total: 2 }, missing: [], ...extra }] })[0]
+  it('reads a product\'s optional counts only when both are finite, and the empty optional names only when well formed', () => {
+    const e = entry({
+      byProduct: { p: { state: 'blocked', pct: 50, optional: { filled: 2, total: 5 } }, half: { state: 'warn', pct: 50, optional: { filled: 2 } }, none: { state: 'ready', pct: 100 } },
+      optionalMissing: [{ productId: 'p', field: 'colour', label: 'Colour' }, { productId: 'p', field: 3 }, null],
+    })
+    expect(e.byProduct!.p.optional).toEqual({ filled: 2, total: 5 })
+    // A half-count or no count at all is NOT RECORDED — left out, never read as "nothing optional is empty".
+    expect(e.byProduct!.half.optional).toBeUndefined()
+    expect(e.byProduct!.none.optional).toBeUndefined()
+    expect(e.optionalMissing).toEqual([{ productId: 'p', field: 'colour', label: 'Colour' }])
+  })
+  it('an older server with no optional side parses as before', () => {
+    expect(entry({}).optionalMissing).toEqual([])
+  })
+})

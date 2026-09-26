@@ -19987,6 +19987,13 @@ model ReadinessIndex {
   requiredFilled  Int
   requiredTotal   Int
   missing         Json
+  /// Progress columns (2026-09-26, colour rule A) — the attributes that apply here and are NOT required: how many,
+  /// how many are filled, and the empty ones by name (`[{ field, label }]`), from the row's `completeness.optional`.
+  /// NULL = NOT RECORDED (every row written before these columns existed, and an unavailable destination): a reader says
+  /// "not recorded yet" and never paints green on it. The nightly refresh or the family's next edit records them.
+  optionalFilled  Int?
+  optionalTotal   Int?
+  optionalMissing Json?
   note            String?
   mappingRules    Int?
   /// VT.1b (VT.4's request) — the variation-rule PROVENANCE for this coordinate: 'derived' | 'rule' | 'overridden' |

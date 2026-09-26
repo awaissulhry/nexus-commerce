@@ -475,6 +475,14 @@ body:has(.h10-shell),
   --nds-primary: var(--nds-blue-800);
   --nds-primary-hover: #0f4290;
   --nds-primary-soft: var(--nds-blue-100);
+  /* Progress bars (2026-09-26) — their light values, so a light console never draws the dark tones. */
+  --nds-progress-complete: var(--nds-green-600);
+  --nds-progress-complete-edge: var(--nds-green-700);
+  --nds-progress-missing: var(--nds-signal-red);
+  --nds-progress-missing-edge: var(--nds-progress-missing);
+  --nds-progress-partial: var(--nds-signal-yellow);
+  --nds-progress-partial-edge: var(--nds-signal-yellow-edge);
+  --nds-progress-track: var(--nds-grey-200);
   --nds-rail-bg: var(--nds-rail-surface);
   --nds-rail-border: var(--nds-rail-line);
   --nds-rail-chev: var(--nds-grey-450);

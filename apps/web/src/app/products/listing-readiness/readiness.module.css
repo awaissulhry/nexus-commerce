@@ -7,4 +7,5 @@
 .product { display: block; min-width: 16ch; max-width: 42ch; }
 .productName { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issues { display: grid; gap: var(--nds-space-12); padding-inline-start: var(--nds-space-20); margin: 0; }
+.issueLink { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-link); }
 @media (max-width: 750px) { .fields { grid-template-columns: minmax(0, 1fr); } }

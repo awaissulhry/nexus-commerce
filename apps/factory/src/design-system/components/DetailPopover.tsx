@@ -12,6 +12,12 @@ export interface DetailPopoverProps {
   /** The trigger's accessible name — the whole sentence, not the visible abbreviation. */
   triggerLabel: string
   triggerClassName?: string
+  /**
+   * Added to the panel beside `nds-detailpop`. For a panel with a long list: `nds-detailpop-scroll` caps the panel to
+   * the room `usePopoverPosition` publishes (`--nds-popover-room`), so its header and footer stay put and the list
+   * between them scrolls (the progress card, 2026-09-26).
+   */
+  panelClassName?: string
   /** The panel's accessible name. The panel is a NON-modal dialog. */
   label: string
   /** The panel's content. The function form receives `close`, so an action can close the panel. */
@@ -39,7 +45,7 @@ export interface DetailPopoverProps {
  * `detailPopoverKeys.ts` (pure, tested). Portaled to `<body>` above drawers (`--nds-z-popover`), placed by
  * `usePopoverPosition` (flips when there is no room, never clipped by a scrolling grid).
  */
-export function DetailPopover({ trigger, triggerLabel, triggerClassName, label, children, hoverDelay = 350, returnFocus, open: controlled, onOpenChange }: DetailPopoverProps) {
+export function DetailPopover({ trigger, triggerLabel, triggerClassName, panelClassName, label, children, hoverDelay = 350, returnFocus, open: controlled, onOpenChange }: DetailPopoverProps) {
   const [own, setOwn] = useState(false)
   const open = controlled ?? own
   const via = useRef<'click' | 'keyboard' | 'hover'>('click')
@@ -129,7 +135,7 @@ export function DetailPopover({ trigger, triggerLabel, triggerClassName, label, 
         {trigger}
       </button>
       {open && typeof document !== 'undefined' && createPortal(
-        <div id={id} ref={popRef} style={style} className="nds-detailpop" role="dialog" aria-modal="false" aria-label={label} tabIndex={-1}
+        <div id={id} ref={popRef} style={style} className={['nds-detailpop', panelClassName].filter(Boolean).join(' ')} role="dialog" aria-modal="false" aria-label={label} tabIndex={-1}
           onKeyDown={onPanelKeyDown} onMouseEnter={() => clearTimeout(leaveTimer.current)} onMouseLeave={hoverOut}>
           {typeof children === 'function' ? children({ close }) : children}
         </div>,
