@@ -104,6 +104,14 @@ export async function handleEtsyOrderEvent(
     await ingestEtsyOrderEvent(accountId, receiptId, shopId == null ? null : String(shopId), context ?? { connectionId: accountId })
     return
   }
+  // The switch is read by each process on its own (API receiver, worker retry, scheduler poll). With it
+  // OFF here, an ACTIVATED account's event must not be finished as a read-back: the claim would mark it
+  // done with no order and no hold. Hold it for a process with the switch on, spending no attempt.
+  if (await ingest.etsyIngestActivated(accountId)) {
+    const held = `Etsy order ingest is off in this process (${ingest.ETSY_ORDER_INGEST_FLAG} is not 1) but the account is activated: the event is held for a process with it on.`
+    logger.warn('[etsy-webhooks] Etsy order ingest is off in this process; an activated account\'s event stays held', { receiptId, flag: ingest.ETSY_ORDER_INGEST_FLAG })
+    throw new InboundDeferred(held, ingest.ETSY_AUTH_HOLD_MS)
+  }
   // E1 — `null` is Etsy's 404 only. An expired token, a rate limit or an outage throws its own
   // typed error, which fails this event with that reason (still retryable, still a 500 to Etsy).
   const receipt = await pullEtsyReceipt(accountId, receiptId, shopId == null ? undefined : String(shopId))

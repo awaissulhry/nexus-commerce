@@ -23,6 +23,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { ETSY_MAX_OFFSET, ETSY_RECEIPTS_PAGE, pullEtsyReceiptsPage } from '../services/etsy/receipts.service.js'
+import { resolveLocationByCode } from '../services/stock-level.service.js'
 import {
   etsyIngestBinding, etsyOrderIngestEnabled, etsyReceiptFreshness, ingestEtsyReceipt, receiptIdentity,
 } from '../services/etsy/receipt-ingest.js'
@@ -73,6 +74,8 @@ export async function pollEtsyConnection(connectionId: string, options: { pageCa
   let error: string | null = null
   try {
     const binding = await etsyIngestBinding(connectionId)
+    // One warehouse lookup per run, handed to every receipt (it was one statement per receipt).
+    const locationId = await resolveLocationByCode('IT-MAIN')
     const t0 = Math.floor(state.activatedAt.getTime() / 1000)
     const now = Math.floor(state.now.getTime() / 1000)
     // One fixed, closed creation horizon: updates cannot remove a member or move its receipt ID.
@@ -91,7 +94,7 @@ export async function pollEtsyConnection(connectionId: string, options: { pageCa
     const ingestPage = async (results: unknown[]) => {
       for (const raw of results) {
         const identity = receiptIdentity(raw)
-        const outcome = await ingestEtsyReceipt({ connectionId, raw, binding, source: 'poll' })
+        const outcome = await ingestEtsyReceipt({ connectionId, raw, binding, source: 'poll', locationId })
         if (outcome.kind === 'refused') throw new Error(`[${outcome.code}] ${outcome.message}`)
         if (outcome.kind === 'receipt_refused') counts.refused++
         else if (outcome.kind === 'written') { counts.written++; if (outcome.created) counts.created++ }

@@ -65,6 +65,11 @@ export interface EtsyReceiptWrite {
   source: 'webhook' | 'poll' | 'replay'
   /** A SIGNED order.delivered event for this receipt. Believed only when the receipt read shows it shipped. */
   deliveredEvent?: boolean
+  /**
+   * The business's warehouse, when the caller resolved it once for a run of receipts (the poller: one
+   * lookup per run, not one per receipt). Omitted, the writer resolves it; `null` means "none".
+   */
+  locationId?: string | null
 }
 
 export interface EtsyOrderWarning {
@@ -152,7 +157,7 @@ async function noticeStockProblems(tx: Prisma.TransactionClient, args: {
 export async function writeEtsyReceipt(input: EtsyReceiptWrite): Promise<EtsyWriteOutcome> {
   const { receipt } = input
   // A read, outside the transaction: the business's own warehouse (with the default fallback).
-  const locationId = await resolveLocationByCode('IT-MAIN')
+  const locationId = input.locationId !== undefined ? input.locationId : await resolveLocationByCode('IT-MAIN')
 
   const result = await prisma.$transaction(async (tx): Promise<WriteResult> => {
     // 1. The account, re-checked inside the transaction (KEY SHARE: it cannot be deleted under us).

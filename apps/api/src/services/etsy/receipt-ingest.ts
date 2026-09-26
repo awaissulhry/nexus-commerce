@@ -39,6 +39,12 @@ export async function activateEtsyIngest(connectionId: string): Promise<Date> {
   return row.activatedAt
 }
 
+/** Whether the account has its T0 (explicit activation). Read-only; never establishes it. */
+export async function etsyIngestActivated(connectionId: string): Promise<boolean> {
+  const row = await prisma.etsyReceiptIngest.findUnique({ where: { workspace_connectionId: workspaceKey({ connectionId }) }, select: { activatedAt: true } })
+  return row?.activatedAt instanceof Date
+}
+
 /** Processing never establishes T0: a missing activation keeps the delivery retryable. */
 export async function requireEtsyIngestActivation(connectionId: string): Promise<Date> {
   const row = await prisma.etsyReceiptIngest.findUnique({ where: { workspace_connectionId: workspaceKey({ connectionId }) }, select: { activatedAt: true } })
@@ -97,6 +103,8 @@ export async function ingestEtsyReceipt(args: {
   deliveredEvent?: boolean
   expectedReceiptId?: string | null
   claimedShopId?: string | null
+  /** Passed through to the writer (see EtsyReceiptWrite.locationId). */
+  locationId?: string | null
 }): Promise<EtsyIngestOutcome> {
   const normalized = normalizeEtsyReceipt(args.raw, {
     ...args.binding, expectedReceiptId: args.expectedReceiptId ?? null, claimedShopId: args.claimedShopId ?? null,
@@ -108,7 +116,7 @@ export async function ingestEtsyReceipt(args: {
     return { kind: 'receipt_refused', refusal }
   }
   const receipt = (normalized as Extract<typeof normalized, { ok: true }>).receipt
-  return writeEtsyReceipt({ connectionId: args.connectionId, receipt, source: args.source, deliveredEvent: args.deliveredEvent })
+  return writeEtsyReceipt({ connectionId: args.connectionId, receipt, source: args.source, deliveredEvent: args.deliveredEvent, ...(args.locationId !== undefined ? { locationId: args.locationId } : {}) })
 }
 
 // ── E6 — freshness ────────────────────────────────────────────────────────────────────────────

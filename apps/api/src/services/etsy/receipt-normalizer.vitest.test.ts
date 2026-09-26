@@ -112,8 +112,8 @@ describe('a well-formed paid receipt', () => {
 /**
  * A REAL getShopReceipt response, published by an Etsy developer in etsy/open-api discussion #1356
  * (https://github.com/etsy/open-api/discussions/1356, receipt from Oct 2024; saved as evidence
- * etsy-real-receipt-discussion-1356.txt). Every value is verbatim except the ids and personal
- * fields the author REDACTED, which are replaced by synthetic values (marked `// redacted`).
+ * etsy-real-receipt-discussion-1356.txt). Every value is verbatim except ids and personal fields,
+ * which are synthetic here (marked `// redacted`; the transaction ids too: this repository is public).
  * It is what proved that Etsy sends "Completed" — capitalised — where the schema says "completed".
  */
 const REAL_RECEIPT_ID = 3_512_345_678 // redacted
@@ -130,14 +130,14 @@ const realReceipt = (): Json => ({
   discount_amt: { amount: 0, divisor: 100, currency_code: 'USD' }, gift_wrap_price: { amount: 0, divisor: 100, currency_code: 'USD' },
   shipments: [{ receipt_shipping_id: 1001, shipment_notification_timestamp: 1728489600, carrier_name: 'USPS', tracking_code: 'REDACTED' }], // redacted id
   transactions: [
-    { transaction_id: 4284862003, title: 'Redacted', description: 'Redacted', seller_user_id: Number(SELLER), buyer_user_id: 88, // redacted (not transaction_id)
+    { transaction_id: 1_000_000_001, title: 'Redacted', description: 'Redacted', seller_user_id: Number(SELLER), buyer_user_id: 88, // redacted
       create_timestamp: 1728449563, created_timestamp: 1728449563, paid_timestamp: 1728449581, shipped_timestamp: 1728484312, quantity: 1,
       listing_image_id: 5001, receipt_id: REAL_RECEIPT_ID, is_digital: false, file_data: '', listing_id: 6001, sku: 'RIBBON-5Y', product_id: 7001, // redacted
       transaction_type: 'listing', price: { amount: 700, divisor: 100, currency_code: 'USD' }, shipping_cost: { amount: 0, divisor: 100, currency_code: 'USD' },
       variations: [{ property_id: 513, value_id: 1, formatted_name: 'Ribbon length', formatted_value: '5 Yards' }],
       product_data: [{ property_id: 513, property_name: 'Length', scale_id: 9, scale_name: 'Yards', value_ids: [1], values: ['5'] }],
       shipping_profile_id: 8001, min_processing_days: 1, max_processing_days: 3, shipping_method: null, shipping_upgrade: null, expected_ship_date: 1728489600, buyer_coupon: 0, shop_coupon: 0 },
-    { transaction_id: 4284862004, title: 'Redacted', description: 'Redacted', seller_user_id: Number(SELLER), buyer_user_id: 88, // redacted
+    { transaction_id: 1_000_000_002, title: 'Redacted', description: 'Redacted', seller_user_id: Number(SELLER), buyer_user_id: 88, // redacted
       create_timestamp: 1728449563, created_timestamp: 1728449563, paid_timestamp: 1728449581, shipped_timestamp: 1728484312, quantity: 1,
       listing_image_id: 5002, receipt_id: REAL_RECEIPT_ID, is_digital: false, file_data: '', listing_id: 6002, sku: 'RIBBON-5Y-GG', product_id: 7002, // redacted
       transaction_type: 'listing', price: { amount: 650, divisor: 100, currency_code: 'USD' }, shipping_cost: { amount: 0, divisor: 100, currency_code: 'USD' },
@@ -156,7 +156,7 @@ describe('a real Etsy receipt (discussion #1356)', () => {
       checks: { linesMatchTotalPrice: true, shippedLines: 2, zeroQuantityLines: [], unreadableMoney: [] },
     })
     expect(r.grandTotal.decimal).toBe('21.27')
-    expect(r.lines.map((line) => [line.transactionId, line.unitPrice.decimal, line.lineTotal])).toEqual([['4284862003', '7.00', '7.00'], ['4284862004', '6.50', '6.50']])
+    expect(r.lines.map((line) => [line.transactionId, line.unitPrice.decimal, line.lineTotal])).toEqual([['1000000001', '7.00', '7.00'], ['1000000002', '6.50', '6.50']])
   })
 
   it('is refused when bound to another seller (the binding still holds on a real shape)', () => {

@@ -134,15 +134,24 @@ lender's release of a kept pool hold). They apply on a database in main's state 
 and migration upgrade check pass). No migration on main or in PR #15 was edited. A later main migration
 dated 2026-09-26 would need these renamed again.
 
-Runbook — if `20260926p`'s 5 s `lock_timeout` fires (a long transaction held `ChannelConnection` during the
-release): the migration is wrapped in one transaction, so nothing of it is applied, but Prisma records it
-as failed and every later `migrate deploy` stops with P3009 until it is resolved. Check with (read-only):
+Runbook (P3009) — three of these migrations bound their locks: `SET LOCAL lock_timeout = '5s'` (and
+`statement_timeout = '60s'` for s and t). Each is wrapped in one transaction, so a timeout applies nothing
+of it, but Prisma records the migration as failed and every later `migrate deploy` stops with P3009 until
+it is resolved. What each one waits for:
+
+| Migration | Locks it needs | Proof it did not apply (read-only) |
+|---|---|---|
+| `20260926p_cx_etsy_receipt_ingest` | foreign keys to `ChannelConnection` (SHARE ROW EXCLUSIVE) | `SELECT to_regclass('"EtsyReceiptIngest"')` is NULL |
+| `20260926s_cx_ebay_privacy_census` | `ALTER TABLE "EbayNoticeQuarantine"` (ACCESS EXCLUSIVE; row security, grants, functions) | `SELECT to_regprocedure('public.nexus_ebay_deletion_quarantine_census()')` is NULL |
+| `20260926t_cx_ebay_erasure_review` | new columns and a validated CHECK on `EbayNoticeQuarantine` (ACCESS EXCLUSIVE, the CHECK scans it); a foreign key to `"Order"` (SHARE ROW EXCLUSIVE on a busy table) | `SELECT to_regclass('"ErasureRequest"')` is NULL |
+
+If one fires (a long transaction held the table during the release): check with (read-only)
 `SELECT migration_name, started_at, finished_at, rolled_back_at, logs FROM "_prisma_migrations" WHERE
-migration_name = '20260926p_cx_etsy_receipt_ingest';` — a failed run has `finished_at` and `rolled_back_at`
-both NULL and a lock-timeout (55P03) message in `logs`; confirm the Etsy tables do not exist
-(`SELECT to_regclass('"EtsyReceiptIngest"')` is NULL). Then, with the Owner's approval only:
-`prisma migrate resolve --rolled-back 20260926p_cx_etsy_receipt_ingest` against the direct (non-pooler)
-endpoint, and redeploy at a quieter moment. Never mark it applied.
+migration_name = '<name>';` — a failed run has `finished_at` and `rolled_back_at` both NULL and a
+lock-timeout (55P03) or statement-timeout (57014) message in `logs`; confirm its object is absent (table
+above). Then, with the Owner's approval only: `prisma migrate resolve --rolled-back <name>` against the
+direct (non-pooler) endpoint, and redeploy at a quieter moment; the later migrations apply after it in
+order. Never mark it applied.
 
 ## Production-facing on deploy (no switch)
 

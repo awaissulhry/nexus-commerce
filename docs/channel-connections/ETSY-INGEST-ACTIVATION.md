@@ -54,6 +54,19 @@ The SQL is intentionally account-scoped. It changes no flags, grants, credential
 or historical orders. `activateEtsyIngest` remains an internal explicit-action/test helper;
 processing entry points never call it.
 
+## The switches: set them on the API, the worker and the scheduler together
+
+`NEXUS_ENABLE_ETSY_ORDER_INGEST` is read by each process on its own: the API (the webhook receiver),
+the worker (the inbound retry of a deferred or failed event) and the scheduler (the receipts poll).
+Set it to `1` on all three in the same change, and turn it off on all three together.
+`NEXUS_ENABLE_ETSY_RECEIPTS_POLL_CRON` is read by the scheduler only.
+
+A mismatch is safe but stalls orders: a process with ingest off never finishes an activated
+account's order event as a plain read-back. It holds the event (no attempt spent, retried after
+30 minutes) and logs one warning naming the switch, so the event waits for a process with ingest on.
+Events of an account that is not activated keep the old behaviour (read back and logged): their
+receipts predate T0 and would be skipped anyway.
+
 ## Poll recovery contract
 
 Etsy documents `sort_on=receipt_id`, `min_created` and `max_created`. Reconciliation uses those

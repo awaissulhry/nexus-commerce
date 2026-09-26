@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   pull: null as null | (() => unknown),
   outcome: { kind: 'written', status: 'PROCESSING', created: true, warnings: [] } as Record<string, unknown>,
   stored: null as null | Record<string, any>,
+  activated: false,
 }))
 
 vi.mock('../services/cx/ingress/ledger.js', async (importOriginal) => {
@@ -66,6 +67,7 @@ vi.mock('../services/etsy/receipt-ingest.js', async (importOriginal) => {
     ...original,
     etsyIngestBinding: async () => ({ shopId: '12345', sellerUserId: '900000001' }),
     requireEtsyIngestActivation: async () => new Date(),
+    etsyIngestActivated: async () => h.activated,
     ingestEtsyReceipt: async (args: Record<string, unknown>) => { h.ingested.push(args); return h.outcome },
   }
 })
@@ -92,6 +94,7 @@ async function post(event_type = 'order.paid') {
 beforeEach(() => {
   h.completed.length = 0; h.deferred.length = 0; h.stamped.length = 0; h.pulled.length = 0; h.ingested.length = 0
   h.pull = null
+  h.activated = false
   h.outcome = { kind: 'written', status: 'PROCESSING', created: true, warnings: [] }
   vi.stubEnv('ETSY_WEBHOOK_SIGNING_SECRET', SECRET)
   vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
@@ -154,5 +157,18 @@ describe('order ingest OFF (the default)', () => {
     expect(h.ingested).toEqual([])
     expect(h.stamped).toEqual([])
     expect(h.completed).toEqual([{ id: 'row-1', ok: true, error: undefined }])
+  })
+
+  // Review of PR #32: the switch is per process. An API with it OFF must not finish an activated
+  // account's event as a read-back (no order, no hold); it holds it for a process with the switch on.
+  it('an ACTIVATED account: held (503, deferred, no attempt spent); nothing read or written', async () => {
+    vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '')
+    h.activated = true
+    const res = await post()
+    expect(res.statusCode).toBe(503)
+    expect(h.pulled).toEqual([])
+    expect(h.ingested).toEqual([])
+    expect(h.completed).toEqual([])
+    expect(h.deferred).toEqual([{ id: 'row-1', reason: expect.stringContaining('NEXUS_ENABLE_ETSY_ORDER_INGEST'), delayMs: 30 * 60 * 1000 }])
   })
 })

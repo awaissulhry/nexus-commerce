@@ -88,7 +88,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'redelivery identity and bounded inbound retention (binding, reconnects, payload expiry by UPDATE)', file: 'src/services/cx/ingress/inbound-redelivery-retention-postgres.vitest.test.ts', expect: 7 },
   { name: 'transactional event producers and duplicate consumers', file: 'src/services/event-durability.vitest.test.ts', expect: 5 },
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
-  { name: 'Etsy receipt ingest (one writer: S1 per-product holds, whole-receipt take, partial notice, R5 dispositions, H1 activation, webhook defer/refusals, fair polling, lease, freshness)', file: 'src/services/etsy/etsy-order-ingest-postgres.vitest.test.ts', expect: 58 },
+  { name: 'Etsy receipt ingest (one writer: S1 per-product holds, whole-receipt take, partial notice, R5 dispositions, H1 activation, webhook defer/refusals, fair polling, lease, freshness)', file: 'src/services/etsy/etsy-order-ingest-postgres.vitest.test.ts', expect: 59 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'Amazon Finances dry run and order attribution on the base schema (A2, A5; A3/A4 held)', file: 'src/services/amazon-finances-base-postgres.vitest.test.ts', expect: 9 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },

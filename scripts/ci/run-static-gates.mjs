@@ -38,6 +38,7 @@ const GATES = {
   // Prisma 6 resolves env("DATABASE_URL") even to validate; a placeholder that reaches nothing is enough.
   'prisma validate': { file: 'packages/database/prisma/schema.prisma', cmd: [PRISMA, 'validate', '--schema=packages/database/prisma/schema.prisma'], env: { DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://validate@127.0.0.1:1/validate_only_test' } },
   'model ownership': node('packages/database/scripts/check-model-ownership.mjs'),
+  'Prisma client adapter (Prisma 7)': node('scripts/check-prisma-client-adapter-ratchet.mjs', '--check'),
   'policy ⇄ migration parity': node('packages/database/scripts/check-policy-migration-parity.mjs'),
   'migrations: expand/contract + shipped folders unchanged': node('scripts/check-migration-expand-contract.mjs'),
   'migration gate self-test': nodeTest('scripts/check-migration-expand-contract.test.mjs'),

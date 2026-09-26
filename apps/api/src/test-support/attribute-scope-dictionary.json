@@ -1,0 +1,1457 @@
+{
+ "//": "P3b S0 (docs/attributes/PLAN.md §10.9) — the 242 shared attributes of 2026-09-10 (the attribute-scope study, appendix A), codes, labels, types and the study class only. Test data for the F4 fixture; no product data.",
+ "attributes": [
+  {
+   "code": "accepted_voltage_frequency",
+   "label": "Accepted voltage frequency",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "additional_features",
+   "label": "Additional features",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "age_range_description",
+   "label": "Age range",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "apparel_closure_orientation",
+   "label": "Apparel closure orientation",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "apparel_fabric_stretch",
+   "label": "Apparel fabric stretch",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "apparel_fabric_weight_class",
+   "label": "Apparel fabric weight class",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "apparel_size__height_type",
+   "label": "Apparel size height type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "apparel_size__size_class",
+   "label": "Apparel size size class",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "apparel_size__size_to",
+   "label": "Apparel size size to",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "armorType",
+   "label": "Armor Type",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "athlete",
+   "label": "Athlete",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "auto_part_position",
+   "label": "Auto part position",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "automotive_fit_type",
+   "label": "Automotive fit type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "band",
+   "label": "Band",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "batteries_included",
+   "label": "Batteries included",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "batteries_required",
+   "label": "Batteries required",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "battery__cell_composition",
+   "label": "Battery cell composition",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery__cell_composition_other_than_listed",
+   "label": "Battery cell composition other than listed",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery__iec_code",
+   "label": "Battery iec code",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery__weightUnit",
+   "label": "Battery weight Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery__weightValue",
+   "label": "Battery weight Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery_contains_free_unabsorbed_liquid",
+   "label": "Battery contains free unabsorbed liquid",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "battery_installation_device_type",
+   "label": "Battery installation device type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "body_type",
+   "label": "Body type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "bottoms_size__height_type",
+   "label": "Bottoms size height type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "bottoms_size__inseam_size",
+   "label": "Bottoms size inseam size",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "bottoms_size__size_class",
+   "label": "Bottoms size size class",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "bottoms_size__size_to",
+   "label": "Bottoms size size to",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "bottoms_size__waist_size",
+   "label": "Bottoms size waist size",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "care_instructions",
+   "label": "Care instructions",
+   "type": "textarea",
+   "class": "core"
+  },
+  {
+   "code": "ceCertification",
+   "label": "Ce Certification",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "chestUnit",
+   "label": "Chest Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "chestValue",
+   "label": "Chest Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "climate_suitability",
+   "label": "Climate suitability",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "closure",
+   "label": "Closure",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "coat_silhouette_type",
+   "label": "Coat silhouette type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "coat_weather_protection",
+   "label": "Coat weather protection",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "collar_style",
+   "label": "Collar style",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "collection_item",
+   "label": "Collection item",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "color",
+   "label": "Color",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "color__standardized_values",
+   "label": "Color standardized values",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compatibility_options",
+   "label": "Compatibility options",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "compliance_age_range",
+   "label": "Compliance age range",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_down_plumage_weight",
+   "label": "Compliance down plumage weight",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_embellishment_feature",
+   "label": "Compliance embellishment feature",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_fastening_method",
+   "label": "Compliance fastening method",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_is_furskin_present",
+   "label": "Compliance is furskin present",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_is_handmade",
+   "label": "Compliance is handmade",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_other_material_additions",
+   "label": "Compliance other material additions",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_outer_surface_material",
+   "label": "Compliance outer surface material",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_printing_method",
+   "label": "Compliance printing method",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_suit_included_components",
+   "label": "Compliance suit included components",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_suit_yarn_diameter",
+   "label": "Compliance suit yarn diameter",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_weave_type",
+   "label": "Compliance weave type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "compliance_wool_type",
+   "label": "Compliance wool type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "configuration",
+   "label": "Configuration",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "contains_battery_or_cell",
+   "label": "Contains battery or cell",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "countryOfOrigin",
+   "label": "Country of origin",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "cup",
+   "label": "Cup",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "customer_package_type",
+   "label": "Customer package type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "declarationOfConformityUrl",
+   "label": "Declaration of conformity URL",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "department",
+   "label": "Department",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "edition",
+   "label": "Edition",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "embellishment_feature",
+   "label": "Embellishment feature",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "eu_spare_part_availability_durationUnit",
+   "label": "Eu spare part availability duration Unit",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "eu_spare_part_availability_durationValue",
+   "label": "Eu spare part availability duration Value",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "eu_toys_safety_directive_age_warning",
+   "label": "Eu toys safety directive age warning",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "eu_toys_safety_directive_warning",
+   "label": "Eu toys safety directive warning",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "exact_color",
+   "label": "Exact color",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "exact_material",
+   "label": "Exact material",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fabric_distressing",
+   "label": "Fabric distressing",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fabric_stretchability",
+   "label": "Fabric stretchability",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fabric_type",
+   "label": "Fabric composition",
+   "type": "textarea",
+   "class": "core"
+  },
+  {
+   "code": "fabric_wash",
+   "label": "Fabric wash",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fashion_decade",
+   "label": "Fashion decade",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fc_shelf_lifeUnit",
+   "label": "Fc shelf life Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fc_shelf_lifeValue",
+   "label": "Fc shelf life Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fit_to_size_sentiment",
+   "label": "Fit to size sentiment",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "fit_type",
+   "label": "Fit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "flavor",
+   "label": "Flavor",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "formality_level",
+   "label": "Formality level",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "front_pocket_count",
+   "label": "Front pocket count",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "front_style",
+   "label": "Front style",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "fur",
+   "label": "Fur",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "garmentClass",
+   "label": "Protective garment class",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "garment_size_country",
+   "label": "Garment size country",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "ghs",
+   "label": "Ghs",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "ghs_chemical_h_code",
+   "label": "Ghs chemical h code",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "glove_protection_level",
+   "label": "Glove protection level",
+   "type": "select",
+   "class": "core"
+  },
+  {
+   "code": "glove_standard",
+   "label": "Glove certification standard",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "glove_type",
+   "label": "Glove type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "gpsr_safety_attestation",
+   "label": "Gpsr safety attestation",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "grip",
+   "label": "Grip",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "grit",
+   "label": "Grit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "hand_orientation",
+   "label": "Hand orientation",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "handmade_classification",
+   "label": "Handmade classification",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "has_coat_weather_resistance",
+   "label": "Has coat weather resistance",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "has_less_than_30_percent_state_of_charge",
+   "label": "Has less than 30 percent state of charge",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "has_multiple_battery_powered_components",
+   "label": "Has multiple battery powered components",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "has_pockets",
+   "label": "Has pockets",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "has_replaceable_battery",
+   "label": "Has replaceable battery",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "hazmat",
+   "label": "Hazmat",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "hazmatClass",
+   "label": "Hazardous material class",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "hazmatUnNumber",
+   "label": "UN number",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "hsCode",
+   "label": "HS code",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "impactProtectors",
+   "label": "Impact protectors",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "included_components",
+   "label": "Included components",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "inner",
+   "label": "Inner",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "inseamUnit",
+   "label": "Inseam Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "inseamValue",
+   "label": "Inseam Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "is_assembly_required",
+   "label": "Is assembly required",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "is_battery_non_spillable",
+   "label": "Is battery non spillable",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "is_expiration_dated_product",
+   "label": "Is expiration dated product",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "is_fragile",
+   "label": "Is fragile",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "is_green_purchasing_law_compliant",
+   "label": "Is green purchasing law compliant",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "is_oem_sourced_product",
+   "label": "Is oem sourced product",
+   "type": "boolean",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "is_this_product_subject_to_buyer_age_restrictions",
+   "label": "Is this product subject to buyer age restrictions",
+   "type": "boolean",
+   "class": "channel-specific"
+  },
+  {
+   "code": "item_display_dimensions__depthUnit",
+   "label": "Item display dimensions depth Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_display_dimensions__depthValue",
+   "label": "Item display dimensions depth Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_display_dimensions__diameterUnit",
+   "label": "Item display dimensions diameter Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_display_dimensions__diameterValue",
+   "label": "Item display dimensions diameter Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_length_description",
+   "label": "Item length description",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "item_package_quantity",
+   "label": "Item package quantity",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_shape",
+   "label": "Item shape",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "item_specific_quantity",
+   "label": "Item specific quantity",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "item_specific_unit",
+   "label": "Item specific unit",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "item_type_name",
+   "label": "Item type name",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "jacket__decimal_value",
+   "label": "Jacket decimal value",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "jacket__string_value",
+   "label": "Jacket string value",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "jacket__unit",
+   "label": "Jacket unit",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "knuckle_impact_protection",
+   "label": "Knuckle impact protection",
+   "type": "boolean",
+   "class": "core"
+  },
+  {
+   "code": "language",
+   "label": "Language",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "league_name",
+   "label": "League name",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "leg",
+   "label": "Leg",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "leg__decimal_value",
+   "label": "Leg decimal value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "leg__unit",
+   "label": "Leg unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "leg_hem_opening_widthUnit",
+   "label": "Leg hem opening width Unit",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "leg_hem_opening_widthValue",
+   "label": "Leg hem opening width Value",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "length",
+   "label": "Length",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lens",
+   "label": "Lens",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lens__color",
+   "label": "Lens color",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lens__widthUnit",
+   "label": "Lens width Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lens__widthValue",
+   "label": "Lens width Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lifestyle",
+   "label": "Lifestyle",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "lining_description",
+   "label": "Lining description",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "lithium_battery__energy_contentUnit",
+   "label": "Lithium battery energy content Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lithium_battery__energy_contentValue",
+   "label": "Lithium battery energy content Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lithium_battery__packaging",
+   "label": "Lithium battery packaging",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lithium_battery__weightUnit",
+   "label": "Lithium battery weight Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "lithium_battery__weightValue",
+   "label": "Lithium battery weight Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "manufacturer_warranty",
+   "label": "Manufacturer warranty",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "material",
+   "label": "Material",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "metal_type",
+   "label": "Metal type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "model_name",
+   "label": "Model name",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "model_number",
+   "label": "Model number",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "neckline",
+   "label": "Neckline",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "non_lithium_battery_energy_content",
+   "label": "Non lithium battery energy content",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "non_lithium_battery_energy_content__unit",
+   "label": "Non lithium battery energy content unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "non_lithium_battery_packaging",
+   "label": "Non lithium battery packaging",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "notifiedBodyName",
+   "label": "Notified body name",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "notifiedBodyNumber",
+   "label": "Notified body number",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "num_batteries",
+   "label": "Num batteries",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "number_of_items",
+   "label": "Number of items",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "number_of_lithium_ion_cells",
+   "label": "Number of lithium ion cells",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "number_of_lithium_metal_cells",
+   "label": "Number of lithium metal cells",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "number_of_pieces",
+   "label": "Number of pieces",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "number_of_pockets",
+   "label": "Number of pockets",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "oem_equivalent_part_number",
+   "label": "Oem equivalent part number",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "outer",
+   "label": "Outer",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "packageDimensionUnit",
+   "label": "Package Dimension Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "packageHeight",
+   "label": "Package Height",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "packageLength",
+   "label": "Package Length",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "packageType",
+   "label": "Package Type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "packageWeightUnit",
+   "label": "Package Weight Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "packageWeightValue",
+   "label": "Package Weight Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "packageWidth",
+   "label": "Package Width",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "package_contains_sku",
+   "label": "Package contains sku",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "package_level",
+   "label": "Package level",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "pants_form_type",
+   "label": "Pants form type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "part_number",
+   "label": "Part number",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "pattern",
+   "label": "Pattern",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "pattern_type",
+   "label": "Pattern type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "platform_for_display",
+   "label": "Platform for display",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "pocket_description",
+   "label": "Pocket description",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "power_plug_type",
+   "label": "Power plug type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "ppeCategory",
+   "label": "PPE category",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "product_expiration_type",
+   "label": "Product expiration type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "product_grade",
+   "label": "Product grade",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "protection",
+   "label": "Protection",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "regulatory_compliance_certification",
+   "label": "Regulatory compliance certification",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "ring",
+   "label": "Ring",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "rise__heightUnit",
+   "label": "Rise height Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "rise__heightValue",
+   "label": "Rise height Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "rise__style",
+   "label": "Rise style",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "safety_data_sheet_url",
+   "label": "Safety data sheet url",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "scent",
+   "label": "Scent",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "seasons",
+   "label": "Seasons",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "shopify_product_type",
+   "label": "Shopify product type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "shoulder_to_bottom_hem_lengthUnit",
+   "label": "Shoulder to bottom hem length Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "shoulder_to_bottom_hem_lengthValue",
+   "label": "Shoulder to bottom hem length Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "size",
+   "label": "Size",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "sleeve__length_description",
+   "label": "Sleeve length description",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "sleeve__type",
+   "label": "Sleeve type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "special_feature",
+   "label": "Special feature",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "special_size_type",
+   "label": "Special size type",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "specific_color",
+   "label": "Specific color",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "specific_material",
+   "label": "Specific material",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "specific_uses_for_product",
+   "label": "Specific uses for product",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "sport_type",
+   "label": "Sport type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "style",
+   "label": "Style",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "subject_character",
+   "label": "Subject character",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "suit_type",
+   "label": "Suit type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "suitable_for",
+   "label": "Suitable for",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "supplier_declared_dg_hz_regulation",
+   "label": "Supplier declared dg hz regulation",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "target_gender",
+   "label": "Target gender",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "team_name",
+   "label": "Team name",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "temperature_minimumUnit",
+   "label": "Temperature minimum Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "temperature_minimumValue",
+   "label": "Temperature minimum Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "temperature_rating",
+   "label": "Temperature rating",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "theme",
+   "label": "Theme",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "title_differentiation",
+   "label": "Title differentiation",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "type",
+   "label": "Type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "ultraviolet_protection_factor",
+   "label": "Ultraviolet protection factor",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "unit_count",
+   "label": "Unit count",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "unit_count__type",
+   "label": "Unit count type",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "vehicle_fitment__code",
+   "label": "Vehicle fitment code",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "vehicle_fitment__note",
+   "label": "Vehicle fitment note",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "vehicle_fitment__standard",
+   "label": "Vehicle fitment standard",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "version_for_country",
+   "label": "Version for country",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "volume_capacity_nameUnit",
+   "label": "Volume capacity name Unit",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "volume_capacity_nameValue",
+   "label": "Volume capacity name Value",
+   "type": "number",
+   "class": "channel-specific"
+  },
+  {
+   "code": "waistUnit",
+   "label": "Waist Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "waistValue",
+   "label": "Waist Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "waist__sizeUnit",
+   "label": "Waist size Unit",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "waist__sizeValue",
+   "label": "Waist size Value",
+   "type": "number",
+   "class": "core"
+  },
+  {
+   "code": "waist__style",
+   "label": "Waist style",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "waist__widthUnit",
+   "label": "Waist width Unit",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "waist__widthValue",
+   "label": "Waist width Value",
+   "type": "number",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "warranty_description",
+   "label": "Warranty description",
+   "type": "textarea",
+   "class": "unused-or-duplicate"
+  },
+  {
+   "code": "water_resistance_level",
+   "label": "Water resistance",
+   "type": "text",
+   "class": "core"
+  },
+  {
+   "code": "weave_type",
+   "label": "Weave type",
+   "type": "text",
+   "class": "channel-specific"
+  },
+  {
+   "code": "width",
+   "label": "Width",
+   "type": "text",
+   "class": "unused-or-duplicate"
+  }
+ ]
+}

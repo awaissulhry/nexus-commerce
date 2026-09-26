@@ -687,6 +687,36 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(await orderOf(r.receipt_id)).toEqual([])
     })
 
+    // Review of PR #32 (2026-09-26): the switch is read by the API (receiver), the worker (retry) and the
+    // scheduler (poll) separately. A process with it OFF must never finish an ACTIVATED account's order
+    // event as a mere read-back: that completed the row with no order and no hold (the event was lost).
+    it('with the flag OFF in this process, an activated account\'s event stays held: no attempt spent, one warning, nothing read or written; a process with it ON writes it', async () => {
+      const pid = await product('H-OFF', 10)
+      const r = receipt([line({ sku: 'H-OFF', quantity: 2 })])
+      publish(id.shop, r)
+      const rowId = await delivered(id.shop, r)
+      const { logger } = await import('../../utils/logger.js')
+      const warn = vi.spyOn(logger, 'warn')
+      const reader = vi.mocked((await import('./read-client.js')).etsyReader)
+      const reads = reader.mock.calls.length
+      process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST = '0'
+      try {
+        await expect(underClaim(rowId)).rejects.toBeInstanceOf(ledger.InboundDeferred)
+      } finally { process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST = '1' }
+      expect(await rowOf(rowId)).toMatchObject({ status: 'failed', attempts: 0, deferred: true })
+      expect((await rowOf(rowId)).lastError).toContain('NEXUS_ENABLE_ETSY_ORDER_INGEST')
+      expect(await orderOf(r.receipt_id)).toEqual([])
+      expect(reader.mock.calls.length).toBe(reads)
+      expect(warn.mock.calls.filter(([message]) => String(message).includes('order ingest is off'))).toHaveLength(1)
+      warn.mockRestore()
+      // A process with the switch on takes it when it is due.
+      const due = (await inB(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: rowId }, select: { nextAttemptAt: true } }))).nextAttemptAt!
+      await underClaim(rowId, due)
+      expect(await rowOf(rowId)).toMatchObject({ status: 'done', attempts: 1 })
+      expect(await orderOf(r.receipt_id)).toHaveLength(1)
+      expect(await level(pid)).toEqual([10, 2, 8])
+    })
+
     it('with the flag OFF the handler only reads back and logs, exactly as before: no order, no activation', async () => {
       process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST = '0'
       const quiet = await connection('55556666', { activate: false })
@@ -750,6 +780,9 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(state).toEqual({ cursorReceiptId: String(all[229].receipt_id), backlog: false })
     }, 120_000)
 
+    // The cases below write 130–460 receipts through the one-transaction-per-receipt writer over several
+    // polls: inherently heavy, so they take the same budget as the 230-receipt case above. A CI runner
+    // measured ~2.5x slower than a developer machine; the 10 s default timed them out there.
     it('receipt-ID order: an updated receipt keeps its position while reconciliation pages', async () => {
       const shop = await connection('77770006', { activate: false })
       await activate(shop)
@@ -765,7 +798,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       }
       const outcome = await inB(() => poll.pollEtsyConnection(shop))
       expect(outcome).toMatchObject({ status: 'SUCCESS', counts: { created: 150 } })
-    })
+    }, 120_000)
 
     it('equal timestamps with descending IDs across pages ingest every receipt without an invented secondary sort', async () => {
       const shop = await connection('77770008')
@@ -780,7 +813,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       }
       expect(runs.at(-1)).toMatchObject({ status: 'SUCCESS', backlog: false })
       expect((await q<{ n: number }>(`SELECT count(*)::int AS n FROM "Order" WHERE "channelConnectionId" = $1`, [shop]))[0].n).toBe(230)
-    })
+    }, 120_000)
 
     it('a receipt updated between capped runs cannot remove an unread member from an old timestamp bucket', async () => {
       const shop = await connection('77770011')
@@ -801,7 +834,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       // A completed scan must not depend on a 600-second updated overlap to repair this loss.
       expect((await q<{ n: number }>(`SELECT count(*)::int AS n FROM "Order" WHERE "channelConnectionId" = $1`, [shop]))[0].n).toBe(230)
       expect(await orderOf(all[100].receipt_id)).toHaveLength(1)
-    })
+    }, 120_000)
 
     it.each([10, 60])('a newly paid receipt is held within the cap after a %i-minute interval while historical reconciliation has a backlog', async (interval) => {
       const shop = await connection(`77770012${interval}`)
@@ -822,7 +855,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(result).toMatchObject({ status: 'PARTIAL', backlog: true, counts: { pages: 2 } })
       expect(await orderOf(fresh.receipt_id)).toHaveLength(1)
       expect(await level(pid)).toEqual([10, 2, 8])
-    })
+    }, 120_000)
 
     it('a late member changes the fixed window count and restarts its offset before declaring completeness', async () => {
       const shop = await connection('77770013')
@@ -839,7 +872,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(runs.at(-1)).toMatchObject({ status: 'SUCCESS', backlog: false })
       expect((await q<{ n: number }>(`SELECT count(*)::int AS n FROM "Order" WHERE "channelConnectionId" = $1`, [shop]))[0].n).toBe(231)
       expect(await orderOf(late.receipt_id)).toHaveLength(1)
-    })
+    }, 120_000)
 
     it('a single-page cap alternates recent work and historical progress without raising the cap', async () => {
       const shop = await connection('77770014')
@@ -855,7 +888,7 @@ describe.skipIf(!serverUrl)(`Etsy receipt ingest — writer, webhook, poller (ne
       expect(await inB(() => poll.pollEtsyConnection(shop, { pageCap: 1 }))).toMatchObject({ backlog: true, counts: { pages: 1, recentPages: 1 } })
       expect(await level(pid)).toEqual([10, 2, 8])
       expect(await inB(() => poll.pollEtsyConnection(shop, { pageCap: 1 }))).toMatchObject({ status: 'SUCCESS', backlog: false, counts: { pages: 1, reconciliationPages: 1 } })
-    })
+    }, 120_000)
 
     it('a short reconciliation page with a larger count fails held, retaining its page and last success until recovery', async () => {
       const shop = await connection('77770015')
