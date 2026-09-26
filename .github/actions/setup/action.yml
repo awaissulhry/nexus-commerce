@@ -1,0 +1,34 @@
+name: Setup Nexus workspace
+description: >-
+  Node 22, node_modules restored from cache (npm ci on a miss), then the generated pieces every job
+  needs rebuilt from THIS checkout — never trusted from the cache: the Prisma client and database
+  runtime (schema.prisma may have changed) and the shared/events packages (their dist/ is gitignored).
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Restore node_modules
+      id: modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+        key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json', 'patches/**') }}
+
+    - name: Install dependencies (cache miss)
+      if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci --no-audit --no-fund
+
+    - name: Prisma client, database runtime, shared and events packages
+      shell: bash
+      run: |
+        npm run build --workspace=@nexus/database
+        npm run build --workspace=@nexus/shared
+        npm run build --workspace=@nexus/events

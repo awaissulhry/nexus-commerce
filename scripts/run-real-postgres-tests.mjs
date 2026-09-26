@@ -46,6 +46,7 @@
  *
  *   node scripts/run-real-postgres-tests.mjs
  *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
+ *   node scripts/run-real-postgres-tests.mjs --required           # CI: missing Docker or image FAILS instead of skipping
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
  */
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -78,7 +79,8 @@ const docker = (...cmd) => execFileSync('docker', cmd, { encoding: 'utf8', stdio
 
 function skip(reason) {
   console.log(`⚠ real-PostgreSQL tests SKIPPED — ${reason}. They prove no stock update is lost under concurrency and that a shared-product copy completes end to end; run them where Docker is available.`)
-  process.exit(0)
+  // In CI, or with --required, a skip measured nothing and must fail (docs/ci-plan.md §2.3).
+  process.exit(args.includes('--required') || process.env.CI === 'true' ? 1 : 0)
 }
 
 try { docker('info', '--format', '{{.ServerVersion}}') } catch { skip('Docker is not available here') }

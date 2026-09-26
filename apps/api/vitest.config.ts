@@ -49,7 +49,8 @@ const catalogueSuites = [
 export default defineConfig({
   test: {
     projects: [
-      { extends: true, test: { name: 'regressions', include: ['src/**/__tests__/*.test.ts', 'src/**/*.vitest.test.ts'], exclude: ['node_modules/**', 'dist/**', ...catalogueSuites] } },
+      // globalSetup: one PGlite snapshot per run; every formulaDatabase() file gets its own copy.
+      { extends: true, test: { name: 'regressions', include: ['src/**/__tests__/*.test.ts', 'src/**/*.vitest.test.ts'], exclude: ['node_modules/**', 'dist/**', ...catalogueSuites], globalSetup: ['./src/test-support/pglite-snapshot.global.ts'] } },
       ...catalogueSuites.map((file, index) => ({ extends: true as const, test: {
         name: `catalogue-${index + 1}`, include: [file], sequence: { groupOrder: index + 1 }, testTimeout: 30_000,
       } })),

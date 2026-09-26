@@ -163,7 +163,7 @@ describe('business profile boundaries with PostgreSQL', () => {
     for (const input of [{ limit: 0 }, { limit: 101 }, { limit: ['2'] }, { status: ['archived'] }, { permission: ['owner'] }, { q: 'x'.repeat(81) }, { cursor: 'bad-cursor' }]) {
       await expect(service.listPage(user.id, input)).rejects.toMatchObject({ code: 'invalid_profile_query' })
     }
-  })
+  }, 30_000) // 13 businesses with 20 markets each, through the real service; 10 s is a unit-test budget (vitest.config.ts: DB tests bump explicitly)
 
   it('supports multiple seller accounts of one channel in a profile without combining their identities', async () => {
     const user = await person(), profile = await service.create(user.id, details())
