@@ -14,6 +14,7 @@
  *              disabled overflow item; a bare `disabled` Import button would be a silent hold
  *   ⋯          Reload
  */
+import type { ReactNode } from 'react'
 import type { MenuItemDef } from '@/design-system/components'
 import type { GridStateApi, GridViewPreset, SavedGridView, SheetStatus } from '@/design-system/grid'
 
@@ -53,6 +54,9 @@ export interface MatrixToolbarProps {
   onReload: () => void
   overflow?: readonly MenuItemDef[]
   status?: readonly SheetStatus[]
+  /** The verbs for the selected rows — in the toolbar while rows are selected, as on the sheet (2026-09-26). */
+  selectionActions?: ReactNode
+  onClearSelection?: () => void
 }
 
 export function MatrixToolbar(p: MatrixToolbarProps) {
@@ -61,6 +65,8 @@ export function MatrixToolbar(p: MatrixToolbarProps) {
       visible={p.visible}
       total={p.total}
       selected={p.selected}
+      selectionActions={p.selectionActions}
+      onClearSelection={p.onClearSelection}
       descriptor={!p.loading && !p.unavailable ? <span className="nds-cell-muted"> · {p.hasParent ? '1 parent' : 'no parent'} · {p.variants} {p.variants === 1 ? 'variant' : 'variants'}</span> : null}
       search={p.search}
       onSearch={p.onSearch}
