@@ -22,6 +22,8 @@
  * network failure. Account id, key ids and every payload here are synthetic.
  */
 import crypto from 'node:crypto'
+import { createServer, type IncomingHttpHeaders } from 'node:http'
+import type { Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KMSClient } from '@aws-sdk/client-kms'
 
@@ -551,4 +553,105 @@ describe('B. quarantined eBay notices: one KMS data key per notice, and no notic
     expect(row.payloadKeyId).toBe(keyArn)
     expect((await openEbayQuarantineBody(row as never)).equals(Buffer.from(body))).toBe(true)
   })
+})
+
+// ── D. A KMS that never answers, through the client crypto.ts builds for production ─────
+
+/** The same fake KMS behind a loopback HTTP listener, so the production-built SDK client
+ * (its own transport, timeouts and retry budget) is what talks to it. Nothing leaves 127.0.0.1. */
+async function kmsOverLoopback(service: KmsService) {
+  const sockets = new Set<Socket>()
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(chunk as Buffer)
+    try {
+      const { response: answer } = await service.handler.handle({ headers: request.headers as IncomingHttpHeaders, body: new Uint8Array(Buffer.concat(chunks)) })
+      response.writeHead(answer.statusCode, answer.headers)
+      response.end(answer.body)
+    } catch { response.destroy() }
+  })
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)) })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('Expected a loopback listener')
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: async () => {
+      service.releaseHung()
+      for (const socket of sockets) socket.destroy()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    },
+  }
+}
+
+/** A silent KMS must be bounded well inside this; an unbounded client fails the assertion, not the test timeout. */
+const SILENT_KMS_BOUND_MS = 10_000
+const NO_ANSWER = Symbol('no answer within the bound')
+async function withinBound<T>(work: Promise<T>): Promise<{ value: T | typeof NO_ANSWER; ms: number }> {
+  const started = Date.now()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const value = await Promise.race([work, new Promise<typeof NO_ANSWER>(resolve => { timer = setTimeout(() => resolve(NO_ANSWER), SILENT_KMS_BOUND_MS) })])
+  clearTimeout(timer)
+  return { value, ms: Date.now() - started }
+}
+
+describe('D. a KMS that never answers is bounded by the production client', () => {
+  let loopback: Awaited<ReturnType<typeof kmsOverLoopback>>
+  beforeEach(async () => {
+    loopback = await kmsOverLoopback(kms)
+    vi.stubEnv('AWS_ENDPOINT_URL_KMS', loopback.url)
+    vi.stubEnv('AWS_REGION', REGION)
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'synthetic')
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'synthetic')
+    vi.stubEnv('AWS_SESSION_TOKEN', '')
+    vi.stubEnv('AWS_PROFILE', '')
+    vi.stubEnv('AWS_CONFIG_FILE', '/nonexistent/aws-config')
+    vi.stubEnv('AWS_SHARED_CREDENTIALS_FILE', '/nonexistent/aws-credentials')
+    vi.stubEnv('AWS_EC2_METADATA_DISABLED', 'true')
+    branch.__cryptoTest.setKmsClient(null) // crypto.ts now builds its own production client
+  })
+  afterEach(async () => { await loopback.close(); branch.__cryptoTest.setKmsClient(null) })
+
+  it('GenerateDataKey never answers: the notice is sealed under the env key and eBay gets 200 within the bound', async () => {
+    kms.faults.GenerateDataKey = 'hang'
+    const body = notice('n-silent-kms')
+    const pending = deliver(body)
+    try {
+      const { value, ms } = await withinBound(pending)
+      expect(value).not.toBe(NO_ANSWER)
+      expect(value).toMatchObject({ status: 200, json: { received: true } })
+      expect(ms).toBeLessThan(SILENT_KMS_BOUND_MS)
+      expect(kms.calls('GenerateDataKey')).toHaveLength(2)
+      expect(fallbackReasons).toEqual(['KMS GenerateDataKey failed (TimeoutError)'])
+      const row = storedRow('n-silent-kms')
+      expect(row.payloadKeyId).toBe('env')
+      delete kms.faults.GenerateDataKey
+      expect((await openEbayQuarantineBody(row as never)).equals(Buffer.from(body))).toBe(true)
+    } finally {
+      delete kms.faults.GenerateDataKey
+      kms.releaseHung()
+      await pending.catch(() => undefined)
+    }
+  }, 30_000)
+
+  it('Decrypt never answers: the read fails closed with kms_unavailable within the bound, and reads again afterwards', async () => {
+    const written = await branch.encryptCredentials(PAYLOADS['eBay OAuth grant'])
+    expect(written).toMatchObject({ mode: 'kms', keyId: keyArn })
+    coldCaches()
+    kms.faults.Decrypt = 'hang'
+    const pending = branch.decryptCredentials(written.blob).then(value => ({ value }), error => ({ error }))
+    try {
+      const { value, ms } = await withinBound(pending)
+      expect(value).not.toBe(NO_ANSWER)
+      expect(value).toMatchObject({ error: { name: 'CredentialsDecryptError', code: 'kms_unavailable' } })
+      expect(ms).toBeLessThan(SILENT_KMS_BOUND_MS)
+      expect(kms.calls('Decrypt')).toHaveLength(2)
+      expect(logText()).not.toContain(PROVIDER_DETAIL)
+    } finally {
+      delete kms.faults.Decrypt
+      kms.releaseHung()
+      await pending
+    }
+    expect(await branch.decryptCredentials(written.blob)).toEqual(PAYLOADS['eBay OAuth grant'])
+  }, 30_000)
 })
