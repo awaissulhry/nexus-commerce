@@ -673,7 +673,7 @@
 .acr-digest p { font-size: 12.5px; line-height: 1.55; color: #56637a; margin: 0 0 6px; max-width: 92ch; }
 .acr-digest-flags { font-size: 11.5px; color: var(--nds-grey-600); }
 .acr-digest-flags code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  font-family: var(--nds-font-mono); font-size: 11px;
   background: var(--nds-grey-100); border-radius: 3px; padding: 1px 4px; color: #56637a;
 }
 .acr-digest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
@@ -1201,12 +1201,12 @@
    taller than the primitive's default and sunk into the card so it reads as code. */
 .acr-cs-editor {
   min-height: 300px; background: var(--nds-grey-25);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   font-size: 12px; line-height: 1.6;
 }
 .acr-cs-diff {
   border: 1px solid var(--nds-grey-150); border-radius: 9px; padding: 10px 12px; background: var(--nds-grey-25);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  font-family: var(--nds-font-mono); font-size: 11.5px;
   max-height: 220px; overflow-y: auto;
 }
 .acr-cs-difftitle {

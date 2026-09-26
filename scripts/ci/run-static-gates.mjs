@@ -52,6 +52,8 @@ const GATES = {
   'alias form': node('scripts/check-alias-form.mjs', '--check'),
   'DS fork drift (web ⇄ factory)': node('scripts/check-ds-fork-drift.mjs', '--check'),
   'CSS radius': node('scripts/check-css-radius-ratchet.mjs', '--check'),
+  'DS fonts (no Arial)': node('scripts/check-font-families.mjs', '--check'),
+  'DS fonts self-test': node('scripts/check-font-families.mjs', '--self-test'),
   'CSS parse': node('scripts/check-css-parse.mjs'),
   'CSS DS shadow': node('scripts/check-css-ds-shadow-ratchet.mjs', '--check'),
   'silent disabled (U13)': node('scripts/check-silent-disabled.mjs'),

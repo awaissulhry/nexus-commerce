@@ -198,7 +198,7 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
                 {l.options.length > 0 && <div style={{ fontSize: 12, color: "#5b6573", marginTop: 2 }}>{l.options.join(" · ")}</div>}
               </div>
               {/* EPQ.5 — a consumer sees VAT-inclusive line prices (gross-first) */}
-              <div style={{ fontWeight: 700, fontFamily: "ui-monospace, monospace" }}>{eur(grossFirst ? l.lineGrossCents ?? l.lineTotalCents : l.lineTotalCents)}</div>
+              <div style={{ fontWeight: 700, fontFamily: "var(--nds-font-mono)" }}>{eur(grossFirst ? l.lineGrossCents ?? l.lineTotalCents : l.lineTotalCents)}</div>
             </div>
           ))}
         </div>
@@ -207,13 +207,13 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
         {!tax ? (
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
             <span style={{ fontSize: 15, fontWeight: 800 }}>Totale</span>
-            <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{eur(s.totalCents)}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--nds-font-mono)" }}>{eur(s.totalCents)}</span>
           </div>
         ) : tax.grossFirst ? (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
               <span style={{ fontSize: 15, fontWeight: 800 }}>Totale (IVA {tax.vatRatePct}% inclusa)</span>
-              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{eur(tax.totaleCents)}</span>
+              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--nds-font-mono)" }}>{eur(tax.totaleCents)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 12, color: "#8a93a1" }}>
               <span>Imponibile {eur(tax.imponibileCents)} · IVA {tax.vatRatePct}% {eur(tax.ivaCents)}</span>
@@ -223,21 +223,21 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
           <>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
               <span style={{ fontSize: 15, fontWeight: 800 }}>Totale</span>
-              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{eur(tax.totaleCents)}</span>
+              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--nds-font-mono)" }}>{eur(tax.totaleCents)}</span>
             </div>
             <div style={{ marginTop: 4, fontSize: 12, color: "#8a93a1" }}>{tax.note}</div>
           </>
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, fontSize: 13, color: "#5b6573" }}>
-              <span>Imponibile</span><span style={{ fontFamily: "ui-monospace, monospace" }}>{eur(tax.imponibileCents)}</span>
+              <span>Imponibile</span><span style={{ fontFamily: "var(--nds-font-mono)" }}>{eur(tax.imponibileCents)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2, fontSize: 13, color: "#5b6573" }}>
-              <span>IVA {tax.vatRatePct}%</span><span style={{ fontFamily: "ui-monospace, monospace" }}>{eur(tax.ivaCents)}</span>
+              <span>IVA {tax.vatRatePct}%</span><span style={{ fontFamily: "var(--nds-font-mono)" }}>{eur(tax.ivaCents)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
               <span style={{ fontSize: 15, fontWeight: 800 }}>Totale</span>
-              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "ui-monospace, monospace" }}>{eur(tax.totaleCents)}</span>
+              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--nds-font-mono)" }}>{eur(tax.totaleCents)}</span>
             </div>
           </>
         )}

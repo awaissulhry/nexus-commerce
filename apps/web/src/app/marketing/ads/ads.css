@@ -1160,7 +1160,7 @@
 @media (max-width: 1180px) { .h10-cb-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ── CBN — AI Advertising · New Product Goal (AI Goal builder), Helium 10 match ── */
-.h10-aig { position: fixed; inset: 0; z-index: 120; background: var(--nds-grey-25); display: flex; flex-direction: column; font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--nds-grey-900); }
+.h10-aig { position: fixed; inset: 0; z-index: 120; background: var(--nds-grey-25); display: flex; flex-direction: column; font-family: var(--nds-font-sans); color: var(--nds-grey-900); }
 .h10-aig-top { flex-shrink: 0; height: 52px; background: var(--nds-white); border-bottom: 1px solid var(--nds-grey-150); display: flex; align-items: center; gap: 12px; padding: 0 16px; }
 .h10-aig-top .x { display: inline-flex; border: none; background: none; color: var(--nds-grey-600); cursor: pointer; padding: 6px; border-radius: var(--nds-radius-md); }
 .h10-aig-top .x:hover { background: var(--nds-grey-75); color: var(--nds-grey-900); }
@@ -2157,11 +2157,11 @@
 .h10-rep-tbl .expbtn { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font: inherit; background: none; border: none; padding: 1px 3px; margin-left: -3px; border-radius: 5px; cursor: pointer; text-align: left; }
 .h10-rep-tbl .expbtn:hover { background: var(--nds-grey-100); }
 .h10-rep-tbl .expbtn code, .h10-rep-tbl .expbtn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h10-rep-tbl .expbtn code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--nds-grey-900); }
+.h10-rep-tbl .expbtn code { font-family: var(--nds-font-mono); font-size: 12px; color: var(--nds-grey-900); }
 .h10-rep-tbl .expbtn b { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }
 .h10-rep-tbl .expbtn .pen { flex: none; color: #b6bfca; opacity: 0; }
 .h10-rep-tbl .expbtn:hover .pen { opacity: 1; }
-.h10-rep-tbl .expedit { width: 100%; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-blue-600); border-radius: 5px; padding: 2px 6px; }
+.h10-rep-tbl .expedit { width: 100%; font: inherit; font-family: var(--nds-font-mono); font-size: 12px; color: var(--nds-grey-900); border: 1px solid var(--nds-blue-600); border-radius: 5px; padding: 2px 6px; }
 .h10-rep-tbl .expedit:focus { outline: none; box-shadow: 0 0 0 2px rgba(31,111,222,.14); }
 .h10-rep-tbl .whrline { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-size: 11px; color: #9aa4b1; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
 .h10-rep-tbl .whrline:hover { color: var(--nds-blue-600); }
@@ -2345,7 +2345,7 @@
 .h10-rep-drift { margin-top: 14px; }
 .h10-rep-drift .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
 .h10-rep-drift .h10-rep-note { margin-top: 10px; }
-.h10-rep-drift code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.h10-rep-drift code { font-family: var(--nds-font-mono); font-size: 11.5px; }
 
 /* OS.1-3 — searchable pickers. The keyboard-active row needs to read as "Enter takes this one"
    without being confused with .on (the currently-selected value), so it gets a neutral wash plus a

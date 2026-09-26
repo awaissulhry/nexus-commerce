@@ -103,7 +103,7 @@
 }
 
 .railFootValue {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   color: var(--nds-text);
 }
 
@@ -189,7 +189,7 @@
 .fieldKey {
   font-size: var(--nds-font-size-micro);
   color: var(--nds-text-2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -227,7 +227,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   font-size: var(--nds-font-size-xs);
 }
 
@@ -291,12 +291,12 @@
 
 .hint { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); line-height: 1.6; }
 
-.formula { width: 100%; min-height: 104px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.formula { width: 100%; min-height: 104px; font-family: var(--nds-font-mono); }
 
 .exprError {
   color: var(--nds-danger-text);
   font-size: var(--nds-font-size-xs);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   line-height: 1.6;
 }
 
@@ -335,7 +335,7 @@
 }
 
 .sourceItem { width: 100%; justify-content: space-between; gap: var(--nds-space-10); }
-.sourcePath { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sourcePath { font-family: var(--nds-font-mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sourceVal {
   flex: 0 1 45%;
   min-width: 0;
@@ -350,7 +350,7 @@
 .fnList { display: flex; flex-direction: column; gap: 5px; max-height: 210px; overflow-y: auto; }
 .fnRow { font-size: var(--nds-font-size-xs); line-height: 1.5; }
 .fnSig {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   color: var(--nds-text-link);
   cursor: pointer;
 }
@@ -374,7 +374,7 @@
 .categoryMappingLabel { flex: 1 1 180px; min-width: 0; }
 .categoryMappingControls { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; max-width: 100%; }
 .ruleBody {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--nds-font-mono);
   font-size: var(--nds-font-size-xs);
   color: var(--nds-text-2);
   overflow: hidden;

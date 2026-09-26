@@ -346,7 +346,7 @@ function BuyPanel({ order, presets, canCost, onClose, onBought }: { order: Ready
                       <span style={{ fontSize: 12.5 }}><b>{r.carrier}</b> · {r.service}{r.estDays ? <span style={{ color: "var(--nds-text-3)" }}> · ~{r.estDays}d</span> : null}</span>
                       <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6, alignItems: "center" }}>
                         {cheapest && r.costCents === 0 && <Pill tone="success">free</Pill>}
-                        {canCost && r.costCents != null && <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{eur(r.costCents)}</span>}
+                        {canCost && r.costCents != null && <span style={{ fontFamily: "var(--nds-font-mono)", fontSize: 12.5 }}>{eur(r.costCents)}</span>}
                       </span>
                     </label>
                   );

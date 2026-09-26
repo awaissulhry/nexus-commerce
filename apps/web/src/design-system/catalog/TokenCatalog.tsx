@@ -1049,7 +1049,7 @@ export function TokenCatalog() {
             title="GALE Pro Racing Suit"
             meta={
               <>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>GALE-KAN-PRO</span>
+                <span style={{ fontFamily: 'var(--nds-font-mono)' }}>GALE-KAN-PRO</span>
                 <Pill tone="success" dot>Active</Pill>
               </>
             }

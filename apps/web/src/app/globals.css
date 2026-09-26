@@ -214,7 +214,7 @@ body {
   background-color: rgb(var(--surface-canvas));
   color: rgb(var(--text-primary));
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
