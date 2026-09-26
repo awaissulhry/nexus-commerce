@@ -267,8 +267,10 @@ export function buildVariantColumns(opts: BuildVariantColumnsOptions): (ColDef<S
    * carries the same finding). Nothing here needs it — every column is `suppressMovable`.
    */
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
-    /* The "Shared product" progress column sits beside the Product cell, as on the sheet (2026-09-27). */
-    { groupId: 'grp-product', headerName: 'Product', children: [identity, sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
+    { groupId: 'grp-product', headerName: 'Product', children: [identity] },
+    /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
+       boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
+    { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
   ]
   if (axisColumns.length > 0) groups.push({ groupId: 'grp-axes', headerName: 'Axes', children: axisColumns })
   if (projectionColumns.length > 0) groups.push({ groupId: 'grp-projections', headerName: 'Channel projections', children: projectionColumns })

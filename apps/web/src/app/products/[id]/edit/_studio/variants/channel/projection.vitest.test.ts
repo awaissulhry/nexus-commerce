@@ -38,9 +38,13 @@ describe('channel projection progress column (2026-09-27)', () => {
   it('the Product cell draws no bar; the progress column beside it reads this coordinate from the index', () => {
     const page = projectionFixture()
     const child = { ...page.children[0], readiness: { requiredPct: 100, state: 'live' } }
-    const group = projectionColumns(hostFor(page, reading(child.id)), page)[0]
-    if (!('children' in group)) throw new Error('Product group is missing')
-    const [identity, progress] = group.children
+    const [group, progressGroup] = projectionColumns(hostFor(page, reading(child.id)), page)
+    if (!('children' in group) || !('children' in progressGroup)) throw new Error('Product or Progress group is missing')
+    // Its own group: inside the pinned Product group it split the header in two.
+    expect(group.children).toHaveLength(1)
+    expect(progressGroup.headerName).toBe('PROGRESS')
+    const [identity] = group.children
+    const [progress] = progressGroup.children
     if (!('cellRenderer' in identity) || !('valueGetter' in progress)) throw new Error('Product group columns are missing')
     const html = renderToStaticMarkup(createElement(identity.cellRenderer, { ...identity.cellRendererParams, data: { rowId: child.id, kind: 'variant', parent: null, child } }))
     expect(html).not.toContain('nds-readypill')
@@ -54,9 +58,9 @@ describe('channel projection progress column (2026-09-27)', () => {
 
   it('a row with no index reading is NOT COMPUTED (null), never 0 %', () => {
     const page = projectionFixture()
-    const group = projectionColumns(hostFor(page, null), page)[0]
-    if (!('children' in group)) throw new Error('Product group is missing')
-    const getter = (group.children[1] as { valueGetter: (p: { data: unknown }) => unknown }).valueGetter
+    const progressGroup = projectionColumns(hostFor(page, null), page)[1]
+    if (!('children' in progressGroup)) throw new Error('Progress group is missing')
+    const getter = (progressGroup.children[0] as { valueGetter: (p: { data: unknown }) => unknown }).valueGetter
     expect(getter({ data: { rowId: page.children[0].id, kind: 'variant', parent: null, child: page.children[0] } })).toBeNull()
   })
 

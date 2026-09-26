@@ -225,8 +225,10 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
   }
 
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
-    /* The "Shared product" progress column sits beside the Product cell, as on the sheet (2026-09-27). */
-    { groupId: 'grp-product', headerName: 'Product', children: [identity, sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
+    { groupId: 'grp-product', headerName: 'Product', children: [identity] },
+    /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
+       boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
+    { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
     { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, { ...status, headerName: 'Status', width: 104, minWidth: 104 }] },
   ]
 
