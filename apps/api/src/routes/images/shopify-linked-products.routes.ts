@@ -16,6 +16,7 @@ import { configureLinkedAutomation, runLinkedAutomation } from '../../services/s
 import { suggestSharedContent } from '../../services/shopify/linked-shared-content.service.js'
 import { readInformation } from '../../services/shopify/information-gateway.js'
 import { ensureShopifySchemaSubscriptions } from '../../services/shopify/schema-sync.service.js'
+import { SHOPIFY_WEBHOOKS_OFF_CODE, SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIngestEnabled } from '../../services/shopify/order-ingest-switch.js'
 
 const querySchema = z.object({ accountId: z.string().min(1), listingId: z.string().min(1).optional(), market: z.literal('GLOBAL').default('GLOBAL'),
   locale: z.string().min(2).max(35).optional(), refreshConstraints: z.literal('1').optional(),
@@ -27,6 +28,9 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
     method, url: `/products/:productId/shopify-linked${suffix}`, bodyLimit: 10 * 1024 * 1024,
     handler: async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store')
+      // Registering the twelve topics starts Shopify order ingest with no start time (T0): refused, before any
+      // lookup, until the order-ingest switch is on. The products.edit permission check still runs first.
+      if (suffix === '/webhook-subscriptions' && !shopifyOrderIngestEnabled()) return reply.code(409).send({ error: SHOPIFY_WEBHOOKS_OFF_MESSAGE, code: SHOPIFY_WEBHOOKS_OFF_CODE })
       try {
         const query = querySchema.parse(request.query), id = request.params.productId
         // Every route resolves the business, family and explicit connected store before any remote access.

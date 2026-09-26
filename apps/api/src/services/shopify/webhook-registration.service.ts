@@ -20,6 +20,7 @@ import { publicApiOrigin } from '../public-api-origin.js'
 import { shopifyAdmin } from './admin-client.js'
 import { collectShopifyPages } from './linked-products-gateway.js'
 import { logger } from '../../utils/logger.js'
+import { SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIngestEnabled } from './order-ingest-switch.js'
 
 /**
  * Shopify's topic enum, the path we receive it on, and the `eventType` written to the
@@ -94,6 +95,8 @@ function publicOrigin(): { origin: string } | { error: string } {
  * Make one shop's subscriptions match this table. Idempotent, and never destructive.
  */
 export async function ensureShopifyWebhookSubscriptions(accountId: string): Promise<ShopifyRegistrationResult> {
+  // Registration starts Shopify order ingest; every caller (route, job, script) is refused until it is on.
+  if (!shopifyOrderIngestEnabled()) return { accountId, live: false, reason: SHOPIFY_WEBHOOKS_OFF_MESSAGE, perTopic: [] }
   const origin = publicOrigin()
   if ('error' in origin) return { accountId, live: false, reason: origin.error, perTopic: [] }
 
