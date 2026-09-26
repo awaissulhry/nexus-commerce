@@ -671,6 +671,12 @@ left as it is and reported as a follow-up.
 - **The reader switches (P8):** a shadow harness keyed to `resolveBatch`, then the Shopify outbound/content sync
   first; delete the payload-only Shopify legacy builder; the flat-file readers move only with their owners.
 - **The condition source** (see above; needs one field in the shared studio-sheet file).
+- **From the variation-theme lane (VTR, 2026-09-26; read in code by VTR, not run):** `resolve-batch.service.ts:338` —
+  `effectiveStored` falls back to the category id only for Amazon `productType` and eBay `categoryId`. For Etsy and
+  Shopify the mapping default shows on the sheet with the source "master" (`studio-sheet.service.ts:1341-1342`, a wrong
+  label) and likely counts as EMPTY for readiness and publish; the same condition probably makes Shopify's free-text
+  "Product type" show the taxonomy gid when empty. VTR's step 4 (categories) depends on it. Queued as the next P8 item
+  after the P3b S5 apply; tell VTR (nexus-commerce-12) when it starts.
 
 ### 10.9 P3b — attribute scope (planned 2026-09-26)
 
@@ -897,6 +903,14 @@ keys per attribute and readiness rows by state.
   makes eBay a user. Full API suite: OFF only the 4 local-only files; ON only the baseline files.
 - Column build (private copy, best of 5): Shared family cold 40 ms, warm 7 ms; Amazon channel cold 69 ms, warm 5 ms
   (the version read now spans 9 tables). The plan's bound was 191 ms cold.
+
+**Axis guard (2026-09-26, PR #46; asked by the variation-theme lane before its step 1).** An attribute a family
+VARIES BY is never hidden: a placement move to a channel and an archive are refused while a live family root's
+`Product.variationAxes` has a label naming it (`canonicalVariantAxis` against its code, concept or label), and the S5
+cleanup preview marks such a row "blocked". VTR's step 1 will store the attribute CODE in a family axis list; that list
+joins `familyAxisLabels()` then. Agreed with VTR the same day: per-language option labels stay in
+`AttributeOption.metadata.labels` (no new column); option and attribute codes never change; `semanticKey` links an
+attribute to its concept; `AttributeOption.sortOrder` is the shared value order.
 
 ## 11. For the product-sheet session (the screens are theirs)
 
