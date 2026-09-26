@@ -10,7 +10,7 @@ vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundS
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: state.emit, emitMany: async () => [], emitManyTx: async () => [] } }))
 vi.mock('../audit-log.service.js', () => ({ auditLogService: { writeMany: state.audit } }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: async () => {}, refreshMany: async () => [] } }))
-vi.mock('../pim/readiness-index.service.js', () => ({ produceReadiness: async () => {} }))
+vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(async () => {}))
 vi.mock('../pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: async () => ({ products: [{ productId: 'pr1-product', cells: {} }] }) }))
 vi.mock('../connection-resolver.service.js', () => ({ primaryConnectionIds: async () => new Map() }))
 vi.mock('../../db.js', () => { const db = {

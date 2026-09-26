@@ -1,9 +1,10 @@
-import { produceReadiness } from '../pim/readiness-index.service.js'
+import { produceReadinessForProducts } from '../pim/readiness-index.service.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
 import { applyContentBulk, type ContentEdit } from '../pim/content-bulk-write.js'
 import { variationAttributePatch } from '../pim/shared-variation-values.js'
+import { optionModeFrom } from '@nexus/shared/attributes'
 import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyBaseLogger } from 'fastify'
@@ -312,6 +313,80 @@ async function masterBulletCapRefusals(edits: ContentEdit[]): Promise<ProductBul
   return refusals
 }
 
+/** P2 — rows per set-based statement: bounds the statement's size whatever a cascade fans out to. */
+export const SET_BASED_CHUNK = 2000
+
+/**
+ * P2 (docs/attributes/PLAN.md §4.7) — the master attribute merges of one bulk edit as set-based statements.
+ *
+ * Each product's merges are FOLDED in their original order into one `(remove, patch)` pair, which is exactly what the
+ * old sequence of per-product statements produced: `((v - r1) || p1 - r2) || p2` equals `(v - (r1 ∪ r2)) || fold`,
+ * where a key a later step removes leaves the fold and a key a later step sets wins. One UPDATE per chunk then writes
+ * every product; a product matched by two source rows would be updated with an arbitrary one, which the fold rules out.
+ *
+ * A product whose merge touches its VARIATION AXES keeps the per-product statement (`writeAttrMerge`), for every one of
+ * its merges and in their order: that statement also rewrites `variations` and the legacy axis bag from the locked row.
+ */
+export function setBasedAttrMerges(
+  merges: Array<{ id: string; patch: Record<string, unknown>; remove: string[] }>,
+  writeOne: (productId: string, patch: Record<string, any>, remove?: string[]) => Promise<unknown>,
+  variationOwners: Map<string, { categoryAttributes: unknown; variantAttributes: unknown; variationAxes: string[] }>,
+): Array<Promise<unknown>> {
+  const axisProducts = new Set(merges.filter(m => {
+    const owner = variationOwners.get(m.id)
+    return owner ? variationAttributePatch(owner, owner.variationAxes, m.patch, m.remove).changed : false
+  }).map(m => m.id))
+  const statements: Array<Promise<unknown>> = []
+  const folded = new Map<string, { patch: Record<string, unknown>; remove: Set<string> }>()
+  for (const merge of merges) {
+    if (axisProducts.has(merge.id)) { statements.push(writeOne(merge.id, merge.patch, merge.remove)); continue }
+    const acc = folded.get(merge.id) ?? { patch: {}, remove: new Set<string>() }
+    for (const key of merge.remove) { delete acc.patch[key]; acc.remove.add(key) }
+    Object.assign(acc.patch, merge.patch)
+    folded.set(merge.id, acc)
+  }
+  const rows = [...folded].map(([id, acc]) => ({ id, patch: acc.patch, remove: [...acc.remove] }))
+  for (let i = 0; i < rows.length; i += SET_BASED_CHUNK) {
+    const chunk = JSON.stringify(rows.slice(i, i + SET_BASED_CHUNK))
+    statements.push(prisma.$executeRaw`
+      UPDATE "Product" AS p
+      SET "categoryAttributes" = (COALESCE(p."categoryAttributes", '{}'::jsonb) - v.remove) || v.patch
+      FROM jsonb_to_recordset(${chunk}::jsonb) AS v(id text, patch jsonb, remove text[])
+      WHERE p.id = v.id
+    `)
+  }
+  return statements
+}
+
+/**
+ * P2 — `cascadedFields` edits of one bulk edit, set-based. `remove` = what `array_remove` did per field (every
+ * occurrence goes, order and NULL members are kept); `push` = what Prisma's `{ push }` did per field (appended in
+ * order, and `updatedAt` moves as Prisma's `@updatedAt` moved it).
+ */
+export function setBasedCascadedFields(fieldsByProduct: Map<string, string[]>, mode: 'remove' | 'push'): Array<Promise<unknown>> {
+  const rows = [...fieldsByProduct].filter(([, fields]) => fields.length).map(([id, fields]) => ({ id, fields }))
+  const statements: Array<Promise<unknown>> = []
+  for (let i = 0; i < rows.length; i += SET_BASED_CHUNK) {
+    const chunk = JSON.stringify(rows.slice(i, i + SET_BASED_CHUNK))
+    statements.push(mode === 'remove'
+      ? prisma.$executeRaw`
+          UPDATE "Product" AS p
+          SET "cascadedFields" = CASE WHEN p."cascadedFields" IS NULL THEN NULL ELSE ARRAY(
+            SELECT f FROM unnest(p."cascadedFields") WITH ORDINALITY AS c(f, n)
+            WHERE f IS NULL OR NOT (f = ANY(v.fields)) ORDER BY n) END
+          FROM jsonb_to_recordset(${chunk}::jsonb) AS v(id text, fields text[])
+          WHERE p.id = v.id
+        `
+      : prisma.$executeRaw`
+          UPDATE "Product" AS p
+          SET "cascadedFields" = COALESCE(p."cascadedFields", '{}'::text[]) || v.fields, "updatedAt" = now()
+          FROM jsonb_to_recordset(${chunk}::jsonb) AS v(id text, fields text[])
+          WHERE p.id = v.id
+        `)
+  }
+  return statements
+}
+
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
 export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
   // Bind mutation promises before constructing them, including facts and formula cascades.
@@ -580,8 +655,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     return col ? Object.values(col.channels ?? {})[0]?.store : channelStoreByKey.get(key)
   }
 
+  /**
+   * P6 (docs/attributes/PLAN.md §4.4) — the save rule for an attribute cell. The column's `mode` says how the sheet
+   * DRAWS the list; the save refuses an off-list value only when the BUSINESS made the attribute strict
+   * (`validation.optionMode: 'strict'`). A channel's closed list never blocks the save: the value is stored, the
+   * channel validator flags it (readiness, mapping preview) and that listing's publish is held until it is mapped or
+   * changed. Shape errors (text in a number, an unknown unit, a list sent to a single value) still refuse.
+   */
   const factsOf = (col: { key: string; label: string; maxLength?: number; maxBytes?: number; validation?: Record<string, unknown>; kind?: string; shape?: string; cardinality?: { min: number; max: number | null }; unitOptions?: string[]; options?: string[]; mode?: 'strict' | 'open' }): ShapeWriteFacts =>
-    ({ key: col.key, label: col.label, maxLength: col.maxLength, maxBytes: col.maxBytes, validation: col.validation, kind: col.kind, shape: (col.shape ?? 'scalar') as ShapeWriteFacts['shape'], cardinality: col.cardinality, unitOptions: col.unitOptions, options: col.options, mode: col.mode })
+    ({ key: col.key, label: col.label, maxLength: col.maxLength, maxBytes: col.maxBytes, validation: col.validation, kind: col.kind, shape: (col.shape ?? 'scalar') as ShapeWriteFacts['shape'], cardinality: col.cardinality, unitOptions: col.unitOptions, options: col.options,
+      mode: optionModeFrom(col.validation?.optionMode) === 'strict' ? 'strict' : 'open' })
   if (changeIds.length > 0) {
     try {
       const [ptRows, mkRows] = await Promise.all([
@@ -2456,40 +2539,36 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
+    // P2 (docs/attributes/PLAN.md §4.7) — the master attribute merges, collected IN ORDER (direct edits, then cascades:
+    // the order the per-product statements used to run in) and written set-based below. Measured before this: one
+    // UPDATE per product plus one per child per field (500 products → ~980 statements).
+    const attrMerges: Array<{ id: string; patch: Record<string, any>; remove: string[] }> = []
+    const cascadeRemovals = new Map<string, string[]>()
+    const cascadePushes = new Map<string, string[]>()
     for (const [productId, patch] of attrDirectByProduct) {
-      updates.push(writeAttrMerge(productId, patch, attrResetByProduct.get(productId)))
+      attrMerges.push({ id: productId, patch, remove: attrResetByProduct.get(productId) ?? [] })
       if (childIdSet.has(productId)) {
-        for (const stripped of Object.keys(patch)) {
-          const fieldName = `attr_${stripped}`
-          updates.push(
-            prisma.$executeRaw`
-              UPDATE "Product"
-              SET "cascadedFields" = array_remove("cascadedFields", ${fieldName})
-              WHERE id = ${productId}
-            `
-          )
-        }
+        const fields = cascadeRemovals.get(productId) ?? []
+        for (const stripped of Object.keys(patch)) fields.push(`attr_${stripped}`)
+        cascadeRemovals.set(productId, fields)
       }
     }
 
     // Cascade attr edits — merge into parent + every child, then
     // push the prefixed field names onto each child's cascadedFields.
     for (const [parentId, patch] of attrCascadeByProduct) {
-      updates.push(writeAttrMerge(parentId, patch))
+      attrMerges.push({ id: parentId, patch, remove: [] })
       const kids = childrenByParent.get(parentId) ?? []
       const fieldNames = attrCascadeFieldNames.get(parentId) ?? []
       for (const childId of kids) {
-        updates.push(writeAttrMerge(childId, patch))
-        for (const fieldName of fieldNames) {
-          updates.push(
-            prisma.product.update({
-              where: { id: childId },
-              data: { cascadedFields: { push: fieldName } } as any,
-            })
-          )
-        }
+        attrMerges.push({ id: childId, patch, remove: [] })
+        if (fieldNames.length) cascadePushes.set(childId, [...(cascadePushes.get(childId) ?? []), ...fieldNames])
       }
     }
+    updates.push(...setBasedAttrMerges(attrMerges, writeAttrMerge, variationOwners))
+    // Direct edits leave the cascade (all removals), THEN cascades join it (all pushes) — the old statement order.
+    updates.push(...setBasedCascadedFields(cascadeRemovals, 'remove'))
+    updates.push(...setBasedCascadedFields(cascadePushes, 'push'))
 
     // W1.2 — optimistic concurrency CAS. When the caller passed an
     // expectedVersion, prepend a Product.update keyed by (id,
@@ -2792,10 +2871,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       ? { channel: effectiveContexts[0].channel, market: effectiveContexts[0].marketplace,
           accountId: connFor.get(effectiveContexts[0].channel) ?? null }
       : undefined
-    for (const id of cacheRefreshIds) {
-      if (readinessScope) await produceReadiness(id, readinessScope)
-      else await produceReadiness(id)
-    }
+    // P2 (docs/attributes/PLAN.md §10.1) — one query for every touched family, then rebuilt inline (up to
+    // INLINE_READINESS_MAX_FAMILIES, today's behaviour) or marked pending in this transaction and rebuilt after commit.
+    // Before this, a loop rebuilt every family inside the transaction: 15+ families crossed the 60 s limit and the whole
+    // edit was lost.
+    const readiness = await produceReadinessForProducts(cacheRefreshIds, readinessScope)
     await afterDatabaseCommit(`product-cache:${cacheRefreshIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(cacheRefreshIds)).catch(err => {
       context.logger.warn({ err, productIds: cacheRefreshIds }, '[products/bulk] cache refresh failed')
     })
@@ -2927,6 +3007,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // stays byte-identical for every caller that never uses formulas.
       ...(recalculated.length ? { recalculated } : {}),
       ...(recalcError ? { recalcError } : {}),
+      // P2 — present only when readiness was NOT rebuilt in this request: the number of families whose readiness is
+      // being rebuilt in the background. Their readiness rows read "pending" until then.
+      ...(readiness.pending ? { readinessPendingFamilies: readiness.pending } : {}),
       currentVersion: freshChannelVersion ?? freshMasterVersion ?? undefined,
       versionOf: freshChannelVersion !== undefined ? 'channelListing' : expectedVersion !== undefined ? 'product' : undefined,
     }

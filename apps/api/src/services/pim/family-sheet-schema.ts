@@ -31,7 +31,9 @@ export function savedAttributeFields(bags: unknown[]): FieldDefinition[] {
 /** The existing family dictionary is the authority for shared product specifications. */
 export async function familySheetFields(familyIds: string[], locale = 'it'): Promise<FieldDefinition[]> {
   const ids = [...new Set(familyIds)]
-  const effective = await Promise.all(ids.map(id => familyHierarchyService.resolveEffectiveAttributes(id)))
+  // P3 — one query per hierarchy level for all families, not one per family per ancestor.
+  const effectiveById = await familyHierarchyService.resolveEffectiveAttributesMany(ids)
+  const effective = ids.map(id => effectiveById.get(id)!)
   /**
    * 🔴 PLAN Step 2.1 (A-14, approved). `schema.prisma:736-739`: `required = true` with an EMPTY
    * `channels` array means required everywhere; with `['AMAZON']` it means required on Amazon.
@@ -87,7 +89,8 @@ export async function familySheetFields(familyIds: string[], locale = 'it'): Pro
       validation,
       group: { key: `master:${a.group.code}`, label: a.group.label },
       scope: a.scope === 'per_variant' ? 'per_variant' : 'global',
-      options: MASTER_FIELD_OPTIONS[a.code] ?? a.options.map(o => o.code),
+      // P3/P6 — a retired option is no longer OFFERED; its label stays below, so a value saved with it still reads well.
+      options: MASTER_FIELD_OPTIONS[a.code] ?? a.options.filter(o => !(o as { archivedAt?: Date | null }).archivedAt).map(o => o.code),
       optionLabels: Object.fromEntries(a.options.map(o => [o.code, labelFor((o.metadata as any)?.labels, o.label)])),
       unitOptions: Array.isArray(validation.unitOptions) ? validation.unitOptions.filter((unit): unit is string => typeof unit === 'string') : undefined,
       shape: validation.shape === 'measure' ? 'measure' : a.type === 'multiselect' || validation.shape === 'list' ? 'list' : 'scalar',
