@@ -20,7 +20,7 @@ import {
   type PlacementProposalGroup,
 } from '@nexus/shared/attribute-placement-proposal'
 import {
-  archiveAttribute, PlacementError, requirementsAfter, restoreAttribute, setAttributePlacement, undoPlacementChange,
+  archiveAttribute, axesNaming, familyAxisLabels, PlacementError, requirementsAfter, restoreAttribute, setAttributePlacement, undoPlacementChange,
   type Actor, type PlacementState,
 } from './attribute-placement.service.js'
 
@@ -49,11 +49,11 @@ export interface ProposalPreview {
 }
 
 async function readRows(): Promise<ProposalRow[]> {
-  const attributes = await prisma.customAttribute.findMany({
+  const [attributes, axisLabels] = await Promise.all([prisma.customAttribute.findMany({
     where: { code: { in: PLACEMENT_PROPOSAL.map(r => r.code) } },
-    select: { id: true, code: true, placement: true, placementChannels: true, archivedAt: true, semanticKey: true,
+    select: { id: true, code: true, label: true, placement: true, placementChannels: true, archivedAt: true, semanticKey: true,
       familyAttributes: { where: { required: true }, select: { id: true, channels: true, family: { select: { id: true, label: true } } } } },
-  })
+  }), familyAxisLabels()])
   const byCode = new Map(attributes.map(a => [a.code, a]))
   const rows: ProposalRow[] = []
   for (const proposal of PLACEMENT_PROPOSAL) {
@@ -66,7 +66,10 @@ async function readRows(): Promise<ProposalRow[]> {
       : channel ? { action: 'channel' as const, channels: [channel] } : { action: 'archive' as const, channels: [] }
     let status: ProposalRow['status'] = 'change'
     let reason: string | undefined
-    if (proposed.action === 'archive') {
+    // A variation axis is never hidden (the axis guard): moving it to a channel or archiving it is blocked.
+    const axes = proposed.action === 'shared' ? [] : axesNaming(a, axisLabels)
+    if (axes.length && !(proposed.action === 'archive' && current.archived)) { status = 'blocked'; reason = `variation axis (${axes.join(', ')})` }
+    else if (proposed.action === 'archive') {
       if (current.archived) status = 'no-change'
       else if (requirements.length) { status = 'blocked'; reason = `required in ${requirements.map(r => r.familyLabel).join(', ')}` }
     } else {
