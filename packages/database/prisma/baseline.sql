@@ -188,6 +188,8 @@ CREATE TABLE "Product" (
     "isMaster" BOOLEAN NOT NULL DEFAULT false,
     "masterSku" TEXT,
     "variationAxes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "variationAxisCodes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "variationValueOrder" JSONB,
     "linkedToChannels" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "importSource" TEXT,
     "importedAt" TIMESTAMP(3),

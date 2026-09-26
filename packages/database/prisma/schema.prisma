@@ -302,6 +302,13 @@ model Product {
   masterSku         String?
   // Variation axes for master products: ["Color", "Size", "BodyType"]
   variationAxes     String[]  @default([])
+  /// VTR step 1 (docs/variation-theme/STEP1-PLAN.md) — the family's axes as dictionary attribute CODES
+  /// (CustomAttribute.code, never renamed), in order. `variationAxes` stays as the label mirror; both are written
+  /// only by services/pim/family-variations.service.ts. Empty = not yet moved to the dictionary.
+  variationAxisCodes  String[] @default([])
+  /// VTR step 1 — a per-family value order: attribute code → option codes. NULL = the dictionary's shared order
+  /// (AttributeOption.sortOrder). Per-channel orders stay on the listing.
+  variationValueOrder Json?
   // Channels this master is currently linked to (resolved listings)
   linkedToChannels  String[]  @default([])
   // Where this product came from
