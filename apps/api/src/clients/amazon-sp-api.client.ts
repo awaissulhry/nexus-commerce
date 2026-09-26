@@ -78,7 +78,7 @@ interface GetListingsItemOptions {
   /** SP-API includedData set: which sections to return. Default ['summaries']
    *  (parent ASIN + status). 'images' returns the per-marketplace image
    *  array which IE.4 stores in ChannelLiveImage for drift detection. */
-  includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers' | 'images'>
+  includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers' | 'images' | 'fulfillmentAvailability'>
 }
 
 export interface SpApiImageVariant {

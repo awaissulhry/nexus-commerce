@@ -126,6 +126,7 @@ import pimRoutes from "./routes/pim.routes.js";
 import pimGlobalRoutes from "./routes/pim-global.routes.js";
 import productsSheetRoutes from "./routes/products-sheet.routes.js";
 import productStudioRoutes from "./routes/product-studio.routes.js";
+import liveReadRoutes from "./routes/live-read.routes.js"; // PE — read what a channel holds live (read only)
 import studioMatrixRoutes from "./routes/studio-matrix.routes.js"; // MX.1 — the Matrix page
 import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
 import sheetTransferRoutes from "./routes/sheet-transfer.routes.js";
@@ -664,6 +665,8 @@ app.register(productsSheetRoutes, { prefix: '/api' });
 // PES.5 — the Product Edit Studio's reads. Under /api/products, so the RBAC
 // prefix rule maps GET->products:view and writes->products:edit automatically.
 app.register(productStudioRoutes, { prefix: '/api' });
+// PE — GET /api/products/:id/live-read: what the channel holds right now (read only; products:view by the prefix rule).
+app.register(liveReadRoutes, { prefix: '/api' });
 // MX.1 — the Matrix page's read, write door, verbs and revert (explicit manifest entry, most-specific-first).
 app.register(studioMatrixRoutes, { prefix: '/api' });
 app.register(catalogTransferRoutes, { prefix: '/api' });

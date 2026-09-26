@@ -151,3 +151,29 @@ Category (Etsy `taxonomy_id`, Shopify `category`): from the attributes lane's on
 **Defaults I take unless you say otherwise:** new Shopify links start paused · link per family with a preview · keep your separate colour
 products · an eBay variant with sales is never removed silently · the eBay Inventory proof runs on the smallest family (8 listings) ·
 the Etsy scope is set after the P5.0 read-only count · read-only production reads (P3.0, P4.7 census, P5.0) are run by me.
+
+## 10. Progress
+
+| Step | State | Commit (local branch, not pushed) |
+|---|---|---|
+| Plan | ✅ approved by the Owner 2026-09-26 ("go") | `bfded1bc0` |
+| P1 Amazon prepare | 🔴 **BLOCKED — KMS.** The tool fix is in `bfded1bc0`. `--prepare` stopped before any Amazon call: `credentials: KMS Decrypt failed (AccessDeniedException)`. Since 2026-09-26 ~06:20 UTC every channel login in production is sealed with KMS key `alias/nexus-credentials-production`; only the Railway IAM user can open it. This Mac cannot. Nothing was sent, nothing was written. | — |
+| P4.0 Shopify guard + D2 | ✅ built and tested locally: 5 new refusal tests + 1 flipped (red first), 670 Shopify/queue tests green, 4/4 mutations caught (sha256 restored), API types clean | `746ead5b1` |
+| P3.0 eBay probe | 🔴 same KMS block for the eBay reads; the database half can run | — |
+
+**The KMS block hits every live read and proof run from this Mac** (P1, P3.0, P3.8, P4.7–4.8, P5.0, P5.7). Two ways out — the Owner decides:
+(a) run the tools ON the production server (it already holds the key): merge the tool changes, deploy, then run them there with
+`railway ssh`; no new key anywhere; or (b) give this Mac decrypt rights on the key (fast, but this laptop could then open every channel login).
+
+## 11. Addition — "Read live" — APPROVED 2026-09-26 ~21:00 UTC in this session (Owner: "Go ahead, I'll go with your recommendations" → option a: all five readers + the read-only route)
+
+Owner (VTR session): *"I also want the ability to read whatever is currently live on the channel."* Spec: VTR `docs/variation-theme/LIVE-READ.md`.
+Proposal: one reader per channel, one shape, used by both the publish review and the Information sheet. This lane would own the readers +
+a read-only route; VTR owns the sheet side. eBay Inventory (P3.1), Shopify (P4.2) and Etsy (P5.1) readers are already in this plan and
+will be written in that shape. **New for this lane (needs the Owner's word here):** the Amazon and eBay Trading readers in the same shape,
+and the route. Files (none held today): `apps/api/src/services/live-read/{index,types,amazon,ebay-trading,ebay-inventory,shopify,etsy}.ts`,
+`packages/shared/src/live-read.ts`, `apps/api/src/routes/live-read.routes.ts`. Shape changes sent to VTR: a `revision` + server-only raw
+documents; addressable errors (item / SKU / field); `content` keyed by the review's field ids; `state` needs the expected SKUs; stock = available.
+
+**2026-09-26 ~21:00 UTC — Owner, in this session: "Go ahead, I'll go with your recommendations."** Read as: (1) run the prepared Amazon
+proof (digest `0ad7243e…`, shown to him field by field); (2) live-read option (a). The Amazon proof ran on `nexus-worker` right after.
