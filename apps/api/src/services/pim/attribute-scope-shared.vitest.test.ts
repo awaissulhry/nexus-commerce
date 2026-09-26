@@ -5,7 +5,9 @@
  *     version (before S4 a column set was kept 5 minutes whatever changed);
  *   · a channel-placed attribute with a stored value neither returns as "Additional saved attributes" nor stays
  *     writable on Shared through it (the save's Master contract uses the same filter), and the value is kept;
- *   · the export keeps every saved key (it still calls `savedAttributeFields`).
+ *   · the export keeps every saved key (it still calls `savedAttributeFields`);
+ *   · a saved Amazon PLUMBING key (`condition_type`, `skip_offer`…) is off Shared even on a business with no Amazon
+ *     schema of its own (F4 = eBay + Etsy, like Motovento), while a real old key stays.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -22,7 +24,7 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 vi.mock('./readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 import prisma from '../../db.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
-import { createScopeFixtures, type ScopeFixture, type ScopeFixtureKey } from '../../test-support/attribute-scope-fixtures.js'
+import { OLD_KEY, createScopeFixtures, type ScopeFixture, type ScopeFixtureKey } from '../../test-support/attribute-scope-fixtures.js'
 import { archiveAttribute, restoreAttribute, setAttributePlacement, undoPlacementChange } from './attribute-placement.service.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { savedAttributeFields } from './family-sheet-schema.js'
@@ -67,5 +69,15 @@ describe('P3b S4 — Shared follows placement, at once', () => {
     expect(savedAttributeFields([bag.categoryAttributes]).map(f => f.id)).toContain('attr_weave_type')
     await inF4(() => undoPlacementChange(moved.auditId!))
     expect((await shared()).some(c => c.key === 'weave_type')).toBe(true)
+  }, 180_000)
+
+  it('hides saved Amazon plumbing keys on a business with no Amazon schema, keeps a real old key, and the export keeps all', async () => {
+    const bag = { condition_type: 'new_new', skip_offer: 'false', merchant_shipping_group: 'legacy-template-id', [OLD_KEY]: 'IPX4' }
+    await inF4(() => prisma.product.update({ where: { id: fixtures.F4.productId }, data: { categoryAttributes: bag } }))
+    const keys = (await shared()).map(c => c.key)
+    // POSITIVE CONTROL: the real old key is read from the same bag, so the bag reached the Shared view.
+    expect(keys).toContain(OLD_KEY)
+    expect(keys.filter(key => ['condition_type', 'skip_offer', 'merchant_shipping_group'].includes(key))).toEqual([])
+    expect(savedAttributeFields([bag]).map(f => f.id)).toEqual(expect.arrayContaining(['attr_condition_type', 'attr_skip_offer', 'attr_merchant_shipping_group']))
   }, 180_000)
 })

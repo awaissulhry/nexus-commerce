@@ -4,6 +4,7 @@ import { familyHierarchyService } from '../family-hierarchy.service.js'
 import { ALLOWED_MASTER_FIELDS, MASTER_FIELD_OPTIONS } from './master-field-gate.js'
 import type { FieldDefinition } from './field-registry.service.js'
 import { humanizeKey } from './channel-specs/types.js'
+import { AMAZON_NON_ATTRIBUTE_KEYS } from './amazon-plumbing-keys.js'
 
 const INTERNAL_KEYS = new Set(['variations', 'ebayClusterParent', 'ebayFileExcluded'])
 
@@ -152,7 +153,10 @@ export async function amazonSchemaKeys(): Promise<Set<string>> {
  * family field into an "Additional saved attributes" column; this drops the ones that do not belong on Shared:
  *   · a dictionary attribute placed on a channel, or archived;
  *   · a key the dictionary does not have that IS an Amazon attribute of the business's cached schemas (an Amazon-scope
- *     save of a field with no listing store writes the shared bag; the Amazon scope reads it there, Shared must not).
+ *     save of a field with no listing store writes the shared bag; the Amazon scope reads it there, Shared must not);
+ *   · a key the dictionary does not have that is Amazon PLUMBING (`AMAZON_NON_ATTRIBUTE_KEYS`: offer, identity, content,
+ *     variation keys such as `condition_type`, `skip_offer`) — also on a business with no Amazon schema of its own
+ *     (Motovento's Shared view showed 8 copied from another business, 2026-09-26).
  * A real old key (not in the dictionary, not a channel attribute — e.g. `waterproofRating`) stays. The value is never
  * touched. The column builder applies it only when the caller asks (`savedFieldsFor: 'shared'`); the EXPORT does not ask
  * (every key travels in a file).
@@ -169,6 +173,6 @@ export async function sharedSavedFields(saved: FieldDefinition[]): Promise<Field
     const key = f.id.replace(/^attr_/, '')
     const own = inDictionary.get(key)
     if (own) return own.placement === 'shared' && !own.archivedAt
-    return !amazon.has(key)
+    return !amazon.has(key) && !AMAZON_NON_ATTRIBUTE_KEYS.has(key)
   })
 }
