@@ -1,0 +1,404 @@
+{
+ "probe": "pe-p3.0-ebay-inventory",
+ "market": "IT",
+ "workspace": "nexus_legacy_workspace",
+ "at": "2026-09-26T20:35:25.335Z",
+ "totals": {
+  "items": 14,
+  "inventoryOk": 7,
+  "tradingOk": 6,
+  "mismatch": 0,
+  "mixed": 1,
+  "couldNotMeasure": 0
+ },
+ "items": [
+  {
+   "family": "GALE-JACKET",
+   "market": "IT",
+   "alias": true,
+   "nexusChildren": 20,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 20,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 9,
+   "itemSpecifics": 9,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "GALE-JACKET",
+   "market": "IT",
+   "alias": true,
+   "nexusChildren": 20,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 20,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 11,
+   "itemSpecifics": 9,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "GALE-JACKET",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 20,
+   "nexusMarked": 20,
+   "skus": {
+    "inventory-this-item": 19,
+    "inventory-elsewhere": 0,
+    "none": 1,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 20,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(2)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 2,
+    "descriptionChars": 31334
+   },
+   "verdict": "MIXED"
+  },
+  {
+   "family": "GALE-JACKET",
+   "market": "IT",
+   "alias": true,
+   "nexusChildren": 20,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 20,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 10,
+   "itemSpecifics": 9,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "GALE-JACKET",
+   "market": "IT",
+   "alias": true,
+   "nexusChildren": 20,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 19,
+    "none": 1,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 3,
+   "itemSpecifics": 9,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "AIREON",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 40,
+   "nexusMarked": 40,
+   "skus": {
+    "inventory-this-item": 40,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 40,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 40,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(4)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 5,
+    "descriptionChars": 32984
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "VENTRA-JACKET-ALT2",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 0,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 40,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 40,
+   "variantsWithSales": 0,
+   "itemSpecifics": 21,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "VENTRA-JACKET-ALT1",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 0,
+   "nexusMarked": 0,
+   "skus": {
+    "inventory-this-item": 0,
+    "inventory-elsewhere": 40,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 40,
+   "variantsWithSales": 0,
+   "itemSpecifics": 21,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": null,
+   "verdict": "TRADING-OK"
+  },
+  {
+   "family": "AIRMESH-JACKET",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 20,
+   "nexusMarked": 20,
+   "skus": {
+    "inventory-this-item": 20,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 20,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 20,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(2)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 5,
+    "descriptionChars": 32724
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "REGAL-JACKET",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 40,
+   "nexusMarked": 40,
+   "skus": {
+    "inventory-this-item": 40,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 40,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 40,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(4)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 4,
+    "descriptionChars": 30414
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "WATERPROOF-OVERJACKET-BLACK-MEN",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 10,
+   "nexusMarked": 10,
+   "skus": {
+    "inventory-this-item": 10,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 10,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 10,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 2,
+    "descriptionChars": 26994
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "normal-knee-slider",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 8,
+   "nexusMarked": 8,
+   "skus": {
+    "inventory-this-item": 8,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 8,
+   "variantsWithSales": 1,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 8,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(8)"
+    ],
+    "groupAspects": 1,
+    "images": 8,
+    "descriptionChars": 34049
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "IT-MOSS-JACKET",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 30,
+   "nexusMarked": 30,
+   "skus": {
+    "inventory-this-item": 30,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 30,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 30,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(3)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 2,
+    "descriptionChars": 32297
+   },
+   "verdict": "INVENTORY-OK"
+  },
+  {
+   "family": "VENTRA-JACKET",
+   "market": "IT",
+   "alias": false,
+   "nexusChildren": 40,
+   "nexusMarked": 40,
+   "skus": {
+    "inventory-this-item": 40,
+    "inventory-elsewhere": 0,
+    "none": 0,
+    "unread": 0
+   },
+   "liveListingType": "FixedPriceItem",
+   "liveVariations": 40,
+   "variantsWithSales": 0,
+   "itemSpecifics": 1,
+   "readError": null,
+   "otherMarketOffers": {},
+   "group": {
+    "keyIsParentSku": true,
+    "variants": 40,
+    "missingInNexus": 0,
+    "missingOnEbay": 0,
+    "axes": [
+     "Colore(4)",
+     "Taglia(10)"
+    ],
+    "groupAspects": 1,
+    "images": 6,
+    "descriptionChars": 30652
+   },
+   "verdict": "INVENTORY-OK"
+  }
+ ]
+}
