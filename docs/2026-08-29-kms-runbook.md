@@ -1,29 +1,62 @@
 # Turning on KMS for stored credentials — the Owner's steps, and how to check them
 
-> ## ⛔ NOT PROCEEDING — decided 2026-09-21
+> ## ✅ DONE — KMS is ON in production since 2026-09-26
 >
-> The Owner reviewed the cost and chose not to turn KMS on. **No AWS key was created.
-> Nothing was charged. Production is unchanged and `NEXUS_KMS_KEY_ID` is still unset**,
-> so credentials stay on the `NEXUS_CREDENTIAL_ENC_KEY` environment key exactly as
-> before. That is a deliberate decision, not an unfinished task.
+> The Owner reversed the 2026-09-21 "not proceeding" decision on 2026-09-26, after
+> reviewing the cost (~$1/month per key, cents in requests, +$1/month for each of the
+> first two yearly rotations). The steps below were followed; every result was read
+> back, not inferred.
 >
-> What the money bought, for whoever revisits this: ~$1/month per key plus a fraction of
-> a cent in request charges. What it bought was a CloudTrail record of every decrypt and
-> a single switch that revokes access instantly. Neither of those exists today.
+> **A prerequisite was found first: the API ran on the AWS ROOT account's access key.**
+> `aws iam get-access-key-last-used` returned no `UserName` for the production
+> `AWS_ACCESS_KEY_ID`; the only IAM user (`sp-api-user`) did not own it. Granting KMS to
+> root would have been meaningless (root can do anything), so the principal was fixed
+> before step 1. That also answers "Open decision 3" below in part: KMS now has its own
+> principal. It is still a static key pair in the Railway config, so the "a config leak
+> is not survivable" caveat at the top still holds.
 >
-> **What is already done and costs nothing to keep:**
-> - The code covers both credential tables and reads key state honestly (see the two
->   closed items under "Open decisions"). It is inert while `NEXUS_KMS_KEY_ID` is unset.
-> - The region trap is measured and written down: `AWS_REGION=us-east-1`, so the key
->   goes in `us-east-1`, not `eu-west-1`. Re-verify it before acting — it is a variable,
->   and variables move.
-> - The console walk-through below was taken to the final review screen and abandoned
->   there, so the steps are known-good up to the point of creation.
+> What was done, 2026-09-26 (UTC):
+> - **06:05:35** IAM user `nexus-api-production` created. Inline policy `nexus-api-sqs`
+>   allows only `sqs:ReceiveMessage`, `sqs:DeleteMessage` and `sqs:GetQueueAttributes`
+>   on `nexus-sp-api-notifications` and `nexus-sp-api-notifications-dlq` (us-east-1) and
+>   `nexus-ams` (eu-west-1). Measured before the swap: the API uses no other AWS service
+>   in production (`STORAGE_PROVIDER` unset → both stores are LOCAL, the account has no
+>   S3 buckets; `amazon-sp-api` ^1.2 does not sign with AWS keys). The new key was
+>   proven to read all three queues and to be denied S3, IAM and `sqs:ListQueues`.
+> - **06:11:57** Railway `@nexus/api` `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
+>   replaced. The new key was first used for SQS at 06:17; the root key was last used
+>   at 06:16 (the old deployment); 0 auth errors in the logs.
+> - **06:22:42** Root access key set to **Inactive** (reversible). Delete it after two
+>   quiet days: `aws iam delete-access-key --access-key-id <root key id>` as root.
+> - **Step 1** Key `alias/nexus-credentials-production` →
+>   `arn:aws:kms:us-east-1:084164016829:key/50d6fb4a-8ecb-4a04-8a57-e7771f0186f2`,
+>   automatic yearly rotation on.
+> - **Step 2** Inline policy `nexus-api-kms` on `nexus-api-production`:
+>   `kms:GenerateDataKey` + `kms:Decrypt` on that key only, and only with
+>   `kms:EncryptionContext:app=nexus` and `kms:EncryptionContext:purpose=credentials`
+>   (the context `lib/crypto.ts` sends). The IAM simulator shows both allowed with the
+>   context, `kms:Decrypt` denied without it, `kms:Encrypt`/`ScheduleKeyDeletion` denied.
+> - **Step 3** `NEXUS_KMS_KEY_ID=alias/nexus-credentials-production` at 06:23:54.
+> - **Steps 3b–5**, run per business profile, because `ChannelConnection` is
+>   workspace-owned (`ChannelApp` is global):
 >
-> **The `CONNECTION_HEALTH` alert with `reason: "NEXUS_KMS_KEY_ID is not set"` will keep
-> firing.** It is correct, and it is now expected. Do not silence it by setting a bad
-> key id — that produces the `kmsConfigured=true, onEnvKey>0` state this document calls
-> the one combination that means "configured but not working".
+>   | profile | before | preflight | rotate | after |
+>   |---|---|---|---|---|
+>   | Motovento | onEnvKey=2 appOnEnvKey=6 | `ok mode=kms` | rotated=2 appRotated=6 failed=0 | onKms=2 onEnvKey=0 appOnKms=6 appOnEnvKey=0 unreadable=0 |
+>   | Xavia Racing | onEnvKey=4 | `ok mode=kms` | rotated=5 (incl. 1 inactive) failed=0 | onKms=4 onEnvKey=0 appOnKms=6 appOnEnvKey=0 unreadable=0 |
+>
+>   Heartbeats after rotation: eBay `xaviaracing` and eBay `motovento` both `ok:true`.
+>   CloudTrail since 06:20: 10 × `Decrypt` and 17 × `GenerateDataKey`, all by
+>   `nexus-api-production`.
+>
+> **The jobs are run per profile.** "How to run these jobs" below says to use the hub's
+> Sync Logs screen; the trigger button runs the job in the profile you are in, so run
+> rotate/status once in every active profile. A profile added later starts on the env
+> key until its first token refresh or a rotate run in that profile.
+>
+> **Rolling back** is unchanged (section at the end): unset `NEXUS_KMS_KEY_ID`, run
+> `cx-credentials-rotate` in every profile, and do not touch the key until status reads
+> `onKms=0` and `appOnKms=0` everywhere.
 
 > **Revised 2026-09-21.** The first version of this runbook was checked against the code
 > line by line. Five things in it were wrong or missing; the corrections are inline below
