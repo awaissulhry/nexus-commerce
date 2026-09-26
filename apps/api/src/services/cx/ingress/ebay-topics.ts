@@ -34,13 +34,15 @@ export type EbayTopicAction =
 /** How the action was decided — worth recording, because two of these are weak. */
 export type EbayTopicVia = 'topic' | 'legacy_alias' | 'payload_shape' | 'none'
 
-/** eBay's real topic ids. Verified against `getTopics` by the setup. */
+/**
+ * eBay's real topic ids. Verified against `getTopics` by the setup. ITEM_PRICE_REVISION and
+ * ITEM_AVAILABILITY were removed in S1 (2026-09-26): they are buy-side item topics, never
+ * subscribed, so no stored row carries them.
+ */
 const TOPIC_ROUTES: Record<string, EbayTopicAction> = {
   MARKETPLACE_ACCOUNT_DELETION: 'account_deletion',
   AUTHORIZATION_REVOCATION: 'authorization_revoked',
   ORDER_CONFIRMATION: 'order_created',
-  ITEM_PRICE_REVISION: 'listing_changed',
-  ITEM_AVAILABILITY: 'listing_changed',
 }
 
 /**

@@ -108,7 +108,7 @@ describe('1. 🔴 one accessor, not two names for one fact', () => {
 describe('2. 🔴 "could not measure" is not "measured empty"', () => {
   it('says whether the two variables are set at all', async () => {
     const { body } = await status()
-    expect(body.configured).toEqual({ hasEndpoint: true, hasVerificationToken: true, verificationTokenValid: false })
+    expect(body.configured).toEqual({ hasEndpoint: true, hasVerificationToken: true, verificationTokenValid: false, hasAlertEmail: false })
   })
 
   it('🔴 an unconfigured endpoint still reports what eBay actually holds', async () => {

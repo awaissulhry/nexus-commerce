@@ -9,9 +9,13 @@
  *
  * Endpoints:
  *   POST /api/admin/setup-ebay-notifications   create the destination, subscribe the
- *                                              real topics, report any name eBay's own
- *                                              catalogue does not contain
- *   GET  /api/admin/ebay-notification-status   what eBay says exists right now
+ *                                              armed topics, report any name eBay's own
+ *                                              catalogue does not contain (403 unarmed)
+ *   POST /api/admin/ebay-notification-test?topicId=…
+ *                                              ask eBay to send its test notice for our
+ *                                              subscription to an armed topic (403 unarmed)
+ *   GET  /api/admin/ebay-notification-status   what eBay says exists right now, plus the
+ *                                              local token check and the arming gate
  *   GET  /api/webhooks/ebay-notification?challenge_code=…
  *                                              ownership check —
  *                                              SHA256(code + token + endpoint)
@@ -143,8 +147,15 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   //
   // This route now does the thing that was missing: create the destination eBay
   // delivers to, and subscribe the real topics, checked against eBay's own catalogue.
+  //
+  // S1 (review, 2026-09-26): this route used to ignore the setup switch. It now obeys the
+  // same arming gate as the nightly reconcile, and answers 403 before any eBay call.
   app.post('/admin/setup-ebay-notifications', async (req, reply) => {
-    const { setupEbayNotifications, ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
+    const { setupEbayNotifications, ebayNotificationSetupSucceeded, ebayNotificationSetupGate, EbayNotificationNotArmedError } = await import('../services/cx/connectors/ebay/notifications.js')
+    const gate = ebayNotificationSetupGate()
+    if (!gate.armed) {
+      return reply.status(403).send({ ok: false, armed: false, error: new EbayNotificationNotArmedError(gate.reason).message })
+    }
     const query = req.query as { environment?: string; onlyHandled?: string }
     const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
     const result = await setupEbayNotifications({
@@ -165,6 +176,24 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
         ? `eBay's catalogue does not contain: ${result.notOffered.join(', ')}. Correct them in services/cx/ingress/ebay-topics.ts.`
         : undefined,
     })
+  })
+
+  // ── POST /api/admin/ebay-notification-test?topicId=… ───────────────
+  // S1 — eBay's own test notice for our subscription (POST /subscription/{id}/test). It
+  // arrives signed at the receiver like a real notice, so it proves the whole path.
+  app.post('/admin/ebay-notification-test', async (req, reply) => {
+    const { sendEbayTestNotice, ebayNotificationSetupGate, EbayNotificationNotArmedError } = await import('../services/cx/connectors/ebay/notifications.js')
+    const gate = ebayNotificationSetupGate()
+    if (!gate.armed) {
+      return reply.status(403).send({ ok: false, armed: false, error: new EbayNotificationNotArmedError(gate.reason).message })
+    }
+    const query = req.query as { environment?: string; topicId?: string }
+    const topicId = typeof query.topicId === 'string' ? query.topicId : ''
+    if (!gate.topics.includes(topicId)) {
+      return reply.status(400).send({ ok: false, error: `topicId must name an armed topic: ${gate.topics.join(', ')}.` })
+    }
+    const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
+    return reply.send(await sendEbayTestNotice(environment, topicId))
   })
 
   // ── GET /api/admin/ebay-notification-status ────────────────────────
@@ -198,9 +227,31 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
      * see the thing that is broken is worse than none, because it is quoted. It was
      * quoted: `PROGRESS.md` §4 sends the next session here.
      */
-    const { ebayNotificationConfig, ebayVerificationTokenError } = await import('../services/cx/connectors/ebay/notifications.js')
+    const {
+      ebayNotificationConfig, ebayVerificationTokenError, ebayNotificationAlertEmail, ebayNotificationSetupGate,
+    } = await import('../services/cx/connectors/ebay/notifications.js')
     const config = ebayNotificationConfig()
     const endpoint = config.endpoint
+    /**
+     * Local facts, read without eBay and returned on the error path too: the runbook's first
+     * check is `configured.verificationTokenValid`, and it must not depend on eBay answering.
+     * Booleans and fixed text only; never the token or the address.
+     */
+    const local = {
+      /**
+       * Whether the two variables the ownership hash is built from are set at all.
+       * Without this, a null `endpoint` reads as "eBay has nothing" when it means
+       * "we did not ask for anything".
+       */
+      configured: {
+        hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken,
+        verificationTokenValid: !ebayVerificationTokenError(config.verificationToken),
+        hasAlertEmail: !!ebayNotificationAlertEmail(),
+      },
+      configurationError: ebayVerificationTokenError(config.verificationToken),
+      /** Whether setup may write to eBay, and which topics the Owner armed. */
+      setupGate: ebayNotificationSetupGate(),
+    }
     try {
       const [topics, destinations, subscriptions] = await Promise.all([
         getEbayTopics(environment), getEbayDestinations(environment), getEbaySubscriptions(environment),
@@ -210,16 +261,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       return reply.send({
         environment,
         endpoint,
-        /**
-         * Whether the two variables the ownership hash is built from are set at all.
-         * Without this, a null `endpoint` reads as "eBay has nothing" when it means
-         * "we did not ask for anything".
-         */
-        configured: {
-          hasEndpoint: !!config.endpoint, hasVerificationToken: !!config.verificationToken,
-          verificationTokenValid: !ebayVerificationTokenError(config.verificationToken),
-        },
-        configurationError: ebayVerificationTokenError(config.verificationToken),
+        ...local,
         destination: ours,
         /**
          * 🔴 "Could not measure" is not "measured empty". `destination: null` alone
@@ -248,7 +290,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
         })),
       })
     } catch (err: any) {
-      return reply.status(500).send({ error: err?.message ?? String(err) })
+      return reply.status(500).send({ ...local, error: err?.message ?? String(err) })
     }
   })
 

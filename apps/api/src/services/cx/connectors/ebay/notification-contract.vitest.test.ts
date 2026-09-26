@@ -4,8 +4,7 @@ const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn() }))
 vi.mock('./client.js', () => ({ ebayAppToken: m.token }))
 vi.mock('../../../gateway/ebay.js', () => ({ ebayTransport: () => m.transport }))
 vi.mock('../../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }))
-const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded, EBAY_DESIRED_TOPICS } = await import('./notifications.js')
-const actualReadiness = EBAY_DESIRED_TOPICS.map(topic => topic.handlerMissing)
+const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded, sendEbayTestNotice } = await import('./notifications.js')
 
 // DOCUMENTED fixtures, with synthetic IDs and token; never a channel call.
 // https://developer.ebay.com/api-docs/master/commerce/notification/openapi/3/commerce_notification_v1_oas3.json
@@ -18,10 +17,17 @@ const destination = {
   destinationId: 'destination-fixture', name: 'Nexus inbound notifications', status: 'ENABLED',
   deliveryConfig: { endpoint, verificationToken },
 }
-const topicIds = ['MARKETPLACE_ACCOUNT_DELETION', 'AUTHORIZATION_REVOCATION']
-const topics = topicIds.map(topicId => ({
-  topicId, status: 'ENABLED', supportedPayloads: [{ format: ['JSON'], deliveryProtocol: 'HTTPS', schemaVersion: '1.0', deprecated: false }],
-}))
+// v1 subscribes AUTHORIZATION_REVOCATION only (application scope). Deletion is portal-only
+// and ORDER_CONFIRMATION is a per-seller USER topic, so the fixture catalogue lists them too.
+const topicIds = ['AUTHORIZATION_REVOCATION']
+const alertEmail = 'alerts-fixture@example.test'
+const supportedPayloads = [{ format: ['JSON'], deliveryProtocol: 'HTTPS', schemaVersion: '1.0', deprecated: false }]
+const topics = topicIds.map(topicId => ({ topicId, status: 'ENABLED', scope: 'APPLICATION', supportedPayloads }))
+const fullCatalogue = [
+  ...topics,
+  { topicId: 'MARKETPLACE_ACCOUNT_DELETION', status: 'ENABLED', scope: 'APPLICATION', supportedPayloads },
+  { topicId: 'ORDER_CONFIRMATION', status: 'ENABLED', scope: 'USER', supportedPayloads },
+]
 const catalogue = new Map(topics.map(topic => [topic.topicId, topic]))
 const payload = { format: 'JSON', deliveryProtocol: 'HTTPS', schemaVersion: '1.0' }
 const jsonResponse = (body: unknown) => new Response(JSON.stringify(body), {
@@ -33,18 +39,16 @@ const createdResponse = (resource: 'destination' | 'subscription', id: string) =
 
 beforeEach(() => {
   vi.resetAllMocks()
-  // Wire-contract controls simulate completed lifecycle handlers. The separate
-  // notification-readiness suite proves that the actual handlers stay unavailable.
-  for (const topic of EBAY_DESIRED_TOPICS) if (topicIds.includes(topic.topicId)) topic.handlerMissing = false
   vi.stubEnv('EBAY_NOTIFICATION_ENDPOINT_URL', endpoint)
   vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', verificationToken)
+  // Wire-contract controls run ARMED; notification-readiness proves the unarmed defaults.
+  vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+  vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
+  vi.stubEnv('EBAY_NOTIFICATION_ALERT_EMAIL', alertEmail)
   m.token.mockResolvedValue('fixture-app-token')
   m.transport.mockRejectedValue(new Error('Unexpected notification transport request'))
 })
-afterEach(() => {
-  EBAY_DESIRED_TOPICS.forEach((topic, index) => { topic.handlerMissing = actualReadiness[index] })
-  vi.unstubAllEnvs()
-})
+afterEach(() => vi.unstubAllEnvs())
 
 describe('eBay Notification API wire contract', () => {
   it.each(['ENABLED', 'DISABLED'])('refuses an incompatible existing %s subscription without writing', async status => {
@@ -53,9 +57,10 @@ describe('eBay Notification API wire contract', () => {
     expect(m.transport).not.toHaveBeenCalled()
   })
   it.each(['failed', 'refused', 'not_offered'] as const)('never reports reconciliation success for a %s subscription', status => {
-    const result = { configured: true, environment: 'production' as const, endpoint, destinationId: 'destination-fixture', catalogue: topicIds, notOffered: [], perTopic: [{ topicId: topicIds[0], status }] }
+    const result = { configured: true, armed: true, environment: 'production' as const, endpoint, destinationId: 'destination-fixture', catalogue: topicIds, notOffered: [], perTopic: [{ topicId: topicIds[0], status }] }
     expect(ebayNotificationSetupSucceeded(result)).toBe(false)
     expect(ebayNotificationSetupSucceeded({ ...result, perTopic: [{ topicId: topicIds[0], status: 'already_exists' }] })).toBe(true)
+    expect(ebayNotificationSetupSucceeded({ ...result, armed: false, perTopic: [{ topicId: topicIds[0], status: 'already_exists' }] })).toBe(false)
     expect(ebayNotificationSetupSucceeded({ ...result, perTopic: [] })).toBe(false)
   })
 
@@ -82,14 +87,14 @@ describe('eBay Notification API wire contract', () => {
   })
 
   it('does not let the legacy false override enable a missing handler', async () => {
-    const completeCatalogue = [...topics, { ...topics[0], topicId: 'ORDER_CONFIRMATION' }]
     const subscriptions = topicIds.map(topicId => ({ topicId, destinationId: destination.destinationId, subscriptionId: topicId, status: 'ENABLED', payload }))
-    m.transport.mockResolvedValueOnce(jsonResponse({ topics: completeCatalogue }))
+    m.transport.mockResolvedValueOnce(jsonResponse({ topics: fullCatalogue }))
       .mockResolvedValueOnce(jsonResponse({ destinations: [destination] }))
+      .mockResolvedValueOnce(jsonResponse({ alertEmail }))
       .mockResolvedValueOnce(jsonResponse({ subscriptions }))
     const result = await setupEbayNotifications({ skipTopicsWithoutHandlers: false })
     expect(result.perTopic.map(t => t.topicId)).toEqual(topicIds)
-    expect(m.transport).toHaveBeenCalledTimes(3)
+    expect(m.transport).toHaveBeenCalledTimes(4)
     expect(m.transport.mock.calls.every(([, request]) => request.method === 'GET')).toBe(true)
   })
 
@@ -191,6 +196,7 @@ describe('eBay Notification API wire contract', () => {
       if (request.method !== 'GET') throw new Error(`Existing setup must not write: ${request.method} ${url}`)
       if (url === `${API}/topic?limit=100`) return jsonResponse({ topics, total: topics.length })
       if (url === `${API}/destination?limit=100`) return jsonResponse({ destinations: [destination], total: 1 })
+      if (url === `${API}/config`) return jsonResponse({ alertEmail })
       if (url === `${API}/subscription?limit=100`) return jsonResponse({ subscriptions, total: subscriptions.length })
       throw new Error(`Unexpected notification URL: ${url}`)
     })
@@ -201,7 +207,142 @@ describe('eBay Notification API wire contract', () => {
         topicId: subscription.topicId, status: 'already_exists', subscriptionId: subscription.subscriptionId,
       })),
     })
-    expect(m.transport).toHaveBeenCalledTimes(3)
+    expect(m.transport).toHaveBeenCalledTimes(4)
     expect(m.transport.mock.calls.every(([, request]) => request.method === 'GET')).toBe(true)
+  })
+})
+
+/** A stateful stand-in for eBay's Notification API, served through the stubbed gateway. */
+function fakeEbay(initial: { alertEmail?: string | null; destinations?: object[]; subscriptions?: object[] } = {}) {
+  const state = {
+    alertEmail: initial.alertEmail ?? null as string | null,
+    destinations: [...(initial.destinations ?? [])] as any[],
+    subscriptions: [...(initial.subscriptions ?? [])] as any[],
+    requests: [] as string[],
+  }
+  m.transport.mockImplementation(async (url: string, request: RequestInit) => {
+    const method = request.method ?? 'GET'
+    state.requests.push(`${method} ${url.replace(API, '')}`)
+    const body = request.body ? JSON.parse(String(request.body)) : null
+    if (method === 'GET' && url === `${API}/topic?limit=100`) return jsonResponse({ topics: fullCatalogue, total: fullCatalogue.length })
+    if (method === 'GET' && url === `${API}/destination?limit=100`) return jsonResponse({ destinations: state.destinations, total: state.destinations.length })
+    if (method === 'GET' && url === `${API}/subscription?limit=100`) return jsonResponse({ subscriptions: state.subscriptions, total: state.subscriptions.length })
+    if (method === 'GET' && url === `${API}/config`) {
+      return state.alertEmail ? jsonResponse({ alertEmail: state.alertEmail }) : new Response(null, { status: 404 })
+    }
+    if (method === 'PUT' && url === `${API}/config`) { state.alertEmail = body.alertEmail; return new Response(null, { status: 204 }) }
+    if (method === 'POST' && url === `${API}/destination`) {
+      // eBay's documented rule: a destination needs the alert-email config first.
+      if (!state.alertEmail) return new Response(JSON.stringify({ errors: [{ errorId: 195003 }] }), { status: 400 })
+      state.destinations.push({ destinationId: 'destination-created', status: body.status, deliveryConfig: body.deliveryConfig })
+      return createdResponse('destination', 'destination-created')
+    }
+    if (method === 'POST' && url === `${API}/subscription`) {
+      state.subscriptions.push({ subscriptionId: `subscription-${body.topicId}`, topicId: body.topicId, destinationId: body.destinationId, status: body.status, payload: body.payload })
+      return createdResponse('subscription', `subscription-${body.topicId}`)
+    }
+    if (method === 'POST' && /\/subscription\/[^/]+\/test$/.test(url)) return new Response(null, { status: 202 })
+    throw new Error(`Unexpected notification request: ${method} ${url}`)
+  })
+  return state
+}
+
+describe('S1: an application-level setup eBay accepts', () => {
+  it('sets a missing alert-email config from EBAY_NOTIFICATION_ALERT_EMAIL before creating the destination', async () => {
+    const ebay = fakeEbay()
+    const result = await setupEbayNotifications()
+    expect(ebay.requests).toEqual([
+      'GET /topic?limit=100', 'GET /destination?limit=100', 'GET /config', 'PUT /config',
+      'POST /destination', 'GET /subscription?limit=100', 'POST /subscription',
+    ])
+    expect(JSON.parse(m.transport.mock.calls[3][1].body)).toEqual({ alertEmail })
+    expect(result).toMatchObject({ armed: true, alertEmail: 'set', destinationId: 'destination-created', perTopic: [{ topicId: 'AUTHORIZATION_REVOCATION', status: 'created' }] })
+    expect(ebayNotificationSetupSucceeded(result)).toBe(true)
+  })
+
+  it('leaves an existing alert-email config alone', async () => {
+    const ebay = fakeEbay({ alertEmail: 'someone-else@example.test' })
+    const result = await setupEbayNotifications()
+    expect(ebay.requests).not.toContain('PUT /config')
+    expect(ebay.alertEmail).toBe('someone-else@example.test')
+    expect(result).toMatchObject({ alertEmail: 'present', perTopic: [{ status: 'created' }] })
+  })
+
+  it.each([undefined, '', 'not-an-email'])('refuses with zero writes when the config is missing and the alert email is %j', async value => {
+    vi.stubEnv('EBAY_NOTIFICATION_ALERT_EMAIL', value)
+    const ebay = fakeEbay()
+    const result = await setupEbayNotifications()
+    expect(ebay.requests.every(request => request.startsWith('GET '))).toBe(true)
+    expect(ebay.requests).not.toContain('POST /destination')
+    expect(result).toMatchObject({ destinationId: null, perTopic: [], error: expect.stringMatching(/EBAY_NOTIFICATION_ALERT_EMAIL/) })
+    if (value) expect(result.error).not.toContain(value)
+    expect(ebayNotificationSetupSucceeded(result)).toBe(false)
+  })
+
+  it('creates the revocation subscription once; a second run makes only GETs', async () => {
+    const ebay = fakeEbay()
+    expect((await setupEbayNotifications()).perTopic).toEqual([{ topicId: 'AUTHORIZATION_REVOCATION', status: 'created', subscriptionId: 'subscription-AUTHORIZATION_REVOCATION' }])
+    const writes = ebay.requests.filter(request => !request.startsWith('GET ')).length
+    ebay.requests.length = 0
+    const second = await setupEbayNotifications()
+    expect(second.perTopic).toEqual([{ topicId: 'AUTHORIZATION_REVOCATION', status: 'already_exists', subscriptionId: 'subscription-AUTHORIZATION_REVOCATION' }])
+    expect(writes).toBe(3)
+    expect(ebay.requests).toEqual(['GET /topic?limit=100', 'GET /destination?limit=100', 'GET /config', 'GET /subscription?limit=100'])
+    expect(ebay.subscriptions).toHaveLength(1)
+    // Portal-only deletion and the USER-level order topic were never sent to eBay.
+    expect(ebay.subscriptions.map(s => s.topicId)).toEqual(['AUTHORIZATION_REVOCATION'])
+  })
+
+  const errorCases = [
+    [195003, /alert.?email/i],
+    [195019, /32.*80.*A-Za-z0-9_-/],
+    [195020, /challenge/i],
+    [195021, /195021/],
+  ] as const
+  it.each(errorCases)('names eBay errorId %i in the result without exposing a secret', async (errorId, meaning) => {
+    fakeEbay({ alertEmail })
+    const echo = { errors: [{ errorId, domain: 'API_NOTIFICATION', message: `synthetic echo ${verificationToken} ${alertEmail}`, parameters: [{ name: 'verificationToken', value: verificationToken }] }] }
+    const inner = m.transport.getMockImplementation()!
+    m.transport.mockImplementation(async (url: string, request: RequestInit) =>
+      request.method === 'POST' && url === `${API}/destination` ? new Response(JSON.stringify(echo), { status: 400 }) : inner(url, request))
+    const result = await setupEbayNotifications()
+    expect(result.error).toContain(`errorId ${errorId}`)
+    expect(result.error).toMatch(meaning)
+    expect(JSON.stringify(result)).not.toContain(verificationToken)
+    expect(JSON.stringify(result)).not.toContain(alertEmail)
+  })
+
+  it('gives each named error id its own explanation', async () => {
+    const messages = new Set<string>()
+    for (const [errorId] of errorCases) {
+      m.transport.mockResolvedValueOnce(new Response(JSON.stringify({ errors: [{ errorId }] }), { status: 400 }))
+      const error = await createEbayDestination('production', 'Nexus', endpoint, verificationToken).catch((err: Error) => err.message)
+      messages.add(String(error).split(String(errorId)).join(''))
+    }
+    expect(messages.size).toBe(errorCases.length)
+  })
+
+  it('asks eBay for a test notice on our armed revocation subscription', async () => {
+    const ebay = fakeEbay({
+      alertEmail,
+      destinations: [destination],
+      subscriptions: [{ subscriptionId: 'sub-1', topicId: 'AUTHORIZATION_REVOCATION', destinationId: destination.destinationId, status: 'ENABLED', payload }],
+    })
+    expect(await sendEbayTestNotice('production', 'AUTHORIZATION_REVOCATION')).toEqual({ ok: true, topicId: 'AUTHORIZATION_REVOCATION', subscriptionId: 'sub-1' })
+    expect(ebay.requests).toEqual(['GET /destination?limit=100', 'GET /subscription?limit=100', 'POST /subscription/sub-1/test'])
+  })
+
+  it('never asks for a test notice on a subscription that is not ours', async () => {
+    const ebay = fakeEbay({
+      destinations: [destination],
+      subscriptions: [{ subscriptionId: 'foreign', topicId: 'AUTHORIZATION_REVOCATION', destinationId: 'someone-else', status: 'ENABLED', payload }],
+    })
+    expect(await sendEbayTestNotice('production', 'AUTHORIZATION_REVOCATION')).toMatchObject({ ok: false, error: expect.stringMatching(/setup/i) })
+    expect(ebay.requests.every(request => request.startsWith('GET '))).toBe(true)
+  })
+
+  it.each(['ORDER_CONFIRMATION', 'MARKETPLACE_ACCOUNT_DELETION'])('refuses a test notice for the unarmed topic %s without a call', async topicId => {
+    expect(await sendEbayTestNotice('production', topicId)).toMatchObject({ ok: false })
+    expect(m.transport).not.toHaveBeenCalled()
   })
 })

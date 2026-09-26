@@ -467,9 +467,12 @@ export async function startScheduler(): Promise<void> {
   startAmazonNotificationReconcileCron();
 
   // P2.3 — the same for eBay, which had NO destination and NO subscription at all,
-  // so no genuine eBay notification had ever arrived. Makes no call until
-  // EBAY_NOTIFICATION_ENDPOINT_URL and EBAY_NOTIFICATION_VERIFICATION_TOKEN are
-  // both set. Opt out via NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=0.
+  // so no genuine eBay notification had ever arrived. OFF by default: it schedules
+  // nothing unless NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP is exactly 1 AND
+  // NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS names each topic the Owner armed (v1:
+  // AUTHORIZATION_REVOCATION). Any other value, including the old switch alone,
+  // means no reconcile and no eBay call. It also needs EBAY_NOTIFICATION_ENDPOINT_URL
+  // and a valid EBAY_NOTIFICATION_VERIFICATION_TOKEN.
   startEbayNotificationReconcileCron();
 
   // P2.7 — check the Amazon Marketing Stream subscriptions per profile and dataset.
