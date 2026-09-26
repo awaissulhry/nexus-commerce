@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0 built 2026-09-26 (fixtures F1–F4, today's behaviour pinned, the read-only measure script); S1 next | §10.9 |
+| P3b | 🟡 S0 + S1 built 2026-09-26 (fixtures and today's behaviour pinned; the channel footprint); S2 next | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -762,6 +762,25 @@ keys per attribute and readiness rows by state.
   `apps/api/.env` is refused), so the stored-key and readiness counts for production wait for the Owner's run:
   `DATABASE_URL=<owner login> node --import tsx apps/api/scripts/attribute-scope-measure.mts`.
 
+**S1 built (2026-09-26, branch `feat/attributes-p3b-s1`):** `services/channel-footprint.service.ts` +
+`GET /api/channel-footprint` (reads with `listings.view`; the rule is the pure `footprintFrom`).
+
+- A channel is in the footprint when it has at least one ACTIVE account managed by oauth or env; an expired token
+  still counts. Its markets are its switched-on `Marketplace` rows; an Amazon market leaves only when Amazon said
+  `NOT_PARTICIPATING` (never checked, suspended, unknown and access-denied stay). A channel with switched-on markets
+  and no active account is `notConnected`; an account of a channel with no market (Amazon Ads) is ignored.
+- **The same answer as the web scope bar** (`_studio/studio-data.ts` + `scopes.ts:128`, its rule kept in the test as
+  the reference) on 5 shapes, including Xavia Racing's and Motovento's, **except two planned differences**: a channel
+  whose accounts are all disconnected (the bar shows it; the plan hides a removed channel), and an Amazon market Amazon
+  reports as not participating. Production today has neither (read 2026-09-26: Xavia Racing's 11 Amazon markets are
+  all `PARTICIPATING`; its eBay has an active account beside the revoked ones), so both answers agree there now.
+- Tests: `services/channel-footprint.vitest.test.ts` (21, profiles off and on): the unit table, the bar comparison,
+  the F1–F4 fixtures on PostgreSQL (each exactly its own channels; only switched-on markets), two businesses kept apart,
+  and the route's permission. 5 planted mistakes caught. RBAC coverage: 0 unmapped routes.
+- **For the product-sheet session:** the scope bar can read `GET /api/channel-footprint` instead of combining
+  `/api/marketplaces/grouped` with `/api/connections?all=true` (which needs `settings.integrations.manage`). That
+  switch is theirs; it brings the two planned differences with it.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
 The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
@@ -777,6 +796,7 @@ The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the de
 | Say who requires a missing field ("Required by Amazon · IT", "Required by Family: Jackets") | `ReadinessIndex.missing[].requiredBy` — relayed as-is by `GET /api/products/:id/readiness` (`matrix[].missing`) | On `requiredEmpty` entries. Absent on a row rebuilt before P7 = not recorded. The condition source is not separate yet (§10.8). |
 | Filter "missing a required field at eBay DE" | `GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&field][&requiredBy][&language][&accountId][&take][&after]` | `checkedProducts` / `pendingProducts` say what was not checked or is being rebuilt; show "checking…", never "none missing", for those. |
 | Save a dictionary attribute on the Shared scope with no market chosen | `PATCH /api/products/bulk` without `marketplaceContexts` | Works for family and saved attributes. An Amazon-only attribute still needs the scope. |
+| Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 
