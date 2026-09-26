@@ -30,6 +30,7 @@
     "editor:open": "node scripts/check-editor-open.mjs"
   },
   "devDependencies": {
+    "lint-staged": "^16.4.0",
     "patch-package": "^8.0.1",
     "turbo": "^2.0.0"
   },
