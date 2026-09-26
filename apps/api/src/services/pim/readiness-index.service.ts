@@ -10,7 +10,7 @@ import { marketLanguages } from './market-languages.js'
 import { coordinatesFor, VARIATION_THEME_KEY } from './sheet-columns.service.js'
 // VT.1b — the provenance mapper and the cell type live with the resolver; this file only reads them.
 import { variationSourceFor, type VariationThemeCell } from './variation-rules.service.js'
-import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, type ReadinessCoordinate } from './readiness-model.js'
+import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, requirementSources, type ReadinessCoordinate } from './readiness-model.js'
 import { runResumableSweep, type SweepReport } from './resumable-sweep.js'
 import { logger } from '../../utils/logger.js'
 
@@ -216,12 +216,15 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
       // (`catalog-language.ts` `catalogLanguageValues`). Deriving it from the sheet cell instead would be a second
       // answer to "what does this cell say", and the two would drift the first time either changed.
       prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
-        select: { id: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
+        select: { id: true, parentId: true, familyId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
           translations: true, parent: { select: { id: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true, translations: true } } } }),
       prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }] }),
       prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, accountLabel: true, displayName: true } }),
     ])
     const languages = readinessLanguages(markets)
+    // P7 — the family names a `requiredBy` source reads ("Family: Jackets"). One query per rebuild.
+    const familyIds = [...new Set(products.map(p => p.familyId).filter((id): id is string => !!id))]
+    const familyLabels = new Map(familyIds.length ? (await prisma.productFamily.findMany({ where: { id: { in: familyIds } }, select: { id: true, label: true } })).map(f => [f.id, f.label]) : [])
     const destinations: Array<{ coordinate: ReadinessCoordinate; language: string; label: string }> = languages.map(language => ({
       coordinate: { channel: null, market: null, accountId: null, aliasId: null }, language, label: 'Shared product',
     }))
@@ -277,6 +280,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         continue
       }
       const market = markets.find(m => m.channel === coordinate.channel && m.code === coordinate.market)
+      const columnByKey = new Map(sheet.columns.map(column => [column.key, column]))
       const mapping = market?.schemaMapping as { fields?: Record<string, unknown>; byProductType?: Record<string, Record<string, unknown>> } | null
       for (const row of sheet.rows) {
         const c = { ...coordinate, aliasId: row.aliasId }
@@ -290,7 +294,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         // the wording changes. They read this key now.
         // A-45 (Step 4.3 #4) — the same entries, plus every required-and-empty field FLAGGED (`requiredEmpty`),
         // from the set behind `requiredFilled/requiredTotal`, so the completeness card can name them.
-        const missing = readinessMissingEntries(row)
+        const missing = readinessMissingEntries(row, field => requirementSources(columnByKey.get(field), row, coordinate.channel ? sheet.scope.label : null, id => familyLabels.get(id)))
         // VT.1b (VT.4's request) — the variation-rule PROVENANCE for this coordinate, from the cell the sheet already
         // computed. It is the one thing `missing[].kind` cannot express: a CORRECT mapping raises no readiness item, so
         // `derived` / `rule` / `overridden` are invisible to the filter without a column. `unset` and `collides` stay in
