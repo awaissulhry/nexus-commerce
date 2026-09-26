@@ -138,6 +138,8 @@ export function structuralColumnKeys(columns: readonly SheetColumn[]): string[] 
 export const ESSENTIALS_VIEW_ID = 'essentials'
 /** The second fixed set — every column some channel REQUIRES on this product type, filled or not. */
 export const REQUIRED_VIEW_ID = 'required'
+/** SHEET-VIEWS step 5 — every column with a readiness gap on a row in view. Saved, it follows the gaps (`viewRules.ts`). */
+export const GAPS_VIEW_ID = 'gaps'
 
 export interface ViewContext {
   /** What this family actually varies by — `['Colore', 'Taglia']` on the XAVIA jackets. */
@@ -358,13 +360,20 @@ export function sheetViews(
   const required: GridViewPreset[] = requiredKeys.length > 0
     ? [{ id: REQUIRED_VIEW_ID, label: 'Required', description: 'Applicable requirements for these rows, including active category conditions', columns: requiredKeys }]
     : []
+  /* SHEET-VIEWS step 5 — "Has gaps": the columns readiness flags on some row in view (Essentials' rule 4, alone).
+     Offered only when there is a gap; saved as a view, it keeps following the gaps. */
+  const flagged = new Set(ctx.flaggedKeys ?? [])
+  const gapKeys = orderColumnKeys(columns, ctx).filter((k) => flagged.has(k) && !ALWAYS_COLUMNS.includes(k as never))
+  const gaps: GridViewPreset[] = gapKeys.length > 0
+    ? [{ id: GAPS_VIEW_ID, label: 'Has gaps', description: 'Columns with a readiness gap on a row in view', columns: gapKeys }]
+    : []
 
   const focused: GridViewPreset[] = [
     { id: ESSENTIALS_VIEW_ID, label: 'Essentials', description: 'Identity, required facts, variation axes and fields that need attention', columns: essentialsColumns(columns, ctx) },
     { id: 'family-facts', label: 'Family facts', description: 'Attributes declared by this product family', columns: columns.filter(column => column.familyRules).map(column => column.key) },
     { id: 'localized-content', label: 'Localized content', description: `Content for ${ctx.locale}`, columns: columns.filter(column => column.storage === 'localizedContent' || Object.values(column.channels ?? {}).some(facts => facts.store?.kind === 'platformAttributes' && ['_etsyInformationLocales', '_shopifyInformationLocales'].includes(facts.store.path[0]))).map(column => column.key) },
   ].filter(view => view.columns.length > 0)
-  return { source: 'rules', presets: [all, ...required, languages, ...focused] }
+  return { source: 'rules', presets: [all, ...required, languages, ...gaps, ...focused] }
 }
 
 /**

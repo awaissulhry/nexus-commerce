@@ -65,8 +65,9 @@ export function usePopoverPosition(
       const m = 8
 
       let top = a.bottom + offset
+      let room = vh - m - top
       // flip up only if there is genuinely more room there — otherwise stay put and let it scroll
-      if (top + ph > vh - m && a.top - ph - offset > m) top = a.top - ph - offset
+      if (top + ph > vh - m && a.top - ph - offset > m) { top = a.top - ph - offset; room = a.top - offset - m }
 
       // 🔴 HORIZONTAL PLACEMENT IS ANCHOR-PINNED, NOT WIDTH-DERIVED. A right-aligned panel used to
       // be placed as `left = a.right - pw`, which is only correct while `pw` equals the width the
@@ -98,7 +99,13 @@ export function usePopoverPosition(
         // same defect seen from the other end, a label clipped inside a box sized for something
         // else. `min-width` states the floor and lets the content and the cap do the rest.
         ...(width === 'anchor' ? { minWidth: a.width } : {}),
-      })
+        /* SHEET-VIEWS P2 (2026-09-26) — "let it scroll" needs a height to scroll WITHIN. The room on the
+           chosen side is published as a variable, not as `maxHeight`, so a panel with its own CSS cap
+           keeps it; a panel opts in with `max-height: var(--nds-popover-room)` (`.nds-menu`). Measured:
+           the sheet's views menu grew to 756px under a 906px viewport and its last item, Delete…, sat
+           33px below the fold. */
+        ['--nds-popover-room' as string]: `${Math.max(120, Math.floor(room))}px`,
+      } as CSSProperties)
     }
     place()
     // capture phase: a scroll inside a grid or a modal body does not bubble to window

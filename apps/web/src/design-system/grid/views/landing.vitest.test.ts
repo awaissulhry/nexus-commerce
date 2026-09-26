@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { allColumns, arrangementColumnState, resolveLanding } from './landing'
+import { allColumns, arrangementColumnState, productTypeDefaultView, resolveLanding } from './landing'
 import { columnsViewPayload } from './viewPayload'
 
 const KEYS = ['brand', 'item_name', 'bullet_point', 'color', 'size', 'name', 'status', 'basePrice', 'fabric_type']
@@ -134,5 +134,34 @@ describe('arrangementColumnState — widths, pins and sort come back; membership
       current,
     )
     expect(state).toEqual([])
+  })
+})
+
+describe('productTypeDefaultView — SHEET-VIEWS step 4: the view a product type opens on', () => {
+  const view = (id: string, over: Partial<{ owned: boolean; teamShared: boolean; defaultProductTypes: string[]; updatedAt: string; payload: unknown }> = {}) =>
+    ({ id, owned: true, teamShared: false, defaultProductTypes: [] as string[], updatedAt: '2026-09-26T10:00:00.000Z', payload: columnsViewPayload(['brand']), ...over })
+
+  it('is none without a product type, or when no view is the default for it', () => {
+    const views = [view('a', { defaultProductTypes: ['OUTERWEAR'] })]
+    expect(productTypeDefaultView(views, null)).toBeNull()
+    expect(productTypeDefaultView(views, '  ')).toBeNull()
+    expect(productTypeDefaultView(views, 'PANTS')).toBeNull()
+  })
+
+  it('prefers my own default over a team default, and matches the code in any case', () => {
+    const team = view('team', { owned: false, teamShared: true, defaultProductTypes: ['OUTERWEAR'], updatedAt: '2026-09-26T12:00:00.000Z' })
+    const mine = view('mine', { defaultProductTypes: ['OUTERWEAR'] })
+    expect(productTypeDefaultView([team, mine], 'outerwear')?.id).toBe('mine')
+  })
+
+  it('falls back to the NEWEST team default, never to a teammate\'s private view or a legacy template', () => {
+    const older = view('older', { owned: false, teamShared: true, defaultProductTypes: ['OUTERWEAR'], updatedAt: '2026-09-25T10:00:00.000Z' })
+    const newer = view('newer', { owned: false, teamShared: true, defaultProductTypes: ['OUTERWEAR'], updatedAt: '2026-09-26T10:00:00.000Z' })
+    const unshared = view('legacy', { owned: false, teamShared: false, defaultProductTypes: ['OUTERWEAR'], updatedAt: '2026-09-27T10:00:00.000Z' })
+    expect(productTypeDefaultView([older, unshared, newer], 'OUTERWEAR')?.id).toBe('newer')
+  })
+
+  it('skips a view whose payload is not a columns view', () => {
+    expect(productTypeDefaultView([view('blob', { defaultProductTypes: ['OUTERWEAR'], payload: { v: 1, gridState: {} } })], 'OUTERWEAR')).toBeNull()
   })
 })

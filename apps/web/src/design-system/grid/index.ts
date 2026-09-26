@@ -86,7 +86,8 @@ export { resolvePreset, landingPreset, allColumnsPreset, ALL_VIEW_ID, type GridV
 // visibility or order.
 export { columnsViewPayload, sheetLayoutPayload, isColumnsViewPayload, viewDisplayOf, COLUMNS_VIEW_SCHEMA, SHEET_LAYOUT_SCHEMA, VIEW_WIDTH_MIN, VIEW_WIDTH_MAX, VIEW_SORT_MAX, type ColumnsViewPayload, type ColumnsViewPayloadV2, type SheetLayoutPayload, type SheetLayoutInput, type ViewDisplay, type ViewSort } from './views/viewPayload'
 export { preferencesFromLayout, layoutFromPreferences, visibleLayoutKeys } from './views/columnLayout'
-export { resolveLanding, arrangementColumnState, allColumns, type Landing, type LandingSource, type LandingInput, type PersistedArrangement } from './views/landing'
+export { viewRulesOf, viewRuleMatches, withViewRules, viewRulesFor, describeViewRules, VIEW_RULES_MAX, type ViewRule, type ViewRuleFacts } from './views/viewRules'
+export { resolveLanding, arrangementColumnState, allColumns, productTypeDefaultView, type Landing, type LandingSource, type LandingInput, type PersistedArrangement } from './views/landing'
 export { useGridState, readLastUsed, writeLastUsed, clearLastUsed, lastUsedKey, pickGridState, LAST_USED_SCHEMA, gridViewPayload, type GridStateApi, type GridStateKey, type LastUsedState, type UseGridStateOptions } from './hooks/useGridState'
 export { compareSortValues, compareForAgGrid, type SortDir, type SortValue } from './sortValues'
 export * from './renderers'

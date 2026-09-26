@@ -48,6 +48,15 @@ export interface SavedGridView<TPage> {
   payload: SavedViewPayload<TPage> | null
   updatedAt: string
   legacyShared?: boolean
+  /** SHEET-VIEWS P2 — false for a teammate's shared view: it can be applied and duplicated, not changed. */
+  owned?: boolean
+  /** This view is shared with the business (on my own view: I shared it). */
+  shared?: boolean
+  /** A teammate's shared view, and whose — a display name, or null when they have none. */
+  teamShared?: boolean
+  sharedBy?: string | null
+  /** Product types this view opens by default for (upper-case codes, e.g. `OUTERWEAR`). */
+  defaultProductTypes?: string[]
 }
 
 export interface ApiView {
@@ -57,6 +66,11 @@ export interface ApiView {
   filters: unknown
   updatedAt: string
   legacyShared?: boolean
+  owned?: boolean
+  shared?: boolean
+  teamShared?: boolean
+  sharedBy?: string | null
+  defaultProductTypes?: string[]
   workingLayout?: StoredSheetLayout<unknown>
 }
 
@@ -97,7 +111,12 @@ export interface UseGridViewsOptions<TPage> {
 }
 
 function fromApi<TPage>(view: ApiView): SavedGridView<TPage> {
-  return { id: view.id, name: view.name, isDefault: view.isDefault, payload: readPayload<TPage>(view.filters), updatedAt: view.updatedAt, legacyShared: view.legacyShared }
+  return {
+    id: view.id, name: view.name, isDefault: view.isDefault, payload: readPayload<TPage>(view.filters), updatedAt: view.updatedAt, legacyShared: view.legacyShared,
+    // An older server omits these: a view it returns is the operator's own and unshared.
+    owned: view.owned ?? true, shared: view.shared ?? false, teamShared: view.teamShared ?? false, sharedBy: view.sharedBy ?? null,
+    defaultProductTypes: Array.isArray(view.defaultProductTypes) ? view.defaultProductTypes : [],
+  }
 }
 
 /** Keep the server acknowledgement even if the following list refresh fails. */
@@ -247,6 +266,19 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
     await write('PATCH', `${url}/${id}`, { isDefault: false, expectedUpdatedAt: views.find((view) => view.id === id)?.updatedAt }, id)
   }, [url, write, views])
 
+  /** SHEET-VIEWS P2 — share my view with the business, or make it personal again. Owner only (the server refuses others). */
+  const setShared = useCallback(async (id: string, shared: boolean) => {
+    await write('PATCH', `${url}/${id}`, { shared, expectedUpdatedAt: views.find((view) => view.id === id)?.updatedAt }, id)
+  }, [url, write, views])
+
+  /** SHEET-VIEWS P2 — make my view the default for one product type, or stop. The server moves the type off my other views. */
+  const setTypeDefault = useCallback(async (id: string, productType: string, on: boolean) => {
+    const view = views.find((candidate) => candidate.id === id)
+    const current = view?.defaultProductTypes ?? []
+    const next = on ? [...new Set([...current, productType])] : current.filter((type) => type !== productType)
+    await write('PATCH', `${url}/${id}`, { defaultProductTypes: next, expectedUpdatedAt: view?.updatedAt }, id)
+  }, [url, write, views])
+
   const remove = useCallback(async (id: string) => {
     const context = contextRef.current
     const epoch = context.epoch
@@ -258,5 +290,5 @@ export function useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageS
     }
   }, [scope, url, change, refresh])
 
-  return { views, loaded, loadError, activeId, defaultView, bind, apply, save, saveRecord, rename, duplicate, setDefault, clearDefault, remove, refresh, markActive }
+  return { views, loaded, loadError, activeId, defaultView, bind, apply, save, saveRecord, rename, duplicate, setDefault, clearDefault, setShared, setTypeDefault, remove, refresh, markActive }
 }

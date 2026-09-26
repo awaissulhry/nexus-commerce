@@ -310,6 +310,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         activeChip: chipBar.active,
         setChip: chipBar.setActive,
         layoutSurface: `product-edit:layout:master:${market.toUpperCase()}`,
+        productType: sheet ? sheet.family.productType ?? null : undefined,
         grid: {
             surface: 'product-edit:master',
             viewsSurface: 'product-edit:views:master',
