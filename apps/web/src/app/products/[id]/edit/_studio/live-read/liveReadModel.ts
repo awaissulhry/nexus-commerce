@@ -5,7 +5,7 @@
  * for the same destination. Nothing here is stored and nothing is sent: a live read never changes what Publish sends.
  * A value that could not be read says so; it is never shown as a blank that looks like "no change".
  */
-import type { LiveRead, LiveValue } from '@nexus/shared/live-read'
+import type { LiveRead, LiveReadError, LiveValue } from '@nexus/shared/live-read'
 
 export function formatLiveValue(value: LiveValue): string {
   if (value.state === 'absent') return 'Not on the channel'
@@ -75,14 +75,52 @@ function fieldLabel(field: string): string {
   return /^[a-z]+$/.test(field) ? field[0].toUpperCase() + field.slice(1) : field
 }
 
-/** Every live content field, compared with the sheet's value under the same key (an Amazon `root@market/lang` by its root). */
+/** Where the sheet keeps a publish-review field when its key is not the field id itself. */
+const SHEET_KEYS: Record<string, string> = { title: 'name', pictures: 'imageUrls' }
+
+/** The sheet's value for a live field: same key, then the root (`aspect:<key>`, Amazon `root@market/lang`), then the sheet's own name for it, then the folded key. */
+function sheetValue(field: string, nexus: Record<string, unknown>): unknown {
+  const root = field.startsWith('aspect:') ? field.slice('aspect:'.length) : field.includes('@') ? field.slice(0, field.indexOf('@')) : field
+  for (const key of [field, root, SHEET_KEYS[root]]) if (key && key in nexus) return nexus[key]
+  const folded = Object.keys(nexus).find(key => fold(key) === fold(root))
+  return folded === undefined ? undefined : nexus[folded]
+}
+
+/** How a value is shown: a list of picture links as a count, since the drawer has no room for URLs (the comparison still uses every link). */
+const shown = (field: string, value: unknown) => field === 'pictures' && Array.isArray(value) ? `${value.length} ${value.length === 1 ? 'picture' : 'pictures'}` : text(value)
+
+/** Every live content field, compared with the sheet's value for it. */
 export function contentRows(live: LiveRead, nexus: Record<string, unknown>): LiveContentRow[] {
   return Object.keys(live.content).sort().map(field => {
     const value = live.content[field]
-    const mine = field in nexus ? nexus[field] : field.includes('@') && field.split('@')[0] in nexus ? nexus[field.split('@')[0]] : undefined
-    const nexusText = mine === undefined ? null : text(mine)
+    const mine = sheetValue(field, nexus)
     const state: LiveContentRow['state'] = value.state === 'unread' ? 'unread' : value.state === 'absent' ? 'absent'
-      : nexusText === null ? 'not-compared' : text(value.value).trim() === nexusText.trim() ? 'same' : 'differs'
-    return { field, label: fieldLabel(field), live: formatLiveValue(value), nexus: nexusText, state }
+      : mine === undefined ? 'not-compared' : text(value.value).trim() === text(mine).trim() ? 'same' : 'differs'
+    return { field, label: fieldLabel(field), live: value.state === 'value' ? shown(field, value.value) : formatLiveValue(value),
+      nexus: mine === undefined ? null : shown(field, mine), state }
+  })
+}
+
+/** One line over the whole comparison. It counts only what was really compared, so an empty comparison never reads "no differences". */
+export function comparisonSummary(variants: readonly LiveVariantRow[], content: readonly LiveContentRow[]): string {
+  const comparedVariants = variants.filter(v => v.state !== 'live' || v.cells.some(c => c.live != null && c.nexus != null))
+  const comparedContent = content.filter(c => c.state === 'same' || c.state === 'differs')
+  const compared = comparedVariants.length + comparedContent.length
+  if (compared === 0) return 'Nothing could be compared with Nexus.'
+  const differing = comparedVariants.filter(v => v.differs).length + comparedContent.filter(c => c.state === 'differs').length
+  const parts = `${compared} ${compared === 1 ? 'part' : 'parts'} compared`
+  return differing ? `${differing} ${differing === 1 ? 'difference' : 'differences'} from Nexus, in ${parts}.` : `No differences from Nexus, in ${parts}.`
+}
+
+/** Failed reads, one line per reason: many SKUs that failed the same way read as one line that still names them. */
+export function errorGroups(errors: readonly LiveReadError[]): Array<{ label: string; reason: string; names: string[] }> {
+  const groups = new Map<string, LiveReadError[]>()
+  for (const error of errors) groups.set(`${error.scope}\u0000${error.reason}`, [...(groups.get(`${error.scope}\u0000${error.reason}`) ?? []), error])
+  return [...groups.values()].map(group => {
+    const [first] = group
+    const names = group.map(e => e.sku ?? e.field).filter((n): n is string => !!n)
+    if (group.length === 1) return { label: first.sku ?? first.field ?? 'Listing', reason: first.reason, names: [] }
+    const noun = first.scope === 'sku' ? 'variants' : first.scope === 'field' ? 'fields' : 'parts'
+    return { label: `${group.length} ${noun}`, reason: first.reason, names }
   })
 }

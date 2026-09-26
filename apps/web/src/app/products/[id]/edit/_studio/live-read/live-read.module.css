@@ -7,3 +7,4 @@
 .was { color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
 .loading { display: flex; align-items: center; gap: var(--nds-space-8); color: var(--nds-text-2); }
 .errors { margin: 0; padding-left: var(--nds-space-16); }
+.names { display: block; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }

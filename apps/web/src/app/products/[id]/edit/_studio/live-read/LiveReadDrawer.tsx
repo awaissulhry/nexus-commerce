@@ -12,7 +12,7 @@ import type { LiveRead } from '@nexus/shared/live-read'
 import { Banner, DataGrid, Drawer, type Column } from '@/design-system/components'
 import { Button, Pill, Spinner } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
-import { contentRows, variationRows, type AxisLink, type LiveContentRow, type LiveVariantRow, type NexusVariant } from './liveReadModel'
+import { comparisonSummary, contentRows, errorGroups, variationRows, type AxisLink, type LiveContentRow, type LiveVariantRow, type NexusVariant } from './liveReadModel'
 import styles from './live-read.module.css'
 
 export interface LiveReadTarget { productId: string; channel: string; channelLabel: string; marketplace: string; accountId: string; aliasKey: string }
@@ -78,7 +78,6 @@ export function LiveReadDrawer({ open, onClose, target, links, nexusVariants, ne
     { key: 'nexus', label: 'Nexus', render: row => row.nexus ?? '—' },
     { key: 'state', label: 'Compared', render: row => <Pill tone={CONTENT_STATE[row.state].tone}>{CONTENT_STATE[row.state].label}</Pill> },
   ]
-  const differing = variants.filter(v => v.differs).length + content.filter(c => c.state === 'differs').length
 
   return (
     <Drawer open={open} onClose={onClose} side="right" width={760} resizable
@@ -90,17 +89,17 @@ export function LiveReadDrawer({ open, onClose, target, links, nexusVariants, ne
         {load.status === 'error' && <Banner tone="danger" title="The channel could not be read">{load.message} Nothing was changed.</Banner>}
         {ready && <>
           {ready.errors.length > 0 && <Banner tone="warning" title={`${ready.errors.length} ${ready.errors.length === 1 ? 'part' : 'parts'} could not be read`}>
-            <ul className={styles.errors}>{ready.errors.map((e, i) => <li key={i}>{e.sku ?? e.field ?? 'Listing'}: {e.reason}</li>)}</ul>
+            <ul className={styles.errors}>{errorGroups(ready.errors).map((g, i) => <li key={i}>{g.label}: {g.reason}{g.names.length > 0 && <span className={styles.names}>{g.names.join(', ')}</span>}</li>)}</ul>
           </Banner>}
-          <p className={styles.meta}>{differing ? `${differing} ${differing === 1 ? 'difference' : 'differences'} from Nexus.` : 'No differences from Nexus in what could be compared.'}</p>
+          <p className={styles.meta}>{comparisonSummary(variants, content)}</p>
           {ready.variations && <section className={styles.section} aria-labelledby="live-read-variations">
             <h3 id="live-read-variations" className={styles.heading}>Variations</h3>
             <DataGrid ariaLabel="Live variations" columns={variantColumns} rows={variants} rowKey={row => row.sku} />
           </section>}
-          <section className={styles.section} aria-labelledby="live-read-content">
+          {content.length > 0 && <section className={styles.section} aria-labelledby="live-read-content">
             <h3 id="live-read-content" className={styles.heading}>Content</h3>
             <DataGrid ariaLabel="Live content" columns={contentColumns} rows={content} rowKey={row => row.field} />
-          </section>
+          </section>}
         </>}
       </div>
     </Drawer>

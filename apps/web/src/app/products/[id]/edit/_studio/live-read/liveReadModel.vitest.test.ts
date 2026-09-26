@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { LiveRead } from '@nexus/shared/live-read'
-import { contentRows, formatLiveValue, variationRows, type NexusVariant } from './liveReadModel'
+import { comparisonSummary, contentRows, errorGroups, formatLiveValue, variationRows, type NexusVariant } from './liveReadModel'
 
 const read = (over: Partial<LiveRead> = {}): LiveRead => ({
   readAt: '2026-09-26T21:05:00.000Z', source: 'ebay-trading-item', revision: 'r1',
@@ -71,6 +71,54 @@ describe('contentRows', () => {
       { field: 'item_name@IT/it', label: 'item_name (IT, it)', live: 'Could not read: throttled', nexus: null, state: 'unread' },
       { field: 'pictures', label: 'Pictures', live: 'Not on the channel', nexus: null, state: 'absent' },
       { field: 'title', label: 'Title', live: 'Giacca Racing', nexus: 'Giacca Racing', state: 'same' },
+    ])
+  })
+})
+
+describe('comparisonSummary', () => {
+  it('says "nothing could be compared" when nothing was — never "no differences" over an empty comparison', () => {
+    // The drawer's first local run (eBay DE, a draft listing): no content, no variations, one error.
+    expect(comparisonSummary([], [])).toBe('Nothing could be compared with Nexus.')
+    const onlyUncompared = contentRows(read({ content: { gtin: { state: 'value', value: '1' }, brand: { state: 'unread', reason: 'x' } } }), {})
+    expect(comparisonSummary([], onlyUncompared)).toBe('Nothing could be compared with Nexus.')
+  })
+  it('counts what was compared, and what differs', () => {
+    const content = contentRows(read({ content: { title: { state: 'value', value: 'Giacca' }, brand: { state: 'value', value: 'Xavia' } } }), { title: 'Giacca', brand: 'XAVIA' })
+    expect(comparisonSummary([], content)).toBe('1 difference from Nexus, in 2 parts compared.')
+    expect(comparisonSummary([], content.slice(1))).toBe('No differences from Nexus, in 1 part compared.')
+  })
+})
+
+describe('contentRows — the sheet\'s own keys', () => {
+  it('finds the title, the pictures and each item specific where the sheet keeps them (name, imageUrls, the aspect key)', () => {
+    // Seen on the first local run: the eBay sheet holds the title under `name`, so "Title" read "—" beside the live value.
+    const live = read({ content: {
+      title: { state: 'value', value: 'Giacca Gale' },
+      pictures: { state: 'value', value: ['https://a/1.jpg'] },
+      'aspect:paese di origine': { state: 'value', value: ['Italia'] },
+    } })
+    const rows = contentRows(live, { name: 'Giacca Gale', imageUrls: ['https://a/1.jpg', 'https://a/2.jpg'], paese_di_origine: 'Italia' })
+    expect(rows.map(r => [r.field, r.nexus, r.state])).toEqual([
+      ['aspect:paese di origine', 'Italia', 'same'],
+      ['pictures', '2 pictures', 'differs'],
+      ['title', 'Giacca Gale', 'same'],
+    ])
+    // A list of picture links is shown as a count (the drawer has no room for URLs); same / differs still compares every link.
+    expect(rows.find(r => r.field === 'pictures')?.live).toBe('1 picture')
+  })
+})
+
+describe('errorGroups', () => {
+  it('one line per reason: twenty variants that failed the same way read as one line, not twenty', () => {
+    const errors = [
+      { scope: 'item' as const, reason: 'The eBay group could not be read (no answer).' },
+      ...['A', 'B', 'C'].map(sku => ({ scope: 'sku' as const, sku, reason: 'The eBay item could not be read (no answer).' })),
+      { scope: 'field' as const, field: 'price', reason: 'Key missing' },
+    ]
+    expect(errorGroups(errors)).toEqual([
+      { label: 'Listing', reason: 'The eBay group could not be read (no answer).', names: [] },
+      { label: '3 variants', reason: 'The eBay item could not be read (no answer).', names: ['A', 'B', 'C'] },
+      { label: 'price', reason: 'Key missing', names: [] },
     ])
   })
 })
