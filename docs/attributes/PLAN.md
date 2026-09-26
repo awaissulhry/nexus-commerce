@@ -3,7 +3,8 @@
 **Status: 🟢 APPROVED by the Owner 2026-09-26** ("Go ahead, I'll go with your recommendations").
 Decision 1 = **A** (keep the JSON value stores + GIN index). Decision 2 = **A** (readiness catches up after a big save).
 Progress is in §10 at the end of this file.
-Written 2026-09-26. Worktree `/private/tmp/nexus-attributes`, branch `feat/attributes`, based on `origin/main` `4f2e860b8`.
+Written 2026-09-26. P0–P6: branch `feat/attributes` (merged as PR #18, `71888bd6d`, deployed 2026-09-26 — §10.7).
+P7/P8: worktree `/private/tmp/nexus-attributes-p7`, branch `feat/attributes-p7-p8`, based on `origin/main` `71888bd6d`.
 Lane: the attribute system — schema, shared types, API logic. The product-sheet UI and import/export belong to other
 sessions (§7).
 
@@ -326,14 +327,14 @@ these only through the shared contract, and I tell the sheet session before each
 |---|---|---|
 | P0 | ✅ done 2026-09-26 | §10.1. The eBay bulk-aspects check moves to P4 (the step that needs it). |
 | P1 | ✅ done 2026-09-26 | `packages/shared/attributes.ts` (+ 26 tests, 2 planted mistakes caught); API channel types are its aliases; eBay `aspectMode` converted through `optionModeFrom`. API `tsc` clean; 136 channel tests pass. |
-| P2 | ✅ built 2026-09-26 (not pushed) | §10.2 |
-| P3 | ✅ built 2026-09-26 (not pushed; apply on the Owner's business waits for his word) | §10.3 |
-| P4 | ✅ built 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
-| P5 | ✅ built 2026-09-26 (not pushed) | §10.5 |
-| P6 | ✅ API built 2026-09-26 (not pushed); the screens are the product-sheet session's (§11) | §10.6 |
-| Ship | PR #18 opened 2026-09-26; the Owner turned auto-merge on. First CI run failed the migration upgrade check: `prisma/baseline.sql` (a fresh database's schema) was not regenerated with the two migrations — fixed with `generate-baseline.mjs` (+4 columns, +2 indexes), checked locally on a throwaway server first | https://github.com/awaissulhry/nexus-commerce/pull/18 |
-| P7 | ⬜ not started — touches readiness/sheet files shared with the product-sheet session | — |
-| P8 | ⬜ not started — same, plus the resolvers every surface reads | — |
+| P2 | ✅ live 2026-09-26 | §10.2 |
+| P3 | ✅ live 2026-09-26; adopting the concepts on the Owner's business waits (§10.7: the live plan differs from the copy's) | §10.3 |
+| P4 | ✅ live 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
+| P5 | ✅ live 2026-09-26 | §10.5 |
+| P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
+| Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
+| P7 | ⬜ not started — branch `feat/attributes-p7-p8` | — |
+| P8 | ⬜ not started — same branch | — |
 
 **Rebased on `main` c5597f776 (2026-09-26, before shipping):** main had merged PR #4 (Prisma 7; background work moved
 to separate worker and scheduler processes). The readiness worker is now registered in `runtime/worker.ts` and the
@@ -549,9 +550,44 @@ left as it is and reported as a follow-up.
   2 updated in `paste-validity.vitest.test.ts`; 6 planted mistakes caught. Attribute, family and save tests: 15 files,
   111 tests pass.
 
+### 10.7 Deployed state (checked 2026-09-26, after PR #18)
+
+- **Code.** PR #18 merged to `main` as `71888bd6d` (squash). CI took 3 runs: run 1 failed the migration upgrade check
+  (`prisma/baseline.sql` not regenerated), run 2 the profiles-ON ratchet (6 new test files did database work outside a
+  business). Both were fixed before the merge.
+- **Production (Railway, environment `production`), all three services online:**
+
+  | Service | Live since (UTC) |
+  |---|---|
+  | API | 2026-09-26 13:33 — migrations `20260926a_attr_readiness_pending` and `20260926b_attr_concepts` applied (deploy log) |
+  | worker | 2026-09-26 13:53 |
+  | scheduler | 2026-09-26 14:00 — log: "schema-refresh cron: scheduled (0 4 * * *)" |
+
+  `main` has no newer commit, so all three run `71888bd6`. The GitHub "Deploy API" job for `71888bd6` shows
+  `cancelled`: its first attempt died on "Failed to stream build logs" (Railway kept building), and the re-run shipped
+  the worker and the scheduler but hit the job's 25-minute limit. Railway is the source of truth for what runs, not
+  that job's status.
+- **The two behaviour changes are live:** the schema-refresh job runs daily at 04:00 UTC unless
+  `NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0`; a value off a channel's closed list is saved and flagged (only a
+  business-strict list refuses).
+- **Concept adoption on the Owner's business — NOT applied.** `POST /api/attributes/concepts/apply` with
+  `dryRun: true`, run on production 2026-09-26 on Xavia Racing (`nexus_legacy_workspace`), through the signed-in web
+  app (read-only):
+
+  | | Expected (copy of local data, §10.3) | Live |
+  |---|---:|---:|
+  | adopt (link an existing attribute) | 22 | **21** |
+  | create | 1 (`occasion`) | **2** (`size_system`, `occasion`) |
+  | blocked | 0 | 0 |
+  | master (already a master field) | 12 | 12 |
+
+  **The difference is one concept, `size_system`.** The local copy has a business attribute with the code
+  `size_system` (created locally 2026-09-11); production has none, so the live plan creates it. The other 21 links are
+  the same. Because the result differs, nothing was written; the Owner decides.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
-The API below is built on `feat/attributes` (not pushed). Nothing in `apps/web` or the design system was touched.
+The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
 
 | What the screen needs | API | Notes |
 |---|---|---|
