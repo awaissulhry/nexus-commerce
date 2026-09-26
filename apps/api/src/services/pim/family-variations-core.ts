@@ -83,6 +83,11 @@ export function matchValue(text: string, attribute: DictionaryAttribute): { opti
   return null
 }
 
+/** Two texts name the same value when they match the same option, or fold to the same text when neither is in the dictionary. */
+export function valueIdentity(text: string, attribute: DictionaryAttribute): string {
+  return optionForValue(text, attribute)?.code ?? `text:${foldValue(text)}`
+}
+
 /** A new option code, by the attributes lane's rule: /^[a-z][a-z0-9_]{0,63}$/, unique per attribute, never renamed later. */
 export function newOptionCode(text: string, taken: readonly string[]): string {
   let base = text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -147,7 +152,7 @@ export function planFamilyVariations(input: FamilyVariationsInput): FamilyVariat
   if (!input.variationAxes.length && input.variationTheme?.trim()) issues.push({ kind: 'theme-without-axes', theme: input.variationTheme })
   const axes = input.variationAxes.map(label => {
     const found = attributeForAxis(label, input.attributes)
-    if (found.attribute) return { label, attribute: found.attribute }
+    if (!('reason' in found)) return { label, attribute: found.attribute }
     issues.push({ kind: 'axis-without-attribute', axis: label, reason: found.reason, ...(found.reason === 'ambiguous' ? { candidates: found.candidates } : {}) })
     return { label, attribute: null, reason: found.reason }
   })
