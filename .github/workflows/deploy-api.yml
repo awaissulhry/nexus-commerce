@@ -49,7 +49,7 @@ jobs:
     needs: verify
     name: Build + ship to Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40  # railway up (~11 min measured) + up to 12 min for pre-deploy and healthcheck
     env:
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
 
@@ -101,32 +101,45 @@ jobs:
       # includes the catalog CSV limits), and Railway builds from source before the container starts.
 
       - name: Trigger Railway deploy
+        id: up
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # CLI uploads have no GitHub-trigger variables. Carry the checkout's SHA
           # with the uploaded source so readiness can identify this exact build.
           printf '%s\n' "$GITHUB_SHA" > apps/api/.release-sha
-          if [ -n "${{ secrets.RAILWAY_SERVICE }}" ]; then
-            railway up --service "${{ secrets.RAILWAY_SERVICE }}" --ci --message "GitHub ${{ github.sha }}"
-          else
-            railway up --ci --message "GitHub ${{ github.sha }}"
-          fi
+          # Retried only when Railway's builder cannot download its own tools (scripts/ci/railway-up.sh).
+          scripts/ci/railway-up.sh --service "${{ secrets.RAILWAY_SERVICE }}" --ci --message "GitHub ${{ github.sha }}"
 
       - name: Smoke-test the new container
-        # The build must finish before polling the public database health route.
+        # `railway up` returns when the BUILD ends. Railway then runs the pre-deploy migration and waits for
+        # its own healthcheck (up to 300 s) before it switches traffic: measured 2026-09-26, run 36265845583,
+        # 6 minutes from the end of the build to SUCCESS, while a 3-minute window had already failed the
+        # run and skipped the worker and scheduler. So: up to 12 minutes, failing at once if Railway
+        # reports this deployment FAILED or CRASHED.
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          DEPLOYMENT_ID: ${{ steps.up.outputs.deployment_id }}
         run: |
-          set -e
+          set -euo pipefail
           expected="${GITHUB_SHA:0:8}"
-          for _ in $(seq 1 36); do
+          for _ in $(seq 1 144); do
             body=$(curl --max-time 10 -fsS "https://nexusapi-production-b7bb.up.railway.app/api/health/ready") || body='{}'
             if jq -e --arg build "$expected" '.status == "healthy" and .build == $build' <<< "$body" >/dev/null; then
               echo "✓ Railway is serving $expected"
               exit 0
             fi
+            if [ -n "$DEPLOYMENT_ID" ]; then
+              status=$(railway service status --service "$API_SERVICE" --json 2>/dev/null || echo '{}')
+              if jq -e --arg id "$DEPLOYMENT_ID" '.deploymentId == $id and (.status == "FAILED" or .status == "CRASHED")' <<< "$status" >/dev/null; then
+                echo "✗ Railway reports deployment $DEPLOYMENT_ID as $(jq -r .status <<< "$status") — the previous build keeps serving"
+                exit 1
+              fi
+            fi
             sleep 5
           done
-          echo "✗ Railway did not serve the expected build after 36 readiness attempts"
+          echo "✗ Railway did not serve $expected within 12 minutes"
           exit 1
 
   # The worker and scheduler ship the same commit once the API serves it, side by side and each
@@ -152,4 +165,4 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
-        run: railway up --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
+        run: scripts/ci/railway-up.sh --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
