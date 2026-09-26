@@ -93,7 +93,9 @@ export async function claimEbayInbound(id: string, onDeadLetter?: EbayDeadLetter
   return prisma.$transaction(async tx => {
     const now = await databaseTime(tx)
     const eligible: Prisma.WebhookEventWhereInput = {
-      id, channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
+      // One owner per row: the generic claimant never holds an eBay row, and this lease
+      // never takes a row that carries a generic processing claim.
+      id, channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null, processingToken: null,
       OR: [{ status: { in: ['pending', 'failed'] }, nextAttemptAt: { lte: now },
         OR: [{ leaseUntil: null }, { leaseUntil: { lte: now } }],
       }, ...(ebayInboundProcessingReady() ? [heldEbayInboundWhere()] : [])],

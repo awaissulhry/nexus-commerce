@@ -10,7 +10,7 @@ export function heldEbayInboundWhere(): Prisma.WebhookEventWhereInput {
   return {
     channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
     status: 'pending', attempts: 0, isProcessed: false, processedAt: null,
-    nextAttemptAt: null, leaseToken: null, leaseUntil: null, connectionId: { not: null },
+    nextAttemptAt: null, leaseToken: null, leaseUntil: null, processingToken: null, processingUntil: null, connectionId: { not: null },
     OR: [{ externalId: { startsWith: 'ebay:production:' } }, { externalId: { startsWith: 'ebay:sandbox:' } }],
     NOT: { externalId: { in: ['ebay:production:', 'ebay:sandbox:'] } },
   }

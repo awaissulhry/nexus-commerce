@@ -51,13 +51,15 @@ export interface InboundClaim {
 export async function claimInbound(id: string, now?: Date): Promise<InboundClaim | null> {
   now ??= await inboundDatabaseNow()
   const row = await prisma.webhookEvent.findUnique({ where: { id } })
-  if (!row || row.archivedAt || !isVerifiedInbound(row) || !['pending', 'failed'].includes(row.status)) return null
+  // One owner per row type: eBay rows belong to the eBay processor (ebay-claims.ts leases),
+  // never to this claimant, whatever their trust or schedule.
+  if (!row || row.channel === 'EBAY' || row.archivedAt || !isVerifiedInbound(row) || !['pending', 'failed'].includes(row.status)) return null
   if (row.processingUntil && row.processingUntil > now) return null
   if (row.nextAttemptAt && row.nextAttemptAt > now) return null
 
   const unchanged: Prisma.WebhookEventWhereInput = {
-    id, status: row.status, archivedAt: null, attempts: row.attempts,
-    processingToken: row.processingToken, processingUntil: row.processingUntil,
+    id, channel: { not: 'EBAY' }, status: row.status, archivedAt: null, attempts: row.attempts,
+    processingToken: row.processingToken, processingUntil: row.processingUntil, leaseToken: null,
     nextAttemptAt: row.nextAttemptAt, AND: [VERIFIED_INBOUND_WHERE],
   }
   if (row.attempts >= MAX_INBOUND_ATTEMPTS) {
@@ -87,7 +89,7 @@ export async function claimInbound(id: string, now?: Date): Promise<InboundClaim
 /** The row as its claim left it: same token and attempt, lease still live. */
 function stillOwned(claim: InboundClaim, now: Date): Prisma.WebhookEventWhereInput {
   return {
-    id: claim.id, status: 'pending', archivedAt: null, processingToken: claim.token,
+    id: claim.id, channel: { not: 'EBAY' }, status: 'pending', archivedAt: null, processingToken: claim.token,
     attempts: claim.attempt, processingUntil: { gt: now }, AND: [VERIFIED_INBOUND_WHERE],
   }
 }

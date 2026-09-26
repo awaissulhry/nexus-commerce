@@ -18,11 +18,12 @@ export async function archiveCompletedInbound(days: number): Promise<{ archived:
       WHERE "workspaceId"=${workspaceId} AND status='done' AND "isProcessed"=true
         AND "processedAt" < (${cutoff}::timestamptz AT TIME ZONE 'UTC')
         AND "archivedAt" IS NULL AND "nextAttemptAt" IS NULL AND "leaseToken" IS NULL AND "leaseUntil" IS NULL
+        AND "processingToken" IS NULL AND "processingUntil" IS NULL
       ORDER BY "processedAt", id LIMIT ${INBOUND_ARCHIVE_BATCH} FOR UPDATE SKIP LOCKED`
     if (!rows.length) return { archived: 0, limitReached: false }
     const saved = await tx.webhookEvent.updateMany({ where: { id: { in: rows.map(row => row.id) }, workspaceId,
       status: 'done', isProcessed: true, processedAt: { lt: cutoff }, archivedAt: null,
-      nextAttemptAt: null, leaseToken: null, leaseUntil: null,
+      nextAttemptAt: null, leaseToken: null, leaseUntil: null, processingToken: null, processingUntil: null,
     }, data: { archivedAt: clock.now } })
     return { archived: saved.count, limitReached: rows.length === INBOUND_ARCHIVE_BATCH }
   }, { isolationLevel: 'ReadCommitted', maxWait: 5_000, timeout: 30_000 })

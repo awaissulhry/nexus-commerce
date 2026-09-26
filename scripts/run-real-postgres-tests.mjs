@@ -77,6 +77,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'credential maintenance races (rotation, backfill, rollback and shared-account isolation)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 12 },
   { name: 'transactional eBay revocation and unresolved owner warnings', file: 'src/services/cx/revocation-postgres.vitest.test.ts', expect: 25 },
   { name: 'durable webhook claims and retention', file: 'src/services/cx/ingress/claims.vitest.test.ts', expect: 20 },
+  { name: 'one owner per inbound row type (eBay leases × processing claims, retention archive)', file: 'src/services/cx/ingress/inbound-ownership-postgres.vitest.test.ts', expect: 13 },
   { name: 'transactional event producers and duplicate consumers', file: 'src/services/event-durability.vitest.test.ts', expect: 5 },
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },

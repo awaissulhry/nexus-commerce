@@ -58,13 +58,21 @@ describe.skipIf(!concurrentDatabaseUrl())('durable eBay receipt processing in Po
     expect(stored.nextAttemptAt!.getTime()).toBeGreaterThanOrEqual(before)
   })
 
-  it('leaves existing inline flows unscheduled and never queues an unverified receipt', async () => {
-    for (const [channel, eventType, verifiedBy, signatureOk] of [
-      ['SHOPIFY', 'product/update', 'shopify_hmac', true], ['AMAZON', 'ORDER_CHANGE', 'sqs_iam', null], ['ETSY', 'order.paid', 'none', true],
+  it('schedules each row type only by its owner and never queues an unverified receipt', async () => {
+    // #4 (claims.ts): a trusted arrival with a replay handler is due at once for the generic
+    // claimant; one without a handler stays unscheduled. Package A's eBay queue never takes them.
+    for (const [channel, eventType, verifiedBy, signatureOk, dueAtOnce] of [
+      ['SHOPIFY', 'product/update', 'shopify_hmac', true, true], ['AMAZON', 'ORDER_CHANGE', 'sqs_iam', null, false], ['ETSY', 'order.paid', 'none', true, true],
     ] as const) {
       const receipt = await inOwner(() => recordInbound({ ...queuedReceipt(), channel, eventType, verifiedBy, signatureOk, queueForRetry: false }))
-      expect((await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: receipt.id! } }))).nextAttemptAt).toBeNull()
+      const row = await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: receipt.id! } }))
+      if (dueAtOnce) expect(row.nextAttemptAt).toBeInstanceOf(Date)
+      else expect(row.nextAttemptAt).toBeNull()
+      expect(row).toMatchObject({ leaseToken: null, leaseUntil: null })
     }
+    // A verified eBay receipt admitted without the eBay queue stays unscheduled (held).
+    const held = await inOwner(() => recordInbound({ ...queuedReceipt(), queueForRetry: false }))
+    expect((await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: held.id! } }))).nextAttemptAt).toBeNull()
     const rejected = await inOwner(() => recordInbound({ ...queuedReceipt(), signatureOk: false }))
     const stored = await inOwner(() => database.client.webhookEvent.findUniqueOrThrow({ where: { id: rejected.id! } }))
     expect(stored.status).toBe('failed')

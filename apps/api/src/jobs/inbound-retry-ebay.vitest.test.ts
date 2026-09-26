@@ -1,11 +1,20 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { workspaceIdForQuery } from '../lib/workspace-context.js'
-const state = vi.hoisted(() => ({ events: [] as Array<{ id: string; workspaceId: string }>, process: vi.fn(), due: vi.fn(), payload: vi.fn(), complete: vi.fn(), dead: vi.fn() }))
+const state = vi.hoisted(() => ({ events: [] as Array<{ id: string; workspaceId: string }>, process: vi.fn(), due: vi.fn(), payload: vi.fn(), complete: vi.fn(), dead: vi.fn(), claimed: vi.fn(), finished: vi.fn() }))
 vi.mock('../services/cx/ingress/ebay-processing.js', () => ({ dueEbayInboundEvents: async () => state.events,
   processEbayInbound: state.process, ebayInboundProcessingEnabled: () => true }))
 vi.mock('../services/cx/ingress/ledger.js', () => ({ dueInboundEvents: state.due, isVerifiedInbound: (row: any) => row.signatureOk === true,
   completeInbound: state.complete, deadLetterInbound: state.dead }))
 vi.mock('../services/cx/ingress/handlers.js', () => ({ canReplayInbound: () => true, inboundHandlerFor: async () => state.payload }))
+// Generic rows run under #4's claim (proved against PostgreSQL in claims.vitest.test.ts); here a
+// claim is the selected row itself, so the sweep's routing is what is under test.
+vi.mock('../services/cx/ingress/claims.js', () => ({
+  inboundDatabaseNow: async () => new Date('2026-09-26T12:00:00Z'),
+  claimInbound: async (id: string) => { state.claimed(id)
+    return { id, token: 'token', attempt: 1, payload: { product: 'existing' }, connectionId: id === 'shopify' ? 'shop' : 'preserved-shopify', eventType: 'product/update', channel: 'SHOPIFY' } },
+  runWithInboundClaim: async (claim: { id: string }, work: (claim: unknown, signal: AbortSignal) => Promise<unknown>) => {
+    const result = await work(claim, new AbortController().signal); state.finished(claim.id); return result },
+}))
 vi.mock('../db.js', () => ({ default: {} }))
 vi.mock('../lib/cron/clustered.js', () => ({ default: {} }))
 vi.mock('../utils/cron-observability.js', () => ({ recordCronRun: vi.fn() }))
@@ -26,9 +35,15 @@ it('runs stored receipts in their own profiles and never invokes legacy completi
   expect(await runInboundRetrySweep()).toEqual({ due: 5, succeeded: 2, failed: 1, unreplayable: 1, deferred: 1, skipped: 0 })
   expect(state.process).toHaveBeenCalledTimes(4)
   expect(state.due).toHaveBeenCalledWith(50, expect.any(Date), { excludeVerifiedEbay: true })
-  expect(state.complete).toHaveBeenCalledExactlyOnceWith('shopify-receipt', true)
+  // #4: a generic row finishes through its claim, never through legacy completion.
+  expect(state.claimed).toHaveBeenCalledExactlyOnceWith('shopify-receipt')
+  expect(state.finished).toHaveBeenCalledExactlyOnceWith('shopify-receipt')
+  expect(state.complete).not.toHaveBeenCalled()
   expect(state.dead).not.toHaveBeenCalled()
-  expect(state.payload).toHaveBeenCalledExactlyOnceWith({ product: 'existing' }, { connectionId: 'preserved-shopify', eventType: 'product/update', channel: 'SHOPIFY' })
+  expect(state.payload).toHaveBeenCalledExactlyOnceWith({ product: 'existing' }, { connectionId: 'preserved-shopify', eventType: 'product/update', channel: 'SHOPIFY', signal: expect.any(AbortSignal) })
+  // One owner per row type: the eBay processor never saw the generic row, the claimant never saw an eBay row.
+  expect(state.process.mock.calls.map(call => call[0])).not.toContain('shopify-receipt')
+  expect(state.claimed.mock.calls.map(call => call[0])).toEqual(['shopify-receipt'])
 })
 
 it('leaves a failed required write to durable lease recovery instead of a legacy completion', async () => {

@@ -116,7 +116,7 @@ describe('a redelivery is not a handling attempt', () => {
   it('counts a duplicate arrival as a delivery, leaving the retry budget alone', async () => {
     seed('e1', { channel: 'SHOPIFY', externalId: 'delivery-1', status: 'pending', attempts: 3 })
     const result = await recordInbound({
-      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1',
+      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1', connectionId: 'account-1',
       payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac',
     })
     expect(result.duplicate).toBe(true)
@@ -129,7 +129,7 @@ describe('a redelivery is not a handling attempt', () => {
   it('reports the status the row ALREADY had, so a receiver can tell a retry from a duplicate', async () => {
     seed('e1', { externalId: 'delivery-1', status: 'failed' })
     const result = await recordInbound({
-      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1',
+      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1', connectionId: 'account-1',
       payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac',
     })
     // Without this, a channel resending BECAUSE we failed gets a 200 and is dropped.
@@ -271,7 +271,9 @@ describe('replay', () => {
       rows.get('raced')![field as string] = value
       return updateMany(args)
     })
-    expect(await replayInbound({ id: 'raced' })).toMatchObject({ ok: false, reason: 'already_pending' })
+    // Refused either way; the reason names what raced it (Package A's replay reasons).
+    const reason = field === 'processingToken' ? 'already_pending' : field === 'archivedAt' ? 'archived' : 'changed'
+    expect(await replayInbound({ id: 'raced' })).toMatchObject({ ok: false, reason })
     expect(updates).toHaveLength(0)
     expect(rows.get('raced')!.attempts).toBe(MAX_INBOUND_ATTEMPTS)
     expect(rows.get('raced')![field as string]).toBe(value)
