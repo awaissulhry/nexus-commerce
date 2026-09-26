@@ -1,14 +1,12 @@
-import { Prisma } from '@prisma/client';
 import keysJson from './workspaces/scoped-keys.json' with { type: 'json' };
+import modelMetadata from './workspaces/model-metadata.json' with { type: 'json' };
 import { LEGACY_WORKSPACE_ID, WorkspaceError } from './workspace-context.js';
 const keys = keysJson;
-const relationModels = Object.fromEntries(Prisma.dmmf.datamodel.models.map(model => [model.name,
+const relationModels = Object.fromEntries(modelMetadata.models.map(model => [model.name,
     Object.fromEntries(model.fields.filter(field => field.kind === 'object').map(field => [field.name, field.type])),
 ]));
-const singletonIds = Object.fromEntries(Prisma.dmmf.datamodel.models.flatMap(model => {
-    const field = model.fields.find(field => field.isId && typeof field.default === 'string');
-    return field ? [[model.name, field.default]] : [];
-}));
+const singletonIds = Object.fromEntries(modelMetadata.models.flatMap(model => model.fields.flatMap(field => 'isId' in field && field.isId && 'default' in field && typeof field.default === 'string'
+    ? [[model.name, field.default]] : [])));
 const record = (value) => !!value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
 function assertScope(value, workspaceId) {
     if (value !== undefined && value !== workspaceId)

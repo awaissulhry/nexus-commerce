@@ -29,6 +29,8 @@ export interface InboundHandlerContext {
   connectionId: string | null
   eventType: string
   channel: string
+  /** Aborted when the processing lease is lost; another worker now owns the event. */
+  signal?: AbortSignal
 }
 
 export type InboundHandler = (payload: unknown, context?: InboundHandlerContext) => Promise<unknown>

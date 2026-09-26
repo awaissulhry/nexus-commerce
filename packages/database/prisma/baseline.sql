@@ -2341,6 +2341,24 @@ CREATE TABLE "PasswordResetToken" (
 );
 
 -- CreateTable
+CREATE TABLE "CommandReceipt" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "scope" TEXT NOT NULL,
+    "keyHash" TEXT NOT NULL,
+    "requestHash" TEXT NOT NULL,
+    "actorUserId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "httpStatus" INTEGER,
+    "response" JSONB,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CommandReceipt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "WebhookEvent" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -2362,6 +2380,10 @@ CREATE TABLE "WebhookEvent" (
     "nextAttemptAt" TIMESTAMP(3),
     "leaseToken" TEXT,
     "leaseUntil" TIMESTAMP(3),
+    "processingToken" TEXT,
+    "processingUntil" TIMESTAMP(3),
+    "rawBody" BYTEA,
+    "verificationHeaders" JSONB,
     "signatureOk" BOOLEAN,
     "verifiedBy" TEXT,
     "payloadDigest" TEXT,
@@ -10545,6 +10567,12 @@ CREATE INDEX "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId");
 
 -- CreateIndex
 CREATE INDEX "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt");
+
+-- CreateIndex
+CREATE INDEX "CommandReceipt_workspaceId_expiresAt_idx" ON "CommandReceipt"("workspaceId", "expiresAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CommandReceipt_workspaceId_scope_keyHash_key" ON "CommandReceipt"("workspaceId", "scope", "keyHash");
 
 -- CreateIndex
 CREATE INDEX "WebhookEvent_isProcessed_idx" ON "WebhookEvent"("isProcessed");

@@ -2,10 +2,21 @@
   "name": "@nexus/database",
   "version": "1.0.0",
   "private": true,
+  "bin": {
+    "nexus-model-metadata": "./scripts/generate-model-metadata.cjs"
+  },
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
   "exports": {
+    "./model-metadata": {
+      "types": "./model-metadata.d.ts",
+      "default": "./model-metadata.js"
+    },
+    "./runtime-role": {
+      "types": "./runtime-role.d.ts",
+      "default": "./runtime-role.js"
+    },
     ".": {
       "types": "./index.d.ts",
       "import": "./index.js",
@@ -43,13 +54,14 @@
   },
   "dependencies": {
     "@nexus/shared": "*",
-    "@prisma/adapter-pg": "^6.19.3",
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "@prisma/generator-helper": "7.10.0",
     "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
     "next": "16.3.5",
     "pg": "^8.20.0",
-    "prisma": "^6.19.3"
+    "prisma": "7.10.0"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

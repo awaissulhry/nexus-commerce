@@ -16,6 +16,34 @@ const updates: Array<{ id: string; data: Row }> = []
 let rawRows: Row[] = []
 let lastRawArgs: unknown[] = []
 
+const comparable = (value: any) => value instanceof Date ? value.getTime() : value
+function matchesWhere(row: Row, where: Row): boolean {
+  return Object.entries(where).every(([field, condition]) => {
+    if (field === 'AND') return condition.every((part: Row) => matchesWhere(row, part))
+    if (field === 'OR') return condition.some((part: Row) => matchesWhere(row, part))
+    const actual = comparable(row[field])
+    if (condition !== null && typeof condition === 'object' && !(condition instanceof Date)) {
+      return Object.entries(condition).every(([operator, value]) => {
+        if (operator === 'in') return (value as unknown[]).includes(actual)
+        if (operator === 'not') return actual !== comparable(value)
+        if (operator === 'lte') return actual != null && actual <= comparable(value)
+        if (operator === 'lt') return actual != null && actual < comparable(value)
+        throw new Error(`Unsupported test predicate: ${operator}`)
+      })
+    }
+    return actual === comparable(condition)
+  })
+}
+
+function applyUpdate(row: Row, data: Row) {
+  updates.push({ id: row.id, data })
+  for (const [field, value] of Object.entries(data)) {
+    row[field] = value && typeof value === 'object' && 'increment' in value
+      ? (row[field] ?? 0) + value.increment
+      : value
+  }
+}
+
 const prismaMock = {
   webhookEvent: {
     findUnique: vi.fn(async (args: any) => {
@@ -38,29 +66,23 @@ const prismaMock = {
     }),
     findMany: vi.fn(async (args: any) => {
       lastRawArgs = [args]
-      return rawRows
+      return rawRows.filter(row => matchesWhere(row, args.where)).slice(0, args.take)
     }),
     update: vi.fn(async (args: any) => {
+      // Package A's redelivery guards identity in the UPDATE itself (P2025 on mismatch);
+      // #4's writers are conditional on their claim fields. Both go through matchesWhere.
       const key = args.where.channel_externalId
       const row = key ? [...rows.values()].find(row => row.channel === key.channel && row.externalId === key.externalId) : rows.get(args.where.id)
-      if (key && (!row || ['eventType', 'connectionId', 'signatureOk', 'verifiedBy'].some(field => (row[field] ?? null) !== args.where[field]))) throw Object.assign(new Error('No matching receipt'), { code: 'P2025' })
-      updates.push({ id: row?.id ?? args.where.id, data: args.data })
-      if (row) {
-        for (const [field, value] of Object.entries(args.data as Row)) {
-          row[field] = value && typeof value === 'object' && 'increment' in (value as Row)
-            ? (row[field] ?? 0) + (value as Row).increment
-            : value
-        }
-      }
-      return row ?? args.data
+      if (key) {
+        if (!row || ['eventType', 'connectionId', 'signatureOk', 'verifiedBy'].some(field => (row[field] ?? null) !== args.where[field])) throw Object.assign(new Error('No matching receipt'), { code: 'P2025' })
+      } else if (!row || !matchesWhere(row, args.where)) throw new Error('No matching inbound event')
+      applyUpdate(row, args.data)
+      return row
     }),
-    updateMany: vi.fn(async ({ where, data }: any) => {
-      const row = rows.get(where.id)
-      if (!row || Object.entries(where).some(([key, value]) => value !== undefined &&
-        (value instanceof Date ? row[key]?.getTime() !== value.getTime() : row[key] !== value))) return { count: 0 }
-      updates.push({ id: row.id, data })
-      Object.assign(row, data)
-      return { count: 1 }
+    updateMany: vi.fn(async (args: any) => {
+      const matching = [...rows.values()].filter(row => matchesWhere(row, args.where))
+      for (const row of matching) applyUpdate(row, args.data)
+      return { count: matching.length }
     }),
   },
   $queryRawUnsafe: vi.fn(async (..._args: unknown[]) => {
@@ -79,7 +101,7 @@ const {
 } = await import('./ledger.js')
 
 function seed(id: string, row: Row) {
-  rows.set(id, { id, channel: 'SHOPIFY', eventType: 'product/update', externalId: id, status: 'failed', attempts: 0, deliveries: 1, archivedAt: null, nextAttemptAt: null, workspaceId: 'ws-1', signatureOk: true, verifiedBy: 'shopify_hmac', ...row })
+  rows.set(id, { id, channel: 'SHOPIFY', eventType: 'product/update', externalId: id, status: 'failed', attempts: 0, deliveries: 1, archivedAt: null, nextAttemptAt: null, processingToken: null, processingUntil: null, connectionId: 'account-1', createdAt: new Date(), workspaceId: 'ws-1', signatureOk: true, verifiedBy: 'shopify_hmac', ...row })
 }
 
 beforeEach(() => {
@@ -231,12 +253,28 @@ describe('replay', () => {
     seed('queued', { status: 'pending', nextAttemptAt: new Date() })
     expect((await replayInbound({ id: 'queued' })).reason).toBe('already_pending')
 
-    // The 91 rows sitting at `pending` with no time on them are exactly what the
-    // button exists for: a receiver died between recording the arrival and handling
-    // it. Refusing every `pending` row would have excluded the only case that needs it.
+    // Manual replay can queue a stranded arrival immediately; eligible older
+    // arrivals can also be recovered automatically by the retry sweep.
     seed('stuck', { status: 'pending', nextAttemptAt: null })
     expect((await replayInbound({ id: 'stuck' })).ok).toBe(true)
     expect(rows.get('stuck')!.nextAttemptAt).toBeInstanceOf(Date)
+  })
+
+  it.each([
+    ['status', 'done'], ['archivedAt', new Date()], ['nextAttemptAt', new Date()],
+    ['processingToken', 'another-worker'], ['processingUntil', new Date()],
+    ['signatureOk', false], ['verifiedBy', 'none'],
+  ])('does not overwrite a concurrent change to %s', async (field, value) => {
+    seed('raced', { status: 'dlq', attempts: MAX_INBOUND_ATTEMPTS })
+    const updateMany = prismaMock.webhookEvent.updateMany.getMockImplementation()!
+    prismaMock.webhookEvent.updateMany.mockImplementationOnce(async args => {
+      rows.get('raced')![field as string] = value
+      return updateMany(args)
+    })
+    expect(await replayInbound({ id: 'raced' })).toMatchObject({ ok: false, reason: 'already_pending' })
+    expect(updates).toHaveLength(0)
+    expect(rows.get('raced')!.attempts).toBe(MAX_INBOUND_ATTEMPTS)
+    expect(rows.get('raced')![field as string]).toBe(value)
   })
 })
 
@@ -254,6 +292,34 @@ describe('what the worker picks up', () => {
     expect(args.orderBy).toEqual({ nextAttemptAt: 'asc' })
     expect(args.take).toBe(25)
     expect(args.select).toMatchObject({ signatureOk: true, verifiedBy: true })
+  })
+
+  it('collects only rows whose time has come, never a row stranded without one', async () => {
+    const now = new Date('2026-09-25T12:00:00Z')
+    const old = new Date(now.getTime() - 5 * 60_000 - 1)
+    const stranded = { status: 'pending', createdAt: old }
+    seed('failed-due', { nextAttemptAt: now })
+    seed('replayed-due', { status: 'pending', nextAttemptAt: now })
+    seed('shopify-stranded', stranded)
+    seed('etsy-stranded', { ...stranded, channel: 'ETSY', eventType: 'order.paid' })
+    seed('uninstalled', { ...stranded, eventType: 'app/uninstalled', connectionId: null })
+    seed('future', { nextAttemptAt: new Date(now.getTime() + 1) })
+    seed('fresh', { ...stranded, createdAt: new Date(now.getTime() - 5 * 60_000) })
+    seed('unverified', { ...stranded, signatureOk: false })
+    seed('unknown-trust', { ...stranded, signatureOk: null, verifiedBy: 'none' })
+    seed('no-handler', { ...stranded, eventType: 'unknown' })
+    seed('no-account', { ...stranded, connectionId: null })
+    seed('claimed', { ...stranded, processingToken: 'active-worker' })
+    seed('amazon-stranded', { ...stranded, channel: 'AMAZON', verifiedBy: 'sqs_iam' })
+    seed('archived', { ...stranded, archivedAt: now, nextAttemptAt: now })
+    seed('done', { status: 'done', nextAttemptAt: now })
+    seed('dead-letter', { status: 'dlq', nextAttemptAt: now })
+    rawRows = [...rows.values()]
+
+    // Stranded rows predate claims: replaying a weeks-old delivery could write stale
+    // state, so they wait for an operator in Sync Logs (see dueInboundEvents).
+    expect((await dueInboundEvents(25, now)).map(row => row.id).sort()).toEqual(['failed-due', 'replayed-due'])
+    expect(updates).toHaveLength(0)
   })
 
   it('goes through the SCOPED model API, never raw SQL', async () => {

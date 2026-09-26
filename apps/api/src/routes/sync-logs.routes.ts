@@ -41,6 +41,7 @@ import {
 import { recordCronRun } from '../utils/cron-observability.js'
 import { inboundHandlerFor, inboundReceiptHandlerFor, canReplayInbound, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
 import { completeInbound, deadLetterInbound, replayInbound } from '../services/cx/ingress/ledger.js'
+import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { ebayInboundProcessingReady } from '../services/cx/ingress/ebay-processing.js'
 
@@ -1160,6 +1161,20 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Stored-payload channels execute through the same durable claimant as
+        // normal delivery. Manual replay cannot race an inline handler. eBay never
+        // reaches this claimant: its receipts belong to the eBay processor above.
+        if (canReplayInbound(event.channel, event.eventType)) {
+          const claim = await claimInbound(event.id)
+          if (!claim) return reply.code(202).send({ success: true, queued: true })
+          await runWithInboundClaim(claim, async (stored, signal) => {
+            const handler = await inboundHandlerFor(stored.channel, stored.eventType)
+            if (!handler) throw new ReplayUnsupported('The stored event has no replay handler.')
+            await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
+          })
+          return reply.send({ success: true })
+        }
+
         const replay = async (): Promise<void> => {
           // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
           if (event.channel === 'AMAZON') {
@@ -1219,8 +1234,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         if (!row) {
           return reply.code(404).send({ error: 'Webhook event not found' })
         }
-        const { leaseToken: _privateLeaseToken, ...publicRow } = row
-        return reply.send(publicRow)
+        const { leaseToken: _privateLeaseToken, rawBody: _rawBody, verificationHeaders: _verificationHeaders,
+          processingToken: _processingToken, processingUntil: _processingUntil, ...visible } = row
+        return reply.send(visible)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         fastify.log.error({ err }, '[sync-logs/webhooks/:id] failed')

@@ -18,6 +18,7 @@ import crypto from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
+import { canReplayInbound } from './handlers.js'
 
 export type InboundStatus = 'pending' | 'done' | 'failed' | 'dlq'
 
@@ -37,12 +38,38 @@ export function isVerifiedInbound(event: { channel: string; signatureOk?: boolea
   )
 }
 
+/** `isVerifiedInbound` as a query filter, for conditional updates that must re-check trust. */
+export const VERIFIED_INBOUND_WHERE: Prisma.WebhookEventWhereInput = { OR: [
+  { signatureOk: true },
+  { signatureOk: null, verifiedBy: 'sqs_iam', channel: { in: ['AMAZON', 'AMAZON_ADS'] } },
+] }
+
+/**
+ * Exact request bytes are kept so a signature can be re-verified later, when a
+ * delivery is disputed. Bounded: a larger body keeps only its digest and payload.
+ */
+const MAX_RAW_BODY_BYTES = 1024 * 1024
+
+/** Headers that carry a delivery's identity or signature. Never credentials. */
+const VERIFICATION_HEADERS = new Set([
+  'x-shopify-hmac-sha256', 'x-shopify-webhook-id', 'x-shopify-topic', 'x-shopify-shop-domain',
+  'webhook-id', 'webhook-timestamp', 'webhook-signature', 'x-ebay-signature',
+])
+const MAX_VERIFICATION_HEADER_LENGTH = 8192
+
+function verificationHeadersOf(headers: InboundRecord['headers']): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers ?? {}).filter((entry): entry is [string, string] =>
+    VERIFICATION_HEADERS.has(entry[0].toLowerCase()) &&
+    typeof entry[1] === 'string' && entry[1].length <= MAX_VERIFICATION_HEADER_LENGTH))
+}
+
 interface InboundRecordFields {
   channel: string
   eventType: string
   /** The channel's own id when it gives one; a body digest is used when it does not. */
   externalId?: string | null
   rawBody?: Buffer | null
+  headers?: Record<string, string | string[] | undefined>
   payload: unknown
   /** true = checked and passed · false = checked and failed · null = nothing to check. */
   signatureOk: boolean | null
@@ -115,13 +142,18 @@ async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' 
         ? `sha256:${payloadDigest}`
         : `unidentified:${crypto.randomUUID()}`
   const status: InboundStatus = rec.status ?? (rec.signatureOk === false ? 'failed' : 'pending')
+  // A trusted arrival with a handler is due at once. The receiver claims it inline;
+  // if that process dies first, the retry worker finds it due and claims it instead.
+  // Never eBay: its receipts belong to the eBay processor, which schedules them itself
+  // (queueForRetry below) and holds admitted receipts unscheduled while processing is off.
+  const dueNow = String(rec.channel) !== 'EBAY' && status === 'pending' && isVerifiedInbound(rec) && canReplayInbound(rec.channel, rec.eventType)
 
   try {
     if (rec.queueForRetry && String(rec.channel) !== 'EBAY') {
       logger.error('[cx-ingress] durable receipt scheduling is not configured for this channel', { channel: rec.channel })
       return { id: null, duplicate: false }
     }
-    let nextAttemptAt: Date | null = null
+    let nextAttemptAt: Date | null = dueNow ? new Date() : null
     if (rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending') {
       const [clock] = await db.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
       nextAttemptAt = clock.now
@@ -146,6 +178,8 @@ async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' 
         signatureOk: rec.signatureOk,
         verifiedBy: rec.verifiedBy,
         payloadDigest,
+        rawBody: rec.rawBody && rec.rawBody.length <= MAX_RAW_BODY_BYTES ? Uint8Array.from(rec.rawBody) : null,
+        verificationHeaders: verificationHeadersOf(rec.headers),
         lastError: rec.lastError ?? null,
         error: rec.lastError ?? null,
       },
@@ -220,18 +254,19 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
   try {
     if (ok) {
       await prisma.webhookEvent.update({
-        where: { id, channel: { not: 'EBAY' } },
+        where: { id, channel: { not: 'EBAY' }, processingToken: null },
         data: { status: 'done', isProcessed: true, processedAt: new Date(), nextAttemptAt: null, lastError: null },
       })
       return
     }
-    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true, channel: true } })
-    if (row?.channel === 'EBAY') return
+    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true, channel: true, processingToken: true } })
+    // One owner per row: the eBay processor finishes eBay receipts, a claim holder finishes its claim.
+    if (row?.channel === 'EBAY' || row?.processingToken) return
     const attempts = (row?.attempts ?? 0) + 1
     const exhausted = attempts >= MAX_INBOUND_ATTEMPTS
     const reason = (error ?? 'unknown').slice(0, 500)
     await prisma.webhookEvent.update({
-      where: { id, channel: { not: 'EBAY' } },
+      where: { id, channel: { not: 'EBAY' }, processingToken: null, attempts: row?.attempts ?? 0 },
       data: {
         status: exhausted ? 'dlq' : 'failed',
         attempts,
@@ -255,7 +290,7 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
 export async function deadLetterInbound(id: string, reason: string): Promise<void> {
   try {
     await prisma.webhookEvent.update({
-      where: { id, OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] },
+      where: { id, processingToken: null, OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] },
       data: { status: 'dlq', isProcessed: false, processedAt: null, nextAttemptAt: null, lastError: reason.slice(0, 500), error: reason.slice(0, 500) },
     })
   } catch (err) {
@@ -289,12 +324,17 @@ export interface DueInboundEvent {
  * Events that are due to be tried again — not archived, and past their time.
  *
  * `nextAttemptAt` is the queue, not the status. A failure that backed off is `failed`
- * with a time; an event an operator replayed is `pending` with a time. Both belong to
- * the worker, and neither can be confused with the far larger set of rows that carry
- * no time at all: a fresh arrival being handled inline, a finished event, a dead
- * letter. Selecting on the time rather than on one status is what keeps a replayed
- * event from sitting in the table forever waiting for a sweep that only looks at
- * failures.
+ * with a time; an event an operator replayed is `pending` with a time; a trusted
+ * arrival with a handler is `pending` and due the moment it is written, so a receiver
+ * that dies before handling it cannot strand it. A claimed event's time is its lease
+ * expiry (see `claims.ts`): it becomes due again only if its owner stops renewing.
+ * Rows with no time are finished, dead letters, or have nothing to run. Selecting on
+ * the time rather than on one status is what keeps a replayed event from sitting in
+ * the table forever waiting for a sweep that only looks at failures.
+ *
+ * Rows stranded before claims existed (`pending`, no time) are deliberately NOT
+ * collected: replaying a weeks-old delivery could write stale state over newer data.
+ * They stay visible in Sync Logs, where an operator can replay each one on purpose.
  *
  * Ordered by `nextAttemptAt` so the longest-waiting event goes first, and limited so
  * one sweep cannot hold the worker open indefinitely when a channel has been down.
@@ -362,7 +402,7 @@ export interface ReplayOutcome {
 export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> {
   const row = await prisma.webhookEvent.findUnique({
     where: { id: req.id },
-    select: { id: true, workspaceId: true, channel: true, eventType: true, status: true, archivedAt: true, nextAttemptAt: true, signatureOk: true, verifiedBy: true },
+    select: { id: true, workspaceId: true, channel: true, eventType: true, status: true, archivedAt: true, nextAttemptAt: true, signatureOk: true, verifiedBy: true, processingToken: true, processingUntil: true },
   })
   if (!row) return { ok: false, reason: 'not_found' }
   if (req.workspaceId && row.workspaceId !== req.workspaceId) return { ok: false, reason: 'wrong_workspace' }
@@ -372,20 +412,24 @@ export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> 
     const { queueEbayReplay } = await import('./ebay-claims.js')
     return queueEbayReplay(req)
   }
+  // The worker recovers expired claims. A manual request never overrides a
+  // claimant based on a potentially skewed HTTP-container clock.
+  if (row.processingToken) return { ok: false, reason: 'already_pending' }
   // Refuse only what is ALREADY in the worker's queue. A `pending` row with no time
   // on it is not queued for anything — that is the shape a receiver leaves behind when
   // it dies between recording an arrival and handling it, and replay is the only way
-  // such an event ever moves again. Refusing every `pending` row would have made the
+  // such an event can be expedited before automatic historical recovery. Refusing every `pending` row would have made the
   // one case the button exists for the one case it could not touch.
   if (row.status === 'pending' && row.nextAttemptAt) return { ok: false, reason: 'already_pending' }
   const saved = await prisma.webhookEvent.updateMany({
-    where: { id: row.id, workspaceId: row.workspaceId, channel: row.channel, status: row.status,
-      archivedAt: null, nextAttemptAt: row.nextAttemptAt, signatureOk: row.signatureOk, verifiedBy: row.verifiedBy },
-    data: { status: 'pending', attempts: 0, nextAttemptAt: new Date(), lastError: null, isProcessed: false, processedAt: null },
+    where: { id: row.id, workspaceId: row.workspaceId, channel: row.channel, status: row.status, archivedAt: null,
+      nextAttemptAt: row.nextAttemptAt, processingToken: row.processingToken, processingUntil: row.processingUntil,
+      signatureOk: row.signatureOk, verifiedBy: row.verifiedBy },
+    data: { status: 'pending', attempts: 0, nextAttemptAt: new Date(), lastError: null, isProcessed: false, processedAt: null, processingToken: null, processingUntil: null },
   })
   if (saved.count !== 1) {
-    const current = await prisma.webhookEvent.findUnique({ where: { id: row.id }, select: { archivedAt: true } })
-    return { ok: false, reason: !current ? 'not_found' : current.archivedAt ? 'archived' : 'changed' }
+    const current = await prisma.webhookEvent.findUnique({ where: { id: row.id }, select: { archivedAt: true, processingToken: true } })
+    return { ok: false, reason: !current ? 'not_found' : current.archivedAt ? 'archived' : current.processingToken ? 'already_pending' : 'changed' }
   }
   return { ok: true, channel: row.channel, eventType: row.eventType }
 }

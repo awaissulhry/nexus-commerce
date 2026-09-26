@@ -66,7 +66,7 @@ export interface EventDefinition<S extends z.ZodType = z.ZodType> {
   readonly schema: S
   /**
    * Derives the envelope `subject` — the aggregate id, and therefore the
-   * partition key that ordering is guaranteed against. Living on the
+   * partition key for subject affinity (not a processing-order guarantee). Living on the
    * definition rather than at each call site is what stops two publishers of
    * the same event from disagreeing about how it partitions.
    */
