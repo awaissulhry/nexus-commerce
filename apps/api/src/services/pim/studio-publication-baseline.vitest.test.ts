@@ -51,7 +51,7 @@ const field = (result: Awaited<ReturnType<typeof read>>, name: string, productId
 
 beforeAll(async () => {
   await prisma.product.createMany({ data: [...identities.map(item => item.productId), 'baseline-excluded'].map(id => ({ id, sku: `LOCAL-${id}`, name: id, basePrice: 10, status: 'DRAFT' })) })
-  await prisma.channelConnection.createMany({ data: [{ id: scope.accountId, channelType: 'AMAZON', isActive: true }, { id: 'baseline-other-account', channelType: 'AMAZON', isActive: true }] })
+  await prisma.channelConnection.createMany({ data: [{ id: scope.accountId, externalAccountId: 'baseline-seller', channelType: 'AMAZON', isActive: true }, { id: 'baseline-other-account', externalAccountId: 'baseline-other-seller', channelType: 'AMAZON', isActive: true }] })
   const listing = { productId: identities[0].productId, channel: scope.channel, marketplace: scope.marketplace, region: 'EU', channelMarket: 'AMAZON_IT', channelConnectionId: scope.accountId, aliasKey, externalListingId: 'remote-parent' }
   await prisma.channelListing.createMany({ data: [
     { ...listing, id: 'baseline-listing-parent' },

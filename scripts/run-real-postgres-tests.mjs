@@ -44,7 +44,7 @@
  *      report, so one suite's passes can never cover for another's skips. A suite that skipped measured
  *      nothing: that is a failure here, not a pass.
  *
- *   node scripts/run-real-postgres-tests.mjs
+ *   node scripts/run-real-postgres-tests.mjs                     # production-equivalent owner by default
  *   node scripts/run-real-postgres-tests.mjs --owner production   # as a non-superuser owner, production's rights
  *   node scripts/run-real-postgres-tests.mjs --required           # CI: missing Docker or image FAILS instead of skipping
  *   node scripts/run-real-postgres-tests.mjs --suites '[{"name":"x","file":"src/…","expect":1}]'   # harness use
@@ -60,6 +60,20 @@ const API = `${ROOT}/apps/api`
 const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
+  { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },
+  { name: 'retained inbound history (archive/replay races and database deletion guards)', file: 'src/services/cx/ingress/archive-postgres.vitest.test.ts', expect: 14 },
+  { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
+  { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
+  { name: 'private eBay admission and recovery (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 32 },
+  { name: 'private quarantine maintenance and inventory (roles, CAS, audit, snapshots and handoff races)', file: 'src/services/cx/ingress/ebay-quarantine-maintenance-postgres.vitest.test.ts', expect: 33 },
+  { name: 'cold quarantine verification (closed snapshots, private body door, concurrent changes and CLI)', file: 'src/services/cx/ingress/ebay-quarantine-verification-postgres.vitest.test.ts', expect: 12 },
+  { name: 'operator quarantine rewrap (audited CAS, closed transactions across KMS, contention and CLI)', file: 'src/services/cx/ingress/ebay-quarantine-rewrap-postgres.vitest.test.ts', expect: 7 },
+  { name: 'mixed-version eBay rollout (held admission and atomic activation)', file: 'src/services/cx/ingress/ebay-rollout-postgres.vitest.test.ts', expect: 9 },
+  { name: 'stored eBay execution (claims, holds, warnings, selection and worker integration)', file: 'src/services/cx/ingress/ebay-processing-postgres.vitest.test.ts', expect: 17 },
+  { name: 'atomic grant versions (reconnect, rollback, inspection and concurrent replacement)', file: 'src/services/cx/grant-version-postgres.vitest.test.ts', expect: 10 },
+  { name: 'eBay seller grant fence (cross-record reconnects and fresh committed reads)', file: 'src/services/cx/ebay-identity-postgres.vitest.test.ts', expect: 10 },
+  { name: 'credential maintenance races (rotation, backfill, rollback and shared-account isolation)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 12 },
+  { name: 'transactional eBay revocation and unresolved owner warnings', file: 'src/services/cx/revocation-postgres.vitest.test.ts', expect: 25 },
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
@@ -113,7 +127,7 @@ try {
   // --owner production: the suites connect as a NON-superuser that bypasses row security — the rights
   // production's migration role was measured with (neondb_owner: rolsuper false, rolbypassrls true) — so
   // every door, trigger and policy is created and run without a superuser (shared stock plan risk 8).
-  const owner = flag('--owner') ?? 'superuser'
+  const owner = flag('--owner') ?? 'production'
   if (!['superuser', 'production'].includes(owner)) { console.error(`❌ --owner must be superuser or production, not ${owner}`); process.exit(1) }
   const user = owner === 'production' ? 'nexus_owner' : 'postgres'
   if (owner === 'production') {
@@ -147,8 +161,8 @@ try {
     const statuses = file?.assertionResults?.map((test) => test.status) ?? []
     const count = (status) => statuses.filter((s) => s === status).length
     const passed = count('passed'), failed = count('failed'), skipped = statuses.length - passed - failed
-    const ok = !!file && passed === suite.expect && failed === 0 && skipped === 0
-    const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped` : 'not in the report'
+    const ok = file?.status === 'passed' && passed === suite.expect && failed === 0 && skipped === 0
+    const detail = file ? `${passed} passed, ${failed} failed, ${skipped} skipped; suite ${file.status}` : 'not in the report'
     return { suite, ok, line: `${suite.name}: ${detail} (expected ${suite.expect} passed)` }
   })
 
@@ -167,6 +181,10 @@ try {
     }
   }
   console.error(`Full local test evidence retained at ${reportDir}`)
+  // Hook failures can leave every assertion green and JSON's file.message empty.
+  // Surface the actual failure before ordinary application/Redis log noise.
+  const hookFailure = output.indexOf('Failed Suites')
+  if (hookFailure >= 0) console.error(output.slice(hookFailure).split('\n').slice(0, 40).join('\n'))
   console.error(output.split('\n').filter((l) => /FAIL|AssertionError|Error:|expected|skipped/.test(l)).slice(0, 40).join('\n'))
   process.exit(1)
 } finally {

@@ -26,7 +26,7 @@ const settle = (value: StudioPublishResult, scope = context) => prisma.$transact
 
 beforeAll(async () => {
   await prisma.product.createMany({ data: products.map((id, index) => ({ id, sku: `LOCAL-${index}`, name: `Product ${index}`, basePrice: 10, status: 'DRAFT' })) })
-  await prisma.channelConnection.createMany({ data: [{ id: context.accountId, channelType: 'AMAZON', isActive: true }, { id: 'other-record-account', channelType: 'AMAZON', isActive: true }] })
+  await prisma.channelConnection.createMany({ data: [{ id: context.accountId, externalAccountId: 'record-seller', channelType: 'AMAZON', isActive: true }, { id: 'other-record-account', externalAccountId: 'record-other-seller', channelType: 'AMAZON', isActive: true }] })
 }, 120_000)
 beforeEach(async () => {
   await prisma.channelPublishAttempt.deleteMany({ where: { productId: { in: products } } })

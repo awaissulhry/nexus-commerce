@@ -15,6 +15,7 @@
  *   app secrets         0   (no app has an expiry date set)
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 
@@ -23,7 +24,8 @@ vi.mock('../../db.js', () => ({
   default: new Proxy({} as Record<string, unknown>, { get: (_t, p) => (database.client as unknown as Record<string, unknown>)[p as string] }),
 }))
 
-const WS = 'nexus_legacy_workspace'
+const BASE_WS = 'nexus_legacy_workspace'
+let WS = BASE_WS
 const OTHER_WS = 'ws_other_business'
 const OWNER = 'user-owner'
 const OWNER_2 = 'user-owner-2'
@@ -260,11 +262,17 @@ describe('P3.4 — channel alerts reach the owning profile’s owners', () => {
     const webhookEvent = (id: string, channel: string, o: { status?: string; signatureOk?: boolean | null; at: Date }) =>
       q(`INSERT INTO "WebhookEvent" ("workspaceId", id, channel, "externalId", "eventType", payload, "isProcessed", status, "signatureOk", "createdAt", "updatedAt")
          VALUES ($1,$2,$3,$2,'test','{}'::jsonb,false,$4,$5,$6,$6)`,
-        [WS, id, channel, o.status ?? 'done', o.signatureOk ?? null, o.at])
+        [WS, `${WS}:${id}`, channel, o.status ?? 'done', o.signatureOk ?? null, o.at])
 
     beforeEach(async () => {
+      WS = `alerts-${randomUUID()}`
+      await q(`INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,'Alert fixture','test',$1,now())`, [WS])
+      await q(`INSERT INTO "WorkspaceMembership" (id,"workspaceId","userId",status,"updatedAt")
+        SELECT $1 || ':' || id,$1,"userId",status,now() FROM "WorkspaceMembership" WHERE "workspaceId"=$2`, [WS, BASE_WS])
+      await q(`INSERT INTO "WorkspaceMemberRole" ("membershipId","roleId")
+        SELECT $1 || ':' || r."membershipId",r."roleId" FROM "WorkspaceMemberRole" r
+        JOIN "WorkspaceMembership" m ON m.id=r."membershipId" WHERE m."workspaceId"=$2`, [WS, BASE_WS])
       await q(`DELETE FROM "Notification"`)
-      await q(`DELETE FROM "WebhookEvent"`)
       await q(`DELETE FROM "ListingIssue"`)
       await q(`DELETE FROM "ChannelApp"`)
     })

@@ -5138,6 +5138,7 @@ model PasswordResetToken {
 // ── Webhook Event Tracking ─────────────────────────────────────────
 
 model WebhookEvent {
+  ebayQuarantine EbayNoticeQuarantine?
   // Business ownership comes from verified database context.
   workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String    @id @default(cuid())
@@ -5172,6 +5173,9 @@ model WebhookEvent {
   attempts      Int       @default(0)
   deliveries    Int       @default(0)
   nextAttemptAt DateTime?
+  // eBay processing ownership. Inline Shopify/SQS handling does not acquire a lease.
+  leaseToken    String?
+  leaseUntil    DateTime?
   // Tri-state on purpose: true = checked and passed, false = checked and
   // failed, null = this transport carries no signature. Amazon's SQS
   // notifications are unsigned JSON trusted via the queue's IAM policy, so
@@ -5188,10 +5192,57 @@ model WebhookEvent {
   @@unique([workspaceId, channel, externalId], name: "channel_externalId", map: "WebhookEvent_channel_externalId_key")
   @@index([isProcessed])
   @@index([channel])
+  @@index([channel, externalId])
   @@index([channel, providerTimestamp])
   @@index([status, nextAttemptAt])
   @@index([connectionId])
   @@index([workspaceId])
+}
+
+// Application-scoped eBay notices whose business/account cannot yet be established.
+// No tenant-facing payload reader. Routing proof is immutable; a dedicated audited
+// CAS may rewrap ciphertext. Owner handoff links one business receipt without deleting history.
+model EbayNoticeQuarantine {
+  id                    String    @id @default(uuid())
+  environment           String
+  signatureOk           Boolean   @default(false)
+  externalId            String
+  topic                 String
+  subjectHash           String?
+  firstOwnerWorkspaceId String?
+  // Rejected signatures retain metadata/digest only, never arbitrary private bodies.
+  payloadEnc            String?
+  payloadKeyId          String?
+  payloadDigest         String
+  verificationKeyId     String?
+  receivedAt            DateTime  @default(now())
+  lastReceivedAt        DateTime  @default(now())
+  deliveries            Int       @default(1)
+  reason                String
+  resolvedWorkspaceId   String?
+  resolvedReceiptId     String?   @unique
+  resolvedReceipt       WebhookEvent? @relation(fields: [resolvedReceiptId], references: [id], onDelete: Restrict)
+  resolvedAt            DateTime?
+
+  @@unique([environment, signatureOk, externalId])
+  @@index([subjectHash, receivedAt])
+  @@index([firstOwnerWorkspaceId, resolvedAt])
+}
+
+// Application maintenance only. Database function inserts atomically with rewrap;
+// runtime has no access and history is append-only, including for ordinary owner SQL.
+model EbayQuarantineMaintenanceAudit {
+  operationId     String   @db.Uuid
+  quarantineId    String
+  recordedAt      DateTime @default(now())
+  sessionUser     String
+  oldKeyId        String
+  newKeyId        String
+  oldCipherDigest String
+  newCipherDigest String
+
+  @@id([operationId, quarantineId])
+  @@index([quarantineId, recordedAt])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────
@@ -6726,6 +6777,9 @@ model ChannelConnection {
   // Distributed refresh lease (pgbouncer-safe; no advisory lock across HTTP).
   refreshLeaseUntil     DateTime?
   refreshLeaseOwner     String?
+  // Advances with a new consent/adoption, never an ordinary token refresh.
+  // Zero identifies a grant saved before version tracking was introduced.
+  grantVersion          Int       @default(0)
   // { userId, username, storeName?, storeUrl?, sellerId?, shopDomain? }
   identity              Json?
   apiVersion            String?

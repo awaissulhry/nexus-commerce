@@ -140,7 +140,7 @@ const wipePlan = [
   ['RateLimitLog', `DELETE FROM "RateLimitLog"`],
   ['TrackingEvent', `DELETE FROM "TrackingEvent"`],
   ['TrackingMessageLog', `DELETE FROM "TrackingMessageLog"`],
-  ['WebhookEvent', `DELETE FROM "WebhookEvent"`],
+  // D8: inbound receipt identity/proof is retained; never include it in a wipe plan.
   ['LoginEvent', `DELETE FROM "LoginEvent"`],
   ['FlatFilePullRecord', `DELETE FROM "FlatFilePullRecord"`],
   ['FlatFilePullJob', `DELETE FROM "FlatFilePullJob"`],

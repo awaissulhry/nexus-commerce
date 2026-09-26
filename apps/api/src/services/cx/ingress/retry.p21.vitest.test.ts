@@ -31,18 +31,20 @@ const prismaMock = {
       }
       return null
     }),
-    create: vi.fn(async (args: any) => {
-      const id = `row-${rows.size + 1}`
-      rows.set(id, { id, ...args.data })
-      return { id }
+    createMany: vi.fn(async (args: any) => {
+      if ([...rows.values()].some(row => row.channel === args.data.channel && row.externalId === args.data.externalId)) return { count: 0 }
+      rows.set(args.data.id, { ...args.data })
+      return { count: 1 }
     }),
     findMany: vi.fn(async (args: any) => {
       lastRawArgs = [args]
       return rawRows
     }),
     update: vi.fn(async (args: any) => {
-      const row = rows.get(args.where.id)
-      updates.push({ id: args.where.id, data: args.data })
+      const key = args.where.channel_externalId
+      const row = key ? [...rows.values()].find(row => row.channel === key.channel && row.externalId === key.externalId) : rows.get(args.where.id)
+      if (key && (!row || ['eventType', 'connectionId', 'signatureOk', 'verifiedBy'].some(field => (row[field] ?? null) !== args.where[field]))) throw Object.assign(new Error('No matching receipt'), { code: 'P2025' })
+      updates.push({ id: row?.id ?? args.where.id, data: args.data })
       if (row) {
         for (const [field, value] of Object.entries(args.data as Row)) {
           row[field] = value && typeof value === 'object' && 'increment' in (value as Row)
@@ -51,6 +53,14 @@ const prismaMock = {
         }
       }
       return row ?? args.data
+    }),
+    updateMany: vi.fn(async ({ where, data }: any) => {
+      const row = rows.get(where.id)
+      if (!row || Object.entries(where).some(([key, value]) => value !== undefined &&
+        (value instanceof Date ? row[key]?.getTime() !== value.getTime() : row[key] !== value))) return { count: 0 }
+      updates.push({ id: row.id, data })
+      Object.assign(row, data)
+      return { count: 1 }
     }),
   },
   $queryRawUnsafe: vi.fn(async (..._args: unknown[]) => {

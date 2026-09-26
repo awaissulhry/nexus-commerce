@@ -2360,6 +2360,8 @@ CREATE TABLE "WebhookEvent" (
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "deliveries" INTEGER NOT NULL DEFAULT 0,
     "nextAttemptAt" TIMESTAMP(3),
+    "leaseToken" TEXT,
+    "leaseUntil" TIMESTAMP(3),
     "signatureOk" BOOLEAN,
     "verifiedBy" TEXT,
     "payloadDigest" TEXT,
@@ -2368,6 +2370,44 @@ CREATE TABLE "WebhookEvent" (
     "archiveUri" TEXT,
 
     CONSTRAINT "WebhookEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EbayNoticeQuarantine" (
+    "id" TEXT NOT NULL,
+    "environment" TEXT NOT NULL,
+    "signatureOk" BOOLEAN NOT NULL DEFAULT false,
+    "externalId" TEXT NOT NULL,
+    "topic" TEXT NOT NULL,
+    "subjectHash" TEXT,
+    "firstOwnerWorkspaceId" TEXT,
+    "payloadEnc" TEXT,
+    "payloadKeyId" TEXT,
+    "payloadDigest" TEXT NOT NULL,
+    "verificationKeyId" TEXT,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastReceivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deliveries" INTEGER NOT NULL DEFAULT 1,
+    "reason" TEXT NOT NULL,
+    "resolvedWorkspaceId" TEXT,
+    "resolvedReceiptId" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+
+    CONSTRAINT "EbayNoticeQuarantine_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EbayQuarantineMaintenanceAudit" (
+    "operationId" UUID NOT NULL,
+    "quarantineId" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sessionUser" TEXT NOT NULL,
+    "oldKeyId" TEXT NOT NULL,
+    "newKeyId" TEXT NOT NULL,
+    "oldCipherDigest" TEXT NOT NULL,
+    "newCipherDigest" TEXT NOT NULL,
+
+    CONSTRAINT "EbayQuarantineMaintenanceAudit_pkey" PRIMARY KEY ("operationId","quarantineId")
 );
 
 -- CreateTable
@@ -3020,6 +3060,7 @@ CREATE TABLE "ChannelConnection" (
     "consecutiveFailures" INTEGER NOT NULL DEFAULT 0,
     "refreshLeaseUntil" TIMESTAMP(3),
     "refreshLeaseOwner" TEXT,
+    "grantVersion" INTEGER NOT NULL DEFAULT 0,
     "identity" JSONB,
     "apiVersion" TEXT,
 
@@ -10512,6 +10553,9 @@ CREATE INDEX "WebhookEvent_isProcessed_idx" ON "WebhookEvent"("isProcessed");
 CREATE INDEX "WebhookEvent_channel_idx" ON "WebhookEvent"("channel");
 
 -- CreateIndex
+CREATE INDEX "WebhookEvent_channel_externalId_idx" ON "WebhookEvent"("channel", "externalId");
+
+-- CreateIndex
 CREATE INDEX "WebhookEvent_channel_providerTimestamp_idx" ON "WebhookEvent"("channel", "providerTimestamp");
 
 -- CreateIndex
@@ -10525,6 +10569,21 @@ CREATE INDEX "WebhookEvent_workspaceId_idx" ON "WebhookEvent"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "WebhookEvent_channel_externalId_key" ON "WebhookEvent"("workspaceId", "channel", "externalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EbayNoticeQuarantine_resolvedReceiptId_key" ON "EbayNoticeQuarantine"("resolvedReceiptId");
+
+-- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_subjectHash_receivedAt_idx" ON "EbayNoticeQuarantine"("subjectHash", "receivedAt");
+
+-- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_firstOwnerWorkspaceId_resolvedAt_idx" ON "EbayNoticeQuarantine"("firstOwnerWorkspaceId", "resolvedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EbayNoticeQuarantine_environment_signatureOk_externalId_key" ON "EbayNoticeQuarantine"("environment", "signatureOk", "externalId");
+
+-- CreateIndex
+CREATE INDEX "EbayQuarantineMaintenanceAudit_quarantineId_recordedAt_idx" ON "EbayQuarantineMaintenanceAudit"("quarantineId", "recordedAt");
 
 -- CreateIndex
 CREATE INDEX "ChannelLiveImage_productId_channel_idx" ON "ChannelLiveImage"("productId", "channel");
@@ -14533,6 +14592,9 @@ ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedByUserId_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "UserProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EbayNoticeQuarantine" ADD CONSTRAINT "EbayNoticeQuarantine_resolvedReceiptId_fkey" FOREIGN KEY ("resolvedReceiptId") REFERENCES "WebhookEvent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChannelLiveImage" ADD CONSTRAINT "ChannelLiveImage_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;

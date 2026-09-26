@@ -20,12 +20,13 @@ import { MarketplaceChannel, WebhookSignatureValidation } from "../types/marketp
  */
 export type RawBodyRequest = FastifyRequest & { rawBody?: Buffer };
 
-export function registerRawJsonParser(app: FastifyInstance): void {
+export function registerRawJsonParser(app: FastifyInstance, options?: { rawBodyOnly?: (request: FastifyRequest) => boolean }): void {
   app.addContentTypeParser(
     "application/json",
     { parseAs: "buffer" },
     (req, buf: Buffer, done) => {
       (req as RawBodyRequest).rawBody = buf;
+      if (options?.rawBodyOnly?.(req)) return done(null, buf);
       if (buf.length === 0) return done(null, undefined);
       try {
         done(null, JSON.parse(buf.toString("utf8")));

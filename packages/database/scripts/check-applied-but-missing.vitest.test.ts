@@ -78,7 +78,7 @@ const localUrl = process.env.NEXUS_TEST_LOCAL_PG_URL?.trim()
 const host = localUrl ? new URL(localUrl).hostname : ''
 const isLoopback = host === '127.0.0.1' || host === 'localhost'
 const canRun = Boolean(localUrl) && isLoopback
-const SCHEMA = 'abm_gate_test'
+const SCHEMA = `abm_gate_test_${process.pid}`
 
 describe.runIf(canRun)('checkAppliedButMissing — against a throwaway schema', () => {
   let client: pg.Client

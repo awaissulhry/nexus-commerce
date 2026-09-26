@@ -15,10 +15,16 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * Neither can be confused for the other.
  */
 import crypto from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 
 export type InboundStatus = 'pending' | 'done' | 'failed' | 'dlq'
+
+const unclaimedUnverifiedEbay: Prisma.WebhookEventWhereInput = {
+  channel: 'EBAY', leaseToken: null,
+  OR: [{ signatureOk: false }, { signatureOk: null }, { verifiedBy: { not: 'ebay_ecdsa' } }, { verifiedBy: null }],
+}
 
 /** What established trust for this event, or that nothing did. */
 export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
@@ -31,7 +37,7 @@ export function isVerifiedInbound(event: { channel: string; signatureOk?: boolea
   )
 }
 
-export interface InboundRecord {
+interface InboundRecordFields {
   channel: string
   eventType: string
   /** The channel's own id when it gives one; a body digest is used when it does not. */
@@ -47,9 +53,16 @@ export interface InboundRecord {
   status?: InboundStatus
 }
 
+/** Existing inline/broker flows stay opt-out; only eBay is being moved to this queue. */
+export type InboundRecord = InboundRecordFields & (
+  { queueForRetry?: false } | { channel: 'EBAY'; queueForRetry: true }
+)
+
 export interface InboundWriteResult {
   id: string | null
   duplicate: boolean
+  /** The delivery ID is already bound to different account/event/trust metadata. */
+  conflict?: 'identity_mismatch'
   /**
    * The status the row ALREADY had, when this arrival was a duplicate.
    *
@@ -72,11 +85,28 @@ export function digestOf(body: Buffer | string | null | undefined): string | nul
  * rewrite the original verdict, it only increments `deliveries`, so "how often did this
  * arrive" and "what did we decide the first time" stay separately answerable.
  *
- * Never throws. An ingress endpoint that 500s because its audit trail is unavailable
- * would turn a logging problem into dropped notifications — and eBay marks an endpoint
- * down when it stops answering.
+ * A unique insert chooses the first receipt atomically. A concurrent redelivery
+ * increments only that receipt's delivery count, with its identity guarded in the
+ * same UPDATE. No read-before-insert race, overwritten payload or spent retry.
+ *
+ * A null ID is a refusal to acknowledge durable receipt; callers must retain/retry
+ * the delivery. Expected conflicts never pass through Prisma's error logger with
+ * the inbound payload as part of a failed INSERT diagnostic.
  */
 export async function recordInbound(rec: InboundRecord): Promise<InboundWriteResult> {
+  return persistInbound(prisma, rec)
+}
+
+/** A quarantine handoff must commit its business receipt and destination pointer together. */
+export async function recordInboundInTx(tx: Prisma.TransactionClient, rec: InboundRecord,
+  history?: { receivedAt: Date; deliveries: number },
+): Promise<InboundWriteResult> {
+  return persistInbound(tx, rec, history)
+}
+
+async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' | '$queryRaw'>, rec: InboundRecord,
+  history?: { receivedAt: Date; deliveries: number },
+): Promise<InboundWriteResult> {
   const payloadDigest = digestOf(rec.rawBody ?? null)
   const externalId =
     rec.externalId && rec.externalId !== ''
@@ -87,23 +117,20 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
   const status: InboundStatus = rec.status ?? (rec.signatureOk === false ? 'failed' : 'pending')
 
   try {
-    const existing = await prisma.webhookEvent.findUnique({
-      where: { channel_externalId: workspaceKey({ channel: rec.channel, externalId }) },
-      select: { id: true, status: true },
-    })
-    if (existing) {
-      // P2.1 — a redelivery is an ARRIVAL, not a handling attempt. Before this it
-      // incremented `attempts`, which the retry worker now uses as its budget: a
-      // channel that redelivers eagerly would have spent the retry budget of an event
-      // nobody had tried to handle even once.
-      await prisma.webhookEvent.update({
-        where: { id: existing.id },
-        data: { deliveries: { increment: 1 } },
-      })
-      return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
+    if (rec.queueForRetry && String(rec.channel) !== 'EBAY') {
+      logger.error('[cx-ingress] durable receipt scheduling is not configured for this channel', { channel: rec.channel })
+      return { id: null, duplicate: false }
     }
-    const row = await prisma.webhookEvent.create({
+    let nextAttemptAt: Date | null = null
+    if (rec.queueForRetry && rec.signatureOk === true && rec.verifiedBy === 'ebay_ecdsa' && status === 'pending') {
+      const [clock] = await db.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+      nextAttemptAt = clock.now
+    }
+    const id = crypto.randomUUID()
+    const inserted = await db.webhookEvent.createMany({
+      skipDuplicates: true,
       data: {
+        id,
         channel: rec.channel,
         eventType: rec.eventType,
         externalId,
@@ -113,21 +140,42 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
         providerTimestamp: rec.providerTimestamp ?? null,
         connectionId: rec.connectionId ?? null,
         status,
-        deliveries: 1,
+        nextAttemptAt,
+        deliveries: history?.deliveries ?? 1,
+        ...(history ? { createdAt: history.receivedAt } : {}),
         signatureOk: rec.signatureOk,
         verifiedBy: rec.verifiedBy,
         payloadDigest,
         lastError: rec.lastError ?? null,
         error: rec.lastError ?? null,
       },
-      select: { id: true },
     })
-    return { id: row.id, duplicate: false }
+    if (inserted.count === 1) return { id, duplicate: false }
+
+    try {
+      const existing = await db.webhookEvent.update({
+        where: {
+          channel_externalId: workspaceKey({ channel: rec.channel, externalId }),
+          eventType: rec.eventType,
+          connectionId: rec.connectionId ?? null,
+          signatureOk: rec.signatureOk,
+          verifiedBy: rec.verifiedBy,
+        },
+        data: { deliveries: { increment: history?.deliveries ?? 1 } },
+        select: { id: true, status: true },
+      })
+      return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
+    } catch (err) {
+      if ((err as { code?: string })?.code !== 'P2025') throw err
+      logger.warn('[cx-ingress] delivery identity conflicts with its stored receipt', { channel: rec.channel, eventType: rec.eventType })
+      return { id: null, duplicate: true, conflict: 'identity_mismatch' }
+    }
   } catch (err) {
+    const code = (err as { code?: unknown })?.code
     logger.error('[cx-ingress] could not record an inbound event', {
       channel: rec.channel,
       eventType: rec.eventType,
-      error: err instanceof Error ? err.message : String(err),
+      code: typeof code === 'string' && /^P\d{4}$/.test(code) ? code : 'unavailable',
     })
     return { id: null, duplicate: false }
   }
@@ -172,17 +220,18 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
   try {
     if (ok) {
       await prisma.webhookEvent.update({
-        where: { id },
+        where: { id, channel: { not: 'EBAY' } },
         data: { status: 'done', isProcessed: true, processedAt: new Date(), nextAttemptAt: null, lastError: null },
       })
       return
     }
-    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true } })
+    const row = await prisma.webhookEvent.findUnique({ where: { id }, select: { attempts: true, channel: true } })
+    if (row?.channel === 'EBAY') return
     const attempts = (row?.attempts ?? 0) + 1
     const exhausted = attempts >= MAX_INBOUND_ATTEMPTS
     const reason = (error ?? 'unknown').slice(0, 500)
     await prisma.webhookEvent.update({
-      where: { id },
+      where: { id, channel: { not: 'EBAY' } },
       data: {
         status: exhausted ? 'dlq' : 'failed',
         attempts,
@@ -206,8 +255,8 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
 export async function deadLetterInbound(id: string, reason: string): Promise<void> {
   try {
     await prisma.webhookEvent.update({
-      where: { id },
-      data: { status: 'dlq', nextAttemptAt: null, lastError: reason.slice(0, 500), error: reason.slice(0, 500) },
+      where: { id, OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] },
+      data: { status: 'dlq', isProcessed: false, processedAt: null, nextAttemptAt: null, lastError: reason.slice(0, 500), error: reason.slice(0, 500) },
     })
   } catch (err) {
     logger.warn('[cx-ingress] could not dead-letter an inbound event', { id, error: err instanceof Error ? err.message : String(err) })
@@ -260,12 +309,13 @@ export interface DueInboundEvent {
  * Reaching every business is the cron wrapper's job, not this function's: a non-platform
  * schedule visits each active profile in turn and runs its handler inside that profile.
  */
-export async function dueInboundEvents(limit = 50, now: Date = new Date()): Promise<DueInboundEvent[]> {
+export async function dueInboundEvents(limit = 50, now: Date = new Date(), options?: { excludeVerifiedEbay: boolean }): Promise<DueInboundEvent[]> {
   const rows = await prisma.webhookEvent.findMany({
     where: {
       status: { in: ['failed', 'pending'] },
       archivedAt: null,
       nextAttemptAt: { not: null, lte: now },
+      ...(options?.excludeVerifiedEbay ? { OR: [{ channel: { not: 'EBAY' } }, unclaimedUnverifiedEbay] } : {}),
     },
     select: { id: true, workspaceId: true, channel: true, eventType: true, externalId: true, payload: true, attempts: true, connectionId: true, signatureOk: true, verifiedBy: true },
     orderBy: { nextAttemptAt: 'asc' },
@@ -280,7 +330,7 @@ export interface ReplayRequest {
   workspaceId?: string | null
 }
 
-export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified'
+export type ReplayRefusal = 'not_found' | 'wrong_workspace' | 'archived' | 'already_pending' | 'unverified' | 'changed' | 'processing_held'
 
 /**
  * One shape rather than a discriminated union on `ok`.
@@ -318,15 +368,24 @@ export async function replayInbound(req: ReplayRequest): Promise<ReplayOutcome> 
   if (req.workspaceId && row.workspaceId !== req.workspaceId) return { ok: false, reason: 'wrong_workspace' }
   if (!isVerifiedInbound(row)) return { ok: false, reason: 'unverified' }
   if (row.archivedAt) return { ok: false, reason: 'archived' }
+  if (row.channel === 'EBAY') {
+    const { queueEbayReplay } = await import('./ebay-claims.js')
+    return queueEbayReplay(req)
+  }
   // Refuse only what is ALREADY in the worker's queue. A `pending` row with no time
   // on it is not queued for anything — that is the shape a receiver leaves behind when
   // it dies between recording an arrival and handling it, and replay is the only way
   // such an event ever moves again. Refusing every `pending` row would have made the
   // one case the button exists for the one case it could not touch.
   if (row.status === 'pending' && row.nextAttemptAt) return { ok: false, reason: 'already_pending' }
-  await prisma.webhookEvent.update({
-    where: { id: row.id },
+  const saved = await prisma.webhookEvent.updateMany({
+    where: { id: row.id, workspaceId: row.workspaceId, channel: row.channel, status: row.status,
+      archivedAt: null, nextAttemptAt: row.nextAttemptAt, signatureOk: row.signatureOk, verifiedBy: row.verifiedBy },
     data: { status: 'pending', attempts: 0, nextAttemptAt: new Date(), lastError: null, isProcessed: false, processedAt: null },
   })
+  if (saved.count !== 1) {
+    const current = await prisma.webhookEvent.findUnique({ where: { id: row.id }, select: { archivedAt: true } })
+    return { ok: false, reason: !current ? 'not_found' : current.archivedAt ? 'archived' : 'changed' }
+  }
   return { ok: true, channel: row.channel, eventType: row.eventType }
 }
