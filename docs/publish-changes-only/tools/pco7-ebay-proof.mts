@@ -154,11 +154,13 @@ const { prepareEbayChanges, compileEbayChanges, ebayPublicationRequest } = await
 const { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText, ebayXmlList } = await import(join(ROOT, 'apps/api/src/services/channel-drift/ebay-content-compare.js'))
 const { assertPushAllowed } = await import('@nexus/shared/push-lock')
 
+// The SAME request the sender (studio-publication-ebay.ts requestLiveItem) makes: without the UTF-8 declaration eBay returned
+// ~978 description characters differently (2026-09-26), so an "original" read that way was not eBay's exact text.
 async function readItem(target: Target, choosing = false): Promise<Snapshot> {
   const lock = [target, ...target.participants].map(assertPushAllowed).find(Boolean)
   if (lock) throw new Refusal(lock.sentence)
   const oauthToken = await ebayAuthService.getValidToken(target.accountId)
-  const answer = await callTradingApi('GetItem', `<?xml version="1.0"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(target.itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`,
+  const answer = await callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(target.itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`,
     { oauthToken, siteId: '101', connectionId: target.accountId, market: 'IT' })
   if (!answer.raw || !['Success','Warning'].includes(answer.ack)) throw new Refusal('GetItem returned no usable acknowledgement/body.')
   const item = parseEbayItemDocument(answer.raw), status = ebayXmlObject(item.SellingStatus), title = ebayXmlText(item.Title)

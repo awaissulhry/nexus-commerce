@@ -37,7 +37,8 @@ export async function readEbayInventoryListing(destination: EbayInventoryDestina
   let group: { status: number; body: Json | null; error?: string } = await reads.group(parentSku).catch(error => ({ status: 0, body: null, error: message(error) }))
   if (group.status === 404) {
     const answers = await reads.items(expectedSkus.slice(0, 25)).catch(() => [])
-    const keys = [...new Set(answers.flatMap(a => texts(obj(a.inventoryItem).groupIds)))]
+    // bulk_get_inventory_item names the link `inventoryItemGroupKeys` (measured 2026-09-26); `groupIds` is the single-item form.
+    const keys = [...new Set(answers.flatMap(a => texts(obj(a.inventoryItem).inventoryItemGroupKeys ?? obj(a.inventoryItem).groupIds)))]
     groupKey = keys.length === 1 ? keys[0] : null
     if (groupKey) group = await reads.group(groupKey).catch(error => ({ status: 0, body: null, error: message(error) }))
     else errors.push({ scope: 'item', reason: keys.length ? `The items belong to ${keys.length} eBay groups; the group cannot be chosen.` : 'eBay knows no group for these SKUs.' })
