@@ -451,3 +451,14 @@ row 5 (column D, `Category name`, is a formula). About 706,000 cell drop-downs.
   `P:EPID`, `VideoID`, `Schedule Time`.
 - It is an `.xlsx`, not a CSV: the reader takes both (Seller Hub offers both), and the export writes into the
   downloaded workbook itself (as the Amazon export writes into Amazon's template), keeping its sheets and drop-downs.
+
+## 8. The Owner's decisions (2026-09-26)
+
+- **eBay native files: SKIPPED.** "I prefer how we put it all together for eBay": the eBay workbook stays the eBay file
+  format. Sections 1, N3–N5, N11 and the eBay half of N0/N10 are not built.
+- **Shopify product CSV: BUILD**, import and export, with the recommendations:
+  - D1 A — the export changes products Nexus already links to Shopify; it never creates products.
+  - D2 A — the compare-at price goes through the one price door, record-only on import, and is exported from there.
+  - D3 A — the export lives on the File mappings page first; the product sheet's Import accepts the file automatically.
+- Build order: N1 contract → N2 sniffer/routing → N6 import → N7 export → N8 golden files → N9 screens; N10 (the first
+  real run) only with the Owner's word.
