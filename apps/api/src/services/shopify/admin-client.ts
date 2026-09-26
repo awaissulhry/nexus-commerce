@@ -1,17 +1,62 @@
 import { resolveConnection } from '../connection-resolver.service.js'
-import { shopifyKind, shopifyTransport } from '../gateway/shopify.js'
+import { graphqlDocumentInfo, shopifyKind, shopifyTransport } from '../gateway/shopify.js'
 import { SHOPIFY_API_VERSION } from './api-version.js'
 import { getAccessToken, assertWritable } from '../cx/token.service.js'
 import { shopifyShopDomain } from '../cx/connectors/shopify/auth.js'
 import { acquireShopifyPublishToken, getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 
 export type ShopifyGraphql = <T = any>(query: string, variables?: Record<string, unknown>) => Promise<T>
-export async function shopifyAdmin(accountId: string): Promise<{ graphql: ShopifyGraphql; domain: string }> {
+
+/** The account's Admin GraphQL endpoint on the one API version Nexus speaks. */
+async function adminEndpoint(accountId: string): Promise<{ domain: string; url: string; grantedScopes: string[] }> {
   const connection = await resolveConnection({ accountId })
   if (connection.channelType !== 'SHOPIFY') throw new Error('The selected account is not Shopify.')
   const domain = shopifyShopDomain(connection.region)
   if (!domain) throw new Error('The Shopify account has no verified myshopify.com domain.')
-  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`
+  return { domain, url: `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, grantedScopes: connection.grantedScopes ?? [] }
+}
+
+export interface ShopifyGraphqlError { message: string; path?: Array<string | number>; extensions?: { code?: string } }
+export interface ShopifyQueryCost {
+  requestedQueryCost: number | null
+  actualQueryCost: number | null
+  throttleStatus: { maximumAvailable: number; currentlyAvailable: number; restoreRate: number } | null
+}
+export interface ShopifyReadResult<T> { data: T | null; errors: ShopifyGraphqlError[]; cost: ShopifyQueryCost | null }
+export type ShopifyReadGraphql = <T = any>(query: string, variables?: Record<string, unknown>) => Promise<ShopifyReadResult<T>>
+
+/**
+ * The read-only face of the admin client, for reports that must never change the shop. It sends only a
+ * document that parses and holds nothing but `query` operations (no mutation or subscription, no fragment on
+ * the Mutation root) — anything else is refused before anything is sent. It returns what `shopifyAdmin`
+ * drops: GraphQL errors next to partial data, and the query cost (`extensions.cost`), so a paginated reader
+ * can pace itself. Same account, same endpoint, same gateway path (`kind: 'read'`), same local rate bucket.
+ */
+export async function shopifyAdminReader(accountId: string): Promise<{ read: ShopifyReadGraphql; domain: string; grantedScopes: string[] }> {
+  const { domain, url, grantedScopes } = await adminEndpoint(accountId)
+  const read: ShopifyReadGraphql = async <T>(query: string, variables: Record<string, unknown> = {}) => {
+    const body = JSON.stringify({ query, variables })
+    if (!graphqlDocumentInfo(query).readOnly || shopifyKind('POST', url, body) !== 'read') {
+      throw new Error('Refused, nothing sent: this Shopify client only reads, and the document would change the shop.')
+    }
+    const acquired = await acquireShopifyPublishToken(domain)
+    if (!acquired.ok) throw new Error(acquired.error)
+    const token = await getAccessToken(accountId)
+    const response = await shopifyTransport(accountId)(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token }, body, signal: AbortSignal.timeout(60_000) })
+    if (!response.ok) throw new Error(`Shopify request failed (HTTP ${response.status}). Retry after checking the account and request status.`)
+    const result = await response.json() as { data?: T | null; errors?: ShopifyGraphqlError[]; extensions?: { cost?: Partial<ShopifyQueryCost> } }
+    const cost = result.extensions?.cost
+    return {
+      data: result.data ?? null,
+      errors: Array.isArray(result.errors) ? result.errors : [],
+      cost: cost ? { requestedQueryCost: cost.requestedQueryCost ?? null, actualQueryCost: cost.actualQueryCost ?? null, throttleStatus: cost.throttleStatus ?? null } : null,
+    }
+  }
+  return { read, domain, grantedScopes }
+}
+
+export async function shopifyAdmin(accountId: string): Promise<{ graphql: ShopifyGraphql; domain: string }> {
+  const { domain, url } = await adminEndpoint(accountId)
   const graphql: ShopifyGraphql = async <T>(query: string, variables: Record<string, unknown> = {}) => {
     if (/^\s*mutation\b/.test(query)) {
       await assertWritable(accountId)

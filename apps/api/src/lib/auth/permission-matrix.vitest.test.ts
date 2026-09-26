@@ -48,6 +48,8 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   // Settings — owner/admin only
   ['GET', '/api/settings/api-keys', ['ADMIN']],
   ['POST', '/api/settings/api-keys', ['ADMIN']],
+  // Shopify orders shadow report — reads the channel's orders: the connection managers only
+  ['GET', '/api/shopify/shadow-report/:accountId', ['ADMIN']],
   // Admin/ops destructive — admin only (besides owner)
   ['POST', '/api/admin/repair/all', ['ADMIN']],
   ['POST', '/api/admin/recycle-bin/purge', ['ADMIN']],

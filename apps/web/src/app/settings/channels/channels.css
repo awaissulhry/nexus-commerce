@@ -354,3 +354,11 @@
   font-size: var(--nds-font-size-sm);
   overflow-wrap: anywhere;
 }
+
+/* Shopify orders shadow report (read-only): its small tables side by side once there is room. */
+.nds-cd-shadow-grid {
+  display: grid;
+  gap: var(--nds-space-14);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: start;
+}
