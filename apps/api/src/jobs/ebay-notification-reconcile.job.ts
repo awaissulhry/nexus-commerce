@@ -11,9 +11,12 @@
  * already points at our endpoint is reused, an existing subscription is left alone, and
  * a disabled one is enabled rather than recreated. Nothing is ever deleted.
  *
- * Provisioning requires explicit NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1, configured
- * endpoint/token, and ready domain handlers. Deploying transport fixes must not
- * activate live subscriptions. The setup service independently enforces readiness.
+ * Provisioning requires the Owner's arming (`ebayNotificationSetupGate`): exact
+ * NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1 AND NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS naming
+ * each ready application-level topic (v1: AUTHORIZATION_REVOCATION), plus a configured
+ * endpoint/token. The old switch alone schedules nothing: a scheduler may still hold it
+ * from before it became opt-in, and a deploy must never start live subscriptions. The
+ * setup service and the admin route enforce the same gate independently.
  *
  * Cadence: 03:55 UTC, after the Amazon reconcile at 03:40 so the two do not interleave
  * in the logs.
@@ -21,6 +24,7 @@
 
 import cron, { schedulePlatform } from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
+import { ebayNotificationSetupGate } from '../services/cx/connectors/ebay/notifications.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -35,6 +39,10 @@ export async function runEbayNotificationReconcile() {
     // valid state, and a nightly stack trace about it would train everyone to ignore
     // this job's output.
     logger.info('[ebay-notification-reconcile] not configured — no call made', { reason: result.error })
+    return result
+  }
+  if (!result.armed) {
+    logger.info('[ebay-notification-reconcile] not armed — no call made', { reason: result.error })
     return result
   }
   if (result.notOffered.length) {
@@ -67,8 +75,9 @@ export function startEbayNotificationReconcileCron(): void {
     logger.warn('ebay-notification-reconcile cron already started — skipping')
     return
   }
-  if (process.env.NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP !== '1') {
-    logger.info('ebay-notification-reconcile cron disabled via env')
+  const gate = ebayNotificationSetupGate()
+  if (!gate.armed) {
+    logger.info('ebay-notification-reconcile cron not armed — nothing scheduled, no eBay call', { reason: gate.reason })
     return
   }
   const schedule = process.env.NEXUS_EBAY_NOTIFICATION_RECONCILE_SCHEDULE ?? '55 3 * * *'
@@ -82,6 +91,7 @@ export function startEbayNotificationReconcileCron(): void {
     await recordCronRun('ebay-notification-reconcile', async () => {
       const result = await runEbayNotificationReconcile()
       if (!result.configured) return 'not configured'
+      if (!result.armed) return 'not armed — no call made'
       const { ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
       if (!ebayNotificationSetupSucceeded(result)) {
         throw new Error(result.error ?? `eBay notification reconciliation failed: ${result.perTopic.map(topic => `${topic.topicId}:${topic.status}`).join(' ') || 'no supported subscriptions'}`)
@@ -93,5 +103,5 @@ export function startEbayNotificationReconcileCron(): void {
       })
     })
   })
-  logger.info('ebay-notification-reconcile cron started', { schedule })
+  logger.info('ebay-notification-reconcile cron started', { schedule, topics: gate.topics.join(',') })
 }

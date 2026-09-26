@@ -16,8 +16,9 @@ vi.mock('../utils/trace-log.js', () => ({ logTraceEvent: vi.fn() }))
 const { startEbayNotificationReconcileCron } = await import('./ebay-notification-reconcile.job.js')
 beforeEach(() => {
   vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+  vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
   state.statuses = []
-  state.result = { configured: true, destinationId: 'd', notOffered: [], perTopic: [] }
+  state.result = { configured: true, armed: true, destinationId: 'd', notOffered: [], perTopic: [] }
   if (!state.scheduled) startEbayNotificationReconcileCron()
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -38,6 +39,12 @@ it('keeps an unconfigured no-op distinct from a configured failure', async () =>
 })
 it('records success for verified existing subscriptions', async () => {
   state.result.perTopic = [{ topicId: 'AUTHORIZATION_REVOCATION', status: 'already_exists' }]
+  await state.scheduled!()
+  expect(state.statuses).toEqual(['SUCCESS'])
+})
+it('records an unarmed result as a no-call run, not a failure', async () => {
+  state.result.armed = false
+  state.result.error = 'Setup is not armed.'
   await state.scheduled!()
   expect(state.statuses).toEqual(['SUCCESS'])
 })

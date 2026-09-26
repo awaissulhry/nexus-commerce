@@ -28,6 +28,9 @@ describe('eBay verification token preflight', () => {
     expect(m.transport).not.toHaveBeenCalled()
   })
   it.each([32, 80])('positive control: accepts %i allowed characters and reaches the transport unchanged', async length => {
+    // A write needs the Owner's arming too (notification-readiness proves the unarmed refusal).
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
     const token = 'AZaz09_-'.repeat(10).slice(0, length)
     await expect(createEbayDestination('production', 'Nexus', 'https://example.test/hook', token)).resolves.toBe('destination-fixture')
     expect(m.transport).toHaveBeenCalledOnce()
