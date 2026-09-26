@@ -5,7 +5,8 @@ import { FormulaGuidance, formulaSuggestions, useFormulaPreview } from './formul
 import { createElement, forwardRef, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import type { ICellEditorParams } from 'ag-grid-community'
 import { useGridCellEditor } from 'ag-grid-react'
-import { Button, Input, Textarea } from '../../primitives'
+import { History, Link2, Sparkles } from 'lucide-react'
+import { Button, Input, Textarea, ToolbarButton, TooltipPortalProvider } from '../../primitives'
 import { ListboxPanel, type ListboxOption } from '../../components'
 import { editorBox, roomToRightOf } from './editorBox'
 import {
@@ -18,6 +19,23 @@ import { acceptNumberEdit, NUMBER_ONLY_MESSAGE, numberCommitText, numberStart } 
 import { assignRefColours, colourFor } from './formulaPalette'
 import { errorMarkAt, functionHint, previewLine, unknownRefNames, type FormulaFunctionDoc, type FormulaPreviewResponse } from './formulaPreview'
 import { callAt, refsOf, tokenizeForDisplay, type Token } from './formulaTokens'
+
+/**
+ * 2026-09-26 (Owner: cell editor OPTION A) — what a cell carries besides its value. Each part shows an icon in the editor
+ * only when it is present, so an ordinary cell opens as one clean line.
+ */
+export interface CellEditorContext {
+  /** An AI draft waiting for this cell. `accept` / `reject` are the review's own verbs (they write through the drafts API). */
+  aiDraft?: { value: string; accept: () => Promise<unknown>; reject: () => Promise<unknown> } | null
+  /** Earlier values, read when the operator opens the list. Picking one fills the field; Enter saves it as usual. */
+  history?: () => Promise<CellHistoryEntry[]>
+  /** The row shows another row's value (a child following its parent). Typing gives this row its own value. */
+  inherited?: { from: string; value: string } | null
+  /** The channel's length cap. The counter turns red past it; nothing is ever truncated. */
+  maxLength?: number | null
+}
+
+export interface CellHistoryEntry { value: string; when: string; who?: string | null }
 
 export interface FormulaEditorParams extends ICellEditorParams {
   onValueChange?: (value: unknown) => void
@@ -39,24 +57,52 @@ export interface FormulaEditorParams extends ICellEditorParams {
    * page — or a column/row the formula writer refuses), so text and number open the same editor on every surface.
    */
   formulas?: boolean
+  /** Option A — the selector opened this editor `under` its cell, so the cell keeps painting its saved value. */
+  openedUnder?: boolean
+  /** Option A — the cell's AI draft, history, inheritance and length cap (`CellEditorContext`). */
+  cellContext?: CellEditorContext | null
 }
 
 export function FormulaGlyph({ title = 'Formula' }: { title?: string }) {
   return <span className="nds-cell-prov nds-cell-prov-formula nds-formula-glyph" aria-hidden title={title}>ƒ</span>
 }
 
-/** AG's popup keyboard handling runs before React's bubble handlers. */
+/**
+ * AG's popup keyboard handling runs before React's bubble handlers. Enter and Esc are always the editor's; Tab and the
+ * arrows are its own while completions are open; and Tab is also its own on a FORMULA (Option A, 2026-09-26), so a broken
+ * formula is refused the same way Enter refuses it instead of being committed by AG and failing on the cell.
+ */
 export function suppressFormulaKeys({ event, editing }: { event: KeyboardEvent; editing: boolean }): boolean {
   if (!editing || !(event.target instanceof Element)) return false
   const editor = event.target.closest('.nds-formula-editor')
   if (!editor) return false
   return event.key === 'Enter' || event.key === 'Escape' ||
-    (editor.getAttribute('data-completions') === 'true' && ['Tab', 'ArrowUp', 'ArrowDown'].includes(event.key))
+    (editor.getAttribute('data-completions') === 'true' && ['Tab', 'ArrowUp', 'ArrowDown'].includes(event.key)) ||
+    (editor.getAttribute('data-formula') === 'true' && event.key === 'Tab')
 }
 
+/** The class that tells `grid.css` this cell's editor sits UNDER it, so its value stays painted (#769 is for `over`). */
+export const CELL_EDITING_UNDER_CLASS = 'nds-cell-editing-under'
+
+type ContextPanel = 'ai' | 'history' | 'parent' | null
+
+/**
+ * THE ONE TEXT/NUMBER CELL EDITOR (R-63), laid out as the Owner's OPTION A (2026-09-26, previewed in
+ * `/design/grid-lab` and approved):
+ *   - it opens UNDER the cell (`formulaCellEditorSelector` → `popupPosition: 'under'`), so the cell and the rest of the row
+ *     stay in view — the row is what a formula refers to;
+ *   - one compact line and no Cancel / Apply: Enter saves, Esc cancels, and the one key line stays (R-48);
+ *   - `=` expands the formula help below the line: suggestions (every function and this row's fields), the signature, a
+ *     live result, error marks, Insert field / Add text / Help, and click-a-cell to insert;
+ *   - context icons only when they apply: an AI draft (use / dismiss), history, "follows the parent";
+ *   - long text opens a taller box with a character counter, red past the channel's cap and never truncated;
+ *   - Enter or Tab on a formula with an error says "Not saved" and keeps the draft — a broken formula is never written.
+ * The state, keys, preview, suggestions, pick-a-cell and reference outlines are unchanged from the editor it replaces.
+ */
 export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(function FormulaCellEditor(props, _ref) {
   const { candidates, preview, functions = [], formulaExpr, colIdOfRef, commitKind = 'text', multiline = false,
     value, initialValue, eventKey, node, column, onValueChange } = props
+  const context = props.cellContext ?? {}
   const formulasOn = props.formulas !== false
   // AG's reactive value changes as we type. Neither the initial selection nor cancel may chase it.
   /* R-47 — a NUMBER cell opens through `numberStart`: a start key that cannot begin a number is refused and the stored
@@ -84,8 +130,23 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   const id = useId()
   const [pickMessage, setPickMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  /** Enter / Tab was pressed on a formula with an error: say plainly that nothing was saved, until the next edit. */
+  const [refused, setRefused] = useState(false)
+  const [panel, setPanel] = useState<ContextPanel>(null)
+  const [history, setHistory] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; entries: CellHistoryEntry[] }>({ state: 'idle', entries: [] })
+  const [draftBusy, setDraftBusy] = useState(false)
   const editRevision = useRef(0)
   useEffect(() => () => { editRevision.current += 1 }, [])
+
+  /* Option A — an editor that sits UNDER its cell leaves the cell's saved value painted (grid.css keys #769's hide on
+     this class). Only when the selector opened it under: an `=` typed into an option editor stays in that editor's
+     `over` popup, which still covers the cell. */
+  useEffect(() => {
+    const cell = props.eGridCell
+    if (!props.openedUnder || !cell) return
+    cell.classList.add(CELL_EDITING_UNDER_CLASS)
+    return () => cell.classList.remove(CELL_EDITING_UNDER_CLASS)
+  }, [props.openedUnder, props.eGridCell])
 
   const report = useCallback((draft: string) => {
     const typed = commitKind === 'number' ? numberCommitText(draft) : draft
@@ -110,12 +171,13 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     touched.current = true
     editRevision.current += 1
     setSubmitting(false)
+    setRefused(false)
     setText(next.text)
     setCaret(next.caret)
     setPickMessage('')
     // updateValue is synchronous: even an immediate Enter reads the latest keystroke.
     report(next.text)
-  }, [report])
+  }, [report, commitKind, formulasOn])
   useEffect(() => { if (touched.current) report(initial) }, [])
   useGridCellEditor({ isCancelAfterEnd: () => !touched.current || (formula && !exprOf(text).trim()) })
 
@@ -230,8 +292,13 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
   const syncScroll = () => { if (inputRef.current && overlayRef.current) overlayRef.current.scrollLeft = inputRef.current.scrollLeft }
   useLayoutEffect(syncScroll, [text, caret, metrics])
 
-  const save = async () => {
-    if (!touched.current || (formula && !expr.trim())) { props.api.stopEditing(true); return }
+  /** Commit what is typed, then leave the cell (`move`: Tab moves right, Shift+Tab left — AG's own Tab, reproduced). */
+  const save = async (move: 'next' | 'previous' | null = null) => {
+    const leave = () => {
+      if (move === 'next') props.api.tabToNextCell()
+      else if (move === 'previous') props.api.tabToPreviousCell()
+    }
+    if (!touched.current || (formula && !expr.trim())) { props.api.stopEditing(true); leave(); return }
     if (submitting) return
     if (formula) {
       const revision = editRevision.current
@@ -241,9 +308,9 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
         if (revision !== editRevision.current) return
         setResponse(checked)
         setInFlight(false)
-        if (!checked.ok) { focusAt(caret); return }
+        if (!checked.ok) { setRefused(true); focusAt(caret); return }
       } catch {
-        if (revision === editRevision.current) setResponse({ ok: false, error: 'Could not check the formula. Please try again.' })
+        if (revision === editRevision.current) { setResponse({ ok: false, error: 'Could not check the formula. Please try again.', retryable: true }); setRefused(true) }
         return
       } finally {
         if (revision === editRevision.current) setSubmitting(false)
@@ -257,6 +324,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
         if (revision !== editRevision.current) return
         if (!removed.ok) { setPickMessage(removed.error ?? 'Could not replace this formula.'); return }
         props.api.stopEditing(true)
+        leave()
         return
       } catch {
         if (revision === editRevision.current) setPickMessage('Could not replace this formula. Please try again.')
@@ -267,6 +335,7 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     }
     report(text)
     props.stopEditing()
+    leave()
   }
   const cancel = () => props.api.stopEditing(true)
   const keyboard = (e: React.KeyboardEvent) => {
@@ -280,63 +349,135 @@ export const FormulaCellEditor = forwardRef<unknown, FormulaEditorParams>(functi
     } else if (e.key === 'Escape') {
       e.preventDefault(); e.stopPropagation(); cancel()
     } else if (e.key === 'Enter' && !(multiline && !formula && e.shiftKey)) {
-      e.preventDefault(); e.stopPropagation(); save()
+      e.preventDefault(); e.stopPropagation(); void save()
+    } else if (e.key === 'Tab' && formula) {
+      // `suppressFormulaKeys` handed Tab to this editor on a formula: check it like Enter, then move like AG would.
+      e.preventDefault(); e.stopPropagation(); void save(e.shiftKey ? 'previous' : 'next')
     }
   }
+
+  const toggle = (next: Exclude<ContextPanel, null>) => {
+    setPanel(current => current === next ? null : next)
+    if (next === 'history' && context.history && history.state !== 'loading' && history.state !== 'ready') {
+      setHistory({ state: 'loading', entries: [] })
+      context.history().then(entries => setHistory({ state: 'ready', entries }), () => setHistory({ state: 'error', entries: [] }))
+    }
+  }
+  const use = (draft: string) => { change({ text: draft, caret: draft.length }); setPanel(null); focusAt(draft.length) }
+  const decideDraft = async (verb: 'accept' | 'reject') => {
+    const draft = context.aiDraft
+    if (!draft || draftBusy) return
+    setDraftBusy(true)
+    try {
+      await (verb === 'accept' ? draft.accept() : draft.reject())
+      // The review wrote (or dismissed) the value; this edit has nothing left to add.
+      props.api.stopEditing(true)
+    } catch {
+      setPickMessage(verb === 'accept' ? 'Could not use the AI draft. Please try again.' : 'Could not dismiss the AI draft. Please try again.')
+      setDraftBusy(false)
+    }
+  }
+
   const hint = functionHint(callAt(tokens, Math.max(0, caret - offset)), functions)
   const cellRect = props.eGridCell?.getBoundingClientRect()
+  /* Option A widths: one line asks for 400px (the key line and the counter fit on one row), a formula 480px, long text its
+     cap — never wider than the room to the right, never narrower than the cell (editorBox). */
   const box = editorBox({ cellWidth: cellRect?.width ?? column.getActualWidth(), cellHeight: cellRect?.height ?? 0,
     roomToRight: cellRect ? roomToRightOf(cellRect.left, window.innerWidth) : window.innerWidth,
-    kind: multiline && !formula ? 'longtext' : 'formula' })
-  /* The field's own help. With formulas off there is no `=` to explain; long text keeps its Shift+Enter fact. */
-  const help = formula ? <>Click a field in this row, or start typing.</>
-    : formulasOn ? <>Start with <code>=</code> to calculate or combine fields.{multiline && ' Shift+Enter adds a line.'}</>
-    : multiline ? <>Shift+Enter adds a line.</> : null
+    kind: multiline && !formula ? 'longtext' : 'formula', contentWidth: formula ? 480 : multiline ? undefined : 400 })
+  const cap = context.maxLength ?? undefined
+  const length = text.length
+  const over = cap !== undefined && length > cap
+  const showCount = !formula && (multiline || cap !== undefined)
   const inputProps = {
     value: text, spellCheck: !formula, 'aria-label': formula ? 'Formula' : 'Cell value',
-    'aria-describedby': help ? `${id}-help ${id}-preview` : `${id}-preview`,
+    'aria-invalid': refused || over || undefined,
+    'aria-describedby': `${id}-keys ${id}-preview`,
+    placeholder: formulasOn ? 'Type a value, or = for a formula' : 'Type a value',
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change({ text: e.target.value, caret: e.target.selectionStart ?? e.target.value.length }),
     onSelect: (e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => setCaret(e.currentTarget.selectionStart ?? 0),
   }
+  const hasContext = !!(context.aiDraft || context.history || context.inherited)
   return (
-    <div className={`nds-formula-editor nds-readable${props.eGridCell?.closest('.dark') ? ' dark' : ''}`} data-completions={open} style={{ width: box.width, maxWidth: box.width }} onKeyDownCapture={keyboard}>
+    <div className={`nds-formula-editor nds-readable${props.eGridCell?.closest('.dark') ? ' dark' : ''}`} data-completions={open} data-formula={formula}
+      style={{ width: box.width, maxWidth: box.width }} onKeyDownCapture={keyboard}>
       <div className="nds-formula-body">
-      <div className="nds-formula-fieldwrap">
-        {formula && metrics && <div ref={overlayRef} className="nds-formula-overlay" aria-hidden style={{ ...metrics, fontVariantLigatures: 'none' }}>
-          <span className="nds-formula-overlay-line">{renderTokens(text, expr, offset, tokens, refColours, unknown, errorAt)}</span>
+        <div className="nds-formula-line">
+          <div className="nds-formula-fieldwrap">
+            {formula && metrics && <div ref={overlayRef} className="nds-formula-overlay" aria-hidden style={{ ...metrics, fontVariantLigatures: 'none' }}>
+              <span className="nds-formula-overlay-line">{renderTokens(text, expr, offset, tokens, refColours, unknown, errorAt)}</span>
+            </div>}
+            {multiline && !formula ? <Textarea {...inputProps} ref={el => { inputRef.current = el }} rows={5} /> :
+              <Input {...inputProps} ref={el => { inputRef.current = el }} size="sm" autoComplete="off"
+                role={formula ? 'combobox' : undefined} aria-autocomplete={formula ? 'list' : undefined}
+                aria-expanded={formula ? open : undefined} aria-controls={open ? `${id}-listbox` : undefined}
+                aria-activedescendant={open && matches[active] ? `${id}-o${active}` : undefined}
+                className={formula ? `nds-formula-input${metrics ? ' highlighted' : ''}` : undefined}
+                leadingIcon={formula || formulaExpr ? <FormulaGlyph title={formula ? 'Formula' : 'This cell holds a formula. Typing a value replaces it.'} /> : undefined}
+                onScroll={syncScroll} />}
+          </div>
+          {/* Portaled tips: inside this scrolling editor a tip widened the body and focusing an icon scrolled it sideways. */}
+          {hasContext && <TooltipPortalProvider><div className="nds-formula-context">
+            {context.aiDraft && <ToolbarButton icon={<Sparkles size={14} />} label="AI draft" description="An AI suggestion is waiting for this cell" aria-expanded={panel === 'ai'} onClick={() => toggle('ai')} />}
+            {context.history && <ToolbarButton icon={<History size={14} />} label="History" description="Earlier values of this cell" aria-expanded={panel === 'history'} onClick={() => toggle('history')} />}
+            {context.inherited && <ToolbarButton icon={<Link2 size={14} />} label={`Follows ${context.inherited.from}`} description="Typing here gives this row its own value" aria-expanded={panel === 'parent'} onClick={() => toggle('parent')} />}
+          </div></TooltipPortalProvider>}
+        </div>
+
+        {panel === 'ai' && context.aiDraft && <div className="nds-formula-contextpanel">
+          <span className="nds-formula-contextpanel-label"><Sparkles size={12} aria-hidden /> AI suggests</span>
+          <span className="nds-formula-contextpanel-value">{context.aiDraft.value}</span>
+          <div className="nds-formula-contextpanel-actions">
+            <Button size="xs" variant="primary" disabled={draftBusy} onClick={() => void decideDraft('accept')}>Use it</Button>
+            <Button size="xs" variant="quiet" disabled={draftBusy} onClick={() => void decideDraft('reject')}>Dismiss</Button>
+          </div>
         </div>}
-        {multiline && !formula ? <Textarea {...inputProps} ref={el => { inputRef.current = el }} rows={6} /> :
-          <Input {...inputProps} ref={el => { inputRef.current = el }} size="sm" autoComplete="off"
-            role={formula ? 'combobox' : undefined} aria-autocomplete={formula ? 'list' : undefined}
-            aria-expanded={formula ? open : undefined} aria-controls={open ? `${id}-listbox` : undefined}
-            aria-activedescendant={open && matches[active] ? `${id}-o${active}` : undefined}
-            className={formula ? `nds-formula-input${metrics ? ' highlighted' : ''}` : undefined}
-            leadingIcon={formula ? <FormulaGlyph /> : undefined} onScroll={syncScroll} />}
-      </div>
-      {help && <div id={`${id}-help`} className="nds-formula-help">{help}</div>}
-      {formula && <FormulaGuidance text={text} sourceLabel={response?.sourceLabel ?? props.sourceLabel} disabled={submitting} allowText={commitKind !== 'number'}
-        onInteractionChange={setAssisting} onChange={next => { change(next); focusAt(next.caret) }} />}
-      {open && <ListboxPanel ariaLabel="Formula suggestions" options={options} query={token?.query ?? ''} autoFocus={false} onCommit={applyChosen}
-        onCancel={() => setDismissed(completionKey)} activeIndex={active} onActiveIndexChange={setActive}
-        onMatchesChange={setMatches} idPrefix={id} className="nds-formula-pop"
-        style={{ position: 'static', width: '100%', maxWidth: '100%', maxHeight: 168 }} />}
-      {formula && hint && <div className="nds-formula-hint"><code>
-        {hint.signature.slice(0, hint.signature.indexOf('(') + 1)}
-        {hint.args.map((arg, i) => <span key={i} className={i === hint.argIndex ? 'on' : undefined}>{arg}{i < hint.args.length - 1 ? ', ' : ''}</span>)})
-      </code><span className="nds-formula-hint-sum">{hint.summary}</span></div>}
-      <div id={`${id}-preview`} role="status" aria-live="polite" aria-atomic="true">
-        {!formula && pickMessage && <div className="nds-formula-preview bad">{pickMessage}</div>}
-        {!formula && numberMessage && <div className="nds-formula-preview bad">{numberMessage}</div>}
-        {formula && <div className={`nds-formula-preview${line.kind === 'error' ? ' bad' : ''}`}>
-          {pickMessage || (line.kind === 'idle' ? 'Result will appear here' :
-            line.kind === 'checking' ? 'Checking formula…' : line.kind === 'error' ? line.message :
-            line.kind === 'empty' ? 'Result: empty' : `Result: ${line.value}`)}
+        {panel === 'history' && context.history && <div className="nds-formula-contextpanel" role="list" aria-label="Earlier values" aria-busy={history.state === 'loading'}>
+          {history.state === 'loading' && <span className="nds-formula-note">Reading earlier values…</span>}
+          {history.state === 'error' && <span className="nds-formula-note bad">Could not read earlier values.</span>}
+          {history.state === 'ready' && !history.entries.length && <span className="nds-formula-note">No earlier values recorded.</span>}
+          {history.entries.map((h, i) => <button key={i} type="button" role="listitem" className="nds-formula-historyrow" onClick={() => use(h.value)}>
+            <span className="nds-formula-contextpanel-value">{h.value || <em>empty</em>}</span>
+            <span className="nds-formula-note">{[h.who, h.when].filter(Boolean).join(' · ')}</span>
+          </button>)}
         </div>}
+        {panel === 'parent' && context.inherited && <div className="nds-formula-contextpanel">
+          <span className="nds-formula-contextpanel-label"><Link2 size={12} aria-hidden /> Follows {context.inherited.from}</span>
+          <span className="nds-formula-contextpanel-value">{context.inherited.value || <em>empty</em>}</span>
+          <span className="nds-formula-note">Typing here gives this row its own value.</span>
+        </div>}
+
+        {formula && <>
+          {hint && <div className="nds-formula-hint"><code>
+            {hint.signature.slice(0, hint.signature.indexOf('(') + 1)}
+            {hint.args.map((arg, i) => <span key={i} className={i === hint.argIndex ? 'on' : undefined}>{arg}{i < hint.args.length - 1 ? ', ' : ''}</span>)})
+          </code><span className="nds-formula-hint-sum">{hint.summary}</span></div>}
+          {open && <ListboxPanel ariaLabel="Formula suggestions" options={options} query={token?.query ?? ''} autoFocus={false} onCommit={applyChosen}
+            onCancel={() => setDismissed(completionKey)} activeIndex={active} onActiveIndexChange={setActive}
+            onMatchesChange={setMatches} idPrefix={id} className="nds-formula-pop"
+            style={{ position: 'static', width: '100%', maxWidth: '100%', maxHeight: 180 }} />}
+          <FormulaGuidance text={text} sourceLabel={response?.sourceLabel ?? props.sourceLabel} disabled={submitting} allowText={commitKind !== 'number'}
+            onInteractionChange={setAssisting} onChange={next => { change(next); focusAt(next.caret) }} />
+          <span className="nds-formula-note">Click a field in this row to insert it.</span>
+        </>}
+        {multiline && !formula && <span className="nds-formula-note">Shift+Enter adds a line.</span>}
+
+        <div id={`${id}-preview`} role="status" aria-live="polite" aria-atomic="true">
+          {pickMessage && <div className="nds-formula-preview bad">{pickMessage}</div>}
+          {!formula && numberMessage && <div className="nds-formula-preview bad">{numberMessage}</div>}
+          {/* While a suggestion is being picked, a half-typed name is not an error yet. */}
+          {formula && !pickMessage && !open && <div className={`nds-formula-preview${line.kind === 'error' ? ' bad' : ''}`}>
+            {line.kind === 'idle' ? 'The result shows here' : line.kind === 'checking' ? 'Checking…'
+              : line.kind === 'error' ? (refused ? <><b>Not saved.</b> {line.message}{/[.!?]$/.test(line.message.trim()) ? '' : '.'} Fix it, or press Esc to cancel.</> : line.message)
+              : line.kind === 'empty' ? '= empty' : <>= <b>{String(line.value)}</b></>}
+            {response?.retryable && <Button size="xs" variant="quiet" disabled={submitting} onClick={retry}>Retry</Button>}
+          </div>}
+        </div>
       </div>
-      {response?.retryable && <Button size="xs" disabled={submitting} onClick={retry}>Retry preview</Button>}
-      </div>
-      <div className="nds-formula-actions"><span className="nds-editor-keyhint">{EDITOR_KEY_HINT}</span>
-        <Button size="sm" onClick={cancel}>Cancel</Button><Button size="sm" variant="primary" disabled={submitting || (formula && !expr.trim())} onClick={save}>{submitting ? 'Checking…' : 'Apply'}</Button>
+      <div className="nds-formula-foot">
+        <span id={`${id}-keys`} className="nds-editor-keyhint">{EDITOR_KEY_HINT}</span>
+        {submitting && <span className="nds-formula-note">Checking…</span>}
+        {showCount && <span className={`nds-formula-count${over ? ' bad' : ''}`} aria-live="polite">{length}{cap !== undefined ? ` / ${cap}` : ''}</span>}
       </div>
     </div>
   )
@@ -397,6 +538,8 @@ export interface FormulaWiring<TRow> {
    */
   errorFor?: (rowId: string, fieldKey: string) => string | null
   colIdOfRef: (name: string, fieldKey?: string) => string | null
+  /** Option A — the cell's AI draft, history and inheritance, shown as icons in the editor only when present. */
+  contextFor?: (row: TRow, fieldKey: string) => CellEditorContext | null
 }
 
 
@@ -421,7 +564,7 @@ function FormulaAwareEditor(props: FormulaEditorParams & { fallback: FallbackEdi
 
 export function formulaCellEditorSelector<TRow>(
   wiring: FormulaWiring<TRow>,
-  col: { key: string; kind?: string; formulaWritable?: boolean },
+  col: { key: string; kind?: string; formulaWritable?: boolean; maxLength?: number | null },
   fallback: FallbackEditor | ((row: TRow | undefined) => FallbackEditor),
   rowIdOf: (row: TRow) => string,
 ) {
@@ -434,14 +577,24 @@ export function formulaCellEditorSelector<TRow>(
       const editor = typeof fallback === 'function' ? fallback(p.data) : fallback
       const available = rowWritable !== false && formulaAvailability({ formulaWritable: col.formulaWritable, hasStoredFormula: !!stored }).kind === 'available'
       const choice = formulaEditorChoice({ eventKey: p.eventKey, storedExpr: stored, formulaWritable: col.formulaWritable, rowWritable })
+      /* Option A — the cell's context and length cap ride with every value editor this selector opens. */
+      const cellContext = { ...(p.data ? wiring.contextFor?.(p.data, col.key) : null), maxLength: col.maxLength ?? null }
       /* R-63 — no formula here: text and number still open the ONE value editor (formulas off), never AG's inline ones. */
-      if (!available) return editor.component === 'agTextCellEditor' ? scalarValueEditorSpec('text')
-        : editor.component === 'agNumberCellEditor' ? scalarValueEditorSpec('number') : editor
+      if (!available) {
+        const plain = editor.component === 'agTextCellEditor' ? scalarValueEditorSpec('text') : editor.component === 'agNumberCellEditor' ? scalarValueEditorSpec('number') : null
+        return plain ? { ...plain, params: { ...plain.params, cellContext } } : editor
+      }
       const scalar = typeof editor.component === 'string' && ['agTextCellEditor', 'agLargeTextCellEditor', 'agNumberCellEditor'].includes(editor.component)
+      const direct = choice.use === 'formula' || scalar
       return {
-        component: choice.use === 'formula' || scalar ? FormulaCellEditor : FormulaAwareEditor,
+        component: direct ? FormulaCellEditor : FormulaAwareEditor,
         popup: true,
+        /* Option A — the value editor opens UNDER its cell. An option / list / measure editor keeps its own position; an `=`
+           typed there swaps to this editor inside that popup, which is why `openedUnder` travels with the position. */
+        ...(direct ? { popupPosition: 'under' as const } : {}),
         params: {
+          openedUnder: direct,
+          cellContext,
           /* 🔴 Explicit, not defaulted: AG merges the COLUMN's `cellEditorParams` under these (`mergeParams`), so a column
              that also names the plain value editor would otherwise hand this formula editor `formulas: false` and `=`
              would stop switching (caught by the push gate on 2026-09-24). */
@@ -469,7 +622,8 @@ const NO_PREVIEW = async (): Promise<FormulaPreviewResponse> => ({ ok: false, er
  * available, and by `scalarValueEditor` for a sheet built without formula wiring (the Variants page).
  */
 export function scalarValueEditorSpec(kind: 'text' | 'number') {
-  return { component: FormulaCellEditor, popup: true, params: { formulas: false, commitKind: kind, candidates: [], preview: NO_PREVIEW } }
+  return { component: FormulaCellEditor, popup: true, popupPosition: 'under' as const,
+    params: { formulas: false, commitKind: kind, candidates: [], preview: NO_PREVIEW, openedUnder: true } }
 }
 
 /**
@@ -479,7 +633,7 @@ export function scalarValueEditorSpec(kind: 'text' | 'number') {
  */
 export function scalarValueEditor(kind: 'text' | 'number') {
   const spec = scalarValueEditorSpec(kind)
-  return { cellEditor: spec.component, cellEditorPopup: true, cellEditorParams: spec.params, suppressKeyboardEvent: suppressFormulaKeys }
+  return { cellEditor: spec.component, cellEditorPopup: true, cellEditorPopupPosition: spec.popupPosition, cellEditorParams: spec.params, suppressKeyboardEvent: suppressFormulaKeys }
 }
 
 function FormulaUnavailableEditor(props: { message: string; retry?: () => void; api: { stopEditing: (cancel?: boolean) => void } }) {

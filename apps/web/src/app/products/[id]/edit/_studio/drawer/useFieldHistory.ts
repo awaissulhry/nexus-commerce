@@ -38,10 +38,35 @@ export interface FieldHistoryState {
   reload: () => void
 }
 
-interface HistoryPayload {
+export interface HistoryPayload {
   entries: FieldHistoryEntry[]
   coverageSince: string | null
   coverageNote?: string
+}
+
+/**
+ * The one history request, shared by the drawer's pane and the sheet's cell editor (Option A's history icon), so the
+ * two can never ask for different things. `rowId` is the row whose history is wanted — a family read returns parent AND
+ * variations.
+ */
+export async function fetchFieldHistory(
+  q: { productId: string; fieldKey: string; scope: DrawerScope; rowId: string | null },
+  /** The editor's one-off read has nothing to cancel it; the pane passes its own. */
+  signal: AbortSignal = new AbortController().signal,
+): Promise<HistoryPayload> {
+  const { productId, fieldKey, scope, rowId } = q
+  const qs = new URLSearchParams({ fieldKey, scope: scope.kind, limit: '50' })
+  if (scope.locale) qs.set('locale', scope.locale)
+  if (scope.channel) qs.set('channel', scope.channel)
+  if (scope.marketplace) qs.set('marketplace', scope.marketplace)
+  if (scope.kind === 'channel') qs.set('aliasKey', scope.aliasId ?? '')
+  if (scope.accountId !== undefined) qs.set('accountId', scope.accountId)
+  if (scope.listingId) qs.set('listingId', scope.listingId)
+  if (rowId) qs.set('rowId', rowId)
+  const res = await studioFetch(`${getBackendUrl()}/api/products/${rowId ?? productId}/studio/history?${qs}`, signal)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const page = (await res.json()) as FieldHistoryPage
+  return { entries: page.entries ?? [], coverageSince: page.coverageSince ?? null, coverageNote: page.coverageNote }
 }
 
 /** Frozen: `?? []` in the return would mint a new array every render (#166). */
@@ -59,21 +84,7 @@ export function useFieldHistory(
       // Unreachable: `enabled` below is the same condition. Thrown rather than silently returning
       // an empty page, which would be indistinguishable from "no history recorded".
       if (!productId || !fieldKey) throw new Error('useFieldHistory: run called while disabled')
-      const qs = new URLSearchParams({ fieldKey, scope: scope.kind, limit: '50' })
-      if (scope.locale) qs.set('locale', scope.locale)
-      if (scope.channel) qs.set('channel', scope.channel)
-      if (scope.marketplace) qs.set('marketplace', scope.marketplace)
-      if (scope.kind === 'channel') qs.set('aliasKey', scope.aliasId ?? '')
-      if (scope.accountId !== undefined) qs.set('accountId', scope.accountId)
-      if (scope.listingId) qs.set('listingId', scope.listingId)
-      if (rowId) qs.set('rowId', rowId)
-      const res = await studioFetch(
-        `${getBackendUrl()}/api/products/${rowId ?? productId}/studio/history?${qs}`,
-        signal,
-      )
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const page = (await res.json()) as FieldHistoryPage
-      return { entries: page.entries ?? [], coverageSince: page.coverageSince ?? null, coverageNote: page.coverageNote }
+      return fetchFieldHistory({ productId, fieldKey, scope, rowId }, signal)
     },
     [productId, fieldKey, rowId, scope.kind, scope.channel, scope.marketplace, scope.aliasId, scope.accountId, scope.listingId, scope.locale],
   )

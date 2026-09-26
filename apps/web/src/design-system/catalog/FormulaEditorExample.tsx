@@ -56,11 +56,18 @@ export function FormulaEditorExample() {
     exprFor: (row: string, field: string) => formulas.current.get(`${row}:${field}`) ?? null,
     colIdOfRef: (name: string) => name,
     preview: async (id: string, _field: string, expr: string) => samplePreview(expr, rowsRef.current.find(row => row.id === id)!),
+    /* Option A (2026-09-26) — the icons a cell shows in its editor only when they apply: a sample AI draft on Gloves'
+       brand, earlier values on Jacket's title, and Boots' manufacturer following another row. */
+    contextFor: (row: ExampleRow, field: string) => ({
+      aiDraft: row.id === 'two' && field === 'brand' ? { value: 'Nexus Moto', accept: async () => setNotice('Sample: the AI draft would be applied.'), reject: async () => setNotice('Sample: the AI draft would be dismissed.') } : null,
+      history: row.id === 'one' && field === 'title' ? async () => [{ value: 'Jacket (old)', when: '24 Sept', who: 'Sample' }] : undefined,
+      inherited: row.id === 'three' && field === 'manufacturer' ? { from: 'Atlas parent', value: 'Atlas Ltd' } : null,
+    }),
   }), [])
   const columns = useMemo<ColDef<ExampleRow>[]>(() => FIELDS.map(f => ({
     field: f.key, headerName: f.label, editable: true, cellDataType: false, minWidth: 150, flex: 1,
     suppressKeyboardEvent: suppressFormulaKeys,
-    ...formulaCellEditorSelector(wiring, { key: f.key, kind: f.key === 'price' ? 'number' : 'text', formulaWritable: true },
+    ...formulaCellEditorSelector(wiring, { key: f.key, kind: f.key === 'price' ? 'number' : 'text', formulaWritable: true, maxLength: f.key === 'title' ? 60 : null },
       { component: f.key === 'title' ? 'agLargeTextCellEditor' : 'agTextCellEditor' }, row => row.id),
   })), [wiring])
   const clipboard = useMemo(() => formulaTransfer<ExampleRow>({ exprFor: (row, field) => wiring.exprFor(row.id, field) }), [wiring])
@@ -76,7 +83,9 @@ export function FormulaEditorExample() {
     setNotice(`Saved ${field} for ${event.data.brand}: ${String(next)}`)
   }, [])
   return <div id="formula-editor-example">
-    <p>Try the real cell editor with sample rows. Double-click Manufacturer and type <code>=</code>, then click Brand in that row.
+    <p>Try the real cell editor with sample rows. It opens under the cell: Enter saves, Tab saves and moves right, Esc cancels.
+      Gloves&apos; Brand has an AI draft (✦), Jacket&apos;s Title has history and a counter, Boots&apos; Manufacturer follows another row.
+      Double-click Manufacturer and type <code>=</code>, then click Brand in that row.
       For Title, insert Brand and use Add text to append “ Jacket”, or try <code>=$brand &amp; " Jacket"</code> or <code>=upper($brand)</code>. Copy or fill down to use each row’s brand.</p>
     <p>This sample accepts only the example formulas and changes sample data in this page. Product formulas use the server evaluator.</p>
     <GridCard><NexusGrid<ExampleRow> {...SHEET_GRID_OPTIONS} {...clipboard} rowData={rows} columnDefs={columns}
