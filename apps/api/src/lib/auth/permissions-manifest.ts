@@ -162,6 +162,9 @@ export const ENTRIES: Entry[] = [
   P(F.inventoryAdjust, (m, p) => m === 'POST' && p.startsWith('/api/stock-pool/products/')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
+  // The Shopify orders shadow report (read-only counts before order ingest): the people who manage
+  // connections. It spends the account's Shopify read budget, so it is not a general orders read.
+  P(F.settingsIntegrationsManage, (_m, p) => p === '/api/shopify/shadow-report/:accountId'),
 
   // ── Channel connect/disconnect (OAuth-adjacent, session-gated) ──
   // CX.1 — the shared connect flow. Only the browser-redirect callback is public.

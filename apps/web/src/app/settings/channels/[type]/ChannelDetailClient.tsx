@@ -40,6 +40,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useSettingsForm } from '../../_shell/SettingsSaveBar'
 import '../channels.css'
 import { InboundGrid } from '../ChannelEventsGrid'
+import { ShopifyShadowReportCard } from './ShopifyShadowReportCard'
 import {
   type ActionNote,
   type ChannelConnection,
@@ -361,6 +362,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         setDraftMarkets={setDraftMarkets}
       />
       <InboundEventsCard events={detail.recentEvents} stats={detail.eventStats} />
+      {channelType === 'shopify' && connection.isManagedBy !== 'pending' && <ShopifyShadowReportCard accountId={connection.id} />}
       <AdvancedCard meta={detail.meta} />
     </div>
   )
