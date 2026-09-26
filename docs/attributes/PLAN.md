@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0–S5 merged (S2 live); S6 (API) built 2026-09-26; S5 apply approved by the Owner (disputed: keep 3, archive `collar_style`; Xavia Racing first), not yet run; S7 needs the assortment owner; S9 open | §10.9 |
+| P3b | 🟡 S0–S6 and the axis guard merged and LIVE (API build `efa02341`, 2026-09-26 20:01 UTC); **S5 APPLIED on both businesses 2026-09-26** (Xavia Racing 184 changes, Motovento 146; disputed: 3 kept on Shared, `collar_style` archived); S7 needs the assortment owner; S9 open | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -671,6 +671,22 @@ left as it is and reported as a follow-up.
 - **The reader switches (P8):** a shadow harness keyed to `resolveBatch`, then the Shopify outbound/content sync
   first; delete the payload-only Shopify legacy builder; the flat-file readers move only with their owners.
 - **The condition source** (see above; needs one field in the shared studio-sheet file).
+- **From the variation-theme lane (VTR, 2026-09-26; read in code by VTR, not run):** `resolve-batch.service.ts:338` —
+  `effectiveStored` falls back to the category id only for Amazon `productType` and eBay `categoryId`. For Etsy and
+  Shopify the mapping default shows on the sheet with the source "master" (`studio-sheet.service.ts:1341-1342`, a wrong
+  label) and likely counts as EMPTY for readiness and publish; the same condition probably makes Shopify's free-text
+  "Product type" show the taxonomy gid when empty. VTR's step 4 (categories) depends on it.
+  **Fixed 2026-09-26, PR #48 (the Owner chose "fix both parts", then a third spot).** One map,
+  `CHANNEL_CATEGORY_FIELD` in `mapping/category-mapping.service.ts` (Amazon `productType`, eBay `categoryId`, Shopify
+  `category`, Etsy `taxonomy_id`), drives the listing pin, the resolver fill (a blank stored value in the channel's own
+  category field gets the mapped category; a stored value still wins), the studio sheet fill (only the coordinate
+  channel's own column; the label stays "master", VTR's to change) and the sheet's missing-schema issue key (on Shopify
+  it named `productType`). Etsy `taxonomy_id` keeps the mapped id as TEXT in the cell; validation reads it as a number
+  (`0` and non-numbers are flagged) — no Etsy writer sends `taxonomy_id` today. Tests: `resolve-batch.vitest.test.ts`
+  (the mock keeps the real map) and `studio-sheet-category-fill.vitest.test.ts`; 6 planted mistakes caught. Trap: 8
+  test files mock `category-mapping.service.js`; a mock without the new export fails only where `resolveBatch` runs
+  (`ebay-presentation-workflow`, fixed with `importOriginal`); the catalog-transfer mocks are import/export files and
+  still pass.
 
 ### 10.9 P3b — attribute scope (planned 2026-09-26)
 
@@ -876,9 +892,49 @@ keys per attribute and readiness rows by state.
   counts, the preview (disputed apart, a required row blocked), a stale preview refused with nothing changed, one
   group changing only its own rows and undone exactly, "approve the rest" leaving only the core and the undecided
   disputed rows on Shared and undone exactly, and two businesses kept apart.
-- **Not applied to any business.** The Owner decides per business: the groups, and each disputed row (the study's view
+- **Applied to both businesses on 2026-09-26 — the record is below.** (Before that: not applied.) The Owner decides per business: the groups, and each disputed row (the study's view
   or the concept list's). The review screen (`settings/pim/attributes/placement/`) is the product-sheet session's; until
   it exists the preview can be read and approved from this report.
+
+**S5 APPLIED in production (2026-09-26 ~20:10 UTC, the Owner's word: "1A + 2A").** Run on API build `efa02341` (it
+holds S5, S6, the axis guard #46 and the category fix #48), through the signed-in web app. Each business: a fresh
+preview, a written prediction, `POST …/apply { fingerprint, groups: 'all', includeDisputed: ['collar_style'] }`, then a
+read-back. Every number matched the prediction; no row was blocked (the axis guard found no family varying by a moved
+or archived attribute).
+
+| | Xavia Racing | Motovento |
+|---|---|---|
+| Preview (before) | core 54 · Amazon 67 · eBay 4 · Shopify 0 · duplicate 34 · not relevant 78 · disputed 4 · blocked 0 · not in the proposal 2 (`occasion`, `size_system`) | core 49 · Amazon 43 · eBay 3 · Shopify 0 · duplicate 26 · not relevant 73 · disputed 3 · blocked 0 · not in the proposal 0 |
+| Applied | 184 = Amazon 67 + eBay 4 + archived 113 (112 + `collar_style`) | 146 = Amazon 43 + eBay 3 + archived 100 (99 + `collar_style`) |
+| Batch (for undo) | `1e632618-979d-4487-aee7-a41005d8614b` | `56cba7d6-d304-4d26-81d7-e9eab3a53ff6` |
+| Dictionary after | 243 = Shared 59 · Amazon 67 · eBay 4 · archived 113 | 197 = Shared 51 · Amazon 43 · eBay 3 · archived 100 (all 197 were Shared before) |
+| Preview after | every group 0 changes; `ceCertification`, `lining_description`, `theme` still "change" (kept on Shared, not approved) | same; `lining_description`, `theme` kept |
+
+Undo: `POST /api/attributes/placement-proposal/<batch>/undo` (per business header), only while every row still equals
+what the batch made. The Motovento apply left Xavia's dictionary unchanged (read after it).
+
+**The Shared view after the apply (studio columns, master scope, one family per business):**
+- Xavia Racing: 33 attribute columns = 32 core + `supplier_declared_dg_hz_regulation` (placed on Amazon, kept because
+  Amazon · IT requires it — the S4 rule). Nothing else moved or archived shows.
+- Motovento: 40 = 31 core + 9 saved keys the dictionary does not have (`armorType`, `condition_type`, `item_name`,
+  `merchant_shipping_group`, `merchant_suggested_asin`, `recommended_browse_nodes`, `parentage_level`, `skip_offer`,
+  `supplier_declared_has_product_identifier_exemption`). S4 hides an unknown saved key only when it is an Amazon
+  attribute of the BUSINESS's cached schemas; Motovento has no Amazon connection, so the Amazon-looking keys stay.
+  **Open (Owner):** also hide keys that are Amazon attributes of ANY cached schema, or leave them.
+- 32 of Xavia's 33 attribute columns are hidden by default: that is the old MS.1 rule (`DEFAULT_VISIBLE_GROUPS` —
+  only Identity, Content, Identifiers, Pricing or a required column show by default), not S5 or S6. `color`, `size`,
+  `material` on Xavia are `usedBy` Amazon, eBay, Shopify and not dormant.
+- Motovento: 94 of 97 live attributes are DORMANT (S6) — concept adoption (step A) ran only on Xavia, so eBay and Etsy
+  declare nothing through a concept there. **Open (Owner):** run step A on Motovento (a prod write; dry run first).
+- **Asked by VTR the same evening:** in production `color` and `size` have 0 options on both businesses (their concepts
+  are kind `text`, so adoption made none; `optionsFor()` only fills `select` concepts). VTR's step 1b would create 31
+  (colour 21, size 10). The concept lists hold color 13 codes and size 10 codes. Codes never change, so ONE code set:
+  **Open (Owner):** (A) this lane creates the options from the concept lists first and VTR's backfill links to them, or
+  (B) VTR creates them with the concept codes. Recommended: A; VTR agrees (its step 1b would then only LINK, never
+  create, and report what it cannot match). Production values the concept lists miss (VTR's read-only report): the
+  Italian spelling "Arancia" (a synonym for orange), size "XXS", and 12 mixed values (colour + gender or garment, e.g.
+  "Nero | Donna") — the Owner decides whether those stay colour values; they are NOT added until he answers. A NEW
+  value typed on the sheet gets the concept code when it matches a concept spelling, else a code from the text.
 
 **S6 built — API (2026-09-26, branch `feat/attributes-p3b-s6`): "used by" and dormant.**
 
@@ -897,6 +953,14 @@ keys per attribute and readiness rows by state.
   makes eBay a user. Full API suite: OFF only the 4 local-only files; ON only the baseline files.
 - Column build (private copy, best of 5): Shared family cold 40 ms, warm 7 ms; Amazon channel cold 69 ms, warm 5 ms
   (the version read now spans 9 tables). The plan's bound was 191 ms cold.
+
+**Axis guard (2026-09-26, PR #46; asked by the variation-theme lane before its step 1).** An attribute a family
+VARIES BY is never hidden: a placement move to a channel and an archive are refused while a live family root's
+`Product.variationAxes` has a label naming it (`canonicalVariantAxis` against its code, concept or label), and the S5
+cleanup preview marks such a row "blocked". VTR's step 1 will store the attribute CODE in a family axis list; that list
+joins `familyAxisLabels()` then. Agreed with VTR the same day: per-language option labels stay in
+`AttributeOption.metadata.labels` (no new column); option and attribute codes never change; `semanticKey` links an
+attribute to its concept; `AttributeOption.sortOrder` is the shared value order.
 
 ## 11. For the product-sheet session (the screens are theirs)
 
