@@ -637,7 +637,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.');
         }
     }, [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns]);
-    const { preferences, columnDialog, openCustomise } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'channel', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     const getDataPath = useCallback((d: ChannelSheetRow) => dataPathFor(d), []);
     const getRowId = useCallback((p: {
         data: ChannelSheetRow;
@@ -768,6 +768,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             search: search,
             onSearch: setSearch,
             onCustomise: openCustomise,
+            onNewView: openNewView,
             onExport: () => { setTransferIntent('export'); setTransferOpen(true); },
             exportCounts: { view: sheetColumns.visibleAttributeKeys().length, all: sheetColumns.orderedKeys.length },
             exportDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.export'),
@@ -847,7 +848,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             })()}</>,
         status: {
             rows: visibleRows.length,
-            selected: selected.length,
+            /* The selection is counted ONCE, on the toolbar, not again here (SHEET-VIEWS, 2026-09-26). */
             pending: pending,
             saving: saving,
             refused: refused,

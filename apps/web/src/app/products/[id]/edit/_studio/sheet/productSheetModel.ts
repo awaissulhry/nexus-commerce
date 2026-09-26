@@ -10,7 +10,7 @@ import type { SheetColumnsApi } from './useSheetColumns'
 
 type CommonToolbarProps = 'views' | 'presets' | 'activePresetId' | 'languagesView' | 'onApplyPreset'
   | 'viewsEmptyLabel' | 'onSaveCurrentView' | 'onUpdateCurrentView' | 'describeView'
-  | 'chips' | 'activeChipId' | 'onChipToggle'
+  | 'chips' | 'activeChipId' | 'onChipToggle' | 'density' | 'onDensity'
 
 /** Scope adapters supply data and domain actions; ProductSheetSurface owns the UI. */
 export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = SheetRow> {

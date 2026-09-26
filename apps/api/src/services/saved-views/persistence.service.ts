@@ -27,12 +27,40 @@ function keys(value: unknown): value is string[] {
   return Array.isArray(value) && value.length <= 5000 && value.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 500) && new Set(value).size === value.length
 }
 
+const VIEW_DENSITIES = new Set(['compact', 'cozy', 'spacious'])
+
+/**
+ * 2026-09-26 — the optional display fields a sheet view may carry beside its columns (web
+ * `design-system/grid/views/viewPayload.ts` → `ViewDisplay`): widths, sort and row height. Absent is
+ * valid and means "leave that alone"; present must be exactly the documented shape, because the client
+ * applies what it reads to the grid.
+ */
+function validateViewDisplay(value: Record<string, unknown>): void {
+  const widths = value.columnWidths
+  if (widths !== undefined && (!record(widths) || Object.keys(widths).length > 5000 || Object.entries(widths).some(([key, px]) =>
+    !key || key.length > 500 || typeof px !== 'number' || !Number.isFinite(px) || px < 20 || px > 2000))) {
+    throw new SavedViewError('Column widths must map each column to a width between 20 and 2000 pixels')
+  }
+  const sort = value.sort
+  if (sort !== undefined) {
+    const entries = Array.isArray(sort) ? sort : null
+    const valid = !!entries && entries.length <= 50 && entries.every((entry) =>
+      record(entry) && typeof entry.colId === 'string' && entry.colId.length > 0 && entry.colId.length <= 500 && (entry.sort === 'asc' || entry.sort === 'desc'))
+    if (!valid || new Set(entries!.map((entry) => (entry as { colId: string }).colId)).size !== entries!.length) {
+      throw new SavedViewError('A view sort must list up to 50 distinct columns, each asc or desc')
+    }
+  }
+  if (value.density !== undefined && (typeof value.density !== 'string' || !VIEW_DENSITIES.has(value.density))) {
+    throw new SavedViewError('Row height must be compact, cozy or spacious')
+  }
+}
+
 function validateColumnsPayload(value: unknown, allowLegacyGridState: boolean): void {
   if (!record(value)) throw new SavedViewError('A sheet view needs a valid columns payload')
   // Retain older named views; they are upgraded by the client when explicitly saved.
   if (allowLegacyGridState && value.v === 1 && record(value.gridState)) return
   const common = value.kind === 'columns' && keys(value.columns) && (value.chip === undefined || value.chip === null || typeof value.chip === 'string')
-  if (value.v === 2 && common) return
+  if (value.v === 2 && common) return validateViewDisplay(value)
   if (value.v !== 3 || !common || !keys(value.columnOrder) || !keys(value.lockedColumns) || !keys(value.groupOrder) || !record(value.groupOverrides)) {
     throw new SavedViewError('A sheet layout needs columns, columnOrder, lockedColumns, groupOrder and groupOverrides')
   }
@@ -43,6 +71,7 @@ function validateColumnsPayload(value: unknown, allowLegacyGridState: boolean): 
   if (!(value.columns as string[]).every((key) => ordered.has(key)) || !value.lockedColumns.every((key) => ordered.has(key))) {
     throw new SavedViewError('The column order must include every visible and locked column')
   }
+  validateViewDisplay(value)
 }
 
 /** Generic catalog filters stay opaque. The product grids own these versioned layout contracts. */

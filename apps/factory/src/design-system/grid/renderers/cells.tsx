@@ -6,7 +6,8 @@
  *
  * The rule every one of them enforces: an UNMEASURED value (`null`) and a MEASURED zero are
  * different facts and render differently — `formatGridValue` decides which, the cell draws it.
- * `EmptyValue` is the dash: muted, and it carries a `title` ONLY when the zero was measured.
+ * `EmptyValue` is the dash: muted, and it carries a `title` ONLY when the zero was measured. Inside a
+ * grid that asks for blank empty cells (`emptyCells.ts`) the unmeasured dash draws nothing instead.
  *
  * Styling: `../theme/grid.css` (`.nds-grid-*`), tokens from `tokens/grid.ts`. No CSS module, so
  * the cell reads the same in a page card, a modal and a drawer.
@@ -19,6 +20,7 @@ import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 import { Button, InfoTip, Pill, TagGlyph, type Tone } from '../../primitives'
 import { CoverageSummary, Menu, Thumbnail, type CoverageChannel, type MenuItemDef } from '../../components'
 import { DetailPopover } from '../../components/DetailPopover'
+import { BLANK_CELL_LABEL, useGridEmptyCells } from './emptyCells'
 import { emptyValueA11y } from './emptyValue'
 import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } from './format'
 import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
@@ -47,6 +49,13 @@ export type EmptyValueProps =
 
 export const EmptyValue = memo(function EmptyValue({ measuredZero = false, title }: EmptyValueProps) {
   const a = emptyValueA11y(measuredZero, title)
+  const mode = useGridEmptyCells()
+  /* An editing grid (`NexusGrid emptyCells="blank"`) draws nothing for a value nobody entered — the
+     words are for a screen reader only. A measured zero is a fact, not an absence, so it keeps its
+     dash and its title in every mode (see `emptyCells.ts`). */
+  if (mode === 'blank' && !measuredZero) {
+    return <span className="nds-cell-empty nds-cell-blank"><span className="nds-vh">{BLANK_CELL_LABEL}</span></span>
+  }
   return (
     <span className="nds-cell-empty" title={a.title} aria-label={a.ariaLabel}>
       {EMPTY_DASH}

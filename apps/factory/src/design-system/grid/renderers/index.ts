@@ -1,4 +1,5 @@
 export { formatGridValue, EMPTY_DASH, type GridValueKind, type FormatOptions, type FormattedValue } from './format'
+export { GridEmptyCellsContext, useGridEmptyCells, BLANK_CELL_LABEL, type GridEmptyCells } from './emptyCells'
 export { IdentityBand, CompletenessPill, type IdentityBandProps, type CompletenessPillProps } from './IdentityBand'
 export { deriveBandWidth, deriveBandWidthFromDom, findKeyBearingBand, measureLongestSku, measureBandSlots, buildSkuFont, skuBudget, bandTruncatesSku, BAND_WIDTH_FLOOR, BAND_WIDTH_CEILING, type BandSlots } from './bandWidth'
 export {

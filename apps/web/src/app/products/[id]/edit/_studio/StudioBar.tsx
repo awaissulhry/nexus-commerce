@@ -10,7 +10,7 @@ import { languageSummary, orderedLocales } from './languageControl'
 import { participationSuffix, scopeItems } from './scopeItems'
 import { useScopeReadiness, useStudioScope, useStudioSave } from './contracts'
 import { MASTER_SCOPE } from './types'
-import { languageLabel } from './scopes'
+import { languageLabel, scopeLanguages } from './scopes'
 
 /** Scope selects the owner; product navigation selects the work. Grid controls stay in the sheet. */
 export function StudioBar() {
@@ -23,20 +23,29 @@ export function StudioBar() {
     discoveryFailed: discovery?.failed === true, destination: destination.status }),
   [options.channels, market, marketplaces, readiness, scope, save, locale, discovery?.failed, destination.status])
   const available = options.locales.map(language => language.code)
+  /* SHEET-VIEWS (Owner, 2026-09-26: "why do we have two different dropdowns for the country and then the
+     language?"). On a channel scope the language list is the MARKET's languages, and every market but
+     Amazon BE (nl, fr) has exactly one — so a second dropdown offered a choice that was not one. A
+     one-language market names its language in the market dropdown ("IT · Italy · Italian") and the
+     language control is not drawn; a market with two or more keeps it, and so does Shared (every
+     market's languages, a real choice). A market with NO declared language keeps the control too, so
+     its empty state stays visible rather than silently absent. */
+  const languagesOf = (code: string) => scopeLanguages(scope, code, marketplaces, null)
+  const languageChoice = scope === MASTER_SCOPE || available.length !== 1
   const languageOptions = options.locales.map(language => ({ value: language.code,
     label: `${languageLabel(language.code)}${scope === MASTER_SCOPE && language.code === primaryLanguage ? ' · source' : ''}` }))
   return <ScopeBar variant="menu" className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={
     <>
       {scope !== MASTER_SCOPE && <>
       {accounts.length > 1 && <Listbox size="sm" width="auto" value={accountId} options={accounts.map(a => ({ value: a.id, label: a.label + (a.primary ? ' · primary' : '') + (connectionScopePolicy(a.health, scope, false).needsReconnect ? ' · needs reconnecting' : '') }))} onChange={setAccount} ariaLabel="Account" placeholder="Choose account" />}
-      <Listbox size="sm" width="auto" options={options.markets.filter(m => m.channels.includes(scope)).map(m => ({ value: m.code, label: m.label + participationSuffix(marketplaces.find(p => p.channel === scope && p.code === m.code)) }))}
+      <Listbox size="sm" width="auto" options={options.markets.filter(m => m.channels.includes(scope)).map(m => { const only = languagesOf(m.code); return { value: m.code, label: m.label + (only.length === 1 ? ` · ${languageLabel(only[0])}` : '') + participationSuffix(marketplaces.find(p => p.channel === scope && p.code === m.code)) } })}
         value={market ?? undefined} onChange={setMarket} ariaLabel="Market" placeholder="Market" />
 
       {listingId && <Button size="sm" variant="ghost" onClick={() => setListing()} title="Clear this listing selection and show all listings in the selected account and market">{destination.status === 'ready' && destination.data.aliasKey ? 'Listing customization' : 'Selected listing'} · Clear</Button>}
       </>}
       {/* Step 4.3 #2 (A-44) — ONE language control in the slot the nine chips took. The Languages view
           makes it a multi-select that can never drop below one language; `locales` keeps its URL. */}
-      {locales
+      {!languageChoice ? null : locales
         ? <MultiSelect size="sm" width="auto" ariaLabel="Content languages" options={languageOptions} value={locales} minSelected={1}
             formatLabel={value => languageSummary(value, available, languageLabel)}
             onChange={next => { const ordered = orderedLocales(next, available); if (ordered) setLocales(ordered) }} />

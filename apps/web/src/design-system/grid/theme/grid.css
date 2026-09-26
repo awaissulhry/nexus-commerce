@@ -330,6 +330,45 @@
 
 /* the dash — muted; the title (a measured zero) is on the element, the colour is here */
 .nds-cell-empty { color: var(--nds-grid-muted-fg); }
+/* 2026-09-26 — a BLANK empty cell (`NexusGrid emptyCells="blank"`, the product sheet): nothing is drawn
+   and the words ride in `.nds-vh`. Inline-block so it still holds the value's line box and anything
+   trailing it (a select chevron) keeps its place. */
+.nds-cell-blank { display: inline-block; min-width: 1px; }
+/* A cell that does not apply to its row — master's `columnApplies` says no, or a variation-theme child
+   ("Set on the parent"). A light diagonal hatch, as a background IMAGE so the child-row tint, hover and
+   range selection still show through it. The tooltip keeps the reason. */
+.nds-ag-nexus .ag-cell.nds-cell-na {
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--nds-border) 5px 6px);
+}
+/* Follows an EMPTY parent: the link mark alone, in the muted text tone instead of the link blue —
+   "there is a source, and it holds nothing". `--nds-text-3` is 7:1 on every grid ground. */
+.nds-cell-value:has(.nds-cell-blank) > .nds-cell-prov-inherited { color: var(--nds-text-3); }
+/* 2026-09-26 (Owner: "When I click on a checkbox, it should be selecting the whole row, not just a single
+   thing … it looks very odd"). A selected row must read as ONE selected row.
+   Measured before, master·IT: `--nds-grid-selected-bg` is #eef5ff and a variation row's tint is #eef1f5, and
+   `.nds-ag-flat-tree .ag-row:not(.ag-row-level-0)` paints that tint OVER the selected colour — a selected
+   variation looked exactly like an unselected one. On any row, a cell with its own tint (inherited: 6% info)
+   covered the row colour, so only some cells changed.
+   Now every cell of a selected row carries a primary wash as a background IMAGE (over the row tint, over a
+   cell's own tint, beside the n/a hatch), and the checkbox cell carries a 3px primary rail. Engine-wide, so
+   every NexusGrid selects the same way. A DESCENDANT selector on purpose: AG 36 wraps a row's cells in
+   `.ag-grid-pinned-left-cells` / center wrappers, so `.ag-row > .ag-cell` matched nothing (measured). */
+.nds-ag-nexus .ag-row.ag-row-selected .ag-cell {
+  background-image: linear-gradient(color-mix(in srgb, var(--nds-primary) 12%, transparent), color-mix(in srgb, var(--nds-primary) 12%, transparent));
+}
+.nds-ag-nexus .ag-row.ag-row-selected .ag-cell.nds-cell-na {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--nds-primary) 12%, transparent), color-mix(in srgb, var(--nds-primary) 12%, transparent)),
+    repeating-linear-gradient(135deg, transparent 0 5px, var(--nds-border) 5px 6px);
+}
+.nds-ag-nexus .ag-row.ag-row-selected .ag-cell[col-id='ag-Grid-SelectionColumn'] { box-shadow: inset 3px 0 0 var(--nds-primary); }
+/* A pointer tick is not a keyboard move: clicking a checkbox left AG's focus box around that one cell
+   (`.ag-cell-focus:focus-within`, the checkbox input focused, `:focus-visible` false) — the "single thing"
+   the Owner saw. The box stays for keyboard focus, on the cell or on its checkbox. */
+.nds-ag-nexus .ag-cell[col-id='ag-Grid-SelectionColumn'].ag-cell-focus:focus-within:not(:focus-visible):not(:has(:focus-visible)) { border-color: transparent; }
+/* …and the checkbox's own 3px halo (`.ag-checkbox-input-wrapper:focus-within`), for the same pointer tick.
+   Keyboard focus (`:focus-visible` on the input) keeps it. */
+.nds-ag-nexus .ag-checkbox-input-wrapper:focus-within:not(:has(:focus-visible)) { box-shadow: none; }
 .nds-cell-muted { color: var(--nds-grid-muted-fg); }
 .nds-cell-strong { font-weight: var(--nds-font-weight-semibold); }
 .nds-cell-date { font-size: var(--nds-font-size-sm); white-space: nowrap; }
@@ -1036,8 +1075,11 @@
   padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 600; line-height: 1;
   background: var(--nds-surface-sunken); color: var(--nds-text-2);
 }
+/* Portaled to <body> and placed by `usePopoverPosition` (fixed `top`/`left` inline) since 2026-09-26 —
+   an absolute panel inside the toolbar's `overflow: auto` was clipped under the grid. The popover layer
+   is the same one every other DS popover uses. */
 .nds-toolbar-fold-panel {
-  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
+  position: fixed; z-index: var(--nds-z-popover);
   display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
   max-width: min(640px, calc(100vw - 32px)); padding: 10px;
   background: var(--nds-surface); border: 1px solid var(--nds-border);
@@ -1069,7 +1111,14 @@
    puts it over the grid, which trades a covered hint for a covered cell. The width comes from
    DS.1's measured token rather than a number copied here — if the button's footprint changes, this
    follows it. DS1-2. */
-.nds-grid-sheet-status { font-size: 12.5px; color: var(--nds-text-2); padding-right: var(--nds-fab-reserve-inline, 128px); }
+/* 2026-09-26 (Owner: "the question mark … on the footer of the table is not perfectly aligned") — the
+   reservation now applies only while the FAB is actually ON SCREEN. CT.1 (2026-09-04) stopped mounting
+   the button on the studio sheet (`CopilotMount` `EXCLUDED_PATTERNS`), but this rule kept reserving
+   128px for it, so the `?` sat 128px in from the right edge that every other control on the page lines
+   up with (measured at 1728: gap 128, footer 67→1727, `?` 1581→1599). `data-nds-fab` is set by
+   `AiCopilot`'s button; while it exists, the tail of the hint line stays clear of it exactly as before. */
+.nds-grid-sheet-status { font-size: 12.5px; color: var(--nds-text-2); }
+:root:has([data-nds-fab]) .nds-grid-sheet .nds-grid-sheet-status { padding-right: var(--nds-fab-reserve-inline, 128px); }
 .nds-grid-sheet-status-pending { color: var(--nds-warning-strong); }
 .nds-grid-sheet-status-refused { color: var(--nds-danger-text); }
 
@@ -1700,6 +1749,10 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 
 /* PR.6: one owner for sheet toolbar padding; preserves the existing 6px gutter. */
 .nds-gridcard.nds-grid-sheet .nds-toolbar { padding-block: 0; padding-inline: var(--nds-space-6); }
+/* 2026-09-26 — the status strip takes the SAME gutter, so its ends line up with the toolbar's: "41 rows"
+   under "41 rows" and the `?` under the `⋯` (measured before: toolbar 6px, strip 16px — 10px off at
+   both ends). The FAB reservation above still wins on the right while the button is on screen. */
+.nds-gridcard.nds-grid-sheet .nds-grid-footstrip { padding-inline: var(--nds-space-6); }
 @media (max-width: 1279px) {
   .nds-gridcard.nds-grid-sheet .nds-toolbar { padding-block: var(--nds-space-6); }
 }

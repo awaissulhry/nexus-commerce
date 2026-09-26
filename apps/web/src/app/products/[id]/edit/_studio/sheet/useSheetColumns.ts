@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import type { GridApi, GridState } from '@/design-system/grid'
 import {
   ALL_VIEW_ID, arrangementColumnState, columnStateToPrefs, columnsViewPayload,
-  isColumnsViewPayload, pickGridState, prefsToColumnState, resolveLanding, resolvePreset, useGridState,
+  isColumnsViewPayload, pickGridState, prefsToColumnState, resolveLanding, resolvePreset, useGridState, viewDisplayOf,
   type ColumnsViewPayload, type GridStateApi, type GridStateKey, type GridViewPreset,
-  type Landing, type PrefsBridgeOptions, type SavedGridView, type UseGridStateOptions,
+  type Landing, type PrefsBridgeOptions, type SavedGridView, type UseGridStateOptions, type ViewDisplay,
 } from '@/design-system/grid'
+import type { GridDensityName } from '@/design-system/tokens/grid'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
 import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { viewChipColumns, type ViewChip } from '../contracts'
@@ -18,8 +19,31 @@ import { alwaysColumnsFor, orderColumnKeys, sheetViews, structuralColumnKeys, ty
 import { defaultViewKeys } from './slotListColumns'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 
-/** Widths and sort remain lightweight browser preferences. Complete layouts are saved explicitly. */
+/**
+ * Widths and sort remain lightweight browser preferences for the WORKING layout. A NAMED view also
+ * carries them, with the row height (2026-09-26, `ViewDisplay`), and applying one restores all three.
+ */
 export const SHEET_PERSIST_KEYS: readonly GridStateKey[] = ['columnSizing', 'columnPinning', 'sort']
+
+/**
+ * The sheet's row height, per operator and browser — one choice for every product and scope, like
+ * the products grid's. Read after mount, not in the state initialiser: this hook also renders on the
+ * server, where there is no storage, and a first paint that disagreed with the client's would not
+ * hydrate. The default is COMPACT — what `GridSheet` has always given the sheet — so an operator who
+ * never touches the control sees no change.
+ */
+export const SHEET_DENSITY_KEY = 'nds-sheet-density:v1'
+export const SHEET_DEFAULT_DENSITY: GridDensityName = 'compact'
+const DENSITIES: readonly GridDensityName[] = ['compact', 'cozy', 'spacious']
+function readSheetDensity(): GridDensityName | null {
+  try {
+    const stored = window.localStorage.getItem(SHEET_DENSITY_KEY)
+    return stored && (DENSITIES as readonly string[]).includes(stored) ? (stored as GridDensityName) : null
+  } catch { return null }
+}
+function writeSheetDensity(density: GridDensityName): void {
+  try { window.localStorage.setItem(SHEET_DENSITY_KEY, density) } catch { /* private mode: the choice lasts this visit */ }
+}
 export type ActiveColumns =
   | { kind: 'all' }
   | { kind: 'preset'; id: string; label: string }
@@ -70,6 +94,9 @@ export interface SheetColumnsApi<TPage> {
   updateView: (view: SavedGridView<TPage>) => Promise<unknown>
   describeView: (view: SavedGridView<TPage>) => { note?: string; title?: string } | null
   visibleAttributeKeys: () => string[]
+  /** The sheet's row height. A view that carries one sets it; so does the toolbar. */
+  density: GridDensityName
+  setDensity: (density: GridDensityName) => void
 }
 
 export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>): SheetColumnsApi<TPage> {
@@ -110,6 +137,11 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const loadError = loadState.surface === layoutSurface ? loadState.error : null
   const requestSequence = useRef(0)
   const saving = useRef(false)
+  const [density, setDensityState] = useState<GridDensityName>(SHEET_DEFAULT_DENSITY)
+  const densityRef = useRef(density)
+  densityRef.current = density
+  useEffect(() => { const stored = readSheetDensity(); if (stored) setDensityState(stored) }, [])
+  const setDensity = useCallback((next: GridDensityName) => { setDensityState(next); writeSheetDensity(next) }, [])
   const applySavedRef = useRef<(payload: ColumnsViewPayload, view: SavedGridView<TPage>) => void>(() => {})
   const gridState = useGridState<TPage>({ ...a.grid, persistKeys: SHEET_PERSIST_KEYS, applyColumnsView: (payload, view) => applySavedRef.current(payload, view) })
   const recoveryState = recovery?.surface === layoutSurface ? recovery.state : undefined
@@ -180,6 +212,40 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     activate(preset.id === ALL_VIEW_ID ? { kind: 'all' } : { kind: 'preset', id: preset.id, label: preset.label }, columnsViewPayload(resolved.columns.filter((k) => attributeKeys.has(k))), false)
     setChip?.(null)
   }, [addressable, alwaysColumns, gridState, activate, attributeKeys, setChip, languageView])
+  /**
+   * 2026-09-26 — a named view restores what it saved besides its columns: widths, sort, row height.
+   * Only an EXPLICIT apply (the menu, or landing on the default view) calls this; landing on the
+   * working layout does not, so the widths the operator dragged since stay theirs. A width or sort for
+   * a column this product type lacks is skipped, the same way a missing column is (`missing` above).
+   */
+  const applyDisplay = useCallback((display: ViewDisplay) => {
+    if (display.density) setDensity(display.density)
+    const api = apiRef.current
+    if (!api || api.isDestroyed()) return
+    const present = new Set(api.getColumnState().map((c) => c.colId))
+    const widths = Object.entries(display.columnWidths ?? {}).filter(([colId]) => present.has(colId)).map(([colId, width]) => ({ colId, width }))
+    if (widths.length) api.applyColumnState({ state: widths, applyOrder: false })
+    if (display.sort) {
+      api.applyColumnState({
+        state: display.sort.filter((s) => present.has(s.colId)).map((s, sortIndex) => ({ colId: s.colId, sort: s.sort, sortIndex })),
+        defaultState: { sort: null },
+        applyOrder: false,
+      })
+    }
+  }, [apiRef, setDensity])
+  /** What a named save stores besides the columns — read from the grid as it is on screen now. */
+  const captureDisplay = useCallback((): ViewDisplay => {
+    const api = apiRef.current
+    if (!api || api.isDestroyed()) return { density: densityRef.current }
+    const state = api.getColumnState().filter((c) => addressableSet.has(c.colId))
+    return {
+      columnWidths: Object.fromEntries(state.filter((c) => typeof c.width === 'number' && c.width > 0).map((c) => [c.colId, Math.round(c.width!)])),
+      sort: state.filter((c) => c.sort === 'asc' || c.sort === 'desc')
+        .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))
+        .map((c) => ({ colId: c.colId, sort: c.sort as 'asc' | 'desc' })),
+      density: densityRef.current,
+    }
+  }, [apiRef, addressableSet])
   const applySaved = useCallback((payload: ColumnsViewPayload, view: SavedGridView<TPage>) => {
     const languages = columnLanguages(payload.columns)
     if (languageView && JSON.stringify(languages) !== JSON.stringify(languageView.selected ?? [])) {
@@ -188,8 +254,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       return
     }
     activate({ kind: 'saved', id: view.id, name: view.name, missing: payload.columns.filter((k) => !attributeKeys.has(k)) }, payload)
+    applyDisplay(viewDisplayOf(payload))
     setChip?.(payload.chip ?? null)
-  }, [activate, attributeKeys, setChip, languageView])
+  }, [activate, applyDisplay, attributeKeys, setChip, languageView])
   applySavedRef.current = applySaved
   const applyCustom = useCallback((keys: readonly string[], locks?: readonly string[]) => {
     const prefs = preferencesFromLayout(layoutRef.current, specs)
@@ -311,7 +378,9 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     if (saving.current) throw new Error('A layout save is already in progress')
     const working = workingRef.current
     if (scopeRef.current !== layoutSurface || working.surface !== layoutSurface || !working.ready) throw new Error('Load your saved layout before saving. Use Reload saved layout to retry.')
-    const payload = { ...layoutFromPreferences(specs, value, alwaysColumns), ...(named?.chip ? { chip: named.chip } : {}) }
+    /* A NAMED view keeps everything on screen (2026-09-26): widths, sort and row height ride with its
+       columns. The personal working layout stays columns-only — its widths follow the browser. */
+    const payload = { ...layoutFromPreferences(specs, value, alwaysColumns), ...(named?.chip ? { chip: named.chip } : {}), ...(named ? captureDisplay() : {}) }
     saving.current = true
     try {
       let id: string | null = null
@@ -332,7 +401,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       setChip?.(payload.chip ?? null)
       return id
     } finally { saving.current = false }
-  }, [layoutSurface, specs, alwaysColumns, gridState, baseUrl, activate, attributeKeys, setChip])
+  }, [layoutSurface, specs, alwaysColumns, gridState, baseUrl, activate, attributeKeys, setChip, captureDisplay])
   const savePreferences = useCallback(async (value: PreferencesValue) => { await persistDraft(value) }, [persistDraft])
   const savePreferencesAs = useCallback(async (name: string, value: PreferencesValue) => (await persistDraft(value, { name, chip: activeChip?.id }))!, [persistDraft, activeChip])
   const updatePreferences = useCallback(async (view: SavedGridView<TPage>, value: PreferencesValue) => { await persistDraft(value, { name: view.name, view, chip: activeChip?.id }) }, [persistDraft, activeChip])
@@ -365,5 +434,6 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     landed, landing, loadError: loadError ?? gridState.loadError, orderedKeys, preferenceColumns: specs, alwaysColumns, allColumnKeys,
     applyPreset, applyCustom, currentPreferences, currentPayload, savePreferences, savePreferencesAs,
     updatePreferences, reloadSavedPreferences, saveCurrentAs, updateView, describeView, visibleAttributeKeys,
+    density, setDensity,
   }
 }

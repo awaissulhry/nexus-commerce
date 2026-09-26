@@ -28,14 +28,20 @@
  * save · default); the second fixed set, Required, is a chip beside it; the view chips stay; Export
  * always writes the full importable file; Reload lives in the ⋯ overflow. Presets per group, quick
  * picks, "Export view" and the per-column filter row are gone by the Owner's ruling, not by omission.
+ *
+ * SHEET-VIEWS (Owner, 2026-09-26): the views menu manages views in full — New view…, Rename… and
+ * Duplicate… are back beside save · update · default · delete — and the bar gains the row-height
+ * control the products grid has (Compact · Cozy · Spacious). A saved view keeps the row height, the
+ * widths and the sort with its columns. Same on every scope, like everything else here.
  */
 import { useRef, type ReactNode } from 'react'
-import { AlertTriangle, MoreHorizontal, Search } from 'lucide-react'
+import { AlertTriangle, ChevronDown, MoreHorizontal, Search } from 'lucide-react'
 
 import { Button, FilterChip, Input } from '@/design-system/primitives'
 import { Menu, type MenuItemDef } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
-import { ALL_VIEW_ID, GridSearchSlot, GridToolbarFold, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
+import { ALL_VIEW_ID, GRID_DENSITY_OPTIONS, GridDensityToggle, GridSearchSlot, GridSelectionActions, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarOverflowTier, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
+import type { GridDensityName } from '@/design-system/tokens/grid'
 
 import { viewChipIsAlarm, type ViewChip } from '../contracts'
 import { viewChipCountLabel, viewChipSummary } from '../viewChips'
@@ -62,6 +68,14 @@ export interface SheetToolbarProps<TPage> {
   selected: number
   /** What this sheet IS — the family descriptor, or the channel coordinate. */
   descriptor?: ReactNode
+  /**
+   * The verbs for the selected rows (SHEET-VIEWS, Owner 2026-09-26). Given AND rows selected, the bar
+   * swaps into its selection state — the products grid's shape (`GridSelectionActions`): the count reads
+   * "Selected N rows", the verbs and Clear take the search field's place, the row-height control steps
+   * aside. A scope with no verbs keeps its normal bar and counts the selection beside its rows.
+   */
+  selectionActions?: ReactNode
+  onClearSelection?: () => void
 
   /* ── the standard controls. Every scope gets all of them unless it says otherwise. ───────── */
   search: string
@@ -76,6 +90,8 @@ export interface SheetToolbarProps<TPage> {
   /** Save / update what is on screen as a columns view; the hook supplies both (`useSheetColumns`). */
   onSaveCurrentView?: (name: string) => Promise<unknown>
   onUpdateCurrentView?: (view: SavedGridView<TPage>) => Promise<unknown>
+  /** "New view…" — opens the Customise dialog with the view-name field open (`useSheetPreferences`). */
+  onNewView?: () => void
   /** A note under a saved view — the columns it names that this product type lacks. */
   describeView?: (view: SavedGridView<TPage>) => { note?: string; title?: string } | null
   /** Already filtered by `isViewChipVisible` — `useViewChips()` does it. Do not re-filter. */
@@ -83,6 +99,9 @@ export interface SheetToolbarProps<TPage> {
   activeChipId?: string | null
   onChipToggle?: (id: string | null) => void
   onCustomise?: () => void
+  /** Row height. Both or neither: the toggle shows only when the sheet can change it. */
+  density?: GridDensityName
+  onDensity?: (density: GridDensityName) => void
   /**
    * Export requests every attribute. Shared sheets retain their editable key row; channel sheets
    * declare review-only output because resolved values do not describe stored overrides.
@@ -123,18 +142,58 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
   /* LX.F2 / R-LX-18 — the ENGINE answers "is the bar over?"; this file answers "then which verbs
      move". Reasoned at `design-system/grid/toolbars/GridToolbarFold.tsx` with the measured widths. */
   const actionsRef = useRef<HTMLDivElement>(null)
-  const tight = useToolbarOverflow(actionsRef)
+  const selecting = p.selected > 0 && p.selectionActions != null
+  /* Steps aside while rows are selected, as on the products grid: the verbs need the room. */
+  const densityShown = !!(p.density && p.onDensity) && !selecting
+  /* SHEET-VIEWS (2026-09-26) — the row-height control is the CHEAPEST thing to give up, so it folds
+     first; the verbs move only if the bar is still over after that (`useToolbarOverflowTier`, with the
+     measured widths). With no row-height control on this bar the verbs' tier is armed from the start,
+     which is exactly the old single-tier behaviour. */
+  const densityFolded = useToolbarOverflow(actionsRef)
+  const tight = useToolbarOverflowTier(actionsRef, !densityShown || densityFolded)
   /* R-LX-27 — the LAST tier, armed by the one above it: only once the chips have folded and the verbs
      have moved does a bar that is still over ask its status pills for their width back. Reasoned with
      the measured 230.8px at `design-system/grid/toolbars/GridToolbarFold.tsx`. */
   const compactStatus = useToolbarStatusCompaction(actionsRef, tight)
-  const foldedActions: MenuItemDef[] = !tight ? [] : [
-    ...(!gone('export') && p.onExport ? [{
+  /* The filter dropdown's rows (see the render below for the Owner's ruling). */
+  const filterChips = orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID)
+  const activeFilter = filterChips.find((chip) => chip.id === p.activeChipId) ?? null
+  const filterItems: MenuItemDef[] = [
+    { id: 'filter:all', label: <>All rows{activeFilter ? '' : ' ✓'}</>, description: 'No filter — every row of this sheet', disabled: blocked, onSelect: () => p.onChipToggle?.(null) },
+    { id: 'sep-filters', separator: true },
+    ...filterChips.map((chip): MenuItemDef => {
+      const on = chip.id === p.activeChipId
+      const n = viewChipCountLabel(chip)
+      const detail = [viewChipSummary(chip), chip.count !== null ? chip.note : null].filter(Boolean).join('. ')
+      /* The visible second line: the breadth ("41 affected cells across 1 column and 41 rows") only when
+         there is something to count — at a measured zero the label already says "0 cells", and "0 affected
+         cells across 0 columns and 0 rows" under it is noise. The tooltip keeps the full detail. */
+      const zero = chip.count !== null && chip.count.n === 0
+      const line = zero ? (chip.note ?? null) : detail
+      return {
+        id: `filter:${chip.id}`,
+        /* The glyph follows the chip's KIND (§6.2): a count of WORK is not an alarm. */
+        icon: viewChipIsAlarm(chip) ? <AlertTriangle size={12} aria-hidden /> : undefined,
+        label: <>{chip.label}{n !== null && <> · {n}</>}{on ? ' ✓' : ''}</>,
+        description: line,
+        title: detail,
+        disabled: blocked,
+        onSelect: () => p.onChipToggle?.(on ? null : chip.id),
+      }
+    }),
+  ]
+  const foldedActions: MenuItemDef[] = [
+    /* The row height folds FIRST and as three items, so it stays one click away (✓ marks the one in force). */
+    ...(densityShown && densityFolded ? GRID_DENSITY_OPTIONS.map((o) => ({
+      id: `folded-density-${o.value}`, label: `Rows: ${o.label}${o.value === p.density ? ' ✓' : ''}`,
+      disabled: blocked, onSelect: () => p.onDensity?.(o.value as GridDensityName),
+    } as MenuItemDef)) : []),
+    ...(tight && !gone('export') && p.onExport ? [{
       id: 'folded-export', label: 'Export',
       description: p.exportPurpose === 'workbook' ? 'Choose products and destinations for an editing workbook' : 'Every attribute this scope declares',
       disabled: blocked || p.exportDisabled, onSelect: () => p.onExport?.('all'),
     } as MenuItemDef] : []),
-    ...(!gone('import') && p.onImport ? [{
+    ...(tight && !gone('import') && p.onImport ? [{
       id: 'folded-import', label: 'Import', description: 'Bring values in from a workbook',
       disabled: blocked || p.importDisabled, onSelect: () => p.onImport?.(),
     } as MenuItemDef] : []),
@@ -142,7 +201,9 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
   return (
     <GridToolbar
       count={
-        blocked ? <span role="status">{p.loading ? 'Loading information…' : 'Information unavailable'}</span> : <>
+        blocked ? <span role="status">{p.loading ? 'Loading information…' : 'Information unavailable'}</span> : selecting ? <>
+          Selected <b>{p.selected}</b> {p.selected === 1 ? 'row' : 'rows'}
+        </> : <>
           <b>{p.visible}</b> {p.visible === 1 ? 'row' : 'rows'}
           {p.visible !== p.total && <> of {p.total}</>}
           {p.selected > 0 && <> · <b>{p.selected}</b> selected</>}
@@ -171,7 +232,8 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
                   onApplyPreset={p.onApplyPreset ?? (() => {})}
                   emptyLabel={p.viewsEmptyLabel ?? 'View'}
                   showCounts
-                  manage="minimal"
+                  manage="full"
+                  onNewView={p.onNewView}
                   presetInMenu={(x) => x.id !== REQUIRED_VIEW_ID && x.id !== LANGUAGES_VIEW_ID}
                   onSaveCurrent={p.onSaveCurrentView}
                   onUpdateCurrent={p.onUpdateCurrentView}
@@ -214,49 +276,38 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
             semantics nobody has specified.
           */}
           {/*
-            LX.F2 / R-LX-18 — the chips are handed to the ENGINE's overflow rule, not folded here. The
-            rule, its thresholds and the measured widths that chose it all live in
-            `design-system/grid/toolbars/GridToolbarFold.tsx`; this file only says WHICH group folds
-            first and what its trigger counts. Measured before: 9 chips = 1345.4px of a 2150px bar
-            against 1200px of usable width at 1280, 9 controls clipped; after: the chips fold into one
-            ~150px trigger and nothing clips at 1280 / 1440 / 1728 / 2048.
+            LX.F2 / R-LX-18 measured why the filters must never sit on the bar one by one: 9 chips =
+            1345.4px of a 2150px bar at 1280, 9 controls clipped. R-52 folded them into one trigger at
+            every width; the trigger below keeps that one-trigger footprint.
           */}
-          {/* Step 4.3 #2 (R-52) — ALWAYS folded into one trigger: `Filters N` (how many exist), or
-              `Filters · <label>` when one is on (single-select, so an active COUNT would read 0 or 1). */}
-          {!gone('chips') && <GridToolbarFold label="Filters" mode="always" activeLabel={(p.chips ?? []).find((chip) => chip.id === p.activeChipId)?.label}
-            count={orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID).length}>
-          {orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID).map((chip) => {
-            const on = p.activeChipId === chip.id
-            const n = viewChipCountLabel(chip)
-            const detail = [viewChipSummary(chip), chip.count !== null ? chip.note : null].filter(Boolean).join('. ')
-            return (
-              /*
-               * A FILTER CHIP, not a button (CT.1, 2026-09-04). This was a `Button size="sm"`
-               * carrying `aria-pressed` — a toggle that filters the sheet, styled as a secondary
-               * action — while the Errors & Sync facets, the same role, were a clickable Pill. One
-               * role, one control, on every surface: the DS `FilterChip` at its toolbar height.
-               */
-              <FilterChip
-                key={chip.id}
-                size="md"
-                disabled={blocked}
-                pressed={on}
-                // `null` renders no number and keeps the chip — see the ViewChip contract.
-                count={n ?? undefined}
-                onClick={() => p.onChipToggle?.(on ? null : chip.id)}
-                title={detail}
-                aria-label={`${chip.label}: ${detail}`}
-                compactLabel={chip.compactLabel}
-              >
-                {/* The glyph follows the chip's KIND (§6.2). A warning glyph on a count of WORK is
-                    a false positive, and a false positive teaches operators the alarm means nothing. */}
-                {viewChipIsAlarm(chip) && <AlertTriangle size={11} />} {chip.label}
-              </FilterChip>
-            )
-          })}
-          </GridToolbarFold>}
+          {/* SHEET-VIEWS (Owner, 2026-09-26: "instead of having chips, I think it's better to actually keep a
+              dropdown"). The filters are ONE single-select dropdown — the DS `Menu`, the same control as the
+              views menu and `⋯` — not chips in a panel. The trigger keeps R-52's reading: `Filters N` (how many
+              exist) or `Filters · <label>` pressed when one is on. Each row keeps what its chip carried: the
+              label, the count (`null` is never printed as 0), the alarm glyph for a warning/danger KIND, and
+              the full detail as a visible second line. "All rows" clears; picking the active filter clears it. */}
+          {!gone('chips') && filterChips.length > 0 && (
+            <Menu
+              label={<>
+                Filters
+                {activeFilter
+                  ? <span className="nds-toolbar-fold-active">· {activeFilter.label}</span>
+                  : <span className="nds-toolbar-fold-count">{filterChips.length}</span>}
+                <ChevronDown size={11} aria-hidden />
+              </>}
+              items={filterItems}
+              selectedId={activeFilter ? `filter:${activeFilter.id}` : 'filter:all'}
+              triggerProps={{
+                className: ['nds-btn sm nds-toolbar-fold-trigger', activeFilter ? 'is-active' : ''].filter(Boolean).join(' '),
+                disabled: blocked,
+                'aria-label': activeFilter ? `Filters: ${activeFilter.label}` : `Filters, ${filterChips.length} available`,
+              }}
+            />
+          )}
           <SheetStatuses status={p.status} compact={compactStatus} />
           <div className="nds-sheet-toolbar-actions" ref={actionsRef}>
+            {/* Beside Customise, as on the products grid: both change how the sheet LOOKS, not what it holds. */}
+            {densityShown && !densityFolded && <GridDensityToggle value={p.density!} onChange={(d) => p.onDensity?.(d)} />}
             {!gone('customise') && p.onCustomise && <Button size="sm" disabled={blocked} onClick={p.onCustomise}>Customise</Button>}
             {!gone('export') && p.onExport && !tight && (
               /* The scope declares whether this file carries editable values or review data.
@@ -327,7 +378,12 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
         </>
       }
     >
-      {!gone('search') && (
+      {selecting ? (
+        <GridSelectionActions>
+          {p.selectionActions}
+          <Button variant="link" size="sm" onClick={p.onClearSelection}>Clear</Button>
+        </GridSelectionActions>
+      ) : !gone('search') && (
         <GridSearchSlot>
           <Input
             /* `xs`, not `sm`. Measured: the sm field is 36px against 28px buttons, and it was the

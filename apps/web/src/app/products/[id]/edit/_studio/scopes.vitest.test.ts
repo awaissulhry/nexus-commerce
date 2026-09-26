@@ -24,6 +24,7 @@ import {
   historyStateIsInternal,
   deriveScopeOptions,
   flattenGrouped,
+  localeForMarketChange,
   primaryLanguageFrom,
   scopeLanguages,
   localeLabel,
@@ -387,5 +388,25 @@ describe('language chips use server metadata on every scope', () => {
   it('does not infer a language from another channel or the legacy scalar', () => {
     expect(scopeLanguages('EBAY', 'BE', markets, 'it')).toEqual([])
     expect(flattenGrouped({ AMAZON: [{ code: 'IT', language: 'it' }] })[0].languages).toEqual([])
+  })
+})
+
+describe('localeForMarketChange — a market change keeps the chosen language while the new market accepts it', () => {
+  // Amazon BE is the one real two-language market (nl, fr); the fixture above gives it nl only.
+  const rows = flattenGrouped({ ...GROUPED, AMAZON: GROUPED.AMAZON.map(row => row.code === 'BE' ? { ...row, languages: ['nl', 'fr'] } : row) })
+
+  it('keeps French when moving from Amazon BE to Amazon FR', () => {
+    expect(localeForMarketChange('AMAZON', 'FR', 'fr', rows)).toBe('fr')
+  })
+  it('keeps French when moving from Amazon FR to Amazon BE, where French is the SECOND language', () => {
+    expect(localeForMarketChange('AMAZON', 'BE', 'fr', rows)).toBe('fr')
+  })
+  it('falls back to the new market\'s first language when it does not accept the chosen one', () => {
+    expect(localeForMarketChange('AMAZON', 'DE', 'fr', rows)).toBe('de')
+    expect(localeForMarketChange('AMAZON', 'BE', 'it', rows)).toBe('nl')
+  })
+  it('defaults when nothing was chosen, and says null for a market it does not know', () => {
+    expect(localeForMarketChange('AMAZON', 'IT', null, rows)).toBe('it')
+    expect(localeForMarketChange('AMAZON', 'XX', 'it', rows)).toBeNull()
   })
 })

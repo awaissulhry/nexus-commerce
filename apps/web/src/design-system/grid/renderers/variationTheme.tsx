@@ -34,6 +34,7 @@ import type { ICellRendererParams } from 'ag-grid-community'
 
 import { Tag } from '../../primitives'
 import { composeCellTooltip } from './cellTooltip'
+import { useGridEmptyCells } from './emptyCells'
 import { classifyProvenance, type CellProvenance, type ProvenanceLike } from './provenance'
 import { ProvenanceMark } from './provenanceMark'
 
@@ -320,14 +321,22 @@ export const VariationThemeValue = memo(function VariationThemeValue(
   p: ICellRendererParams & VariationThemeValueParams,
 ) {
   const cell = (p.value ?? null) as VariationThemeCell | null
+  const emptyCells = useGridEmptyCells()
 
-  /* A child row: structure is the parent's. The em dash is the grid's, and it says why. */
+  /* A child row: structure is the parent's. The em dash is the grid's, and it says why. In a grid
+     that draws empty cells blank, the cell draws nothing — the column def's `nds-cell-na` hatch says
+     "not for this row" and the tooltip still says why; the reason stays in the text for a reader. */
   if (!cell) {
+    const reason = p.childReason ?? VARIATION_THEME_CHILD_REASON
     return (
       <span className="nds-cell-value nds-axes-cell">
-        <span className="nds-cell-empty" title={p.childReason ?? VARIATION_THEME_CHILD_REASON} aria-label={p.childReason ?? VARIATION_THEME_CHILD_REASON}>
-          —
-        </span>
+        {emptyCells === 'blank' ? (
+          <span className="nds-cell-empty nds-cell-blank" title={reason}><span className="nds-vh">{reason}</span></span>
+        ) : (
+          <span className="nds-cell-empty" title={reason} aria-label={reason}>
+            —
+          </span>
+        )}
       </span>
     )
   }

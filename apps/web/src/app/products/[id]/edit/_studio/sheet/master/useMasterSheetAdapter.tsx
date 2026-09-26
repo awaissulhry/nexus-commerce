@@ -41,7 +41,7 @@ import type { NewVariationDraft } from './addVariation';
 import { useFamilyProductPicker } from './FamilyProductPicker';
 import { familyActions } from './familyActions';
 import { familyOps } from './familyOps';
-import { FamilySelectionBar } from './FamilySelectionBar';
+import { FamilySelectionVerbs } from './FamilySelectionBar';
 import { useFamily } from './useFamily';
 import { useCellFormulas } from '../../useCellFormulas';
 import { cellOf, editRefusalReason } from './columnRules';
@@ -542,7 +542,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onDone: onFamilyChanged,
         onCollectVariation: setNewVariation,
     });
-    const { preferences, columnDialog, openCustomise } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
+    const { preferences, columnDialog, openCustomise, openNewView } = useSheetPreferences({ scope: 'master', sheetColumns, getGridApi, bandWidthRef, bandDerivedRef, revealCell });
     customiseRef.current = openCustomise;
     const [exportNote, setExportNote] = useState<string | null>(null);
     const onExport = useCallback((mode: SheetExportMode) => {
@@ -615,10 +615,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             visible: visibleRows.length,
             total: rows.length,
             selected: selected,
+            /* SHEET-VIEWS (2026-09-26): the selection verbs live in the toolbar while rows are selected. */
+            selectionActions: <FamilySelectionVerbs rows={selectedRows} actions={famActions} onDone={onFamilyChanged}/>,
+            onClearSelection: clearSelection,
             descriptor: familySummary.role !== '—' ? (<span className="nds-cell-muted"> · {familySummary.role} · {familySummary.detail}</span>) : null,
             search: search,
             onSearch: setSearch,
             onCustomise: openCustomise,
+            onNewView: openNewView,
             onExport: () => { setTransferIntent('export'); setImportOpen(true); },
             exportCounts: { view: sheetColumns.visibleAttributeKeys().length, all: sheetColumns.orderedKeys.length },
             exportDisabled: !sheet || loading || !has('products.export'),
@@ -643,7 +647,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         toolbarExtra: <></>,
         status: {
             rows: visibleRows.length,
-            selected: selected,
+            /* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */
             pending: pending,
             refused: refused,
             saving: saving,
@@ -655,7 +659,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             showRefusedOnly: showRefusedOnly,
             onToggleRefused: () => setShowRefusedOnly((v) => !v),
             lastSavedAt: lastSavedAt,
-        }, footerBefore: <><FamilySelectionBar rows={selectedRows} actions={famActions} onClear={clearSelection} onDone={onFamilyChanged}/>
+        }, footerBefore: <>
         {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
         {rowPress.confirmElement}
         {familyVerbs.dialogs}

@@ -16,6 +16,8 @@ export function useSheetPreferences<Row, Page>(options: {
   revealCell: (key: string, intent?: RevealIntent) => void
 }) {
   const [open, setOpen] = useState(false)
+  /* `new-view`: opened by the views menu's "New view…" — the same dialog, with the name field open. */
+  const [intent, setIntent] = useState<'edit' | 'new-view'>('edit')
   const [draft, setDraft] = useState<PreferencesValue | null>(null)
   const live = useRef(options)
   live.current = options
@@ -24,6 +26,14 @@ export function useSheetPreferences<Row, Page>(options: {
   const openCustomise = useCallback(() => {
     if (!live.current.getGridApi()) return
     setDraft(live.current.sheetColumns.currentPreferences())
+    setIntent('edit')
+    setOpen(true)
+  }, [])
+  /** "New view…" — build on what is on screen, then name it. Save as view is the way out. */
+  const openNewView = useCallback(() => {
+    if (!live.current.getGridApi()) return
+    setDraft(live.current.sheetColumns.currentPreferences())
+    setIntent('new-view')
     setOpen(true)
   }, [])
   const resetColumns = useCallback(() => {
@@ -73,12 +83,12 @@ export function useSheetPreferences<Row, Page>(options: {
     pageSizeChoices: [], sortFieldOptions: [], showSticky: false,
     groupToggles: true, inViewCount: true, attributeGroups: true,
     onReloadSaved: sheetColumns.reloadSavedPreferences,
-    viewSave: { activeName: sheetColumns.activeViewName, onSaveAs: saveAs, onUpdate: sheetColumns.activeViewName ? update : undefined },
-    title: sheetColumns.activeViewName ? `Customise columns · ${sheetColumns.activeViewName}` : 'Customise columns',
+    viewSave: { activeName: sheetColumns.activeViewName, onSaveAs: saveAs, onUpdate: sheetColumns.activeViewName ? update : undefined, startNaming: intent === 'new-view' },
+    title: intent === 'new-view' ? 'New view' : sheetColumns.activeViewName ? `Customise columns · ${sheetColumns.activeViewName}` : 'Customise columns',
     listHint: options.scope === 'master'
       ? 'Organise attributes into groups and choose their order. Save keeps your personal layout for this market, including after a reload.'
       : 'Organise channel attributes into groups and choose their order. Save keeps your personal layout for this channel and market after a reload.',
   }
   const columnDialog = useMemo(() => ({ customise: openCustomise, reset: resetColumns }), [openCustomise, resetColumns])
-  return { preferences, columnDialog, openCustomise }
+  return { preferences, columnDialog, openCustomise, openNewView }
 }

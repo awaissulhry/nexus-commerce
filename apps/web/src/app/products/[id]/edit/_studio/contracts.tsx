@@ -51,7 +51,7 @@ import { isViewChipVisible } from './viewChips'
 import { marketGate, marketGateReason } from './marketGate'
 import {
   channelServesMarket,
-  defaultLocaleFor,
+  localeForMarketChange,
   scopeLanguages,
   localeLabel,
   defaultMarket,
@@ -857,7 +857,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
       // changes the content language a session is looking at. Both are resolved HERE, in one URL
       // write, rather than by a second effect that would land as a separate history state.
       const strands = scope !== MASTER_SCOPE && !channelServesMarket(scope, code, options)
-      const nextLocale = scope === MASTER_SCOPE || strands ? primaryLanguage : defaultLocaleFor(code, marketplaces, scope)
+      const nextLocale = scope === MASTER_SCOPE || strands ? primaryLanguage : localeForMarketChange(scope, code, localeParam, marketplaces)
       writeLastMarket(code)
       push({
         [URL_KEYS.market]: code,
@@ -865,7 +865,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
         account: strands ? undefined : accountId,
         listing: undefined,
         [URL_KEYS.scope]: strands ? undefined : scopeParam ?? undefined,
-        // Only re-default the locale when the operator had not pinned one.
+        // Master keeps a pinned locale; a channel keeps it while the new market accepts it (`localeForMarketChange`).
         [URL_KEYS.locale]: scope === MASTER_SCOPE ? localeParam ?? nextLocale ?? undefined : nextLocale ?? undefined,
         [URL_KEYS.record]: undefined,
         [URL_KEYS.cell]: undefined,

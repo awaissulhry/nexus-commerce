@@ -169,6 +169,35 @@ describe('saved layout write contract', () => {
     expect(db.rows).toHaveLength(2)
   })
 
+  it('round-trips the widths, sort and row height a named view keeps (2026-09-26)', async () => {
+    const withDisplay = { ...payload(), columnWidths: { brand: 180, color: 96 }, sort: [{ colId: 'color', sort: 'desc' }, { colId: 'brand', sort: 'asc' }], density: 'compact' }
+    const response = await send('POST', '/saved-views', { surface: NAMED, name: 'Dense', filters: withDisplay })
+    expect(response.statusCode).toBe(200)
+    expect(response.json().filters).toEqual(withDisplay)
+    // Positive control for the optional arm: a view with none of the fields is still accepted as-is.
+    expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Plain', filters: payload() })).json().filters).toEqual(payload())
+    // Schema 2 carries the same optional fields.
+    const v2 = { v: 2, kind: 'columns', columns: ['brand'], density: 'cozy' }
+    expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Two', filters: v2 })).statusCode).toBe(200)
+  })
+
+  it('refuses a view display that the grid could not apply', async () => {
+    const bad = [
+      { columnWidths: { brand: 5 } },
+      { columnWidths: { brand: 'wide' } },
+      { columnWidths: ['brand'] },
+      { sort: [{ colId: 'brand', sort: 'up' }] },
+      { sort: [{ colId: 'brand', sort: 'asc' }, { colId: 'brand', sort: 'desc' }] },
+      { sort: { colId: 'brand', sort: 'asc' } },
+      { density: 'tiny' },
+    ]
+    for (const [i, extra] of bad.entries()) {
+      const response = await send('POST', '/saved-views', { surface: NAMED, name: `Bad ${i}`, filters: { ...payload(), ...extra } })
+      expect(response.statusCode, JSON.stringify(extra)).toBe(400)
+    }
+    expect(db.rows).toEqual([])
+  })
+
   it('updates an existing companion using its own conditional token', async () => {
     seed({ id: 'working', surface: WORKING, name: 'Current layout' })
     const next = payload(['color'])

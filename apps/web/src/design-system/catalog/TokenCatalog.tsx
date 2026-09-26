@@ -111,6 +111,7 @@ import {
 import { FormulaEditorExample } from './FormulaEditorExample'
 import { SlotListEditorExample } from './SlotListEditorExample'
 import { MetafieldValueExample } from './MetafieldValueExample'
+import { EmptyCellsExample } from './EmptyCellsExample'
 import { RecordListExample } from './RecordListExample'
 import { ChangeReviewExample } from './ChangeReviewExample'
 import { FileRowExample } from './FileRowExample'
@@ -981,6 +982,7 @@ export function TokenCatalog() {
         <FormulaEditorExample />
         <SlotListEditorExample />
         <MetafieldValueExample />
+        <EmptyCellsExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />

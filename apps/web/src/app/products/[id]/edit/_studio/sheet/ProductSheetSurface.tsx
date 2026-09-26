@@ -18,12 +18,15 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
   const scope = useStudioScope()
   const columns = model.columns
   const channel = model.scope === 'channel'
+  /* 2026-09-26 — an EDITING grid: an empty cell is a value nobody entered, so it draws nothing
+     (`emptyCells="blank"`; a cell that does not apply carries the engine's hatch instead). */
   const grid = <NexusGrid<Row>
     {...SHEET_GRID_OPTIONS}
     {...SHEET_STATE_OVERLAYS}
     {...model.grid}
     fill
     rows="media-line"
+    emptyCells="blank"
     treeData
     groupHeaderHeight={gridGeometry.stripH}
   />
@@ -35,7 +38,10 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
   </>
   return <>
     {model.before}
+    {/* The row height is the operator's (toolbar, or a saved view). `GridSheet` provides it to the rows,
+        the thumbnails and the loading skeleton alike; its own default is Compact, and so is ours. */}
     <GridSheet
+      density={columns.density}
       toolbar={<><SheetToolbar
         {...model.toolbar}
         views={columns.gridState}
@@ -47,6 +53,8 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         onSaveCurrentView={columns.saveCurrentAs}
         onUpdateCurrentView={columns.updateView}
         describeView={columns.describeView}
+        density={columns.density}
+        onDensity={columns.setDensity}
         chips={chips.chips}
         activeChipId={chips.activeId}
         onChipToggle={chips.setActive}
