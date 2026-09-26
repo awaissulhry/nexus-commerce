@@ -33,6 +33,13 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
   /** The fields a column can be mapped to: the channel spec of every product type (or category) of the form. */
   fastify.get<{ Params: { id: string } }>('/pim/channel-mapping-sets/:id/targets', async (request, reply) => guard(reply, async () => {
     const set = await getSet(request.params.id)
+    if (set.channel === 'SHOPIFY') {
+      // NCF — the store's saved field list only (never a live Shopify read); the native fields when none is saved.
+      const { shopifyStoreSpec } = await import('../services/pim/catalog-shopify-csv.js')
+      const { spec, storeFields } = await shopifyStoreSpec(set.formKey)
+      return { targets: spec.fields.map(f => ({ key: f.key, label: f.label, englishLabel: f.englishLabel ?? null, requirement: f.requirement, shape: f.shape, kind: f.kind, productTypes: [] as string[] })).sort((a, b) => a.key.localeCompare(b.key)),
+        missingSchemas: storeFields ? [] : ['this store’s field list (metafields)'] }
+    }
     const { loadAmazonSpec, loadEbaySpec } = await import('../services/pim/channel-specs/index.js')
     const categories = set.formKey.split('+').filter(c => c && c !== 'UNKNOWN')
     const byKey = new Map<string, { key: string; label: string; englishLabel: string | null; requirement: string; shape: string; kind: string; productTypes: string[] }>()
@@ -91,6 +98,16 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string }; Body: { skus?: string[]; includePrices?: boolean } }>('/pim/channel-mapping-sets/:id/export', async (request, reply) => guard(reply, async () => {
     const set = await getSet(request.params.id)
     if (set.status !== 'ACTIVE') throw new MappingError(`Activate version ${set.version} before exporting with it.`, 409)
+    if (set.formKind === 'SHOPIFY_PRODUCT_CSV') {
+      // NCF N7 — Shopify's own product CSV: only products Nexus links; a blank never erases, options never move.
+      const { exportShopifyCsv } = await import('../services/channel-mapping/shopify-export-host.js')
+      const out = await exportShopifyCsv({ setId: set.id, skus: request.body?.skus ?? [], includePrices: request.body?.includePrices ?? true })
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
+      reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows.length, products: out.products, gaps: out.refused.length, blankColumns: out.omitted.length, mapping: out.set.label,
+        omitted: out.omitted.map(o => o.header), refused: out.refused.map(r => r.sku) })))
+      return reply.send(out.bytes)
+    }
     if (set.formKind === 'EBAY_WORKBOOK') {
       const { exportEbayWorkbook } = await import('../services/channel-mapping/ebay-export-host.js')
       const out = await exportEbayWorkbook({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [] })

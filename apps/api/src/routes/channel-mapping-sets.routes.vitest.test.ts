@@ -85,4 +85,22 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
     const back = await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${copy.json().set.id}/push-impact` })
     expect(back.json().impact).toMatchObject({ stops: [], starts: ['item specific “team name”'], replaces: 1 })
   })
+
+  it('NCF — a Shopify product-CSV version: its targets are the store’s fields, and it exports only when ACTIVE', async () => {
+    const { ensureSetForForm } = await import('../services/channel-mapping/store.js')
+    const { buildShopifyDraftFields, shopifyChannelKeyOf } = await import('../services/channel-mapping/shopify-draft.js')
+    const { shopifyFormOf } = await import('../services/channel-mapping/form.js')
+    const headers = ['Handle', 'Title', 'Option1 Name', 'Option1 Value', 'Variant SKU', 'Variant Price', 'Status']
+    const { set } = await inBusiness(() => ensureSetForForm(shopifyFormOf({ accountId: 'store-1', channelKeys: headers.map(shopifyChannelKeyOf) }), () => buildShopifyDraftFields(headers)))
+    const targets = (await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${set.id}/targets` })).json()
+    expect(targets.targets.map((t: { key: string }) => t.key)).toEqual(expect.arrayContaining(['title', 'descriptionHtml', 'vendor', 'seo_title', 'barcode']))
+    expect(targets.missingSchemas).toEqual(['this store’s field list (metafields)'])
+    const draft = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/export`, payload: { skus: ['X'] } })
+    expect(draft.statusCode).toBe(409)
+    expect(draft.json().error).toBe('Activate version 1 before exporting with it.')
+    expect((await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/activate` })).json().set.status).toBe('ACTIVE')
+    const none = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${set.id}/export`, payload: { skus: [] } })
+    expect(none.statusCode).toBe(400)
+    expect(none.json().error).toBe('Choose the products to export')
+  })
 })
