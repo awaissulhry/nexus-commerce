@@ -28,6 +28,13 @@ export interface IntegritySnapshot {
   orphanedLast24h: number
   /** Minutes since the settings sync last verified ANY campaign against Amazon. */
   minutesSinceSettingsSync: number | null
+  /**
+   * S1 — campaigns the settings sync can verify: Sponsored Products, not archived, holding an Amazon id. The
+   * sync reads only the SP campaigns list, so nothing else is ever stamped. At 0 the two settings-sync checks are
+   * skipped: a business profile with no campaigns can never have a sync time, and reporting that as
+   * ADS_SETTINGS_SYNC_NEVER put a false CRITICAL on production health (2026-09-26).
+   */
+  settingsSyncScope: number
   /** Minutes since the newest AMS hourly row was ingested. */
   minutesSinceAmsIngest: number | null
   /** Campaigns whose last write to Amazon failed. */
@@ -163,14 +170,17 @@ export function evaluateIntegrity(s: IntegritySnapshot): IntegrityReport {
     })
   }
 
-  if (s.minutesSinceSettingsSync == null) {
+  // S1 — a profile with nothing to sync has no sync time to expect. Only an explicit 0 skips the checks: a
+  // snapshot without the count keeps them, so a missing number can never silence a real stall.
+  const settingsSyncInScope = s.settingsSyncScope !== 0
+  if (settingsSyncInScope && s.minutesSinceSettingsSync == null) {
     findings.push({
       code: 'ADS_SETTINGS_SYNC_NEVER',
       severity: 'CRITICAL',
       message: 'No campaign has ever been verified against Amazon.',
       action: 'The 20-minute settings sync is not running — check NEXUS_ENABLE_AMAZON_ADS_CRON and the ads-campaign-settings-sync CronRun rows.',
     })
-  } else if (s.minutesSinceSettingsSync > INTEGRITY_THRESHOLDS.settingsSyncStaleMinutes) {
+  } else if (settingsSyncInScope && s.minutesSinceSettingsSync > INTEGRITY_THRESHOLDS.settingsSyncStaleMinutes) {
     findings.push({
       code: 'ADS_SETTINGS_SYNC_STALE',
       severity: 'CRITICAL',

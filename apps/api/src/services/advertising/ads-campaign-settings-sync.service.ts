@@ -99,7 +99,7 @@ async function recordCampaignDrift(
   amazon: V3CampaignSettings,
   pending: Set<string>,
 ): Promise<number> {
-  const { diffFields, classifyDrift } = await import('../ads-core/drift.js')
+  const { diffFields, comparedFields, classifyDrift } = await import('../ads-core/drift.js')
   const ours: Record<string, unknown> = {
     status: existing.status,
     dailyBudget: existing.dailyBudget == null ? null : Number(existing.dailyBudget),
@@ -113,14 +113,22 @@ async function recordCampaignDrift(
 
   // Anything we hold that Amazon now agrees with is no longer drifting. Closing
   // resolved rows is what stops the drift list becoming a graveyard nobody reads.
+  //
+  // S2 — but only for a field this read COMPARED. It used to close every open row whose field was not drifting,
+  // which included fields Amazon left out of this response and fields this sync never looks at (name, state,
+  // existence: the structural reconcile's rows). Those were closed on ignorance, not evidence.
   const stillDrifting = new Set(diffs.map((d) => d.field))
-  await prisma.adDrift.updateMany({
-    where: {
-      entityType: 'CAMPAIGN', entityId: existing.id, resolvedAt: null,
-      field: { notIn: [...stillDrifting] },
-    },
-    data: { resolvedAt: new Date() },
-  })
+  const agreeing = comparedFields(ours, incoming, CAMPAIGN_DRIFT_FIELDS, { nullIsMeaningful: ['portfolioId'] })
+    .filter((f) => !stillDrifting.has(f))
+  if (agreeing.length) {
+    await prisma.adDrift.updateMany({
+      where: {
+        entityType: 'CAMPAIGN', entityId: existing.id, resolvedAt: null,
+        field: { in: agreeing },
+      },
+      data: { resolvedAt: new Date() },
+    })
+  }
   if (!diffs.length) return 0
 
   // `pending` is computed by the caller, which also uses it to hold those

@@ -31,16 +31,10 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { verifyLaunch } from './ads-launch-verify.service.js'
 import { verifyCampaignPortfolios } from './ads-create.service.js'
-import type { LaunchEntityResult } from '../ads-core/launch-verify.js'
-
-/** Local entity kind → the entityType string AdDrift already uses elsewhere. */
-const DRIFT_ENTITY_TYPE: Record<LaunchEntityResult['entityType'], string> = {
-  CAMPAIGN: 'CAMPAIGN', AD_GROUP: 'AD_GROUP',
-  KEYWORD: 'AD_TARGET', TARGET: 'AD_TARGET', PRODUCT_AD: 'PRODUCT_AD',
-}
+import { assessEntities, emptyEvidence, neverSent, rowsToClose, type DriftEvidence, type DriftFinding } from '../ads-core/drift-resolution.js'
 
 /**
- * Fields this reconcile opens drift rows for. STRUCTURE — not bids.
+ * Fields this reconcile opens drift rows for. STRUCTURE — not bids (`BID_FIELDS` in drift-resolution).
  *
  * Measured on the first prod run over 5 legacy campaigns: 198 entities produced 107 mismatches, and
  * 102 of them were `bid` (local €0.50 against Amazon's real €2.00 on 2024-era campaigns whose bids
@@ -60,7 +54,9 @@ const DRIFT_RECORD_FIELDS = new Set([
   'existence', 'state', 'name', 'dailyBudget', 'portfolioId',
   'targetingType', 'biddingStrategy', 'matchType', 'keywordText', 'value', 'sku',
 ])
-const BID_FIELDS = new Set(['bid', 'defaultBid'])
+
+/** Open drift rows read per query in the resolve pass; the id list goes into one `IN`. */
+const RESOLVE_CHUNK = 1000
 
 /**
  * Campaigns per verification batch.
@@ -88,6 +84,11 @@ export interface StructuralReconcileResult {
    * owns those. Surfaced so the suppression is a reported number rather than a silent policy.
    */
   bidDeltasNotRecorded: number
+  /**
+   * S3 — entities archived here that never reached Amazon. Counted in `notPushed` (the launch verifier's number) but
+   * treated as agreement: no drift row, and an open `existence` row for them closes. Reported, not silent.
+   */
+  archivedNeverSent: number
   portfoliosRepaired: number
   errors: string[]
 }
@@ -102,9 +103,12 @@ export async function runStructuralReconcileOnce(opts: {
   const out: StructuralReconcileResult = {
     ok: true, campaignsChecked: 0, campaignsTruncated: 0, entitiesChecked: 0,
     verified: 0, mismatch: 0, missingOnAmazon: 0, notPushed: 0, uncovered: 0,
-    driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, portfoliosRepaired: 0, errors: [],
+    driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, archivedNeverSent: 0, portfoliosRepaired: 0, errors: [],
   }
   const limit = opts.limit ?? 400
+  // Before the first Amazon read. A row another writer re-detects after this is newer evidence than anything this run
+  // read, so the run may not close it (closeAgreeingRows).
+  const runStart = new Date()
 
   const where = {
     externalCampaignId: { not: null },
@@ -128,7 +132,8 @@ export async function runStructuralReconcileOnce(opts: {
   }
   if (!campaigns.length) return out
 
-  const seenKeys = new Set<string>()
+  // What this run compared and what it saw differ, across all its batches — the only grounds for closing a row.
+  const evidence = emptyEvidence()
 
   for (let i = 0; i < campaigns.length; i += BATCH) {
     const batch = campaigns.slice(i, i + BATCH).map((c) => c.id)
@@ -149,25 +154,21 @@ export async function runStructuralReconcileOnce(opts: {
     out.uncovered += v.uncovered
     if (v.errors.length) { out.ok = false; out.errors.push(...v.errors.slice(0, 5)) }
 
-    for (const e of v.entities) {
-      if (e.verdict === 'VERIFIED') continue
-      const entityType = DRIFT_ENTITY_TYPE[e.entityType]
-      // A verdict with no per-field delta (NOT_PUSHED / MISSING_ON_AMAZON) is recorded against a
-      // synthetic `existence` field so it gets a row of its own rather than being invisible.
-      const deltas = e.deltas.length ? e.deltas : [{ field: 'existence', intended: 'on Amazon', observed: e.verdict === 'NOT_PUSHED' ? 'never sent' : 'not returned' }]
-      for (const d of deltas) {
-        if (BID_FIELDS.has(d.field)) { out.bidDeltasNotRecorded++; continue }
-        // An unrecognised field is recorded rather than dropped: a new comparison added later
-        // should default to visible, not silently ignored.
-        if (!DRIFT_RECORD_FIELDS.has(d.field) && !BID_FIELDS.has(d.field)) {
-          logger.info('[AX-VT.5] recording drift for an unlisted field', { field: d.field })
-        }
-        try {
-          out.driftRowsOpened += await openDrift(entityType, e, d.field, d.intended, d.observed)
-          seenKeys.add(`${entityType}|${e.localId}|${d.field}`)
-        } catch (err) {
-          out.errors.push(`drift ${e.label}/${d.field}: ${(err as Error).message.slice(0, 90)}`)
-        }
+    // Every difference is folded into `evidence` before any row is written, so a bid delta (never recorded) and a
+    // row whose save throws both keep their key out of the resolve pass below.
+    const { record, bidDeltas, archivedNeverSent } = assessEntities(v.entities, evidence)
+    out.bidDeltasNotRecorded += bidDeltas
+    out.archivedNeverSent += archivedNeverSent
+    for (const d of record) {
+      // An unrecognised field is recorded rather than dropped: a new comparison added later
+      // should default to visible, not silently ignored.
+      if (!DRIFT_RECORD_FIELDS.has(d.field)) {
+        logger.info('[AX-VT.5] recording drift for an unlisted field', { field: d.field })
+      }
+      try {
+        out.driftRowsOpened += await openDrift(d)
+      } catch (err) {
+        out.errors.push(`drift ${d.entity.label}/${d.field}: ${(err as Error).message.slice(0, 90)}`)
       }
     }
 
@@ -183,23 +184,14 @@ export async function runStructuralReconcileOnce(opts: {
     }
   }
 
-  // Close rows for entities this run found to agree again. Scoped to the entities actually checked
-  // — a truncated run must not resolve drift for a campaign it never looked at.
+  // Close rows this run found to agree again: every entity type it compared, not only campaigns, and only the
+  // fields it actually compared (drift-resolution.ts). An entity or field it never looked at keeps its row.
   //
   // Only closed when the run was otherwise clean: if a read failed we do not know the values agree,
   // and resolving on ignorance is how a drift list quietly empties itself while the problem stands.
   if (out.ok) {
     try {
-      const checkedIds = campaigns.map((c) => c.id)
-      const open = await prisma.adDrift.findMany({
-        where: { resolvedAt: null, entityType: 'CAMPAIGN', entityId: { in: checkedIds } },
-        select: { id: true, entityType: true, entityId: true, field: true },
-      })
-      const stale = open.filter((r) => !seenKeys.has(`${r.entityType}|${r.entityId}|${r.field}`)).map((r) => r.id)
-      if (stale.length) {
-        const res = await prisma.adDrift.updateMany({ where: { id: { in: stale } }, data: { resolvedAt: new Date() } })
-        out.driftRowsResolved = res.count
-      }
+      out.driftRowsResolved = await closeAgreeingRows(evidence, out.ok, runStart)
     } catch (e) {
       out.errors.push(`resolve pass: ${(e as Error).message.slice(0, 120)}`)
     }
@@ -215,20 +207,44 @@ export async function runStructuralReconcileOnce(opts: {
   return out
 }
 
-async function openDrift(
-  entityType: string,
-  e: LaunchEntityResult,
-  field: string,
-  intended: string | null,
-  observed: string | null,
-): Promise<number> {
+/**
+ * Reads this profile's open rows for the compared entities, a chunk at a time, and closes the ones the evidence allows.
+ *
+ * Only rows last detected before the run started: the 20-minute settings sync (or the portfolio sync) may re-detect a
+ * row with a fresh delta while this run is still going, and this run's earlier read must not close it. The guard sits
+ * in the UPDATE itself, so it also covers a re-detection between the read of the open rows and the close.
+ */
+async function closeAgreeingRows(evidence: DriftEvidence, runOk: boolean, runStart: Date): Promise<number> {
+  let closed = 0
+  for (const [entityType, byId] of evidence.compared) {
+    const ids = [...byId.keys()]
+    for (let i = 0; i < ids.length; i += RESOLVE_CHUNK) {
+      const open = await prisma.adDrift.findMany({
+        where: { resolvedAt: null, entityType, entityId: { in: ids.slice(i, i + RESOLVE_CHUNK) } },
+        select: { id: true, entityType: true, entityId: true, field: true },
+      })
+      const agree = rowsToClose(runOk, evidence, open)
+      if (!agree.length) continue
+      const res = await prisma.adDrift.updateMany({
+        where: { id: { in: agree }, resolvedAt: null, lastDetectedAt: { lt: runStart } },
+        data: { resolvedAt: new Date() },
+      })
+      closed += res.count
+    }
+  }
+  return closed
+}
+
+async function openDrift(d: DriftFinding): Promise<number> {
+  const { entityType, entity: e, field, intended, observed } = d
   const { classifyDrift } = await import('../ads-core/drift.js')
   // Local write history lives on Campaign; for child entities we have no per-entity stamp, so the
   // classification falls back to EXTERNAL_CHANGE rather than inventing a write time.
   const camp = entityType === 'CAMPAIGN'
     ? await prisma.campaign.findUnique({ where: { id: e.localId }, select: { marketplace: true, lastSyncedAt: true, lastSyncStatus: true } })
     : null
-  const classification = classifyDrift({
+  // S3 — except a live entity we never sent: that is our write that never landed, whatever the timestamps say.
+  const classification = neverSent(d) ? 'WRITE_FAILED' : classifyDrift({
     ours: intended, theirs: observed,
     lastWriteAt: camp?.lastSyncedAt ?? null,
     lastWriteStatus: camp?.lastSyncStatus ?? null,

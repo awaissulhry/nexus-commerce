@@ -19,7 +19,7 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
 
   const [
     deadLettersLastHour, deadLetters24h, orphanedTargets, orphanedLast24h,
-    freshest, amsNewest, campaignsFailedWrite, conns, openDriftRows, driftNeedsAttention, lastReconcile,
+    freshest, amsNewest, campaignsFailedWrite, conns, openDriftRows, driftNeedsAttention, lastReconcile, settingsSyncScope,
   ] = await Promise.all([
     prisma.outboundSyncQueue.count({ where: { syncType: { startsWith: 'AD_' }, isDead: true, diedAt: { gte: hourAgo } } }),
     prisma.outboundSyncQueue.count({ where: { syncType: { startsWith: 'AD_' }, isDead: true, diedAt: { gte: dayAgo } } }),
@@ -37,6 +37,14 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
       where: { jobName: 'ads-structural-reconcile', status: 'SUCCESS' },
       orderBy: { finishedAt: 'desc' }, select: { finishedAt: true },
     }).catch(() => null),
+    // S1 — what the settings sync can stamp: it reads only the Sponsored Products campaigns list, and matches by
+    // Amazon id. No adProduct counts as SP, as in the launch verifier's familyOf.
+    prisma.campaign.count({
+      where: {
+        externalCampaignId: { not: null }, status: { not: 'ARCHIVED' },
+        OR: [{ adProduct: 'SPONSORED_PRODUCTS' }, { adProduct: null }],
+      },
+    }),
   ])
 
   // Campaigns stranded where no production connection can accept a write.
@@ -54,6 +62,7 @@ export async function collectIntegritySnapshot(): Promise<IntegritySnapshot> {
     orphanedTargets,
     orphanedLast24h,
     minutesSinceSettingsSync: minsSince(freshest._max.settingsSyncedAt),
+    settingsSyncScope,
     minutesSinceAmsIngest: minsSince(amsNewest?._max.reportedAt ?? null),
     campaignsFailedWrite,
     campaignsInUnwritableMarket,

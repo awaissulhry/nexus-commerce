@@ -6144,7 +6144,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       lastLaunchVerification: lastReceipt
         ? { at: lastReceipt.createdAt, status: lastReceipt.amazonResponseStatus, ok: receipt?.ok ?? null, total: receipt?.total ?? null, verified: receipt?.verified ?? null, mismatch: receipt?.mismatch ?? null, missingOnAmazon: receipt?.missingOnAmazon ?? null, notPushed: receipt?.notPushed ?? null, uncovered: receipt?.uncovered ?? null }
         : null,
-      integrity: integrity ? { severity: integrity.severity, findings: integrity.findings } : null,
+      // S1 — this profile's own detail. The public /api/health shows only the worst severity and the findings, with
+      // nothing that names a profile; the count says why a profile with nothing to sync has no settings-sync finding.
+      integrity: integrity ? { severity: integrity.severity, findings: integrity.findings, settingsSyncScope: integrity.snapshot.settingsSyncScope } : null,
     }
   })
 
@@ -6186,7 +6188,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           : `${needsAttention} field(s) differ for a reason that will NOT resolve on its own — someone changed them on Amazon, or one of our writes failed.`,
       items: rows.map((r) => ({
         ...r,
-        explanation: describeDrift(r.classification as never, r.field),
+        explanation: describeDrift(r.classification as never, r.field, r.amazonValue),
         driftingForHours: Math.round((Date.now() - r.firstDetectedAt.getTime()) / 3_600_000),
       })),
     }

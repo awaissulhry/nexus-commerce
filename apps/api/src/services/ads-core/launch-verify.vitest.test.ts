@@ -89,6 +89,67 @@ describe('AX-VT.4 — intended vs observed', () => {
   })
 })
 
+/**
+ * S2 (2026-09-26) — `compared` is what a drift row may be closed on. The verdict alone cannot say it: VERIFIED
+ * also means "Amazon did not report the field", and a reconcile that closed rows on that emptied the drift list
+ * on ignorance. A field is compared only when both sides were read.
+ */
+describe('S2 — compared names only the fields where both sides were read', () => {
+  it('lists every field both sides hold, agreeing or not', () => {
+    const r = verifyEntity(pair({
+      intended: { name: 'A', state: 'ENABLED', dailyBudget: 50 },
+      observed: { name: 'A', state: 'enabled', dailyBudget: 10 },
+    }))
+    expect(r.verdict).toBe('MISMATCH')
+    expect(r.compared).toEqual(['name', 'state', 'dailyBudget'])
+  })
+
+  it('leaves out a field Amazon did not report, and one it reported as undefined', () => {
+    const r = verifyEntity(pair({
+      intended: { name: 'A', state: 'ENABLED', targetingType: 'MANUAL' },
+      observed: { name: 'A', state: undefined },
+    }))
+    expect(r.verdict).toBe('VERIFIED')
+    expect(r.compared).toEqual(['name'])
+  })
+
+  it('leaves out a field we never specified', () => {
+    const r = verifyEntity(pair({ intended: { name: 'A', portfolioId: null }, observed: { name: 'A', portfolioId: '999' } }))
+    expect(r.compared).toEqual(['name'])
+  })
+
+  it('counts an explicit null as compared only for an opted-in field', () => {
+    const p = pair({ intended: { name: 'A', portfolioId: '111' }, observed: { name: 'A', portfolioId: null } })
+    expect(verifyEntity(p, ['portfolioId']).compared).toEqual(['name', 'portfolioId'])
+    expect(verifyEntity(p).compared).toEqual(['name'])
+  })
+
+  it('compares nothing when Amazon has no entity to compare against', () => {
+    expect(verifyEntity(pair({ externalId: null })).compared).toEqual([])
+    expect(verifyEntity(pair({ observed: undefined })).compared).toEqual([])
+  })
+})
+
+/**
+ * S3 (2026-09-26) — "archived here and never sent" is agreement for the structural reconcile's drift rows, and
+ * NOT here. verifyEntity also writes launch receipts, and a receipt must never call an entity Amazon never saw
+ * verified. It only passes our state through, so the reconcile can apply its own rule.
+ */
+describe('S3 — verifyEntity stays strict about entities Amazon never saw', () => {
+  it('an archived entity we never sent is still NOT_PUSHED, and counts against the receipt', () => {
+    const r = verifyEntity(pair({ externalId: null, intended: { name: 'A', state: 'ARCHIVED' } }))
+    expect(r.verdict).toBe('NOT_PUSHED')
+    expect(r.localState).toBe('archived')
+    expect(summarise([r])).toMatchObject({ ok: false, verified: 0, notPushed: 1 })
+  })
+
+  it('passes our state through for every verdict, and null when we hold none', () => {
+    expect(verifyEntity(pair()).localState).toBe('enabled')
+    expect(verifyEntity(pair({ observed: undefined, intended: { name: 'A', state: 'PAUSED' } })).localState).toBe('paused')
+    expect(verifyEntity(pair({ intended: { name: 'A' } })).localState).toBeNull()
+  })
+})
+
 describe('AX-VT.4 — summary', () => {
   it('ok only when everything verified', () => {
     const ok = summarise([verifyEntity(pair()), verifyEntity(pair({ localId: 'c2' }))])
