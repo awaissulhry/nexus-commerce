@@ -75,13 +75,15 @@ export function optionForValue(text: string, attribute: DictionaryAttribute): Di
 export function matchValue(text: string, attribute: DictionaryAttribute): { option: string; spelled: string } | null {
   const key = foldValue(text)
   if (!key) return null
-  const byCode = attribute.options.find(o => foldValue(o.code) === key)
-  if (byCode) return { option: byCode.code, spelled: byCode.label }
+  // A text that IS one of an option's names keeps that name's spelling ("3XL" stays "3XL" even where the default label is
+  // "XXXL"); only a bare code ("black") takes the default label. Measured on a private copy: code-first turned "3XL" into
+  // "XXXL" and "XXL" into "2XL" on 37 variants — a change the channels would have received.
   for (const option of attribute.options) {
     const name = optionNames(option).slice(1).find(n => foldValue(n) === key)
     if (name) return { option: option.code, spelled: name }
   }
-  return null
+  const byCode = attribute.options.find(o => foldValue(o.code) === key)
+  return byCode ? { option: byCode.code, spelled: byCode.label } : null
 }
 
 /** Two texts name the same value when they match the same option, or fold to the same text when neither is in the dictionary. */

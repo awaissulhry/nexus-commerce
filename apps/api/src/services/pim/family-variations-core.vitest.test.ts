@@ -71,6 +71,11 @@ describe('matchValue — the value is saved as the dictionary spells the name it
     expect(matchValue('nero ', COLOR)).toEqual({ option: 'black', spelled: 'Nero' })
     expect(matchValue('BLACK', COLOR)).toEqual({ option: 'black', spelled: 'Black' })
   })
+  it('a text that IS one of the option\'s names keeps that spelling, even when it also folds to the code ("3XL" stays "3XL")', () => {
+    const SIZES: DictionaryAttribute = { ...SIZE, options: [option('3xl', 'XXXL', { synonyms: ['3XL'] }), option('xxl', '2XL', { synonyms: ['XXL'] })] }
+    expect(matchValue('3XL', SIZES)).toEqual({ option: '3xl', spelled: '3XL' })
+    expect(matchValue('xxl', SIZES)).toEqual({ option: 'xxl', spelled: 'XXL' })
+  })
   it('a synonym keeps its own dictionary spelling; an unknown text matches nothing', () => {
     expect(matchValue('arancia', COLOR)).toEqual({ option: 'orange', spelled: 'Arancia' })
     expect(matchValue('Verde', COLOR)).toBeNull()
