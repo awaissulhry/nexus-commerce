@@ -5,7 +5,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn(), setup: vi.fn(), testNotice: vi.fn(), topics: vi.fn(), destinations: vi.fn(), subscriptions: vi.fn() }))
+const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn(), setup: vi.fn(), testNotice: vi.fn(), topics: vi.fn(), destinations: vi.fn(), subscriptions: vi.fn(), audit: vi.fn() }))
+vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { write: m.audit } }))
 vi.mock('../services/cx/connectors/ebay/client.js', () => ({ ebayAppToken: m.token }))
 vi.mock('../services/gateway/ebay.js', () => ({ ebayTransport: () => m.transport }))
 vi.mock('../services/cx/connectors/ebay/notifications.js', async original => {
@@ -30,6 +31,7 @@ async function call(method: 'GET' | 'POST', url: string) {
   const Fastify = (await import('fastify')).default
   const routes = (await import('./ebay-notification.routes.js')).default
   const app = Fastify()
+  app.addHook('onRequest', async request => { (request as any).authUser = { id: 'user-fixture' } })
   await app.register(routes as any, { prefix: '/api' })
   try {
     const res = await app.inject({ method, url })
@@ -38,7 +40,7 @@ async function call(method: 'GET' | 'POST', url: string) {
 }
 
 beforeEach(() => {
-  m.transport.mockReset(); m.token.mockReset(); m.setup.mockClear(); m.testNotice.mockClear()
+  m.transport.mockReset(); m.token.mockReset(); m.setup.mockClear(); m.testNotice.mockClear(); m.audit.mockReset().mockResolvedValue(undefined)
   for (const reader of [m.topics, m.destinations, m.subscriptions]) reader.mockReset().mockRejectedValue(new Error('status reader not stubbed'))
   vi.stubEnv('EBAY_NOTIFICATION_ENDPOINT_URL', endpoint)
   vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', verificationToken)
@@ -65,6 +67,11 @@ describe('POST /api/admin/setup-ebay-notifications', () => {
     const res = await call('POST', '/api/admin/setup-ebay-notifications')
     expect(res.statusCode).toBe(403)
     expect(res.body).toMatchObject({ ok: false, armed: false, error: expect.stringMatching(/not armed/i) })
+    expect(m.audit).toHaveBeenCalledOnce()
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-fixture', entityType: 'EbayNotificationSetup', entityId: 'ebay-notifications:production', action: 'ebay.notification.setup',
+      metadata: expect.objectContaining({ outcome: 'refused_not_armed', topics: [] }),
+    }))
     expect(m.setup).not.toHaveBeenCalled()
     expect(m.token).not.toHaveBeenCalled()
     expect(m.transport).not.toHaveBeenCalled()
@@ -79,6 +86,11 @@ describe('POST /api/admin/setup-ebay-notifications', () => {
     expect(m.transport).toHaveBeenCalledOnce()
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ ok: false, armed: true, error: expect.stringContaining('500') })
+    expect(m.audit).toHaveBeenCalledOnce()
+    const row = m.audit.mock.calls[0][0]
+    expect(row).toMatchObject({ userId: 'user-fixture', action: 'ebay.notification.setup',
+      metadata: { outcome: 'failed', topics: ['AUTHORIZATION_REVOCATION'], error: expect.stringContaining('500') } })
+    expect(JSON.stringify(row)).not.toContain(verificationToken)
   })
 })
 
@@ -88,6 +100,8 @@ describe('POST /api/admin/ebay-notification-test', () => {
     vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', armed)
     const res = await call('POST', '/api/admin/ebay-notification-test?topicId=AUTHORIZATION_REVOCATION')
     expect(res.statusCode).toBe(403)
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-fixture', action: 'ebay.notification.test',
+      metadata: expect.objectContaining({ outcome: 'refused_not_armed', topics: ['AUTHORIZATION_REVOCATION'] }) }))
     expect(m.testNotice).not.toHaveBeenCalled()
     expect(m.transport).not.toHaveBeenCalled()
   })
@@ -97,6 +111,8 @@ describe('POST /api/admin/ebay-notification-test', () => {
     vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
     const res = await call('POST', `/api/admin/ebay-notification-test${topicId ? `?topicId=${topicId}` : ''}`)
     expect(res.statusCode).toBe(400)
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ebay.notification.test',
+      metadata: expect.objectContaining({ outcome: 'refused_topic_not_armed', topics: topicId ? [topicId] : [] }) }))
     expect(m.testNotice).not.toHaveBeenCalled()
     expect(m.transport).not.toHaveBeenCalled()
   })
@@ -114,6 +130,9 @@ describe('POST /api/admin/ebay-notification-test', () => {
     const res = await call('POST', '/api/admin/ebay-notification-test?topicId=AUTHORIZATION_REVOCATION')
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({ ok: true, topicId: 'AUTHORIZATION_REVOCATION', subscriptionId: 's-1' })
+    expect(m.audit).toHaveBeenCalledOnce()
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-fixture', action: 'ebay.notification.test',
+      metadata: expect.objectContaining({ outcome: 'sent', topics: ['AUTHORIZATION_REVOCATION'], subscriptionId: 's-1' }) }))
   })
 })
 

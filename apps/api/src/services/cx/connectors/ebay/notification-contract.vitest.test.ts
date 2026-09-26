@@ -4,7 +4,7 @@ const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn() }))
 vi.mock('./client.js', () => ({ ebayAppToken: m.token }))
 vi.mock('../../../gateway/ebay.js', () => ({ ebayTransport: () => m.transport }))
 vi.mock('../../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }))
-const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded, sendEbayTestNotice } = await import('./notifications.js')
+const { createEbayDestination, getEbayDestinations, getEbayTopics, getEbaySubscriptions, setupEbayNotifications, subscribeEbayTopic, ebayNotificationSetupSucceeded, sendEbayTestNotice, ensureEbayAlertEmail } = await import('./notifications.js')
 
 // DOCUMENTED fixtures, with synthetic IDs and token; never a channel call.
 // https://developer.ebay.com/api-docs/master/commerce/notification/openapi/3/commerce_notification_v1_oas3.json
@@ -297,7 +297,7 @@ describe('S1: an application-level setup eBay accepts', () => {
     [195003, /alert.?email/i],
     [195019, /32.*80.*A-Za-z0-9_-/],
     [195020, /challenge/i],
-    [195021, /195021/],
+    [195021, /already has a destination for this endpoint/i],
   ] as const
   it.each(errorCases)('names eBay errorId %i in the result without exposing a secret', async (errorId, meaning) => {
     fakeEbay({ alertEmail })
@@ -320,6 +320,65 @@ describe('S1: an application-level setup eBay accepts', () => {
       messages.add(String(error).split(String(errorId)).join(''))
     }
     expect(messages.size).toBe(errorCases.length)
+  })
+
+  it('195021 (409): reuses the destination a re-read finds for exactly our endpoint, and subscribes', async () => {
+    const ebay = fakeEbay({ alertEmail })
+    const inner = m.transport.getMockImplementation()!
+    let destinationReads = 0
+    m.transport.mockImplementation(async (url: string, request: RequestInit) => {
+      if (request.method === 'GET' && url === `${API}/destination?limit=100`) {
+        // The first read misses it (for example, created by a concurrent run); the re-read sees it.
+        ebay.requests.push('GET /destination?limit=100')
+        return jsonResponse({ destinations: ++destinationReads === 1 ? [] : [destination] })
+      }
+      if (request.method === 'POST' && url === `${API}/destination`) {
+        ebay.requests.push('POST /destination')
+        return new Response(JSON.stringify({ errors: [{ errorId: 195021, message: 'Destination exists for this endpoint' }] }), { status: 409 })
+      }
+      return inner(url, request)
+    })
+    const result = await setupEbayNotifications()
+    expect(result).toMatchObject({ destinationId: destination.destinationId, perTopic: [{ topicId: 'AUTHORIZATION_REVOCATION', status: 'created' }] })
+    expect(result.error).toBeUndefined()
+    expect(ebayNotificationSetupSucceeded(result)).toBe(true)
+    expect(ebay.requests.filter(r => r === 'POST /destination')).toHaveLength(1)
+    expect(ebay.subscriptions[0]).toMatchObject({ destinationId: destination.destinationId })
+  })
+
+  it.each([
+    ['no destination with exactly our endpoint', [{ ...destination, deliveryConfig: { endpoint: `${endpoint}/` } }], /already has a destination/i],
+    ['a DISABLED destination for our endpoint', [{ ...destination, status: 'DISABLED' }], /DISABLED.*repair/i],
+  ])('195021 (409) with %s stays a failure and subscribes nothing', async (_label, reread, message) => {
+    const ebay = fakeEbay({ alertEmail })
+    const inner = m.transport.getMockImplementation()!
+    let destinationReads = 0
+    m.transport.mockImplementation(async (url: string, request: RequestInit) => {
+      if (request.method === 'GET' && url === `${API}/destination?limit=100`) return jsonResponse({ destinations: ++destinationReads === 1 ? [] : reread })
+      if (request.method === 'POST' && url === `${API}/destination`) return new Response(JSON.stringify({ errors: [{ errorId: 195021 }] }), { status: 409 })
+      return inner(url, request)
+    })
+    const result = await setupEbayNotifications()
+    expect(result.error).toMatch(message)
+    expect(ebayNotificationSetupSucceeded(result)).toBe(false)
+    expect(ebay.subscriptions).toHaveLength(0)
+    expect(ebay.requests).not.toContain('POST /subscription')
+  })
+
+  // Review: a choke point that refused only POST survived every test. PUT is the config write.
+  it('never sends the config PUT while unarmed, even after the read', async () => {
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', undefined)
+    const ebay = fakeEbay()
+    await expect(ensureEbayAlertEmail('production')).rejects.toThrow(/not armed/i)
+    expect(ebay.requests).toEqual(['GET /config'])
+    expect(ebay.alertEmail).toBeNull()
+  })
+
+  it('positive control: armed, the same call sends the config PUT', async () => {
+    const ebay = fakeEbay()
+    await expect(ensureEbayAlertEmail('production')).resolves.toBe('set')
+    expect(ebay.requests).toEqual(['GET /config', 'PUT /config'])
+    expect(ebay.alertEmail).toBe(alertEmail)
   })
 
   it('asks eBay for a test notice on our armed revocation subscription', async () => {

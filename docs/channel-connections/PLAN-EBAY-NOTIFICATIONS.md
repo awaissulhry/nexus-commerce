@@ -77,12 +77,20 @@ only), all under `apps/api/src`. No migration and no schema change.
 - `MARKETPLACE_ACCOUNT_DELETION` is `portal`: reported in the status (`wanted[].delivery`), never subscribed.
 - `ITEM_PRICE_REVISION` and `ITEM_AVAILABILITY` are gone from the wishes and from the topic router.
 - `AUTHORIZATION_REVOCATION` is ready, after the written C8 check in §4.4.
-- 195003, 195019, 195020 and 195021 are named in the setup output (CronRun detail and admin response). 195021's
-  meaning is not recorded in this repository, so its text says to read eBay's error table rather than guess (P6.7).
+- 195003, 195019, 195020 and 195021 are named in the setup output (CronRun detail and admin response). eBay's
+  public spec documents 195021 as "Destination exists for this endpoint" (HTTP 409). The setup treats it as "already
+  exists": it re-reads the destinations and reuses the one whose endpoint matches exactly, if it is `ENABLED`, so the
+  nightly run does not fail. With no exact match, or a match that is not `ENABLED`, it still fails. It never guesses.
 - `POST /api/admin/setup-ebay-notifications` answers 403 unless armed, before any call.
 - New: `POST /api/admin/ebay-notification-test?topicId=AUTHORIZATION_REVOCATION` asks eBay to send its test notice for
   OUR subscription (`POST /subscription/{id}/test`). It is 403 unless armed and 400 for a topic that is not armed.
   RBAC: `admin.repair`, like the setup route.
+- Both admin routes write one `AuditLog` row per request, refusals included:
+  - `entityType` is `EbayNotificationSetup`, and the action is `ebay.notification.setup` or `ebay.notification.test`;
+  - the metadata records the actor, the armed topics, the outcome, and each topic's status or the subscription id;
+  - the error text is redacted before it is written.
+- `apps/api/.env.example` lists every `EBAY_NOTIFICATION_*` variable and both switches with placeholder values. Its
+  token placeholder is deliberately invalid, so setup refuses it.
 
 ### 4.2 The arming mechanism (R4)
 
@@ -96,15 +104,16 @@ The gate (`ebayNotificationSetupGate`) is enforced in four places, each proved b
 - the setup service;
 - the admin setup and test-notice routes: 403 before any call;
 - `notificationApi`, the one function every Notification API request goes through: no POST or PUT is sent, and no
-  app token is fetched, unless armed. Reads (the status route) are unaffected.
+  app token is fetched, unless armed. A test proves the PUT case separately, because an independent review found that
+  a gate refusing only POST passed every earlier test. Reads (the status route) are unaffected.
 
 **Why this and not an Owner-armed database marker:** it is the smallest mechanism that is safe whatever the environment
 holds:
 - No release before S1 read this variable, so no stale value can arm it. The old switch alone, the stale case the
   review found, arms nothing.
 - It needs no migration, no new model to classify, no row-level-security policy and no new admin write path. Railway's
-  deployment history shows the variable change. Every armed run also writes a `CronRun`, or returns an admin response
-  naming its topics.
+  deployment history shows the variable change. Every nightly run writes a `CronRun`, and every admin setup or
+  test-notice request writes an `AuditLog` row with the actor, the topics and the outcome.
 - It names topics instead of being a boolean. A later release that makes another topic ready (S2 may do so for
   `ORDER_CONFIRMATION`) does not arm it. The Owner must add it to the list, and the gate refuses a `USER` or portal
   topic even when its handler is ready.
@@ -176,7 +185,9 @@ Queries run in a `READ ONLY` transaction, return aggregates only and carry a pos
 - **195020:** eBay's challenge failed. Check that the API and the scheduler hold the same token and endpoint and that
   the API has redeployed, then rerun step 5.
 - **195003:** the alert email. Check A3.
-- **195021:** its meaning is not recorded here. Stop and read eBay's createDestination error table.
+- **195021** ("Destination exists for this endpoint", HTTP 409): the setup reuses the destination whose endpoint matches
+  exactly. If it still fails, compare `EBAY_NOTIFICATION_ENDPOINT_URL` with `destinationEndpoints` in the status (a
+  trailing slash, http/https or another host).
 - **Any other `getConfig` status:** the setup stops before writing and prints eBay's text. Report it.
 
 ## 7. Estimate

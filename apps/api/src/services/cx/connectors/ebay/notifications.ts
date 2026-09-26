@@ -74,16 +74,31 @@ export function ebayNotificationAlertEmail(): string | null {
 
 /**
  * eBay error ids the setup can meet, named so the CronRun output and the admin route say what
- * to do. Sources: eBay's createDestination page (195019 token format, 195020 challenge; see
- * docs/channel-connections/build/CX-CLEANUP.md) and the plan's read of eBay's spec (195003).
- * 195021 is named without a meaning: this repository has not recorded one, and P6.7 forbids
- * guessing eBay's strings.
+ * to do. Source: eBay's public Notification API spec — createDestination lists 195019 (token
+ * format), 195020 (challenge failed) and 195021 "Destination exists for this endpoint" (HTTP
+ * 409); see docs/channel-connections/build/CX-CLEANUP.md. 195003 is the missing /config.
  */
 const EBAY_NOTIFICATION_ERROR_IDS: Record<number, string> = {
   195003: 'eBay needs the Notification API alert email (config) first. Nexus sets it from EBAY_NOTIFICATION_ALERT_EMAIL when eBay has none; set that variable on the API and the scheduler.',
   195019: 'eBay refused the verification token. It must be 32–80 characters using only [A-Za-z0-9_-]; the Owner replaces EBAY_NOTIFICATION_VERIFICATION_TOKEN on the API and the scheduler.',
   195020: "eBay's challenge to the endpoint failed. The API service must answer with the same token and endpoint this process sent: set both variables on the API and the scheduler, let the API redeploy, then retry.",
-  195021: "eBay returned 195021. Its meaning is not recorded in this repository; read the error table on eBay's createDestination page before retrying.",
+  195021: 'eBay already has a destination for this endpoint (HTTP 409). The setup re-reads the destinations and reuses the one whose endpoint matches EBAY_NOTIFICATION_ENDPOINT_URL exactly; if none matches exactly, compare that variable with destinationEndpoints in the status.',
+}
+
+/** eBay's errorIds in a response body; [] when the body is not eBay's error shape. */
+function ebayErrorIds(text: string): number[] {
+  try {
+    const errors = (JSON.parse(text) as { errors?: Array<{ errorId?: unknown }> })?.errors
+    return Array.isArray(errors) ? errors.map(error => Number(error?.errorId)).filter(Number.isInteger) : []
+  } catch { return [] }
+}
+
+/** createDestination said 195021 / 409: a destination for this endpoint already exists. */
+export class EbayDestinationExistsError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'EbayDestinationExistsError'
+  }
 }
 
 /** Every secret a notification error could echo, removed before any text leaves this module. */
@@ -94,11 +109,7 @@ function redactNotificationText(text: string, extra: Array<string | null | undef
 
 /** `eBay <operation> returned <status> (errorId …: meaning): <redacted body>`. */
 export function describeEbayNotificationError(operation: string, status: number, text: string): string {
-  let ids: number[] = []
-  try {
-    const errors = (JSON.parse(text) as { errors?: Array<{ errorId?: unknown }> })?.errors
-    if (Array.isArray(errors)) ids = errors.map(error => Number(error?.errorId)).filter(Number.isInteger)
-  } catch { ids = [] }
+  const ids = ebayErrorIds(text)
   const named = ids.filter(id => EBAY_NOTIFICATION_ERROR_IDS[id]).map(id => `errorId ${id}: ${EBAY_NOTIFICATION_ERROR_IDS[id]}`)
   return `eBay ${operation} returned ${status}${named.length ? ` (${named.join(' ')})` : ''}: ${redactNotificationText(text).slice(0, 300)}`
 }
@@ -323,7 +334,9 @@ export async function createEbayDestination(
   )
   // eBay answers a create with 201 and the new id in the Location header or the body.
   if (res.status !== 201 && res.status !== 200) {
-    throw new Error(describeEbayNotificationError('createDestination', res.status, res.text))
+    const message = describeEbayNotificationError('createDestination', res.status, res.text)
+    if (res.status === 409 || ebayErrorIds(res.text).includes(195021)) throw new EbayDestinationExistsError(message)
+    throw new Error(message)
   }
   const id = createdResourceId(res.location, environment, 'destination') ?? res.body?.destinationId
   if (!id) throw new Error(`eBay createDestination gave no destinationId: ${res.text.slice(0, 300)}`)
@@ -445,7 +458,7 @@ export function ebayNotificationSetupSucceeded(result: EbayNotificationSetupResu
  * there (perhaps set by the Owner) is never overwritten. With no usable
  * EBAY_NOTIFICATION_ALERT_EMAIL this throws before any write.
  */
-async function ensureEbayAlertEmail(environment: EbayEnvironment): Promise<'present' | 'set'> {
+export async function ensureEbayAlertEmail(environment: EbayEnvironment): Promise<'present' | 'set'> {
   const current = await notificationApi<{ alertEmail?: unknown }>(environment, 'GET', '/commerce/notification/v1/config')
   if (current.status === 200 && typeof current.body?.alertEmail === 'string' && current.body.alertEmail.trim()) return 'present'
   if (![200, 204, 404].includes(current.status)) throw new Error(describeEbayNotificationError('getConfig', current.status, current.text))
@@ -508,9 +521,23 @@ export async function setupEbayNotifications(options: {
     const alertEmail = await ensureEbayAlertEmail(environment)
 
     if (!destination) {
-      const id = await createEbayDestination(environment, 'Nexus inbound notifications', endpoint, verificationToken)
-      destination = { destinationId: id, endpoint }
-      logger.warn('[ebay-notifications] destination created', { destinationId: id, endpoint })
+      try {
+        const id = await createEbayDestination(environment, 'Nexus inbound notifications', endpoint, verificationToken)
+        destination = { destinationId: id, endpoint }
+        logger.warn('[ebay-notifications] destination created', { destinationId: id, endpoint })
+      } catch (err) {
+        // 195021 / 409: eBay already holds a destination for this endpoint that the first read
+        // did not show. Reuse it exactly as a destination found by that read is reused: only an
+        // exact endpoint match, only ENABLED. Anything else stays a failure; never a guess.
+        if (!(err instanceof EbayDestinationExistsError)) throw err
+        const existing = (await getEbayDestinations(environment)).find((d) => d.endpoint === endpoint)
+        if (!existing) throw err
+        if (existing.status !== 'ENABLED') {
+          return { ...base, destinationId: existing.destinationId, error: `The matching eBay destination is ${existing.status ?? 'of unknown status'}; repair it before enabling subscriptions.` }
+        }
+        destination = existing
+        logger.warn('[ebay-notifications] destination already existed (195021); reusing it', { destinationId: existing.destinationId, endpoint })
+      }
     }
 
     const existing = await getEbaySubscriptions(environment)
