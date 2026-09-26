@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const db = vi.hoisted(() => ({ marketplace: { findMany: vi.fn() }, channelListing: { groupBy: vi.fn() } }))
+// P3b S4 — the column cache key carries the dictionary version (`dictionary-version.ts`).
+const db = vi.hoisted(() => ({ marketplace: { findMany: vi.fn() }, channelListing: { groupBy: vi.fn() }, $queryRaw: async () => [{ v: 'test-dictionary' }] }))
 vi.mock('../../../db.js', () => ({ default: db }))
 vi.mock('../field-registry.service.js', () => ({ getAvailableFields: async () => [
   { id: 'sku', label: 'SKU', type: 'text', category: 'identity', editable: false },

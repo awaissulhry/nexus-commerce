@@ -24,6 +24,7 @@ import { getSheetColumns, UnknownMarketError } from '../services/pim/sheet-colum
 import { getSheetRows } from '../services/pim/sheet-rows.service.js'
 import { previewPublish } from '../services/pim/sheet-publish.service.js'
 import { TtlCache } from '../utils/ttl-cache.js'
+import { dictionaryVersion } from '../services/pim/dictionary-version.js'
 
 const columnCache = new TtlCache<Awaited<ReturnType<typeof getSheetColumns>>>({ ttlMs: 5 * 60_000, maxEntries: 64 })
 
@@ -46,7 +47,8 @@ const productsSheetRoutes: FastifyPluginAsync = async (fastify) => {
     if (!market) return reply.code(400).send({ error: 'market is required', hint: 'e.g. ?market=IT' })
 
     const productTypes = csv(q.productTypes)
-    const key = `${market}:${productTypes.slice().sort().join(',')}`
+    // P3b S4 (docs/attributes/PLAN.md §10.9) — the dictionary's version, so an edit shows at once.
+    const key = `${await dictionaryVersion()}:${market}:${productTypes.slice().sort().join(',')}`
     const force = q.force === '1' || q.force === 'true'
 
     const hit = force ? undefined : columnCache.get(key)
@@ -59,7 +61,8 @@ const productsSheetRoutes: FastifyPluginAsync = async (fastify) => {
       const set = await getSheetColumns({ market, productTypes })
       columnCache.set(key, set)
       reply.header('X-Sheet-Columns-Cache', 'miss')
-      reply.header('Cache-Control', 'private, max-age=300')
+      // P3b S4 — the browser asks again each time (the server cache answers); a 5-minute browser copy hid dictionary edits.
+      reply.header('Cache-Control', 'private, no-cache')
       return set
     } catch (err) {
       if (err instanceof UnknownMarketError) return reply.code(400).send({ error: err.code, message: err.message, knownMarkets: err.known })

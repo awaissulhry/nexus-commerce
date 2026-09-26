@@ -6,8 +6,8 @@
  *     channels and writes an audit row; undo restores exactly, and refuses once the attribute changed again; a move
  *     that would hide a required attribute is refused and changes nothing; archive refuses a required attribute;
  *     delete refuses an attribute with values or links ("archive instead") and deletes an unused one;
- *   · publish parity on F4: the eBay values resolved for the product are identical before and after a move, and so is
- *     the Shared view (placement is a label until S4 reads it);
+ *   · publish parity on F4: the eBay values resolved for the product are identical before and after a move; the
+ *     Shared view loses exactly the moved attributes that no family requires (S4), and keeps the required one;
  *   · another business cannot move this business's attribute.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -129,11 +129,11 @@ describe('on PostgreSQL — the scope fixtures', () => {
     expect(await inF4(() => prisma.auditLog.count({ where: { entityId: unused.id, action: 'attribute.delete' } }))).toBe(1)
   })
 
-  it('publish parity: the eBay values and the Shared view are identical before and after a move', async () => {
+  it('publish parity: the eBay values are identical after a move; Shared drops only the moved optional attributes (S4)', async () => {
     const snapshot = () => inF4(async () => {
       const batch = await resolveBatch({ productIds: [fixtures.F4.productId], channel: 'EBAY', marketplace: 'IT' })
       const sheet = await getStudioSheet({ productId: fixtures.F4.productId, scope: 'master', market: 'IT', locale: 'it' } as never)
-      return JSON.stringify({ cells: batch.products.map(p => p.cells), columns: sheet.columns.map(c => c.key) })
+      return { cells: JSON.stringify(batch.products.map(p => p.cells)), columns: sheet.columns.map(c => c.key) }
     })
     const before = await snapshot()
     const moved: string[] = []
@@ -143,8 +143,13 @@ describe('on PostgreSQL — the scope fixtures', () => {
       if (r.changed) moved.push(r.auditId!)
     }
     expect(moved.length).toBe(3)
-    expect(await snapshot()).toBe(before)
+    const after = await snapshot()
+    expect(after.cells).toBe(before.cells)
+    // `department` is required (on Amazon now): never hidden. The two optional ones leave Shared, and nothing else does.
+    expect(before.columns.filter(k => !after.columns.includes(k)).sort()).toEqual(['batteries_required', 'weave_type'])
+    expect(after.columns.filter(k => !before.columns.includes(k))).toEqual([])
     for (const auditId of moved.reverse()) await inF4(() => undoPlacementChange(auditId))
+    expect((await snapshot()).columns).toEqual(before.columns)                      // undo brings them back at once
   }, 180_000)
 
   it('another business cannot move this business\'s attribute', async () => {

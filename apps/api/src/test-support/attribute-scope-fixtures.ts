@@ -5,8 +5,10 @@
  * ones production creates), then given only what makes it that case:
  *
  *   F1 eBay only        one active eBay account; one product, no family
- *   F2 Amazon only      one active Amazon account; one product, no family, with an Amazon-only key in its shared bag
- *                       (what an Amazon-scope save of a field with no listing store writes, `channel-specs/amazon.ts`)
+ *   F2 Amazon only      one active Amazon account and a cached Amazon schema (IT OUTERWEAR, a few properties); one
+ *                       product, no family, with an Amazon-only key in its shared bag (what an Amazon-scope save of a
+ *                       field with no listing store writes, `channel-specs/amazon.ts`) and a real old key that is no
+ *                       channel attribute (`waterproofRating`)
  *   F3 no channel       nothing connected; one product, no family
  *   F4 Motovento-shaped eBay + Etsy accounts; the 242 shared attributes of the study (`attribute-scope-dictionary.json`)
  *                       in a Jackets family, created like the assortment copy does (`skipDuplicates`: a starter row with
@@ -38,6 +40,8 @@ export function studyAttributes(): StudyAttribute[] {
 
 /** An Amazon-only attribute of the study (class `channel-specific`), used for F2's shared-bag key. */
 export const AMAZON_ONLY_KEY = 'department'
+/** A real old key: in no dictionary and no channel schema. Shared keeps showing it (P3b S4). */
+export const OLD_KEY = 'waterproofRating'
 
 const CHANNELS: Record<ScopeFixtureKey, string[]> = { F1: ['EBAY'], F2: ['AMAZON'], F3: [], F4: ['EBAY', 'ETSY'] }
 
@@ -62,8 +66,13 @@ export async function createScopeFixtures(client: PrismaClient): Promise<Record<
         await client.channelConnection.create({ data: { channelType, managedBy: 'oauth', isActive: true, accountLabel: `${key} ${channelType}`, externalAccountId: `scope-${key}-${channelType}` } as never })
       }
       if (key !== 'F4') {
+        if (key === 'F2') {
+          await client.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR', schemaVersion: 'scope-fixture',
+            schemaDefinition: { properties: { [AMAZON_ONLY_KEY]: { type: 'array' }, item_name: { type: 'array' }, color: { type: 'array' } } },
+            expiresAt: new Date(Date.now() + 86_400_000), isActive: true } })
+        }
         const product = await client.product.create({ data: { sku: `SCOPE-${key}`, name: `Scope ${key}`, basePrice: 10,
-          ...(key === 'F2' ? { categoryAttributes: { [AMAZON_ONLY_KEY]: 'Uomo' } } : {}) } })
+          ...(key === 'F2' ? { categoryAttributes: { [AMAZON_ONLY_KEY]: 'Uomo', [OLD_KEY]: 'IPX4' } } : {}) } })
         return { productId: product.id, familyId: null }
       }
       const group = await client.attributeGroup.create({ data: { code: 'scope-copied', label: 'Copied attributes' } })

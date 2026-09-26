@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0, S1 merged; S2, S3 built 2026-09-26 (readiness follows the footprint; placement, archive, undo); S4 next | §10.9 |
+| P3b | 🟡 S0–S2 merged; S3, S4 built 2026-09-26 (placement, archive, undo; Shared follows placement, at once); S5 next (its production apply needs the Owner's word per business) | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -827,6 +827,34 @@ keys per attribute and readiness rows by state.
   and after moving three Amazon-only attributes to Amazon. (The Shared-view half flips on purpose in S4.)
 - Full API suite on the private copy: profiles OFF, only the 4 local-only files fail; profiles ON, only the files in
   `profiles-on-baseline.ci.json` with their counts, plus the same local-only files.
+
+**S4 built (2026-09-26, branch `feat/attributes-p3b-s4`): the Shared view follows placement, at once.**
+
+- `familySheetFields` shows `placement = 'shared'`, not archived. A channel-placed attribute a family still requires
+  stays (marked "required by <channel>"): a channel scope shows no family requirement, so hiding it would hide a
+  requirement.
+- A product with no family shows the business's **core** (`coreSheetFields`): the concept-linked (`semanticKey`)
+  Shared attributes — the starter set for a new business, the 23 adopted concepts for Xavia Racing.
+- `sharedSavedFields` drops the saved keys that do not belong on Shared: a dictionary attribute placed on a channel or
+  archived, and a key the dictionary does not have that is an Amazon attribute of the business's cached schemas (an
+  Amazon-scope save of a field with no listing store writes the shared bag). A real old key stays. The column builder
+  applies it only when a Shared view asks (`savedFieldsFor: 'shared'`: the studio sheet, the master sheet rows, the
+  save's Master contract, formula references); **the export does not ask and keeps every key**. No value is touched.
+- The column caches carry `dictionaryVersion()` (count + latest `updatedAt` of the five dictionary tables):
+  `getSheetColumns`, `getStudioColumns` and `GET /products/sheet/columns` (whose browser header was
+  `max-age=300`, now `no-cache`). An edit, a move or an archive shows on the next read. The footprint is not in the keys
+  yet: nothing in the column build reads it until the scope bar does (the sheet session's switch).
+- Measured on the private copy (best of 5): the Shared family build cold 26 ms (23 before), the Amazon IT channel scope
+  cold 59 ms (57); warm reads +2–4 ms (the version read). The plan's bound was 191 ms cold.
+- Tests: B2 and B3 flipped in `attribute-scope-baseline` (no family → the starter core; the Amazon-only bag key gone,
+  `waterproofRating` kept); the S3 parity test now expects exactly the moved optional attributes to leave Shared (the
+  required one stays; undo brings them back at once); `attribute-scope-shared.vitest.test.ts` (archive / restore / a
+  label edit show at once; a channel-placed attribute is neither shown nor writable on Shared, its value kept, the
+  export still lists it). Profiles off and on; 8 planted mistakes caught. Three test mocks that run the real column
+  builder gained the version read, and the hand-written cache key in `sheet-columns-cache` gained its two new parts.
+  Full API suite: profiles OFF only the 4 local-only files; ON only the baseline files. 51/51 static gates.
+- **Told the product-sheet session first** (its memory file): what Shared now shows, and that
+  `sheet-columns.service.ts` / `studio-sheet.service.ts` changed by a few lines each.
 
 ## 11. For the product-sheet session (the screens are theirs)
 
