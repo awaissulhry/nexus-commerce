@@ -1,8 +1,9 @@
 /**
  * The concept value lists as business options (the Owner's "option A", 2026-09-26): `applyConceptOptions` adds the
  * `color` and `size` values to the attribute linked to each concept, on PostgreSQL with the generated row-level-security
- * policies (`formulaDatabase`). Businesses are created through the real `createWorkspaceService().create`, so their
- * starter dictionary (color and size linked, no options) is the one production creates.
+ * policies (`formulaDatabase`). Businesses are created through the real `createWorkspaceService().create`; a new business
+ * now starts WITH these options (`optionsFor`), so `beforeAll` removes them to stand in for a business created before —
+ * what the backfill exists for (both businesses in production were).
  *
  * Run: npx vitest run src/services/pim/attribute-concept-options.vitest.test.ts
  */
@@ -36,6 +37,7 @@ beforeAll(async () => {
     const user = await state.db.client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active' } })
     const created = await service.create(user.id, { name: `Business ${key}`, country: 'IT', currency: 'EUR', timezone: 'Europe/Rome', creationKey: randomUUID() })
     businesses[key] = (await service.membership(user.id, created.id)).context
+    await inBusiness(key, () => prisma.attributeOption.deleteMany({ where: { attribute: { code: { in: ['color', 'size'] } } } }))
   }
 }, 180_000)
 afterAll(async () => { await state.db?.close() }, 30_000)
