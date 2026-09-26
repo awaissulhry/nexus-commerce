@@ -34,7 +34,10 @@ export const PRODUCT_COLUMNS: Record<string, Disposition> = {
   // content (primary language; other languages are "translations")
   name: g('content'), description: g('content'), bulletPoints: g('content'), keywords: g('content'), aPlusContent: g('content'), localizedContent: g('content'),
   // attributes
-  productType: g('attributes'), variationTheme: g('attributes'), variationAxes: g('attributes'), categoryAttributes: g('attributes'), variantAttributes: g('attributes'),
+  productType: g('attributes'), variationTheme: g('attributes'), variationAxes: g('attributes'),
+  // VTR step 1 — codes of THIS business's attribute dictionary; the receiving business links its own axes (the VTR backfill).
+  variationAxisCodes: never('dictionary codes belong to each business; the receiving business links its own axes'),
+  variationValueOrder: never('value order refers to each business\'s own dictionary options'), categoryAttributes: g('attributes'), variantAttributes: g('attributes'),
   // media
   imageAxisPreference: g('media'),
   // physical
