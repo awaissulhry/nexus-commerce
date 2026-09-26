@@ -1,7 +1,7 @@
 # CI plan — required PR checks under 10 minutes
 
 > Saved from the approved plan on 2026-09-26.
-> Status: APPROVED by the Owner 2026-09-26. Phase 3 in progress: PR-1 green (§6a).
+> Status: APPROVED by the Owner 2026-09-26. Phase 3: all five tier PRs open, **based on main without #4** (Owner's choice, §6c). #4 is deferred (§4.1a).
 > Owner decisions (2026-09-26):
 > - Land `chore/architecture-reliability` first.
 > - Make the repo **public**, so GitHub-hosted runners are free.
@@ -439,6 +439,55 @@ These are Railway writes. They happen only on the Owner's word, or the Owner cli
 - **Risk:** a failed migration stops the deploy, and the old container keeps serving. That is the wanted behaviour.
 - **Rollback:** revert `railway.toml` to migrate-then-start.
 
+### 4.1a Cutover runbook for #4 (written 2026-09-26; DEFERRED — fix the login bug in §6c first)
+
+After #4, `RuntimePool` refuses any runtime login that owns objects or bypasses RLS, **in the API and the web**. Production still logs in as `neondb_owner`. So the new login, the variables, the services and the merge are **one** change. Do not do half of it.
+
+**State already done (2026-09-26):**
+- `MIGRATION_DATABASE_URL` is set on the Railway API (the direct host, `neondb_owner`).
+- The Neon password is rotated everywhere.
+
+**Steps, in order:**
+
+1. **Neon SQL editor:** create the restricted login. Choose a strong password.
+
+   ```sql
+   CREATE ROLE nexus_app LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '<new password>';
+   GRANT nexus_workspace_runtime TO nexus_app WITH INHERIT TRUE;
+   ```
+
+   `WITH INHERIT TRUE` is required: the web reads `UserSession` as the login (measured in #5). `scripts/ci/seed-smoke.mts` creates exactly this shape, and #5's smoke job runs the API and the web on it.
+
+2. **Railway:** create the `worker` and `scheduler` services from this repo.
+   - Config File Path: `railway.worker.toml` and `railway.scheduler.toml`.
+   - Copy the API's variables.
+   - Source: none. Deploys come from GitHub Actions.
+
+3. **GitHub:** add the secrets `RAILWAY_WORKER_SERVICE` and `RAILWAY_SCHEDULER_SERVICE` (service IDs). `deploy-api.yml` refuses to deploy without them.
+
+4. **Railway API, worker and scheduler:** set `DATABASE_URL` and `DIRECT_DATABASE_URL` to the `nexus_app` login (pooler host for `DATABASE_URL`).
+   - Use `railway variables --set … --skip-deploys`, so the change waits for the #4 deploy. Main's code still migrates at start with `DATABASE_URL`, and a restricted login cannot do that.
+   - Keep `MIGRATION_DATABASE_URL` on `neondb_owner`.
+
+5. **Vercel Production:** set `DATABASE_URL` to the `nexus_app` pooler URL. It applies on the next production build, which is the #4 merge.
+
+6. **Railway:** disconnect the API service's native GitHub source, so each push deploys once and migrates once.
+
+7. **Merge #4.** Deploy API runs `verify`, then:
+   - Railway builds;
+   - the pre-deploy step migrates with `MIGRATION_DATABASE_URL`;
+   - the API, worker and scheduler start on `nexus_app`.
+
+   Watch these:
+   - `/api/health/ready` reports the release SHA;
+   - the worker and scheduler report their new deployments.
+
+**Rollback:**
+- Railway: redeploy the previous deployment.
+- Railway: set `DATABASE_URL` back to the `neondb_owner` pooler URL.
+- Vercel: promote the previous production deployment.
+- #4 adds **no** migration folders (measured: 0 against main), so a rollback meets the same schema.
+
 ### 4.2 Expand/contract rule
 
 This goes into `tasks/architecture-operations.md` and `CLAUDE.md`:
@@ -586,6 +635,55 @@ Job times in run 3: checks 5.7 · API 6.0 / 4.6 / 7.2 · postgres 2.4 · smoke 3
 - Smoke has 7 journeys. The cell-edit round trip is still to write.
 - `database-target` is excluded, not rewritten: it reads the real `.env` files by design (R-VT-12).
 - The Turbo remote cache is wired (`TURBO_TOKEN` secret, `TURBO_TEAM` variable) but **not configured**. Without them, turbo uses its local cache.
+
+## 6b. PR-2 … PR-5 (2026-09-26)
+
+All four are stacked on #5: **#6 → #7 → #8 → #10**.
+
+| PR | Tier | Result |
+|---|---|---|
+| #6 | B pre-push | `turbo typecheck --affected`, **19 s** (was 8–9 min). A planted TS2322 fails it. The old hook is `npm run gates:full`. |
+| #7 | A pre-commit | `lint-staged --no-stash` → the repo's fast gates. **4 s** for a `.ts` change. A planted raw hex is refused in 1 s. |
+| #8 | D merge to main | Deploy drops its duplicate build and tests. The worker and scheduler must show a NEW successful deployment. `ci.yml` is off push-to-main. Read-only production web smoke on Vercel's Production `deployment_status` (needs `VERCEL_AUTOMATION_BYPASS_SECRET`). |
+| PR-5 | E nightly | 02:00 UTC + manual. Covers: ci.yml on main; the whole API suite in one job without the snapshot (OFF + ON ratchet); 39 legacy runners (**39/39**); the real-PG load tests (rush 2/2, sync 1/1 at POOL_RUSH=20/BURST=50, AE4_LOAD=200); the eBay consent check. The factory config now collects its 8 design-system tests (**86/86**). |
+
+**Found while building PR-5**
+- The legacy runners had never run.
+  - 37 of 39 passed at once.
+  - `ebay-pushback` (5/5) and `channel-cancel` (9/9) pass, then never exit: the queue's Redis client holds them open. The runner stops a file 3 s after it prints its own all-green summary. A file that crashes on its own keeps its exit code. Control: a planted failure turns the runner red.
+- My first runner killed only the `tsx` wrapper, and a hung test ran for 21 minutes. The runner now kills the whole process group.
+
+## 6c. Re-based onto main, #4 deferred (2026-09-26)
+
+Reading #4's own cutover notes (`tasks/architecture-operations.md` on its branch) showed two things:
+- #4 moves every background job out of the API into new worker and scheduler services. It is a production migration with 5 open evidence items, not only a login change.
+- **#4 has a bug.** Its notes ask for a `NOINHERIT` runtime login. But the web's control pool (`apps/web/src/lib/workspaces/server.ts`) reads `UserSession` as the login, without `SET ROLE`. With a `NOINHERIT` grant, every signed-in page is a 500 (measured in the smoke job). Fix it before any cutover. Either the control pool sets the role, or the login is granted `WITH INHERIT TRUE`, as the smoke job does.
+
+The Owner chose "CI first, #4 later". The five tier PRs were rebuilt on `main` (Prisma 6) and re-measured there:
+
+| Check on main's code | Result |
+|---|---|
+| Static gates | 50/50 |
+| Typecheck, 8 workspaces | pass, 50 s |
+| API suite, profiles OFF | **936/936 files**, 83 s locally |
+| API suite, profiles ON | 37 files / 212 tests — the CI baseline, identical to the #4 measurement |
+| Database package / RBAC coverage / real-PG (11 suites, now `--required`) | pass |
+| Migration upgrade check (through `migrate-direct.mjs` run from `packages/database`, as `railway.toml` runs it) | pass; a stray-column control goes red |
+| Smoke on a production build, restricted login | **7/7** |
+| Pre-push / pre-commit controls | a TS2322 and a raw hex are both refused |
+| Legacy runners / factory | 39/39 / 86/86 |
+
+Changes needed for main:
+- `prisma validate` gets a placeholder `DATABASE_URL`, because Prisma 6 reads `env()` to validate.
+- Main's real-PG runner exited 0 on a skip; it gained `--required`.
+- The upgrade check calls main's release script.
+- The deploy workflow gained the `verify` gate. Main deployed without waiting for any check.
+
+**Merge order**
+1. #5
+2. The ruleset on main requires `ci-ok` and `db-security`
+3. #6, #7, #8, #10
+4. #4 later: rebase it on main, fix the login bug, let the new CI check it, then follow §4.1a
 
 ## 7. Verification
 

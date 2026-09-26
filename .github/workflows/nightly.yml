@@ -1,0 +1,136 @@
+# Nightly + manual — docs/ci-plan.md §2.5 (Tier E). Everything slow, and a check of the shortcuts the
+# PR pipeline takes. A failure fails the run, and GitHub emails the repository owner.
+#
+#   ci            the whole PR pipeline (ci.yml) on main — main has no push trigger of its own
+#   api-whole     the whole API suite in ONE job, per-file database build (no snapshot), profiles OFF
+#                 then ON: proves the sharding and the PGlite snapshot lose nothing
+#   legacy        the 39 legacy *.test.ts runners (tsx), which vitest does not collect
+#   load          the opt-in real-PostgreSQL load tests (stock-pool rush, live sync under a bulk edit)
+#   ebay-consent  eBay still accepts every consent scope the production app requests
+#
+# Not here yet (docs/ci-plan.md §6a): the browser gates (they need a seeded studio fixture) and the
+# live-site Playwright suite (29 of its 55 tests are fixme).
+
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_DISABLE_BACKGROUND_JOBS: '1'
+  ENABLE_QUEUE_WORKERS: '0'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  api-whole:
+    name: Whole API suite, one job, no snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      NEXUS_TEST_NO_TEMPLATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Disposable database
+        run: npx tsx scripts/ci/prepare-test-database.mts --url "$DATABASE_URL"
+      - name: Profiles OFF
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+          NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
+        run: |
+          node scripts/ci/api-test-plan.mjs --shard 1/1 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
+          node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/off.json"
+      - name: Profiles ON, judged by the ratchet
+        env:
+          NEXUS_WORKSPACES_ENABLED: '1'
+          REDIS_URL: redis://127.0.0.1:1
+        run: |
+          set +e
+          node scripts/ci/api-test-plan.mjs --shard 1/1 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
+          set -e
+          test -s "$RUNNER_TEMP/on.json" || { echo "✗ no profiles-ON report — could not measure"; exit 1; }
+          node apps/api/scripts/profiles-on-ratchet.mjs --report="$RUNNER_TEMP/on.json" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
+
+  legacy:
+    name: Legacy tsx test runners
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      REDIS_URL: redis://127.0.0.1:1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: npx tsx scripts/ci/prepare-test-database.mts --url "$DATABASE_URL"
+      - run: node scripts/ci/run-legacy-tests.mjs
+
+  load:
+    name: Real-PostgreSQL load tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: docker pull -q pgvector/pgvector:pg17
+      - name: Stock-pool rush and live sync under a bulk edit
+        env:
+          POOL_RUSH: '20'
+          POOL_RUSH_SECONDS: '20'
+          POOL_RUSH_BURST: '50'
+          AE4_LOAD: '200'
+        run: >-
+          node scripts/run-real-postgres-tests.mjs --required --suites
+          '[{"name":"shared stock rush (load)","file":"src/services/stock-pool/stock-pool-rush.vitest.test.ts","expect":2},
+          {"name":"live product sync under a bulk edit (load)","file":"src/services/assortment/sync-load.vitest.test.ts","expect":1}]'
+
+  ebay-consent:
+    name: eBay accepts every consent scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: npm install -g @railway/cli@5.30.1
+      - name: Ask eBay (app ID and RuName read from Railway, never printed)
+        working-directory: apps/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          set -euo pipefail
+          pick='[.EBAY_CLIENT_ID // "", .EBAY_RUNAME // ""] | @tsv'
+          ebay=$(railway variables list --service "$RAILWAY_SERVICE" --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
+          EBAY_CLIENT_ID=$(cut -f1 <<< "$ebay") EBAY_RUNAME=$(cut -f2 <<< "$ebay") npx tsx scripts/check-ebay-consent-scopes.mts
