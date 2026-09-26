@@ -6,8 +6,14 @@ This cutover has not been executed.
 ## Credentials before the first release
 
 1. Provision a dedicated LOGIN in the same PostgreSQL database, with
-   `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT`.
-   Grant `nexus_workspace_runtime` with SET permission and **without ADMIN OPTION**.
+   `NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`.
+   Grant it `nexus_workspace_runtime` **WITH INHERIT TRUE, SET TRUE** and
+   **without ADMIN OPTION**. INHERIT is required: the web's session reader
+   (`apps/web/src/lib/workspaces/server.ts`) queries without `SET ROLE`, so a
+   NOINHERIT grant makes every signed-in page fail with "permission denied".
+   Row-level security still applies to such queries, because PostgreSQL applies
+   the `nexus_workspace_runtime` policies to every role that inherits it. The
+   runtime pool refuses a login without the inherited grant at connection time.
    Grant CONNECT to the database. Do not transfer schema, function, type or table
    ownership to this login. No database/schema CREATE, TRUNCATE, REFERENCES or
    TRIGGER privileges are needed. Preserve existing narrowly authorized SECURITY

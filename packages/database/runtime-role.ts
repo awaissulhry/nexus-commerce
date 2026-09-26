@@ -37,12 +37,20 @@ export async function auditRuntimeRole(client: Pick<PoolClient, 'query'>): Promi
   if (rows[0]?.safe !== true) {
     throw new Error('Unsafe database runtime login: require restricted role membership, no administrative privileges, schema CREATE authority or application object ownership')
   }
-  // Membership with SET FALSE is insufficient. pg_has_role checks whether the
-  // session can actually enter the target role without mutating an open transaction.
-  const access = await client.query<{ allowed: boolean }>(
-    "SELECT pg_has_role(session_user, 'nexus_workspace_runtime', 'SET') AS allowed",
-  )
-  if (access.rows[0]?.allowed !== true) throw new Error('Database login cannot enter nexus_workspace_runtime')
+  // Membership alone is insufficient. SET lets the workspace adapter enter the
+  // role; USAGE (inherited privileges) serves connections that never SET ROLE,
+  // such as the web's session reader. A NOINHERIT grant passes every check above
+  // and then fails each signed-in page with "permission denied for table". RLS
+  // still applies without SET ROLE: policies name nexus_workspace_runtime, and
+  // PostgreSQL applies them to every role that inherits its privileges.
+  const access = await client.query<{ enter: boolean; inherit: boolean }>(`
+    SELECT pg_has_role(session_user, 'nexus_workspace_runtime', 'SET') AS enter,
+           pg_has_role(session_user, 'nexus_workspace_runtime', 'USAGE') AS inherit
+  `)
+  if (access.rows[0]?.enter !== true) throw new Error('Database login cannot enter nexus_workspace_runtime')
+  if (access.rows[0]?.inherit !== true) {
+    throw new Error('Database login does not inherit nexus_workspace_runtime: grant it WITH INHERIT TRUE, SET TRUE')
+  }
 }
 
 type ConnectCallback = (error: Error | undefined, client: PoolClient | undefined, done: (error?: Error | boolean) => void) => void

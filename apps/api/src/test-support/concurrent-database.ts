@@ -78,9 +78,11 @@ export async function concurrentDatabase(options: { maxConnections?: number } = 
       VALUES ('nexus_legacy_workspace', 'Test business', 'active', true, 'test-bootstrap', 'test-bootstrap', CURRENT_TIMESTAMP)`)
     await pool.query(workspacePolicySql())
     // Identifiers and password are generated hexadecimal, never caller input or logged.
-    await pool.query(`CREATE ROLE ${runtimeLogin} LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '${runtimePassword}'`)
+    await pool.query(`CREATE ROLE ${runtimeLogin} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '${runtimePassword}'`)
     roleCreated = true
-    await pool.query(`GRANT nexus_workspace_runtime TO ${runtimeLogin}`)
+    // The production grant (tasks/architecture-operations.md): inherited, because
+    // connections that never SET ROLE (the web's session reader) need table access.
+    await pool.query(`GRANT nexus_workspace_runtime TO ${runtimeLogin} WITH INHERIT TRUE, SET TRUE`)
     // The fixture owner observes/terminates only its own child login's sessions.
     // Membership points owner -> runtime login, never runtime login -> owner.
     await pool.query(`GRANT ${runtimeLogin} TO CURRENT_USER WITH INHERIT TRUE`)

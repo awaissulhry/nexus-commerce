@@ -58,11 +58,15 @@ describe('runtime login privileges on real PostgreSQL', () => {
     finally { if (started) docker('stop', container) }
   }, 40_000)
 
-  async function login(options: { attribute?: string; runtimeMembership?: boolean } = {}) {
+  // The production shape (tasks/architecture-operations.md): the login inherits the
+  // runtime role, because the web's session reader queries without SET ROLE.
+  async function login(options: { attribute?: string; runtimeMembership?: boolean; inherit?: boolean } = {}) {
     const user = name('runtime_login')
-    await sql(`CREATE ROLE ${user} LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION`)
+    await sql(`CREATE ROLE ${user} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION`)
     if (options.attribute) await sql(`ALTER ROLE ${user} ${options.attribute}`)
-    if (options.runtimeMembership !== false) await sql(`GRANT nexus_workspace_runtime TO ${user}`)
+    if (options.runtimeMembership !== false) {
+      await sql(`GRANT nexus_workspace_runtime TO ${user} WITH INHERIT ${options.inherit === false ? 'FALSE' : 'TRUE'}, SET TRUE`)
+    }
     const client = new Client({ host: '127.0.0.1', port, user, database: 'postgres', connectionTimeoutMillis: 2_000 })
     await client.connect()
     return { user, client }
@@ -116,11 +120,11 @@ describe('runtime login privileges on real PostgreSQL', () => {
     } finally { await client.end() }
   })
 
-  it('rejects direct access to a privileged role even with NOINHERIT', async () => {
+  it('rejects direct access to a privileged role even without inherited privileges', async () => {
     const { client, user } = await login()
     const privileged = name('bypass_role')
     try {
-      await sql(`CREATE ROLE ${privileged} NOLOGIN BYPASSRLS; GRANT ${privileged} TO ${user}`)
+      await sql(`CREATE ROLE ${privileged} NOLOGIN BYPASSRLS; GRANT ${privileged} TO ${user} WITH INHERIT FALSE, SET TRUE`)
       await expect(auditAfterDownscope(client)).rejects.toThrow()
     } finally { await client.end() }
   })
@@ -183,6 +187,29 @@ describe('runtime login privileges on real PostgreSQL', () => {
     try {
       await sql(`GRANT nexus_workspace_runtime TO ${user} WITH ADMIN OPTION`)
       await expect(auditAfterDownscope(client)).rejects.toThrow()
+    } finally { await client.end() }
+  })
+
+  it('rejects a login whose runtime membership does not inherit privileges', async () => {
+    const { client } = await login({ inherit: false })
+    try {
+      // The failure this prevents: without SET ROLE the login has no table access.
+      await expect(client.query('SELECT value FROM public."RuntimeRoleProbe"')).rejects.toThrow('permission denied')
+      await expect(auditRuntimeRole(client)).rejects.toThrow('does not inherit nexus_workspace_runtime')
+    } finally { await client.end() }
+  })
+
+  it('keeps row-level security on an inheriting login that never sets the runtime role', async () => {
+    const { client } = await login()
+    try {
+      await expect(auditRuntimeRole(client)).resolves.toBeUndefined()
+      expect((await client.query('SELECT current_user::text = session_user::text AS unchanged')).rows[0].unchanged).toBe(true)
+      expect((await client.query('SELECT value FROM public."RuntimeRoleProbe"')).rows).toEqual([])
+      await client.query('BEGIN')
+      await client.query("SELECT set_config('nexus.workspace_id', $1, true)", ['business_b'])
+      expect((await client.query('SELECT value FROM public."RuntimeRoleProbe"')).rows).toEqual([{ value: 'B' }])
+      expect((await client.query('UPDATE public."RuntimeRoleProbe" SET value = $1 WHERE id = 1', ['foreign'])).rowCount).toBe(0)
+      await client.query('ROLLBACK')
     } finally { await client.end() }
   })
 
