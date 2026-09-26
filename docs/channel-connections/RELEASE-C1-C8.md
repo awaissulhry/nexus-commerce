@@ -1,6 +1,10 @@
 # Reviewed safety release — C1 through C8
 
-Final serving deployment: `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
+**Status: deployed 2026-09-22 (historical release record).** Later releases built on it: Package A
+(PR #15) and release B+C (PR #32), both deployed 2026-09-26. Current status:
+[COMPLETION-MATRIX](COMPLETION-MATRIX.md).
+
+Final serving deployment: Railway **SUCCESS**,
 commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
 smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
 Sanitized release evidence: `build/RELEASE-2026-09-22-EVIDENCE.json` (kept locally; not in the public repo). This supersedes
@@ -39,7 +43,8 @@ Production behavior included in this approval:
   under its existing account/publishing gates. The 20:38:30Z read found **zero** such
   FAILED/AUTH_REQUIRED rows in both profiles; that is a snapshot, not a permanent zero.
 - Correct Etsy shop routing and event parsing; a valid configured delivery can read
-  its receipt through the named account. Receipt ingestion is still unfinished.
+  its receipt through the named account. Receipt ingestion was still unfinished then; it shipped
+  in release B+C (PR #32) behind switches that are OFF.
 - Hold unsafe Finances 2024 writes, retaining v0; comparison remains explicitly dry-run.
 - Enforce conservative queue-policy checks and private owner rotation-failure notices
   if the existing rotation job is configured. No new rotation is manually requested.
@@ -67,9 +72,9 @@ runs are retained in CX-COMPLETION; no timeouts or assertions were relaxed.
 The following production checks passed on the final commit at 21:54Z;
 the existing `/api/health/ready` gate also passed. Read-only evidence:
 
-1. The migration is finished with its exact committed checksum, and shop alias `57783036` maps exclusively to
-   Motovento connection `cmubtwtad00ctmu01w4qsruxt`.
-2. All 18 pre-existing connections retain their compared ownership, activity,
+1. The migration is finished with its exact committed checksum, and the Etsy shop alias maps
+   exclusively to the owning business's Etsy connection.
+2. Every pre-existing connection retains its compared ownership, activity,
    primary/management state, external IDs, scopes, key IDs, auth state and encrypted
    credential-presence booleans. Non-Etsy route sets and aliases are unchanged.
    Shopify remains connected. All ten deletion candidates remain.
@@ -89,8 +94,10 @@ integrity findings. Those are not a new-package regression or proof of complete 
 
 If the new deployment fails readiness, retain the old serving deployment. For a new
 serving regression in authorization, profile isolation, migration/routing or normal
-request handling, restore the pinned Railway deployment:
-`19ccdbb5-379e-4e17-b270-edca4b07e13f` (`7c70556ea631be3bcca0fcbd25d9397b719eca9e`).
+request handling, restore the pinned Railway deployment of
+`7c70556ea631be3bcca0fcbd25d9397b719eca9e` (its deployment id is in the local evidence).
+Historical: this rollback target predates PR #4's separate worker and scheduler and the later
+migrations; it must not be used now. Current recovery branches are listed in COMPLETION-MATRIX.
 Read-only API proof at **20:51:37Z**: SUCCESS, `canRollback:true`, `canRedeploy:true`.
 Recheck availability immediately before recovery. Railway's documented
 `deploymentRollback(id)` restores that image and its custom variables; the CLI's

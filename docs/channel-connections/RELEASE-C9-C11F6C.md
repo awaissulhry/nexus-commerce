@@ -1,61 +1,20 @@
 # Release package — C9 through C11f6c (eBay inbound protocol and quarantine operations)
 
-## Latest checkpoint — 2026-09-25 11:38 UTC
+## Status — deployed 2026-09-26 (PR #15)
 
-**Package A code/recovery APPROVED, fully gated and locally rehearsed. No package or
-recovery ref has been pushed by this session; nothing new is deployed or enabled.**
-Final documentation signoff/publication remain pending. The Owner has approved reviewed,
-gated, rehearsed deployment with every new switch OFF. The existing CI eBay consent-page
-GET probes still need the separate narrow exception already requested; no yes received.
+**Package A shipped as PR #15, merge commit `c5597f776`, merged 2026-09-26 12:26 UTC and
+deployed.** It merged PR #4 (`889f01893`) and the FBM hotfix PR #14 (`578c3756c`) first and adapted
+to #4's inbound claims (see "Coordination" below). The eight migrations `20260923a..h_cx_*` ran in
+Railway's pre-deploy migration step. Every new switch is OFF: eBay inbound processing and topic
+setup are held, no operator login has been granted the quarantine roles, and no operator tool has
+run in production. KMS is on in production (2026-09-26), so admission encrypts under KMS; operator
+KMS use (verify, rewrap) still needs its own yes. Current status: [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
 
-Published main is `2459bf52fe85e1ffe0b5f0c510994e019cb3eed4` (refetched11:37Z; docs after
-bc39). Public readiness re-read before that fetch reports healthy serving **bc39f98d**.
-Release source is **`3be0a62e1344626db7f8adf4e49351880cae6725`**; recovery branch
-`recovery/cx-20260925` is **`34c376113380f4c803d4f91190f94c06126c56a2`**. Metadata commits
-may follow the reviewed source. Recovery preserves published main and the exact release
-DB tree; application differences are C11f6a/b/c only. Its PCO fixture correction has an
-independent APPROVE; no assertion, timeout, ratchet or hook was weakened.
-
-Clean source full hook: DB33, **API12220/359 existing skips**, **web4887/13**, both builds,
-security127, RBAC2728/zero unmapped, **realPG328 in25 suites/zero skips**; profiles977 files,
-41 known-failing/217 tests, none new or worse. Clean recovery full hook: **API12129/340**,
-web4887/13, DB33/security127/builds, **realPG309 in23 suites/zero skips**; profiles971 files,
-same41/217 unchanged baseline. Contrast at these heads: web92/factory106 pairs, zero below7:1.
-Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
-`package-a-recovery-gate-34c376113.log`; archived sublogs under their helpers' build/evidence
-`package-a-3be0a62e1/` and `recovery-34c376113/`.
-
-HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
-recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
-migration history/checksums and role/object invariants. Jobs initialized with processing
-held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
-Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the source-equivalent
-pre-checkout pass are preserved but are not substituted for the clean3be gate.
-
-Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
-on the IT market (some follow the master price); the active eBay sellers have default
-warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
-unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
-No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
-shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
-with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
-findings; healthy readiness is not a blanket operational verdict.
-
-Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
-eBay orders68fcc9f36 APPROVED. Etsy ingest c621418e and SKU identity da1de249 APPROVED;
-pooled line foundation61cbe88bc is under review and terminal writer integration remains open.
-Its offset-ceiling history limit remains an explicit hold, not unrestricted completeness.
-Package C: listing issues16945532a and Tag contrast e738e4531 APPROVED; privacy census
-6e6687952 APPROVED, candidate records in verification; cancellation parity b77db1bd3 APPROVED,
-terminal follow-up b382fb7ba required fixes (recovery65bda8b72 committed, atomic-state fix in
-progress). Contract follow-up330395766 and teardown87406ac23 await independent review.
-The latter proves/fixes a setup-client shutdown race consistent with the original57P01;
-it does not explain recoveryf9's separate PGlite socket loss. Remaining engineering,
-activation preparations and Phase5 audit remain open under the structured plan.
-
+The rest of this record is the release preparation as it happened. The 2026-09-25 plan to push the
+gated source directly to `main` (the "Approved release action" section) was replaced by a pull
+request merged on the Owner's word; the gating and rehearsal evidence below is historical proof for
+earlier heads, and the PR's own checks gated the merged tree (listed in the PR description).
+Production identifiers and census figures stay in local evidence.
 
 ## Historical source4e gate and early census evidence — 2026-09-25
 
@@ -91,7 +50,7 @@ separates them. No production write, vendor call, credential or environment chan
 | Active Etsy connections | Present; no new shop-route or Shopify ownership proof from this census |
 
 The non-IT master-price exception is not triggered by this snapshot. Rerun the census before
-Package B shipping. The subsequent01:01:54Z census verified the exact active Etsy shop57783036→Motovento route and the connected Shopify; see the latest checkpoint and production-census-20260925-010154.json (kept locally; not in the public repo).
+Package B shipping. The subsequent 01:01:54Z census verified the exact active Etsy shop route to its owning business and the connected Shopify; see the latest checkpoint and production-census-20260925-010154.json (kept locally; not in the public repo).
 
 **Historical source checkpoint: source `77c787559` and recovery `a5efa0dd9` are independently reviewed, fully gated and
 locally rehearsed. Final docs/tools commit hook and exact-build rehearsals remain pending. No package
@@ -110,14 +69,14 @@ narrow scope confirmation before main push.** Follow
 
 The public health response still reports quantity mismatches and critical Ads integrity alerts.
 It does not refresh private runtime, switch, migration or business-state evidence.
-A 2026-09-25 Railway CLI read (fallback because MCP is unavailable) confirms deployment
-`674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at GitHub SHA
+A 2026-09-25 Railway CLI read (fallback because MCP is unavailable) confirms the base
+deployment SUCCESS at GitHub SHA
 `a22f2fc361488c3620d6c8110344e8200c46ebb2`; remote main was rechecked unchanged at 2026-09-25 00:15Z.
 This confirms the base deployment only.
 
-## What changes in production when this deploys
+## What changed in production when this deployed (2026-09-26)
 
-1. **Eight additive migrations** run from the existing start command (`migrate-direct` → `prisma migrate deploy`):
+1. **Eight additive migrations** run in Railway's pre-deploy release step since PR #4 (`npm run db:migrate:deploy`, the migration login), not at API start:
    inbound receipt leases and archive columns plus database deletion guards; eBay grant versions;
    the private `EbayNoticeQuarantine` table with RLS and system-only lookup functions; bootstrap
    account-integrity functions; three **NOLOGIN** roles (`nexus_ebay_quarantine_writer`,
@@ -147,8 +106,8 @@ This confirms the base deployment only.
 enabling eBay processing or topic setup, vendor probes (including the automatic consent-page gate
 below), the exact-ten deletion, Finances cutover, Etsy ingest activation and any P7 drop.
 The eBay order writer, Amazon Finances, eBay price read-back, contract coverage and Etsy receipts
-lanes belong to Package B; its reviewed/gated/rehearsed deployment with new switches OFF is already
-approved, subject to the plan's census and conditional currency decision.
+lanes belonged to Package B; after the 2026-09-26 approach review they were reworked and shipped
+with Package C as release B+C (PR #32, deployed 2026-09-26, new switches OFF).
 
 **Known watch item:** eBay may send account-deletion notices for many users. Each is now stored
 encrypted and retained. Measure quarantine growth daily after deploy (read-only inventory counts).
@@ -248,6 +207,9 @@ later docs/tools and must pass its own hook and both rehearsals. For each final 
 
 ## Separate approval scope: automatic eBay consent-page probes
 
+*Settled 2026-09-26: releases now go by pull request, and the Owner's merge covers the existing
+deploy workflow's consent-page check (approach review, decision 3). Kept as history.*
+
 The existing `.github/workflows/deploy-api.yml` invokes
 `apps/api/scripts/check-ebay-consent-scopes.mts`. It GETs `auth.ebay.com` OAuth consent pages
 for base/fake/full scope cases; it performs no sign-in, token exchange or writes. These are live
@@ -288,7 +250,7 @@ This old `0a` proof is superseded by the source77/recoverya5 rehearsal above. Fi
    deliberately dead Redis address.
 Held-processing behaviour itself is proven by the rollout (9) and processing (17) realPG suites in both trees.
 
-## Approved release action (new main requires new proof)
+## Approved release action (new main requires new proof) — historical, superseded by PR #15
 
 1. Retain the source3be/recovery34 reviews, both clean full hooks and HTTP/jobs rehearsals.
    Finalize reviewed metadata, then check out the final release SHA detached in
@@ -318,7 +280,7 @@ Held-processing behaviour itself is proven by the rollout (9) and processing (17
    every new switch OFF. From the clean release tree push
    `git push origin <final-release-sha>:refs/heads/main`, with normal hooks.
 6. Verify Railway SUCCESS, health/ready200 at the exact release build, protected diagnostic401,
-   finished/checksummed eight CX migrations, exact Etsy shop57783036→Motovento route and
+   finished/checksummed eight CX migrations, the exact Etsy shop route to its owning business and
    Shopify connected. Record bounded production-log findings and unavailable proof honestly.
 
 The approved census source is read only from the isolated cwd. The08:54:05Z snapshot
