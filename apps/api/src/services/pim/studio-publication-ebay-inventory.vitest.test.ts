@@ -14,13 +14,13 @@ import { readEbayInventoryListing } from '../live-read/ebay-inventory.js'
 const destination = { productId: 'family', channel: 'EBAY' as const, marketplace: 'IT', accountId: 'account', aliasKey: '', expectedSkus: ['FAM-M'], itemId: '9000000001', parentSku: 'FAM' }
 const liveGroup = { title: 'Jacket', description: '<p>Warm</p>', imageUrls: ['https://img.example/1.jpg'], aspects: { Marca: ['Brand'] }, variantSKUs: ['FAM-M'],
   variesBy: { specifications: [{ name: 'Taglia', values: ['M'] }] } }
-function reads(opts: { putStatus?: number; after?: Record<string, unknown> | null } = {}) {
+function reads(opts: { putStatus?: number; after?: Record<string, unknown> | null; listingLags?: boolean } = {}) {
   const events: string[] = []
   let current: Record<string, unknown> | null = liveGroup
   return { events,
     group: vi.fn(async () => { events.push('read'); return current ? { status: 200, body: structuredClone(current) } : { status: 500, body: null } }),
     items: vi.fn(async (skus: string[]) => skus.map(sku => ({ sku, statusCode: 200, inventoryItem: { product: { aspects: { Taglia: ['M'] } }, availability: { shipToLocationAvailability: { quantity: 2 } } } }))),
-    getItem: vi.fn(async () => ({ xml: null, error: 'not needed' })),
+    getItem: vi.fn(async () => ({ xml: current && !opts.listingLags ? `<GetItemResponse><Item><ItemID>9000000001</ItemID><Title>${current.title}</Title></Item></GetItemResponse>` : null, error: current ? undefined : 'no item' })),
     put: vi.fn(async (_key: string, body: Record<string, unknown>) => {
       events.push('put'); const status = opts.putStatus ?? 204
       if (status < 300) current = opts.after === undefined ? structuredClone(body) : opts.after
@@ -70,6 +70,13 @@ describe('sendEbayInventoryGroup', () => {
     const r = reads({ after: liveGroup })
     const receipt = await sendEbayInventoryGroup({ destination, groupKey: 'FAM', group, expectedRevision: await revision(r), fields: ['title'], reads: r })
     expect(receipt).toMatchObject({ verified: false, warnings: ['eBay accepted the update, but the read-back differs for: title.'] })
+  })
+
+  it('the group matches but the live listing still shows the old title: NOT verified, with a warning', async () => {
+    const r = reads({ listingLags: true })
+    const receipt = await sendEbayInventoryGroup({ destination, groupKey: 'FAM', group, expectedRevision: await revision(r), fields: ['title'], reads: r })
+    expect(receipt.verified).toBe(false)
+    expect(receipt.warnings).toEqual(['eBay stored the change, but the live listing does not show it yet for: title. eBay may need a publish step; check the listing.'])
   })
 
   it('refuses before any read when live eBay publishing is off', async () => {

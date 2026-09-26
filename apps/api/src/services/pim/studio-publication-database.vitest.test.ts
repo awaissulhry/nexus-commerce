@@ -41,6 +41,7 @@ vi.mock('./studio-publication-ebay.js', () => ({
   sendEbayPublication: fixture.sendEbay,
   readEbayPublication: fixture.readEbay,
   ebayPublicationRequest: (plan: any, reviewId: string) => ({ operation: 'AddFixedPriceItem', xml: plan.xml.replace('<Item>', `<Item><UUID>${reviewId}</UUID>`) }),
+  usesEbayInventory: () => false, prepareEbayInventoryPublication: async () => { throw new Error('Inventory is not part of this suite.') },
 }))
 vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
 vi.mock('./studio-publication-amazon-changes.js', () => ({
