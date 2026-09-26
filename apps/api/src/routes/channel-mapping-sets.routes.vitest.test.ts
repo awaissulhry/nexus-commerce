@@ -32,7 +32,7 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
 
   it('every route needs pim.manage', () => {
     for (const [method, url] of [['GET', '/api/pim/channel-mapping-sets'], ['GET', '/api/pim/channel-mapping-sets/:id'], ['PATCH', '/api/pim/channel-mapping-sets/:id/fields'],
-      ['POST', '/api/pim/channel-mapping-sets/:id/activate'], ['POST', '/api/pim/channel-mapping-sets/:id/versions']] as const) {
+      ['POST', '/api/pim/channel-mapping-sets/:id/activate'], ['POST', '/api/pim/channel-mapping-sets/:id/versions'], ['GET', '/api/pim/channel-mapping-sets/:id/push-impact']] as const) {
       expect(permissionForRoute(method, url)).toBe(permissionForRoute('POST', '/api/pim/channel-mapping/:channel/:code/impact'))
       expect(permissionForRoute(method, url)).toBeTruthy()
     }
@@ -54,15 +54,27 @@ describe('CHMAP — /api/pim/channel-mapping-sets', () => {
     const noReason = await app.inject({ method: 'PATCH', url: `/api/pim/channel-mapping-sets/${setId}/fields`, payload: { channelKey: 'specific:team name', state: 'ignored' } })
     expect(noReason.statusCode).toBe(400)
     const ignored = await app.inject({ method: 'PATCH', url: `/api/pim/channel-mapping-sets/${setId}/fields`, payload: { channelKey: 'specific:team name', state: 'ignored', reason: 'Amazon workaround field' } })
-    expect(ignored.json().set.fields.find((f: { channelKey: string }) => f.channelKey === 'specific:team name')).toMatchObject({ state: 'ignored', decidedBy: 'owner', reason: 'Amazon workaround field' })
+    // The column keeps its target: the push must know which field the Owner stopped.
+    expect(ignored.json().set.fields.find((f: { channelKey: string }) => f.channelKey === 'specific:team name')).toMatchObject({ state: 'ignored', decidedBy: 'owner', reason: 'Amazon workaround field', targetKind: 'itemSpecific', targetKey: 'itemSpecifics.team name' })
     await app.inject({ method: 'PATCH', url: `/api/pim/channel-mapping-sets/${setId}/fields`, payload: { channelKey: 'aspect:Marca', state: 'mapped', targetKind: 'channelField', targetKey: 'aspect_Marca' } })
+    // CHMAP M4 — the difference list before activation: the push stops sending the specific the Owner ignored.
+    const impact = await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${setId}/push-impact` })
+    expect(impact.json().impact).toMatchObject({ stops: ['item specific “team name”'], starts: [], kept: [], listings: 0, replaces: null })
+    expect((await app.inject({ method: 'GET', url: '/api/pim/channel-mapping-sets/nope/push-impact' })).statusCode).toBe(404)
     const active = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${setId}/activate` })
     expect(active.json().set).toMatchObject({ status: 'ACTIVE', counts: { requiredUnmapped: 0 } })
+    // Retiring the ACTIVE version would make the push send the specific again: the Retire confirmation says so.
+    const retire = await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${setId}/push-impact?on=retire` })
+    expect(retire.json().impact).toMatchObject({ stops: [], starts: ['item specific “team name”'], replaces: null })
     const frozen = await app.inject({ method: 'PATCH', url: `/api/pim/channel-mapping-sets/${setId}/fields`, payload: { channelKey: 'specific:team name', state: 'mapped', targetKind: 'itemSpecific', targetKey: 'itemSpecifics.team name' } })
     expect(frozen.statusCode).toBe(409)
     const copy = await app.inject({ method: 'POST', url: `/api/pim/channel-mapping-sets/${setId}/versions` })
     expect(copy.json().set).toMatchObject({ version: 2, status: 'DRAFT' })
     const diff = await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${copy.json().set.id}/diff/${setId}` })
     expect(diff.json().diff).toEqual({ added: [], removed: [], requirementChanged: [], decisionChanged: [] })
+    // The copy undoes the Owner's ignore: against the ACTIVE v1, the push starts sending the specific again.
+    await app.inject({ method: 'PATCH', url: `/api/pim/channel-mapping-sets/${copy.json().set.id}/fields`, payload: { channelKey: 'specific:team name', state: 'mapped', targetKind: 'itemSpecific', targetKey: 'itemSpecifics.team name' } })
+    const back = await app.inject({ method: 'GET', url: `/api/pim/channel-mapping-sets/${copy.json().set.id}/push-impact` })
+    expect(back.json().impact).toMatchObject({ stops: [], starts: ['item specific “team name”'], replaces: 1 })
   })
 })

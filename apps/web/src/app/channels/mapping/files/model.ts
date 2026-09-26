@@ -9,9 +9,10 @@
  * answers with — so a field the API renames breaks this file's type check, not the screen.
  */
 import type {
-  MappingDiff, MappingDirection, MappingFieldRow, MappingFieldState, MappingFormKind, MappingRequirement, MappingSetSummary,
+  MappingDiff, MappingDirection, MappingFieldRow, MappingFieldState, MappingFormKind, MappingPushImpact, MappingRequirement, MappingSetSummary,
   MappingTargetKind, MappingTransform,
 } from '@nexus/shared/channel-mapping'
+import type { ActionFinding, ActionReview } from '@/design-system/grid'
 
 /* ── words ──────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -381,4 +382,31 @@ export interface TemplateUploadResult {
 /** "Template 2026.0715 stored; it reads with Amazon DE · COAT+PANTS · v2 (draft)." */
 export function templateResultSentence(t: Pick<TemplateUploadResult, 'templateVersion' | 'label' | 'created'>): string {
   return `Template ${t.templateVersion ?? '(version not stated)'} stored; it reads with ${t.label}.${t.created ? ' That version is new: review it before activating.' : ''}`
+}
+
+/* ── activation: what the push sends ───────────────────────────────────────────────────────────── */
+
+/** An Amazon attribute with the template's own label when a column carries it (`Colore (color)`); eBay names stay. */
+function pushFieldName(fields: readonly Pick<MappingFieldRow, 'targetKind' | 'targetKey' | 'label'>[], name: string): string {
+  const row = fields.find(f => f.targetKind === 'channelField' && f.label && f.targetKey?.split('__')[0] === name)
+  return row ? `${row.label} (${name})` : name
+}
+
+/**
+ * The Activate confirmation's difference list (CHMAP M4): which fields the next publish to this channel and market starts
+ * or stops sending, and the Owner's stops the push cannot follow. `null` = the check failed: that is said, never guessed.
+ */
+export function pushImpactReview(set: Pick<MappingSetSummary, 'channel' | 'marketplace'> & { fields: readonly Pick<MappingFieldRow, 'targetKind' | 'targetKey' | 'label'>[] },
+  impact: MappingPushImpact | null, failure?: string): { consequences: string[]; review?: ActionReview; findings: ActionFinding[] } {
+  const where = `${channelLabel(set.channel)} ${set.marketplace}`
+  if (!impact) return { consequences: [], findings: [{ label: `What Nexus sends to ${where}${failure ? ` (${failure})` : ''}`, severity: 'unknown' }] }
+  const findings: ActionFinding[] = impact.kept.map(k => ({ label: `Still sent: ${k}`, severity: 'warn' }))
+  if (!impact.stops.length && !impact.starts.length) return { consequences: [`What Nexus sends to ${where} does not change.`], findings }
+  const rows = [...impact.stops.map(s => ({ label: pushFieldName(set.fields, s), before: 'Sent', after: 'Not sent' })),
+    ...impact.starts.map(s => ({ label: pushFieldName(set.fields, s), before: 'Not sent', after: 'Sent' }))]
+  return {
+    consequences: [`The next publish to ${where} changes for ${impact.listings} listing${impact.listings === 1 ? '' : 's'} of this form.`, impact.note],
+    review: { title: `What Nexus sends to ${where}`, rows },
+    findings,
+  }
 }

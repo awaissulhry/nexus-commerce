@@ -138,6 +138,22 @@ export interface MappingDiff {
   decisionChanged: { channelKey: string; from: Pick<MappingFieldRow, 'state' | 'targetKind' | 'targetKey'>; to: Pick<MappingFieldRow, 'state' | 'targetKind' | 'targetKey'> }[]
 }
 
+/**
+ * CHMAP M4 — the difference list shown before activation: what the push starts or stops sending when this version
+ * replaces the form's ACTIVE one. `stops`/`starts` are Amazon attribute names or `item specific “Name”`; `kept` are the
+ * Owner's stops the push cannot follow, each with its reason.
+ */
+export interface MappingPushImpact {
+  stops: string[]
+  starts: string[]
+  kept: string[]
+  /** Listings of this channel and market whose product type (Amazon) or category (eBay) is in the form. */
+  listings: number
+  /** The ACTIVE version this one replaces, if any. */
+  replaces: number | null
+  note: string
+}
+
 const isRequired = (f: Pick<MappingFieldRow, 'requirement'>) => f.requirement === 'required'
 const isOpen = (f: Pick<MappingFieldRow, 'state'>) => f.state === 'unmapped'
 

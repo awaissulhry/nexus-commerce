@@ -3,7 +3,7 @@ import type { MappingDiff, MappingFieldRow, MappingSetSummary } from '@nexus/sha
 import {
   changedKeys, decisionBody, decisionSentence, DIRECTION_WORD, exportBlocker, exportSummarySentence, filenameFromDisposition,
   filterCounts, filterRows, filterSets, formLabel, groupByForm, initialDraft, isLocked, marketsOf, matchesSearch,
-  needsTemplateUpload, pageOf, parseExportSummary, parseSkus, requirementWord, sharedTarget, siblingsOf, stateTone,
+  needsTemplateUpload, pageOf, parseExportSummary, parseSkus, pushImpactReview, requirementWord, sharedTarget, siblingsOf, stateTone,
   targetLabel, templateResultSentence, transformSummary, useCount, versionName,
 } from './model'
 import { fileSetHref, mappingViewHref, readMappingView } from './urls'
@@ -280,5 +280,28 @@ describe('urls', () => {
   it('deep-links one version', () => {
     expect(fileSetHref('view=files', 'abc')).toBe('/channels/mapping?view=files&set=abc')
     expect(fileSetHref('view=files&set=abc', null)).toBe('/channels/mapping?view=files')
+  })
+})
+
+describe('the Activate confirmation — what the push sends (CHMAP M4)', () => {
+  const fields = [{ targetKind: 'channelField' as const, targetKey: 'team_name', label: 'Nome della squadra' }, { targetKind: 'channelField' as const, targetKey: 'sleeve__type', label: 'Tipo di manica' }]
+  const impact = { stops: ['team_name'], starts: ['sleeve'], kept: ['color__standardized_values: Amazon takes color as one field, and another column still sends it'], listings: 1, replaces: 2, note: 'Amazon keeps the current value of a field Nexus stops sending. A new listing is created without it.' }
+
+  it('lists every field the next publish stops or starts sending, with the template label, and the stops it cannot follow', () => {
+    const got = pushImpactReview({ channel: 'AMAZON', marketplace: 'IT', fields }, impact)
+    expect(got.consequences).toEqual(['The next publish to Amazon IT changes for 1 listing of this form.', impact.note])
+    expect(got.review).toEqual({ title: 'What Nexus sends to Amazon IT', rows: [
+      { label: 'Nome della squadra (team_name)', before: 'Sent', after: 'Not sent' },
+      { label: 'Tipo di manica (sleeve)', before: 'Not sent', after: 'Sent' },
+    ] })
+    expect(got.findings).toEqual([{ label: `Still sent: ${impact.kept[0]}`, severity: 'warn' }])
+  })
+
+  it('says when nothing changes, and says the check failed instead of guessing', () => {
+    expect(pushImpactReview({ channel: 'EBAY', marketplace: 'IT', fields: [] }, { ...impact, stops: [], starts: [], kept: [], listings: 0 }))
+      .toEqual({ consequences: ['What Nexus sends to eBay IT does not change.'], findings: [] })
+    expect(pushImpactReview({ channel: 'EBAY', marketplace: 'IT', fields: [] }, null, 'Service unavailable'))
+      .toEqual({ consequences: [], findings: [{ label: 'What Nexus sends to eBay IT (Service unavailable)', severity: 'unknown' }] })
+    expect(pushImpactReview({ channel: 'AMAZON', marketplace: 'DE', fields }, { ...impact, listings: 3 }).consequences[0]).toBe('The next publish to Amazon DE changes for 3 listings of this form.')
   })
 })

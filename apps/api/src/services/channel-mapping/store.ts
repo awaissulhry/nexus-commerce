@@ -174,7 +174,8 @@ export async function decideField(setId: string, channelKey: string, decision: F
   if (decision.state === 'mapped' && ['channelField', 'itemSpecific'].includes(targetKind) && !targetKey) throw new MappingError('Choose the field this column maps to')
   await prisma.channelMappingField.update({
     where: { id: field.id },
-    data: { state: decision.state, targetKind, targetKey: decision.state === 'mapped' ? targetKey : null, reason, direction, decidedBy: 'owner',
+    // The target stays on an ignored column: the push needs to know which field the Owner chose not to send.
+    data: { state: decision.state, targetKind, targetKey, reason, direction, decidedBy: 'owner',
       ...(decision.transform ? { transform: decision.transform as unknown as Prisma.InputJsonValue } : {}) },
   })
   return getSet(setId)

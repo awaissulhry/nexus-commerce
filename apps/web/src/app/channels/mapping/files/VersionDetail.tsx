@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import {
-  activationBlocker, type MappingDiff, type MappingFieldRow, type MappingSetDetail, type MappingSetSummary,
+  activationBlocker, type MappingDiff, type MappingFieldRow, type MappingPushImpact, type MappingSetDetail, type MappingSetSummary,
 } from '@nexus/shared/channel-mapping'
 import { Button, FilterChip, Input, Pill, Tag } from '@/design-system/primitives'
 import {
@@ -23,11 +23,11 @@ import { GridPager } from '@/design-system/grid'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { formatDate, num } from '@/design-system/lib/format'
 import {
-  activateMappingSet, diffMappingSets, errorText, newMappingVersion, readMappingSet, readMappingTargets, retireMappingSet,
+  activateMappingSet, diffMappingSets, errorText, newMappingVersion, readMappingSet, readMappingTargets, readPushImpact, retireMappingSet,
   type MappingUse,
 } from './api'
 import {
-  changedKeys, DECIDED_BY_WORD, DIRECTION_WORD, exportBlocker, filterCounts, filterRows, formLabel, isLocked, pageOf, requirementWord, siblingsOf,
+  changedKeys, DECIDED_BY_WORD, DIRECTION_WORD, exportBlocker, filterCounts, filterRows, formLabel, isLocked, pageOf, pushImpactReview, requirementWord, siblingsOf,
   STATE_WORD, stateTone, STATUS_TONE, STATUS_WORD, targetLabel, transformSummary, USE_WORD, useCount, versionName,
   type FieldFilter,
 } from './model'
@@ -110,7 +110,7 @@ export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
   const [deciding, setDeciding] = useState<string | null>(null)
   const [compareWith, setCompareWith] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [busy, setBusy] = useState<null | 'version' | 'activate' | 'retire'>(null)
+  const [busy, setBusy] = useState<null | 'version' | 'checkActivate' | 'activate' | 'checkRetire' | 'retire'>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const siblings = useMemo(() => (set ? siblingsOf(set, sets) : []), [set, sets])
@@ -138,14 +138,23 @@ export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
 
   const activate = async () => {
     if (!set) return
+    // CHMAP M4 — the push follows the active version: read what it would start or stop sending before asking.
+    setBusy('checkActivate'); setActionError(null)
+    let impact: MappingPushImpact | null = null, failure: string | undefined
+    try { impact = await readPushImpact(set.id) } catch (error) { failure = errorText(error) } finally { setBusy(null) }
+    const push = pushImpactReview(set, impact, failure)
     const ok = await confirm.ask({
       level: 'confirm', reach: 'local',
       title: `Activate v${set.version} of ${formLabel(set)}?`,
+      ...(impact ? { asOf: new Date().toISOString() } : {}),
       consequences: [
         `Files of this form are read and written with v${set.version}.`,
         activeSibling ? `v${activeSibling.version}, the active version today, is retired.` : 'No other version of this form is active today.',
         `v${set.version} can no longer be changed; a new version is the way to change it.`,
+        ...push.consequences,
       ],
+      review: push.review,
+      findings: push.findings,
       reversal: activeSibling ? { verb: `Activate v${activeSibling.version}`, fidelity: 'exact' } : { verb: `Retire v${set.version}`, fidelity: 'exact' },
     })
     if (!ok) return
@@ -158,13 +167,25 @@ export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
 
   const retire = async () => {
     if (!set) return
+    // Retiring the ACTIVE version: the push stops following it, so the fields it stopped are sent again.
+    let push: ReturnType<typeof pushImpactReview> = { consequences: [], findings: [] }, checked = false
+    if (set.status === 'ACTIVE') {
+      setBusy('checkRetire'); setActionError(null)
+      let impact: MappingPushImpact | null = null, failure: string | undefined
+      try { impact = await readPushImpact(set.id, 'retire') } catch (error) { failure = errorText(error) } finally { setBusy(null) }
+      push = pushImpactReview(set, impact, failure); checked = impact != null
+    }
     const ok = await confirm.ask({
       level: 'confirm', reach: 'local',
       title: `Retire v${set.version} of ${formLabel(set)}?`,
+      ...(checked ? { asOf: new Date().toISOString() } : {}),
       consequences: [
         set.status === 'ACTIVE' ? `This form has no active version until another one is activated.` : `This draft can no longer be changed.`,
         `v${set.version} stays in the list and can be activated again.`,
+        ...push.consequences,
       ],
+      review: push.review,
+      findings: push.findings,
       reversal: { verb: `Activate v${set.version}`, fidelity: 'exact' },
     })
     if (!ok) return
@@ -284,12 +305,12 @@ export function VersionDetail({ setId, sets, onSelect, onListChanged }: {
           </Button>
           {(set.status === 'DRAFT' || set.status === 'RETIRED') && (
             <Button size="sm" variant="success" disabled={busy != null || blocker != null} aria-describedby={blocker ? `${set.id}-blocker` : undefined} onClick={() => void activate()}>
-              {busy === 'activate' ? 'Activating…' : 'Activate'}
+              {busy === 'checkActivate' ? 'Checking…' : busy === 'activate' ? 'Activating…' : 'Activate'}
             </Button>
           )}
           {(set.status === 'ACTIVE' || set.status === 'DRAFT') && (
             <Button size="sm" variant="danger-outline" disabled={busy != null} onClick={() => void retire()}>
-              {busy === 'retire' ? 'Retiring…' : 'Retire'}
+              {busy === 'checkRetire' ? 'Checking…' : busy === 'retire' ? 'Retiring…' : 'Retire'}
             </Button>
           )}
           <Button size="sm" disabled={busy != null || cannotExport != null} aria-describedby={cannotExport ? `${set.id}-export` : undefined} onClick={() => setExporting(true)}>

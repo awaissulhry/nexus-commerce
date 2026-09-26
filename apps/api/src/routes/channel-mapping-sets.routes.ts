@@ -59,6 +59,14 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
     set: await newVersionFrom(request.params.id, actor(request)),
   })))
 
+  /** The difference list shown before an activation (or `?on=retire`): what the push starts or stops sending, and how many listings it touches. */
+  fastify.get<{ Params: { id: string }; Querystring: { on?: string } }>('/pim/channel-mapping-sets/:id/push-impact', async (request, reply) => guard(reply, async () => {
+    const { pushImpact } = await import('../services/channel-mapping/push.js')
+    const impact = await pushImpact(request.params.id, request.query.on === 'retire' ? 'retire' : 'activate')
+    if (!impact) throw new MappingError('This mapping version does not exist', 404)
+    return { impact }
+  }))
+
   fastify.post<{ Params: { id: string } }>('/pim/channel-mapping-sets/:id/activate', async (request, reply) => guard(reply, async () => ({
     set: await activateSet(request.params.id, actor(request)),
   })))

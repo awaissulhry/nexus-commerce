@@ -651,8 +651,8 @@ modelling "piece of a set" as a real concept (§7.1).
 ## 11. Progress
 
 Branch `feat/channel-mappings` (worktree `/private/tmp/nexus-channel-mappings`), local only: private DB copy
-`nexus_chmap_test`. Nothing is pushed. Commits: `62b342908` (M1+M2), `9ec472113` (M3+M5), `ef1aa31df` (M4 check 4).
-The web screen (M6) is committed with this progress note.
+`nexus_chmap_test`. Nothing is pushed. Rebased onto `origin/main` `c5597f776` (Prisma 7). Commits: `a203424f6` (M1+M2),
+`249f77e5a` (M3+M5), `871f41e29` (M4 check 4), `376b1840a` (M6), `567bef732` (Prisma 7 metadata), then the M4 switch.
 
 ### 11.1 Steps
 
@@ -662,7 +662,7 @@ The web screen (M6) is committed with this progress note.
 | M1 | Tables | ✅ | `ChannelMappingSet` / `ChannelMappingField` / `ChannelMappingUse`, additive migration `20260926m_channel_mapping_sets`, RLS + reference guard, one ACTIVE per form (partial unique index; a second ACTIVE is refused — tested). Business B sees none of A's versions (tested). |
 | M2 | Import reads the versions | ✅ | Both readers follow the version: the Owner's ignore/map/unmapped wins, a column the version does not know is refused. Every import records the version it used. The old flat-file key table and the eBay column lists are data (`channel-mapping/defaults.ts`). **Parity:** 67 of 67 Amazon files in the corpus read identically with the rules' version (0 different); a planted Owner decision moved exactly its column in every file. **Full corpus proof, twice:** 89 files, 0 not clean, control caught; parse/ledger identical to CFI proof 3 except the one intended change (330 new "GTIN exemption" rows). |
 | M3 | Export from the same store (E-1) | ✅ API | Amazon `.xlsm` into the stored template and our eBay workbook, through the version. Always a partial update; stock never written. **Real files through the database:** 26 of 33 upload-ready Amazon files equal cell for cell; MOSS DE too once its parent link is confirmed (2,049/2,049); the other 6 are local-environment limits (5 IT files: the job's shipping-template check needs a live Amazon read; X-RACING: no APPAREL schema cached). **eBay:** 0 different and 0 missing on all 14 comparable workbooks; the only extras are values Nexus holds beyond that file. |
-| M4 | Push reads the versions | 🟡 check done, switch not started | Check 4 (offline): the push's own serializer fed with what Nexus holds equals the file on every mapped cell for GALE IT/DE/FR/ES and REGAL FR (planted change caught). **Found:** the push refuses 40 of 41 AIREON DE products — two closure types per product ("Nested repeated values in closure"). The switch (the push honouring the Owner's decisions) edits the publish lane's files and changes what channels receive: **needs your word (§11.3).** |
+| M4 | Push reads the versions | 🟡 built, waits for your approval of the difference list (§11.3) | Check 4 (offline): the push's own serializer fed with what Nexus holds equals the file on every mapped cell for GALE IT/DE/FR/ES and REGAL FR (planted change caught). **The switch:** the product-sheet push leaves out a field only when YOU stopped every column of it in the ACTIVE version (ignore, managed elsewhere, read on import only). Amazon: a whole attribute or nothing (Amazon replaces an attribute whole, so leaving out one part would clear that part). eBay: item specifics only. Rules never change a push; with no ACTIVE version (production today) nothing changes. The Activate and Retire confirmations show the difference first. **Proof:** offline compare of every family on this copy (§11.3), 14 of 14 planted faults caught, real-browser check (light, dark, 390 px, keyboard, a planted 503). The flat-file feed's second key list is merged (exactly the same two sets, pinned). **Found:** the push refuses 40 of 41 AIREON DE products — two closure types per product ("Nested repeated values in closure"). |
 | M5 | Golden tests | ✅ | 9 anonymised golden files (two independent leak scans clean, each with a positive control) + trimmed public schemas. The golden test pins the ledger, the decisions and a strict cell-by-cell round trip: 0 differences on all 9. Runs with no database, in CI. 5 of 5 planted export faults caught. |
 | M6 | The screen | ✅ | `/channels/mapping` → "File mappings": versions per form, counters, filters, compare, decide (map / ignore / managed / unmapped, and direction), activate/retire/new version, recent uses, **export a file** (ACTIVE versions; always a partial update) and **upload a template**. Real-browser check twice (light, dark, 390 px, keyboard, real 400/409s): exported GALE IT `.xlsm` 21 rows; a DE export refused for a missing template, then uploaded inline and exported. Web tsc 0; 72 tests; 21 UI/DS guards 0. Not shown yet: value coverage and sample values per column (no API for them). |
 | M7 | Clean-up | ⏳ | Waits for M4. Most remaining key lists sit in other lanes' files (§11.2). |
@@ -673,13 +673,61 @@ The web screen (M6) is committed with this progress note.
 - **eBay spec labels for Best Offer are the wrong way round** (`channel-specs/ebay.ts:123-124`, the attributes lane): floor = auto-decline, ceiling = auto-accept.
 - **The flat-file page's sale price path** (`flat-file.service.ts:1044-1052`) is `sale_price`; the templates and CFI use `discounted_price`.
 - **Main has moved** (PR #4 merged: Prisma 7, three-process API). Before a PR, this branch must be rebased and the migration, baseline and client regenerated with Prisma 7.
+- **The flat-file feed and the flat-file save treat `standard_price` differently** (`flat-file.service.ts`): the save always skips the column; the feed skips it only when the product type's schema does not list it. Kept as it is (no payload change).
 - **Two tests fail on this copy with and without this branch** (`variation-quality`, `variation-rule-view`): they read `nexus_development` data. Environmental.
 
-### 11.3 Your decision (one)
+### 11.3 M4 — the difference list (for your approval)
 
-**Let the push follow the mapping versions (M4 switch)?** It makes the product-sheet push skip columns you ignored, and
-it moves the flat-file feed's second key list and the eBay feed's English aspect names onto the versions.
-- **A (recommended): yes, after the publish lane releases its files** — I compare every payload before and after,
-  offline, per market, and change nothing that Amazon or eBay receives unless you approve the difference list.
-- **B: not now** — imports and exports use the versions; the push keeps today's rules.
+**How it was compared** (`apps/api/scripts/chmap-push-diff.mts`, offline). For every product family with a connected
+listing in each market, the tool built the payload the studio publication would send, five times, and compared them root
+by root (Amazon) and item specific by item specific (eBay):
+- **BASE** — the two builders as committed before M4, loaded from git.
+- **S0** — the M4 builders, no ACTIVE version (production today).
+- **S1** — every draft activated as the rules made it (no decision of yours).
+- **S2** — a new version with planted decisions of yours: one whole field ignored, ONE part of a multi-part Amazon field
+  ignored, one eBay item specific ignored.
+- **S2 with the switch off** (`NEXUS_PUSH_FOLLOWS_MAPPING=0`).
 
+Every family ran in its own database transaction that was thrown away. Nothing was sent: every network connection except
+the local database was refused (0 attempts recorded).
+
+**Result on the local copy `nexus_chmap_test`** (81 families: Amazon IT 14, DE 12, FR 8, ES 9; eBay IT 37, DE 1):
+
+| | Families built | S0, S1, switch off vs BASE | S2 vs BASE |
+|---|---|---|---|
+| Amazon IT | 1 (9 messages) | 0 differences | only the planted field: `color` left out of the 8 messages that carried it; the partly ignored `child_parent_sku_relationship` unchanged |
+| Amazon DE | 1 (0 messages: every offer closed) | 0 | — |
+| eBay IT | 23 | 0 | only the planted item specific, once in each of the 23 families (0 other changes) |
+| The other 56 families | refused | refused with the **same sentence** in every state | — |
+
+- **Limit:** this copy's Amazon data is not publish-ready (variants that cannot be told apart, pending translations, more
+  than nine images on new listings, stale saved rules), so only one Amazon family builds. No Amazon version exists for its
+  product type, so the tool made a rules-only one for it inside the thrown-away transaction. The Amazon rule is also proved
+  by the builder's own tests on a synthetic family (a whole field, one part, a PATCH message, the content resolver's
+  title, a field with errors). Production was not read.
+
+**What changes, once you activate a version with your own decisions:**
+1. **Amazon:** an attribute whose every column you stopped is not sent. Amazon keeps its current value (the change-only
+   publish cannot send an omission). A new listing is created without it.
+2. **Amazon, one part only:** if another column still sends the attribute, the whole attribute is still sent. The
+   confirmation says "Still sent: … Amazon takes … as one field".
+3. **eBay:** an item specific whose every column you stopped is not sent. On a live listing eBay keeps its value (the
+   change-only publish starts from eBay's own specifics; `studio-publication-ebay-changes.vitest.test.ts` pins it). Other
+   eBay fields (title, price, …) still follow the listing; the confirmation says so.
+4. **Retire** an ACTIVE version: the fields it stopped are sent again. The Retire confirmation shows it.
+5. **Price, quantity and parentage columns** never change the push: the rules route them to their own doors.
+
+**Not changed — your decision:** the eBay flat-file **feed mode** (`ebay-feed.service.ts`, Inventory task feed) always sends
+8 English aspect names: Brand, Colour, Size, Material, Model Number, Custom Label, EAN, MPN — on every market. Moving them
+onto the versions would send the market's own names (`Marca`, `Colore`, …) instead.
+
+### 11.4 Your decisions (two)
+
+**1. Approve the difference list (§11.3)?** Nothing changes until you activate a version with your own decisions.
+- **A (recommended): yes.** The push follows your decisions from the next activation. Push and deploy still need your word.
+- **B: no.** I set `NEXUS_PUSH_FOLLOWS_MAPPING=0` as the default, so the push ignores the versions until you say so.
+
+**2. The eBay feed-mode English aspect names?**
+- **A (recommended): keep them for now.** Feed mode is one of several eBay push paths (§4.2); a change needs one live
+  listing checked first.
+- **B: follow the version** (the market's own names), after one live test listing.

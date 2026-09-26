@@ -7,7 +7,7 @@
  * is open) is therefore an ordinary thrown error with `status === 409`.
  */
 import { getBackendUrl } from '@/lib/backend-url'
-import type { MappingDiff, MappingSetDetail, MappingSetSummary } from '@nexus/shared/channel-mapping'
+import type { MappingDiff, MappingPushImpact, MappingSetDetail, MappingSetSummary } from '@nexus/shared/channel-mapping'
 import { json } from '../_shared/api'
 import { filenameFromDisposition, parseExportSummary, type DecisionBody, type ExportSummary, type TemplateUploadResult } from './model'
 
@@ -52,6 +52,10 @@ export const decideMappingField = (setId: string, body: DecisionBody) =>
 
 export const newMappingVersion = (setId: string) =>
   json<{ set: MappingSetDetail }>(`${base()}/${id(setId)}/versions`, { method: 'POST' }).then(r => r.set)
+
+/** What the push starts or stops sending if this version replaces the form's active one, or is retired (read only). */
+export const readPushImpact = (setId: string, on: 'activate' | 'retire' = 'activate', signal?: AbortSignal) =>
+  json<{ impact: MappingPushImpact }>(`${base()}/${id(setId)}/push-impact${on === 'retire' ? '?on=retire' : ''}`, { signal }).then(r => r.impact)
 
 export const activateMappingSet = (setId: string) =>
   json<{ set: MappingSetDetail }>(`${base()}/${id(setId)}/activate`, { method: 'POST' }).then(r => r.set)
