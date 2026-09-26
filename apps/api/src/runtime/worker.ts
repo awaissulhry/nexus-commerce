@@ -1,3 +1,4 @@
+import './registrations.js'
 import { initializeQueue, closeQueue } from '../lib/queue.js'
 import { initializeBullMQWorker } from '../workers/bullmq-sync.worker.js'
 import { initializeChannelSyncWorker } from '../workers/channel-sync.worker.js'

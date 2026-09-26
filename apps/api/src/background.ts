@@ -11,6 +11,9 @@ const role = process.argv[2]
 if (role !== 'worker' && role !== 'scheduler') throw new Error('Background process role must be worker or scheduler')
 if (process.env.NEXUS_DISABLE_BACKGROUND_JOBS === '1') throw new Error('Background service cannot start with NEXUS_DISABLE_BACKGROUND_JOBS=1')
 if (!process.env.REDIS_URL && !process.env.REDIS_HOST) throw new Error('Background services require Redis for coordination')
+// The worker consumes the queued lane and the scheduler produces into it (addJobSafely
+// skips every enqueue while this is off, leaving work to the 60-second drains).
+if (process.env.ENABLE_QUEUE_WORKERS !== '1') throw new Error('Background services require ENABLE_QUEUE_WORKERS=1')
 // Legacy schedules must also fail closed once they run as independent services.
 process.env.NEXUS_REQUIRE_CRON_LEASE = '1'
 process.env.NEXUS_PROCESS_ROLE = role

@@ -186,8 +186,8 @@ import connectionsRoutes from "./routes/connections.routes.js";
 import accountsRoutes from "./routes/accounts.routes.js";
 import assortmentsRoutes from "./routes/assortments.routes.js";
 import stockPoolRoutes from "./routes/stock-pool.routes.js";
-// CX.1 — connection core
-import "./services/cx/connectors/index.js";
+// CX.1 — connection core, plus the other registries every process shares.
+import "./runtime/registrations.js";
 import cxConnectRoutes from "./routes/cx-connect.routes.js";
 import cxConnectionsRoutes from "./routes/cx-connections.routes.js";
 import { seedChannelApps } from "./services/cx/apps.service.js";
@@ -229,6 +229,7 @@ import { startEventInfrastructure, stopEventInfrastructure } from "./workers/eve
 import { registerProductGraph } from "./graph/index.js";
 import prisma from "./db.js";
 import { registerCommandIdempotency } from './lib/command-idempotency.js';
+import { endEventStreamsOnClose } from './lib/sse.js';
 
 process.env.NEXUS_PROCESS_ROLE = 'api';
 
@@ -519,6 +520,8 @@ app.addHook('preHandler', rbacHook);
 // too) and is a no-op in shadow mode. SSE + export writers bypass this and
 // call filterFinancialPayload() directly (S2 follow-up).
 app.addHook('preSerialization', financialFilterHook);
+// Before the routes: open event streams end when shutdown starts (lib/sse.ts).
+endEventStreamsOnClose(app);
 // After the workspace and RBAC hooks (a replay is served only to callers they
 // admit) and after the financial filter (a receipt stores the filtered response).
 registerCommandIdempotency(app);

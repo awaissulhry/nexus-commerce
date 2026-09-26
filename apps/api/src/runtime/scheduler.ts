@@ -1,3 +1,4 @@
+import './registrations.js'
 // Schedule registration lives outside the HTTP process. Job bodies and feature flags
 // remain unchanged; the clustered wrapper owns workspace leases.
 import prisma from '../db.js'
@@ -169,19 +170,7 @@ export async function startScheduler(): Promise<void> {
   // accidentally fires real mail). No-op when no schedules due.
   startScheduledExportCron();
 
-  // W7.1 — register bulk-ops action handlers into the existing
-  // AutomationRule registry. Idempotent — safe to call before /
-  // after the W4 replenishment evaluator boots.
-  try {
-    const { registerBulkOpsActions } = await import(
-      '../services/automation/bulk-ops-actions.js'
-    );
-    registerBulkOpsActions();
-  } catch (err) {
-    logger.warn(
-      `[boot] bulk-ops automation actions skipped: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
+  // W7.1 — bulk-ops automation actions are registered by ./registrations.js.
 
   // W7.2 — bulk-ops automation cron tick. Fires the
   // `bulk_cron_tick` trigger every 15 min so scheduled hygiene
