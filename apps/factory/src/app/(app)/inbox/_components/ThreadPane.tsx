@@ -54,7 +54,7 @@ export function ThreadPane({
   thread: ThreadResponse | null;
   loading: boolean;
   onMutated: () => void;
-  composerRef?: React.RefObject<HTMLTextAreaElement>;
+  composerRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** EPI2.2 — ?file= deep link: the lightbox's active attachment */
   fileId?: string | null;
   onFileChange?: (id: string | null) => void;

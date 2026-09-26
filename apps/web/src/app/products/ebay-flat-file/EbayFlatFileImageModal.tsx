@@ -1293,8 +1293,8 @@ export function EbayFlatFileImageDrawer({ open, onClose, marketplace, families: 
   const { toast } = useToast()
 
   // Stable ref map keyed by productId — persists across renders without extra deps.
-  const refsMap = useRef<Map<string, RefObject<FamilySectionHandle>>>(new Map())
-  const getRef = useCallback((pid: string): RefObject<FamilySectionHandle> => {
+  const refsMap = useRef<Map<string, RefObject<FamilySectionHandle | null>>>(new Map())
+  const getRef = useCallback((pid: string): RefObject<FamilySectionHandle | null> => {
     if (!refsMap.current.has(pid)) refsMap.current.set(pid, createRef<FamilySectionHandle>())
     return refsMap.current.get(pid)!
   }, [])
