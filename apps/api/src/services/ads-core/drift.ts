@@ -86,10 +86,22 @@ export function isOurs(c: DriftClass): boolean {
 }
 
 /**
+ * The value an `existence` row carries when we hold no Amazon id: the entity was never sent. Written by the
+ * structural reconcile, read here to word the row.
+ */
+export const NEVER_SENT = 'never sent'
+
+/**
  * Human wording. Drift reports get read by whoever is on shift, not by whoever
  * wrote the classifier, so each one says what happened AND what to do.
+ *
+ * `amazonValue` is required so no caller can forget it: a row for an entity we never sent is worded on its own.
+ * "Amazon still holds the old value" is untrue there — Amazon holds nothing.
  */
-export function describeDrift(c: DriftClass, field: string): string {
+export function describeDrift(c: DriftClass, field: string, amazonValue: string | null): string {
+  if (field === 'existence' && amazonValue === NEVER_SENT) {
+    return 'This was saved in Nexus but never reached Amazon — the write gate was closed or the create was rejected. Push it, or archive it in Nexus. This will not fix itself.'
+  }
   switch (c) {
     case 'WRITE_PENDING':
       return `${field} differs because our change is still queued and has not reached Amazon yet. It should resolve on its own.`

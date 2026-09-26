@@ -106,6 +106,9 @@ export async function runStructuralReconcileOnce(opts: {
     driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, archivedNeverSent: 0, portfoliosRepaired: 0, errors: [],
   }
   const limit = opts.limit ?? 400
+  // Before the first Amazon read. A row another writer re-detects after this is newer evidence than anything this run
+  // read, so the run may not close it (closeAgreeingRows).
+  const runStart = new Date()
 
   const where = {
     externalCampaignId: { not: null },
@@ -188,7 +191,7 @@ export async function runStructuralReconcileOnce(opts: {
   // and resolving on ignorance is how a drift list quietly empties itself while the problem stands.
   if (out.ok) {
     try {
-      out.driftRowsResolved = await closeAgreeingRows(evidence, out.ok)
+      out.driftRowsResolved = await closeAgreeingRows(evidence, out.ok, runStart)
     } catch (e) {
       out.errors.push(`resolve pass: ${(e as Error).message.slice(0, 120)}`)
     }
@@ -204,8 +207,14 @@ export async function runStructuralReconcileOnce(opts: {
   return out
 }
 
-/** Reads this profile's open rows for the compared entities, a chunk at a time, and closes the ones the evidence allows. */
-async function closeAgreeingRows(evidence: DriftEvidence, runOk: boolean): Promise<number> {
+/**
+ * Reads this profile's open rows for the compared entities, a chunk at a time, and closes the ones the evidence allows.
+ *
+ * Only rows last detected before the run started: the 20-minute settings sync (or the portfolio sync) may re-detect a
+ * row with a fresh delta while this run is still going, and this run's earlier read must not close it. The guard sits
+ * in the UPDATE itself, so it also covers a re-detection between the read of the open rows and the close.
+ */
+async function closeAgreeingRows(evidence: DriftEvidence, runOk: boolean, runStart: Date): Promise<number> {
   let closed = 0
   for (const [entityType, byId] of evidence.compared) {
     const ids = [...byId.keys()]
@@ -216,7 +225,10 @@ async function closeAgreeingRows(evidence: DriftEvidence, runOk: boolean): Promi
       })
       const agree = rowsToClose(runOk, evidence, open)
       if (!agree.length) continue
-      const res = await prisma.adDrift.updateMany({ where: { id: { in: agree }, resolvedAt: null }, data: { resolvedAt: new Date() } })
+      const res = await prisma.adDrift.updateMany({
+        where: { id: { in: agree }, resolvedAt: null, lastDetectedAt: { lt: runStart } },
+        data: { resolvedAt: new Date() },
+      })
       closed += res.count
     }
   }

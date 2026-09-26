@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  classifyDrift, describeDrift, isOurs, normaliseForCompare, diffFields, comparedFields,
+  classifyDrift, describeDrift, isOurs, normaliseForCompare, diffFields, comparedFields, NEVER_SENT,
   WRITE_LAG_GRACE_MS, holdBackPendingFields } from './drift.js'
 
 const NOW = new Date('2026-07-28T12:00:00Z')
@@ -49,10 +49,25 @@ describe('classification', () => {
   })
 
   it('describes every class in words, and says which one will not self-heal', () => {
-    expect(describeDrift('WRITE_LAG', 'Daily budget')).toContain('resolve on its own')
-    expect(describeDrift('WRITE_PENDING', 'Bid')).toContain('resolve on its own')
-    expect(describeDrift('WRITE_FAILED', 'State')).toContain('will not fix itself')
-    expect(describeDrift('EXTERNAL_CHANGE', 'State')).toContain('Seller Central')
+    expect(describeDrift('WRITE_LAG', 'Daily budget', '20')).toContain('resolve on its own')
+    expect(describeDrift('WRITE_PENDING', 'Bid', '0.5')).toContain('resolve on its own')
+    expect(describeDrift('WRITE_FAILED', 'State', 'paused')).toContain('will not fix itself')
+    expect(describeDrift('WRITE_FAILED', 'State', 'paused')).toContain('Amazon still holds the old value')
+    expect(describeDrift('EXTERNAL_CHANGE', 'State', 'paused')).toContain('Seller Central')
+  })
+
+  // S3 — a row for an entity we never sent says so in its own words. "Amazon still holds the old value" (WRITE_FAILED)
+  // and "changed on Amazon's side" (the class these rows had before) are both untrue: Amazon holds nothing.
+  it('an entity never sent to Amazon gets its own plain sentence, whatever its class', () => {
+    for (const c of ['WRITE_FAILED', 'EXTERNAL_CHANGE'] as const) {
+      const text = describeDrift(c, 'existence', NEVER_SENT)
+      expect(text).toContain('never reached Amazon')
+      expect(text).toContain('will not fix itself')
+      expect(text).not.toContain('old value')
+      expect(text).not.toContain('Seller Central')
+    }
+    // Only that row: an entity Amazon no longer returns keeps the class wording.
+    expect(describeDrift('EXTERNAL_CHANGE', 'existence', 'not returned')).toContain("Amazon's side")
   })
 })
 

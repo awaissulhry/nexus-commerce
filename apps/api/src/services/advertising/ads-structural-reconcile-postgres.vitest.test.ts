@@ -14,11 +14,15 @@ import { concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/co
 import { withWorkspace } from '../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof concurrentDatabase>>
-const amazon = vi.hoisted(() => ({ keywords: [] as unknown[], campaigns: [] as unknown[], adGroups: [] as unknown[], targetsFail: false }))
+const amazon = vi.hoisted(() => ({
+  keywords: [] as unknown[], campaigns: [] as unknown[], adGroups: [] as unknown[], targetsFail: false,
+  /** Runs once, inside the run's first Amazon read: another writer acting while the reconcile is mid-run. */
+  duringRead: null as null | (() => Promise<unknown>),
+}))
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_target, key) => (database.client as any)[key] }) }))
 vi.mock('./ads-api-client.js', () => ({
   ALL_STATES: ['ENABLED', 'PAUSED', 'ARCHIVED'],
-  listCampaignsV3: vi.fn(async () => amazon.campaigns),
+  listCampaignsV3: vi.fn(async () => { const act = amazon.duringRead; amazon.duringRead = null; await act?.(); return amazon.campaigns }),
   listAdGroupsV3: vi.fn(async () => amazon.adGroups),
   listKeywords: vi.fn(async () => amazon.keywords),
   listTargets: vi.fn(async () => { if (amazon.targetsFail) throw new Error('503 from Amazon'); return [] }),
@@ -73,6 +77,7 @@ describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on 
       await drift('AD_TARGET', ids.unreported, 'state') // Amazon did not report state → stays open
       await drift('CAMPAIGN', ids.campaign, 'status') // the settings sync's field; the reconcile compares `state` → stays open
       await drift('CAMPAIGN', ids.campaign, 'name') // compared and agrees → closes
+      await drift('CAMPAIGN', ids.campaign, 'dailyBudget') // agrees in this run, but re-detected by another writer mid-run → stays open
       await drift('AD_TARGET', ids.archivedNeverSent, 'existence') // S3: archived here, nothing on Amazon → agrees, closes
       await drift('AD_TARGET', ids.liveNeverSent, 'existence') // S3: live here, never sent → stays, a write that never landed
     })
@@ -90,6 +95,13 @@ describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on 
   afterAll(async () => { await database?.close(); vi.unstubAllEnvs() }, 60_000)
 
   it('closes the rows its clean run compared and found agreeing, in its own profile only; an unclean run closes none', async () => {
+    // While the run reads Amazon, the 20-minute settings sync re-detects the budget with a fresh delta. That newer
+    // evidence must win: the run's older read may not close it (the next run decides). Written through the Prisma
+    // client, as the settings sync writes it: raw `pg` would store a JS Date as local wall time, not UTC.
+    amazon.duringRead = () => database.client.adDrift.updateMany({
+      where: { entityType: 'CAMPAIGN', entityId: ids.campaign, field: 'dailyBudget' },
+      data: { lastDetectedAt: new Date(), occurrences: { increment: 1 } },
+    })
     const r = await inProfile(PROFILE_B, () => runStructuralReconcileOnce())
     expect(r.errors).toEqual([])
     expect(r.ok).toBe(true)
@@ -104,6 +116,7 @@ describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on 
       b('AD_TARGET', ids.unreported, 'state', false),
       b('AD_TARGET', ids.archivedNeverSent, 'existence', true),
       b('AD_TARGET', ids.liveNeverSent, 'existence', false, 2),
+      b('CAMPAIGN', ids.campaign, 'dailyBudget', false, 2),
       b('CAMPAIGN', ids.campaign, 'name', true),
       b('CAMPAIGN', ids.campaign, 'status', false),
     ]))

@@ -6188,7 +6188,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           : `${needsAttention} field(s) differ for a reason that will NOT resolve on its own — someone changed them on Amazon, or one of our writes failed.`,
       items: rows.map((r) => ({
         ...r,
-        explanation: describeDrift(r.classification as never, r.field),
+        explanation: describeDrift(r.classification as never, r.field, r.amazonValue),
         driftingForHours: Math.round((Date.now() - r.firstDetectedAt.getTime()) / 3_600_000),
       })),
     }

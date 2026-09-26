@@ -17,6 +17,7 @@
  * Pure: no I/O. The reconcile service reads, writes, and calls in here.
  */
 import type { LaunchEntityResult } from './launch-verify.js'
+import { NEVER_SENT } from './drift.js'
 
 /** Local entity kind → the entityType string AdDrift uses. Keywords and targets are both AD_TARGET rows. */
 export const DRIFT_ENTITY_TYPE: Record<LaunchEntityResult['entityType'], string> = {
@@ -98,7 +99,7 @@ export function assessEntities(
     if (archivedNeverSent(e)) { archivedUnsent++; continue }
     // A verdict with no per-field delta (NOT_PUSHED / MISSING_ON_AMAZON) is recorded against a synthetic
     // `existence` field so it gets a row of its own rather than being invisible.
-    const deltas = e.deltas.length ? e.deltas : [{ field: 'existence', intended: 'on Amazon', observed: e.verdict === 'NOT_PUSHED' ? 'never sent' : 'not returned' }]
+    const deltas = e.deltas.length ? e.deltas : [{ field: 'existence', intended: 'on Amazon', observed: e.verdict === 'NOT_PUSHED' ? NEVER_SENT : 'not returned' }]
     for (const d of deltas) {
       evidence.observed.add(driftKey(entityType, e.localId, d.field))
       if (BID_FIELDS.has(d.field)) { bidDeltas++; continue }
