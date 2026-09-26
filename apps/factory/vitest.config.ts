@@ -8,7 +8,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/__tests__/*.test.ts"],
+    // The design-system copy carries its own *.vitest.test.ts files (mirrored from apps/web); they ran nowhere until 2026-09-26.
+    include: ["src/**/__tests__/*.test.ts", "src/**/*.vitest.test.ts"],
     testTimeout: 10_000,
   },
 });
