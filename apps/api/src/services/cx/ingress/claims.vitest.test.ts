@@ -6,11 +6,15 @@ import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support
 import { withWorkspace } from '../../../lib/workspace-context.js'
 
 let database: Pick<Awaited<ReturnType<typeof formulaDatabase>>, 'client' | 'close'>
+/** Owner-side SQL for fixtures only (the app client is the restricted runtime login). */
+let adminQuery: (sql: string, params: unknown[]) => Promise<unknown>
 vi.mock('../../../db.js', () => ({
   default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
 }))
 
-const WORKSPACE = 'nexus_legacy_workspace'
+// Recovery runs on the release's database, whose DELETE/TRUNCATE guard retains inbound
+// history, so each test uses a fresh business profile instead of clearing a shared one.
+let WORKSPACE = 'nexus_legacy_workspace'
 const NOW = new Date('2026-09-25T12:00:00.000Z')
 const inWorkspace = <T>(work: () => Promise<T>) => withWorkspace({
   workspaceId: WORKSPACE, actorUserId: null, membershipId: null, roleKeys: [],
@@ -26,7 +30,15 @@ describe('durable inbound claim ownership', () => {
   let ledger: typeof import('./ledger.js')
 
   beforeAll(async () => {
-    database = concurrentDatabaseUrl() ? await concurrentDatabase() : await formulaDatabase()
+    if (concurrentDatabaseUrl()) {
+      const concurrent = await concurrentDatabase()
+      database = concurrent
+      adminQuery = (sql, params) => concurrent.pool.query(sql, params)
+    } else {
+      const formula = await formulaDatabase()
+      database = formula
+      adminQuery = (sql, params) => formula.db.query(sql, params)
+    }
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
     claims = await import('./claims.js')
     ledger = await import('./ledger.js')
@@ -38,7 +50,8 @@ describe('durable inbound claim ownership', () => {
   }, 30_000)
 
   beforeEach(async () => {
-    await inWorkspace(() => database.client.webhookEvent.deleteMany())
+    WORKSPACE = `claims-${randomUUID()}`
+    await adminQuery('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,$2,$3,$1,now())', [WORKSPACE, 'Claims fixture', 'test'])
     await inWorkspace(() => database.client.dataRetentionPolicy.deleteMany())
   })
 
@@ -259,7 +272,7 @@ describe('durable inbound claim ownership', () => {
     expect(await inWorkspace(() => claims.finishInboundClaim(claim!, true, undefined, NOW))).toBe(true)
   })
 
-  it('retains claimed or scheduled work of any age and expires the rest', async () => {
+  it('cannot delete inbound history on the release database: the sweep reports it and every row survives', async () => {
     vi.stubEnv('NEXUS_ENABLE_RETENTION_SWEEP', '1')
     const { runRetentionSweepOnce } = await import('../../../jobs/data-retention-sweep.job.js')
     await inWorkspace(() => database.client.dataRetentionPolicy.create({ data: { policies: { webhookEvents: 1 } } }))
@@ -269,18 +282,20 @@ describe('durable inbound claim ownership', () => {
     const active = await event({ createdAt: old })
     const claim = await inWorkspace(() => claims.claimInbound(active.id, now))
     expect(claim).not.toBeNull()
-    await event({ createdAt: old, status: 'done', isProcessed: true, processedAt: old })
-    await event({ createdAt: old, status: 'dlq', attempts: 5 })
-    // Rejected and stranded arrivals have nothing left to run. They used to be kept
-    // forever; a flood of bad signatures would have grown the table without bound.
-    await event({ createdAt: old, status: 'failed', signatureOk: false })
-    await event({ createdAt: old, nextAttemptAt: null })
+    const finished = await event({ createdAt: old, status: 'done', isProcessed: true, processedAt: old })
+    const deadLetter = await event({ createdAt: old, status: 'dlq', attempts: 5 })
+    const rejected = await event({ createdAt: old, status: 'failed', signatureOk: false })
+    const stranded = await event({ createdAt: old, nextAttemptAt: null })
     const recent = await event({ createdAt: now, status: 'done', isProcessed: true, processedAt: now })
+    const all = [scheduled, active, finished, deadLetter, rejected, stranded, recent].map(item => item.id)
 
     const result = await inWorkspace(() => runRetentionSweepOnce())
-    expect(result).toMatchObject({ deletedByKey: { webhookEvents: 4 } })
-    const survivors = await inWorkspace(() => database.client.webhookEvent.findMany({ select: { id: true } }))
-    expect(survivors.map(item => item.id).sort()).toEqual([scheduled.id, active.id, recent.id].sort())
+    // Main's sweep still tries to delete; Package A's DELETE guard refuses it (42501). The
+    // recovery build reports the refusal as a skipped key and retains every row.
+    expect(result.deletedByKey.webhookEvents).toBeUndefined()
+    expect(result.skippedKeys.some(key => key.startsWith('webhookEvents (error'))).toBe(true)
+    const survivors = await inWorkspace(() => database.client.webhookEvent.findMany({ where: { id: { in: all } }, select: { id: true } }))
+    expect(survivors.map(item => item.id).sort()).toEqual([...all].sort())
     expect((await row(active.id)).processingToken).toBe(claim!.token)
   })
 })
