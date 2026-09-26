@@ -49,7 +49,8 @@ export interface LiveRead {
   destination: Omit<LiveReadDestination, 'expectedSkus'>
   /** Digest of the parsed live content; the publish review re-checks it just before a send. Null when the item was not read. */
   revision: string | null
-  /** Keyed by the publish review's field ids: title, description, pictures, aspect:<key>, <attribute>@<marketplace>/<language>, … */
+  /** Keyed by the publish review's field ids: title, description, pictures, aspect:<key> (eBay); Amazon content roots as
+   *  `<root>:["<marketplaceId>","<language>"]` and every other Amazon attribute by its root name. */
   content: Record<string, LiveValue>
   /** Null for a listing without variations. */
   variations: LiveVariations | null
