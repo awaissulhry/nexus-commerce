@@ -87,9 +87,8 @@ production completion is tracked separately. See [plan.md](plan.md).
 - [x] 220 pending AMAZON webhook rows stranded before the release were closed as dead
   letters with the reason (140/144 order notices name orders Nexus holds; the other 2
   orders are MCF fulfilment orders).
-- [ ] Move Redis to europe-west4 (it runs in us-west2; every other service is in Europe).
-  A short Redis outage while Railway migrates its volume: planned after the 2026-09-27
-  morning health check.
+- [x] Redis moved to europe-west4, next to every other service (2026-09-26 19:18 UTC). The
+  volume migrated with its data (1,746 keys); the apps lost Redis for about 3 seconds.
 
 Repository implementation and production rollout remain separate until evidence
 exists for both. Deferred product choices (Factory sync/SSO, removing GraphQL,
