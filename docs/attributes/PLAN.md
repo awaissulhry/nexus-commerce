@@ -333,7 +333,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P0 | ✅ done 2026-09-26 | §10.1. The eBay bulk-aspects check moves to P4 (the step that needs it). |
 | P1 | ✅ done 2026-09-26 | `packages/shared/attributes.ts` (+ 26 tests, 2 planted mistakes caught); API channel types are its aliases; eBay `aspectMode` converted through `optionModeFrom`. API `tsc` clean; 136 channel tests pass. |
 | P2 | ✅ live 2026-09-26 | §10.2 |
-| P3 | ✅ live 2026-09-26; adopting the concepts on the Owner's business waits (§10.7: the live plan differs from the copy's) | §10.3 |
+| P3 | ✅ live 2026-09-26; concepts adopted on Xavia Racing 2026-09-26 (about 16:40 UTC) on the Owner's word (§10.7) | §10.3 |
 | P4 | ✅ live 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
@@ -590,6 +590,14 @@ left as it is and reported as a follow-up.
   **The difference is one concept, `size_system`.** The local copy has a business attribute with the code
   `size_system` (created locally 2026-09-11); production has none, so the live plan creates it. The other 21 links are
   the same. Because the result differs, nothing was written; the Owner decides.
+- **Applied 2026-09-26 on the Owner's word** ("go for step A", with the recommendation "apply it as it is"). After the
+  API went live on build `9ad36523` (16:36 UTC), a fresh dry run gave the same plan (21 adopt, 2 create, 0 blocked, the
+  same 21 pairs); then `dryRun: false` returned `applied: true`. Read back: a new dry run has nothing left to do
+  (23 linked, 0 adopt / create / blocked); Xavia Racing has 243 attributes (241 + `size_system`, a select
+  with 7 options, and `occasion`, text); neither new attribute is in a family yet; Motovento is untouched (0 linked).
+  Three of the four rows the attribute-scope study disputes are now linked (`certification` ← `ceCertification`,
+  `lining` ← `lining_description`, `theme` ← `theme`); the P3b S5 review can unlink them (a link only sets
+  `semanticKey`).
 
 ### 10.8 P7 and P8 — first pass (2026-09-26, branch `feat/attributes-p7-p8`)
 
