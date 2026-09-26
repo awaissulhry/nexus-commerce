@@ -304,6 +304,9 @@ CREATE TABLE "CustomAttribute" (
     "scope" TEXT NOT NULL DEFAULT 'global',
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "semanticKey" TEXT,
+    "placement" TEXT NOT NULL DEFAULT 'shared',
+    "placementChannels" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

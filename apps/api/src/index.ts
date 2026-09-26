@@ -231,8 +231,11 @@ import { registerProductGraph } from "./graph/index.js";
 import prisma from "./db.js";
 import { registerCommandIdempotency } from './lib/command-idempotency.js';
 import { endEventStreamsOnClose } from './lib/sse.js';
+import { markProcessReady } from './lib/runtime-status/process-snapshot.js';
+import { startRuntimeStatusPublisher } from './services/runtime-status/publisher.service.js';
 
 process.env.NEXUS_PROCESS_ROLE = 'api';
+let stopRuntimeStatus: (() => Promise<void>) | undefined;
 
 
 
@@ -822,6 +825,11 @@ async function start() {
     });
 
 
+    // Every process publishes a runtime heartbeat (lib/runtime-status); the API's carries its own publish
+    // circuits and applies circuit resets requested from any replica.
+    stopRuntimeStatus = startRuntimeStatusPublisher();
+    markProcessReady();
+
     logger.info('✅ API server initialized', {
       processRole: 'api',
       timestamp: new Date().toISOString(),
@@ -848,6 +856,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, async ()
   deadline.unref();
   try {
     await app.close();
+    await stopRuntimeStatus?.();
     await stopEventInfrastructure();
     await closeBroker();
     await closeQueue();

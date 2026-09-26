@@ -28,6 +28,8 @@
  *     that sells NOWHERE YET: the column model reads Marketplace and ChannelListing, so only a real server
  *     can show that the reference market belongs to the SHARING business and that the receiving profile,
  *     which has no Marketplace row, must not be refused by the strict check.
+ *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
+ *     replacements and Categories workspace commands serialize on the business's category-tree lock.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -93,6 +95,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 11 },
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
+  { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

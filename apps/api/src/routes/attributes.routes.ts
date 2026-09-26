@@ -49,6 +49,20 @@ import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION } from '@nexus/shared/attribute-c
 import { applyConceptDictionary, conceptDictionaryPlan } from '../services/pim/attribute-concepts.service.js'
 import { attributeChoices, ChoicesError } from '../services/pim/attribute-choices.service.js'
 import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
+import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
+import { applyPlacementProposal, placementProposalPreview, undoPlacementProposal } from '../services/pim/attribute-placement-correction.js'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+
+const actorOf = (request: FastifyRequest): Actor => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null, ip: request.ip ?? null })
+
+/** A placement refusal is the operator's answer (400/404/409 with the reason); anything else is a real failure. */
+async function placementReply<T>(reply: FastifyReply, work: () => Promise<T>) {
+  try { return await work() }
+  catch (error) {
+    if (error instanceof PlacementError) return reply.code(error.status).send({ error: error.message, ...(error.details ? { details: error.details } : {}) })
+    throw error
+  }
+}
 
 /** P3 — `validation` must satisfy the shared contract; the refusal names each problem. `null`/absent = no rules. */
 function validationRefusal(validation: unknown): string | null {
@@ -364,16 +378,39 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // P3b S3 (docs/attributes/PLAN.md §10.9) — delete only what nothing uses; otherwise 409 "archive instead".
   fastify.delete('/attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.customAttribute.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'attribute not found' })
-      throw err
-    }
+    return placementReply(reply, () => deleteAttribute(id, actorOf(request)))
+  })
+
+  // P3b S3 — placement (a label; the value stays where it is), archive / restore, and undo of a placement change.
+  fastify.patch('/attributes/:id/placement', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => setAttributePlacement(id, (request.body ?? {}) as { placement?: unknown; channels?: unknown }, actorOf(request)))
+  })
+  fastify.post('/attributes/:id/archive', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => archiveAttribute(id, actorOf(request)))
+  })
+  fastify.post('/attributes/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => restoreAttribute(id, actorOf(request)))
+  })
+  // P3b S5 — the reviewed cleanup: preview (with a fingerprint), apply approved groups, undo a whole batch.
+  fastify.get('/attributes/placement-proposal', async () => placementProposalPreview())
+  fastify.post('/attributes/placement-proposal/apply', async (request, reply) => {
+    const body = (request.body ?? {}) as { fingerprint?: unknown; groups?: unknown; includeDisputed?: unknown }
+    if (typeof body.fingerprint !== 'string') return reply.code(400).send({ error: 'fingerprint is required (from GET /attributes/placement-proposal)' })
+    return placementReply(reply, () => applyPlacementProposal({ fingerprint: body.fingerprint as string, groups: body.groups as never, includeDisputed: body.includeDisputed as never }, actorOf(request)))
+  })
+  fastify.post('/attributes/placement-proposal/:batchId/undo', async (request, reply) => {
+    const { batchId } = request.params as { batchId: string }
+    return placementReply(reply, () => undoPlacementProposal(batchId, actorOf(request)))
+  })
+  fastify.post('/attributes/placement-changes/:auditId/undo', async (request, reply) => {
+    const { auditId } = request.params as { auditId: string }
+    return placementReply(reply, () => undoPlacementChange(auditId, actorOf(request)))
   })
 
   // ── AttributeOption ──────────────────────────────────────────

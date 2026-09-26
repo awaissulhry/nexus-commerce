@@ -12,7 +12,7 @@ import type { StudioTabId } from './types'
 import { StudioHeader } from './StudioHeader'
 import { StudioBar } from './StudioBar'
 
-export function StudioSubheader({ frameRef }: { frameRef: RefObject<HTMLDivElement> }) {
+export function StudioSubheader({ frameRef }: { frameRef: RefObject<HTMLDivElement | null> }) {
   const pathname = usePathname()
   const search = useSearchParams()
   const router = useRouter()

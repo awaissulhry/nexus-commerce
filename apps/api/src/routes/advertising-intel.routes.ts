@@ -39,9 +39,7 @@ import {
 } from '../services/advertising/placement-grid.service.js'
 import { buildManualAdjustments, type ManagedPlacement } from '../services/advertising/ads-placement-manual.js'
 import { getShareOfVoice, SOV_MARKETS, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
-import { envEnabled } from '../utils/env-flag.js'
-import { cronStartupState } from '../jobs/cron-startup-state.js'
-import { amsQueueUrl, isAmsSqsConfigured, sqsUrlFromArn } from '../services/ams-sqs.service.js'
+import { readAdsCronStatus } from '../services/runtime-status/process-views.service.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   /**
@@ -64,36 +62,14 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     void flushAdsCache()
   })
 
-  // Apex — diagnostic probe for the ads-cron gate. Reads the SAME process.env
-  // the boot-time cron block reads (single process serves HTTP + crons), so this
-  // definitively shows whether the running process sees the flag as enabled and
-  // what raw value was set. processUptimeSec confirms whether a recent deploy
-  // actually restarted the container.
+  // Apex — diagnostic probe for the ads-cron gate. Since the process split the ads crons are gated and
+  // registered in the SCHEDULER and the AMS poller runs in the WORKER, so each value is read from that
+  // process's runtime snapshot; `sources` names the process behind every field and `unknown` lists what no
+  // live process reported (null, never a default). processUptimeSec / hasRedisUrl describe this API process;
+  // `processes` gives every process's start time and uptime.
   fastify.get('/advertising/cron-status', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store')
-    return {
-      adsCronEnabled: envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON'),
-      adsCronRaw: process.env.NEXUS_ENABLE_AMAZON_ADS_CRON ?? null,
-      cronStartupStep: cronStartupState.step,
-      cronStartupAt: cronStartupState.updatedAt,
-      adsMode: process.env.NEXUS_AMAZON_ADS_MODE ?? null,
-      queueWorkersRaw: process.env.ENABLE_QUEUE_WORKERS ?? null,
-      hasRedisUrl: !!process.env.REDIS_URL,
-      // Apex B.1 — why the AMS poller is/ isn't active. amsQueueUrlResolved=true
-      // means we derived a pollable SQS URL (from NEXUS_AMS_SQS_QUEUE_URL or an
-      // SQS NEXUS_AMS_DESTINATION_ARN). pollerActive requires that + AWS creds.
-      ams: {
-        destinationArnSet: !!process.env.NEXUS_AMS_DESTINATION_ARN,
-        destinationArnIsSqs: process.env.NEXUS_AMS_DESTINATION_ARN ? !!sqsUrlFromArn(process.env.NEXUS_AMS_DESTINATION_ARN) : false,
-        explicitQueueUrlSet: !!process.env.NEXUS_AMS_SQS_QUEUE_URL,
-        queueUrlResolved: !!amsQueueUrl(),
-        hasAwsAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-        hasAwsSecret: !!process.env.AWS_SECRET_ACCESS_KEY,
-        pollerActive: isAmsSqsConfigured(),
-      },
-      processUptimeSec: Math.round(process.uptime()),
-      nowUtc: new Date().toISOString(),
-    }
+    return readAdsCronStatus()
   })
 
   // Per-product profit-native target ACOS + break-even + TACOS/TACoP.

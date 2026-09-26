@@ -15,7 +15,11 @@ const FALSE_SET = new Set(['0', 'false', 'no', 'off', 'n', 'f', 'disabled', ''])
  * @param defaultOn value when the var is unset/empty (default false = opt-in)
  */
 export function envEnabled(name: string, defaultOn = false): boolean {
-  const raw = process.env[name]
+  return flagValueEnabled(process.env[name], defaultOn)
+}
+
+/** The same parsing for a raw value read elsewhere (e.g. the flag another process published). */
+export function flagValueEnabled(raw: string | null | undefined, defaultOn = false): boolean {
   if (raw == null) return defaultOn
   const v = raw.trim().toLowerCase()
   if (TRUE_SET.has(v)) return true
