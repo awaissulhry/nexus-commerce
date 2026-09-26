@@ -1,14 +1,12 @@
 /**
  * Amazon-Ads-faithful console styling. Tokens + components extracted from the
- * real Amazon Ads Campaigns page (Amazon Ember font, their palette, Balham-style
- * grid). Everything scoped under .az-root so it can't leak into the rest of the
- * app. @font-face is global (just registers "Amazon Ember"; only used here).
+ * real Amazon Ads Campaigns page (their palette, Balham-style grid). Everything
+ * scoped under .az-root so it can't leak into the rest of the app.
+ *
+ * DS fonts (Owner, 2026-09-26): the console used to load Amazon Ember from Amazon's CDN, falling back to
+ * Helvetica / Arial when that failed. It now uses the design system's Inter like the rest of the app
+ * (`scripts/check-font-families.mjs`).
  */
-
-/* Real Amazon Ember from Amazon's font CDN (graceful fallback to Helvetica). */
-@font-face { font-family: 'Amazon Ember'; font-weight: 400; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/pDxWAF1pBB0dzGB.woff2) format('woff2'); }
-@font-face { font-family: 'Amazon Ember'; font-weight: 500; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/VjTR4RqBzY0mUYx.woff2) format('woff2'); }
-@font-face { font-family: 'Amazon Ember'; font-weight: 700; font-display: swap; src: url(https://m.media-amazon.com/images/S/sash/KFPk-9IF4FqAqY-.woff2) format('woff2'); }
 
 .az-root {
   --ink: #0f1111; --ink2: #565959; --ink3: #6f7373;
@@ -41,7 +39,7 @@
   --nds-success-text: #146034;   /* 7.63:1 */
   height: 100vh; overflow: hidden; display: flex; flex-direction: column;
   background: var(--bg); color: var(--ink);
-  font-family: 'Amazon Ember', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--nds-font-sans);
   font-size: 13px; line-height: 1.45; -webkit-font-smoothing: antialiased;
 }
 .az-root * { box-sizing: border-box; }
@@ -169,7 +167,7 @@
 .az-prodcard .ph-empty { background: var(--bg3); }
 .az-prodcard .meta { flex: 1; min-width: 0; }
 .az-prodcard .meta .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.az-prodcard .meta .as { font-size: 10.5px; color: var(--ink3); font-family: monospace; }
+.az-prodcard .meta .as { font-size: 10.5px; color: var(--ink3); font-family: var(--nds-font-mono); }
 .az-prodcard .you { font-size: 9px; font-weight: 700; color: var(--green); background: #e8f5e9; border-radius: 4px; padding: 2px 6px; flex-shrink: 0; }
 
 /* Strategy panel */
@@ -798,7 +796,7 @@
 .az-cb-prod.on { background: #f3f8ff; }
 .az-cb-prod .thumb { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; background: var(--bg3); border: 1px solid var(--divider); flex-shrink: 0; }
 .az-cb-prod .nm { flex: 1; color: var(--ink); }
-.az-cb-prod .asin { font-size: 11px; color: var(--ink3); font-family: ui-monospace, monospace; }
+.az-cb-prod .asin { font-size: 11px; color: var(--ink3); font-family: var(--nds-font-mono); }
 .az-cb-empty { padding: 20px; text-align: center; color: var(--ink3); font-size: 12.5px; }
 .az-cb-foot { display: flex; align-items: center; gap: 10px; position: sticky; bottom: 0; background: linear-gradient(to top, var(--bg, #fff) 72%, transparent); padding: 16px 2px; margin-top: 16px; }
 .az-cb-foot .grow { flex: 1; }

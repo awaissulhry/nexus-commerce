@@ -91,7 +91,7 @@ export function ComparePricing({ onBack }: { onBack: () => void }) {
         <Card padded>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 800 }}>What each customer pays</div>
-            {result?.baseNetCents != null && <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>Listino base: <b style={{ fontFamily: "ui-monospace, monospace", color: "var(--nds-text)" }}>{eur(result.baseNetCents)}</b></div>}
+            {result?.baseNetCents != null && <div style={{ fontSize: 12, color: "var(--nds-text-3)" }}>Listino base: <b style={{ fontFamily: "var(--nds-font-mono)", color: "var(--nds-text)" }}>{eur(result.baseNetCents)}</b></div>}
           </div>
           {!templateId ? (
             <div style={{ fontSize: 12.5, color: "var(--nds-text-3)", padding: "16px 2px" }}>Choose a product to compare.</div>
@@ -104,7 +104,7 @@ export function ComparePricing({ onBack }: { onBack: () => void }) {
               columns={[
                 { key: "name", label: "Customer", render: (r: CompareRow) => <span style={{ fontWeight: 600 }}>{r.name}</span> },
                 { key: "list", label: "Price list", render: (r: CompareRow) => r.priceListName },
-                { key: "net", label: "Net", align: "right" as const, render: (r: CompareRow) => (r.netCents != null ? <b style={{ fontFamily: "ui-monospace, monospace" }}>{eur(r.netCents)}</b> : "—") },
+                { key: "net", label: "Net", align: "right" as const, render: (r: CompareRow) => (r.netCents != null ? <b style={{ fontFamily: "var(--nds-font-mono)" }}>{eur(r.netCents)}</b> : "—") },
                 { key: "disc", label: "vs base", align: "right" as const, render: (r: CompareRow) => (r.discountPct == null ? "—" : Math.abs(r.discountPct) < 0.05 ? <span style={{ color: "var(--nds-text-3)" }}>—</span> : <Pill tone={r.discountPct > 0 ? "success" : "danger"}>{r.discountPct > 0 ? "-" : "+"}{Math.abs(r.discountPct).toFixed(1)}%</Pill>) },
                 ...(canMargin ? [{ key: "margin", label: "Margin", align: "right" as const, render: (r: CompareRow) => (r.marginCents != null ? <Pill tone={r.marginCents < 0 ? "danger" : "success"}>{(r.marginPct ?? 0).toFixed(0)}%</Pill> : "—") }] : []),
               ]}

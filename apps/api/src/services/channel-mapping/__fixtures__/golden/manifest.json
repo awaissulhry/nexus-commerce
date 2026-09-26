@@ -1,0 +1,460 @@
+{
+ "note": "CHMAP golden fixtures — anonymised copies of the Owner’s files (scripts/chmap-golden-build.mts). Never the originals: the repository is public.",
+ "built": "2026-09-26",
+ "fixtures": [
+  {
+   "id": "amazon-it-coat-pants",
+   "kind": "amazon",
+   "why": "IT template 2026.0713, one market, parent + 20 variations",
+   "file": "amazon-it-coat-pants.xlsm",
+   "marketplace": "IT",
+   "market": {
+    "language": "it",
+    "languages": [
+     "it"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-IT-COAT.json.gz",
+    "amazon-IT-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0713",
+     "keyFingerprint": "0bf55217155f712cab1534999ad72dfa4f32eb1b185aa30befd32b8a014d8618"
+    },
+    "mapping": {
+     "fields": 344,
+     "mapped": 297,
+     "ignored": 35,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 3401,
+     "excluded": 102,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 1430,
+     "equal": 1430,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-de-coat-pants",
+   "kind": "amazon",
+   "why": "DE template 2026.0715: German labels, DE-only columns",
+   "file": "amazon-de-coat-pants.xlsm",
+   "marketplace": "DE",
+   "market": {
+    "language": "de",
+    "languages": [
+     "de"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-DE-COAT.json.gz",
+    "amazon-DE-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0715",
+     "keyFingerprint": "70a5d9ef8f86aa9ec86216f4338f399300b343be5a7a7ef734dbfbd14ab15fe5"
+    },
+    "mapping": {
+     "fields": 352,
+     "mapped": 295,
+     "ignored": 45,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 3443,
+     "excluded": 102,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-fr-coat-pants",
+   "kind": "amazon",
+   "why": "FR template: FR size labels",
+   "file": "amazon-fr-coat-pants.xlsm",
+   "marketplace": "FR",
+   "market": {
+    "language": "fr",
+    "languages": [
+     "fr"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-FR-COAT.json.gz",
+    "amazon-FR-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0715",
+     "keyFingerprint": "e3de9b0c937fe32a6cdd0a717c059a0ac61a54a4322daaf2d14e48190f4560e8"
+    },
+    "mapping": {
+     "fields": 344,
+     "mapped": 297,
+     "ignored": 35,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 3401,
+     "excluded": 102,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-es-coat-pants",
+   "kind": "amazon",
+   "why": "ES template: a different price and feature order",
+   "file": "amazon-es-coat-pants.xlsm",
+   "marketplace": "ES",
+   "market": {
+    "language": "es",
+    "languages": [
+     "es"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-ES-COAT.json.gz",
+    "amazon-ES-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0715",
+     "keyFingerprint": "56e8d1b893aab8d864d86c3249879449b2cbac2e0dd4a1a92926a3d7e04c1a3c"
+    },
+    "mapping": {
+     "fields": 344,
+     "mapped": 297,
+     "ignored": 35,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 3401,
+     "excluded": 102,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 1409,
+     "equal": 1409,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 20,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-de-suit",
+   "kind": "amazon",
+   "why": "COAT + PANTS rows in one file, the team_name workaround",
+   "file": "amazon-de-suit.xlsm",
+   "marketplace": "DE",
+   "market": {
+    "language": "de",
+    "languages": [
+     "de"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-DE-COAT.json.gz",
+    "amazon-DE-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0715",
+     "keyFingerprint": "70a5d9ef8f86aa9ec86216f4338f399300b343be5a7a7ef734dbfbd14ab15fe5"
+    },
+    "mapping": {
+     "fields": 352,
+     "mapped": 295,
+     "ignored": 45,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 6343,
+     "excluded": 222,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 2524,
+     "equal": 2524,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 101,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-de-market-parent",
+   "kind": "amazon",
+   "why": "the parent SKU differs by market",
+   "file": "amazon-de-market-parent.xlsm",
+   "marketplace": "DE",
+   "market": {
+    "language": "de",
+    "languages": [
+     "de"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-DE-COAT.json.gz",
+    "amazon-DE-PANTS.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_TEMPLATE",
+     "formKey": "COAT+PANTS",
+     "templateVersion": "2026.0715",
+     "keyFingerprint": "70a5d9ef8f86aa9ec86216f4338f399300b343be5a7a7ef734dbfbd14ab15fe5"
+    },
+    "mapping": {
+     "fields": 352,
+     "mapped": 295,
+     "ignored": 45,
+     "managed": 12,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 5083,
+     "excluded": 121,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 2049,
+     "equal": 2049,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 30,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "amazon-it-flat-file-2024",
+   "kind": "amazon",
+   "why": "the OLD flat-file grammar (read only)",
+   "file": "amazon-it-flat-file-2024.xlsm",
+   "marketplace": "IT",
+   "market": {
+    "language": "it",
+    "languages": [
+     "it"
+    ],
+    "currency": "EUR"
+   },
+   "specs": [
+    "amazon-IT-COAT.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "AMAZON_FLAT_FILE",
+     "formKey": "COAT",
+     "templateVersion": "2024.0630",
+     "keyFingerprint": "92718355aa5e8dd74d9f9afcf3b597caf16b90ca2b7ac1023747664d3a15c315"
+    },
+    "mapping": {
+     "fields": 174,
+     "mapped": 107,
+     "ignored": 54,
+     "managed": 13,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 843,
+     "excluded": 402,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": null,
+    "differences": []
+   }
+  },
+  {
+   "id": "ebay-it-177104",
+   "kind": "ebay",
+   "why": "our eBay workbook: 5 listings sharing 20 SKUs, custom specifics",
+   "file": "ebay-it-177104.xlsx",
+   "filename": "GALE IT.xlsx",
+   "marketplace": "IT",
+   "specs": [
+    "ebay-IT-177104.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "EBAY_WORKBOOK",
+     "formKey": "177104",
+     "templateVersion": null,
+     "keyFingerprint": "4038ae26a566b256c621964e3940f76fd41f489afdba00408316f083da0051fe"
+    },
+    "mapping": {
+     "fields": 79,
+     "mapped": 63,
+     "ignored": 8,
+     "managed": 8,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 4442,
+     "excluded": 1250,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 5067,
+     "equal": 5067,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 835,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  },
+  {
+   "id": "ebay-it-legacy",
+   "kind": "ebay",
+   "why": "the legacy 66-column eBay file (no Item IDs)",
+   "file": "ebay-it-legacy.xlsx",
+   "filename": "XAVIA-eBay-IT-REGAL.xlsx",
+   "marketplace": "IT",
+   "specs": [
+    "ebay-IT-177104.json.gz"
+   ],
+   "expected": {
+    "form": {
+     "formKind": "EBAY_WORKBOOK",
+     "formKey": "177104",
+     "templateVersion": null,
+     "keyFingerprint": "979625ca723b29f5b50ff53aa21b350319f7966d7c6c19d8a512acb880dc24a3"
+    },
+    "mapping": {
+     "fields": 66,
+     "mapped": 54,
+     "ignored": 4,
+     "managed": 8,
+     "unmapped": 0,
+     "requiredUnmapped": 0,
+     "conditionalUnmapped": 0
+    },
+    "read": {
+     "rows": 1007,
+     "excluded": 232,
+     "refused": 0,
+     "unaccounted": 0,
+     "duplicated": 0,
+     "dangling": 0
+    },
+    "roundTrip": {
+     "compared": 1335,
+     "equal": 1335,
+     "differ": 0,
+     "missing": 0,
+     "extra": 0,
+     "blankByDesign": 110,
+     "rowsRefusedOnImport": 0
+    },
+    "differences": []
+   }
+  }
+ ]
+}

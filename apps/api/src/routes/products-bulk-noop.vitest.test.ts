@@ -91,7 +91,7 @@ vi.mock('../services/connection-resolver.service.js', () => ({
 // attr_* writes are gated on the per-marketplace registry; the channel case
 // below needs a definition that exists and is editable, nothing more.
 // Readiness production has its own PostgreSQL regressions; isolate that derived refresh here.
-vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: (...args: unknown[]) => produceReadiness(...args) }))
+vi.mock('../services/pim/readiness-index.service.js', async () => (await import('../test-support/readiness-module-mock.js')).readinessModuleMock((...args: unknown[]) => produceReadiness(...args)))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),

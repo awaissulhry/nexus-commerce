@@ -63,7 +63,7 @@
    "market": "DE",
    "marketplaceId": "A1PA6795UKMFR9",
    "success": true,
-   "asin": "B0BTCBPVTS",
+   "asin": "B0FX4B2941",
    "status": [],
    "productType": "APPAREL",
    "fulfillment": [
@@ -80,7 +80,7 @@
    "market": "IT",
    "marketplaceId": "APJ6JRA9NG5V4",
    "success": true,
-   "asin": "B0BTCBPVTS",
+   "asin": "B0FX4B2941",
    "status": [
     "BUYABLE",
     "DISCOVERABLE"
@@ -148,7 +148,7 @@
  "afterClose": [
   {
    "afterSeconds": 15,
-   "asin": "B0BTCBPVTS",
+   "asin": "B0FX4B2941",
    "offers": [],
    "offerRawCount": 0,
    "fulfillment": [
@@ -234,7 +234,7 @@
    "market": "DE",
    "marketplaceId": "A1PA6795UKMFR9",
    "success": true,
-   "asin": "B0BTCBPVTS",
+   "asin": "B0FX4B2941",
    "status": [],
    "productType": "APPAREL",
    "fulfillment": [
@@ -251,7 +251,7 @@
    "market": "IT",
    "marketplaceId": "APJ6JRA9NG5V4",
    "success": true,
-   "asin": "B0BTCBPVTS",
+   "asin": "B0FX4B2941",
    "status": [
     "BUYABLE",
     "DISCOVERABLE"

@@ -845,7 +845,7 @@ kind of wrong answer.
   correctly described, and "Dry run" rather than "Queue" because the gate is shut
 - both facts stated separately in one advisory: the blocked count, the closed gate, and that the
   warnings do not block
-- blocking issues name real ASINs and real reasons: *"B0BMS6ZZ4H . MAIN — Amazon requires a MAIN
+- blocking issues name real ASINs and real reasons: *"B0FX4F79EF . MAIN — Amazon requires a MAIN
   image on every listing. Add one before publishing."*
 
 **Not submitted.** Per the standing constraint no Amazon submission was made — not even a dry run.
@@ -926,7 +926,7 @@ the headline item, on this lane's word, and it must come off in that form.
 
 **Observed ~17:51, evidenced:** the publish panel rendered "18 blocked / 40 warnings", the action
 label "Dry run for 2 of 20 ASINs" (publishable = 20 − 18), and a blocking list naming real ASINs
-with real messages — *"B0BMS6ZZ4H · MAIN — Amazon requires a MAIN image on every listing."* All of
+with real messages — *"B0FX4F79EF · MAIN — Amazon requires a MAIN image on every listing."* All of
 it from `validate`'s `summary.asinsBlocked` and `hardFails`.
 
 **Observed ~18:52:** `{ totalAsins: 20, asinsWithIssues: 18, asinsBlocked: 0 }`, **zero hardFails**,
@@ -1625,7 +1625,7 @@ Measured across the **full set** of 20 children, not a sample:
 |---|---|---|
 | `analytics.sales.byChannel` | `[]` at 30, 60 **and** 90 days | 3 channels on the first child alone |
 | units (90d) | **0** | **427, across 17 of 20** |
-| `product-ads` | **0 ads** for `productId`, `sku` **and** its own ASIN `B0F7J163XJ` | **93–107 ads, 70–76 campaigns** on every child sampled |
+| `product-ads` | **0 ads** for `productId`, `sku` **and** its own ASIN `B0FXD0620C` | **93–107 ads, 70–76 campaigns** on every child sampled |
 
 `totalUnits` is `byChannel.reduce(...)` — the sum of an empty list. So "0 units · £0 revenue" on a
 parent is not a measured zero, it is the opposite of the truth stated confidently. Same for
@@ -1645,8 +1645,8 @@ Both halves now name where the figures live instead:
 Aggregating the children would be feature invention (this lane is a port), so the surface names the
 situation rather than inventing a total nobody computed.
 
-**A related trap, avoided:** the ad rows reference ASIN `B0BMSH19GY`, which belongs to one child
-(GALE-JACKET-BLACK-MEN-XL) — *not* to the parent, whose own `amazonAsin` is `B0F7J163XJ`. The query
+**A related trap, avoided:** the ad rows reference ASIN `B0FXFA789A`, which belongs to one child
+(GALE-JACKET-BLACK-MEN-XL) — *not* to the parent, whose own `amazonAsin` is `B0FXD0620C`. The query
 therefore sends every identifier the product has, because on a child it is the ASIN that matches and
 neither `productId` nor `sku` would. (The old `AdsTab` already did this; no bug there.)
 

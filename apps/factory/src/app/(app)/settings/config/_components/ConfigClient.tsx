@@ -112,7 +112,7 @@ export function ConfigClient() {
             <div style={{ display: "grid", gap: 5 }}>
               {backups.map((b) => (
                 <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid var(--nds-border-subtle)", borderRadius: 8, fontSize: 12.5 }}>
-                  <span style={{ flex: 1, fontFamily: "ui-monospace, monospace" }}>{b.name}</span>
+                  <span style={{ flex: 1, fontFamily: "var(--nds-font-mono)" }}>{b.name}</span>
                   <span style={{ color: "var(--nds-text-3)" }}>{kb(b.sizeBytes)}</span>
                   <span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{new Date(b.modifiedAt).toLocaleDateString()}</span>
                 </div>

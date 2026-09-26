@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({ marketplaces: vi.fn(), groupBy: vi.fn(), fields: vi.fn() }))
-vi.mock('../../db.js', () => ({ default: { marketplace: { findMany: db.marketplaces }, channelListing: { groupBy: db.groupBy } } }))
+// P3b S4 — the column cache key carries the dictionary version (`dictionary-version.ts`).
+vi.mock('../../db.js', () => ({ default: { marketplace: { findMany: db.marketplaces }, channelListing: { groupBy: db.groupBy }, $queryRaw: async () => [{ v: 'test-dictionary' }] } }))
 vi.mock('./field-registry.service.js', () => ({ getAvailableFields: db.fields }))
 // An EMPTY but well-formed spec. The coordinates are what this file is about, so the specs must
 // be present enough not to crash and quiet enough to contribute no columns of their own.

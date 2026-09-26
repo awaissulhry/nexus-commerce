@@ -66,84 +66,92 @@ if (existing.rows[0].n > 0) {
   process.exit(1)
 }
 
-// ── 1. the schema ─────────────────────────────────────────────────
-const baseline = readFileSync(baselinePath, 'utf8')
-await client.query(baseline)
-const tables = await client.query(
-  `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
-)
-console.log(`[bootstrap] baseline applied — ${tables.rows[0].n} tables`)
-
-// ── 2. the history, marked applied ────────────────────────────────
-//
-// Ordered by localeCompare, which is how Prisma orders them — pinned against an observed deploy,
-// not assumed (see replay-migrations.mjs). The checksum is Prisma's: sha256 of the migration SQL.
-const folders = readdirSync(migrationsDir)
-  .filter((entry) => {
-    try { return statSync(join(migrationsDir, entry)).isDirectory() } catch { return false }
-  })
-  .sort((a, b) => a.localeCompare(b))
-
-await client.query(`
-  CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
-    id                      VARCHAR(36)  PRIMARY KEY NOT NULL,
-    checksum                VARCHAR(64)  NOT NULL,
-    finished_at             TIMESTAMPTZ,
-    migration_name          VARCHAR(255) NOT NULL,
-    logs                    TEXT,
-    rolled_back_at          TIMESTAMPTZ,
-    started_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    applied_steps_count     INTEGER      NOT NULL DEFAULT 0
-  )`)
-
-let stamped = 0
-for (const folder of folders) {
-  let sql = ''
-  try { sql = readFileSync(join(migrationsDir, folder, 'migration.sql'), 'utf8') } catch { /* folder with no SQL */ }
-  const checksum = createHash('sha256').update(sql).digest('hex')
-  await client.query(
-    `INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-     VALUES ($1, $2, now(), $3, now(), 1)`,
-    [createHash('sha256').update(folder).digest('hex').slice(0, 36), checksum, folder],
+// Schema, migration history and runtime policy installation must succeed together.
+try {
+  await client.query('BEGIN')
+  // ── 1. the schema ─────────────────────────────────────────────────
+  const baseline = readFileSync(baselinePath, 'utf8')
+  await client.query(baseline)
+  const tables = await client.query(
+    `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
   )
-  stamped++
-}
-console.log(`[bootstrap] marked ${stamped} migrations as applied`)
+  console.log(`[bootstrap] baseline applied — ${tables.rows[0].n} tables`)
 
-// ── 3. the isolation layer ────────────────────────────────────────
-//
-// The same three statements, in the same order, that `apps/api/src/test-support/
-// concurrent-database.ts:52-55` applies to a disposable test database. One generator, so a
-// bootstrapped database and a test database cannot disagree about who may read what.
-await client.query(
-  `ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false`,
-)
-// The isolation policy reads `Workspace` and requires an ACTIVE row, so the legacy business has to
-// exist before the policies do. Without it every legacy row is invisible to every reader.
-await client.query(
-  `INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
-   VALUES ('nexus_legacy_workspace', 'Legacy business', 'active', true, 'bootstrap', 'bootstrap', CURRENT_TIMESTAMP)
-   ON CONFLICT (id) DO NOTHING`,
-)
-await client.query(workspacePolicySql())
+  // ── 2. the history, marked applied ────────────────────────────────
+  //
+  // Ordered by localeCompare, which is how Prisma orders them — pinned against an observed deploy,
+  // not assumed (see replay-migrations.mjs). The checksum is Prisma's: sha256 of the migration SQL.
+  const folders = readdirSync(migrationsDir)
+    .filter((entry) => {
+      try { return statSync(join(migrationsDir, entry)).isDirectory() } catch { return false }
+    })
+    .sort((a, b) => a.localeCompare(b))
 
-// 🔴 The gate, in the script itself. A-13's ruling: count the policies and refuse a zero. A
-// bootstrap that silently produced an unisolated database is the whole reason this step exists,
-// and a step that cannot fail is not a step.
-const isolation = await client.query(`
-  SELECT (SELECT count(*)::int FROM pg_policies) AS policies,
-         (SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-           WHERE n.nspname = 'public' AND c.relrowsecurity) AS rls,
-         (SELECT count(*)::int FROM information_schema.role_table_grants
-           WHERE grantee = 'nexus_workspace_runtime') AS grants`)
-const { policies, rls, grants } = isolation.rows[0]
-if (policies === 0 || rls === 0 || grants === 0) {
-  console.error(`\n❌ REFUSED: the isolation layer did not land — ${policies} policies, ${rls} RLS tables, ${grants} grants.`)
-  console.error('   A database with no policies is one GRANT away from every business reading every other business.\n')
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+      id                      VARCHAR(36)  PRIMARY KEY NOT NULL,
+      checksum                VARCHAR(64)  NOT NULL,
+      finished_at             TIMESTAMPTZ,
+      migration_name          VARCHAR(255) NOT NULL,
+      logs                    TEXT,
+      rolled_back_at          TIMESTAMPTZ,
+      started_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
+      applied_steps_count     INTEGER      NOT NULL DEFAULT 0
+    )`)
+
+  let stamped = 0
+  for (const folder of folders) {
+    let sql = ''
+    try { sql = readFileSync(join(migrationsDir, folder, 'migration.sql'), 'utf8') } catch { /* folder with no SQL */ }
+    const checksum = createHash('sha256').update(sql).digest('hex')
+    await client.query(
+      `INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+       VALUES ($1, $2, now(), $3, now(), 1)`,
+      [createHash('sha256').update(folder).digest('hex').slice(0, 36), checksum, folder],
+    )
+    stamped++
+  }
+  console.log(`[bootstrap] prepared ${stamped} migration history rows`)
+
+  // ── 3. the isolation layer ────────────────────────────────────────
+  //
+  // The same three statements, in the same order, that `apps/api/src/test-support/
+  // concurrent-database.ts:52-55` applies to a disposable test database. One generator, so a
+  // bootstrapped database and a test database cannot disagree about who may read what.
+  await client.query(
+    `ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false`,
+  )
+  // The isolation policy reads `Workspace` and requires an ACTIVE row, so the legacy business has to
+  // exist before the policies do. Without it every legacy row is invisible to every reader.
+  await client.query(
+    `INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
+     VALUES ('nexus_legacy_workspace', 'Legacy business', 'active', true, 'bootstrap', 'bootstrap', CURRENT_TIMESTAMP)
+     ON CONFLICT (id) DO NOTHING`,
+  )
+  await client.query(workspacePolicySql())
+
+  // 🔴 The gate, in the script itself. A-13's ruling: count the policies and refuse a zero. A
+  // bootstrap that silently produced an unisolated database is the whole reason this step exists,
+  // and a step that cannot fail is not a step.
+  const isolation = await client.query(`
+    SELECT (SELECT count(*)::int FROM pg_policies) AS policies,
+           (SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public' AND c.relrowsecurity) AS rls,
+           (SELECT count(*)::int FROM information_schema.role_table_grants
+             WHERE grantee = 'nexus_workspace_runtime') AS grants`)
+  const { policies, rls, grants } = isolation.rows[0]
+  if (policies === 0 || rls === 0 || grants === 0) {
+    console.error(`\n❌ REFUSED: the isolation layer did not land — ${policies} policies, ${rls} RLS tables, ${grants} grants.`)
+    console.error('   A database with no policies is one GRANT away from every business reading every other business.\n')
+    throw new Error('Bootstrap isolation verification failed.')
+  }
+  console.log(`[bootstrap] isolation applied — ${policies} policies on ${rls} tables, ${grants} grants to nexus_workspace_runtime`)
+
+  await client.query('COMMIT')
+  console.log(`[bootstrap] ✓ "${db}" now matches schema.prisma, is isolated, and the next migrate deploy applies only new migrations`)
+} catch (error) {
+  await client.query('ROLLBACK').catch(() => {})
+  throw error
+} finally {
   await client.end()
-  process.exit(1)
 }
-console.log(`[bootstrap] isolation applied — ${policies} policies on ${rls} tables, ${grants} grants to nexus_workspace_runtime`)
-
-console.log(`[bootstrap] ✓ "${db}" now matches schema.prisma, is isolated, and the next migrate deploy applies only new migrations`)
-await client.end()

@@ -19,8 +19,8 @@ const LIVE_ROW = {
   startDate: '2026-07-19',
   endDate: '2026-07-19',
   marketplaceId: 'APJ6JRA9NG5V4',
-  parentAsin: 'B0F7J163XJ',
-  childAsin: 'B0BMSC91YK',
+  parentAsin: 'B0FXD0620C',
+  childAsin: 'B0FX7F7ECD',
   msku: 'GALE-JACKET-BLACK-MEN-M',
   sales: {
     unitsOrdered: 1,
@@ -43,7 +43,7 @@ const LIVE_ROW = {
 /** A zero-sales row — the common case: 1100 of 1127 rows had fees: []. */
 const ZERO_ROW = {
   ...LIVE_ROW,
-  childAsin: 'B0BSXLDDSL',
+  childAsin: 'B0FXC60C5F',
   msku: '85-A8DQ-UNYF',
   sales: {
     unitsOrdered: 0,
@@ -137,8 +137,8 @@ describe('parseEconomicsRows', () => {
     expect(r.marketplaceId).toBe('APJ6JRA9NG5V4')
     expect(r.marketplace).toBe('IT')
     expect(r.date.toISOString()).toBe('2026-07-19T00:00:00.000Z')
-    expect(r.parentAsin).toBe('B0F7J163XJ')
-    expect(r.childAsin).toBe('B0BMSC91YK')
+    expect(r.parentAsin).toBe('B0FXD0620C')
+    expect(r.childAsin).toBe('B0FX7F7ECD')
     expect(r.msku).toBe('GALE-JACKET-BLACK-MEN-M')
     expect(r.unitsOrdered).toBe(1)
     expect(r.netProductSales).toBeCloseTo(81.15)

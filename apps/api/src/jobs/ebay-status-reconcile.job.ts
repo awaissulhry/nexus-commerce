@@ -35,6 +35,7 @@ import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { resolveConnection } from '../services/connection-resolver.service.js'
+import { ebayFixedPriceOfferOf, ebayMarketplaceIdOf } from '../services/ebay-price-readback.service.js'
 
 const JOB_NAME = 'ebay-status-reconcile'
 const BATCH_SIZE = 20
@@ -125,6 +126,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
       id: true,
       listingStatus: true,
       externalListingId: true,
+      marketplace: true,
       product: { select: { sku: true } },
     },
   })
@@ -133,7 +135,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
   // once per SKU even if there are multiple ChannelListing rows for it
   // (e.g. different marketplaces sharing the same eBay item).
   const skuToListingIds = new Map<string, string[]>()
-  const listingById = new Map<string, { listingStatus: string; externalListingId: string | null }>()
+  const listingById = new Map<string, { listingStatus: string; externalListingId: string | null; marketplace: string | null }>()
 
   for (const listing of listings) {
     const sku = listing.product?.sku
@@ -142,6 +144,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
     listingById.set(listing.id, {
       listingStatus: listing.listingStatus,
       externalListingId: listing.externalListingId,
+      marketplace: listing.marketplace ?? null,
     })
 
     const existing = skuToListingIds.get(sku)
@@ -180,6 +183,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
         batch.map(async (sku) => {
           const listingIds = skuToListingIds.get(sku) ?? []
           let desiredStatus: string | null = null
+          let offers: EbayOffer[] = []
 
           try {
             const res = await ebaySend(connection.id,
@@ -200,14 +204,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
               return
             } else {
               const data = (await res.json()) as EbayOffersResponse
-              const offer = data.offers?.[0]
-              if (!offer) {
-                // eBay knows the SKU but returned zero offers — treat as
-                // unpublished (no live listing on eBay's side).
-                desiredStatus = 'DRAFT'
-              } else {
-                desiredStatus = ebayStatusToListing(offer.status ?? 'UNPUBLISHED')
-              }
+              offers = data.offers ?? []
             }
 
             checked++
@@ -217,13 +214,22 @@ export async function runEbayStatusReconcile(): Promise<void> {
             for (const listingId of listingIds) {
               const current = listingById.get(listingId)
               if (!current) continue
-              if (current.listingStatus === desiredStatus) continue
+              let desired = desiredStatus
+              if (desired === null) {
+                // CX — the fixed-price offer of THIS listing's market, never `offers[0]` (getOffers lists an auction
+                // beside it). None there → unpublished (DRAFT); a listing with no known market is left alone.
+                const market = ebayMarketplaceIdOf(current.marketplace)
+                if (!market) continue
+                const offer = ebayFixedPriceOfferOf(offers, market) as EbayOffer | null
+                desired = offer ? ebayStatusToListing(offer.status ?? 'UNPUBLISHED') : 'DRAFT'
+              }
+              if (current.listingStatus === desired) continue
 
               try {
                 await prisma.channelListing.update({
                   where: { id: listingId },
                   data: {
-                    listingStatus: desiredStatus,
+                    listingStatus: desired,
                     lastSyncedAt: new Date(),
                     lastSyncStatus: 'SUCCESS',
                   },
@@ -233,7 +239,7 @@ export async function runEbayStatusReconcile(): Promise<void> {
                   listingId,
                   sku,
                   from: current.listingStatus,
-                  to: desiredStatus,
+                  to: desired,
                   externalListingId: current.externalListingId,
                 })
               } catch (dbErr) {

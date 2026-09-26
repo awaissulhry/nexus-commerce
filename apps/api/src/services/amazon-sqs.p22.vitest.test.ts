@@ -53,7 +53,7 @@ const REAL_ORDER_CHANGE = {
         ShippingPrograms: [],
         DestinationPostalCode: null,
       },
-      SellerId: 'A1VRHKTGYO1JNU',
+      SellerId: 'AFXSELLER8BC38',
       AmazonOrderId: '303-3208227-5274706',
       OrderChangeType: 'OrderStatusChange',
       NotificationLevel: 'OrderLevel',
@@ -97,7 +97,7 @@ describe('ORDER_CHANGE is read from where Amazon actually puts it', () => {
     // 1,071 others, which left an `if (fulfillmentType === 'AFN')` branch permanently
     // dead.
     expect(parsed.notification!.fulfillmentType).toBe('AFN')
-    expect(parsed.notification!.sellerId).toBe('A1VRHKTGYO1JNU')
+    expect(parsed.notification!.sellerId).toBe('AFXSELLER8BC38')
   })
 
   it('still reads the FLAT shape, so the retired ORDER_STATUS_CHANGE keeps working', async () => {

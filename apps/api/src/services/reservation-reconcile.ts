@@ -1,13 +1,16 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import { releaseOpenOrder, consumeOpenOrder } from './stock-level.service.js'
+import { consumeOpenOrder } from './stock-level.service.js'
+import { noticeCancelledAfterShipment, settleCancelledOrderHolds } from './order-cancellation/index.js'
 import { poolOpenHoldOrders } from './stock-pool/pool-doors.js'
 
 /**
  * Phase 3 — decide what to do with an active OPEN_ORDER reservation whose
  * order has moved on. Conservative: only auto-act on unambiguous cases.
  *
- *   CANCELLED            -> release  (never shipped; free the hold)
+ *   CANCELLED            -> release  (free the hold; after a partial shipment (C1) the units the
+ *                                   channel says shipped are taken, and a hold it does not describe is
+ *                                   kept — never released into stock)
  *   SHIPPED | DELIVERED  -> consume  (unit left; decrement quantity)
  *   REFUNDED | RETURNED  -> alert    (ambiguous; surface, don't auto-act)
  *   non-terminal & stale -> alert    (legitimately may still await fulfillment)
@@ -102,7 +105,11 @@ export async function reconcileOpenOrderReservations(opts?: {
       const action = classifyOpenOrderReconciliation(String(o.status), ageMs, staleMs)
       try {
         if (action === 'release') {
-          released += await releaseOpenOrder({ orderId: o.id, reason: 'reconcile: order terminal (cancelled)', actor })
+          const settled = await settleCancelledOrderHolds(o.id, { reason: 'reconcile: order terminal (cancelled)', actor })
+          released += settled.released
+          consumed += settled.consumed
+          // The same notice E3 raises (one per order), in case the cancellation never ran its cascade.
+          if (settled.shipped) await noticeCancelledAfterShipment(o.id, { putBack: settled.releasedUnits, kept: settled.kept })
         } else if (action === 'consume') {
           consumed += await consumeOpenOrder({ orderId: o.id, actor })
         } else if (action === 'alert') {

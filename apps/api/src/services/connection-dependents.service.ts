@@ -23,6 +23,7 @@
  * broken reader, not a connection with no dependents, and it throws rather than reporting zeros.
  */
 import { Prisma } from '@prisma/client'
+import modelMetadata from '@nexus/database/model-metadata'
 import prisma from '../db.js'
 import { workspaceIdForQuery } from '../lib/workspace-context.js'
 
@@ -46,7 +47,7 @@ export interface DependentRelation {
  * claim has to be checked against something, and the check is "did it find the ones we can see".
  */
 export function dependentRelations(): DependentRelation[] {
-  return deriveDependentRelations(Prisma.dmmf.datamodel.models)
+  return deriveDependentRelations(modelMetadata.models)
 }
 
 /**

@@ -120,8 +120,9 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('listingFormat', 'Formato', 'Listing format', { kind: 'select', mode: 'strict', options: LISTING_FORMATS, channelStore: pa('listingFormat') }),
     listing('listingDuration', 'Durata', 'Listing duration', { kind: 'select', mode: 'strict', options: LISTING_DURATIONS, channelStore: pa('listingDuration') }),
     listing('bestOffer', 'Proposta d\'acquisto', 'Best offer', { kind: 'boolean', channelStore: pa('bestOffer') }),
-    listing('bestOfferFloor', 'Proposta minima accettata', 'Best offer auto-accept', { kind: 'number', channelStore: pa('bestOfferFloor') }),
-    listing('bestOfferCeiling', 'Proposta rifiutata sotto', 'Best offer auto-decline', { kind: 'number', channelStore: pa('bestOfferCeiling') }),
+    // CHMAP M7 (B3) — the floor is eBay's autoDeclinePrice and the ceiling its autoAcceptPrice (`ebay-variation-push.service.ts`).
+    listing('bestOfferFloor', 'Rifiuto automatico sotto', 'Best offer auto-decline below', { kind: 'number', channelStore: pa('bestOfferFloor'), helpText: 'Offers below this are declined automatically (eBay autoDeclinePrice). Must be below the auto-accept price.' }),
+    listing('bestOfferCeiling', 'Accettazione automatica da', 'Best offer auto-accept from', { kind: 'number', channelStore: pa('bestOfferCeiling'), helpText: 'Offers at or above this are accepted automatically (eBay autoAcceptPrice). Must be above the auto-decline price.' }),
     listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
     listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
     listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'open', options: PACKAGE_TYPES, channelStore: pa('packageType') }),

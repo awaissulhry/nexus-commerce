@@ -227,7 +227,7 @@ function ProductionInner() {
                             <button type="button" title="lower priority" onClick={() => void bumpPriority(w, -1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--nds-text-3)", lineHeight: 0 }}><ChevronDown size={13} /></button>
                           </span>
                         )}
-                        {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--nds-text-3)", fontFamily: "ui-monospace, monospace" }}>{eur(w.estCostCents)}</span>}
+                        {w.estCostCents != null && <span style={{ fontSize: 11, color: "var(--nds-text-3)", fontFamily: "var(--nds-font-mono)" }}>{eur(w.estCostCents)}</span>}
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--nds-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.party}{w.label ? ` · ${w.label}` : ""}</div>
@@ -269,7 +269,7 @@ function ProductionInner() {
           {reserved.map((m) => (
             <div key={m.materialId} style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12.5 }}>{m.name} <span style={{ color: "var(--nds-text-3)" }}>· est {m.reservedQty} {m.unit.toLowerCase()}</span></span>
-              <input type="number" min="0" step="0.01" value={useVals[m.materialId] ?? ""} onChange={(e) => setUseVals((v) => ({ ...v, [m.materialId]: e.target.value }))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+              <input type="number" min="0" step="0.01" value={useVals[m.materialId] ?? ""} onChange={(e) => setUseVals((v) => ({ ...v, [m.materialId]: e.target.value }))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, padding: "6px 8px", fontSize: 12.5, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
             </div>
           ))}
         </div>
@@ -289,8 +289,8 @@ function ProductionInner() {
             <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>{detail.wo.orderNumber} · {detail.wo.party}{detail.wo.label ? ` · ${detail.wo.label}` : ""}</div>
             {detail.wo.estCostCents != null && (
               <div style={{ display: "flex", gap: 18, fontSize: 12.5, padding: "8px 10px", background: "var(--nds-bg-subtle, rgba(20,28,38,0.03))", borderRadius: 8 }}>
-                <span style={{ color: "var(--nds-text-3)" }}>Est. cost <b style={{ color: "var(--nds-text)", fontFamily: "ui-monospace, monospace" }}>{eur(detail.wo.estCostCents)}</b></span>
-                <span style={{ color: "var(--nds-text-3)" }}>Actual material <b style={{ fontFamily: "ui-monospace, monospace", color: (detail.wo.actualMaterialCents ?? 0) > detail.wo.estCostCents ? "var(--nds-danger)" : "var(--nds-success)" }}>{eur(detail.wo.actualMaterialCents ?? 0)}</b></span>
+                <span style={{ color: "var(--nds-text-3)" }}>Est. cost <b style={{ color: "var(--nds-text)", fontFamily: "var(--nds-font-mono)" }}>{eur(detail.wo.estCostCents)}</b></span>
+                <span style={{ color: "var(--nds-text-3)" }}>Actual material <b style={{ fontFamily: "var(--nds-font-mono)", color: (detail.wo.actualMaterialCents ?? 0) > detail.wo.estCostCents ? "var(--nds-danger)" : "var(--nds-success)" }}>{eur(detail.wo.actualMaterialCents ?? 0)}</b></span>
               </div>
             )}
             <div style={{ display: "grid", gap: 8 }}>

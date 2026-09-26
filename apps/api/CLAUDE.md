@@ -1,8 +1,10 @@
 # apps/api
 
-Fastify 5 API; `tsconfig` is not strict. On `main` this process also starts every BullMQ worker and cron
-(`src/index.ts`), unless `NEXUS_DISABLE_BACKGROUND_JOBS=1` is set. Import the database client as
-`import prisma from '../db.js'`; `db.ts` loads `env.ts` first.
+Fastify 5 API; `tsconfig` is not strict. Three processes run this code: `src/index.ts` serves HTTP only,
+`src/background.ts worker` consumes the queues and relays events, `src/background.ts scheduler` runs the crons
+(`src/runtime/`). A registry every process needs (channel specs, automation actions) is filled in
+`src/runtime/registrations.ts`. Import the database client as `import prisma from '../db.js'`; `db.ts` loads
+`env.ts` first.
 
 ## Routes
 - One Fastify plugin per `src/routes/*.routes.ts`, registered in `src/index.ts` with `app.register(x, { prefix: '/api' })`.
@@ -32,7 +34,9 @@ Fastify 5 API; `tsconfig` is not strict. On `main` this process also starts ever
 ## Webhooks — verify, store, then process asynchronously
 1. Verify the provider signature before anything else.
 2. Store the event with `recordInbound` (`src/services/cx/ingress/ledger.ts`) in `WebhookEvent`.
-3. Process it asynchronously, never inline in the request. `src/jobs/inbound-retry.job.ts` drains pending events.
+3. Claim it before running its handler: `claimInbound` + `runWithInboundClaim` (`src/services/cx/ingress/claims.ts`).
+   The receiver may handle it inline; a trusted arrival is due when recorded, so `src/jobs/inbound-retry.job.ts`
+   runs it if the receiver dies. Handlers stay idempotent: a lease is not exactly-once.
 - Every stored event type needs a replay handler in `src/services/cx/ingress/handlers.ts`. Never delete a
   `WebhookEvent` (`scripts/check-inbound-ledger.mjs`).
 
@@ -42,10 +46,13 @@ Fastify 5 API; `tsconfig` is not strict. On `main` this process also starts ever
   `scripts/check-cron-clustered.mjs`.
 - Queues: `Queue` from `src/lib/queue.ts` (that is `WorkspaceQueue`) and `WorkspaceWorker` from
   `src/lib/workspace-jobs.ts`. They carry the workspace in the job data. Exemplar: `src/workers/read-cache.worker.ts`.
-- Every job and cron handler must be idempotent: jobs retry, and a cron lock can fail open. Dedupe with a
+- Every job and cron handler must be idempotent: jobs retry, and a lease can expire mid-run. Dedupe with a
   deterministic `jobId` (e.g. `cache:refresh:<id>`). Use `addJobSafely` only when a PENDING row plus a drain cron
   back the job.
-- Workers run only with `ENABLE_QUEUE_WORKERS=1` and Redis (`REDIS_URL`).
+- The worker consumes the queues; the API and the scheduler produce into them. All three need
+  `ENABLE_QUEUE_WORKERS=1` and Redis (`REDIS_URL`); with it off, every enqueue is skipped.
+- A POST a double-click must not run twice: add its route to `COMMAND_SCOPES` in
+  `src/lib/command-idempotency.ts` (durable Idempotency-Key receipts).
 - Code outside a request needs a workspace context: `visitActiveWorkspaces` (`src/lib/workspace-sweep.ts`) or
   `runProfileTimer` (`src/lib/cron/workspace-timer.ts`).
 

@@ -19,10 +19,19 @@
 import { hostname } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
-import { isEventType, type EventEnvelope, type EventType } from '@nexus/events'
+import { getEventDefinition, isEventType, parseEventEnvelope, parseEventPayload, type EventEnvelope, type EventType } from '@nexus/events'
 import type { BrokerMessage, EventBroker } from './broker.js'
 import { withCorrelation } from './correlation.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../workspace-context.js'
+
+function validateContract(envelope: EventEnvelope): EventEnvelope {
+  const parsed = parseEventEnvelope(envelope)
+  if (!isEventType(parsed.type)) throw new Error(`Unknown event contract: ${parsed.type}`)
+  if (getEventDefinition(parsed.type).version !== parsed.version) {
+    throw new Error(`Unsupported event version: ${parsed.type} v${parsed.version}`)
+  }
+  return { ...parsed, payload: parseEventPayload(parsed.type, parsed.payload) }
+}
 
 function inEventWorkspace<T>(envelope: EventEnvelope, work: () => T): T {
   if (!envelope.workspaceId && process.env.NEXUS_WORKSPACES_ENABLED !== '1') return work()
@@ -69,13 +78,19 @@ export async function subscribeEvents(
     group: subscription.group,
     consumer: consumerName(subscription.group),
     handler: async (message: BrokerMessage) => {
-      const { envelope } = message
-      if (wanted && !wanted.has(envelope.type)) return
+      if (wanted && !wanted.has(message.envelope.type)) return
+      // Throw before invoking domain code. Durable brokers retain the failed
+      // delivery for retry; unsupported versions are never silently ACKed.
+      const envelope = validateContract(message.envelope)
       await withCorrelation({ correlationId: envelope.correlationId, causationId: envelope.id }, async () =>
         inEventWorkspace(envelope, () => subscription.handler(envelope, { shard: message.shard })),
       )
     },
     onError: (error, message) => {
+      logger.error('event consumer failed', {
+        group: subscription.group, eventId: message.envelope.id,
+        type: message.envelope.type, version: message.envelope.version,
+      })
       subscription.onError?.(error, message.envelope)
     },
   })
@@ -122,8 +137,8 @@ export async function subscribeBroadcastEvents(
 
   const stop = await broker.subscribeBroadcast({
     handler: async (message: BrokerMessage) => {
-      const { envelope } = message
-      if (wanted && !wanted.has(envelope.type)) return
+      if (wanted && !wanted.has(message.envelope.type)) return
+      const envelope = validateContract(message.envelope)
       await withCorrelation({ correlationId: envelope.correlationId, causationId: envelope.id }, async () =>
         inEventWorkspace(envelope, () => subscription.handler(envelope, { shard: message.shard })),
       )

@@ -1,6 +1,18 @@
 import { getAccessToken } from '../cx/token.service.js'
 import { assertEtsyPath, etsyAccount, etsyOperation } from './account.js'
 
+/**
+ * Etsy answered, and not with success. The message is the reader's original sentence, byte for
+ * byte, so every existing caller sees exactly what it saw before; `status` lets a caller that must
+ * tell "not found" from "not allowed" or "not now" do so without parsing that sentence.
+ */
+export class EtsyReadError extends Error {
+  constructor(readonly status: number) {
+    super(`Etsy could not read this resource (HTTP ${status}).${status === 429 ? ' Retry after the Etsy rate limit resets.' : ''}`)
+    this.name = 'EtsyReadError'
+  }
+}
+
 /** Account-scoped, read-only access to Etsy Open API v3. Never logs credentials or response bodies. */
 export async function etsyReader(accountId: string) {
   // P4.6b — the account, the shop id and the x-api-key header now come from `account.ts`, which the
@@ -16,7 +28,7 @@ export async function etsyReader(accountId: string) {
       url: `https://api.etsy.com/v3/application${path}`, method: 'GET',
       headers: { 'x-api-key': apiKey }, auth: { token }, timeoutMs: 20_000,
     })
-    if (!response.ok) throw new Error(`Etsy could not read this resource (HTTP ${response.status}).${response.status === 429 ? ' Retry after the Etsy rate limit resets.' : ''}`)
+    if (!response.ok) throw new EtsyReadError(response.status)
     return await response.json() as T
   }
   return { get, shopId }

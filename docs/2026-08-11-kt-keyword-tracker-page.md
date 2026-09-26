@@ -1323,7 +1323,7 @@ as an upper bound in every tooltip; the words "total share" appear nowhere.
 | ES | 7 | **0** | 3 | 2 |
 | FR | 8 | **0** | 5 | 0 |
 
-`giacca moto 4 stagioni` renders **1.67 % attributed to B0BMSJWW7L**, which is in none of the 12 ad
+`giacca moto 4 stagioni` renders **1.67 % attributed to B0FX71011D**, which is in none of the 12 ad
 groups bidding that term — those hold 30 ASINs and the feed covers **zero** of them. Folded into the
 existing `N OF OURS` chip (`none advertised measured`) plus a dotted-underline mark on the share
 itself, with the full sentence in the tooltip. **No new column.**

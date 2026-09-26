@@ -22,8 +22,8 @@ I traced it end to end. A duplicate copy has **no child products of its own** �
 
 ```
 GALE-JACKET-ALT1 (master, 0 children)
-  → its ChannelListing.externalListingId = item 256566101420
-    → SharedListingMembership(itemId=256566101420, sku=GALE-JACKET-BLACK-MEN-XL)
+  → its ChannelListing.externalListingId = item 949285812839
+    → SharedListingMembership(itemId=949285812839, sku=GALE-JACKET-BLACK-MEN-XL)
       → productId = the product GALE-JACKET-BLACK-MEN-XL
         → parentId = GALE-JACKET   ← the canonical master
 ```

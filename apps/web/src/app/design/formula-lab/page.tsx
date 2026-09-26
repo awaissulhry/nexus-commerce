@@ -307,7 +307,7 @@ function FormulaEditor() {
           spellCheck={false}
           leadingIcon={<FormulaGlyph />}
           className={s.mono} style={{
-            fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace',
+            fontFamily: 'var(--nds-font-mono)',
           }}
         />
       </div>
@@ -339,7 +339,7 @@ function FormulaEditor() {
       )}
 
       {/* The preview line. §1.3 step 2 gives both readings verbatim. */}
-      <div className={s.sm} style={{ marginTop: '8px', fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace' }}>
+      <div className={s.sm} style={{ marginTop: '8px', fontFamily: 'var(--nds-font-mono)' }}>
         {preview.error ? (
           <span style={{ color: 'var(--nds-danger-text)' }}>⚠ {preview.error}</span>
         ) : (
@@ -476,8 +476,8 @@ export default function FormulaLabPage() {
             ].map((r, i) => (
               <Fragment key={r[0]}>
                 <div style={{ fontWeight: i === 0 ? 600 : 400, color: i === 0 ? 'var(--nds-text-muted)' : 'var(--nds-text)' }}>{r[0]}</div>
-                <div style={{ fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace', color: 'var(--nds-text)' }}>{r[1]}</div>
-                <div style={{ fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace', color: 'var(--nds-text)' }}>{r[2]}</div>
+                <div style={{ fontFamily: 'var(--nds-font-mono)', color: 'var(--nds-text)' }}>{r[1]}</div>
+                <div style={{ fontFamily: 'var(--nds-font-mono)', color: 'var(--nds-text)' }}>{r[2]}</div>
                 <div style={{ color: 'var(--nds-text-muted)' }}>{r[3]}</div>
               </Fragment>
             ))}
@@ -550,13 +550,13 @@ export default function FormulaLabPage() {
                 <FormulaGlyph />
                 <span
                   className={`nds-cell-value-text ${s.mono}`}
-                  style={{ fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace', }}
+                  style={{ fontFamily: 'var(--nds-font-mono)', }}
                 >
                   =&quot;Gale Jacket &quot; + $brand + &quot; &quot; + $athlete_typo
                 </span>
               </div>
             </div>
-            <div className={s.sm} style={{ marginTop: '8px', color: 'var(--nds-danger-text)', fontFamily: 'var(--font-jetbrains-mono, ui-monospace), ui-monospace, monospace' }}>
+            <div className={s.sm} style={{ marginTop: '8px', color: 'var(--nds-danger-text)', fontFamily: 'var(--nds-font-mono)' }}>
               ⚠ unknown attribute $athlete_typo at 26
             </div>
           </div>

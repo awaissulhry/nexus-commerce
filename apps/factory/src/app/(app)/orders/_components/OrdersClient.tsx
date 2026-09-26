@@ -489,7 +489,7 @@ function PipelineInner() {
           <div style={{ fontSize: 12.5, color: "var(--nds-text-2)" }}>
             One row = one past order with a single line. Columns: <code style={{ fontSize: 11 }}>party, description, qty, unit_net_eur, unit_cost_eur, state, confirmed_date, promise_date, number, client_ref</code>. Parties must exist first (Contacts import). Nothing is written until Apply — and only rows the dry run cleared.
           </div>
-          <textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); setImportResult(null); }} rows={6} placeholder="Paste CSV here…" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 11.5, fontFamily: "ui-monospace, monospace", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
+          <textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); setImportResult(null); }} rows={6} placeholder="Paste CSV here…" style={{ border: "1px solid var(--nds-border)", borderRadius: 8, padding: 9, fontSize: 11.5, fontFamily: "var(--nds-font-mono)", background: "var(--nds-surface)", color: "var(--nds-text)" }} />
           {importResult && (
             <div style={{ maxHeight: 180, overflowY: "auto", display: "grid", gap: 3, fontSize: 11.5 }}>
               <div style={{ fontWeight: 700 }}>{importResult.dryRun ? `Dry run — ${importResult.rows} row(s), ${importResult.errorCount} error(s)` : `Imported ${importResult.created ?? 0} order(s)`}</div>

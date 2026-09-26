@@ -233,7 +233,7 @@ export async function resolveFamilyAxes(
   // `_variationAxes` when non-empty, else `Product.variationTheme`, else legacy discovery. The listing's own
   // `variationTheme` COLUMN is no longer consulted: no push path reads it (T5) and it is retired from the sheet in
   // this same change. Measured over all 38 eBay parent listing rows: this READ is identical on **37 of 38**, and the
-  // one row that changes is GALE-JACKET eBay-IT (ACTIVE, item 257584954808), which read `["Color","Size"]` from that
+  // one row that changes is GALE-JACKET eBay-IT (ACTIVE, item 938554736087), which read `["Color","Size"]` from that
   // column while the push has been sending `["Colore","Taglia"]` — the read now agrees with what ships.
   const effective = parent.variationAxes.length ? (await loadStoredVariationProjection({ productId: parentProductId, channel: 'EBAY', market: marketplace, accountId: channelConnectionId, aliasKey })).cell : null
   const declaredAxes: string[] | null = effective ? effective.axes.filter(a => a.included).map(a => a.familyKey) : ebayDeclaredAxes(pa, parent.variationTheme)

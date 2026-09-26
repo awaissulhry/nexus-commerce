@@ -117,7 +117,7 @@ function forceStates(read: MatrixRead): MatrixRead {
 
   /* AMAZON:IT — listing × price × sale. */
   const it = (id: string) => at(id, 'AMAZON:IT')
-  it('p').listing = { state: 'listed', externalId: 'B0F7J163XJ', detail: '1 listing', published: true }
+  it('p').listing = { state: 'listed', externalId: 'B0FXD0620C', detail: '1 listing', published: true }
   it('v1').listing = { state: 'listed', externalId: null, detail: null, published: true }                              // listed
   it('v1').price = { value: 105, currency: 'EUR', source: 'master', formula: null, clamped: null }                    // price-master
   it('v1').sale = { value: 89, start: '2026-09-12', end: '2026-09-30' }                                               // sale-set

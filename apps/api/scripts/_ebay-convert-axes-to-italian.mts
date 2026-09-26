@@ -13,7 +13,7 @@ const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-t
 
 const APPLY = process.argv.includes('apply')
 const argIds = process.argv.slice(2).filter((a) => /^\d+$/.test(a))
-const ITEMS = argIds.length ? argIds : ['256550369887', '257611257473', '257584954808'] // slider, AIRMESH, GALE(Inventory)
+const ITEMS = argIds.length ? argIds : ['910792398942', '978166641275', '938554736087'] // slider, AIRMESH, GALE(Inventory)
 
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)

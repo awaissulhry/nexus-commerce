@@ -286,6 +286,7 @@ export function kickAssortmentSync(): Promise<number> {
 
 /** Fire-and-forget after this business queued work itself. Never throws, never blocks the caller. */
 export function afterSyncQueued(): void {
+  if (process.env.NEXUS_PROCESS_ROLE === 'api' || process.env.NEXUS_PROCESS_ROLE === 'scheduler') return
   void kickAssortmentSync()
 }
 
@@ -304,10 +305,14 @@ export interface SyncWorkerOptions {
  */
 export function listenUrlFrom(env: NodeJS.ProcessEnv): string | null {
   if (env.DIRECT_URL) return env.DIRECT_URL
-  return env.DATABASE_URL ? env.DATABASE_URL.replace('-pooler', '') : null
+  if (!env.DATABASE_URL) return null
+  let url: URL
+  try { url = new URL(env.DATABASE_URL) } catch { throw new Error('Listener requires a valid PostgreSQL URL') }
+  if (url.hostname.endsWith('.neon.tech')) url.hostname = url.hostname.replace(/-pooler(?=\.)/, '')
+  return url.toString()
 }
 
-export function startAssortmentSyncWorker(options: SyncWorkerOptions = {}): () => void {
+export function startAssortmentSyncWorker(options: SyncWorkerOptions = {}): () => Promise<void> {
   const listenUrl = options.listenUrl === undefined ? listenUrlFrom(process.env) : options.listenUrl
   let stopped = false
   let client: Client | null = null
@@ -358,6 +363,7 @@ export function startAssortmentSyncWorker(options: SyncWorkerOptions = {}): () =
   const poll = async () => {
     if (stopped) return
     const found = await kickAssortmentSync()
+    if (stopped) return
     pollDelay = found > 0 ? 2_000 : Math.min(pollDelay * 2, 60_000)
     pollTimer = setTimeout(() => { void poll() }, pollDelay)
     pollTimer.unref?.()
@@ -367,13 +373,14 @@ export function startAssortmentSyncWorker(options: SyncWorkerOptions = {}): () =
   pollTimer = setTimeout(() => { void poll() }, pollDelay)
   pollTimer.unref?.()
 
-  return () => {
+  return async () => {
     stopped = true
     if (listenTimer) clearTimeout(listenTimer)
     if (pollTimer) clearTimeout(pollTimer)
     const open = client
     client = null
     open?.removeAllListeners('end')
-    open?.end().catch(() => { /* closing */ })
+    await open?.end().catch(() => { /* closing */ })
+    await running
   }
 }

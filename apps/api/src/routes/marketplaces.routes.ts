@@ -1,6 +1,7 @@
 import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { readPushControls } from '../services/listing-push-controls.js'
 import { buildAmazonContentAttributes, type AmazonContentInput } from '../services/pim/amazon-content-payload.js'
+import { CONTENT_ROOTS } from '../services/channel-drift/amazon-content-compare.js'
 import { resolvePublishContent, publishContentIssues, requireReviewedContent } from '../services/pim/publish-review-gate.js'
 import { configuredAmazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
@@ -36,7 +37,7 @@ export async function buildMarketplaceAmazonAttributes(input: {
     ...input.attributes,
   }
   if (input.content) {
-    for (const key of ['item_name', 'product_description', 'bullet_point', 'generic_keyword']) delete spAttrs[key]
+    for (const key of CONTENT_ROOTS) delete spAttrs[key]
     Object.assign(spAttrs, await buildAmazonContentAttributes({ ...input.content, marketplace: input.marketplace, marketplaceId: input.marketplaceId }))
   } else {
   if (input.title) {

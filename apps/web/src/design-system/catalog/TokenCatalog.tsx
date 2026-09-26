@@ -38,6 +38,7 @@ import {
 import {
   Button,
   Pill,
+  Tag,
   Badge,
   Input,
   Select,
@@ -113,6 +114,9 @@ import { MetafieldValueExample } from './MetafieldValueExample'
 import { EmptyCellsExample } from './EmptyCellsExample'
 import { RecordListExample } from './RecordListExample'
 import { ChangeReviewExample } from './ChangeReviewExample'
+import { FileRowExample } from './FileRowExample'
+import { JobProgressExample } from './JobProgressExample'
+import { DownloadExample } from './DownloadExample'
 import { OrderedListExample } from './OrderedListExample'
 import { AsyncListboxExample } from './AsyncListboxExample'
 import { MediaGalleryExample } from './MediaGalleryExample'
@@ -130,7 +134,7 @@ const ramps: Array<[string, Record<string, string>]> = [
   ['Cyan', palette.cyan],
 ]
 
-const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace"
+const mono = 'var(--nds-font-mono)'
 
 /**
  * A catalog specimen of a grid cell. `ProjectionCell` takes AG's own `ICellRendererParams`, which
@@ -511,6 +515,10 @@ export function TokenCatalog() {
             <Button variant="primary" disabled>Disabled</Button>
             <Button variant="secondary" disabled>Disabled</Button>
           </div>
+          <div style={{ maxWidth: 220, marginTop: 10 }}>
+            {/* `wrap`: a link whose label is data (a SKU) breaks inside its container instead of overflowing. */}
+            <strong><Button asChild inline wrap variant="link"><a href="#button-wrap">A-VERY-LONG-UNBROKEN-SKU-THAT-MUST-WRAP-001</a></Button></strong>
+          </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Status pill</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -519,6 +527,10 @@ export function TokenCatalog() {
             <Pill tone="neutral">Archived</Pill>
           </div>
           <MappingStatusExample />
+          <h3 className="nds-type-sm">Metadata tags · 7:1 text in both themes</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-8)', alignItems: 'center' }}>
+            {(['neutral', 'info', 'success', 'warning', 'danger'] as const).map(tone => <Tag key={tone} tone={tone}>{tone}</Tag>)}
+          </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -1008,6 +1020,9 @@ export function TokenCatalog() {
         <WorkspaceSubheaderExample />
         <RecordListExample />
         <ChangeReviewExample />
+        <FileRowExample />
+        <JobProgressExample />
+        <DownloadExample />
         <OrderedListExample />
         <AsyncListboxExample />
         <MediaGalleryExample />
@@ -1051,7 +1066,7 @@ export function TokenCatalog() {
             title="GALE Pro Racing Suit"
             meta={
               <>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>GALE-KAN-PRO</span>
+                <span style={{ fontFamily: 'var(--nds-font-mono)' }}>GALE-KAN-PRO</span>
                 <Pill tone="success" dot>Active</Pill>
               </>
             }

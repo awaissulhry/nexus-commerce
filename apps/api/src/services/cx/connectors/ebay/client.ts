@@ -153,12 +153,14 @@ export async function ebaySigningHeaders(input: { environment: 'production' | 's
   return signEbayRequest({ method: input.method, url: input.url, body: input.body, jwe: key.jwe, privateKeyPem: key.privateKey })
 }
 
-/** Application (client-credentials) token — used only for Key Management and Notification public keys. */
+/** Application (client-credentials) token for app-level Notification and Key Management calls. */
 export async function ebayAppToken(environment: 'production' | 'sandbox' = 'production', scope = 'https://api.ebay.com/oauth/api_scope'): Promise<string> {
   const app = await getChannelApp('EBAY', environment)
   // gateway-exempt: OAuth token exchange (client_credentials) — the gateway's own app-token source
   const res = await fetch(`${EBAY_HOSTS[environment].api}/identity/v1/oauth2/token`, {
     method: 'POST',
+    redirect: 'error',
+    signal: AbortSignal.timeout(30_000),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization: `Basic ${Buffer.from(`${app.clientId}:${app.clientSecret}`).toString('base64')}`,
@@ -167,7 +169,9 @@ export async function ebayAppToken(environment: 'production' | 'sandbox' = 'prod
   })
   const text = await res.text()
   if (!res.ok) throw new EbayApiError(res.status, text, 'identity/v1/oauth2/token (client_credentials)')
-  return String((JSON.parse(text) as { access_token: string }).access_token)
+  const token = (JSON.parse(text) as { access_token?: unknown }).access_token
+  if (typeof token !== 'string' || !token.trim()) throw new Error('eBay application-token response contained no usable token.')
+  return token
 }
 
 /**

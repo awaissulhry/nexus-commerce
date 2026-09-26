@@ -28,6 +28,7 @@ import { resolveMembershipIntended } from './sync-control-core.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { recordChannelReadback, type DriftField } from './channel-drift.service.js'
+import { emptyTradingPriceCounts, runTradingPriceArm, type TradingPriceCounts, type TradingPriceRead } from './ebay-price-readback.service.js'
 
 const DEFAULT_MAX_SKUS = 200
 const DEFAULT_MAX_TRADING_ITEMS = 50
@@ -354,6 +355,8 @@ export interface TradingReadBackResult {
   driftRecorded: number
   /** A-36 — compared entries whose ItemID names no single listing here: counted, never guessed. */
   driftUnmapped: number
+  /** P4.4 (CX) — the price arm, beside the quantity arm and never folded into it. Report-only. */
+  price: TradingPriceCounts
 }
 
 /**
@@ -393,15 +396,19 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     capped: false,
     driftRecorded: 0,
     driftUnmapped: 0,
+    price: emptyTradingPriceCounts(),
   }
 
-  const memberships = await prisma.sharedListingMembership.findMany({
-    // SC.1 — followPool=false members are operator-excluded: never compared,
-    // never healed (their eBay quantity is deliberately theirs to manage).
-    where: { status: 'ACTIVE', followPool: true },
-    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true, stockBuffer: true, pinnedQuantity: true },
+  const allMemberships = await prisma.sharedListingMembership.findMany({
+    where: { status: 'ACTIVE' },
+    select: { itemId: true, marketplace: true, sku: true, productId: true, lastPushedAt: true, stockBuffer: true, pinnedQuantity: true, price: true, channelConnectionId: true, followPool: true },
   })
-  if (memberships.length === 0) return result
+  if (allMemberships.length === 0) return result
+  // SC.1 — followPool=false members are operator-excluded from the QUANTITY arm: never compared,
+  // never healed (their eBay quantity is deliberately theirs to manage). CX (review 2026-09-26) — the
+  // price arm still compares them: followPool governs the pool fan-out (sync-control-core maps it to
+  // a listing pause for quantity), and nothing about it touches the price.
+  const memberships = allMemberships.filter((m) => m.followPool !== false)
 
   // MAP.3 — DECLARED. 🔴 MAP.7: memberships carry channelConnectionId now, so
   // this should group them by account and read back with each account's token.
@@ -412,11 +419,14 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
   const envMax = Number.parseInt(process.env.NEXUS_EBAY_TRADING_READBACK_MAX ?? '', 10)
   const maxItems = Number.isFinite(envMax) && envMax > 0 ? envMax : DEFAULT_MAX_TRADING_ITEMS
 
-  // Group memberships per (itemId, marketplace) — one GetItem per listing.
+  // Group memberships per (itemId, marketplace) — one GetItem per listing. `entries` are the quantity
+  // arm's (followed only); a listing whose every variant is excluded is read for its prices alone.
   const byItem = new Map<string, { itemId: string; marketplace: string; entries: TradingReadbackEntry[] }>()
-  for (const m of memberships) {
+  for (const m of allMemberships) {
     const key = `${m.marketplace}:${m.itemId}`
     const g = byItem.get(key) ?? { itemId: m.itemId, marketplace: m.marketplace, entries: [] }
+    byItem.set(key, g)
+    if (m.followPool === false) continue
     g.entries.push({
       sku: m.sku,
       itemId: m.itemId,
@@ -428,7 +438,8 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
     })
     byItem.set(key, g)
   }
-  const groups = [...byItem.values()]
+  // Followed listings first: the read cap never trades quantity coverage for a price-only read.
+  const groups = [...byItem.values()].sort((a, b) => Number(b.entries.length > 0) - Number(a.entries.length > 0))
   result.capped = groups.length > maxItems
   const batch = groups.slice(0, maxItems)
   result.items = batch.length
@@ -460,12 +471,15 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
 
   const observedByItemSku = new Map<string, number>()
   const checkedEntries: TradingReadbackEntry[] = []
+  const priceReads: TradingPriceRead[] = [] // P4.4 (CX) — the same answers, for the price arm
 
   for (const g of batch) {
     try {
       const rb = await getItemQuantities(g.itemId, { oauthToken: token, market: g.marketplace, connectionId: connection.id })
 
       if (rb.listingStatus && ENDED_STATUSES.has(rb.listingStatus)) {
+        // A price-only read (every variant excluded) writes nothing: ending memberships stays the quantity sweep's call.
+        if (g.entries.length === 0) continue
         const res = await prisma.sharedListingMembership.updateMany({
           where: { marketplace: g.marketplace, itemId: g.itemId, status: 'ACTIVE' },
           data: {
@@ -490,6 +504,7 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
         observedByItemSku.set(obsKey(g.itemId, g.entries[0].sku), rb.itemAvailable)
       }
       checkedEntries.push(...g.entries)
+      priceReads.push({ itemId: g.itemId, marketplace: g.marketplace, prices: rb.prices })
     } catch (err) {
       result.errors++
       logger.warn('ebay-trading-readback: GetItem failed — skipped (fail-open per item)', {
@@ -673,6 +688,10 @@ export async function readBackEbayTradingQuantities(): Promise<TradingReadBackRe
       error: err instanceof Error ? err.message : String(err),
     })
   }
+
+  // P4.4 (CX) — the PRICE arm over the GetItem answers above (no extra call), for the token's own
+  // account's memberships only. 🔴 Report-only: it never heals (no fan-out, no queue row).
+  result.price = await runTradingPriceArm({ memberships: allMemberships, reads: priceReads, accountId: connection.id, keyOf: obsKey })
 
   logger.info('ebay-trading-readback: sweep complete', { ...result })
   return result

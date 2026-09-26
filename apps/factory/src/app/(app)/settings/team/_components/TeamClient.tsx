@@ -109,7 +109,7 @@ export function TeamClient() {
         {joinUrl && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", border: "1px solid var(--nds-primary)", borderRadius: 8, background: "var(--nds-primary-subtle, #eff4ff)", marginBottom: 10, fontSize: 12.5 }}>
             <span style={{ color: "var(--nds-text-2)" }}>Share this one-time link:</span>
-            <code style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "ui-monospace, monospace" }}>{joinUrl}</code>
+            <code style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--nds-font-mono)" }}>{joinUrl}</code>
             <button type="button" onClick={copy} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--nds-text-link)", display: "inline-flex", gap: 4, alignItems: "center" }}><Copy size={13} /> Copy</button>
           </div>
         )}

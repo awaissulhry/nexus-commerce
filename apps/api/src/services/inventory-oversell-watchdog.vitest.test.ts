@@ -15,14 +15,17 @@ const { findUniqueProduct, findManyStock, findManyListings, findFirstOutbox, cre
   createOutbox: vi.fn(),
 }))
 
-vi.mock('../db.js', () => ({
-  default: {
+vi.mock('../db.js', () => {
+  const db = {
     product: { findUnique: findUniqueProduct },
     stockLevel: { findMany: findManyStock },
     channelListing: { findMany: findManyListings },
     eventOutbox: { findFirst: findFirstOutbox, create: createOutbox },
-  },
-}))
+    $queryRaw: vi.fn(async () => []),
+    $executeRaw: vi.fn(async () => 0),
+  }
+  return { default: { ...db, $transaction: async (work: (tx: typeof db) => Promise<unknown>) => work(db) } }
+})
 // stock-movement.service constructs BullMQ queues at module load; the watchdog
 // imports its real resolver, so the queue module is stubbed rather than the
 // resolver — testing against a reimplementation of the FBA rule would defeat
@@ -134,7 +137,7 @@ describe('computeCommitments — what counts as a live promise', () => {
 describe('evaluateOversellRisk', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    findUniqueProduct.mockResolvedValue({ sku: 'SUIT-48', fulfillmentMethod: 'FBM' })
+    findUniqueProduct.mockResolvedValue({ sku: 'SUIT-48', fulfillmentMethod: 'FBM', totalStock: 1 })
     findManyStock.mockResolvedValue([])
   })
 
@@ -199,7 +202,7 @@ describe('handleStockChanged', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    findUniqueProduct.mockResolvedValue({ sku: 'SUIT-48', fulfillmentMethod: 'FBM' })
+    findUniqueProduct.mockResolvedValue({ sku: 'SUIT-48', fulfillmentMethod: 'FBM', totalStock: 1 })
     findManyStock.mockResolvedValue([])
     findFirstOutbox.mockResolvedValue(null)
     findManyListings.mockResolvedValue([
@@ -221,8 +224,9 @@ describe('handleStockChanged', () => {
     expect(row.payload).toMatchObject({ excessUnits: 8, maxChannelCommitment: 9, poolAvailable: 1 })
   })
 
-  it('publishes nothing when there is no excess', async () => {
-    await handleStockChanged(envelope({ productId: 'p1', poolTotal: 20, change: -3 }))
+  it('publishes nothing when current stock has recovered despite a stale decrease event', async () => {
+    findUniqueProduct.mockResolvedValue({ sku: 'SUIT-48', fulfillmentMethod: 'FBM', totalStock: 20 })
+    await handleStockChanged(envelope({ productId: 'p1', poolTotal: 1, change: -3 }))
     expect(createOutbox).not.toHaveBeenCalled()
   })
 

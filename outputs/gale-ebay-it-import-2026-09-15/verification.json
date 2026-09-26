@@ -15,7 +15,7 @@
   "readiness": [
     {
       "label": "Primary",
-      "externalListingId": "257584954808",
+      "externalListingId": "938554736087",
       "readiness": {
         "percent": 100,
         "state": "ready",
@@ -26,7 +26,7 @@
     },
     {
       "label": "IT-GALE-JACKET",
-      "externalListingId": "256564203510",
+      "externalListingId": "913270132587",
       "readiness": {
         "percent": 100,
         "state": "live",
@@ -37,7 +37,7 @@
     },
     {
       "label": "GALE-JACKET-ALT1",
-      "externalListingId": "256566101420",
+      "externalListingId": "949285812839",
       "readiness": {
         "percent": 100,
         "state": "live",
@@ -48,7 +48,7 @@
     },
     {
       "label": "GALE-JACKET-ALT2",
-      "externalListingId": "256566102729",
+      "externalListingId": "910932382515",
       "readiness": {
         "percent": 100,
         "state": "live",
@@ -59,7 +59,7 @@
     },
     {
       "label": "GALE-JACKET-ALT3",
-      "externalListingId": "256566103703",
+      "externalListingId": "950640873955",
       "readiness": {
         "percent": 100,
         "state": "live",

@@ -12,6 +12,7 @@ import {
   readBackEbayTradingQuantities,
 } from '../services/ebay-inventory-readback.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { tradingPriceSummary } from '../services/ebay-price-readback.service.js'
 import { logger } from '../utils/logger.js'
 
 const JOB = 'ebay-readback'
@@ -41,7 +42,7 @@ export function startEbayReadbackCron(): void {
       if (process.env.NEXUS_EBAY_TRADING_READBACK === '0') return `${inv} · trading off`
       try {
         const t = await readBackEbayTradingQuantities()
-        return `${inv} · trading items=${t.items} skus=${t.skusChecked} mismatch=${t.mismatches} logged=${t.logged} healed=${t.healedProducts} resolved=${t.resolved} ended=${t.endedMemberships} errors=${t.errors}${t.capped ? ' (capped)' : ''} · drift recorded=${t.driftRecorded} unmapped=${t.driftUnmapped}`
+        return `${inv} · trading items=${t.items} skus=${t.skusChecked} mismatch=${t.mismatches} logged=${t.logged} healed=${t.healedProducts} resolved=${t.resolved} ended=${t.endedMemberships} errors=${t.errors}${t.capped ? ' (capped)' : ''} · drift recorded=${t.driftRecorded} unmapped=${t.driftUnmapped} · ${tradingPriceSummary(t.price)}`
       } catch (err) {
         logger.error('ebay-readback cron: trading pass failed', {
           err: err instanceof Error ? err.message : String(err),

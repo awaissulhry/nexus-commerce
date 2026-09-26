@@ -1,6 +1,6 @@
 import { languageHeader, parseHeader } from './import-diff.service.js'
 import ExcelJS from 'exceljs'
-import { transferCategoryField, transferCanonical, type TransferRow, type TransferIssue, type TransferEntity } from '@nexus/shared/catalog-transfer'
+import { transferCategoryField, transferCanonical, sheetCellMarker, type TransferRow, type TransferIssue, type TransferEntity } from '@nexus/shared/catalog-transfer'
 import { parseTransferRecords, TRANSFER_MAX_ROWS, TRANSFER_MAX_FILE_BYTES, TransferWorkbookLimitError } from './catalog-transfer-file.js'
 import { workbookTable as table, workbookColors, fill, fitWorkbookRow, formatReferenceSheet, workbookLink } from './catalog-workbook-format.js'
 
@@ -26,14 +26,34 @@ function jsonEncodedFields(scope: WorkbookScope) {
     && (['list', 'measure', 'number', 'boolean', 'json'].includes(types.get(r.field) ?? '') || /[\r\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(r.value))).map(r => r.field))
 }
 
-/** One record per row; each sheet owns one explicit language or listing scope. */
-export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEditor = false, editing?: EditingWorkbookBaseline) {
+/** PSIE — the product sheet's file: the few rules a person needs, in plain words. */
+function sheetInstructions(editing?: EditingWorkbookBaseline): [string, string][] {
+  return [
+    ['Change a value', 'Type the new value in its cell. A cell you leave as it is stays exactly as it is in Nexus.'],
+    ['Empty a value', 'Type #clear in the cell.'],
+    ['Use the shared value', 'On a channel tab, type #shared in the cell. The listing then follows the Shared tab again.'],
+    ['Choices', 'Where a cell has a dropdown, pick from it. Nexus checks every value again when you import.'],
+    ['Keep these', 'Do not change the SKU and Listing columns, the tab names, or the hidden columns and sheets. You may sort and filter.'],
+    ['Import', 'In Nexus, open this product, press Import and drop this file. You see every change before it is saved.'],
+    ['Channels', 'Import saves in Nexus only. Nothing is sent to Amazon, eBay or Shopify until you send it from the product.'],
+    ...(editing?.expiresAt ? [['Valid until', `Import this file before ${editing.expiresAt.slice(0, 10)}. After that, export a new file.`] as [string, string]] : []),
+  ]
+}
+
+/**
+ * One record per row; each sheet owns one explicit language or listing scope.
+ * `style: 'sheet'` (PSIE) — the product sheet's editing file: no action columns (a blank cell keeps the value; `#clear`
+ * and `#shared` are typed in the cell) and short instructions. The reader accepts both styles.
+ */
+export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEditor = false, editing?: EditingWorkbookBaseline, style: 'catalog' | 'sheet' = 'catalog') {
+  const actions = style !== 'sheet'
   if (scopes.length > 100) throw new Error('Choose at most 100 workbook scopes per file')
   if (scopes.reduce((sum, s) => sum + s.rows.length, 0) > TRANSFER_MAX_ROWS) throw new TransferWorkbookLimitError('rows')
   const book = new ExcelJS.Workbook(); book.creator = 'Nexus Commerce'; book.calcProperties.fullCalcOnLoad = true
   const instructions = table(book, 'Instructions', ['Start here', productEditor ? 'Product editing workbook' : 'Catalog workbook'], [30, 108])
   instructions.properties.tabColor = { argb: workbookColors.header }
-  instructions.addRows([
+  if (!actions) instructions.addRows(sheetInstructions(editing))
+  else instructions.addRows([
     ['1. Open a data sheet', productEditor ? 'Use the product, language or listing tabs to edit the existing selected records. Each named listing is a separate destination. Keep SKUs and listing identifiers intact.' : 'Use the product, language or listing tabs. Each sheet has its own destination. Keep SKUs and listing identifiers intact.'],
     ['2. Choose your values', 'Use the dropdown where available. Valid values has one row per attribute and destination, with each choice in its own column. Dictionary explains types, units and requirements.'],
     ['3. Import and review', productEditor ? 'Return to this product editor and choose Import. Nexus restores the workbook selection for review. Check every proposed change before saving. Only existing selected records can be updated.' : 'Open Nexus → Products → Import & export → Nexus workbook. Upload this file and review the proposed changes before saving.'],
@@ -55,7 +75,7 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
     ['Review and apply', productEditor ? 'Review the selected SKUs, accounts, markets, listings and every proposed change before saving. Record versions detect concurrent edits. This import updates Nexus only; it does not publish to a channel.' : 'Review every changed/refused value before applying. Record versions detect concurrent edits. New products/listings are drafts. This workbook is a Nexus import file; it is not an Amazon or eBay upload template.'],
     ['Commercial operations', 'Price, stock and publication retain their dedicated workflows and transactional checks. Their fields are listed as managed in the dictionary and cannot be changed by a catalog import.'],
   ])
-  if (editing?.exportedAt && editing.expiresAt) instructions.addRow(['Workbook validity', `Exported ${editing.exportedAt}. Import before ${editing.expiresAt} using the same Nexus user and product editor. After expiry, download a fresh workbook. Concurrent product or listing edits may require a fresh export sooner.`])
+  if (actions && editing?.exportedAt && editing.expiresAt) instructions.addRow(['Workbook validity', `Exported ${editing.exportedAt}. Import before ${editing.expiresAt} using the same Nexus user and product editor. After expiry, download a fresh workbook. Concurrent product or listing edits may require a fresh export sooner.`])
   // Put the working sheets before reference material without changing their import names.
   for (const scope of scopes) {
     if (supporting.has(scope.sheet) || book.getWorksheet(scope.sheet)) throw new Error('Workbook sheet names must be unique')
@@ -92,7 +112,7 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
     const keys = ['sku', ...(scope.entity === 'Products' ? [] : editing ? ['listing', 'aliasKey'] : ['aliasKey']), 'version']
     const editable = fields
     if (keys.length + editable.length * 2 > 2000) throw new Error(`${scope.sheet}: too many attribute columns`)
-    const headers = [...keys, ...(editing ? [...editable.map(f => fieldHeader(f.field)), ...editable.map(f => `${actionPrefix}${fieldHeader(f.field)}`)] : editable.flatMap(f => [fieldHeader(f.field), `${actionPrefix}${fieldHeader(f.field)}`]))]
+    const headers = [...keys, ...(!actions ? editable.map(f => fieldHeader(f.field)) : editing ? [...editable.map(f => fieldHeader(f.field)), ...editable.map(f => `${actionPrefix}${fieldHeader(f.field)}`)] : editable.flatMap(f => [fieldHeader(f.field), `${actionPrefix}${fieldHeader(f.field)}`]))]
     const sheet = table(book, scope.sheet, headers, headers.map(h => h.startsWith(actionPrefix) ? 18 : h === 'version' ? 12 : 32))
     sheet.addRow([]) // Reserve D15.2 machine keys before data/validation addresses are assigned.
     sheet.columns.forEach(column => { column.alignment = { wrapText: true, vertical: 'top' } })
@@ -124,7 +144,7 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
         if (Object.prototype.hasOwnProperty.call(record, header)) throw new Error(`Duplicate workbook value: ${row.sku} / ${row.field}`)
         if (!byField.has(row.field)) throw new Error(`Missing dictionary field: ${scope.sheet} / ${row.field}`)
         record[header] = row.action === 'SET' ? jsonFields.has(row.field) || byField.get(row.field)?.type === 'json' || typeof row.value === 'object' && row.value !== null ? JSON.stringify(row.value) : row.value : null
-        record[`${actionPrefix}${header}`] = editing ? null : row.action
+        if (actions) record[`${actionPrefix}${header}`] = editing ? null : row.action
       }
       const added = sheet.addRow(record)
       fitWorkbookRow(added, 72)
@@ -141,13 +161,13 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
     for (const f of fields) {
       const header = fieldHeader(f.field)
       const guidance = [f.label, `Type: ${f.type}. ${f.required ?? 'Optional'}.`, f.help,
-        f.editable === false ? 'Reference or managed field. Existing read-only values cannot be changed here.' : editing ? 'Edit this value directly. Blank or unchanged values preserve data and inheritance. Unhide action columns for explicit SET, CLEAR or INHERIT.' : 'Enter a value to set it. Blank value and blank action preserve existing data. If the action says INHERIT, change it to SET when entering a value.',
+        f.editable === false ? 'Reference or managed field. Existing read-only values cannot be changed here.' : !actions ? `Type a new value to change it. Leave it to keep it. Type #clear to empty it${scope.entity === 'Products' ? '' : ', or #shared to follow the Shared tab'}.` : editing ? 'Edit this value directly. Blank or unchanged values preserve data and inheritance. Unhide action columns for explicit SET, CLEAR or INHERIT.' : 'Enter a value to set it. Blank value and blank action preserve existing data. If the action says INHERIT, change it to SET when entering a value.',
         jsonFields.has(f.field) || ['list', 'measure', 'json'].includes(f.type) ? 'Use the JSON encoding described in Dictionary. Lists: ["first","second"]. Measures: {"value":1.2,"unit":"kilograms"}; use the units allowed for this field.' : '',
         f.maxLength ? `Maximum length: ${f.maxLength}.` : '', f.options?.length ? `${f.options.length} choices are listed in Valid values for this sheet and field. ${choiceRule(f)}.` : '',
         'Long content has a compact preview. Select the cell and expand the formula bar, or increase the row height, to see the full value.',
       ].filter(Boolean).join('\n\n')
       sheet.getCell(1, sheet.getColumn(header).number).note = guidance
-      sheet.getCell(1, sheet.getColumn(`${actionPrefix}${header}`).number).note = `${f.label}: SET saves the value; CLEAR explicitly empties it; INHERIT removes the override. CLEAR and INHERIT require an empty value. Leave action and value blank to preserve existing data.`
+      if (actions) sheet.getCell(1, sheet.getColumn(`${actionPrefix}${header}`).number).note = `${f.label}: SET saves the value; CLEAR explicitly empties it; INHERIT removes the override. CLEAR and INHERIT require an empty value. Leave action and value blank to preserve existing data.`
       workbookCells += 11 + (f.options?.length ? f.options.length + 5 : 0)
       if (workbookCells > 2_000_000) throw new TransferWorkbookLimitError('rows')
       const dictionaryRow = dictionary.addRow([workbookLink(scope.sheet), f.field, f.label, f.type, f.required === 'required' ? 'Required' : f.required === 'requiredIfRelevant' ? 'Required when relevant' : f.required ?? 'Optional', f.editable === false ? 'Reference only' : 'Editable', f.maxLength ?? null, (f.unitOptions ?? []).join(', ') || null, f.schemaVersion || null, f.help || null, jsonFields.has(f.field) ? 'json' : 'cell'])
@@ -163,17 +183,17 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
         const end = values.getColumn(5 + options.length).letter
         book.definedNames.add(`'Valid values'!$F$${choiceRow.number}:$${end}$${choiceRow.number}`, optionsName)
       }
-      const col = sheet.getColumn(header), actionCol = sheet.getColumn(`${actionPrefix}${header}`)
+      const col = sheet.getColumn(header), actionCol = actions ? sheet.getColumn(`${actionPrefix}${header}`) : undefined
       sheet.getCell(1, col.number).fill = fill(f.editable === false ? workbookColors.header : workbookColors.editHeader)
       sheet.getCell(1, col.number).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-      sheet.getCell(1, actionCol.number).fill = fill(workbookColors.actionHeader)
-      if (editing || f.editable === false) { actionCol.hidden = true; actionCol.outlineLevel = 1 }
+      if (actionCol) sheet.getCell(1, actionCol.number).fill = fill(workbookColors.actionHeader)
+      if (actionCol && (editing || f.editable === false)) { actionCol.hidden = true; actionCol.outlineLevel = 1 }
       if (!['number', 'boolean'].includes(f.type)) col.numFmt = '@'
       for (let r = 3; r <= last; r++) {
         sheet.getCell(r, col.number).fill = fill(f.editable === false ? workbookColors.reference : workbookColors.input)
-        sheet.getCell(r, actionCol.number).fill = fill(workbookColors.reference)
+        if (actionCol) sheet.getCell(r, actionCol.number).fill = fill(workbookColors.reference)
         if (f.editable === false) continue
-        sheet.getCell(r, actionCol.number).dataValidation = { type: 'list', allowBlank: true, formulae: ['"SET,CLEAR,INHERIT"'], showErrorMessage: true, error: 'Choose SET, CLEAR or INHERIT.' }
+        if (actionCol) sheet.getCell(r, actionCol.number).dataValidation = { type: 'list', allowBlank: true, formulae: ['"SET,CLEAR,INHERIT"'], showErrorMessage: true, error: 'Choose SET, CLEAR or INHERIT.' }
         if (optionsName && !['list', 'measure', 'json'].includes(f.type)) sheet.getCell(r, col.number).dataValidation = { type: 'list', allowBlank: true, formulae: [optionsName], showErrorMessage: f.selectionOnly === true,
           errorStyle: 'warning', errorTitle: 'Value outside the list', error: 'This field expects a listed value. An unlisted value may be refused by Nexus or the channel. Review the choices in Valid values.',
           showInputMessage: true, promptTitle: f.label.slice(0, 32), prompt: `${choiceRule(f)}. See this attribute’s row in Valid values. Nexus checks your edits again during import.` }
@@ -215,8 +235,16 @@ export async function writeCatalogWorkbook(scopes: WorkbookScope[], productEdito
   return buffer
 }
 
-/** Parse the wide workbook into the same reviewed, transactional attribute contract as v1. */
-export function readCatalogWorkbook(book: ExcelJS.Workbook, editing?: EditingWorkbookBaseline, options: { blankPolicy?: 'ignore' | 'clear' } = {}): { rows: TransferRow[]; issues: TransferIssue[] } | null {
+/**
+ * Parse the wide workbook into the same reviewed, transactional attribute contract as v1.
+ *
+ * `changesOnly` (PSIE, editing workbooks only): return ONLY the cells the user changed. A blank cell, or one equal to the
+ * export, is untouched — it is never returned, checked or saved (the old path sent every exported cell back as a row and
+ * refused blank cells in columns that do not apply to a product). `#clear` empties a value and `#shared` makes it follow
+ * the shared value again (`sheetCellMarker`). Each returned row carries what the export held (`expected`), so the review
+ * can refuse ONE cell that also changed in Nexus after the export instead of the whole record.
+ */
+export function readCatalogWorkbook(book: ExcelJS.Workbook, editing?: EditingWorkbookBaseline, options: { blankPolicy?: 'ignore' | 'clear'; changesOnly?: boolean } = {}): { rows: TransferRow[]; issues: TransferIssue[] } | null {
   const manifest = book.getWorksheet('Nexus workbook')
   if (!manifest) return null
   const version = manifest.getCell('B2').text
@@ -272,6 +300,8 @@ export function readCatalogWorkbook(book: ExcelJS.Workbook, editing?: EditingWor
     const originalScope = editing?.scopes.find(s => s.sheet === scope.sheet)
     if (editing && (!originalScope || manifestColumns.some(k => originalScope[k] !== scope[k]))) throw new Error(`${scope.sheet}: the exported destination was changed. Download a new workbook for this destination.`)
     const originalRows = new Map(originalScope?.rows.map(r => [JSON.stringify([r.sku, r.aliasKey, r.field]), r]))
+    // PSIE — every exported record's version, for a changed cell in a column the export held no value for.
+    const recordVersions = new Map(originalScope?.rows.map(r => [JSON.stringify([r.sku, r.aliasKey]), String(r.version)]))
     const originalEncodings = originalScope ? jsonEncodedFields(originalScope) : null
     if (sheet.rowCount > TRANSFER_MAX_ROWS + keyRow || sheet.columnCount > 2000) throw new Error('Worksheet exceeds the import limits')
     scannedCells += sheet.rowCount * sheet.columnCount
@@ -310,6 +340,26 @@ export function readCatalogWorkbook(book: ExcelJS.Workbook, editing?: EditingWor
         const cell = sheet.getCell(r, fieldColumns.get(header)!), raw = record[header]
         const original = originalRows.get(JSON.stringify([record.sku, record.aliasKey ?? '', field]))
         const source = { sheet: scope.sheet, column: cell.address.replace(/\d+$/, '') }
+        if (editing && options.changesOnly) {
+          const requested = record[`${actionPrefix}${header}`], marker = sheetCellMarker(raw)
+          if (!requested && !marker && blank(raw)) continue
+          const type = types.get(JSON.stringify([scope.sheet, field]))!
+          if (type !== originalScope?.fields.find(f => f.field === field)?.type) throw new Error(`${scope.sheet}: keep the field Dictionary intact`)
+          const action = requested || marker || 'SET'
+          const json = action === 'SET' && (encodings.get(JSON.stringify([scope.sheet, field])) === 'json' || ['list', 'measure', 'number', 'boolean', 'json'].includes(type) || typeof cell.value === 'number' || typeof cell.value === 'boolean' || logicalConstant(cell) !== undefined)
+          const parsed = parseTransferRecords([{ entity: scope.entity !== 'Products' && field === transferCategoryField(scope.channel) ? 'Listings' : scope.entity, sku: record.sku, version: record.version, channel: scope.channel, accountId: scope.accountId,
+            marketplace: scope.marketplace, locale: scope.locale, aliasKey: record.aliasKey ?? '', field, action, format: json ? 'json' : 'text', value: marker ? '' : raw }])
+          // Typed back exactly as exported: untouched, whatever else the row says.
+          const changed = parsed.rows.filter(row => requested || marker || !(original?.action === 'SET' && transferCanonical(row.value) === transferCanonical(original.value)))
+          if (!changed.length && !parsed.issues.length) continue
+          const exportedVersion = original ? String(original.version) : recordVersions.get(JSON.stringify([record.sku, record.aliasKey ?? '']))
+          if (exportedVersion === undefined) { issues.push({ row: r, sku: record.sku, field, source, message: `${scope.sheet}: this row is not in the exported file. Keep the exported SKU and listing, or download a new file.` }); continue }
+          if (exportedVersion !== record.version) { issues.push({ row: r, sku: record.sku, field, source, message: `${scope.sheet}: keep the exported record version intact` }); continue }
+          rows.push(...changed.map(row => ({ ...row, row: r, source, expected: original ? { action: original.action, value: original.value ?? null } : null })))
+          issues.push(...parsed.issues.map(issue => ({ ...issue, row: r, source, message: `${scope.sheet}: ${issue.message}` })))
+          if (rows.length + issues.length > TRANSFER_MAX_ROWS) throw new TransferWorkbookLimitError('rows')
+          continue
+        }
         if (editing && (!original || String(original.version) !== record.version)) { issues.push({ row: r, sku: record.sku, field, source, message: 'Keep the exported SKU, alias and version intact. Download a new workbook for a different record.' }); continue }
         const requested = record[`${actionPrefix}${header}`]
         if (editing && options.blankPolicy !== 'clear' && !requested && blank(raw)) { rows.push({ ...original!, row: r, source }); continue }

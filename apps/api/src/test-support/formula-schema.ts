@@ -13,7 +13,7 @@ export const PGLITE_SNAPSHOT_ENV = 'NEXUS_PGLITE_SNAPSHOT'
  */
 export function formulaSchemaStatements(): string[] {
   const root = fileURLToPath(new URL('../../../../', import.meta.url))
-  const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+  const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--config', `${root}/packages/database/prisma.config.ts`, '--from-empty', '--to-schema', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
   return [
     sql,
     // LX.F P3-22 — the deployed databases carry columns `schema.prisma` does not.

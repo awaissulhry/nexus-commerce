@@ -6,7 +6,7 @@ import { listActiveConnections } from '../connection-resolver.service.js'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { TRANSFER_CHANNELS, transferCategoryField, transferIsStore, type TransferRow, type ProductTransferBoundary } from '@nexus/shared/catalog-transfer'
-import { MANAGED_FIELDS, managedChannelField, masterTransferState, transferContracts, type TransferProduct } from './catalog-transfer-plan.js'
+import { MANAGED_FIELDS, isEmptyChannelValue, managedChannelField, masterTransferState, transferContracts, type TransferProduct } from './catalog-transfer-plan.js'
 import { jsonRecord, storedChannelState } from './channel-value-mutation.js'
 import { writeTransferWorkbook } from './catalog-transfer-file.js'
 import { writeTransferDownload } from './catalog-transfer-download.js'
@@ -85,7 +85,7 @@ export async function catalogTransferTemplate(market: string, familyId: string, 
     if (!account || account.isActive === false || account.channelType !== channel.channel || account.marketplace && !['GLOBAL', channel.marketplace].includes(account.marketplace)) throw new Error('Select an active account that matches the channel and marketplace')
     const identity = { ...empty, channel: channel.channel, accountId: channel.accountId, marketplace: channel.marketplace }
     rows.push({ ...identity, entity: 'Listings', field: transferCategoryField(channel.channel), action: channel.category ? 'SET' : '' as TransferRow['action'], value: channel.category ? channel.channel === 'ETSY' ? Number(channel.category) : channel.category : undefined })
-    const contract = await contracts.channel(channel.channel, channel.marketplace, channel.category)
+    const contract = await contracts.channel(channel.channel, channel.marketplace, channel.category, channel.accountId)
     for (const field of contract.fields) {
       if (field.fieldKey === transferCategoryField(channel.channel)) continue
       if (managedChannelField(field)) continue
@@ -96,7 +96,13 @@ export async function catalogTransferTemplate(market: string, familyId: string, 
   return writeTransferWorkbook(rows, dictionary)
 }
 
-export type ExportInput = { skus?: string[]; familyId?: string; market: string; marketplaces?: string[]; effective?: boolean; layout?: 'wide' | 'attributes'; boundary?: ProductTransferBoundary; fields?: string[]; workbookWriter?: (scopes: import('./catalog-workbook.js').WorkbookScope[]) => Promise<Buffer> }
+export type ExportInput = { skus?: string[]; familyId?: string; market: string; marketplaces?: string[]; effective?: boolean; layout?: 'wide' | 'attributes'; boundary?: ProductTransferBoundary; fields?: string[]; workbookWriter?: (scopes: import('./catalog-workbook.js').WorkbookScope[]) => Promise<Buffer>
+  /**
+   * PSIE — the product sheet's export. Nothing is left out silently: a listing without an account is skipped with a
+   * note (instead of stopping the whole export), and a stored listing value the current schema does not declare is
+   * exported as a read-only column that says so (instead of being dropped). Each note is pushed onto `notes`.
+   */
+  sheet?: { notes: string[] } }
 export const productInclude = { translations: true, categories: { select: { categoryId: true, isPrimary: true } }, parent: { include: { translations: true } } } as const
 
 /** Exported for AE.3 (services/assortment/copy-source.service.ts): the same rows, read in the lending business. */
@@ -159,6 +165,7 @@ export async function catalogRows(
   for (const listing of listings) {
     const start = rows.length
     const sku = products.find(p => p.id === listing.productId)!.sku
+    if (!listing.channelConnectionId && input.sheet) { input.sheet.notes.push(`${sku}: its ${listing.channel} ${listing.marketplace} listing has no account, so it was left out. Assign the account in the sheet, then export again.`); continue }
     if (!listing.channelConnectionId) throw new Error(`${sku}: a ${listing.channel} listing has no account attribution. Assign its account before exporting an editable listing.`)
     const identity = { ...empty, sku, entity: 'Overrides' as const, channel: listing.channel, accountId: listing.channelConnectionId, marketplace: listing.marketplace, aliasKey: listing.aliasKey, version: listing.version }
     const categoryKey = transferCategoryField(listing.channel)
@@ -166,7 +173,7 @@ export async function catalogRows(
     const hasCategory = Object.prototype.hasOwnProperty.call(platform, categoryKey)
     const storedCategory = platform[categoryKey]
     const category = String((hasCategory && transferIsStore(listing.channel) ? storedCategory : storedCategory ?? defaults.get(JSON.stringify([listing.channel, listing.marketplace]))?.[listing.productId]?.channelCategoryId) ?? '')
-    const contract = await contracts.channel(listing.channel, listing.marketplace, category)
+    const contract = await contracts.channel(listing.channel, listing.marketplace, category, listing.channelConnectionId)
     const listingLanguages = languages?.get(JSON.stringify([listing.channel, listing.marketplace])) ?? await marketLanguages(listing.channel, listing.marketplace)
     if (input.effective) {
       for (const locale of listingLanguages) {
@@ -194,11 +201,15 @@ export async function catalogRows(
           rows.push({ ...identity, locale, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
         }
       }
+      if (input.sheet) for (const [key, value] of undeclaredListingValues(listing, contract.fields)) rows.push({ ...identity, locale: '', field: key, action: 'SET', value })
     }
     if (workbookMeta) {
       const fields = [{ field: categoryKey, label: 'Channel category', type: listing.channel === 'ETSY' ? 'number' : 'text' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey && (!input.boundary || !managedChannelField(f))).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))]
       const textFields = new Set(contract.fields.filter(f => channelContentField(f, contract.masterLocalizableKeys)).map(f => f.fieldKey))
       const facts = fields.filter(f => !textFields.has(f.field)), text = fields.filter(f => textFields.has(f.field))
+      // PSIE — the undeclared stored keys of THIS listing join its sheet's dictionary as read-only columns.
+      if (input.sheet) for (const [key] of undeclaredListingValues(listing, contract.fields)) if (!facts.some(f => f.field === key)) facts.push({ field: key, label: `${key} (not in the current ${listing.channel} ${listing.marketplace} schema)`, type: 'json', editable: false,
+        help: 'Stored on this listing, but the current channel schema does not list it. Shown so nothing is hidden; it cannot be changed here.' })
       for (const row of rows.slice(start)) workbookMeta.set(row, { category, fields: row.locale ? text : facts, note: contract.warning })
     }
   }
@@ -218,6 +229,12 @@ export async function catalogRows(
   return rows
 }
 
+
+/** PSIE — stored listing values (`overrideData`) whose key the listing's current contract does not declare. */
+export function undeclaredListingValues(listing: { overrideData?: unknown }, fields: { fieldKey: string; sheetKey?: string | null }[]): [string, unknown][] {
+  const declared = new Set(fields.flatMap(f => [f.fieldKey, f.sheetKey].filter((k): k is string => !!k)))
+  return Object.entries(jsonRecord(listing.overrideData)).filter(([key, value]) => !declared.has(key) && !isEmptyChannelValue(value)).sort(([a], [b]) => a.localeCompare(b))
+}
 
 export async function exportCatalogTransfer(input: ExportInput) {
   if (input.marketplaces && (!Array.isArray(input.marketplaces) || input.marketplaces.length > 50 || input.marketplaces.some(m => !/^(?:[A-Z]{2}|GLOBAL)$/.test(m)))) throw new Error('Select valid marketplace codes')

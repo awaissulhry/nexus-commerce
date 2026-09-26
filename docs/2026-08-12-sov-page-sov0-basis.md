@@ -383,8 +383,8 @@ Measured (`_sov0-probe.mts` §5):
 
 | fixture | brief says | measured |
 |---|---|---|
-| `givi` | 11,828 market impressions, ours 0 | 🔴 **not a zero.** On 07-12 it has **two** ASIN rows — `B0BMSJWW7L` brand **22** and `B0BMSWM15B` brand **46**. On 07-19, brand **99** |
-| `giacca moto protezioni livello 3` | 778, ours 0 | 🔴 **not a zero.** 07-12: `B0BMSWM15B` brand **33** + `B0D8RPCJSH` brand 0. On 07-19, brand **12** |
+| `givi` | 11,828 market impressions, ours 0 | 🔴 **not a zero.** On 07-12 it has **two** ASIN rows — `B0FX71011D` brand **22** and `B0FXE444C9` brand **46**. On 07-19, brand **99** |
+| `giacca moto protezioni livello 3` | 778, ours 0 | 🔴 **not a zero.** 07-12: `B0FXE444C9` brand **33** + `B0FX01259A` brand 0. On 07-19, brand **12** |
 | `africa twin` | 3,795, ours 0 | ✅ a real zero — but only in **2026-07-12**, and IT renders **2026-07-19** |
 | `scorpion exo tech` | 520, ours 0 | ✅ same |
 

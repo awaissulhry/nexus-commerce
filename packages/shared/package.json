@@ -6,6 +6,18 @@
   "main": "./dist/vault.js",
   "types": "./dist/vault.d.ts",
   "exports": {
+    "./channel-listing-issues": {
+      "types": "./dist/channel-listing-issues.d.ts",
+      "default": "./dist/channel-listing-issues.js"
+    },
+    "./attributes": {
+      "types": "./dist/attributes.d.ts",
+      "default": "./dist/attributes.js"
+    },
+    "./attribute-concepts": {
+      "types": "./dist/attribute-concepts.d.ts",
+      "default": "./dist/attribute-concepts.js"
+    },
     "./studio-publication": {
       "types": "./dist/studio-publication.d.ts",
       "default": "./dist/studio-publication.js"
@@ -141,6 +153,14 @@
     "./content-language": {
       "types": "./dist/content-language.d.ts",
       "import": "./dist/content-language.js"
+    },
+    "./channel-mapping": {
+      "types": "./dist/channel-mapping.d.ts",
+      "default": "./dist/channel-mapping.js"
+    },
+    "./attribute-placement-proposal": {
+      "types": "./dist/attribute-placement-proposal.d.ts",
+      "default": "./dist/attribute-placement-proposal.js"
     }
   },
   "scripts": {

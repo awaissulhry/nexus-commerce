@@ -104,7 +104,7 @@ strip it regardless. **`SpwProduct.asin` is `''` at all nine call sites.** Conse
 
 The data exists: **`Product.amazonAsin` is populated on 246 of 339 products (72.6%)**, and
 `ChannelListing.externalListingId` holds real child ASINs (799 Amazon rows,
-e.g. `B0BVQNHWVW`). `ProductReadCache` just never mirrored it.
+e.g. `B0FX749EA8`). `ProductReadCache` just never mirrored it.
 
 ### D4 — The advertisable unit is wrong, and a naive fix makes it worse
 

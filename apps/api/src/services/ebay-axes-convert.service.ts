@@ -25,7 +25,7 @@ import { readPushControls } from './listing-push-controls.js'
  * `inventory-managed`; their axis names are set wholesale by re-publishing the
  * group, which now emits the market's own names.
  */
-import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
+import { callTradingApi, parseStartPrice, siteIdForMarket } from './ebay-trading-api.service.js'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 
@@ -57,7 +57,7 @@ export function parseVariationsForRename(raw: string): { vars: LiveVar[]; axisSe
     const b = vm[1]
     const sku = /<SKU>([^<]*)<\/SKU>/.exec(b)?.[1] ?? ''
     const ean = /<EAN>([^<]*)<\/EAN>/.exec(b)?.[1] ?? 'Does not apply'
-    const startPrice = /<StartPrice[^>]*>([^<]*)<\/StartPrice>/.exec(b)?.[1] ?? ''
+    const startPrice = parseStartPrice(b)?.text ?? '' // eBay's text, echoed back unchanged
     const quantity = /<Quantity>([^<]*)<\/Quantity>/.exec(b)?.[1] ?? ''
     const sb = /<VariationSpecifics>([\s\S]*?)<\/VariationSpecifics>/.exec(b)?.[1] ?? ''
     const specs: Array<[string, string]> = []

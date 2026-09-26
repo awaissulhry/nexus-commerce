@@ -12,7 +12,7 @@ const row = (over: Partial<SyncQueueRow> = {}): SyncQueueRow => ({
   id: Math.random().toString(36).slice(2), productId: 'p1',
   channelListingId: 'cl1', targetChannel: 'EBAY', targetRegion: 'IT', syncStatus: 'FAILED',
   syncType: 'PRICE_UPDATE', errorMessage: null, errorCode: null, retryCount: 0, maxRetries: 3,
-  isDead: false, diedAt: null, holdUntil: null, externalListingId: '257584954808',
+  isDead: false, diedAt: null, holdUntil: null, externalListingId: '938554736087',
   sku: 'GALE-JACKET-BLACK-MEN-M', aliasId: null, aliasKey: '', aliasResolved: true,
   reason: 'rejected', reasonSummary: 'The marketplace refused it', reasonActionable: true, reasonWillRetry: false,
   createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
@@ -22,7 +22,7 @@ const row = (over: Partial<SyncQueueRow> = {}): SyncQueueRow => ({
 describe('one incident must not read as thousands of problems', () => {
   it('collapses the same failure carrying different ids and numbers into ONE cause', () => {
     const rows = [
-      row({ errorMessage: 'Rate limit exceeded for item 257584954808 after 3 retries' }),
+      row({ errorMessage: 'Rate limit exceeded for item 938554736087 after 3 retries' }),
       row({ errorMessage: 'Rate limit exceeded for item 257584954999 after 7 retries' }),
       row({ errorMessage: 'Rate limit exceeded for item 257584954111 after 12 retries' }),
     ]
@@ -140,7 +140,7 @@ describe('filters', () => {
 
 describe('normaliseMessage is conservative on purpose', () => {
   it('strips ids, timestamps and counts', () => {
-    expect(normaliseMessage('Failed at 2026-08-01T03:00:00Z for 257584954808 (attempt 4)'))
+    expect(normaliseMessage('Failed at 2026-08-01T03:00:00Z for 938554736087 (attempt 4)'))
       .not.toMatch(/2026|2575|4/)
   })
 

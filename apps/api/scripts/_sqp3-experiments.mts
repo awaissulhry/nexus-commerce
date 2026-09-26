@@ -71,7 +71,7 @@ async function marketplaceId(code: string): Promise<string> {
  * The ASIN that can answer 4.1 at all: wide span AND many rows per week, so a field-by-field
  * comparison has something to compare. Sorting by span alone first picked an FR ASIN with ONE row in
  * its newest week — a span of 11 weeks and nothing to detect revision with. Ranked by newest-week
- * coverage, then by total, it picks IT B0BMSWM15B: 7 weeks at 100 rows each (the per-report cap).
+ * coverage, then by total, it picks IT B0FXE444C9: 7 weeks at 100 rows each (the per-report cap).
  */
 async function pickAsin(): Promise<{ asin: string; marketplace: string; weeks: Array<{ week: string; n: number }> }> {
   const rows = await prisma.searchQueryPerformance.groupBy({

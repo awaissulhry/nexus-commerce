@@ -131,7 +131,7 @@
 
 .issues ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .issues li { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); line-height: 1.45; }
-.issues code { font-family: ui-monospace, monospace; color: var(--nds-text); }
+.issues code { font-family: var(--nds-font-mono); color: var(--nds-text); }
 
 /* ── what Amazon has ─────────────────────────────────────────────── */
 
@@ -283,7 +283,7 @@
 
 /* The channel's own id for an attempt — dim, monospaced, and never wrapped. */
 .jobRef {
-  font-family: ui-monospace, monospace;
+  font-family: var(--nds-font-mono);
   color: var(--nds-text-3);
   overflow: hidden;
   text-overflow: ellipsis;

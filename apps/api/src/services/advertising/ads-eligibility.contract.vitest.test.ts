@@ -18,7 +18,7 @@ const LIVE_ROW = {
   eligibilityStatusList: [],
   overallStatus: 'ELIGIBLE',
   productDetails: {
-    asin: 'B0CFB7GTV7',
+    asin: 'B0FXF87810',
     globalStoreSetting: null,
     sku: 'AIR-MESH-JACKET-MEN-L-BLACK',
   },
@@ -26,7 +26,7 @@ const LIVE_ROW = {
 
 describe('eligibility identifiers — the observed nesting', () => {
   it('reads the asin from productDetails, where Amazon puts it', () => {
-    expect(eligibilityAsin(LIVE_ROW)).toBe('B0CFB7GTV7')
+    expect(eligibilityAsin(LIVE_ROW)).toBe('B0FXF87810')
   })
 
   it('reads the sku from productDetails', () => {
@@ -34,8 +34,8 @@ describe('eligibility identifiers — the observed nesting', () => {
   })
 
   it('uppercases the asin so lookups key consistently', () => {
-    const row = { ...LIVE_ROW, productDetails: { asin: 'b0cfb7gtv7' } } as AdsProductEligibility
-    expect(eligibilityAsin(row)).toBe('B0CFB7GTV7')
+    const row = { ...LIVE_ROW, productDetails: { asin: 'b0fxf87810' } } as AdsProductEligibility
+    expect(eligibilityAsin(row)).toBe('B0FXF87810')
   })
 
   it('still reads a flat asin, so a future shape change does not break it', () => {

@@ -195,7 +195,7 @@ describe('a CREATE resolves its PARENT, not itself', () => {
 })
 
 describe('product ads resolve on both keys too', () => {
-  const AD = { id: 'loc_ad_1', externalAdId: '493240712820577', sku: null, asin: 'B0CR5TFBZC', status: 'ENABLED' }
+  const AD = { id: 'loc_ad_1', externalAdId: '493240712820577', sku: null, asin: 'B0FXCEAA5C', status: 'ENABLED' }
 
   it('by Ad ID', async () => {
     const p = await buildPreview(fakePrisma({
@@ -204,7 +204,7 @@ describe('product ads resolve on both keys too', () => {
     }), 'job')
     expect(p.rows[0].status).toBe('UPDATE')
     // Labelled by what an operator recognises, not the 15-digit id.
-    expect(p.rows[0].label).toBe('B0CR5TFBZC')
+    expect(p.rows[0].label).toBe('B0FXCEAA5C')
   })
 
   it('by row key when the Ad ID was mangled', async () => {

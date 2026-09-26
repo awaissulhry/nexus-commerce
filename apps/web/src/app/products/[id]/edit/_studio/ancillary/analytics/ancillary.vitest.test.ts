@@ -173,10 +173,10 @@ describe('readEfficiency — ACOS null is not 0%', () => {
 
 describe('adsQuery — the ASIN is the one that matches', () => {
   it('carries every identifier the product has', () => {
-    const q = adsQuery({ productId: 'p1', sku: 'GALE-JACKET', asin: 'B0BMSH19GY', windowDays: 7 })
+    const q = adsQuery({ productId: 'p1', sku: 'GALE-JACKET', asin: 'B0FXFA789A', windowDays: 7 })
     expect(q).toContain('productId=p1')
     expect(q).toContain('sku=GALE-JACKET')
-    expect(q).toContain('asin=B0BMSH19GY')
+    expect(q).toContain('asin=B0FXFA789A')
   })
 
   it('omits the ones it does not have rather than sending empty strings', () => {

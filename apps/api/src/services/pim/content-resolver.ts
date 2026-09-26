@@ -213,13 +213,15 @@ export function resolveContent(input: ResolveContentInput): ResolvedContent {
 }
 
 /** Mapping source paths keep their explicit language/link semantics, but never walk legacy JSON. */
-export function contentPathAddress(path: string, requested: string, localizableKeys: readonly string[] = []): { field: string; requested: string; tail: string[] } | null {
+export function contentPathAddress(path: string, requested: string, localizableKeys: readonly string[] | ReadonlySet<string> = []): { field: string; requested: string; tail: string[] } | null {
   const parts = path.replace(/\{locale\}/g, requested).split('.')
   let language = requested
   if (parts[0] === 'localizedContent') { parts.shift(); language = parts.shift() ?? '' }
   else if (['categoryAttributes', 'variantAttributes'].includes(parts[0])) parts.shift()
   const field = contentField(parts.shift() ?? '')
-  if (![...Object.keys(CONTENT_COLUMNS), ...localizableKeys].includes(field)) return null
+  // P7 — a Set is looked up, not copied: the mapping resolver asks this once per field of every product.
+  const localizable = localizableKeys instanceof Set ? localizableKeys.has(field) : (localizableKeys as readonly string[]).includes(field)
+  if (!Object.prototype.hasOwnProperty.call(CONTENT_COLUMNS, field) && !localizable) return null
   return { field, requested: normalizeLanguage(language), tail: parts }
 }
 

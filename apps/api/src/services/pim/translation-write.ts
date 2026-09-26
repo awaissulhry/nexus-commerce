@@ -12,6 +12,8 @@ export interface TranslationWrite {
   state: 'draft' | 'reviewed'; remove?: boolean; reset?: string[]
   expectedVersion?: number; expectedTranslationVersion?: number
   userId?: string | null; ip?: string; label?: string
+  /** PSIE — `false`: cascade without queueing a channel update (see master-content). */
+  queueOutbound?: boolean
 }
 const conflict = (label: string) => Object.assign(new Error(`${label} changed. Reload before saving it.`), { statusCode: 409 })
 
@@ -84,7 +86,7 @@ export async function writeTranslation(input: TranslationWrite) {
     }
     if (!Object.keys(changed).length && prior) for (const [key,column] of Object.entries(CONTENT_COLUMNS)) changed[key] = prior[column]
     const { masterContentService } = await import('../master-content.service.js')
-    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, tx: prisma as any })
+    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, queueOutbound: input.queueOutbound, tx: prisma as any })
     await prisma.auditLog.create({ data: { entityType: 'Product', entityId: product.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
       before: prior as any ?? {}, after: input.remove ? { removed: true } : changed as any,
       metadata: { source: input.state === 'draft' ? 'ai' : 'manual', layer: 'language', language, intent: input.remove ? 'remove' : 'set' } } })

@@ -620,7 +620,7 @@ export function EbayImportWizard({
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={'sku\tcondition\tprice\nABC-123\tNew\t49.99'}
               rows={6}
-              style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', ...T.note }}
+              style={{ fontFamily: 'var(--nds-font-mono)', ...T.note }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button variant="secondary" size="sm" disabled={!pasteText.trim()} onClick={onParsePaste}>

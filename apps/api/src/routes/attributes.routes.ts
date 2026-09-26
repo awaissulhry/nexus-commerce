@@ -28,14 +28,49 @@
  *
  *   AttributeOption (only meaningful in context of an attribute):
  *     POST   /attributes/:attrId/options     create option
- *     PATCH  /attribute-options/:id          update label/metadata/order
+ *     PATCH  /attribute-options/:id          update label/metadata/order/synonyms/archived
  *     DELETE /attribute-options/:id          delete
+ *
+ *   P3 (docs/attributes/PLAN.md §4.1) — the dictionary at scale and the shared concepts:
+ *     POST   /attributes/bulk                create/update up to 500 attributes and their options,
+ *                                              all-or-nothing, per-row errors (dryRun supported)
+ *     GET    /attributes/concepts            the concept catalogue + this business's link plan
+ *     POST   /attributes/concepts/apply      link/create concept attributes (dryRun by default)
+ *   P6 (§4.4) — the open dropdown:
+ *     GET    /attributes/:code/choices       the business's options + each channel's values, merged, with sources
  */
 
 import type { FastifyPluginAsync } from 'fastify'
 import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
 import { CODE_NOT_LOCALIZABLE, CODE_TYPES, localizableRefusalFor } from '../services/pim/attribute-rules.js'
+import { parseAttributeRules } from '@nexus/shared/attributes'
+import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION } from '@nexus/shared/attribute-concepts'
+import { applyConceptDictionary, conceptDictionaryPlan } from '../services/pim/attribute-concepts.service.js'
+import { attributeChoices, ChoicesError } from '../services/pim/attribute-choices.service.js'
+import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
+import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
+import { applyPlacementProposal, placementProposalPreview, undoPlacementProposal } from '../services/pim/attribute-placement-correction.js'
+import { attributeUsages } from '../services/pim/attribute-usage.service.js'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+
+const actorOf = (request: FastifyRequest): Actor => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null, ip: request.ip ?? null })
+
+/** A placement refusal is the operator's answer (400/404/409 with the reason); anything else is a real failure. */
+async function placementReply<T>(reply: FastifyReply, work: () => Promise<T>) {
+  try { return await work() }
+  catch (error) {
+    if (error instanceof PlacementError) return reply.code(error.status).send({ error: error.message, ...(error.details ? { details: error.details } : {}) })
+    throw error
+  }
+}
+
+/** P3 — `validation` must satisfy the shared contract; the refusal names each problem. `null`/absent = no rules. */
+function validationRefusal(validation: unknown): string | null {
+  if (validation === undefined || validation === null) return null
+  const rules = parseAttributeRules(validation)
+  return rules.ok ? null : `validation is invalid: ${(rules as { errors: string[] }).errors.join('; ')}`
+}
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 
@@ -208,6 +243,7 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       localizable?: boolean
       scope?: string
       sortOrder?: number
+      semanticKey?: string | null
     }
     if (!body.code || !CODE_PATTERN.test(body.code))
       return reply.code(400).send({
@@ -228,6 +264,10 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       })
     if (body.localizable && CODE_TYPES.has(body.type))
       return reply.code(400).send({ error: CODE_NOT_LOCALIZABLE })
+    const invalidRules = validationRefusal(body.validation)
+    if (invalidRules) return reply.code(400).send({ error: invalidRules })
+    const conceptRefusal = semanticKeyRefusal(body.semanticKey)
+    if (conceptRefusal) return reply.code(400).send({ error: conceptRefusal })
 
     const groupExists = await prisma.attributeGroup.findUnique({
       where: { id: body.groupId },
@@ -249,6 +289,7 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
           localizable: body.localizable ?? false,
           scope: body.scope ?? 'global',
           sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+          semanticKey: body.semanticKey ?? null,
         },
       })
       return reply.code(201).send({ attribute })
@@ -256,7 +297,9 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       if (err?.code === 'P2002')
         return reply
           .code(409)
-          .send({ error: `attribute code "${body.code}" already exists` })
+          .send({ error: String(err?.meta?.target ?? '').includes('semanticKey')
+            ? `concept "${body.semanticKey}" is already linked to another attribute`
+            : `attribute code "${body.code}" already exists` })
       throw err
     }
   })
@@ -272,6 +315,7 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       localizable?: boolean
       scope?: string
       sortOrder?: number
+      semanticKey?: string | null
     }
     // Deliberately not allowing `type` or `code` changes — type
     // would orphan stored values; code is the stable identifier
@@ -293,8 +337,16 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'groupId does not exist' })
       data.groupId = body.groupId
     }
-    if (body.validation !== undefined)
+    if (body.validation !== undefined) {
+      const invalidRules = validationRefusal(body.validation)
+      if (invalidRules) return reply.code(400).send({ error: invalidRules })
       data.validation = (body.validation as never) ?? null
+    }
+    if (body.semanticKey !== undefined) {
+      const conceptRefusal = semanticKeyRefusal(body.semanticKey)
+      if (conceptRefusal) return reply.code(400).send({ error: conceptRefusal })
+      data.semanticKey = body.semanticKey
+    }
     if (body.defaultValue !== undefined)
       data.defaultValue = (body.defaultValue as never) ?? null
     if (body.localizable === true) {
@@ -321,20 +373,48 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025')
         return reply.code(404).send({ error: 'attribute not found' })
+      if (err?.code === 'P2002')
+        return reply.code(409).send({ error: `concept "${body.semanticKey}" is already linked to another attribute` })
       throw err
     }
   })
 
+  // P3b S3 (docs/attributes/PLAN.md §10.9) — delete only what nothing uses; otherwise 409 "archive instead".
   fastify.delete('/attributes/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await prisma.customAttribute.delete({ where: { id } })
-      return { ok: true, id }
-    } catch (err: any) {
-      if (err?.code === 'P2025')
-        return reply.code(404).send({ error: 'attribute not found' })
-      throw err
-    }
+    return placementReply(reply, () => deleteAttribute(id, actorOf(request)))
+  })
+
+  // P3b S3 — placement (a label; the value stays where it is), archive / restore, and undo of a placement change.
+  fastify.patch('/attributes/:id/placement', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => setAttributePlacement(id, (request.body ?? {}) as { placement?: unknown; channels?: unknown }, actorOf(request)))
+  })
+  fastify.post('/attributes/:id/archive', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => archiveAttribute(id, actorOf(request)))
+  })
+  fastify.post('/attributes/:id/restore', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    return placementReply(reply, () => restoreAttribute(id, actorOf(request)))
+  })
+  // P3b S6 — which connected channels use each attribute, and which are dormant (for the settings list, S8).
+  fastify.get('/attributes/usage', async () => ({ attributes: [...(await attributeUsages()).values()].sort((a, b) => a.code.localeCompare(b.code)) }))
+
+  // P3b S5 — the reviewed cleanup: preview (with a fingerprint), apply approved groups, undo a whole batch.
+  fastify.get('/attributes/placement-proposal', async () => placementProposalPreview())
+  fastify.post('/attributes/placement-proposal/apply', async (request, reply) => {
+    const body = (request.body ?? {}) as { fingerprint?: unknown; groups?: unknown; includeDisputed?: unknown }
+    if (typeof body.fingerprint !== 'string') return reply.code(400).send({ error: 'fingerprint is required (from GET /attributes/placement-proposal)' })
+    return placementReply(reply, () => applyPlacementProposal({ fingerprint: body.fingerprint as string, groups: body.groups as never, includeDisputed: body.includeDisputed as never }, actorOf(request)))
+  })
+  fastify.post('/attributes/placement-proposal/:batchId/undo', async (request, reply) => {
+    const { batchId } = request.params as { batchId: string }
+    return placementReply(reply, () => undoPlacementProposal(batchId, actorOf(request)))
+  })
+  fastify.post('/attributes/placement-changes/:auditId/undo', async (request, reply) => {
+    const { auditId } = request.params as { auditId: string }
+    return placementReply(reply, () => undoPlacementChange(auditId, actorOf(request)))
   })
 
   // ── AttributeOption ──────────────────────────────────────────
@@ -359,9 +439,10 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true, type: true },
     })
     if (!attr) return reply.code(404).send({ error: 'attribute not found' })
-    if (attr.type !== 'select' && attr.type !== 'multiselect')
+    // P6 — a text attribute's options are suggestions for the open dropdown.
+    if (!OPTION_TYPES.has(attr.type))
       return reply.code(400).send({
-        error: `attribute type "${attr.type}" does not accept options (only select/multiselect)`,
+        error: `attribute type "${attr.type}" does not accept options (select, multiselect, text or textarea)`,
       })
     try {
       const option = await prisma.attributeOption.create({
@@ -389,6 +470,8 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
       label?: string
       metadata?: unknown
       sortOrder?: number
+      synonyms?: string[]
+      archived?: boolean
     }
     const data: Record<string, unknown> = {}
     if (body.label !== undefined) {
@@ -399,6 +482,13 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.metadata !== undefined)
       data.metadata = (body.metadata as never) ?? null
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
+    if (body.synonyms !== undefined) {
+      if (!Array.isArray(body.synonyms) || body.synonyms.some(s => typeof s !== 'string' || !s.trim()))
+        return reply.code(400).send({ error: 'synonyms must be a list of non-empty text' })
+      data.synonyms = body.synonyms.map(s => s.trim())
+    }
+    // P3 — retiring keeps every stored value valid; it only stops offering the option.
+    if (body.archived !== undefined) data.archivedAt = body.archived ? new Date() : null
     if (Object.keys(data).length === 0)
       return reply.code(400).send({ error: 'no mutable fields supplied' })
     try {
@@ -412,6 +502,52 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'option not found' })
       throw err
     }
+  })
+
+  // ── P3 — the dictionary at scale, and the shared concepts ────
+
+  fastify.post('/attributes/bulk', async (request, reply) => {
+    const body = (request.body ?? {}) as { attributes?: AttributeUpsert[]; dryRun?: boolean }
+    try {
+      const result = await upsertAttributes(body.attributes ?? [], { dryRun: body.dryRun === true })
+      const failed = result.results.filter(r => !r.ok).length
+      if (failed) return reply.code(400).send({ error: `Nothing was saved: ${failed} of ${result.results.length} attribute(s) need a fix.`, ...result })
+      return result
+    } catch (err) {
+      if (err instanceof DictionaryError) return reply.code(400).send({ error: err.message })
+      throw err
+    }
+  })
+
+  // P6 — everything one dropdown may offer: the business's options + each channel's values, merged, with sources.
+  // ?coordinates=EBAY:IT:177104,AMAZON:IT:OUTERWEAR (channel:market[:category]).
+  fastify.get('/attributes/:code/choices', async (request, reply) => {
+    const { code } = request.params as { code: string }
+    const raw = String((request.query as { coordinates?: string }).coordinates ?? '')
+    const coordinates = raw.split(',').map(part => part.trim()).filter(Boolean).map(part => {
+      const [channel, marketplace, productType] = part.split(':')
+      return { channel, marketplace, productType: productType || null }
+    })
+    if (coordinates.some(c => !c.channel || !c.marketplace)) return reply.code(400).send({ error: 'coordinates are channel:market[:category], comma-separated' })
+    if (coordinates.length > 12) return reply.code(400).send({ error: 'at most 12 coordinates per call' })
+    try {
+      return await attributeChoices(code, coordinates)
+    } catch (err) {
+      if (err instanceof ChoicesError) return reply.code(404).send({ error: err.message })
+      throw err
+    }
+  })
+
+  fastify.get('/attributes/concepts', async () => ({
+    revision: CONCEPTS_REVISION,
+    concepts: ATTRIBUTE_CONCEPTS,
+    plan: await conceptDictionaryPlan(),
+  }))
+
+  fastify.post('/attributes/concepts/apply', async (request) => {
+    const body = (request.body ?? {}) as { dryRun?: boolean }
+    // A write only on an explicit `dryRun: false`: linking changes what every channel reads.
+    return applyConceptDictionary({ dryRun: body.dryRun !== false })
   })
 
   fastify.delete('/attribute-options/:id', async (request, reply) => {
