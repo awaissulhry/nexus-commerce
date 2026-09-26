@@ -1,360 +1,66 @@
 # Channel connections — progress and handover
 
-## Latest checkpoint — 2026-09-25 11:38 UTC
+## Current status
 
-**Package A code/recovery APPROVED, fully gated and locally rehearsed. No package or
-recovery ref has been pushed by this session; nothing new is deployed or enabled.**
-Final documentation signoff/publication remain pending. The Owner has approved reviewed,
-gated, rehearsed deployment with every new switch OFF. The existing CI eBay consent-page
-GET probes still need the separate narrow exception already requested; no yes received.
+**Status lives in one file: [COMPLETION-MATRIX](COMPLETION-MATRIX.md)** — the releases, every switch
+with its default and production state, and one state per requirement (implemented / deployed /
+enabled / production-verified). This file is the programme's working history; where it disagrees
+with the matrix, the matrix wins.
 
-Published main is `2459bf52fe85e1ffe0b5f0c510994e019cb3eed4` (refetched11:37Z; docs after
-bc39). Public readiness re-read before that fetch reports healthy serving **bc39f98d**.
-Release source is **`3be0a62e1344626db7f8adf4e49351880cae6725`**; recovery branch
-`recovery/cx-20260925` is **`34c376113380f4c803d4f91190f94c06126c56a2`**. Metadata commits
-may follow the reviewed source. Recovery preserves published main and the exact release
-DB tree; application differences are C11f6a/b/c only. Its PCO fixture correction has an
-independent APPROVE; no assertion, timeout, ratchet or hook was weakened.
-
-Clean source full hook: DB33, **API12220/359 existing skips**, **web4887/13**, both builds,
-security127, RBAC2728/zero unmapped, **realPG328 in25 suites/zero skips**; profiles977 files,
-41 known-failing/217 tests, none new or worse. Clean recovery full hook: **API12129/340**,
-web4887/13, DB33/security127/builds, **realPG309 in23 suites/zero skips**; profiles971 files,
-same41/217 unchanged baseline. Contrast at these heads: web92/factory106 pairs, zero below7:1.
-Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
-`package-a-recovery-gate-34c376113.log`; archived sublogs under their helpers' build/evidence
-`package-a-3be0a62e1/` and `recovery-34c376113/`.
-
-HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
-recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
-migration history/checksums and role/object invariants. Jobs initialized with processing
-held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
-Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the source-equivalent
-pre-checkout pass are preserved but are not substituted for the clean3be gate.
-
-Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
-on the IT market (some follow the master price); the active eBay sellers have default
-warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
-unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
-No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
-shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
-with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
-findings; healthy readiness is not a blanket operational verdict.
-
-Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
-eBay orders68fcc9f36 APPROVED. Etsy ingest c621418e and SKU identity da1de249 APPROVED;
-pooled line foundation61cbe88bc is under review and terminal writer integration remains open.
-Its offset-ceiling history limit remains an explicit hold, not unrestricted completeness.
-Package C: listing issues16945532a and Tag contrast e738e4531 APPROVED; privacy census
-6e6687952 APPROVED, candidate records in verification; cancellation parity b77db1bd3 APPROVED,
-terminal follow-up b382fb7ba required fixes (recovery65bda8b72 committed, atomic-state fix in
-progress). Contract follow-up330395766 and teardown87406ac23 await independent review.
-The latter proves/fixes a setup-client shutdown race consistent with the original57P01;
-it does not explain recoveryf9's separate PGlite socket loss. Remaining engineering,
-activation preparations and Phase5 audit remain open under the structured plan.
-
-
-Last fully verified release (2026-09-22): `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
-commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
-smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
-Sanitized release evidence: `build/RELEASE-2026-09-22-EVIDENCE.json` (kept locally; not in the public repo). This supersedes
-older pending-deployment notes; the full channel plan remains open.
-
-Updated **2026-09-25** (production evidence uses UTC). Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
-(Owner report); this does not restart **P8, which remains deferred**.
-
-**Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
-Package labels are not proof of every acceptance criterion. Finances cutover, full eBay event
-coverage, live validation, Owner setup, and cleanup must be reconciled against current evidence.
-The C1–C8 release is deployed. Package A and the five later lanes remain local. The Owner
-approved reviewed, gated, rehearsed package deployments with every new switch OFF on 2026-09-25.
-
-**Historical deploy warning (not Package A):** `6cfcb143` (commit `090db711`) reached
-**SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
-read against the wrong clock. `/api/health` reports the serving build as its commit's first 8
-characters, which is the cheapest way to tell *deployed* from *built*.
+In short, on 2026-09-26: PR #4 (architecture: API, worker and scheduler; pre-deploy migrations;
+restricted runtime login), PR #14 (FBM stock double-deduction hotfix), PR #15 (Package A,
+C9–C11f6c) and PR #32 (release B+C: one stock model, eBay price, eBay privacy, contract checks,
+Amazon Finances A0/A1/A2/A5, listing issues) are merged and deployed. Every new switch is OFF. The
+switch-on phase with the Owner has not started. Releases go by pull request; the Owner decides each
+merge.
 
 ## 0. Cold start — read this much and you can work
 
-### Historical checkpoint — source77/recoverya5 before published main moved
-
-Follow [the structured plan](2026-09-25-STRUCTURED-PLAN.md), Phase 1 before Phase 2.
-The Owner approves each reviewed, fully gated and rehearsed package pushed to `main`
-and deployed with every new switch OFF. Activation, live vendor calls/probes, operator
-grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
-`prisma migrate resolve`, Finances cutover and P7 drops still need separate explicit approval.
-
-- **Published/serving baseline:** fetched main `a22f2fc361488c3620d6c8110344e8200c46ebb2`;
-  public health HTTP 200/healthy/build `a22f2fc3` at **2026-09-24T23:49:30.532Z**.
-  Quantity mismatches and critical Ads integrity alerts remain. This public read
-  does not refresh private business, migration, runtime or switch evidence.
-  A 2026-09-25 Railway CLI read (MCP unavailable) confirms base deployment
-  `674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at the same GitHub SHA; remote main
-  was rechecked unchanged at 2026-09-25 00:15Z. This is baseline evidence, not Package A deployment proof.
-- **Package A, implemented locally:** C9–C11f6c merged cleanly with that main at
-  `77c787559d95dc394df358a9fea7b10179b6d5a0`. Independent whole-package source review
-  APPROVE. The exact-head normal full hook **passed, exit 0**: 33 database; 4,850 web /
-  13 existing skips; 11,883 API / 359 existing skips; both builds; 127 security; RBAC
-  2,727 routes / zero unmapped; 328 realPG tests in 25 suites / zero skips, NOSUPERUSER.
-  Profiles-ON: 961 files, 41 known failing files / 217 tests, none new or worse.
-  AAA contrast gate: 106 pairs, zero below 7:1. Package A is **not pushed or deployed**.
-  Logs and limits of this proof are in [the release record](RELEASE-C9-C11F6C.md).
-- **Recovery:** `recovery/cx-20260925` at `a5efa0dd9`, from `38c99a7af` + the same
-  published main + the release database tree + the two prescribed test-support files.
-  Exact `packages/database` diff and independent source review pass. Recovery normal full hook
-  **passed, exit 0**: 33 database; 11,792 API / 340 existing skips; 4,850 web / 13 existing
-  skips; both builds; 127 security; RBAC 2,727 / zero unmapped; 309 realPG / 23 suites /
-  zero skips; profiles-ON 955 files / 41 known failing files / 217 tests, none worse.
-  Earlier recovery branches are historical only.
-- **Source rehearsal passed:** HTTP at **2026-09-25 00:12:13Z**, jobs at **00:15:11Z**,
-  for source `77c787559` / recovery `a5efa0dd9`, PostgreSQL 17.11, NOSUPERUSER owner.
-  History grows by exactly eight CX migrations; `a22` refuses those exact eight;
-  recovery → release → recovery returns 200 with exact builds, unchanged full history,
-  checksums, roles/attributes/objects and pinned definers. Each jobs boot stays alive
-  45 seconds, initializes once and reports `ebayProcessingEnabled:false`.
-- **Final commit checks remain:** docs/tools follow the source head; application/database/
-  hook/workflow trees are unchanged. Source/tool/docs reviews APPROVE. The rehearsal guard
-  fix `44604ff9d` is reviewed. Expanded proof passes 29/29 synthetic tests and 39/39
-  assertion-killed mutations (13 original + 26 additional), with zero unresolved survivors.
-  Runtime guard scripts are restored byte-for-byte to `44604ff9d`.
-  The final release commit's normal hook and both exact-build rehearsals are pending.
-  Set `CX_RELEASE_SHA=<final-release-sha>` for both rehearsal scripts; defaults pin source77.
-  No package or recovery ref has been pushed. See the release record for the reviewed
-  sequence that publishes the separately gated recovery SHA from the clean final release tree.
-- **Separate scope confirmation before main push:** the existing `deploy-api.yml` workflow
-  runs `apps/api/scripts/check-ebay-consent-scopes.mts`, which GETs `auth.ebay.com` consent
-  pages for base/fake/full scopes, without sign-in, token exchange or writes. These are
-  live vendor probes, excluded from the deployment approval. Finish package preparation,
-  then obtain one narrow Owner yes for this automatic deploy gate. Do not skip or weaken it.
-- **Package B, local and unmerged:** contract coverage `a6b5fefaa` is approved;
-  eBay price read-back `915b0b4fa`, Amazon Finances `509d8af99`, eBay order writer
-  `9e4380c12`, and Etsy receipts `cf032a270` still need independent re-review.
-  Integrate in that order after Package A production verification and the required census.
-- **Production census:** the Bash permission rule for `build/tools/prod-census.mjs` (kept locally; not in the public repo)
-  is saved. The script stopped before querying because the isolated root `.env` URL
-  has no username/password. The Owner has been asked for an existing approved credential
-  source path; no credentials or environment variables were changed. Do not repeat the
-  permission request or infer empty results. If any non-IT eBay listing follows the
-  master price, ask the Owner before shipping the per-market currency change.
-- **Etsy decisions are settled:** S1 hold on paid / deduct on shipment; H1 from activation.
-  C11f6b cold verify and C11f6c audited rewrap are implemented locally; no operator grant,
-  live KMS use, rewrap or key retirement has occurred. Phase 3 engineering and Phase 4
-  activation actions remain open; Phase 5 has not passed.
-
-### Historical local continuation — 2026-09-23
-
-C9–C11d4 are committed locally through62d745662: atomic receipt identity, durable
-claims, grant generations/maintenance fences, current-refresh inspection, atomic
-revocation/owner warnings, private admission and a seller fence across reconnects.
-C11d5 now wires stored-ID processing into the receiver, worker and manual routes.
-Its final local proof:233 realPG/19files/zero skips,176 focused regressions,9 killed
-mutations, typecheck, ratchet and independent review. See
-[CX-REMAINING](build/CX-REMAINING.md), including retained failures and amendments.
-All new slices remain unpushed/undeployed. Processing defaults OFF. Quarantine
-recovery/key maintenance/archive and transactional order/erasure work remain open,
-along with Etsy/Finances/contract/UI/operational acceptance in the completion matrix.
-Live-read probe approval and Etsy stock/history policy answers are pending.
-
-A fresh read at12:52Z found published main and public health build **0a563d6d**
-(healthy200), the PES/main merge. Before any future release, integrate that published
-main in the isolated tree and retest. Do not import unpublished shared-tree history.
-This narrow read does not replace the dated439d9e3d business/flag/deployment proof.
-Published main is now merged locally with reviewed bootstrap parity/atomicity repairs
-(23 database tests,6 killed mutations; see I1 in CX-REMAINING). C11d6 now replaces
-the dynamic webhook delete with bounded in-place archival and database deletion
-guards (14 realPG archive cases,24 admission compatibility cases,78 regressions).
-C11d6 is committed as539b95c2c, with247 realPG/zero skips and91 final regressions.
-C11d7 now also fixes the old-worker hazard locally: admission/adoption remain
-unscheduled; compatible ready workers activate and claim atomically. Nine rollout
-realPG cases and five killed mutations pass. Activation still requires old workers
-and in-flight sweeps retired; rollback after activation must be protocol-aware.
-C11d7 is committed asf8f87e8af. The full hook then exposed eight old test fixtures
-violating deployed active-account uniqueness. Their distinct synthetic identities
-are corrected in reviewedc65db206b (79 focused tests). Full package gate passes:
-11504API,4603web,256realPG/zero skips,both builds,127security,2725RBAC/0unmapped;
-profiles ratchet41known failing/217tests,none new/worse. See I2 for skips/evidence.
-U1 migrates the changed retention card to shared DS controls; real-browser proof,
-final typecheck/build and independent review pass (fad6d5f60). U2 fixes Ingress202/queued
-feedback and keyboard focus locally:28 tests,2 killed mutations, actual-browser response
-proof, independent review and final build pass. Quarantine recovery/key
-maintenance remain. C11e1 now adds reviewed owner-only metadata/adoption APIs locally:
-32 admission/recovery realPG plus9 rollout cases,44 route regressions and6 killed
-mutations (committed c2eb15a99). C11e2 adds the recovery UI and fixes parent profile
-races locally:54 regressions,6 killed mutations, actual-ChannelsClient browser proof
-and independent review. Full package gates pass (11518API,4640web,264realPG/zero
-skips,both builds,127security,2727RBAC/0unmapped; ratchet unchanged). Key maintenance and remaining
-channel handlers/operational proof remain. At16:27Z main/health still0a563d6d; five
-quantity mismatches and existing critical Ads integrity remain. No production write.
-C11e2 is committed41393b908. C11f1 maintenance containment is reviewed/tested locally:
-11528 fullAPI,74 focused regressions,12 realPG and6 killed mutations. It refuses
-changed/fallback targets, excludes foreign shared credentials, includes inactive
-inventory and reports failure truthfully. Strict pinned/cold crypto and global
-quarantine maintenance remain; nothing new has been pushed or deployed.
-C11f1 is committed9bb761f16. C11f2 adds reviewed pinned/cold/lossless crypto and fixes
-DEK buffer races locally (89 focused tests in both profiles modes,44 realPG,7 killed
-mutations). Full API passes11543 tests/296skips; typecheck and independent review
-pass. C11f2 is committed396469275. C11f3 adds reviewed private quarantine binding/
-digest/key validation that preserves unsupported bodies without weakening adoption
-(111 final regressions,32 realPG,6 mutations), committede67d8c85e. C11f4 now implements
-private database CAS and atomic audit:7mutations,11569API,4640web,bothbuilds,
-127security,291realPG/zero skips,profiles ratchet unchanged; independently reviewed.
-Global inventory/operator entry point remain next. Deployment also needs a tested
-protocol-aware rollback artifact carrying all new migration folders: old0a refuses
-startup after these migrations (applied-but-missing gate), even with processing held.
-Public18:08Z remains0a563d6d/healthy; read-only18:14Z confirms production PG17.11 and
-required owner role attributes, with new migrations/maintenance roles absent.
-C11f4 is committed16a6e7e48. C11f5 adds the restricted global metadata inventory/CLI
-(63regressions,65realPG,9mutations,reviewed); API build/typecheck and fullAPI11594/329
-pass. First fullAPI overlapped Prisma generation and failed on a partially written
-engine; retained asfailed and rerun sequentially. Never overlap builds/generation
-with tests sharing that generated client.
-Cold verify/rewrap entry point and rehearsed rollback artifact remain next. Unmodified
-c65 fallback would restore known safety defects; nearere67+finalhistory is a candidate
-only. See QUARANTINE-MAINTENANCE.md for honest inventory/retirement boundaries.
-C11f5 is committed38c99a7af. C11f6a adds reviewed cooperative crypto cancellation
-and static private error reporting:125focused,11608fullAPI/329skips,45realPG/zero
-skips,8mutations,typecheck/APIbuild pass. Operator coldverify/rewrap is still next;
-keep database snapshots/locks closed across KMS work and reconcile uncertain writes.
-
-
-### Historical approved production release — 2026-09-22
-
-Final code commit **439d9e3d3 is pushed to main and serving**. Native Railway deployment
-`ab46bc3c-3490-4b5f-8ea8-238e6c39f6f0` reached SUCCESS before the same-commit CLI deployment replaced it. At 21:54Z, health/readiness returned
-200 for `439d9e3d` and protected diagnostics returned 401. The Etsy migration checksum
-and finished state match; shop `57783036` routes exclusively to Motovento. All 18
-pre-existing connections retain compared ownership/state/scopes/credential presence;
-Shopify stays connected and non-Etsy aliases are unchanged.
-
-The Owner approved deployment, including the additive routing migration. Necessary
-build/verification repairs set a compiler-only 4GiB heap and adapt test workers to
-available CPUs. Each was independently reviewed and passed normal hooks. Actual
-GitHub CI is **SUCCESS: 1,904 API tests / 4 existing skips, 3,093 web tests**. Its two-CPU
-runner used one file worker. The Deploy API workflow and final smoke test are also SUCCESS. The earlier failures are retained, not waived.
-
-Startup confirms automatic eBay setup OFF and Amazon rotation OFF (no credential
-queue configured). Vendor probes, channel activation, exact-ten deletion and each P7
-drop remain separately gated. The full plan is still open in the completion matrix.
-
-### Historical pre-deployment audit — final release above supersedes it
-
-Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and
-[CX-COMPLETION](build/CX-COMPLETION.md) before historical package summaries. Fresh
-read-only production inspection identifies Etsy as **ItalianHideCraft**, shop
-`57783036`, in **Motovento**, workspace `bf0047bf-e1d9-48d0-8cc6-20e94bb734dd`,
-connection `cmubtwtad00ctmu01w4qsruxt`. Active/connected; all twelve stored scopes.
-The signed-in Etsy portal has **zero webhook endpoints**, with the four official
-events visible as a positive control. No reconnection or ownership move is needed.
-
-The Xavia eBay 13/12 difference is the `managedBy=transferred` Motovento tombstone,
-which Accounts intentionally excludes. Browser count not newly measured; fresh DB
-rows plus the exact Accounts predicate explain the count. Preserve the tombstone.
-
-Independent audits found unimplemented/unsafe criteria in Finances identity/money,
-eBay event handling and subscription contracts, Etsy payload/routing/order ingestion,
-auth-held retries, rotation alert delivery, contract coverage, eBay price readback
-and the studio error pane. **Do not activate from old “BUILT” labels.**
-C1–C8 are committed through `571371bfc`: replay trust, Etsy contract/shop routing,
-eBay transport and activation holds, Finances read-only containment, auth-held retry
-recovery, reliable test transport, and private owner rotation alerts. All slices were
-independently reviewed. C6 full API: **11188 passed / 137 skipped / zero errors**.
-C7 canonical passed builds, 4591 web, 124 security and 106 real PostgreSQL tests; its
-profiles-ON gate required removal of the now-fixed Amazon classifications exception.
-That exception is removed. Final C8 full API **11215 passed /137 skipped /zero errors**;
-canonical gate **passed on 571371bfc**, including profiles-ON887files/41known failing/
-217tests, none new/worse. No push. [Concrete release approval](RELEASE-C1-C8.md).
-Etsy's latest 20:28Z read shows 37 successful/account-attributed calls in 24 hours,
-zero webhook ingress, and no need to reconnect. Earlier probe timestamp serialization
-subtracted two hours; CX-COMPLETION records the correction and retains raw evidence.
-
-Verification correction: the prior full API log also contains **two unhandled
-EnvironmentTeardownError rejections**, omitted from the earlier six-failure summary.
-The canonical pre-push gate was green; the full API run was not green.
-
-### Prior package snapshot — historical; the active continuation above supersedes it
-
-**Latest Owner correction:** Etsy is **already connected under a different business profile**.
-The profile name/ID was not supplied. Discover it with authorized read-only inspection; do not
-assume Xavia Racing owns Etsy, reconnect it, or infer all-profile absence from one profile's view.
-Verify the four webhook registrations, routing, scopes, and live-mode state in its owning profile;
-connection alone does not establish those facts. [Next-session prompt](NEXT-SESSION-PROMPT.md).
-
-Read [the latest findings and Owner-only actions](2026-09-22-HANDOVER.md) and
-[CX cleanup proof](build/CX-CLEANUP.md). Guarded deletion, the legacy eBay token-report
-fix, verification-token preflight and documented order topic are built in separate commits;
-the report now includes encrypted-credential presence and shares dead-row eligibility with
-deletion. **Final canonical pre-push gate passed** on `4abb1a371`, including both real
-PostgreSQL delete tests and the profiles-ON ratchet. Full API suite: **11066 passed,
-six baseline Amazon failures, 132 skipped**; independent review approved. Deployment is
-pending production approval; Railway and `/api/health` still confirm baseline `7c70556ea`.
-**No production row has been deleted.** Fresh read-only evidence reduces the proposal to **ten**, whose exact IDs
-are in [CX-DELETE-LIST](build/CX-DELETE-LIST.md); Owner confirmation is still required.
-
-The corrected public API origin is **https://nexusapi-production-b7bb.up.railway.app**.
-The former Railway host resolved but served 404; **api.xavia.it has no DNS**. The three
-readers share source resolution, deliberately not validation policy. Shopify setup and
-its 91 accepted scopes are recorded in the latest handover; the two rejected payment
-mandate scopes are removed. Etsy is connected per the latest Owner report; its owning profile,
-four webhook registrations, and live operation still need verification.
-
-Production eBay reads at **16:22:22Z / 16:23:18Z on 2026-09-22**: 13 rows, all 13
-schema-derived relations counted, 11 with zero cascading dependents but only **ten eligible**.
-`cmt0ksbbs01r4mo01c9diw1qp` has encrypted credentials and one surviving ConnectionEvent;
-retain it alongside live primary `cmr4aaqb00025nz016k18rup9` (destroys 15) and
-`cmt142bli01vcp4010fjo2k13` (destroys one ConnectionScope, unlinks 2079 ConnectionEvent).
-Both plaintext refresh columns are empty even on the credentialed live primary. The Owner's
-13 database rows / 12 Accounts rows discrepancy remains open. Notifications:
-0 destinations / 0 subscriptions, positively controlled by 27 topics; 03:55 failure is
-195019 (verification-token format). A healthy challenge hash does not validate that format.
-Fresh live application catalogue is pending permission and browser API access.
-
-**Release isolation:** shared tree currently belongs to `pes/phase-0`; this work is in
-`/private/tmp/nexus-channel-connections-20260922`, based on remote main `7c70556ea`.
-Push only the commits on this isolated package branch. Never push the other session's history.
+Read [COMPLETION-MATRIX](COMPLETION-MATRIX.md) first, then the
+[2026-09-26 approach review](2026-09-26-APPROACH-REVIEW.md) and
+[the stock model](2026-09-26-STOCK-MODEL.md). The checkpoints that used to stand here (Package A
+gating and rehearsal on 2026-09-25, the 2026-09-23 local continuation, the 2026-09-22 release and
+its pre-deployment audit) are superseded; their evidence is in
+[RELEASE-C9-C11F6C](RELEASE-C9-C11F6C.md), [CX-REMAINING](build/CX-REMAINING.md),
+[RELEASE-C1-C8](RELEASE-C1-C8.md), [CX-COMPLETION](build/CX-COMPLETION.md) and git history.
 
 ### Earlier package history (current corrections above take precedence)
 
 | Package | State |
 |---|---|
 | P0 – P3 | done, deployed |
-| **P6.2b** | 🔴 **P6.2 was 0% working in production.** Found by doing §0b. Fixed, deployed, and **proven**: the eBay signing key dies **2029-08-28**. `build/P6.2b.md` |
+| **P6.2b** | 🔴 **P6.2 was 0% working in production.** Found by doing §0b. Fixed, deployed, and **proven**: the eBay signing key's expiry is now recorded from a real read. `build/P6.2b.md` |
 | **P4.1 – P4.5** | done, deployed. P4.5 = seven slices + `P4.5h` |
 | **P7a.1** | 🟢 **FIXED 2026-09-21** — the channel-sync worker picked an arbitrary market and invented a `_US` one. Both latent; both closed. It is now **provably inert** and is the first real deletion candidate. `build/P7a.1.md` |
-| **P4.6** | 🟢 **BUILT 2026-09-21** — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
+| **P4.6** | 🟢 **deployed** (written 2026-09-21) — the Owner **overrode D6**: *"I approve you for the ETSY writes."* Five slices, `build/P4.6a.md` … `P4.6e.md`. Ships with `NEXUS_ENABLE_ETSY_PUBLISH` **OFF** |
 | **P5** | done. P5.1/5.3/5.4 closed; **P5.2 half-closed** (§0a); P5.5 not needed |
 | **P6** | P6.1–P6.6 + P6.8's instrumentation done. ✅ **P6.7 RESOLVED 2026-09-21 — nothing to add**: returns/cancellation/inquiry run on eBay's **Post-Order API**, which takes an `IAF `-prefixed user token and requires **no OAuth scope**. Read in a browser (eBay 403s bots, not people). No reconnect needed for it |
 | **P7a** | 🟢 **MEASURED 2026-09-21 — ZERO deletion candidates.** Its one candidate (the Ads credential fallback) was chased down and the answer is **keep it**: unreachable in production, but it is the only credential path with profiles OFF, it is the documented revert lever, and P4.5e's disconnect enforcement is built on its `throw`. *Unreachable today is not unnecessary.* P1.6 already did the safe half; every remaining named target is registered or on a live import chain. `build/P7a.md` |
 | **P7b** | **each drop needs the Owner's yes**, after a green week |
 | **P8** | 🔴 **DEFERRED** — the Owner, 2026-09-21: *"we'll add the remaining channels later. Currently, we'll keep our focus solely on Amazon, eBay, and Etsy."* Do not start it. Shopify and WooCommerce are also out of the active three |
 
-### 0a. What is genuinely still OPEN, and who owns it
+### 0a. What is genuinely still OPEN, and who owns it (updated 2026-09-26)
 
 | # | Row | Owner | What closes it |
 |---|---|---|---|
-| 1 | ✅ **Orders money question — ANSWERED 2026-09-21** | **Owner** | `ItemPrice` **is the LINE total**, measured live at **quantity 4**: `ItemPrice 72.08` ÷ 4 = **18.02** stored per unit, and the independent `OrderTotal` **87.94** = 72.08 × 1.22 (IT VAT) to the cent — where the unit-price reading predicts **351.75**. Page 2 also came back with 20 orders, so the §5b pagination fix is proven live too. `build/P5.1.md` §5c. **Nothing is left that a read can answer**; `NEXUS_ENABLE_AMAZON_ORDERS_2026=true` is a production config change and is the Owner's yes. |
-| 2 | 🟡 **Finances: the dry run is BUILT; running it is the Owner's** | **Owner** | The probe answered (`envelope: "payload"` ✅). The plan's next step **double-writes** — v0 and the 2024-06-19 path store different `amazonTransactionId` shapes and nothing bridges them — so §4b withdrew it and named a **dry-run counting mode** as the cheapest safe replacement. **Built 2026-09-21** (`build/P5.2.md` §4c): `POST /api/amazon/financials/sync {"useV0": false, "dryRun": true}` runs the real fetch and the real decision path, writes nothing, and reports `txWouldCreate` **and `txWouldDuplicateV0`** — the double-write as a number instead of an argument. 25 tests, 6 mutations killed, 1 null control survived. It is a **live Amazon call**, so the Owner runs it, over a window v0 has already synced. |
-| 3 | ✅ **P6.8 — Etsy and Shopify are READY (2026-09-21)** — `{"ready":true}` for both after the Owner set the variables; the Shopify app is registered (legacy install flow, not embedded, both callback hosts allow-listed) and 🔴 **Shopify refused two of our own scopes — `read_payment_mandate`/`write_payment_mandate` do not exist** and are removed. Etsy's 4 webhooks remain. *Original finding below.* | **Owner** | Measured live 2026-09-21: `GET /api/cx/connect/etsy\|shopify/readiness` → `ready: false, channel_unavailable, "is not set up on this Nexus server"`, while `amazon_sp`, `amazon_ads` and `ebay` all return `ready: true`. **There is no `ChannelApp` row and no env credential** — `getChannelApp` throws from the one branch that needs both to be missing. **Set on `@nexus/api`:** `ETSY_API_KEY` + `ETSY_SHARED_SECRET`; `SHOPIFY_APP_CLIENT_ID` + `SHOPIFY_APP_CLIENT_SECRET`. Boot's `seedChannelApps()` then creates the rows. **Only then** register `${NEXUS_PUBLIC_API_URL}/api/cx/callback/<key>` and Etsy's 4 webhooks. 🔴 `build/P6.8.md` §1's table says a row DOES exist — it names no database and is most likely the dev one; the live reading wins. |
-| 4 | **P6.6** env token — **clean so far, needs the clock** | **Owner/either** | If `[amazon-sp] STILL USING the environment refresh token` never appears over a **day** of real traffic, set `NEXUS_AMAZON_ENV_TOKEN=off`. 📏 **Re-measured 2026-09-21** (`build/P6.6.md` §6b) and this time it is a **real zero**: two deployments, **0** lines, with *both* controls — the `get-logs` filter proved to match a bracketed prefix (`ads-v1-sync`), and the Orders probe proved an SP-API call ran inside the window. Still only ~**32 minutes** across two processes, and the warning is once per process, so the row needs a day with a full cron cycle. Nothing to build. |
-| 5 | **P4.6** first live Etsy call | **Owner** | Set `NEXUS_ENABLE_ETSY_PUBLISH=true` + `ETSY_PUBLISH_MODE=live`. Also settles the one open question in `build/P4.6d.md` §6 (repeated keys vs comma-joined arrays in a form body). |
-| 6 | **Etsy connected in another profile — Owner correction 2026-09-22** | **Either / Owner for gated actions** | The earlier zero-account/zero-listing measurements are historical. Discover the owning profile read-only and verify its current connection, listing counts, webhook routing, scopes and publishing mode. Do not reconnect or move ownership merely because Xavia Racing has no Etsy row. |
-| 7 | **P7b** destructive drops | **Owner** | Needs a **green week** (day 1 = 2026-09-21) **and a separate yes per table**. 🔴 `AmazonAdsConnection` is NOT a candidate — 49 files read it; CX.3c moves ownership first. |
-| 8 | **Section 8** Owner items | **Owner** | 1, 2, 3, 4, 8, 9, 10 are live. **Items 5 and 6 are struck through** — neither reconnect is needed. 🔴 Item 3, the **Neon password in git history**, is the only one where someone else could act first. |
+| 1 | **Amazon Orders 2026-01-01** — the money question was answered by a live read on 2026-09-21 (`ItemPrice` is the line total; pagination proven). `build/P5.1.md` §5c | **Owner** | Re-run the read-only probe once after B+C, then `NEXUS_ENABLE_AMAZON_ORDERS_2026=true` (exactly `true`) on API, worker and scheduler |
+| 2 | **Amazon Finances** — A0/A1/A2/A5 deployed (PR #32); A3/A4 held on `fix/cx-amazon-finances` | **Owner** | Run the A2 dry run (`{"useV0": false, "dryRun": true}`, a live Amazon read) over a window v0 already synced; then decide A3/A4 and A5 |
+| 3 | **Etsy orders** — ingest deployed (PR #32), OFF | **Owner** | Webhook in Etsy's portal, `ETSY_WEBHOOK_SIGNING_SECRET`, T0, both switches — [ETSY-INGEST-ACTIVATION](ETSY-INGEST-ACTIVATION.md) |
+| 4 | **P6.6** env token | **Owner/either** | A 24-hour log read on API, worker and scheduler with no `[amazon-sp] STILL USING the environment refresh token` line (with a positive control), then `NEXUS_AMAZON_ENV_TOKEN=off` |
+| 5 | **P4.6** first live Etsy call | **Owner** | Etsy products in Nexus first; then `NEXUS_ENABLE_ETSY_PUBLISH=true` with `ETSY_PUBLISH_MODE=dry-run`, later `live` |
+| 6 | **eBay notifications** — setup OFF, every topic `handlerMissing`, the verification token refused by eBay | **Owner + code** | The Owner fixes `EBAY_NOTIFICATION_VERIFICATION_TOKEN` (32–80 characters, `[A-Za-z0-9_-]`) and checks the deletion endpoint in eBay's portal; code marks handlers ready and adds seller-token subscriptions (planning) |
+| 7 | **P7b** destructive drops | **Owner** | A **green week** and a separate yes per table. `AmazonAdsConnection` is NOT a candidate |
+| 8 | **Section 8** Owner items (FINAL-PLAN) | **Owner** | KMS done 2026-09-26. Open: Amazon app-secret expiry date, Neon password rotation (in git history), eBay deletion endpoint, Etsy webhook. Items 5 and 6 are not needed |
+| 9 | **FBM stock repair** (after the PR #14 hotfix) | **Owner** | Only after the hotfix is proven in production, with its own yes (option A: add back only units taken twice after the last manual change) |
 
-### 0a-2. The switches — 2 on, 4 gated
+### 0a-2. The switches
 
-Full record: `build/SWITCH-ON.md`.
-
-| Switch | State |
-|---|---|
-| `NEXUS_ENABLE_IMAGE_READBACK_SWEEP` | ✅ **ON** 2026-09-21 |
-| `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN` | ✅ **ON** 2026-09-21 — will report `not-configured` until the `NEXUS_CONTRACT_ACCOUNT_*` sandbox accounts exist. That is deliberate: a visible gap beats an invisible one |
-| Amazon **Orders** 2026-01-01 | 🟢 **gate cleared 2026-09-21** — the money question is answered (row 1). Waiting only on the Owner's yes |
-| Amazon **Finances** 2024-06-19 | ⏸ the duplicate-key problem (row 2) — now **measurable** without writing, via the §4c dry run |
-| `NEXUS_AMAZON_ENV_TOKEN=off` | ⏸ a day of logs (row 4) |
-| `NEXUS_ENABLE_ETSY_PUBLISH` | ⏸ Connection reported complete in another profile; verify current mode and obtain any required enablement approval (rows 5–6) |
+The full table — every switch's default in code, the processes that read it and its last observed
+production state — is in [COMPLETION-MATRIX → Switch table](COMPLETION-MATRIX.md#switch-table).
+On 2026-09-26: ON are the image read-back sweep and the contract run (which reports "not configured"
+until sandbox accounts are named); every switch added by PR #15 and PR #32 is OFF; Amazon Orders 2026,
+suppression pull, new Amazon notification types, eBay notification setup, price heal and the live
+repricer are OFF. History of the earlier switch decisions: `build/SWITCH-ON.md`.
 
 ### 0b. ✅ ALL VERIFIED on deployment `be9f2554` (build `0adbf6e8`), 2026-09-21
 
@@ -362,9 +68,8 @@ Full record: `build/SWITCH-ON.md`.
 2. ✅ `[channel-alerts] etsy freshness {"total":0,"stale":0,"neverSynced":0,"oldestAt":null}` —
    **logged at zero**, 14:00. That is `build/P4.6e.md` §3b's fix holding: an empty shop used to
    produce silence, indistinguishable from a crash.
-3. 🟢 **Already proven:** `[cx-ebay] recorded the signing key expiry
-   {"expiresAt":"2029-08-28T03:12:43.000Z"}` — **once**, where the deploy before it logged the
-   failure four times in two minutes.
+3. 🟢 **Already proven:** `[cx-ebay] recorded the signing key expiry {"expiresAt":"…"}` — **once**,
+   where the deploy before it logged the failure four times in two minutes.
 4. 🟢 **Already proven:** migrations `20260921a_p62_signing_key_expiry` and
    `20260921b_p46e_sync_channel_etsy` both applied.
 
@@ -720,6 +425,8 @@ Read in this order:
 
 ## 1. Rules from the Owner (in force)
 
+- 🔴 **2026-09-26 — releases go by pull request; the Owner decides each merge.** Settings on `main` deny direct pushes. The "push per package" rules below are history: a pushed branch plus a PR replaces them, and a migrating release carries a recovery branch.
+
 - "Start to implement the whole plan. I'll stop you where we need it." → packages run **in plan order**, no per-package "go". Commit each package when its proof is green.
 - **Ask first** for: any production **write**, any **live channel call**, each P7 drop, and the Owner-only steps in plan section 8. Production **reads** (Railway traffic and logs) are allowed since 2026-09-20.
 - **Pushing is allowed** (Owner, 2026-09-20) once the package's proof is green. A push deploys to production and **applies migrations there**.
@@ -739,6 +446,8 @@ Read in this order:
 - Reports to the Owner: simple English, short sentences, **max 2 options with a pick**.
 
 ## 2. Done — on `origin/main`
+
+**Newest (2026-09-26):** PR #4, PR #14, PR #15 (Package A) and PR #32 (release B+C) — see [COMPLETION-MATRIX](COMPLETION-MATRIX.md). The 2026-09-22 release C1–C8 is in [RELEASE-C1-C8](RELEASE-C1-C8.md). The list below is the 2026-09-21 state.
 
 **P0 – P3.6, P5.1, P4.1, P4.2, P4.3 and P4.4 are all deployed and live.** The
 newest is deployment `f7cd8154` from `18ff48dce`: SUCCESS.
@@ -814,8 +523,8 @@ failure {"error":"… Connect an Amazon seller account in Channels …"}`.
 **Those crons run ONCE PER BUSINESS PROFILE, and there are TWO.** I read one profile's
 skip as a fact about production. The same deploy says, in plain words:
 
-- `seedEnvManagedConnections: persisted Amazon authorization exists — skipping env synthesis {"existingId":"cmothu9bo0000nz01asw6wx8j"}`
-- `[amazon-notifications] reusing existing destination {"destinationId":"7e944042-…"}`
+- `seedEnvManagedConnections: persisted Amazon authorization exists — skipping env synthesis {"existingId":"…"}`
+- `[amazon-notifications] reusing existing destination {"destinationId":"…"}`
 - `[amazon-notifications-boot] setup visited business profiles {"visited":2,"ran":1}` — **two profiles, Amazon set up in one**
 - `📣 PUBLISH MODES at boot — Amazon=live eBay=live Shopify=gated`
 
@@ -1206,7 +915,7 @@ screens say so on the screen itself.
 | **eBay** | 🔴 **CHECKED 2026-09-21, and the check itself was broken.** `GET /api/admin/ebay-notification-status` answered `endpoint: null, destination: null, subscriptions: [], catalogueSize: 27`. The 27 proves the call **reached eBay**, so the nulls are not a transport failure — but the handler read `EBAY_NOTIFICATION_ENDPOINT` while every other reader reads `EBAY_NOTIFICATION_ENDPOINT_URL`, so `destinations.find(d => d.endpoint === null)` reported *no destination* **whether or not one existed**. Fixed through the one accessor, with `configured`, `destinationsAtEbay`, `destinationEndpoints` and the full `catalogue` added (`build/P2.3.md`). 🔴 **`subscriptions: []` IS a real zero — nothing is subscribed in production.** ✅ **Re-read after the fix deployed: `destinationsAtEbay: 0`** — eBay holds **no destination and no subscription**, and that is now a measured zero. 🔴 **eBay delivers no notifications to Nexus at all.** The reconcile is armed (`cron started {"schedule":"55 3 * * *"}`) and both variables are set, so three preconditions hold and the fourth does not follow; the 03:55 deployment is REMOVED and its logs are gone, so *why* is **could-not-measure**. **2026-09-22 03:55 UTC logs its own reason.** `ITEM_SOLD` is **not** among eBay's 27 ids — `ORDER_CONFIRMATION` is, and is deliberately **not** swapped in: it has no handler, and `catalogue` now carries the real list so the next change READS it |
 | **Shopify** | Sends nothing until the registration is run per shop (section 5) |
 | **Etsy** | Sends nothing until the Owner configures the portal (section 5) |
-| **Amazon** | **CONNECTED and live** — a persisted authorization (`cmothu9bo0000nz01asw6wx8j`), a reused notification destination, `Amazon=live` at boot. 🔴 An earlier version of this row said "not configured", read off a cron skip that came from the OTHER of the TWO business profiles. A per-profile skip is not a global fact. Still true: no ORDER_CHANGE arrived in a deploy window, so P2.2's parse fix remains unexercised by real traffic |
+| **Amazon** | **CONNECTED and live** — a persisted authorization, a reused notification destination, `Amazon=live` at boot. 🔴 An earlier version of this row said "not configured", read off a cron skip that came from the OTHER of the TWO business profiles. A per-profile skip is not a global fact. Still true: no ORDER_CHANGE arrived in a deploy window, so P2.2's parse fix remains unexercised by real traffic |
 | **eBay** | **TWO accounts connected, both OK** — `ebay-orders cron: tick complete {"connectionsTried":1,"connectionsOk":1}` appears twice per tick, one connection per business profile. 0 orders fetched so far |
 | **Etsy / Shopify** | 🟡 **UNKNOWN from the logs, and that is the honest answer.** The only lines are `[ConfigManager] ⚠ Etsy/Shopify configuration incomplete (missing env vars)` — that is the LEGACY env-based config, not the CX connection table, so it says nothing about a connection made through the Channels screen. P2.4 did measure that production has no `SHOPIFY_*` variable, which is consistent with both. **Do not read those two lines as "not connected"** — that is the same mistake as the Amazon one above |
 | **AMS** | The subscription check's first run is the answer to P2.7's done-when |
@@ -1228,7 +937,7 @@ Each is one command, and each converts a "built" into a "verified":
 
 ## 5. Open items the Owner owns
 
-### 🟢 5.0 The two still live (2026-09-21)
+### 🟢 5.0 Closed since 2026-09-21 (kept for history)
 
 **One of the three closed.** ✅ `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true` was SET
 in production on 2026-09-21 — the image read-back sweep is ON. Its first runs are
@@ -1238,14 +947,14 @@ counted apart from `empty` is what says whether it could actually run.
 
 Still the Owner's:
 
-1. **Run the P5.1 probe and paste the answer.**
+1. ✅ **Done 2026-09-21** — the P5.1 probe ran and answered (§0a row 1). Kept for history:
    `GET /api/admin/amazon-orders-2026-probe?days=7` — admin-gated, read-only, ONE
    `searchOrders` call, does NOT turn the switch on. The Owner chose option B
    (one captured live read before the migration goes live). Until it runs, P5.1
    is proven against Amazon's published model and its own example response, and
    against **no real payload**. See §14a. 🔴 **An agent cannot run this** — it
    sits behind the operator's admin session.
-2. **Etsy and Shopify: are they connected?** The Owner believes Etsy is and is
+2. ✅ **Answered 2026-09-22 — both are connected** (Etsy in another business profile). Kept for history: **Etsy and Shopify: are they connected?** The Owner believes Etsy is and is
    unsure about Shopify. ⚠️ **The logs cannot answer this, and that was retested
    on 2026-09-21 from four angles** (`PUBLISH MODES` is the publish mode not a
    connection; `cx-heartbeat` logs only that it started; `connectionsTried` had
@@ -1275,7 +984,7 @@ Still the Owner's:
 
 
 
-1. **P1.8 is off.** Turn it on with `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN=true` plus one sandbox account per channel (`NEXUS_CONTRACT_ACCOUNT_EBAY`, `…_AMAZON_SP`, `…_AMAZON_ADS`, `…_SHOPIFY`, and `NEXUS_CONTRACT_AMAZON_SELLER_ID`). Shopify needs a development-store account named. **Etsy is not applicable** (review rework 2026-09-26): it has no sandbox, so the run sends nothing to Etsy, leaves it out of the verdict and states that reason in every summary; a run can be green without it. A test listing on the real shop, marked "test", remains the Owner's decision. The Amazon SP checks read Amazon's fixed sandbox examples, so they prove sign-in and reachability only (`build/P1.8.md` section 7).
+1. **P1.8: the contract run is ON (since 2026-09-21) but checks nothing yet.** `NEXUS_ENABLE_CHANNEL_CONTRACT_RUN=true` is set; every run reports "not configured" until one sandbox account per channel is named (`NEXUS_CONTRACT_ACCOUNT_EBAY`, `…_AMAZON_SP`, `…_AMAZON_ADS`, `…_SHOPIFY`, and `NEXUS_CONTRACT_AMAZON_SELLER_ID`). Shopify needs a development-store account named. **Etsy is not applicable** (review rework 2026-09-26): it has no sandbox, so the run sends nothing to Etsy, leaves it out of the verdict and states that reason in every summary; a run can be green without it. A test listing on the real shop, marked "test", remains the Owner's decision. The Amazon SP checks read Amazon's fixed sandbox examples, so they prove sign-in and reachability only (`build/P1.8.md` section 7).
 2. **P6.1 is off** until the Owner registers the credential queue and sets `AMAZON_APP_CREDENTIAL_QUEUE_URL` (`build/P6.1.md` section 4).
 3. **Shopify order-action switches** now reach the connected account when set to `true`: `NEXUS_ENABLE_SHOPIFY_REFUND`, `NEXUS_ENABLE_SHOPIFY_ORDER_CANCEL`, `NEXUS_ENABLE_SHOPIFY_SHIP_CONFIRM` (new in P1.7).
 4. **Re-publishing an ended listing has no path**: the push lock refuses it and nothing in the code relists. Presence's relist verb is the planned answer.
@@ -1291,13 +1000,14 @@ Still the Owner's:
    already pointed elsewhere (left untouched), or refused with Shopify's own message —
    which is where we learn whether the Admin API accepts the three privacy topics or
    whether they must be set in the Partner Dashboard.
-8. **Start eBay's live notifications** by setting `EBAY_NOTIFICATION_ENDPOINT_URL`
-   (the public `/api/webhooks/ebay-notification` URL) and
-   `EBAY_NOTIFICATION_VERIFICATION_TOKEN` (32–80 characters) in production. Until both
-   are set, `setupEbayNotifications` makes **no call at all**. Once set, the nightly
-   reconcile creates the destination and subscribes the topics. Check the result with
-   `GET /api/admin/ebay-notification-status`; a topic listed under `notOffered` means
-   its id in `services/cx/ingress/ebay-topics.ts` is wrong.
+8. **eBay's live notifications — corrected 2026-09-26.** Setting `EBAY_NOTIFICATION_ENDPOINT_URL`
+   (the public `/api/webhooks/ebay-notification` URL) and `EBAY_NOTIFICATION_VERIFICATION_TOKEN`
+   (32–80 characters, only `[A-Za-z0-9_-]`) is necessary but **no longer starts anything**: the
+   nightly reconcile is scheduled only with `NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1` (exactly `1`),
+   and every topic in `services/cx/connectors/ebay/notifications.ts` is marked `handlerMissing`, so
+   setup refuses before any subscription call. eBay also refused the current token twice. Order
+   notices need subscriptions made with each seller's token (not built). Planning: eBay
+   notifications end to end. `GET /api/admin/ebay-notification-status` still reports the state.
 9. **Turn on the Amazon suppression pull** (P3.2) with
    `NEXUS_ENABLE_AMAZON_SUPPRESSION_PULL=true`. It is **off** by default because it
    asks SP-API for a `GET_MERCHANT_LISTINGS_DEFECT_DATA` **report** per marketplace,
@@ -1311,10 +1021,10 @@ Still the Owner's:
    types whose SQS support is unverified. A 400 InvalidInput on one of those is a
    finding, not a fault — it means that type needs an EventBridge destination. Two types
    already need one: `LISTINGS_ITEM_STATUS_CHANGE` and `BRANDED_ITEM_CONTENT_CHANGE`.
-11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason.
-12. **91 AMAZON rows sit at `pending`** with no `nextAttemptAt`, so the retry worker does not see them. `replayInbound` accepts them by hand; nothing sweeps them yet.
-13. **The archiver does not exist.** `archivedAt` / `archiveUri` are honoured by the worker and by replay, but nothing writes them. D8 is held by the guard.
-14b. **🟢 RECOMMENDED: turn the image read-back sweep ON.**
+11. **Amazon and eBay inbound events cannot be replayed from the ledger** (P2.1 section 4). Amazon's handling lives inside the SQS poll loop, eBay's inside the live notification envelope; neither can be re-run from a stored payload. Both are named in the guard's `UNREPLAYABLE` map and the worker dead-letters them on the first sweep with that reason. *(Superseded for eBay 2026-09-26: Package A stores verified eBay receipts and replays them through their own processor; processing is OFF.)*
+12. *(Historical, 2026-09-20.)* **Amazon ledger rows sat at `pending`** with no `nextAttemptAt`, so the retry worker did not see them; `replayInbound` accepts them by hand. PR #4 changed claiming and scheduling for trusted rows — re-measure before relying on this.
+13. ~~**The archiver does not exist.**~~ **Deployed 2026-09-26 (Package A, PR #15):** eligible finished receipts are archived in place, never deleted (D8); personal data in untrusted and archived rows expires by UPDATE after the retention window.
+14b. ✅ **Done 2026-09-21 — the image read-back sweep is ON.** Kept for history: **turn the image read-back sweep ON.**
    `NEXUS_ENABLE_IMAGE_READBACK_SWEEP=true`. Measured cost on the DEV database
    (parents/standalone only): **AMAZON 29 reads, SHOPIFY 1 read per sweep**, four
    times a day, against a 5/second quota and capped at 400 products
@@ -1333,7 +1043,7 @@ Still the Owner's:
    things only a live call can: whether `paginationToken` may travel with
    `includedData`, and whether `marketplaceIds` is accepted as the SDK sends it.
    **Run it, paste the answer, and P5.1 is verified rather than argued.**
-14. **Amazon Orders 2026-01-01 is BUILT and OFF** (P5.1). Turn it on with
+14. **Amazon Orders 2026-01-01 is deployed and OFF** (P5.1; the live probe passed 2026-09-21, §0a row 1). Turn it on with
    `NEXUS_ENABLE_AMAZON_ORDERS_2026=true`. It is off because the mapping is
    proven against Amazon's published model and its own example response, not
    against a real payload — **no live 2026-01-01 call has been made**, and that

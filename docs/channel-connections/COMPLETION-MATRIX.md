@@ -70,9 +70,9 @@ Both carry the release's `packages/database` byte for byte.
 | eBay privacy option A executor (erase personal data, keep tax records) | not implemented | ruling 3 |
 | Switch-on of the deployed features | waiting for the Owner | one switch at a time, each proven by a real event (local switch-on plan) |
 
-## Switch table (generated from code on `main` `074c1cf54`)
+## Switch table
 
-Generated from every `process.env.NEXUS_*` read (and the `envEnabled` helper) in non-test source, then
+Generated on 2026-09-26 from `main` at `074c1cf54`: every `process.env.NEXUS_*` read (and the `envEnabled` helper) in non-test source, then
 compared with these documents. "Default" is what the code does when the variable is unset. Values are
 exact: `1` and `true` are not interchangeable unless the row says so. "Production" is the last
 read-only observation (2026-09-26, inferred from job behaviour; Railway variables are not read by
