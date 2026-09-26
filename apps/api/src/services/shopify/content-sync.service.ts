@@ -13,7 +13,7 @@ import { inspectShopifyContent, resolveShopifyContent } from '@nexus/shared/shop
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { contentDestination, readContent, publicContent, object, digest, CONTENT_KEY, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin } from './admin-client.js'
-import { publishContent, readRemoteProduct, type ShopifyRemoteProduct } from './content-publisher.js'
+import { publishContent, readRemoteProduct, shortId, type ShopifyRemoteProduct } from './content-publisher.js'
 import { nativeListingValue } from './native-listing-value.js'
 import { assertPushAllowed, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
@@ -24,6 +24,14 @@ function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
     ? `This listing was deliberately ended${intent.presenceIntentAt ? ` on ${new Date(intent.presenceIntentAt).toISOString()}` : ''}${intent.presenceIntentBy ? ` by ${intent.presenceIntentBy}` : ''}. Relist it before sending changes.`
     : refusal.sentence
   return Object.assign(new WorkspaceScopeError(sentence, 409), { code: refusal.code, refusal: { ...refusal, sentence } })
+}
+
+/** PE P4.0 — `productSet` deletes the variants and options it does not name, so the whole-product publisher may only
+ *  rewrite a product Nexus created: never the "linked-product" target, and never a listing tied to another product id. */
+function wholeProductRefusal(data: { draft: { target?: string }; publish: Record<string, unknown>; listings: { externalListingId?: string | null }[] }) {
+  const own = typeof data.publish.productId === 'string' ? shortId(data.publish.productId) : null
+  if (data.draft.target !== 'linked-product' && data.listings.every(l => !l.externalListingId || l.externalListingId === own)) return null
+  return new WorkspaceScopeError('This Shopify product was not created by Nexus. Nexus does not rewrite a store product as a whole; its changes go through Publish, which sends only the changed fields. Nothing was sent.', 409)
 }
 
 export async function previewContentSync(productId: string, scope: ContentScope, remote = false) {
@@ -92,6 +100,10 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       const refusal = assertPushAllowed(listing)
       if (refusal) throw pushRefused(listing, refusal)
     }
+    const wholeProduct = wholeProductRefusal(data)
+    if (wholeProduct) throw wholeProduct
+    if (/^gid:\/\/shopify\//i.test(String(nativeListingValue(data.listing, 'productType', object(data.family.categoryAttributes).shopify_product_type) ?? '').trim()))
+      throw new WorkspaceScopeError('The Shopify product type holds a Shopify category id (gid://…). That is a data error: set the category in its own field and a plain product type, then publish. Nothing was sent.', 422)
     if (data.listing.syncLocked) throw new WorkspaceScopeError('Synchronisation is locked for this listing.', 422)
     if (data.publish.status === 'PUBLISHING' && Date.now() - Date.parse(data.publish.lastCheckpointAt ?? data.publish.startedAt) < 20 * 60_000) throw new WorkspaceScopeError('A Shopify synchronisation is already running for this family.')
     const publication = { ...data.publish, status: 'PUBLISHING', runId, startedAt: new Date().toISOString(), error: null, locationId: input.locationId }

@@ -38,7 +38,6 @@ import {
 } from "./channel-publish-audit.service.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { listingPublishService } from "./listing-publish.service.js";
-import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { priceRefusalFor } from "./price-bounds.service.js";
 import { confirmEbayOfferPrice, ebayFixedPriceOfferOf, ebayMarketplaceIdOf, offerPriceOf, pickEbayPriceOffer } from "./ebay-price-readback.service.js";
@@ -2276,6 +2275,13 @@ export class OutboundSyncService {
       }
     }
 
+    // PE P4.0 — Owner D2 (2026-09-26): content for a LINKED store product goes only through Publish, where the
+    // Owner sees the exact change first. An automatic content row wrote a child row's title over the shared product.
+    if (syncType === "CONTENT_UPDATE") {
+      const message = "Content for a linked Shopify product is sent only through Publish (changes only). Nothing was sent.";
+      return { success: true, queueId, channel: "SHOPIFY", status: "SKIPPED", message, retryable: false };
+    }
+
     // P1.3 / P1.4 — the row's own Shopify account, on the 2026-07 GraphQL client (services/shopify/
     // listing-write.service.ts). The REST 2024-01 path with env credentials is gone: it picked "the first"
     // variant for a SKU and "the first" shop location, and wrote with a token of no named account.
@@ -2292,16 +2298,7 @@ export class OutboundSyncService {
       return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message: error, error, errorCode: "WRONG_ACCOUNT_WRITE", retryable: false };
     }
     const work: LinkedListingWork = {};
-    if (syncType === "CONTENT_UPDATE") {
-      // B3 content (title / description) + C3 GPSR compliance metafields. Keyed on syncType so a content
-      // sync can never fall through to the stock path.
-      let metafields: Array<{ namespace: string; key: string; type: string; value: string }> = [];
-      if (product?.id) {
-        const cp = await resolveComplianceById(product.id).catch(() => null);
-        if (cp) metafields = buildShopifyComplianceMetafields(cp);
-      }
-      work.content = { title: payload?.title, description: payload && "description" in payload ? payload.description : undefined, metafields };
-    } else if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+    if (syncType === "PRICE_UPDATE" || payload?.price != null) {
     // P4.4c — the operator's own pricing floor and ceiling (Product.minPrice /
     // maxPrice). Placed HERE, beside the quantity guards and AFTER the push lock
     // and the pause checks, so a paused or locked listing still reports that

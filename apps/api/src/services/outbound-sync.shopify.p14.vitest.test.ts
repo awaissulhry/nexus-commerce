@@ -145,9 +145,12 @@ describe('P1.4 — what the queue asks the module to write', () => {
     await service.syncToShopify(row({ channelConnectionId: 'conn-B', syncType: 'PRICE_UPDATE', payload: { price: 19.5 } }))
     expect(h.sent[0].work).toEqual({ price: 19.5 })
   })
-  it('content: title and description only — a content row never carries a stock value', async () => {
-    await service.syncToShopify(row({ channelConnectionId: 'conn-B', syncType: 'CONTENT_UPDATE', product: null, payload: { title: 'New', description: '<p>x</p>', quantity: 0 } }))
-    expect(h.sent[0].work).toEqual({ content: { title: 'New', description: '<p>x</p>', metafields: [] } })
+  // Owner D2 (PE, 2026-09-26): content for a LINKED store product goes only through Publish, where the Owner sees the
+  // exact change first. Before, a child row's title was written over the shared Shopify product. Skipped, 0 calls.
+  it('content: a linked listing\'s content row is skipped — content goes only through Publish, 0 calls', async () => {
+    const result = await service.syncToShopify(row({ channelConnectionId: 'conn-B', syncType: 'CONTENT_UPDATE', product: null, payload: { title: 'New', description: '<p>x</p>', quantity: 0 } }))
+    expect(result).toMatchObject({ status: 'SKIPPED', retryable: false, message: expect.stringContaining('only through Publish') })
+    expect(h.sent).toEqual([])
   })
 })
 
