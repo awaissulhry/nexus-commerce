@@ -17,7 +17,8 @@
  *
  * WHAT IT COUNTS
  * Each `new PrismaClient(...)` whose argument text does not mention `adapter`, in tracked
- * .ts/.mts/.cts/.js/.mjs/.cjs files. Occurrences inside `//` or `*` comment lines are skipped.
+ * .ts/.mts/.cts/.js/.mjs/.cjs files. Occurrences in `//` or `*` comment lines, or inside a string
+ * on their line, are skipped.
  *
  *   node scripts/check-prisma-client-adapter-ratchet.mjs            # census
  *   node scripts/check-prisma-client-adapter-ratchet.mjs --check    # exit 1 if any file rose
@@ -44,6 +45,8 @@ export function countAdapterless(source) {
     const lineStart = source.lastIndexOf('\n', at) + 1
     const before = source.slice(lineStart, at)
     if (before.includes('//') || /^\s*\*/.test(before)) continue
+    // Inside a quoted string on this line (an odd count of one quote kind before it): text, not code.
+    if (["'", '"', '`'].some(quote => before.split(quote).length % 2 === 0)) continue
     let depth = 1
     let end = from
     while (end < source.length && depth > 0) {
