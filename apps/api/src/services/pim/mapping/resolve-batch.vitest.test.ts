@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
-const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn() }))
+const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn(), categoryId: { value: '177104' } }))
 vi.mock('../../../db.js', () => ({ default: {
   marketplace: { findFirst: async ({ where }: any) => ({ languages: [{ IT: 'it', DE: 'de', FR: 'fr', ES: 'es', GLOBAL: 'en' }[where.code as string]] }) },
   product: { findMany: db.products }, channelListing: { findMany: db.listings }, fieldLinkGroup: { findMany: async () => [] }, productCategory: { findMany: async () => [] },
@@ -10,8 +10,10 @@ vi.mock('../../connection-resolver.service.js', () => ({ primaryConnectionIds: a
 vi.mock('../schema-mapping.service.js', () => ({ getMappingForMarketplace: db.mapping, getRulesFor: (m: any) => m.fields }))
 vi.mock('../value-map.service.js', () => ({ loadValueMapLookup: async () => () => null, loadSizeScaleLookup: async () => () => null }))
 vi.mock('./field-catalogue.service.js', () => ({ getFieldCatalogue: db.catalogue }))
-vi.mock('./category-mapping.service.js', () => ({
-  resolveCategoriesForProducts: async () => ({ p: { channelCategoryId: '177104', source: 'listing' } }),
+// The real `channelCategoryField` — the tests below pin the channel → category-field map itself.
+vi.mock('./category-mapping.service.js', async importOriginal => ({
+  ...await importOriginal<typeof import('./category-mapping.service.js')>(),
+  resolveCategoriesForProducts: async () => ({ p: { channelCategoryId: db.categoryId.value, source: 'listing' } }),
   categoryForListing: (category: unknown) => category,
 }))
 import { resolveBatch } from './resolve-batch.service.js'
@@ -29,6 +31,7 @@ const field = (fieldKey: string, extra: Partial<CatalogueField> = {}): Catalogue
 const input = { channel: 'EBAY', marketplace: 'IT', productIds: ['p'] }
 beforeEach(() => {
   vi.clearAllMocks()
+  db.categoryId.value = '177104'
   // LX.F R-LX-13 — the Italian title is the PRODUCT COLUMN (`it` is the primary
   // language, so it has no translation row by contract), and the legacy
   // `localizedContent` key stays in the fixture deliberately: it is the arm that
@@ -289,4 +292,46 @@ it('uses the selected Shopify store and never revives deleted or retyped definit
   expect(result.products[0].cells.productType.value).toBeNull()
   expect(result.products[0].cells.status.value).toBeNull()
   expect(result.products[0].cells.removed).toBeUndefined()
+})
+
+// The mapped category fills the channel's OWN category field (`CHANNEL_CATEGORY_FIELD`) and no other channel's key.
+// Before, only Amazon `productType` and eBay `categoryId` were filled: Etsy and Shopify resolved empty.
+describe('the mapped category fills only the channel category field', () => {
+  const categoryFields = () => db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [
+    field('productType', { rule: null, sourceOwner: { kind: 'listing', label: 'Category', path: 'productType' } }),
+    field('categoryId', { rule: null, sourceOwner: { kind: 'listing', label: 'Category', path: 'categoryId' } }),
+    field('category', { rule: null, sourceOwner: { kind: 'listing', label: 'Category', path: 'category' } }),
+    field('taxonomy_id', { kind: 'number', rule: null, validation: { minimum: 1, multipleOf: 1 },
+      sourceOwner: { kind: 'listing', label: 'Etsy category selection', path: 'listing.platformAttributes.taxonomy_id' } }),
+  ] })
+  it.each([
+    ['AMAZON', 'productType', 'IT'],
+    ['EBAY', 'categoryId', 'IT'],
+    ['SHOPIFY', 'category', 'GLOBAL'],
+    ['ETSY', 'taxonomy_id', 'GLOBAL'],
+  ])('%s fills %s and leaves the other channels’ category keys empty', async (channel, own, marketplace) => {
+    categoryFields()
+    const { cells } = (await resolveBatch({ channel, marketplace, productIds: ['p'] })).products[0]
+    expect(cells[own]).toMatchObject({ value: '177104', provenance: 'default', errors: [] })
+    for (const other of ['productType', 'categoryId', 'category', 'taxonomy_id'].filter(key => key !== own)) {
+      expect(cells[other]).toMatchObject({ value: null, status: 'unmapped' })
+    }
+  })
+  it('keeps a stored channel value over the mapped category', async () => {
+    categoryFields()
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'ETSY', marketplace: 'GLOBAL', overrideData: { taxonomy_id: 2001 } }])
+    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id)
+      .toMatchObject({ value: 2001, provenance: 'override' })
+  })
+  // Etsy's `taxonomy_id` is a number field. The mapped id arrives as text; validation reads it as a number (so a
+  // numeric id passes and a non-numeric one is flagged), but the cell keeps the text — validation never rewrites it.
+  it('validates Etsy’s mapped taxonomy_id as a number without rewriting the text', async () => {
+    categoryFields()
+    db.categoryId.value = 'not-a-number'
+    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id.errors)
+      .toEqual([expect.stringMatching(/number/i)])
+    db.categoryId.value = '0'
+    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id.errors)
+      .toEqual([expect.stringMatching(/at least 1|minimum|greater/i)])
+  })
 })
