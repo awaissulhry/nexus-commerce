@@ -10,6 +10,7 @@ import { TRANSFER_MAX_FILE_BYTES, TRANSFER_MAX_ROWS } from './catalog-transfer-f
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
 import { amazonChannelKey } from '@nexus/shared/channel-mapping'
 import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
+import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 
 /**
  * CFI (R-CFI-1, `docs/channel-file-import/BUILD.md`) — the Owner's native Amazon template, read AS IS.
@@ -700,7 +701,7 @@ export async function resolveAmazonCatalogWorkbook(parsed: AmazonTemplateParse, 
       if (seenListings.has(l.id)) continue
       seenListings.add(l.id)
       const pa = (l.platformAttributes ?? {}) as Record<string, unknown>, ff = (l.flatFileSnapshot ?? {}) as Record<string, unknown>
-      const sellerSkus = [...new Set([pa.sellerSku, pa.seller_sku, pa.sku, pa.item_sku, ff.item_sku, ...l.offers.map(o => o.sku)].filter((v): v is string => typeof v === 'string' && !!v.trim()))]
+      const sellerSkus = [...new Set([...AMAZON_LISTING_SKU_KEYS.platformAttributes.map(k => pa[k]), ...AMAZON_LISTING_SKU_KEYS.flatFileSnapshot.map(k => ff[k]), ...l.offers.map(o => o.sku)].filter((v): v is string => typeof v === 'string' && !!v.trim()))]
       candidates.push({ sku: l.product.sku, aliasKey: l.aliasKey, accountId: l.channelConnectionId, sellerSkus, asin: l.externalListingId })
     }
   }

@@ -1,6 +1,7 @@
 import { translationMissing, type ContentProduct } from './content-resolver.js'
 import { languageTag } from './market-languages.js'
 import { assertContentReviewed, resolvePublishContent, type PublishContentRow } from './publish-review-gate.js'
+import { CONTENT_MASTER_FIELD } from '../channel-drift/amazon-content-compare.js'
 
 // D7's verdict, the shared resolution and the `requireReviewed` setting live in
 // `publish-review-gate.ts` (R-LX-7) so every publisher consults one definition.
@@ -16,7 +17,8 @@ export interface AmazonContentInput {
   fields?: readonly string[]
 }
 
-const AMAZON_CONTENT_KEYS: Record<string, string> = { title: 'item_name', description: 'product_description', bulletPoints: 'bullet_point', keywords: 'generic_keyword' }
+/** Master content field → Amazon root: the inverse of `CONTENT_MASTER_FIELD`. */
+const AMAZON_CONTENT_KEYS: Record<string, string> = Object.fromEntries(Object.entries(CONTENT_MASTER_FIELD).map(([root, field]) => [field, root]))
 
 /**
  * R-LX-6 — the payload's shape rule, pure and separately testable.

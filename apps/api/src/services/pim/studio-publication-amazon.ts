@@ -22,6 +22,9 @@ import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
+import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
+import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
+import { languageTag } from './market-languages.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -50,7 +53,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const offers = [...new Set(listing?.offers.filter(o => o.isActive).map(o => o.sku) ?? [])]
     if (offers.length > 1) throw new Error(`${product.sku} has multiple seller SKUs. Select its offer before publishing.`)
     const pa = object(listing?.platformAttributes)
-    const identities = [...new Set([...offers, ...[pa.sellerSku, pa.seller_sku, pa.sku, pa.item_sku, object(listing?.flatFileSnapshot).item_sku].filter((v): v is string => typeof v === 'string' && !!v.trim())])]
+    const ff = object(listing?.flatFileSnapshot)
+    const identities = [...new Set([...offers, ...[...AMAZON_LISTING_SKU_KEYS.platformAttributes.map(k => pa[k]), ...AMAZON_LISTING_SKU_KEYS.flatFileSnapshot.map(k => ff[k])].filter((v): v is string => typeof v === 'string' && !!v.trim())])]
     if (identities.length > 1) throw new Error(`${product.sku}: conflicting Amazon seller SKUs. Reconcile this listing's identity before publishing.`)
     if (!identities.length && facts.destination.aliasKey) throw new Error(`${product.sku}: this alias needs its own Amazon seller SKU before publishing.`)
     return [product.id, identities[0] ?? product.sku]
@@ -77,6 +81,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
   const exclusionsFor = pushExclusionsCache()
+  // CHMAP M7 (B2) — the row builder's own maps know five markets and fall back to Italy; give it this market's own.
+  const market = { marketplaceId, languageTag: facts.languages[0] ? languageTag(facts.languages[0], scope.marketplace) : '' }
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
@@ -123,7 +129,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
       for (const slot of amazonImageSlots) delete row[slot.attribute]
     }
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
-    const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, hints)
+    const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, market.languageTag ? { ...hints, market } : hints)
     const spec = await loadAmazonSpec(scope.marketplace, String(row.product_type), scope.accountId)
     // CHMAP M4 — fields the Owner chose not to send in the ACTIVE mapping version are left out (an omission is never a clear).
     const excluded = await exclusionsFor('AMAZON', scope.marketplace, String(row.product_type))
@@ -155,10 +161,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const content = await buildAmazonContentAttributes({ product: product as any, parent: product.id === parent.id ? null : parent as any,
       listing, marketplace: scope.marketplace, marketplaceId })
     if (message.attributes) {
-      for (const key of ['item_name', 'product_description', 'bullet_point', 'generic_keyword']) delete message.attributes[key]
+      for (const key of CONTENT_ROOTS) delete message.attributes[key]
       Object.assign(message.attributes, content)
     } else {
-      const contentKeys = new Set(['item_name', 'product_description', 'bullet_point', 'generic_keyword'].map(k => `/attributes/${k}`))
+      const contentKeys = new Set(CONTENT_ROOTS.map(k => `/attributes/${k}`))
       message.patches = [...(message.patches ?? []).filter((p: any) => !contentKeys.has(p.path)),
         ...Object.entries(content).map(([key, value]) => ({ op: 'replace', path: `/attributes/${key}`, value }))]
     }

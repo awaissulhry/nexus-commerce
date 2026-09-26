@@ -668,7 +668,7 @@ anonymiser now also flags any ASIN that is not one of its fakes.
 | M4 | Push reads the versions | ✅ approved 2026-09-26 (§11.4: 1A, 2A); local, not pushed | Check 4 (offline): the push's own serializer fed with what Nexus holds equals the file on every mapped cell for GALE IT/DE/FR/ES and REGAL FR (planted change caught). **The switch:** the product-sheet push leaves out a field only when YOU stopped every column of it in the ACTIVE version (ignore, managed elsewhere, read on import only). Amazon: a whole attribute or nothing (Amazon replaces an attribute whole, so leaving out one part would clear that part). eBay: item specifics only. Rules never change a push; with no ACTIVE version (production today) nothing changes. The Activate and Retire confirmations show the difference first. **Proof:** offline compare of every family on this copy (§11.3), 14 of 14 planted faults caught, real-browser check (light, dark, 390 px, keyboard, a planted 503). The flat-file feed's second key list is merged (exactly the same two sets, pinned). **Found:** the push refuses 40 of 41 AIREON DE products — two closure types per product ("Nested repeated values in closure"). |
 | M5 | Golden tests | ✅ | 9 anonymised golden files (two independent leak scans clean, each with a positive control) + trimmed public schemas. The golden test pins the ledger, the decisions and a strict cell-by-cell round trip: 0 differences on all 9. Runs with no database, in CI. 5 of 5 planted export faults caught. |
 | M6 | The screen | ✅ | `/channels/mapping` → "File mappings": versions per form, counters, filters, compare, decide (map / ignore / managed / unmapped, and direction), activate/retire/new version, recent uses, **export a file** (ACTIVE versions; always a partial update) and **upload a template**. Real-browser check twice (light, dark, 390 px, keyboard, real 400/409s): exported GALE IT `.xlsm` 21 rows; a DE export refused for a missing template, then uploaded inline and exported. Web tsc 0; 72 tests; 21 UI/DS guards 0. Not shown yet: value coverage and sample values per column (no API for them). |
-| M7 | Clean-up | ⏳ | Waits for M4. Most remaining key lists sit in other lanes' files (§11.2). |
+| M7 | Clean-up | 🟡 safe part done (`e5ac0b7d0`, branch `feat/channel-mappings-m7`, local); the rest waits for you (§11.6) | Inventory of every §4.1, §4.2 and §4.4 row on main `c67ce6069` (§11.5). Merged with no output change: the content roots (8 copies → 1), the content ↔ master map (2 → 1), the seller-SKU places (2 → 1), the eBay column-name rule. 4 of 4 planted faults caught; two readings no test covered are now pinned. |
 
 ### 11.2 What the build found (not fixed here: other lanes' files)
 
@@ -737,3 +737,52 @@ default), and the eBay feed-mode English aspect names stay as they are. No code 
 - **A (recommended): keep them for now.** Feed mode is one of several eBay push paths (§4.2); a change needs one live
   listing checked first.
 - **B: follow the version** (the market's own names), after one live test listing.
+
+### 11.5 M7 — what is left (inventory of main `c67ce6069`)
+
+Most remaining lists use other key spaces (the flat-file grid's column ids, SP-API roots, master fields), not a mapping
+version's column → field rows. For them "read the version" is not possible as-is; the honest move is one copy per list.
+**Already closed:** §4.1 #2 (old key table → `defaults.ts`), §4.1 #7 (flat-file key lists merged in M4), §4.2 #3 (eBay
+columns → `defaults.ts`), §4.4 #5 (eBay headers match either name). **Kept by your decision:** §4.2 #7 (feed-mode English
+aspect names, §11.4 2A).
+
+**Four real bugs** (checked in the code; each changes what a channel receives or what a page shows):
+
+| # | Bug | Where | Changes |
+|---|---|---|---|
+| B1 | The flat-file feed sends the sale price as `purchasable_offer.sale_price`. Amazon's schema for our product types has no `sale_price` (only `discounted_price`), so a sale price typed on the flat-file page cannot reach Amazon. | `amazon/flat-file.service.ts` (sale-price column and feed) | Amazon flat-file feed |
+| B2 | The flat-file feed's language table knows IT, DE, FR, ES and UK only; NL, PL, SE and BE text is tagged `it_IT`. | `amazon/flat-file.service.ts` `LANGUAGE_TAG_MAP` | Amazon flat-file feed |
+| B3 | eBay Best Offer labels are the wrong way round on the product sheet: "auto-accept" sits on the field the push uses for auto-decline (a money risk). | `pim/channel-specs/ebay.ts` | product-sheet labels |
+| B4 | The Amazon → eBay pre-fill reads `bullet_points`; Amazon stores `bullet_point`, so bullets are never copied. | `routes/ebay-flat-file.routes.ts` | eBay flat-file pre-fill |
+
+**Thirteen other differences, kept as they are** (no bug found; unifying them would change an import, a push or a page,
+each needing its own difference list): the FX wizard's supplier aliases (§4.1 #3); the read-back that skips DE/FR/ES text
+(§4.1 #4); the old vault export vs the M3 export (§4.1 #5); the flat-file grid row (§4.1 #6); the Listings PATCH ignoring
+version stops (§4.1 #9); web vs server eBay synonyms (§4.2 #2); the per-market eBay brand table (§4.2 #4); the Trading
+and mapping-dispatch pushes ignoring version stops (§4.2 #5, #6); the eBay-import name lists (§4.2 #9); grid parent SKU
+vs seller SKU (§4.4 #3); the cockpit Best Offer store (§4.4 #6); the identifier columns (§4.4 #8); the two yes/no word
+lists (§4.4 #9). So §8.8's "0 open rows" is not met; these are known and documented.
+
+**Found outside this lane:** a scan of every tracked text file on main against the real ids of the local copy found your
+Amazon seller id in 25 files, eBay account ids in 7, and real eBay item ids or ASINs in 277 files in all (old scripts,
+audit records, backups, one test). These ids are also visible on the marketplaces themselves (storefront and listing
+links), so the risk is low, but the repository is public.
+
+**B1–B4 fixed** (`915ce7322`, answered 1A below): B1's old shape fails Amazon's cached IT COAT, DE COAT and IT PANTS
+schemas (`purchasable_offer` forbids extra keys, so the whole offer — the price too — was invalid); the new shape passes. A
+sale without both dates is left out, as the Listings PATCH already did. B2 turned out wider than the flat-file page (which
+serves five markets only): the product-sheet push reuses the same row builder, which fell back to Italy's marketplace id
+as well; the push now passes the market's own id and language tag. Offline push compare against main: 0 differences
+(Amazon IT, eBay IT 23 families; S0/S1/switch off). 6 of 6 planted faults caught. Not changed: the flat-file column's
+`sale_price` field path (it shapes the grid and the template mapping), the pre-fill's image read.
+
+### 11.6 Your decisions (two) — answered 2026-09-26: 1A, 2A ("Do it all for me")
+
+**1. Fix the four bugs B1–B4?**
+- **A (recommended): yes**, one by one, each proven offline before and after, and shown to you before it ships.
+- **B: no**, keep them documented only.
+
+**2. The real ids on main?**
+- **A (recommended): remove them from today's files** in one small separate PR (replace with fake ids or delete dead
+  scripts); leave the git history, because these ids are public on the marketplaces anyway.
+- **B: leave them.**

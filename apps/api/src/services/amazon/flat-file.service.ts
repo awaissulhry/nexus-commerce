@@ -31,6 +31,7 @@ import { buildListingScopeWhere, type ListingScope } from '../flat-file/listing-
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { whereCoordinate } from '../../lib/listing-coordinate.js'
+import { amazonDiscountedPrice } from './discounted-price.js'
 
 /** PR-PRESENCE-SANCTIONED-PAIR: offerActive:false => skip_offer:true is the ONE
  * sanctioned two-flag pairing. Acknowledged close owns offerClosedAt + offerActive;
@@ -292,6 +293,12 @@ export interface FlatFileRow {
 
 /** Schema-derived hints for buildJsonFeedBody / buildJsonFeedBodyWithReport. */
 export interface FeedSchemaHints {
+  /**
+   * CHMAP M7 (B2) — the market's own marketplace id and language tag, from its Marketplace row. The static maps below
+   * know IT, DE, FR, ES and UK only and fall back to Italy; a caller that serves other markets (the product-sheet push)
+   * passes these.
+   */
+  market?: { marketplaceId: string; languageTag: string }
   enumCodeMap?: Record<string, Record<string, string>>
   localizedFields?: Set<string>
   numericFields?: Set<string>
@@ -2809,8 +2816,8 @@ export class AmazonFlatFileService {
     currencyRows: readonly MarketCurrencyRow[] = [],
   ): { body: string; messageCount: number; skippedRows: Array<{ sku: string; error: string }> } {
     const mp = marketplace.toUpperCase()
-    const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
-    const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
+    const marketplaceId = feedSchema.market?.marketplaceId ?? MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
+    const languageTag = feedSchema.market?.languageTag ?? LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
 
     const enumCodeMap = feedSchema.enumCodeMap ?? {}
     const deepFieldSpecs = feedSchema.deepFields ?? {}
@@ -2968,11 +2975,11 @@ export class AmazonFlatFileService {
             marketplace_id: marketplaceId,
           }
           if (poCondition) offer.condition_type = enumCodeMap['purchasable_offer.condition_type']?.[poCondition] ?? poCondition
+          // CHMAP M7 (B1) — Amazon's schema has no `sale_price`: the sale goes as `discounted_price`, the same shape as
+          // the Listings PATCH, and only with both dates (Amazon refuses a schedule entry without them).
           if (poSalePrice !== undefined && poSalePrice !== '') {
-            const sp: Record<string, any> = { schedule: [{ value_with_tax: Math.max(0, parseLocaleNumber(poSalePrice) ?? 0) }] }
-            if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
-            if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
-            offer.sale_price = [sp]
+            const sale = amazonDiscountedPrice(Math.max(0, parseLocaleNumber(poSalePrice) ?? 0), poSaleFrom, poSaleTo)
+            if (sale) offer.discounted_price = sale
           }
           attrs.purchasable_offer = [offer]
         }

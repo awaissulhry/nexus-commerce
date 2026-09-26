@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn(), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []) }))
+const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn(), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []), hints: vi.fn() }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 // Shared stock — publication reads the product's ledger (loadSyncLedgers): nothing is pooled here.
 // CHMAP M4: the builders read the ACTIVE mapping version; none here, so the push is exactly today's.
@@ -12,7 +12,7 @@ vi.mock('./studio-publication-plan.js', async () => {
 })
 vi.mock('../amazon/flat-file.service.js', () => ({ AmazonFlatFileService: class {
   async getFeedSchemaHints() { return {} }
-  buildJsonFeedBody(rows: any[]) { m.row(rows[0]); return JSON.stringify({ header: {}, messages: [{ sku: rows[0].item_sku, operationType: rows[0]._isNew || rows[0].record_action === 'full_update' ? 'UPDATE' : 'PARTIAL_UPDATE', attributes: {} }] }) }
+  buildJsonFeedBody(rows: any[], _mp?: string, _seller?: string, _expanded?: unknown, hints?: unknown) { m.row(rows[0]); m.hints(hints); return JSON.stringify({ header: {}, messages: [{ sku: rows[0].item_sku, operationType: rows[0]._isNew || rows[0].record_action === 'full_update' ? 'UPDATE' : 'PARTIAL_UPDATE', attributes: {} }] }) }
 } }))
 vi.mock('../categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
 vi.mock('../marketplaces/amazon.service.js', () => ({ AmazonService: class {} }))
@@ -381,6 +381,18 @@ it('CHMAP M4: Amazon takes an attribute whole — one ignored part keeps the who
   await expect(send()).resolves.toEqual(without)
   m.sets.mockResolvedValue([]); m.mapFields.mockResolvedValue([])
   await expect(send()).rejects.toThrow('Mapping validation failed')
+})
+
+it('CHMAP M7 (B2): a market outside the row builder\'s five gets its own marketplace id and language tag, not Italy\'s', async () => {
+  const text = { type: 'array', items: { type: 'object', properties: { value: { type: 'string' } } } }
+  m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'NL', productType: 'COAT', schemaDefinition: { properties: { color: text } } }))
+  const product = { id: 'p', sku: 'SKU-1', name: 'Jas', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'NL', accountId: 'account-b' }, parent: product, products: [product], languages: ['nl'], destination: {},
+    listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { color: { value: 'Zwart', errors: [] } } }], catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color' }] } }] }
+  await prepareAmazonPublication(facts)
+  // The configured NL marketplace id (the test's resolver answers 'MARKET') and the NL language, never IT's.
+  expect(m.hints).toHaveBeenLastCalledWith(expect.objectContaining({ market: { marketplaceId: 'MARKET', languageTag: 'nl_NL' } }))
 })
 
 it('checks Amazon variation collisions against saved channel sizes instead of stale shared sizes', async () => {

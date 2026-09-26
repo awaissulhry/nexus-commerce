@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
+import { ebayColumnName } from '@nexus/shared/channel-mapping'
 import type { ChannelFieldSpec, ChannelSpec } from './channel-specs/types.js'
 import type { SourceExclusion } from './catalog-source-mapping.js'
 import { TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
@@ -64,7 +65,8 @@ const isPriceHeader = (header: string) => PRICE_HEADER.test(header)
 const isImageHeader = (header: string) => IMAGE_HEADER.test(header)
 /** Delete-like eBay lifecycle words, keyed by the languages our workbooks use. Data, not market code paths. */
 const DELETE_ACTIONS = new RegExp(EBAY_WORKBOOK_COLUMNS.deleteActionPattern, 'i')
-const aspectLabel = (header: string) => header.replace(/\s*[○↕⚠*]+/gu, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+/** The column name (the shared mark rule) without a trailing "(English name)". */
+const aspectLabel = (header: string) => ebayColumnName(header).replace(/\s*\([^)]*\)\s*$/, '').trim()
 const isCustomSpecificHeader = (header: string) => /⚠/u.test(header)
 const columnName = (index: number): string => index >= 26 ? columnName(Math.floor(index / 26) - 1) + columnName(index % 26) : String.fromCharCode(65 + index)
 const fold = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase()
