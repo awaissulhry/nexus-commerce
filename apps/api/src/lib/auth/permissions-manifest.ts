@@ -436,6 +436,8 @@ export const ENTRIES: Entry[] = [
   P(F.productsView, (m, p) => m === 'GET' && (p === '/api/catalog-transfer/readiness' || p === '/api/catalog-transfer/readiness/options')),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),
   P(F.productsExport, (_m, p) => p === '/api/catalog-transfer/export' || /^\/api\/catalog-transfer\/products\/[^/]+\/export$/.test(p)),
+  // PSIE — the product sheet's export; its import routes fall under the catalog-transfer prefix below.
+  P(F.productsExport, (m, p) => m === 'POST' && /^\/api\/catalog-transfer\/sheet\/products\/[^/]+\/export$/.test(p)),
   P(F.productsImport, pfx('/api/catalog-transfer')),
   P(F.productsView, (m, p) => has('/bulk-fetch')(m, p) || has('/search')(m, p)),
 
