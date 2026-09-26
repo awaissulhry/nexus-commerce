@@ -20,7 +20,11 @@ import { buildAmazonTemplateRows, codeFor, compareTemplateRows, type AmazonExpor
 import { readerMapping } from '../decisions.js'
 import { buildEbayDraftFields, ebayChannelKeyOf } from '../ebay-draft.js'
 import { buildEbayWorkbookRows, compareEbayRows, type EbayExportRecord } from '../ebay-export.js'
-import { amazonFormOf, ebayFormOf } from '../form.js'
+import { amazonFormOf, ebayFormOf, shopifyFormOf } from '../form.js'
+import { checkShopifyLedger, mapShopifyCsv, readShopifyCsv, SHOPIFY_CSV_IDENTITY, type ShopifyCsvIdentity, type ShopifyCsvTarget } from '../../pim/catalog-shopify-csv.js'
+import { shopifyProductSpec } from '../../pim/channel-specs/store.js'
+import { buildShopifyDraftFields, shopifyChannelKeyOf } from '../shopify-draft.js'
+import { buildShopifyCsv, checkShopifyExport, compareShopifyCsv, type ShopifyExportProduct, type ShopifyExportVariant } from '../shopify-export.js'
 
 export interface GoldenMarket { language: string; languages: string[]; currency: string | null }
 export interface GoldenResult {
@@ -116,5 +120,54 @@ export async function ebayGolden(bytes: Buffer, filename: string, specs: Map<str
     read: { rows: read.rows.length, excluded: read.exclusions.length, refused: read.issues.length, unaccounted: ledger.unaccounted.length, duplicated: ledger.duplicated.length, dangling: ledger.danglingRows.length },
     roundTrip: { compared: cmp.compared, equal: cmp.equal, differ: cmp.differ.length, missing: cmp.missing.length, extra: cmp.extra.length, blankByDesign: [...cmp.blankByDesign.values()].reduce((a, b) => a + b, 0), rowsRefusedOnImport: table.records.length - compared.length },
     differences: [...cmp.differ.map(d => ({ header: d.header, original: d.original, exported: d.exported })), ...cmp.missing.map(d => ({ header: d.header, original: d.original })), ...cmp.extra.map(d => ({ header: d.header, exported: d.exported }))],
+  }
+}
+
+/**
+ * NCF N8 — Shopify's own product CSV. Every product of the file is a Nexus Shopify listing linked to it (its handle
+ * known), and every variant with a SKU a listing under it; a variant without a SKU has no Nexus listing (as in the
+ * Owner's store). The store's field list is NOT loaded (the cold-schema trap is pinned: metafield cells are refused).
+ * The file is read, the values are stored the way the transfer plan stores them, the file is written back through
+ * the version, checked for upload safety, and compared cell by cell.
+ */
+export function shopifyGolden(bytes: Buffer): GoldenResult & { export: { products: number; variants: number; columnsWritten: number; columnsLeftOut: string[]; productsRefused: number; safety: string[] } } {
+  const table = readShopifyCsv(bytes)
+  const accountId = 'fixture-store'
+  const form = shopifyFormOf({ accountId, channelKeys: table.headers.map(shopifyChannelKeyOf) })
+  const fields = withIds(buildShopifyDraftFields(table.headers))
+  const spec = shopifyProductSpec(null, accountId)
+  const handleH = table.headers.find(h => shopifyChannelKeyOf(h) === 'Handle')!, skuH = table.headers.find(h => shopifyChannelKeyOf(h) === 'Variant SKU')!
+  const targets: ShopifyCsvTarget[] = []
+  for (const handle of new Set(table.records.map(r => r.values[handleH].trim()).filter(Boolean))) {
+    const product = `PRODUCT:${handle}`
+    targets.push({ id: product, sku: product, parentSku: null, accountId, aliasKey: '', version: 1, handles: [handle] })
+    for (const sku of new Set(table.records.filter(r => r.values[handleH].trim() === handle).map(r => r.values[skuH].trim()).filter(Boolean)))
+      targets.push({ id: `${product}|${sku}`, sku, parentSku: product, accountId, aliasKey: '', version: 1, handles: [] })
+  }
+  const read = mapShopifyCsv(table, targets, { accountId, spec, storeFields: false, mapping: readerMapping({ id: 'golden', version: 1, status: 'DRAFT' }, 'golden', fields) })
+  const ledger = checkShopifyLedger(table, read)
+  // Nexus's store, simulated: each listing holds exactly what the reader emitted for it.
+  const held = new Map(targets.map(t => [t.id, { values: new Map<string, unknown>(), price: null as number | null, compareAt: null as number | null, identity: null as ShopifyCsvIdentity | null }]))
+  const handleOfRow = new Map(table.records.map(r => [r.row, r.values[handleH].trim()]))
+  const idOf = (r: TransferRow) => r.sku.startsWith('PRODUCT:') ? r.sku : `PRODUCT:${handleOfRow.get(r.row)}|${r.sku}`
+  for (const r of read.rows as TransferRow[]) {
+    if (r.action !== 'SET') continue
+    const h = held.get(idOf(r))!
+    if (r.field === 'price') h.price = Number(r.value)
+    else if (r.field === 'compareAt') h.compareAt = Number(r.value)
+    else if (r.field === SHOPIFY_CSV_IDENTITY) h.identity = r.value as ShopifyCsvIdentity
+    else h.values.set(r.field, r.value)
+  }
+  const products: ShopifyExportProduct[] = targets.filter(t => !t.parentSku).map(t => ({ sku: t.sku, identity: held.get(t.id)!.identity, values: held.get(t.id)!.values,
+    variants: new Map(targets.filter(v => v.parentSku === t.sku).map(v => { const h = held.get(v.id)!; return [v.sku, { sku: v.sku, values: h.values, price: h.price, compareAt: { state: h.compareAt === null ? 'inherited' : 'stored', value: h.compareAt } } as ShopifyExportVariant] })) }))
+  const out = buildShopifyCsv(fields, products, { spec, storeFields: false, includePrices: true })
+  const cmp = compareShopifyCsv(table, out, shopifyChannelKeyOf)
+  return {
+    form: { formKind: form.formKind, formKey: form.formKey, templateVersion: form.templateVersion, keyFingerprint: form.keyFingerprint },
+    mapping: mappingCounts(fields),
+    read: { rows: read.rows.length, excluded: read.exclusions.length, refused: read.issues.length, unaccounted: ledger.unaccounted.length, duplicated: ledger.duplicated.length, dangling: ledger.danglingRows.length },
+    roundTrip: { compared: cmp.compared, equal: cmp.equal, differ: cmp.differ.length, missing: cmp.missing.length, extra: cmp.extra.length, blankByDesign: cmp.columnsLeftOut, rowsRefusedOnImport: cmp.rowsNotWritten },
+    differences: [...cmp.differ.map(d => ({ header: d.header, original: d.original, exported: d.exported })), ...cmp.missing.map(d => ({ header: d.header, original: d.original })), ...cmp.extra.map(d => ({ header: d.header, exported: d.exported }))],
+    export: { products: out.products, variants: out.variants, columnsWritten: out.headers.length, columnsLeftOut: out.omitted.map(o => o.header), productsRefused: out.refused.length, safety: checkShopifyExport(fields, out) },
   }
 }
