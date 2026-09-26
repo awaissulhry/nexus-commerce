@@ -8,3 +8,5 @@
 .loading { display: flex; align-items: center; gap: var(--nds-space-8); color: var(--nds-text-2); }
 .errors { margin: 0; padding-left: var(--nds-space-16); }
 .names { display: block; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+/* Grid cells are one line by default; a long channel value wraps inside its column instead of widening the grid. */
+.wrap { white-space: normal; overflow-wrap: anywhere; }

@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { LiveRead } from '@nexus/shared/live-read'
-import { Banner, DataGrid, Drawer, type Column } from '@/design-system/components'
+import { Banner, Drawer } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Pill, Spinner } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { comparisonSummary, contentRows, errorGroups, variationRows, type AxisLink, type LiveContentRow, type LiveVariantRow, type NexusVariant } from './liveReadModel'
@@ -74,8 +75,8 @@ export function LiveReadDrawer({ open, onClose, target, links, nexusVariants, ne
   ]
   const contentColumns: Array<Column<LiveContentRow>> = [
     { key: 'field', label: 'Field', render: row => row.label },
-    { key: 'live', label: 'Live', render: row => row.live },
-    { key: 'nexus', label: 'Nexus', render: row => row.nexus ?? '—' },
+    { key: 'live', label: 'Live', width: 260, render: row => <span className={styles.wrap}>{row.live}</span> },
+    { key: 'nexus', label: 'Nexus', width: 200, render: row => <span className={styles.wrap}>{row.nexus ?? '—'}</span> },
     { key: 'state', label: 'Compared', render: row => <Pill tone={CONTENT_STATE[row.state].tone}>{CONTENT_STATE[row.state].label}</Pill> },
   ]
 
