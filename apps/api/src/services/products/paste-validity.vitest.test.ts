@@ -4,8 +4,9 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
  * PLAN Step 3.6 as re-scoped by A-34 (R-32) — the GATE: the server is the one judge of a pasted or filled value.
  *
  * Measured first (`docs/product-cheat/tools/paste-validity.mts`, the local catalogue, rolled back): the sheet's own save
- * path refuses a value over its column's cap and a value off a closed list, per row, and saves the valid rows of the same
- * request. Nothing asserted it. These arms run the REAL path — `applyProductBulkEdits` → the real column builder reading a
+ * path refuses a value over its column's cap, per row, and saves the valid rows of the same request. P6
+ * (docs/attributes/PLAN.md §4.4, approved 2026-09-26): a value off a CHANNEL's closed list is no longer refused — it is
+ * stored and the channel flags it; `save-rule.vitest.test.ts` covers a list the BUSINESS made strict, which still refuses. Nothing asserted it. These arms run the REAL path — `applyProductBulkEdits` → the real column builder reading a
  * cached Amazon·IT category schema — on an in-process PostgreSQL (PGlite): what is stored is the claim, not the response.
  */
 const state = vi.hoisted(() => ({ db: null as any }))
@@ -18,7 +19,7 @@ vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => u
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn() } }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
-vi.mock('../pim/readiness-index.service.js', () => ({ produceReadiness: vi.fn() }))
+vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
@@ -60,11 +61,11 @@ it('🔴 a value over the column\'s cap is refused, named per row, and not store
   expect(await stored(ids[0], 'color')).toBeUndefined()
 })
 
-it('🔴 a value off a closed list is refused, named per row, and not stored', async () => {
+it('🔴 P6 — a value off a CHANNEL\'s closed list is stored (the channel flags it; it is never refused on save)', async () => {
   const result = await save([{ id: ids[0], field: 'attr_voltage', value: 'C' }])
-  expect(result.refused).toBe(400)
-  expect(result.errors).toEqual([expect.objectContaining({ id: ids[0], field: 'attr_voltage', error: expect.stringContaining('is not one of the allowed values') })])
-  expect(await stored(ids[0], 'voltage')).toBeUndefined()
+  expect(result).toMatchObject({ updated: 1 })
+  expect(result.errors ?? []).toEqual([])
+  expect(await stored(ids[0], 'voltage')).toBe('C')
 })
 
 it('control: a valid value is stored', async () => {
@@ -73,8 +74,8 @@ it('control: a valid value is stored', async () => {
 })
 
 it('🔴 a paste across rows is judged PER ROW: the valid row is stored, the bad row is refused by name and not stored', async () => {
-  const result = await save([{ id: ids[1], field: 'attr_color', value: 'Blu' }, { id: ids[1], field: 'attr_voltage', value: 'C' }])
-  expect(result).toMatchObject({ updated: 1, errors: [expect.objectContaining({ id: ids[1], field: 'attr_voltage' })] })
-  expect(await stored(ids[1], 'color')).toBe('Blu')
-  expect(await stored(ids[1], 'voltage')).toBeUndefined()
+  const result = await save([{ id: ids[1], field: 'attr_voltage', value: 'A' }, { id: ids[1], field: 'attr_color', value: 'TOOLONG' }])
+  expect(result).toMatchObject({ updated: 1, errors: [expect.objectContaining({ id: ids[1], field: 'attr_color', error: expect.stringContaining('at most 5 characters') })] })
+  expect(await stored(ids[1], 'voltage')).toBe('A')
+  expect(await stored(ids[1], 'color')).toBeUndefined()
 })

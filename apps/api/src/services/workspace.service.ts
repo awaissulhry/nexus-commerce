@@ -4,6 +4,7 @@ import { BUSINESS_COUNTRIES } from '@nexus/shared/business-profile'
 import { expandPermissions, isValidPermission, FEATURES } from '@nexus/shared/permissions'
 import { WorkspaceError, withWorkspace, type WorkspaceContext } from '../lib/workspace-context.js'
 import { marketCatalogueRows } from './pim/market-catalogue.js'
+import { starterDictionaryRows } from './pim/attribute-concepts-rows.js'
 
 const membershipSelect = {
   id: true, status: true, version: true, userId: true, createdAt: true,
@@ -147,6 +148,12 @@ export function createWorkspaceService(db: PrismaClient) {
         // and a product studio that waits forever. `workspaceId` comes from the transaction's business, as the
         // warehouse's does below.
         await tx.marketplace.createMany({ data: marketCatalogueRows() })
+        // P3 (docs/attributes/PLAN.md §4.1): the starter attribute dictionary — one attribute per shared concept, each
+        // linked by `semanticKey`, so the business's colour, size and material link to every channel with no setup.
+        const dictionary = starterDictionaryRows()
+        await tx.attributeGroup.createMany({ data: dictionary.groups })
+        await tx.customAttribute.createMany({ data: dictionary.attributes.map(row => ({ ...row, validation: (row.validation ?? undefined) as never })) })
+        if (dictionary.options.length) await tx.attributeOption.createMany({ data: dictionary.options })
         const warehouse = await tx.warehouse.create({ data: { code: `${input.country}-MAIN`, name: 'Main warehouse', country: input.country, isDefault: true, kind: 'PRIMARY' } })
         await tx.stockLocation.create({ data: { code: warehouse.code, name: warehouse.name, type: 'WAREHOUSE', warehouseId: warehouse.id } })
         await tx.workspaceAudit.create({ data: { workspaceId, actorUserId: userId, action: 'workspace.created' } })

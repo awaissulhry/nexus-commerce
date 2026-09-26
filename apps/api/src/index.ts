@@ -128,6 +128,7 @@ import productsSheetRoutes from "./routes/products-sheet.routes.js";
 import productStudioRoutes from "./routes/product-studio.routes.js";
 import studioMatrixRoutes from "./routes/studio-matrix.routes.js"; // MX.1 — the Matrix page
 import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
+import sheetTransferRoutes from "./routes/sheet-transfer.routes.js";
 import catalogMatrixRoutes from "./routes/catalog-matrix.routes.js";
 import pimMappingRoutes from "./routes/pim-mapping.routes.js";
 import channelMappingRoutes from "./routes/channel-mapping.routes.js"; // PES.6
@@ -666,6 +667,8 @@ app.register(productStudioRoutes, { prefix: '/api' });
 // MX.1 — the Matrix page's read, write door, verbs and revert (explicit manifest entry, most-specific-first).
 app.register(studioMatrixRoutes, { prefix: '/api' });
 app.register(catalogTransferRoutes, { prefix: '/api' });
+// PSIE — the product sheet's Export and Import (one engine, two buttons).
+app.register(sheetTransferRoutes, { prefix: '/api' });
 app.register(catalogMatrixRoutes, { prefix: '/api' });
 app.register(pimMappingRoutes, { prefix: '/api' });
 app.register(channelMappingRoutes, { prefix: '/api' }); // PES.6 — global mapping engine

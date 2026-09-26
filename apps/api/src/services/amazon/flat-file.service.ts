@@ -83,6 +83,36 @@ export function feedCurrencyFor(mp: string, currencyRows: readonly MarketCurrenc
 export type FlatFileColumnKind = 'text' | 'longtext' | 'number' | 'enum' | 'boolean'
 
 // Fields that must be exactly one of the predefined options — free text is invalid.
+/**
+ * CHMAP M4 — the flat-file columns the feed (`buildJsonFeedBodyWithReport`) and the saved attributes
+ * (`buildCollapsedAttrs`) serialise case by case, never through the generic column loop. One list, each
+ * builder's own additions named; the two sets are exactly the two lists they replace (pinned in
+ * `flat-file-explicit-keys.vitest.test.ts`).
+ */
+const FLAT_FILE_EXPLICIT_KEYS = [
+  'item_sku', 'product_type', 'record_action',
+  'parentage_level', 'parent_sku', 'variation_theme',
+  'item_name', 'brand', 'product_description',
+  'bullet_point', 'generic_keyword', 'color',
+  'main_product_image_locator',
+  // purchasable_offer and its expanded sub-columns
+  'purchasable_offer',
+  'purchasable_offer__condition_type', 'purchasable_offer__currency',
+  'purchasable_offer__our_price', 'purchasable_offer__sale_price',
+  'purchasable_offer__sale_from_date', 'purchasable_offer__sale_end_date',
+  // fulfillment_availability and its expanded sub-columns
+  'fulfillment_availability',
+  'fulfillment_availability__fulfillment_channel_code',
+  'fulfillment_availability__quantity',
+  'fulfillment_availability__lead_time_to_ship_max_days',
+]
+/** The feed also handles the product-identifier columns: the block that emits merchant_suggested_asin /
+ * externally_assigned_product_identifier, so the generic loop never ALSO emits a raw `external_product_id`
+ * attribute (which Amazon would reject). */
+export const FEED_EXPLICIT_KEYS: ReadonlySet<string> = new Set([...FLAT_FILE_EXPLICIT_KEYS, 'external_product_id', 'external_product_id_type'])
+/** The saved attributes also leave out the legacy `standard_price` column. */
+export const SAVED_EXPLICIT_KEYS: ReadonlySet<string> = new Set([...FLAT_FILE_EXPLICIT_KEYS, 'standard_price'])
+
 const STRICT_ENUM_FIELDS = new Set([
   'parentage_level', 'record_action', 'variation_theme',
   'condition_type', 'item_condition', 'country_of_origin',
@@ -2826,28 +2856,7 @@ export class AmazonFlatFileService {
       localizedFields ? localizedFields.has(fieldKey) : true
 
     // Fields with complex/explicit SP-API structure — handled case-by-case below
-    const EXPLICIT_KEYS = new Set([
-      'item_sku', 'product_type', 'record_action',
-      // Product-identifier columns are handled explicitly (the block that emits
-      // merchant_suggested_asin / externally_assigned_product_identifier), so
-      // list them here to keep the generic loop from ALSO emitting them as raw
-      // `external_product_id` attributes (which Amazon would reject).
-      'external_product_id', 'external_product_id_type',
-      'parentage_level', 'parent_sku', 'variation_theme',
-      'item_name', 'brand', 'product_description',
-      'bullet_point', 'generic_keyword', 'color',
-      'main_product_image_locator',
-      // purchasable_offer and its expanded sub-columns
-      'purchasable_offer',
-      'purchasable_offer__condition_type', 'purchasable_offer__currency',
-      'purchasable_offer__our_price', 'purchasable_offer__sale_price',
-      'purchasable_offer__sale_from_date', 'purchasable_offer__sale_end_date',
-      // fulfillment_availability and its expanded sub-columns
-      'fulfillment_availability',
-      'fulfillment_availability__fulfillment_channel_code',
-      'fulfillment_availability__quantity',
-      'fulfillment_availability__lead_time_to_ship_max_days',
-    ])
+    const EXPLICIT_KEYS = FEED_EXPLICIT_KEYS
 
     // UFX P6d — parent type lookup (item_sku → product_type) so a blank-type
     // child inherits ITS OWN family's type in a mixed-type sheet, and per-row
@@ -3734,21 +3743,7 @@ export class AmazonFlatFileService {
     }
 
     // All other expanded columns — same collapse logic as buildJsonFeedBody
-    const EXPLICIT = new Set([
-      'item_sku', 'product_type', 'record_action',
-      'parentage_level', 'parent_sku', 'variation_theme',
-      'item_name', 'brand', 'product_description',
-      'bullet_point', 'generic_keyword', 'color',
-      'main_product_image_locator', 'standard_price',
-      'purchasable_offer',
-      'purchasable_offer__condition_type', 'purchasable_offer__currency',
-      'purchasable_offer__our_price', 'purchasable_offer__sale_price',
-      'purchasable_offer__sale_from_date', 'purchasable_offer__sale_end_date',
-      'fulfillment_availability',
-      'fulfillment_availability__fulfillment_channel_code',
-      'fulfillment_availability__quantity',
-      'fulfillment_availability__lead_time_to_ship_max_days',
-    ])
+    const EXPLICIT = SAVED_EXPLICIT_KEYS
     const pendingArrays: Record<string, Array<{ idx: number; value: string }>> = {}
     const subPropMap: Record<string, Record<string, any>> = {}
 

@@ -3,6 +3,9 @@ import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
 import type { ChannelFieldSpec, ChannelSpec } from './channel-specs/types.js'
 import type { SourceExclusion } from './catalog-source-mapping.js'
 import { TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
+import { EBAY_WORKBOOK_COLUMNS } from '../channel-mapping/defaults.js'
+import { ebayChannelKeyOf, headerNames } from '../channel-mapping/ebay-draft.js'
+import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
 
 /**
  * CFI-5 (R-CFI-1) — our eBay listing workbooks, every family and both shapes the Owner holds:
@@ -36,6 +39,8 @@ export interface EbayLink { fileSku: string; proposedSku: string; reason: string
 export interface EbayWorkbookResult {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions: SourceExclusion[]
   ledger: EbayLedgerEntry[]; links: EbayLink[]; warnings: string[]
+  /** CHMAP — the mapping version the file was read with (`docs/studies/channel-mappings.md` §8). */
+  mapping?: { setId: string; version: number; status: string; label: string; created: boolean }
 }
 export interface EbayResolveOptions {
   /** Confirmed identity links: file parent SKU → Nexus parent SKU. */
@@ -45,26 +50,20 @@ export interface EbayResolveOptions {
   confirmDeletes?: boolean | readonly string[]
 }
 
-const fixedFields: Record<string, string> = {
-  Title: 'title', Subtitle: 'subtitle', Description: 'description', Condition: 'conditionId',
-  'Category ID': 'categoryId', 'Variation Theme': 'variationTheme', 'Shared-SKU (Trading API)': 'sharedSkuListing',
-  Format: 'listingFormat', Duration: 'listingDuration', 'Description Theme': 'descriptionThemeId',
-  'Best Offer': 'bestOffer', 'BO Floor (EUR)': 'bestOfferFloor', 'BO Ceiling (EUR)': 'bestOfferCeiling',
-  'VAT %': 'vatRate', 'Handling Days': 'handlingTime', Location: 'itemLocationCountry', 'Package Type': 'packageType',
-  Weight: 'packageWeight', Length: 'packageLength', Width: 'packageWidth', Height: 'packageHeight',
-  'Dim Unit': 'dimensionUnit', 'Video ID': 'videoId', 'Fulfillment Policy ID': 'fulfillmentPolicyId',
-  'Payment Policy ID': 'paymentPolicyId', 'Return Policy ID': 'returnPolicyId',
-}
-const IDENTITY_HEADERS = ['SKU', 'Parent/Child', 'Parent SKU', 'Category ID']
-const coordinates = new Set(['SKU', 'Parent/Child', 'Parent SKU', 'Item ID', 'Listing ID'])
-const quantityHeaders = new Set(['Quantity', 'Qty'])
-const controlHeaders = new Set(['Follow', 'Buffer', 'Max Per Buyer', 'Merchant Location', 'Listing Status', 'Status', 'Last Pushed', 'Sync Status'])
+// CHMAP — the column lists are data, shared with the mapping draft builder and the export (`channel-mapping/defaults.ts`).
+const fixedFields: Readonly<Record<string, string>> = EBAY_WORKBOOK_COLUMNS.fixedFields
+const IDENTITY_HEADERS = EBAY_WORKBOOK_COLUMNS.identityHeaders
+const coordinates = new Set(EBAY_WORKBOOK_COLUMNS.coordinates)
+const quantityHeaders = new Set(EBAY_WORKBOOK_COLUMNS.quantityHeaders)
+const controlHeaders = new Set(EBAY_WORKBOOK_COLUMNS.controlHeaders)
 /** Product identifiers the workbook carries beside the specifics; a category aspect of the same name still maps first. */
-const identifierHeaders = new Set(['EAN', 'MPN', 'UPC', 'ISBN'])
-const isPriceHeader = (header: string) => /^Price \((?:€|EUR|£|GBP)\)$/.test(header)
-const isImageHeader = (header: string) => /^Image [1-9]\d*$/.test(header)
+const identifierHeaders = new Set(EBAY_WORKBOOK_COLUMNS.identifierHeaders)
+const PRICE_HEADER = new RegExp(EBAY_WORKBOOK_COLUMNS.pricePattern)
+const IMAGE_HEADER = new RegExp(EBAY_WORKBOOK_COLUMNS.imagePattern)
+const isPriceHeader = (header: string) => PRICE_HEADER.test(header)
+const isImageHeader = (header: string) => IMAGE_HEADER.test(header)
 /** Delete-like eBay lifecycle words, keyed by the languages our workbooks use. Data, not market code paths. */
-const DELETE_ACTIONS = /^(end|delete|withdraw|chiudi|termina|elimina|beenden|löschen|loschen|supprimer|terminer|retirer|finalizar|eliminar|retirar)\b/i
+const DELETE_ACTIONS = new RegExp(EBAY_WORKBOOK_COLUMNS.deleteActionPattern, 'i')
 const aspectLabel = (header: string) => header.replace(/\s*[○↕⚠*]+/gu, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
 const isCustomSpecificHeader = (header: string) => /⚠/u.test(header)
 const columnName = (index: number): string => index >= 26 ? columnName(Math.floor(index / 26) - 1) + columnName(index % 26) : String.fromCharCode(65 + index)
@@ -133,7 +132,7 @@ function decideRecord(out: EbayWorkbookResult, table: EbayWorkbookTable, record:
 }
 
 /** Invalid identities block their whole row. Resolved rows account for every populated cell. */
-export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string> } = {}): EbayWorkbookResult {
+export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookTarget[], specs: Map<string, ChannelSpec>, options: EbayResolveOptions & { notInNexus?: string; knownSkus?: ReadonlySet<string>; mapping?: ReaderMapping; mappingSpecs?: ReadonlyMap<string, ChannelSpec> } = {}): EbayWorkbookResult {
   const out = emptyResult()
   const warned = new Set<string>()
   const value = (r: Record<string, string>, header: string) => (r[header] ?? '').trim()
@@ -262,8 +261,23 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
         continue
       }
       const label = aspectLabel(header)
-      let fields = fixedFields[header] ? spec.fields.filter(f => f.key === fixedFields[header]) : spec.fields.filter(f => f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics' && f.channelStore.path[1] === label)
-      if (!fields.length && !fixedFields[header]) fields = spec.fields.filter(f => f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics' && fold(f.channelStore.path[1]) === fold(label))
+      // CHMAP — the mapping version decides; the Owner's decision wins over the rules below.
+      let ownerField: string | null = null
+      if (options.mapping) {
+        const decision = options.mapping.byKey.get(ebayChannelKeyOf(header, options.mappingSpecs ?? specs).channelKey)
+        if (!decision) { refuse(header, unmappedReason(options.mapping, header, 'the column is not in this version')); continue }
+        if (decision.state === 'unmapped') { refuse(header, unmappedReason(options.mapping, header, decision.reason)); continue }
+        if (decision.decidedBy === 'owner' && (decision.state === 'ignored' || decision.state === 'managed')) { exclude(header, ignoredReason(options.mapping, decision.reason)); continue }
+        if (decision.decidedBy === 'owner' && decision.targetKind === 'itemSpecific' && decision.targetKey) { emit(header, decision.targetKey, raw); continue }
+        if (decision.decidedBy === 'owner' && decision.targetKind === 'channelField' && decision.targetKey) ownerField = decision.targetKey
+      }
+      // An aspect column matches by EITHER of its names: `Colore (Color)` and the export's English-first `Color (Colore)`.
+      const names = headerNames(header)
+      const isAspect = (f: ChannelFieldSpec) => f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics'
+      let fields = ownerField ? spec.fields.filter(f => f.key === ownerField)
+        : fixedFields[header] ? spec.fields.filter(f => f.key === fixedFields[header]) : spec.fields.filter(f => isAspect(f) && names.includes((f.channelStore as { path: string[] }).path[1]))
+      if (!fields.length && !fixedFields[header] && !ownerField) fields = spec.fields.filter(f => isAspect(f) && names.some(n => fold((f.channelStore as { path: string[] }).path[1]) === fold(n)))
+      if (ownerField && fields.length !== 1) { refuse(header, `${options.mapping!.label} maps this column to ${ownerField}, which eBay ${table.marketplace} category ${category} does not declare`); continue }
       if (fields.length !== 1) {
         if (fields.length > 1 || fixedFields[header]) { refuse(header, 'This populated column has no unambiguous field in the current eBay schema; map or remove it explicitly'); continue }
         if (identifierHeaders.has(header)) { exclude(header, `Product identifier: not imported from an eBay listing workbook; it belongs to the product record. File value: ${raw.trim()}`); continue }
@@ -393,8 +407,8 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
   return [...groups.values()]
 }
 
-/** Every eBay listing of one product group as a verified target (primary and adopted aliases). */
-async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string) {
+/** Every eBay listing of one product group as a verified target (primary and adopted aliases). CHMAP: the export reads it too. */
+export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string) {
   const { productTransferOptions } = await import('./catalog-product-transfer.js')
   const options = await productTransferOptions(rootId), productById = new Map(options.products.map(p => [p.id, p]))
   const selected = options.listings.filter(l => l.channel === 'EBAY' && l.marketplace === table.marketplace)
@@ -417,16 +431,28 @@ async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string
 async function resolveGroups(table: EbayWorkbookTable, options: EbayResolveOptions, onlyRootId?: string): Promise<EbayWorkbookResult> {
   const [{ default: prisma }, { loadEbaySpec }] = await Promise.all([import('../../db.js'), import('./channel-specs/index.js')])
   const out = emptyResult()
+  // CHMAP M2 — one mapping version for the whole file: its columns against every category it names.
+  const fileSpecs = new Map<string, ChannelSpec>()
+  for (const category of new Set(table.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))) fileSpecs.set(category, await loadEbaySpec(table.marketplace, [category]))
+  const { ebayImportMapping } = await import('../channel-mapping/ebay-import.js')
+  let chmap: Awaited<ReturnType<typeof ebayImportMapping>> | null = null, mappingProblem = ''
+  try { chmap = await ebayImportMapping(table, fileSpecs) } catch (error) { mappingProblem = error instanceof Error ? error.message : String(error) }
   for (const group of await planEbayGroups(prisma, table, out, options, onlyRootId)) {
     const sub: EbayWorkbookTable = { ...table, records: group.records }
     const targets = await groupTargets(prisma, sub, group.rootId)
     const specs = new Map<string, ChannelSpec>()
     const categories = new Set(sub.records.map(r => r.values['Category ID']?.trim()).filter(Boolean))
-    for (const category of categories) specs.set(category, await loadEbaySpec(table.marketplace, [category]))
-    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus })
+    for (const category of categories) specs.set(category, fileSpecs.get(category) ?? await loadEbaySpec(table.marketplace, [category]))
+    const mapped = mapEbayWorkbook(sub, targets, specs, { ...options, knownSkus: group.knownSkus, ...(chmap?.mapping ? { mapping: chmap.mapping, mappingSpecs: fileSpecs } : {}) })
     out.rows.push(...mapped.rows); out.issues.push(...mapped.issues); out.exclusions.push(...mapped.exclusions)
     out.ledger.push(...mapped.ledger); out.warnings.push(...mapped.warnings)
   }
+  if (chmap?.info) {
+    out.mapping = chmap.info
+    const { recordUse } = await import('../channel-mapping/store.js')
+    await recordUse(chmap.info.setId, 'IMPORT', table.sheet, { rows: out.rows.length, excluded: out.exclusions.length, refused: out.issues.length })
+  }
+  out.warnings.unshift(...(chmap?.info ? [`Read with the mapping ${chmap.info.label}.`] : []), ...(chmap?.warnings ?? []), ...(mappingProblem ? [`The mapping versions could not be read (${mappingProblem}); this file was read with the built-in rules only, and no Owner decision was applied.`] : []))
   out.warnings.unshift(`eBay listing workbook (${table.marketplace}${table.marketplaceFrom === 'filename' ? ', market from the file name' : table.marketplaceFrom === 'hint' ? ', market chosen for the import' : ''}): populated values are reviewed against current Nexus values. Blank cells preserve data. Prices are recorded without sending them to eBay; quantities, controls and sync fields are reference only.`)
   return out
 }

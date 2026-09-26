@@ -32,3 +32,44 @@ export const formatDate = (value: string | Date | null | undefined) => {
   const d = typeof value === 'string' ? new Date(value) : value
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const
+
+/**
+ * bytes → "673 KB" · "1.8 MB" · "999 B". Binary steps (1024), like the size guard in
+ * `FileDropzone`, and never four digits: from 1000 of a unit it reads in the next one
+ * ("1.0 KB" for 1000 B). One decimal below 10 so a small file still shows its size, whole
+ * numbers above.
+ */
+export const formatBytes = (bytes: number | null | undefined) => {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '—'
+  const last = BYTE_UNITS.length - 1
+  let value = bytes
+  let unit = 0
+  while (value >= 1000 && unit < last) {
+    value /= 1024
+    unit++
+  }
+  if (unit === 0) return `${Math.round(value)} B`
+  const tenths = Math.round(value * 10) / 10
+  if (tenths < 10) return `${tenths.toFixed(1)} ${BYTE_UNITS[unit]}`
+  const whole = Math.round(value)
+  if (whole >= 1000 && unit < last) return `1.0 ${BYTE_UNITS[unit + 1]}`
+  return `${whole} ${BYTE_UNITS[unit]}`
+}
+
+/**
+ * elapsed milliseconds → "12 s" · "1 min 1 s" · "1 h 2 min". Whole seconds, floored, so a
+ * ticking display never runs ahead of the clock; a negative span (a start time from a clock that
+ * is ahead of this one) reads "0 s".
+ */
+export const formatElapsed = (ms: number | null | undefined) => {
+  if (ms == null || !Number.isFinite(ms)) return '—'
+  const total = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (hours > 0) return `${hours} h ${minutes} min`
+  if (minutes > 0) return `${minutes} min ${seconds} s`
+  return `${seconds} s`
+}

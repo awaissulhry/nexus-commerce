@@ -26,6 +26,11 @@ import { AmazonService } from '../marketplaces/amazon.service.js'
 import { amazonMarketplaceId, amazonLocale } from './marketplace-ids.js'
 import { extractEnumLabels } from './enum-labels.js'
 import { downloadAmazonSchema, schemaFingerprint } from './schema-document.js'
+import { optionModeFrom } from '@nexus/shared/attributes'
+import type { ChannelSpec } from '../pim/channel-specs/types.js'
+import { diffChannelSpecs, READINESS_CHANGES } from '../pim/channel-specs/spec-diff.js'
+import { ebaySpecFromCache } from '../pim/channel-specs/ebay.js'
+import { etsyTaxonomySpec } from '../pim/channel-specs/etsy.js'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -175,7 +180,7 @@ export class CategorySchemaService {
         id: `aspect_${a.englishName ?? a.name}`, label: a.name, localizedName: a.name,
         englishName: a.englishName, dataType: a.dataType,
         kind: a.values.length ? 'enum' : a.dataType === 'NUMBER' ? 'number' : a.dataType === 'DATE' ? 'date' : 'text',
-        options: a.values, enumMode: a.mode === 'SELECTION_ONLY' ? 'strict' : 'open',
+        options: a.values, enumMode: optionModeFrom(a.mode) ?? 'open',
         required: a.required, recommended: a.usage === 'RECOMMENDED',
         cardinality: a.cardinality, variantEligible: a.variantEligible, maxLength: a.maxLength,
       })),
@@ -186,11 +191,20 @@ export class CategorySchemaService {
       schemaDefinition: definition as any, isActive: true, fetchedAt: new Date(),
       expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
     }
-    return this.prisma.categorySchema.upsert({
+    const previous = await this.findLatestCache({ channel: 'EBAY', marketplace, productType: query.productType })
+    const since = new Date()
+    const stored = await this.prisma.categorySchema.upsert({
       where: { channel_marketplace_productType_schemaVersion: workspaceKey({ channel: 'EBAY', marketplace, productType: query.productType, schemaVersion }) },
       create: { channel: 'EBAY', marketplace, productType: query.productType, schemaVersion, ...data },
       update: data,
     })
+    // P4 — a NEW version: log what changed (through the adapter) and rebuild the affected families' readiness.
+    if (previous && previous.schemaVersion !== schemaVersion) {
+      const specOf = (def: any) => ebaySpecFromCache({ marketplace, categoryId: query.productType, aspects: def?.aspects ?? [], conditions: def?.conditions ?? [] })
+      await this.logSpecChanges({ channel: 'EBAY', marketplace: query.marketplace ?? marketplace, category: query.productType, since,
+        before: specOf(previous.schemaDefinition), after: specOf(definition) })
+    }
+    return stored
   }
 
   private async fetchAndCacheEtsy(query: SchemaQuery) {
@@ -204,10 +218,18 @@ export class CategorySchemaService {
     readEtsyProperties(definition)
     const schemaVersion = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
     const data = { schemaDefinition: definition as any, isActive: true, fetchedAt: new Date(), expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS) }
-    return this.prisma.categorySchema.upsert({
+    const previous = await this.findLatestCache({ channel: 'ETSY', marketplace: 'GLOBAL', productType: query.productType })
+    const since = new Date()
+    const stored = await this.prisma.categorySchema.upsert({
       where: { channel_marketplace_productType_schemaVersion: workspaceKey({ channel: 'ETSY', marketplace: 'GLOBAL', productType: query.productType, schemaVersion }) },
       create: { channel: 'ETSY', marketplace: 'GLOBAL', productType: query.productType, schemaVersion, ...data }, update: data,
     })
+    // P4 — a NEW version: log what changed (through the adapter) and rebuild the affected families' readiness.
+    if (previous && previous.schemaVersion !== schemaVersion) {
+      await this.logSpecChanges({ channel: 'ETSY', marketplace: 'GLOBAL', category: query.productType, since,
+        before: etsyTaxonomySpec(query.productType, readEtsyProperties(previous.schemaDefinition)), after: etsyTaxonomySpec(query.productType, readEtsyProperties(definition)) })
+    }
+    return stored
   }
 
   private async findFreshCache(query: SchemaQuery) {
@@ -328,8 +350,10 @@ export class CategorySchemaService {
     // New version — diff against the most recent cached row (if any),
     // log changes, then insert.
     const previous = await this.findLatestCache(query)
+    let ruleChange: { written: number; readinessAffecting: boolean } | null = null
+    const detectedSince = new Date()
     if (previous) {
-      await this.detectAndLogChanges(previous, schemaDefinition, query)
+      ruleChange = await this.detectAndLogChanges(previous, schemaDefinition, query)
     }
 
     // UFX P6c — visibility: a NEW schema version landing in the cache is what
@@ -353,20 +377,25 @@ export class CategorySchemaService {
         isActive: true,
         expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
     }
-    return this.prisma.categorySchema.upsert({
+    const stored = await this.prisma.categorySchema.upsert({
       where: { channel_marketplace_productType_schemaVersion: workspaceKey({
         channel: data.channel, marketplace: data.marketplace, productType: data.productType, schemaVersion,
       }) },
       create: data,
       update: data,
     })
+    // P4 — after the new rules are stored, so the rebuild reads them.
+    if (ruleChange?.readinessAffecting) {
+      await this.recordRuleChangeImpact({ channel: 'AMAZON', marketplace: data.marketplace, category: data.productType, since: detectedSince })
+    }
+    return stored
   }
 
   private async detectAndLogChanges(
     previous: { schemaDefinition: any },
     nextDef: Record<string, unknown>,
     query: SchemaQuery,
-  ) {
+  ): Promise<{ written: number; readinessAffecting: boolean }> {
     const prevDef = (previous.schemaDefinition ?? {}) as Record<string, any>
     const oldProps = (prevDef.properties ?? {}) as Record<string, any>
     const newProps = ((nextDef as any).properties ?? {}) as Record<string, any>
@@ -490,8 +519,54 @@ export class CategorySchemaService {
     if (writes.length > 0) {
       await this.prisma.$transaction(writes)
     }
+    // P4 — which of these can move a product's readiness (a rebuild of the affected families follows).
+    const readinessAffecting = [...newRequired].some(id => !oldRequired.has(id)) || [...oldRequired].some(id => !newRequired.has(id))
+      || Object.keys(oldProps).some(id => !(id in newProps))
+      || Object.keys(newProps).some(id => id in oldProps && normalizeType(oldProps[id]) !== normalizeType(newProps[id]))
+    return { written: writes.length, readinessAffecting }
+  }
+
+  /**
+   * P4 (docs/attributes/PLAN.md §4.2) — a rule change that can move readiness landed for (channel, marketplace,
+   * category): find the products in that category (the sheet's own resolution), mark their families' readiness for
+   * that channel × market pending (the P2 drain rebuilds them), and record who was affected on the change rows.
+   * Never fails the refresh: the new rules are already stored, and the nightly reconcile is the backstop.
+   */
+  private async recordRuleChangeImpact(input: { channel: string; marketplace: string | null; category: string; since: Date }) {
+    if (!input.marketplace) return
+    try {
+      const { markCategoryChangePending } = await import('../pim/schema-change-impact.service.js')
+      const impact = await markCategoryChangePending({ channel: input.channel, marketplace: input.marketplace, category: input.category })
+      if (impact.productIds.length) {
+        await this.prisma.schemaChange.updateMany({
+          where: { channel: input.channel, marketplace: input.marketplace, productType: input.category, detectedAt: { gte: input.since } },
+          // Capped so one change row stays small; the families are all marked pending whatever the cap.
+          data: { affectedProducts: impact.productIds.slice(0, AFFECTED_PRODUCTS_CAP) },
+        })
+      }
+      console.info(`[schema-sync] rule change ${input.channel} ${input.marketplace} ${input.category}: ${impact.productIds.length} products, ${impact.rootIds.length} families marked for a readiness rebuild`)
+    } catch (error) {
+      console.warn(`[schema-sync] rule change impact failed for ${input.channel} ${input.marketplace} ${input.category}; the nightly reconcile will catch up`, error instanceof Error ? error.message : error)
+    }
+  }
+
+  /** P4 — eBay and Etsy: diff the adapter output of the previous and the new definition, log it, then the impact. */
+  private async logSpecChanges(input: { channel: 'EBAY' | 'ETSY'; marketplace: string; category: string; since: Date; before: ChannelSpec; after: ChannelSpec }) {
+    const changes = diffChannelSpecs(input.before, input.after)
+    if (!changes.length) return
+    await this.prisma.schemaChange.createMany({ data: changes.map(change => ({
+      channel: input.channel, marketplace: input.marketplace, productType: input.category,
+      changeType: change.changeType, fieldId: change.fieldId,
+      ...(change.oldValue ? { oldValue: change.oldValue as any } : {}), ...(change.newValue ? { newValue: change.newValue as any } : {}),
+    })) })
+    if (changes.some(change => READINESS_CHANGES.has(change.changeType))) {
+      await this.recordRuleChangeImpact({ channel: input.channel, marketplace: input.marketplace, category: input.category, since: input.since })
+    }
   }
 }
+
+/** P4 — how many product ids one `SchemaChange` row keeps. The families are marked pending whatever the count. */
+const AFFECTED_PRODUCTS_CAP = 5000
 
 /** Pull the variation_theme allowed values out of an Amazon schema.
  * Amazon nests this under `properties.variation_theme.items.properties.name.enum`

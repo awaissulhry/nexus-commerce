@@ -303,6 +303,7 @@ CREATE TABLE "CustomAttribute" (
     "localizable" BOOLEAN NOT NULL DEFAULT false,
     "scope" TEXT NOT NULL DEFAULT 'global',
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "semanticKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -318,6 +319,8 @@ CREATE TABLE "AttributeOption" (
     "label" TEXT NOT NULL,
     "metadata" JSONB,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "synonyms" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -8216,6 +8219,71 @@ CREATE TABLE "AmazonTemplateVault" (
 );
 
 -- CreateTable
+CREATE TABLE "ChannelMappingSet" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "formKind" TEXT NOT NULL,
+    "formKey" TEXT NOT NULL,
+    "version" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "templateIdentifier" TEXT,
+    "templateVersion" TEXT,
+    "language" TEXT,
+    "layout" JSONB,
+    "keyFingerprint" TEXT NOT NULL,
+    "basedOnId" TEXT,
+    "source" TEXT NOT NULL,
+    "notes" TEXT,
+    "createdBy" TEXT,
+    "activatedAt" TIMESTAMP(3),
+    "activatedBy" TEXT,
+    "retiredAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChannelMappingSet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelMappingField" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "setId" TEXT NOT NULL,
+    "channelKey" TEXT NOT NULL,
+    "columnKey" TEXT,
+    "label" TEXT,
+    "aliases" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "productTypes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "requirement" TEXT,
+    "templateRequirement" TEXT,
+    "targetKind" TEXT NOT NULL,
+    "targetKey" TEXT,
+    "transform" JSONB NOT NULL DEFAULT '[]',
+    "direction" TEXT NOT NULL DEFAULT 'both',
+    "state" TEXT NOT NULL,
+    "reason" TEXT,
+    "decidedBy" TEXT NOT NULL DEFAULT 'rule',
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ChannelMappingField_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelMappingUse" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "setId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "reference" TEXT,
+    "detail" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ChannelMappingUse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonFamilyWorkbook" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9401,6 +9469,7 @@ CREATE TABLE "ReadinessIndex" (
     "sortTitle" TEXT,
     "sortDescription" TEXT,
     "computedAt" TIMESTAMP(3) NOT NULL,
+    "pendingSince" TIMESTAMP(3),
 
     CONSTRAINT "ReadinessIndex_pkey" PRIMARY KEY ("id")
 );
@@ -9526,6 +9595,9 @@ CREATE INDEX "CustomAttribute_workspaceId_idx" ON "CustomAttribute"("workspaceId
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CustomAttribute_workspace_code_key" ON "CustomAttribute"("workspaceId", "code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CustomAttribute_workspace_semanticKey_key" ON "CustomAttribute"("workspaceId", "semanticKey");
 
 -- CreateIndex
 CREATE INDEX "AttributeOption_attributeId_idx" ON "AttributeOption"("attributeId");
@@ -13806,6 +13878,33 @@ CREATE INDEX "AmazonTemplateVault_workspaceId_idx" ON "AmazonTemplateVault"("wor
 CREATE UNIQUE INDEX "AmazonTemplateVault_workspace_templateIdentifier_key" ON "AmazonTemplateVault"("workspaceId", "templateIdentifier");
 
 -- CreateIndex
+CREATE INDEX "ChannelMappingSet_workspaceId_idx" ON "ChannelMappingSet"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingSet_channel_marketplace_formKind_formKey_stat_idx" ON "ChannelMappingSet"("channel", "marketplace", "formKind", "formKey", "status");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingSet_templateIdentifier_idx" ON "ChannelMappingSet"("templateIdentifier");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelMappingSet_workspaceId_channel_marketplace_formKind__key" ON "ChannelMappingSet"("workspaceId", "channel", "marketplace", "formKind", "formKey", "version");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingField_setId_idx" ON "ChannelMappingField"("setId");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingField_workspaceId_idx" ON "ChannelMappingField"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelMappingField_workspaceId_setId_channelKey_key" ON "ChannelMappingField"("workspaceId", "setId", "channelKey");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingUse_setId_createdAt_idx" ON "ChannelMappingUse"("setId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingUse_workspaceId_idx" ON "ChannelMappingUse"("workspaceId");
+
+-- CreateIndex
 CREATE INDEX "AmazonFamilyWorkbook_marketplace_idx" ON "AmazonFamilyWorkbook"("marketplace");
 
 -- CreateIndex
@@ -14341,6 +14440,9 @@ CREATE INDEX "ReadinessIndex_productId_idx" ON "ReadinessIndex"("productId");
 
 -- CreateIndex
 CREATE INDEX "ReadinessIndex_workspaceId_idx" ON "ReadinessIndex"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ReadinessIndex_workspaceId_pendingSince_idx" ON "ReadinessIndex"("workspaceId", "pendingSince");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");
@@ -15232,6 +15334,12 @@ ALTER TABLE "SharedListingMembership" ADD CONSTRAINT "SharedListingMembership_ch
 
 -- AddForeignKey
 ALTER TABLE "SyncChannelPolicy" ADD CONSTRAINT "SyncChannelPolicy_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelMappingField" ADD CONSTRAINT "ChannelMappingField_setId_fkey" FOREIGN KEY ("setId") REFERENCES "ChannelMappingSet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelMappingUse" ADD CONSTRAINT "ChannelMappingUse_setId_fkey" FOREIGN KEY ("setId") REFERENCES "ChannelMappingSet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SavedReportVersion" ADD CONSTRAINT "SavedReportVersion_savedReportId_fkey" FOREIGN KEY ("savedReportId") REFERENCES "SavedReport"("id") ON DELETE CASCADE ON UPDATE CASCADE;

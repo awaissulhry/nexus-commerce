@@ -82,3 +82,6 @@ export { AsOf, type AsOfProps } from './AsOf'
 export { PresenceMark, type PresenceMarkProps } from './PresenceMark'
 export { DetailPopover, type DetailPopoverProps } from './DetailPopover'
 export { ChangeReview, type ChangeReviewProps, type ChangeReviewItem } from './ChangeReview'
+// PSIE — the picked file before/while it is read, and a background job's progress in a dialog.
+export { FileRow, type FileRowProps } from './FileRow'
+export { JobProgress, jobPercent, type JobProgressProps } from './JobProgress'

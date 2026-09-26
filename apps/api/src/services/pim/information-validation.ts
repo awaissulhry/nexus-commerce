@@ -4,6 +4,7 @@ import { CHANNEL_FIELD_MAP, FOLLOW_FLAG_FOR_COLUMN, channelOverrideKeys } from '
 import { readListValue } from './sheet-values.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import type { SheetColumn } from './sheet-columns.service.js'
+import { isOffListError } from './mapping/validate-channel-value.js'
 
 type Change = { id: string; field: string; value: unknown; reset?: boolean; slot?: number; target?: string }
 /** Validate the same serialized candidate the resolver presents, before the ordinary writer commits. */
@@ -51,6 +52,8 @@ export async function informationChangeErrors(input: {
         if (!changed && previous?.cells[cell.fieldKey]?.errors.includes(error)) continue
         // Information saves incomplete language drafts; readiness still reports untranslated sources.
         if (/fallback|Translation into|content .*missing/i.test(error)) continue
+        // P6 (docs/attributes/PLAN.md §4.4) — a value off the channel's closed list is saved and flagged, never refused.
+        if (isOffListError(error)) continue
         errors.push({ id: product.productId, field: changes.find(c => editedKeys.get(product.productId)?.has(cell.fieldKey) && c.field.replace(/^attr_/, '') === cell.fieldKey)?.field ?? changes[0].field,
           error: `${cell.label}: ${error}` })
       }

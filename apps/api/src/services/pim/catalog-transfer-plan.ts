@@ -8,6 +8,7 @@ import { columnApplies, productRoleOf } from '@nexus/shared/master-sheet'
 import { getSheetColumns, type SheetColumn } from './sheet-columns.service.js'
 import { savedAttributeFields } from './family-sheet-schema.js'
 import { getFieldCatalogue, type CatalogueField } from './mapping/field-catalogue.service.js'
+import { withCachedSchemas } from './cached-schema-context.js'
 import { validateChannelValue } from './mapping/validate-channel-value.js'
 import { contentWireValue } from './content-read.js'
 import { coerceForShape } from './sheet-values.js'
@@ -96,7 +97,8 @@ export interface TransferContracts {
   /** `extraSaved` declares attribute keys the target does not hold yet (a first shared copy: the
    *  product being created has no saved-attribute bag of its own). See `buildTransferPlan`. */
   master: (familyId: string | null, product?: TransferProduct, extraSaved?: Record<string, unknown>) => Promise<SheetColumn[]>
-  channel: (channel: string, marketplace: string, category: string) => Promise<{ fields: CatalogueField[]; masterLocalizableKeys?: string[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
+  /** `accountId` (PSIE) reaches the catalogue for SHOPIFY only: a store's own metafields are part of its contract. */
+  channel: (channel: string, marketplace: string, category: string, accountId?: string | null) => Promise<{ fields: CatalogueField[]; masterLocalizableKeys?: string[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
 }
 
 export function transferContracts(market: string, options: { allowIncompleteSchema?: boolean; allowUnknownMarket?: boolean } = {}): TransferContracts {
@@ -109,10 +111,21 @@ export function transferContracts(market: string, options: { allowIncompleteSche
       if (!masters.has(key)) masters.set(key, getSheetColumns({ market, allowUnknownMarket: options.allowUnknownMarket, familyIds: familyId ? [familyId] : [], productTypes: [], savedFields: saved, scopeKind: 'master', includeEmptyChannels: true }).then(s => s.columns))
       return masters.get(key)!
     },
-    channel(channel, marketplace, category) {
-      const key = JSON.stringify([channel, marketplace, category])
-      if (!channels.has(key)) channels.set(key, getFieldCatalogue({ channel, marketplace, productType: category }).then(c => {
+    channel(channel, marketplace, category, accountId) {
+      // PSIE — Shopify's contract depends on the store (its metafield definitions); every other channel's does not
+      // here, so their contracts stay shared across accounts exactly as before.
+      // 🔴 The store's definitions are read from the SAVED copy only (`withCachedSchemas`): an export or an import never
+      // waits on a live Shopify read (up to 34 s cold) and never fails on one. Not saved yet = the standard fields, said.
+      const store = channel === 'SHOPIFY' ? accountId ?? null : null
+      const key = JSON.stringify([channel, marketplace, category, store])
+      const standard = () => getFieldCatalogue({ channel, marketplace, productType: category })
+      const catalogue = () => store
+        ? withCachedSchemas(() => getFieldCatalogue({ channel, marketplace, productType: category, accountId: store })).then(c => ({ ...c, storeFields: true }), () => standard().then(c => ({ ...c, storeFields: false })))
+        : standard().then(c => ({ ...c, storeFields: undefined as boolean | undefined }))
+      if (!channels.has(key)) channels.set(key, catalogue().then(c => {
         if (!c.schema.present && !options.allowIncompleteSchema) throw new Error(`No cached ${channel} schema for ${marketplace} / ${category}. Refresh the channel category first.`)
+        if (c.storeFields === false) return { fields: c.fields, masterLocalizableKeys: c.masterLocalizableKeys, schemaVersion: c.schema.version, fetchedAt: c.schema.fetchedAt,
+          warning: `${channel} ${marketplace}: this store's own fields (metafields) are not loaded yet, so only the standard fields are here. Open the product's Shopify tab once to load them.` }
         return { fields: c.fields, masterLocalizableKeys: c.masterLocalizableKeys, schemaVersion: c.schema.version, fetchedAt: c.schema.fetchedAt, warning: !c.schema.present
           ? `${channel} ${marketplace}: ${category ? `category ${category} has no cached requirements` : 'no category is selected'}. Available field definitions and stored values are exported. Select a category and refresh its requirements before importing changes.`
           : transferIsStore(channel) ? `${channel} ${marketplace}: core product field definitions; category-specific requirements and publish readiness must be checked separately.` : `${channel} ${marketplace} / ${category}: requirements from ${c.schema.fetchedAt ?? 'an undated cached schema'}; publish readiness is checked separately.` }
@@ -229,7 +242,7 @@ async function effectiveForClears(groups: Map<string, TransferRow[]>, context: T
     const categoryRow = group.find(r => r.entity === 'Listings' && r.field === categoryKey && r.action === 'SET')
     const category = String(categoryRow?.value ?? jsonRecord(listing?.platformAttributes)[categoryKey] ?? context.categoryDefaults?.[JSON.stringify([first.sku, first.channel, first.marketplace])] ?? '')
     let fields: CatalogueField[]
-    try { fields = (await contracts.channel(first.channel, first.marketplace, category)).fields } catch { for (const r of clears) out.set(clearKey(key, r.locale, r.field), null); continue }
+    try { fields = (await contracts.channel(first.channel, first.marketplace, category, first.accountId)).fields } catch { for (const r of clears) out.set(clearKey(key, r.locale, r.field), null); continue }
     const languageRows = context.markets.filter(m => m.channel === first.channel && m.code === first.marketplace)
     const languages = marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] })))
     for (const r of clears) {
@@ -473,7 +486,10 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             value = checked.value
           }
           if (!row.locale && col.storage !== 'categoryAttributes') {
-            const problem = nativeConstraint(col.key, value)
+            // PSIE — a variant's INHERIT carries no value of its own: its parent's is used (for `name`, the content
+            // writer resets the column), so "Name cannot be empty" does not apply to it. A root still has to hold one.
+            const inheritsFromParent = action === 'INHERIT' && !!(existingProduct?.parentId || target.parentSku)
+            const problem = inheritsFromParent ? null : nativeConstraint(col.key, value)
             if (problem) { error(row, problem); continue }
             if (['bulletPoints', 'keywords'].includes(col.key) && value === null) value = []
           }
@@ -537,7 +553,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
         const cleared = transferIsStore(first.channel) && (categoryRow?.action === 'CLEAR' || !categoryRow && storedCategory === null)
         const category = categoryRow?.action === 'SET' ? String(categoryRow.value) : cleared ? '' : String((categoryRow ? null : storedCategory) ?? defaultCategory ?? '')
         if (!category && !transferIsStore(first.channel)) throw new Error(`A listing needs ${categoryKey} in the Listings worksheet`)
-        const contract = await contracts.channel(first.channel, first.marketplace, category)
+        const contract = await contracts.channel(first.channel, first.marketplace, category, first.accountId)
         for (const f of contract.fields) {
           const keys = [f.fieldKey, f.sheetKey, f.channelStore?.kind === 'listingColumn' ? f.channelStore.column : undefined].filter((k): k is string => !!k)
           for (const key of keys) formulaKeys.set(key, keys)

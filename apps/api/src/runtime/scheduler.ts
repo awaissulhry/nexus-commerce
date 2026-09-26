@@ -7,6 +7,7 @@ import { getAmazonPublishMode } from '../services/amazon-publish-gate.service.js
 import { getEbayPublishMode } from '../services/ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../services/shopify-publish-gate.service.js'
 import { startReadinessReconcileCron } from '../jobs/readiness-reconcile.job.js'
+import { startReadinessPendingCron } from '../jobs/readiness-pending.job.js'
 import { startContentDriftCron } from '../jobs/content-drift.job.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { startTaxonomyRefreshCron } from "../jobs/taxonomy-refresh.job.js";
@@ -148,6 +149,8 @@ export async function startScheduler(): Promise<void> {
   // → "import didn't apply"). Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
   startReadCacheReconcileCron();
   startReadinessReconcileCron();
+  // P2 (docs/attributes/PLAN.md §4.7) — rebuild readiness that a big bulk edit left pending (every minute, 45 s budget).
+  startReadinessPendingCron();
   // A-39 (R-41) — Step 3.5b: nightly, rotating Amazon content read → ChannelDrift (NEXUS_ENABLE_CONTENT_DRIFT=0 to disable).
   startContentDriftCron();
 
@@ -277,8 +280,8 @@ export async function startScheduler(): Promise<void> {
     startCatalogRefreshCron();
   }
 
-  // ALA Phase 5 — proactive Amazon schema refresh (self-gates on
-  // NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1; dormant otherwise). 04:00 UTC daily.
+  // ALA Phase 5 / attributes P4 — daily channel-rule refresh for Amazon, eBay and Etsy (04:00 UTC).
+  // On by default since P4; NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0 turns it off.
   startSchemaRefreshCron();
   startTaxonomyRefreshCron();
 
