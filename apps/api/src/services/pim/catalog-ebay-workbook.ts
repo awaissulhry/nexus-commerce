@@ -407,8 +407,8 @@ export async function planEbayGroups(prisma: Pick<Db, 'product' | 'productListin
   return [...groups.values()]
 }
 
-/** Every eBay listing of one product group as a verified target (primary and adopted aliases). */
-async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string) {
+/** Every eBay listing of one product group as a verified target (primary and adopted aliases). CHMAP: the export reads it too. */
+export async function groupTargets(prisma: Db, table: EbayWorkbookTable, rootId: string) {
   const { productTransferOptions } = await import('./catalog-product-transfer.js')
   const options = await productTransferOptions(rootId), productById = new Map(options.products.map(p => [p.id, p]))
   const selected = options.listings.filter(l => l.channel === 'EBAY' && l.marketplace === table.marketplace)

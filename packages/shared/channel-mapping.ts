@@ -55,7 +55,9 @@ export type MappingRequirement = 'required' | 'requiredIfRelevant' | 'bestPracti
  */
 export type MappingTransform =
   | { op: 'copy' }
-  | { op: 'dictionary' }
+  /** The template's own label ↔ code list. `write: 'code'` = the Owner's files write Amazon's code itself (browse nodes);
+   *  `prefer` = the label they use for a code the dictionary names twice (`x_s` → `XS (x_s)`, not `TP (x_s)`). */
+  | { op: 'dictionary'; write?: 'label' | 'code'; prefer?: Record<string, string> }
   | { op: 'list'; slot?: number; join?: string }
   | { op: 'measure'; part: 'value' | 'unit' }
   | { op: 'number' }

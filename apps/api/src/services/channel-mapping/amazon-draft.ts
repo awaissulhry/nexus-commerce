@@ -43,9 +43,27 @@ function isSelector(p: Placement, spec: ChannelSpec) {
   return !!rootSchema?.selectors?.includes(selector)
 }
 
+/**
+ * The dictionary step, as this file uses it: labels or Amazon's own codes, and which label for a code the dictionary
+ * names twice. Learned from the filled cells, so writing back reproduces the Owner's own spelling.
+ */
+export function dictionaryTransform(parsed: AmazonTemplateParse, header: string): Extract<MappingTransform, { op: 'dictionary' }> | null {
+  const aliases = parsed.valueAliases?.[header] ?? {}
+  if (!Object.keys(aliases).length) return null
+  const used = [...new Set(parsed.rows.map(r => (r[header] ?? '').trim()).filter(Boolean))]
+  const codes = new Set(Object.values(aliases))
+  const writesCodes = used.length > 0 && used.every(v => !Object.prototype.hasOwnProperty.call(aliases, v) && codes.has(v))
+  const labelsOf = new Map<string, string[]>()
+  for (const [label, code] of Object.entries(aliases)) labelsOf.set(code, [...(labelsOf.get(code) ?? []), label])
+  const prefer: Record<string, string> = {}
+  for (const v of used) if (Object.prototype.hasOwnProperty.call(aliases, v) && (labelsOf.get(aliases[v])?.length ?? 0) > 1 && labelsOf.get(aliases[v])![0] !== v) prefer[aliases[v]] = v
+  return { op: 'dictionary', ...(writesCodes ? { write: 'code' as const } : {}), ...(Object.keys(prefer).length ? { prefer } : {}) }
+}
+
 function fieldTransform(parsed: AmazonTemplateParse, header: string, p: Extract<Placement, { kind: 'field' }>): MappingTransform[] {
   const out: MappingTransform[] = []
-  if (Object.keys(parsed.valueAliases?.[header] ?? {}).length) out.push({ op: 'dictionary' })
+  const dictionary = dictionaryTransform(parsed, header)
+  if (dictionary) out.push(dictionary)
   if (p.field.shape === 'list') out.push({ op: 'list', slot: p.slots[0] ?? 1 })
   if (p.field.shape === 'measure') out.push({ op: 'measure', part: p.path.at(-1) === 'unit' ? 'unit' : 'value' })
   if (p.field.kind === 'number' && !(p.field.shape === 'measure' && p.path.at(-1) === 'unit')) out.push({ op: 'number' })
@@ -58,7 +76,8 @@ function fieldTransform(parsed: AmazonTemplateParse, header: string, p: Extract<
 function decisionOf(parsed: AmazonTemplateParse, header: string, p: Placement, spec: ChannelSpec, ctx: AmazonDraftContext, typesWhereNotInType: string[]):
   Pick<Row, 'targetKind' | 'targetKey' | 'state' | 'reason' | 'transform' | 'direction' | 'requirement'> {
   const base = { targetKey: null as string | null, reason: null as string | null, transform: [{ op: 'copy' }] as MappingTransform[], direction: 'both' as const, requirement: null as MappingRequirement | null }
-  const dictionary: MappingTransform[] = Object.keys(parsed.valueAliases?.[header] ?? {}).length ? [{ op: 'dictionary' }] : [{ op: 'copy' }]
+  const learned = dictionaryTransform(parsed, header)
+  const dictionary: MappingTransform[] = learned ? [learned] : [{ op: 'copy' }]
   switch (p.kind) {
     case 'identity': return { ...base, targetKind: 'identity', state: 'mapped', requirement: 'required' }
     case 'type': return { ...base, targetKind: 'productType', state: 'mapped', transform: dictionary, requirement: 'required' }
@@ -118,6 +137,32 @@ export function buildAmazonDraftFields(parsed: AmazonTemplateParse, specs: Map<s
       templateRequirement: null, decidedBy: 'rule', sortOrder: index,
       ...decision,
     })
+  }
+  return oneColumnWritesBack(parsed, rows)
+}
+
+/**
+ * Several columns can carry ONE Nexus value: `compliance_media` has a column per document type
+ * (`[content_type=user_manual]`, `…=safety_information`, …) and Nexus keeps one link. All of them are read on import;
+ * only one is written back — the one this file fills most (else the first). The others become `in` with the reason,
+ * and the Owner can move the choice on the mapping screen.
+ */
+function oneColumnWritesBack(parsed: AmazonTemplateParse, rows: Row[]): Row[] {
+  const groups = new Map<string, Row[]>()
+  for (const row of rows) {
+    if (row.state !== 'mapped' || row.targetKind !== 'channelField' || !row.targetKey || row.transform.some(t => t.op === 'list' || t.op === 'measure')) continue
+    const language = /\[language_tag=([^\]]+)\]/.exec(row.columnKey ?? '')?.[1] ?? ''
+    const key = `${row.targetKey}\u0000${language}`
+    groups.set(key, [...(groups.get(key) ?? []), row])
+  }
+  const filled = (header: string) => parsed.rows.filter(r => (r[header] ?? '').trim() !== '').length
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const primary = group.reduce((a, b) => filled(b.columnKey!) > filled(a.columnKey!) ? b : a)
+    for (const row of group) if (row !== primary) {
+      row.direction = 'in'
+      row.reason = `Nexus keeps one value for ${row.targetKey}: every column is read, and it is written back into ${primary.label ?? primary.channelKey}.`
+    }
   }
   return rows
 }

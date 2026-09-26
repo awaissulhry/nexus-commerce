@@ -66,6 +66,39 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>('/pim/channel-mapping-sets/:id/retire', async (request, reply) => guard(reply, async () => ({
     set: await retireSet(request.params.id),
   })))
+
+  /** Upload an Amazon template once: Nexus keeps it as the export base and finds or makes its mapping version. */
+  fastify.post('/pim/channel-mapping-sets/templates', async (request, reply) => guard(reply, async () => {
+    const part = await request.file({ limits: { files: 1, fileSize: 10 * 1024 * 1024 } })
+    if (!part) return reply.status(400).send({ error: 'Choose the Amazon template you downloaded from Seller Central' })
+    const { registerAmazonTemplate } = await import('../services/channel-mapping/amazon-import.js')
+    try { return reply.code(201).send({ template: await registerAmazonTemplate(await part.toBuffer(), part.filename) }) }
+    catch (error) { if (error instanceof MappingError) throw error; return reply.status(400).send({ error: error instanceof Error ? error.message : String(error) }) }
+  }))
+
+  /**
+   * Write Amazon's own template from what Nexus holds, through an ACTIVE version. Always a PARTIAL update: a blank
+   * cell keeps Amazon's value (stock, fulfilment and every column Nexus does not carry stay untouched on upload).
+   */
+  fastify.post<{ Params: { id: string }; Body: { skus?: string[]; includePrices?: boolean } }>('/pim/channel-mapping-sets/:id/export', async (request, reply) => guard(reply, async () => {
+    const set = await getSet(request.params.id)
+    if (set.status !== 'ACTIVE') throw new MappingError(`Activate version ${set.version} before exporting with it.`, 409)
+    if (set.formKind === 'EBAY_WORKBOOK') {
+      const { exportEbayWorkbook } = await import('../services/channel-mapping/ebay-export-host.js')
+      const out = await exportEbayWorkbook({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [] })
+      reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
+      reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows.length, gaps: out.gaps.length, blankColumns: out.blankByDesign.size, mapping: out.set.label })))
+      return reply.send(out.bytes)
+    }
+    if (set.channel !== 'AMAZON' || set.formKind !== 'AMAZON_TEMPLATE') throw new MappingError('Old Amazon flat files are read only; export with a current template version.', 409)
+    const { exportAmazonTemplate } = await import('../services/channel-mapping/amazon-export-host.js')
+    const out = await exportAmazonTemplate({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [], includePrices: request.body?.includePrices ?? true, recordAction: 'partial_update' })
+    reply.header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
+    reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
+    reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows, gaps: out.gaps.length, blankColumns: out.blankByDesign.length, mapping: out.set.label })))
+    return reply.send(out.bytes)
+  }))
 }
 
 export default channelMappingSetRoutes

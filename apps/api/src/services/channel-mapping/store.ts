@@ -119,7 +119,7 @@ export async function ensureSetForForm(form: MappingForm, buildRows: () => Draft
   if (found) return { set: found, created: false }
   const base = await baseFor(form)
   const rows = base ? carryOwnerDecisions(buildRows(), base.fields.map(fieldRowOf), { from: base.language, to: form.language }) : buildRows()
-  const why = base ? `New ${form.templateVersion ? `template version ${form.templateVersion}` : 'column set'}; the Owner's decisions of v${base.version}${base.marketplace !== form.marketplace ? ` (${base.marketplace})` : ''} were carried over.` : 'First file of this form.'
+  const why = base ? `New ${form.templateVersion ? `template version ${form.templateVersion}` : 'column set'}; your decisions from v${base.version}${base.marketplace !== form.marketplace ? ` (${base.marketplace})` : ''} were carried over.` : 'First file of this form.'
   try {
     return { set: await createVersion(form, rows, { source: 'FILE', basedOnId: base?.id ?? null, createdBy: opts.createdBy, notes: why }), created: true }
   } catch (error) {
@@ -225,4 +225,30 @@ export async function recordUse(setId: string, action: 'IMPORT' | 'EXPORT' | 'PU
 
 export async function listUses(setId: string, take = 50) {
   return prisma.channelMappingUse.findMany({ where: { setId }, orderBy: { createdAt: 'desc' }, take })
+}
+
+/**
+ * A DRAFT learns how the Owner's files spell its dictionary columns: a later file of the same form may use a label the
+ * first one never showed (`XXS (xx_s)` for trousers). Only new facts are added — a spelling the version already records
+ * wins — and an ACTIVE or RETIRED version never changes. Returns the columns that learned something.
+ */
+export async function learnSpellings(setId: string, learned: ReadonlyMap<string, Extract<MappingTransform, { op: 'dictionary' }>>): Promise<string[]> {
+  const set = await prisma.channelMappingSet.findUnique({ where: { id: setId }, include: { fields: true } })
+  if (!set || set.status !== 'DRAFT') return []
+  const changed: string[] = []
+  for (const field of set.fields) {
+    const next = learned.get(field.channelKey)
+    if (!next) continue
+    const transform = (field.transform ?? []) as MappingTransform[]
+    const at = transform.findIndex(t => t.op === 'dictionary')
+    if (at < 0) continue
+    const current = transform[at] as Extract<MappingTransform, { op: 'dictionary' }>
+    const prefer = { ...(next.prefer ?? {}), ...(current.prefer ?? {}) }
+    const write = current.write ?? next.write
+    if (JSON.stringify(prefer) === JSON.stringify(current.prefer ?? {}) && write === current.write) continue
+    const merged: Extract<MappingTransform, { op: 'dictionary' }> = { op: 'dictionary', ...(write ? { write } : {}), ...(Object.keys(prefer).length ? { prefer } : {}) }
+    await prisma.channelMappingField.update({ where: { id: field.id }, data: { transform: transform.map((t, i) => i === at ? merged : t) as unknown as Prisma.InputJsonValue } })
+    changed.push(field.channelKey)
+  }
+  return changed
 }

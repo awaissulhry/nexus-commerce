@@ -394,7 +394,14 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
           continue
         }
         case 'relationship': { const reason = 'Amazon variation relationship retained as source evidence; shared parentSku is managed on the Products sheet.'; exclude(header, reason); log(header, 'excluded', { reason }); continue }
-        case 'id-type': { const reason = 'Identifier type, read together with the identifier value'; log(header, 'excluded', { reason }); continue }
+        case 'id-type': {
+          // CHMAP — "GTIN exemption" is a fact of its own (the schema's `supplier_declared_has_product_identifier_exemption`):
+          // kept, so an export can declare it again. Every other type is read together with the identifier value.
+          if (identifierType === 'exempt' && spec.fields.some(f => f.key === 'supplier_declared_has_product_identifier_exemption')) {
+            out.rows.push({ ...identityRow, field: 'supplier_declared_has_product_identifier_exemption', value: true }); log(header, 'row', { field: 'supplier_declared_has_product_identifier_exemption' })
+          } else { const reason = 'Identifier type, read together with the identifier value'; log(header, 'excluded', { reason }) }
+          continue
+        }
         case 'id-value': {
           if (identifierType === 'asin') {
             if (!/^[A-Z0-9]{10}$/.test(raw) || !spec.fields.some(f => f.key === 'merchant_suggested_asin')) { issue(header, 'The declared ASIN needs a valid ten-character value and a Merchant Suggested ASIN schema field'); log(header, 'refused', { reason: 'invalid ASIN' }) }
