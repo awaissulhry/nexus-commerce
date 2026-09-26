@@ -11,7 +11,8 @@ PostgreSQL database, kept apart by row-level security.
 Each app and package below has its own CLAUDE.md; it loads when you open a file there.
 
 ## Apps and packages
-- `apps/api` — Fastify API. On `main` the same process also runs the BullMQ workers and the crons.
+- `apps/api` — one codebase, three Railway services: the Fastify API (`src/index.ts`), the BullMQ worker
+  and the cron scheduler (`src/background.ts worker|scheduler`). Migrations run in Railway's pre-deploy step.
 - `apps/web` — Next.js 16 operator console; pages live under `/w/<workspaceId>/…`.
 - `apps/factory` — the factory app: own SQLite database and auth, isolated from everything else.
 - `packages/database` — Prisma schema, migrations, the workspace-scoped client, row-level-security SQL.
@@ -22,7 +23,8 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
 ## Commands (verified 2026-09-26 on main)
     npm ci                                    # fresh clone/worktree only — it deletes node_modules first
     npm run build -w @nexus/shared && npm run build -w @nexus/events   # after npm ci, and after editing either
-    NEXUS_DISABLE_BACKGROUND_JOBS=1 npm run dev -w @nexus/api   # HTTP only; :8080 unless PORT; needs DATABASE_URL, REDIS_URL
+    npm run dev -w @nexus/api                 # HTTP only; :8080 unless PORT; needs DATABASE_URL, REDIS_URL
+    npm run dev:worker -w @nexus/api          # queue consumers; dev:scheduler runs the crons (hard rule 2)
     npm run dev -w @nexus/web                 # :3000; set NEXT_PUBLIC_API_URL to your local API
     npm run typecheck -w @nexus/<api|web|database|shared|events>   # factory: see apps/factory/CLAUDE.md
     cd apps/api && npx vitest run src/path/to/file.vitest.test.ts -t "test name"
@@ -61,8 +63,9 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
    database and live channel credentials. `apps/api/src/env.ts` loads the CWD `.env` first and then the root
    `.env`, without overriding. So run API tests from `apps/api`, where the test guard refuses non-local databases.
    Run the Prisma CLI only from `packages/database`.
-2. **Start a local API with `NEXUS_DISABLE_BACKGROUND_JOBS=1`.** Without it, every cron and queue worker starts.
-   On 2026-08-20 one local `npm run dev` doubled production order syncs for 7.5 hours.
+2. **Never run the worker or scheduler (`dev:worker`, `dev:scheduler`) against a shared or production database.**
+   They start every queue consumer and cron. On 2026-08-20 one local API, which then started them, doubled
+   production order syncs for 7.5 hours.
 3. **Set `NEXT_PUBLIC_API_URL` for a local web app.** Unset, `getBackendUrl()` falls back to the production API.
 4. **Every marketplace call goes through the channel gateway** (`apps/api/src/services/gateway/gateway.ts`). Account
    state, rate limits and the call ledger live there. The pre-push ratchet holds direct calls at 0.

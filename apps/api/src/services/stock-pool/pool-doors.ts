@@ -99,6 +99,28 @@ export async function poolReserve(db: Db, args: { productId: string; quantity: n
   return answer(await door(db, Prisma.sql`SELECT nexus_pool_reserve(${args.productId}, ${args.quantity}::integer, ${args.orderRef}, ${args.actor ?? null}::text) AS result`))
 }
 
+/**
+ * The order's pool hold for a product, through any of its links (active or ended), in any state —
+ * or null. Hold identity: a product that stopped selling from the pool (a paused or ended grant)
+ * keeps the order's hold where it was made (order-stock-restore.sql).
+ */
+export async function poolOrderHold(db: Db, args: { orderRef: string; productId: string }): Promise<PoolHold | null> {
+  const rows = await db.$queryRaw<Array<{ result: PoolHold | null }>>(Prisma.sql`SELECT nexus_pool_order_hold(${args.orderRef}, ${args.productId}) AS result`)
+  return rows[0]?.result ?? null
+}
+
+/** Units this business's order took from shared stock for a product, through any of its links. */
+export async function poolOrderTaken(db: Db, args: { orderRef: string; productId: string }): Promise<number> {
+  const rows = await db.$queryRaw<Array<{ taken: number }>>(Prisma.sql`SELECT nexus_pool_order_taken(${args.orderRef}, ${args.productId}) AS taken`)
+  return Number(rows[0]?.taken ?? 0)
+}
+
+/** Whether this business's order consumed shared stock (a pool hold taken out when it shipped). */
+export async function poolOrderShipped(db: Db, orderRef: string): Promise<boolean> {
+  const rows = await db.$queryRaw<Array<{ shipped: boolean }>>(Prisma.sql`SELECT nexus_pool_order_shipped(${orderRef}) AS shipped`)
+  return rows[0]?.shipped === true
+}
+
 /** Door 3 — GIVE BACK the open holds of one borrower order (every product, or one). */
 export async function poolRelease(db: Db, args: { orderRef: string; productId?: string | null; actor?: string | null; reason?: string | null }): Promise<PoolResult<{ released: number; units: number }>> {
   return answer(await door(db, Prisma.sql`SELECT nexus_pool_release(${args.orderRef}, ${args.productId ?? null}::text, ${args.actor ?? null}::text, ${args.reason ?? null}::text) AS result`))
@@ -125,6 +147,14 @@ export async function poolPutBack(db: Db, args: {
   actor?: string | null
 }): Promise<PoolResult<{ movementId: string; reused: boolean; units?: number }>> {
   return answer(await door(db, Prisma.sql`SELECT nexus_pool_put_back(${args.productId}, ${args.quantity}::integer, ${args.orderRef}, ${args.putBackRef}, ${args.reason}, ${args.actor ?? null}::text) AS result`))
+}
+
+/**
+ * The LENDER's release of a pool hold its borrower's cancellation kept (re-review 2026-09-26): only a
+ * hold of the calling business for another business's order that is cancelled or refunded there.
+ */
+export async function poolLenderRelease(db: Db, args: { reservationId: string; actor?: string | null }): Promise<PoolResult<{ released: number; units?: number; reused: boolean }>> {
+  return answer(await door(db, Prisma.sql`SELECT nexus_pool_lender_release(${args.reservationId}, ${args.actor ?? null}::text) AS result`))
 }
 
 /** For the repair job: this business's orders that still have an open hold in a pool, oldest first. */

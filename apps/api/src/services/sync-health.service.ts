@@ -48,6 +48,9 @@ export type ConflictType =
   | 'EU_SHARED_QTY_GUARD_UNAVAILABLE'
   // P0c — per-channel publish failure-rate breach (last hour)
   | 'PUBLISH_FAILURE_RATE'
+  // CX (review 2026-09-26) — the master-price cascade refused a listing whose market does not sell in the
+  // master currency (or has none configured): refuse, don't convert; nothing was queued.
+  | 'MASTER_PRICE_CURRENCY_REFUSED'
   // P0c — auth-class publish failures (403/Unauthorized/invalid_grant): the
   // silent-credential-degradation tripwire (the 2026-07-20 incident class)
   | 'CHANNEL_AUTH_FAILURE';

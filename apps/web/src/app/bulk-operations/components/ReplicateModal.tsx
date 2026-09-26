@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { cn } from '@/lib/utils'
 import type { MarketplaceContext, MarketplaceOption } from './MarketplaceSelector'
 
@@ -49,6 +50,7 @@ export default function ReplicateModal({
     errors: Array<{ productId: string; channel: string; marketplace: string; error: string }>
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const replicateKey = useCommandKey()
 
   useEffect(() => {
     if (!open) {
@@ -115,7 +117,11 @@ export default function ReplicateModal({
     setError(null)
     setResult(null)
     try {
-      const res = await fetch(
+      // One key per replicate intent: a retry after a lost response
+      // reuses it, so the server replays the result instead of
+      // writing every listing a second time.
+      const { response: res, body, conflict } = await sendCommand<any>(
+        replicateKey,
         `${getBackendUrl()}/api/products/bulk-replicate`,
         {
           method: 'POST',
@@ -128,8 +134,11 @@ export default function ReplicateModal({
           }),
         },
       )
-      const json = await res.json()
-      if (!res.ok) {
+      if (conflict) {
+        throw new Error(commandConflictMessage(conflict, 'replicate request'))
+      }
+      const json = body ?? {}
+      if (!res.ok || body === null) {
         throw new Error(json?.error ?? `HTTP ${res.status}`)
       }
       setResult({

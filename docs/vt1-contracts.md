@@ -398,9 +398,9 @@ WARNING because the push still goes out, with the axis missing — which is exac
   measured: `color.title = "Farbe"`, `size.title = "Größe"`; `enumNames` says `FARBE/GRÖSSE`), `source.kind:
   'derived'` `tieBreak: 'only-live'`, `limit: 4` (the widest segment count in its own enum, measured 4 on both
   IT and DE), `schemaFetchedAt 2026-09-12T14:52:54.095Z`, `write.endpoint: 'projection'`, `expectedVersion: 13`,
-  `locked` (ASIN B0D8XBXM5H, `setChangeIs: 'new-parent'`).
+  `locked` (ASIN B0FX4BC696, `setChangeIs: 'new-parent'`).
 - `GALE_EBAY_IT_OVERRIDDEN` — eBay·IT, `source.kind: 'override'`, delivered names `Colore · Taglia`, 3 candidate
-  aspects, `limit: 5`, `expectedVersion: 18`, `locked` (item 257584954808, `setChangeIs: 'relist'`,
+  aspects, `limit: 5`, `expectedVersion: 18`, `locked` (item 938554736087, `setChangeIs: 'relist'`,
   `orderChangeAllowed: true`).
 - `GALE_EBAY_DE_UNAVAILABLE` — the honest "could not look" state (no category on the DE listing).
 - `GALE_CHILD` (`null` — the cell VALUE on a child row) + `GALE_CHILD_WRITE_BLOCKED_REASON`.

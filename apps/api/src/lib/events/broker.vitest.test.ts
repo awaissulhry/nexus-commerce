@@ -1,7 +1,7 @@
 // EV.1 — broker contract tests.
 //
 // These assert the two guarantees consumers are allowed to rely on: stable
-// partitioning (so per-subject ordering is real) and type-filtered, correlated
+// stable subject partitioning and type-filtered, correlated
 // delivery. Everything else about a driver is an implementation detail.
 
 import { describe, it, expect, vi } from 'vitest'
@@ -22,7 +22,7 @@ function envelope(type: string, subject: string, over: Partial<EventEnvelope> = 
     correlationId: randomUUID(),
     causationId: null,
     source: 'test',
-    payload: {},
+    payload: type === 'product.updated' ? { productId: subject } : {},
     ...over,
   }
 }

@@ -67,13 +67,13 @@ for (const c of de) {
 }
 console.log('(blank above = no product currently carries the stamp)')
 
-console.log('\n=== F. ItemID 257584954808 — where does it live besides ChannelListing? ===')
+console.log('\n=== F. ItemID 938554736087 — where does it live besides ChannelListing? ===')
 for (const t of ['SharedListingMembership', 'OutboundSyncQueue', 'ChannelImagePublishJob']) {
   // generic probe via raw SQL on the obvious columns
 }
-const memIT = await prisma.sharedListingMembership.count({ where: { itemId: '257584954808' } })
-const obqItem = await prisma.outboundSyncQueue.count({ where: { externalListingId: '257584954808' } })
-const obqItemDE = await prisma.outboundSyncQueue.count({ where: { externalListingId: '257584954808', targetRegion: 'DE' } })
+const memIT = await prisma.sharedListingMembership.count({ where: { itemId: '938554736087' } })
+const obqItem = await prisma.outboundSyncQueue.count({ where: { externalListingId: '938554736087' } })
+const obqItemDE = await prisma.outboundSyncQueue.count({ where: { externalListingId: '938554736087', targetRegion: 'DE' } })
 console.log('memberships:', memIT, ' OBQ rows:', obqItem, ' of which targetRegion=DE:', obqItemDE)
 
 console.log('\n=== G. eBay write gate state (would a delist actually reach eBay?) ===')

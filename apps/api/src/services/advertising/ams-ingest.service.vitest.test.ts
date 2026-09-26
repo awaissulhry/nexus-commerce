@@ -36,7 +36,7 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
     h.budget.mockImplementation(async (records: unknown[]) => { inProfile('budget', records.length); return { received: records.length, exhausted: 0, warning: records.length, skipped: 0, stored: records.length, undatable: 0, unmatched: 0 } })
     h.flush.mockImplementation(async () => { inProfile('flush', 0) })
     h.owner.mockImplementation(async (_channel: string, account: string) => {
-      if (account === 'A1VRHKTGYO1JNU') return { workspaceId: 'xavia-racing' }
+      if (account === 'AFXSELLER8BC38') return { workspaceId: 'xavia-racing' }
       if (account === 'MOTOVENTO-ADS') return { workspaceId: 'motovento' }
       throw new WorkspaceError('ingress_account_ambiguous', 'The verified notification does not identify one connected seller.', 503)
     })
@@ -45,9 +45,9 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
 
   it('writes each account’s records inside its own profile and sums the answer', async () => {
     const result = await ingestAmsBatch([
-      traffic('A1VRHKTGYO1JNU', 'c1'),
+      traffic('AFXSELLER8BC38', 'c1'),
       traffic('MOTOVENTO-ADS', 'c2'),
-      traffic('A1VRHKTGYO1JNU', 'c3'),
+      traffic('AFXSELLER8BC38', 'c3'),
       { dataset_id: 'campaigns', advertiser_id: 'MOTOVENTO-ADS', campaignId: 'c2' },
     ])
     expect(h.writes).toEqual(expect.arrayContaining([
@@ -63,7 +63,7 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
   })
 
   it('counts and logs records no profile owns, and never writes them into a guessed profile', async () => {
-    const result = await ingestAmsBatch([traffic('UNKNOWN-ADS', 'c9'), traffic(undefined, 'c8'), traffic('A1VRHKTGYO1JNU', 'c1')])
+    const result = await ingestAmsBatch([traffic('UNKNOWN-ADS', 'c9'), traffic(undefined, 'c8'), traffic('AFXSELLER8BC38', 'c1')])
     expect(result).toMatchObject({ received: 3, upserted: 1, unrouted: 2 })
     expect(h.writes.filter((w) => w.kind === 'performance')).toEqual([{ kind: 'performance', workspaceId: 'xavia-racing', count: 1 }])
     expect(h.log).toHaveBeenCalledWith(expect.stringContaining('records not saved'), expect.objectContaining({ unrouted: 2, accounts: expect.arrayContaining(['UNKNOWN-ADS', '(none)']) }))
@@ -71,7 +71,7 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
 
   it('lets a real outage fail the request, so the forwarder can retry', async () => {
     h.owner.mockRejectedValueOnce(new Error('database unavailable'))
-    await expect(ingestAmsBatch([traffic('A1VRHKTGYO1JNU', 'c1')])).rejects.toThrow('database unavailable')
+    await expect(ingestAmsBatch([traffic('AFXSELLER8BC38', 'c1')])).rejects.toThrow('database unavailable')
     expect(h.perf).not.toHaveBeenCalled()
   })
 
@@ -79,7 +79,7 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '0')
     h.perf.mockImplementation(async (records: unknown[]) => ({ received: records.length, upserted: records.length, skipped: 0 }))
     h.flush.mockResolvedValue(undefined)
-    const result = await ingestAmsBatch([traffic(undefined, 'c1'), traffic('A1VRHKTGYO1JNU', 'c2')])
+    const result = await ingestAmsBatch([traffic(undefined, 'c1'), traffic('AFXSELLER8BC38', 'c2')])
     expect(result).toMatchObject({ received: 2, upserted: 2, unrouted: 0 })
     expect(h.owner).not.toHaveBeenCalled()
   })

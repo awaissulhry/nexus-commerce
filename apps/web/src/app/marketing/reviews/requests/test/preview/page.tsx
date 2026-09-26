@@ -27,10 +27,10 @@ async function fetchHtml(locale: Locale, productName: string): Promise<string> {
       body: JSON.stringify({ action: 'preview-html', locale, productName }),
       cache: 'no-store',
     })
-    if (!res.ok) return `<p style="font-family: monospace; color: #c00; padding: 16px;">Preview failed: HTTP ${res.status}</p>`
+    if (!res.ok) return `<p style="font-family: var(--nds-font-mono); color: #c00; padding: 16px;">Preview failed: HTTP ${res.status}</p>`
     return await res.text()
   } catch (err) {
-    return `<p style="font-family: monospace; color: #c00; padding: 16px;">Preview error: ${err instanceof Error ? err.message : 'unknown'}</p>`
+    return `<p style="font-family: var(--nds-font-mono); color: #c00; padding: 16px;">Preview error: ${err instanceof Error ? err.message : 'unknown'}</p>`
   }
 }
 

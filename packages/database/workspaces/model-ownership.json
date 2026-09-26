@@ -22,6 +22,8 @@
     "WorkspaceMemberAccount",
     "ChannelAccountGrant",
     "ChannelAccountOwnership",
+    "EbayNoticeQuarantine",
+    "EbayQuarantineMaintenanceAudit",
     "AssortmentShare",
     "CatalogLink",
     "StockPoolGrant",
@@ -123,6 +125,7 @@
     "DataRetentionPolicy",
     "DataExportRequest",
     "WebhookEvent",
+    "ErasureRequest",
     "ChannelLiveImage",
     "ChannelStockEvent",
     "RateLimitLog",
@@ -448,6 +451,12 @@
     "AssortmentMember",
     "AssortmentCopyRun",
     "StockPoolLink",
-    "StockPoolTask"
+    "StockPoolTask",
+    "EtsyReceiptIngest",
+    "EtsyReceiptRefusal",
+    "CommandReceipt",
+    "ChannelMappingSet",
+    "ChannelMappingField",
+    "ChannelMappingUse"
   ]
 }

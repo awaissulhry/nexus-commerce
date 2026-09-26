@@ -29,7 +29,6 @@ import {
 } from '../products/bulk-upload.service.js'
 import { parseZipUpload } from '../products/bulk-zip-upload.service.js'
 import { auditLogService } from '../audit-log.service.js'
-import { idempotencyService } from '../idempotency.service.js'
 import { masterPriceService } from '../master-price.service.js'
 import { masterContentService } from '../master-content.service.js'
 import { applyStockMovement } from '../stock-movement.service.js'

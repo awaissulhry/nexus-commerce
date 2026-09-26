@@ -420,10 +420,10 @@ pane repaints from the same invalidation; its Listings pane gains the new snapsh
 ```
  21 rows · 1 selected  [Copy listing setup to…]  [View ▾][Missing required (7)]  Find…   [+ Add listing alias]
 ┌─ eBay · IT ──────────────────────────────────────────────────────────────────────────────┐
-│ ▾ P ★① Primary          ACTIVE  256566101420   ████████░░ 84%   ⋯                        │
+│ ▾ P ★① Primary          ACTIVE  949285812839   ████████░░ 84%   ⋯                        │
 │     ▸ GALE-KAN-PRO-NE-S   🔗Nero  🔗M    ✎ 149,00                                        │
 │ ▾ P ★② Summer title test DRAFT   —              ███░░░░░░░ 31%   ⋯                        │
-│ ▾ P ★③ Bundle listing    ACTIVE  257584954808  ██████░░░░ 62%   ⋯  [SHARED]              │
+│ ▾ P ★③ Bundle listing    ACTIVE  938554736087  ██████░░░░ 62%   ⋯  [SHARED]              │
 │        └ hover: Trading (adopted) · also carries 14 SKUs from 2 other families            │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
         ┌── Copy listing setup from ★① Primary ───────────────────────────────┐

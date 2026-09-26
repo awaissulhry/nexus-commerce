@@ -11,13 +11,17 @@ vi.mock('./channel-contracts.js', () => ({
   CHANNEL_CONTRACTS: [{
     channel: 'SHOPIFY',
     name: 'shopify.shop',
+    covers: 'shopify.shop.read',
     what: 'read',
     url: () => 'https://live-shop.myshopify.com/admin/api/2026-07/graphql.json',
     method: 'POST',
     body: () => JSON.stringify({ query: '{ shop { id } }' }),
     assert: () => null,
   }],
-  CHANNELS_WITHOUT_SANDBOX: [],
+  REQUIRED_OPERATIONS: {},
+  ACCOUNT_ENVIRONMENT: {},
+  NOT_APPLICABLE_CHANNELS: [],
+  OUT_OF_SCOPE_CHANNELS: [],
 }))
 vi.mock('../gateway/gateway.js', async (original) => ({
   ...(await original<object>()),

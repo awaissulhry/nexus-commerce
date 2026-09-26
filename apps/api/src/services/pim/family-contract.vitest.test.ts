@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 const db = vi.hoisted(() => ({ attributes: vi.fn(), family: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { customAttribute: { findMany: db.attributes } } }))
-vi.mock('../family-hierarchy.service.js', () => ({ familyHierarchyService: { resolveEffectiveAttributes: db.family } }))
+vi.mock('../family-hierarchy.service.js', async () => ({ familyHierarchyService: (await import('../../test-support/family-service-mock.js')).familyServiceMock((id: string) => db.family(id)) }))
 import { familySheetFields } from './family-sheet-schema.js'
 import { buildSheetColumns } from './sheet-columns.service.js'
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'

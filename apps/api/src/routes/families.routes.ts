@@ -33,6 +33,7 @@ import { familyCompletenessService } from '../services/family-completeness.servi
 import { channelReadinessService } from '../services/channel-readiness.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
+import { MISSING_REQUIRED_MAX_TAKE, productsMissingRequired } from '../services/pim/readiness-query.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const MAX_DEPTH = 8
@@ -306,15 +307,37 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
         .code(400)
         .send({ error: 'productIds cannot exceed 200 per call' })
 
+    // P3 — one batched computation (fixed query count) instead of several queries per product in sequence.
+    const computed = await channelReadinessService.computeMany(body.productIds)
     const results: Record<string, unknown> = {}
-    for (const id of body.productIds) {
-      try {
-        results[id] = await channelReadinessService.compute(id)
-      } catch (err: any) {
-        results[id] = { error: err?.message ?? String(err) }
-      }
-    }
+    for (const id of body.productIds) results[id] = computed.get(id)
     return { results }
+  })
+
+  // GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&language=de][&accountId=][&field=color]
+  //     [&requiredBy=Family: Jackets][&take=200][&after=<productId>]
+  //
+  // P7 (docs/attributes/PLAN.md §4.6) — the products that miss a required field at ONE coordinate, read from the
+  // stored readiness index (one query, never a rebuild). Omit channel and market for the shared product. The reply
+  // says how many products were checked there and how many are pending a rebuild, so "none missing" is never
+  // confused with "not checked".
+  fastify.get('/products/readiness/missing-required', async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>
+    const channel = q.channel ? q.channel.toUpperCase() : null
+    const market = q.market ? q.market.toUpperCase() : null
+    if ((channel === null) !== (market === null))
+      return reply.code(400).send({ error: 'Send channel and market together, or neither for the shared product.' })
+    const take = q.take === undefined ? undefined : Number(q.take)
+    if (take !== undefined && (!Number.isInteger(take) || take < 1 || take > MISSING_REQUIRED_MAX_TAKE))
+      return reply.code(400).send({ error: `take must be a whole number from 1 to ${MISSING_REQUIRED_MAX_TAKE}.` })
+    return productsMissingRequired({
+      channel, market, take,
+      ...(q.accountId !== undefined ? { accountId: q.accountId || null } : {}),
+      language: q.language ? q.language.toLowerCase() : null,
+      field: q.field || null,
+      requiredBy: q.requiredBy || null,
+      after: q.after || null,
+    })
   })
 
   // POST /api/products/translation-coverage/bulk { productIds: [...] }
@@ -377,17 +400,15 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
         | { score: number; filled: number; totalRequired: number; familyId: string | null }
         | { error: string }
       > = {}
+      // P3 — one batched computation (fixed query count) instead of one per product.
+      const computed = await familyCompletenessService.computeMany(body.productIds)
       for (const id of body.productIds) {
-        try {
-          const r = await familyCompletenessService.compute(id)
-          results[id] = {
-            score: r.score,
-            filled: r.filled,
-            totalRequired: r.totalRequired,
-            familyId: r.familyId,
-          }
-        } catch (err: any) {
-          results[id] = { error: err?.message ?? String(err) }
+        const r = computed.get(id)!
+        results[id] = 'error' in r ? r : {
+          score: r.score,
+          filled: r.filled,
+          totalRequired: r.totalRequired,
+          familyId: r.familyId,
         }
       }
       return { results }

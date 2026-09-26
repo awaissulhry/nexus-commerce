@@ -65,6 +65,12 @@ export interface TransferRow {
   clearIfPresent?: true
   /** CFI-4 — the SKU as written in the file, when the row was resolved to a different Nexus SKU. */
   fileSku?: string
+  /**
+   * PSIE — what the EXPORT held for this cell (its editing baseline), on a changed cell of a Nexus editing
+   * file read in changes-only mode. The review compares it with the current value: a cell that also changed
+   * in Nexus after the export is a problem for that cell only. `null` = the export held no value here.
+   */
+  expected?: { action: TransferAction; value: unknown } | null
 }
 export interface TransferIssue {
   row: number; sku: string; field: string; message: string; source?: TransferRow['source']
@@ -121,4 +127,95 @@ export function transferFileRow(row: TransferRow): Record<string, string> {
     value: row.action === 'SET' ? (typeof row.value === 'string' ? row.value : JSON.stringify(row.value) ?? '') : '',
     version: row.version === undefined ? '' : String(row.version),
   }
+}
+
+// ── PSIE — the product sheet's import: one engine, two buttons ──────────────────────────────────
+// Import → drop a file → one summary → Apply → Done (with Undo). Only changed cells travel; a cell
+// the file leaves as exported is never sent, checked or saved. Saving writes Nexus only: sending to
+// the channels is its own step (the Owner's D1 (a), 2026-09-26).
+
+export type SheetImportState = 'CHECKING' | 'READY' | 'SAVING' | 'DONE' | 'PARTIAL' | 'FAILED'
+/** What the file was: our editing file, an older Nexus file, a channel's own file, a CSV, or an undo. */
+export type SheetImportFormat = 'nexus' | 'nexus-legacy' | 'amazon' | 'ebay' | 'csv' | 'undo'
+export interface SheetImportSummary {
+  /** Changed cells the import will save. */
+  changes: number
+  /** Cells (or rows) that cannot be saved, each with a reason. */
+  problems: number
+  /** Shared product records and listing records that change. */
+  products: number
+  listings: number
+  /** Cells the file sets to the value Nexus already holds (a channel file restates everything). */
+  unchanged: number
+  /** Channel files only: listings the file creates or ends, and prices recorded without a push. */
+  created: number
+  ended: number
+  prices: number
+}
+export interface SheetImportLink { fileSku: string; proposedSku: string; reason: string }
+export interface SheetImportDelete { sku: string; fileSku: string; channel: string; marketplace: string; accountId: string; evidence?: string; confirmed: boolean }
+export interface SheetImportStatus {
+  jobId: string
+  state: SheetImportState
+  format: SheetImportFormat
+  filename: string
+  summary: SheetImportSummary
+  warnings: string[]
+  /** Records done / all records, for the progress bar while checking or saving. */
+  processed: number
+  total: number
+  startedAt: string
+  completedAt: string | null
+  /** Present once the check is complete; Apply must send it back. */
+  reviewToken?: string
+  receipt?: { saved: number; failed: number; skipped: number }
+  /** Channel files: identities and deletes the Owner must confirm (re-upload with the decisions). */
+  links: SheetImportLink[]
+  deletes: SheetImportDelete[]
+  /** The destinations the file touches, in reading order: "Shared", "Amazon · IT", … */
+  destinations: string[]
+  /** Listings whose values changed (for the publish step). */
+  listingIds: string[]
+  undoOf?: string
+  undoneBy?: string
+  /** True when the import saved something that an undo can put back. */
+  canUndo: boolean
+  /**
+   * The families' readiness, rebuilt right AFTER the save (the Owner's choice, 2026-09-26): `pending` while it runs,
+   * `failed` when it could not (the next edit of the family rebuilds it). Absent when nothing was saved.
+   */
+  readiness?: 'pending' | 'done' | 'failed'
+  error?: string
+}
+export type SheetImportChangeStatus = 'ready' | 'problem' | 'saved' | 'failed' | 'skipped'
+export interface SheetImportChange {
+  id: string
+  sku: string
+  /** "Shared", or "Amazon · IT" plus the listing label when the product has aliases. */
+  destination: string
+  entity: TransferEntity
+  channel: string
+  marketplace: string
+  accountId: string
+  aliasKey: string
+  listing?: string
+  locale: string
+  field: string
+  label: string
+  before: unknown
+  after: unknown
+  beforeState: 'stored' | 'inherited'
+  afterState: 'stored' | 'inherited'
+  status: SheetImportChangeStatus
+  problem?: string
+  row?: number
+  sheet?: string
+  column?: string
+}
+export interface SheetImportChangesPage { changes: SheetImportChange[]; total: number; page: number; pageSize: number }
+/** Typed in a cell of a Nexus file: empty the value / follow the shared value again. Case-insensitive. */
+export const SHEET_CELL_MARKERS = { '#clear': 'CLEAR', '#shared': 'INHERIT' } as const satisfies Record<string, TransferAction>
+export function sheetCellMarker(value: unknown): 'CLEAR' | 'INHERIT' | undefined {
+  if (typeof value !== 'string') return undefined
+  return (SHEET_CELL_MARKERS as Record<string, 'CLEAR' | 'INHERIT'>)[value.trim().toLowerCase()]
 }

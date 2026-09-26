@@ -64,7 +64,7 @@ vi.mock('../services/connection-resolver.service.js', () => ({
 vi.mock('../services/product-event.service.js', () => ({ productEventService: { emitMany: async () => [], emitManyTx: async () => [] } }))
 vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { writeMany: async () => [] } }))
 vi.mock('../services/product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: async () => [] } }))
-vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: async () => {} }))
+vi.mock('../services/pim/readiness-index.service.js', async () => (await import('../test-support/readiness-module-mock.js')).readinessModuleMock(async () => {}))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),

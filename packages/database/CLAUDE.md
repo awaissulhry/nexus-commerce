@@ -19,13 +19,17 @@ Consumers load the committed `*.js` files at this package root. After you edit a
     Raw SQL runs with an empty workspace id: reads return zero rows, and inserts fail the policy.
 - Raw SQL: one statement only (`assertWorkspaceSql`, `workspace-sql.ts`). Never `SET ROLE`, `RESET`, `set_config`
   or `SET nexus.*`; the adapter rejects them. Raw SQL gets no automatic `workspaceId` filter; only RLS protects it.
-- Never `new PrismaClient()` in app code. It skips the adapter, so it gets no workspace and no runtime role.
+- Never `new PrismaClient()` in app code. It skips the adapter, so it gets no workspace and no runtime role. Under
+  Prisma 7 it throws without an adapter; the old one-off scripts in `scripts/` and `apps/api/scripts/` still do
+  it, so switch one to `@nexus/database`'s client before reusing it.
+- Production connects as a restricted login granted `nexus_workspace_runtime` WITH INHERIT TRUE, SET TRUE.
+  `RuntimePool` (`runtime-role.ts`) refuses an owner, BYPASSRLS or non-inheriting login.
 
 ## Changing the schema
 1. Edit `prisma/schema.prisma`.
 2. Write the migration by hand: `prisma/migrations/<YYYYMMDD><letter>_<name>/migration.sql`, using the next free
    letter for the day. Generate the DDL with `npx prisma migrate diff` (the flags this Prisma version takes are in
-   `apps/api/src/test-support/formula-database.ts`), and keep only your change.
+   `apps/api/src/test-support/formula-schema.ts`), and keep only your change.
 3. For a new table, add the model to `workspaces/model-ownership.json`: under `workspaceModels` if one business owns
    each row, otherwise under `globalModels`.
    - For a business-owned table, also add its keys to `workspaces/scoped-keys.json`.

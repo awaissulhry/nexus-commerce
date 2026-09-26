@@ -216,8 +216,8 @@ describe('P4.3f readBackShopifyQuantities', () => {
 
 // ── C. it runs on its own ───────────────────────────────────────────────────
 describe('P4.3f: the job is SCHEDULED, not registry-only', () => {
-  it('index.ts starts the cron at boot', () => {
-    const source = readFileSync(new URL('../../index.ts', import.meta.url), 'utf8')
+  it('the scheduler starts the cron at boot', () => {
+    const source = readFileSync(new URL('../../runtime/scheduler.ts', import.meta.url), 'utf8')
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     expect(code).toContain('startEbayReadbackCron')                 // the stripper left the file intact
     expect(code).toMatch(/startShopifyQtyReadbackCron\(\)/)

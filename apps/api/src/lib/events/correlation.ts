@@ -13,6 +13,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
+import { getRequestId, getTraceId } from '../../utils/request-context.js'
 
 export interface CorrelationContext {
   correlationId: string
@@ -44,7 +45,7 @@ export function currentCausationId(): string | null {
 export function correlationForPublish(): CorrelationContext {
   const store = storage.getStore()
   return {
-    correlationId: store?.correlationId ?? randomUUID(),
+    correlationId: store?.correlationId ?? getTraceId() ?? getRequestId() ?? randomUUID(),
     causationId: store?.causationId ?? null,
   }
 }

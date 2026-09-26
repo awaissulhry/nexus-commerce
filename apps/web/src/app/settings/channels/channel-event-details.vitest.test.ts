@@ -3,7 +3,7 @@ import { readableAccountText, summariseDetail } from './channel-event-details'
 
 describe('connection ledger names', () => {
   it('omits account identifiers, including the legacy identity string', () => {
-    const summary = summariseDetail({ actorKind: 'operator', identity: 'A1VRHKTGYO1JNU', connectionId: 'internal-key', profileId: '123456789', region: 'EU', scopes: 2 })
+    const summary = summariseDetail({ actorKind: 'operator', identity: 'AFXSELLER8BC38', connectionId: 'internal-key', profileId: '123456789', region: 'EU', scopes: 2 })
     expect(summary).toBe('region: EU · scopes: 2')
   })
   it('retains real names and operational details', () => {
@@ -22,7 +22,7 @@ describe('connection ledger names', () => {
     expect(detail.message).toContain(id)
   })
   it('replaces embedded unknown keys, including nested messages', () => {
-    expect(summariseDetail({ error: { message: 'Seller A1VRHKTGYO1JNU unavailable' } })).toBe('error: {"message":"Seller account (name unavailable) unavailable"}')
+    expect(summariseDetail({ error: { message: 'Seller AFXSELLER8BC38 unavailable' } })).toBe('error: {"message":"Seller account (name unavailable) unavailable"}')
   })
   it('keeps numbers and real names while resolving numeric profile IDs', () => {
     expect(readableAccountText('Profile 123456789 failed after 360000 ms for ALPHARACING', { '123456789': 'Xavia Racing Italia' })).toBe('Profile Xavia Racing Italia failed after 360000 ms for ALPHARACING')

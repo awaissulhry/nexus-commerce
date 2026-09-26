@@ -47,7 +47,7 @@ These counts are what must survive the wipe. Verify post-wipe matches.
 ### ChannelConnection (auth — PRESERVE always)
 | channelType | marketplace | managedBy | displayName | has_access_token | has_refresh_token |
 | --- | --- | --- | --- | --- | --- |
-| AMAZON | _null_ | env | A1VRHKTGYO1JNU | false | false |
+| AMAZON | _null_ | env | AFXSELLER8BC38 | false | false |
 | EBAY | _null_ | oauth | eBay seller (verified) | true | true |
 
 ### DigitalAsset (DAM) summary

@@ -117,9 +117,9 @@ is a real write to production data and my lane is read-only. So the honest claim
 affordance*, not *no drag support*.
 
 **9 — nothing on the pane is timestamped.** `Status ACTIVE`, `Pushed to channel: yes`, `Offer:
-selling`, `Price €105.00`, `Quantity (this channel) 19`, `Channel reference B0BMS6ZZ4H`. A regex for
+selling`, `Price €105.00`, `Quantity (this channel) 19`, `Channel reference B0FX4F79EF`. A regex for
 `ago|as of|last (checked|synced|seen)|updated` over the pane's text returns **nothing**. And the
-`↗ B0BMS6ZZ4H` line that reads as "open this on Amazon" is a plain `<div>` beside a text node — no
+`↗ B0FX4F79EF` line that reads as "open this on Amazon" is a plain `<div>` beside a text node — no
 `href`, no `onclick`, no `title`, not an anchor and not a button. The ASIN is also printed twice.
 
 **10 — measured twice, because the first run was a false pass.** Before (master · DE): `scrollTop
@@ -363,7 +363,7 @@ means and may have a better second line.
 
 **Where:** `_studio/drawer/**` — **PES.4** (pane), with the listing shape from **PES.5**.
 
-**Measured** (§1, task 9): no time reference anywhere in the pane; `↗ B0BMS6ZZ4H` is a `<div>` with
+**Measured** (§1, task 9): no time reference anywhere in the pane; `↗ B0FX4F79EF` is a `<div>` with
 an SVG beside a bare text node — no `href`, no handler; and the ASIN is printed twice, once as
 `Channel reference` in the fact list and once under the glyph.
 

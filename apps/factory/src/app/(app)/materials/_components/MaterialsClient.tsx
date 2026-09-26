@@ -163,7 +163,7 @@ export function MaterialsClient() {
             {canCost && canManage && detail.material.costCents != null && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
                 <span style={{ color: "var(--nds-text-3)" }}>Supplier cost / {detail.material.unit.toLowerCase()}</span>
-                <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>€<input type="number" step="0.01" defaultValue={(detail.material.costCents / 100).toFixed(2)} onBlur={(e) => void editCost(e.target.value)} style={{ ...inp, width: 90, textAlign: "right", fontFamily: "ui-monospace, monospace" }} /></span>
+                <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>€<input type="number" step="0.01" defaultValue={(detail.material.costCents / 100).toFixed(2)} onBlur={(e) => void editCost(e.target.value)} style={{ ...inp, width: 90, textAlign: "right", fontFamily: "var(--nds-font-mono)" }} /></span>
               </div>
             )}
             {ripple && <div style={{ padding: 10, background: "var(--nds-wash-warning, #fdf3d3)", borderRadius: 8, fontSize: 12, color: "var(--nds-warning, #9a6700)" }}>Cost changed — <b>{ripple.templates} template{ripple.templates === 1 ? "" : "s"}</b>{ripple.quotes ? <> and <b>{ripple.quotes} open quote{ripple.quotes === 1 ? "" : "s"}</b></> : ""} reference this. Review their pricing.</div>}
@@ -177,7 +177,7 @@ export function MaterialsClient() {
                 {detail.movements.map((m) => (
                   <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
                     <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><Pill tone={MOVE_TONE[m.type]}>{m.type}</Pill><span style={{ color: "var(--nds-text-3)" }}>{m.reason ?? m.refType ?? ""}</span></span>
-                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><span style={{ fontFamily: "ui-monospace, monospace", fontWeight: 600 }}>{m.type === "OUT" ? "−" : m.type === "IN" ? "+" : ""}{num(Math.abs(m.qty))}</span><span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{new Date(m.at).toLocaleDateString()}</span></span>
+                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><span style={{ fontFamily: "var(--nds-font-mono)", fontWeight: 600 }}>{m.type === "OUT" ? "−" : m.type === "IN" ? "+" : ""}{num(Math.abs(m.qty))}</span><span style={{ color: "var(--nds-text-3)", fontSize: 11 }}>{new Date(m.at).toLocaleDateString()}</span></span>
                   </div>
                 ))}
               </div>
@@ -187,7 +187,7 @@ export function MaterialsClient() {
                 {detail.lots.map((l) => (
                   <div key={l.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--nds-border-subtle)", fontSize: 12.5 }}>
                     <span><b>{l.lotCode}</b>{l.supplier ? <span style={{ color: "var(--nds-text-3)" }}> · {l.supplier}</span> : ""}</span>
-                    <span style={{ fontFamily: "ui-monospace, monospace" }}>{num(l.onHand)} on hand</span>
+                    <span style={{ fontFamily: "var(--nds-font-mono)" }}>{num(l.onHand)} on hand</span>
                   </div>
                 ))}
               </div>

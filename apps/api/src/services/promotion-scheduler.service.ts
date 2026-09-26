@@ -17,7 +17,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { refreshSnapshotsForSkus } from './pricing-snapshot.service.js'
-import { resolvePrice } from './pricing-engine.service.js'
+import { isPriceRefusal, resolvePrice } from './pricing-engine.service.js'
 import { recordPriceChange } from './price-history.service.js'
 
 interface PromotionTickResult {
@@ -87,11 +87,19 @@ export async function runPromotionScheduler(
       if (action.action === 'FIXED_PRICE') {
         promoPrice = Number(action.value)
       } else if (action.action === 'PERCENT_OFF' && baseSku) {
-        const resolution = await resolvePrice(prisma, {
-          sku: baseSku,
-          channel: l.channel,
-          marketplace: l.marketplace,
-        })
+        let resolution: Awaited<ReturnType<typeof resolvePrice>>
+        try {
+          resolution = await resolvePrice(prisma, {
+            sku: baseSku,
+            channel: l.channel,
+            marketplace: l.marketplace,
+          })
+        } catch (err) {
+          if (!isPriceRefusal(err)) throw err
+          // CX (review 2026-09-26) — no FX rate or no market currency: this listing gets no promotion price.
+          logger.warn('promotion skipped: this market cannot be priced (configuration)', { listingId: l.id, marketplace: l.marketplace, error: (err as Error).message })
+          continue
+        }
         if (resolution.price <= 0) continue
         promoPrice = resolution.price * (1 - Number(action.value) / 100)
       } else {

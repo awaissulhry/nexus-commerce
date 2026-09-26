@@ -85,14 +85,14 @@ for (const [item, rows] of byItem) {
 }
 console.log('collision groups:', collisions)
 
-console.log('\n=== 4b. targeted probe: ItemID 257584954808 ===')
+console.log('\n=== 4b. targeted probe: ItemID 938554736087 ===')
 const probe = await prisma.channelListing.findMany({
-  where: { externalListingId: '257584954808' },
+  where: { externalListingId: '938554736087' },
   select: { id: true, channel: true, marketplace: true, channelMarket: true, region: true, listingStatus: true, isPublished: true, quantity: true, price: true, createdAt: true, updatedAt: true, product: { select: { sku: true, name: true, deletedAt: true } } },
 })
 console.log('rows with that ItemID:', probe.length)
 for (const r of probe) console.log('   ', J(r))
-const probeMem = await prisma.sharedListingMembership.findMany({ where: { itemId: '257584954808' }, select: { id: true, marketplace: true, sku: true, parentSku: true, status: true, productId: true, price: true, followPool: true } })
+const probeMem = await prisma.sharedListingMembership.findMany({ where: { itemId: '938554736087' }, select: { id: true, marketplace: true, sku: true, parentSku: true, status: true, productId: true, price: true, followPool: true } })
 console.log('SharedListingMembership rows for that ItemID:', probeMem.length, ' markets=', J([...new Set(probeMem.map((m) => m.marketplace))]), ' statuses=', J([...new Set(probeMem.map((m) => m.status))]))
 
 // ── 5. dependents of the DE rows ──────────────────────────────────────────

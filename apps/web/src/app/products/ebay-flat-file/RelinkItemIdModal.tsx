@@ -138,7 +138,7 @@ export function RelinkItemIdModal({ open, onClose, defaultSku, defaultMarketplac
             </label>
             <label className="flex flex-col gap-1 text-[10.5px] font-medium text-slate-500 dark:text-slate-400 min-w-[180px]">
               Live eBay Item ID
-              <Input value={itemId} placeholder="257629964897" inputMode="numeric"
+              <Input value={itemId} placeholder="920071994703" inputMode="numeric"
                 onChange={(e) => { setItemId(e.target.value); setResult(null) }} />
             </label>
             <Button size="sm" onClick={() => void call(false)}

@@ -75,22 +75,22 @@ describe('SD product ad create', () => {
   it('carries numeric campaign/adGroup ids and both identifiers', async () => {
     const w = sent(await createSdProductAd(CTX, {
       externalCampaignId: '543917214584094', externalAdGroupId: '307064886584043',
-      sku: 'MISANO-JACKET-3XL-BLACK', asin: 'B0CFYQQFT9', dryRun: true,
+      sku: 'MISANO-JACKET-3XL-BLACK', asin: 'B0FXA3DEFF', dryRun: true,
     }))
     expect(w.path).toBe('/sd/productAds')
     expect((w.body as Array<Record<string, unknown>>)[0]).toEqual({
       campaignId: 543917214584094,
       adGroupId: 307064886584043,
       sku: 'MISANO-JACKET-3XL-BLACK',
-      asin: 'B0CFYQQFT9',
+      asin: 'B0FXA3DEFF',
       state: 'paused',
     })
   })
 
   it('accepts an ASIN alone — SD does not require a seller SKU the way SP does', async () => {
-    const w = sent(await createSdProductAd(CTX, { externalCampaignId: '1', externalAdGroupId: '2', asin: 'B0CFYQQFT9', dryRun: true }))
+    const w = sent(await createSdProductAd(CTX, { externalCampaignId: '1', externalAdGroupId: '2', asin: 'B0FXA3DEFF', dryRun: true }))
     const row = (w.body as Array<Record<string, unknown>>)[0]
-    expect(row.asin).toBe('B0CFYQQFT9')
+    expect(row.asin).toBe('B0FXA3DEFF')
     expect('sku' in row).toBe(false)
   })
 })

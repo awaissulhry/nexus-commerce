@@ -495,6 +495,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     // Every attribute these products already hold a value for stays a column (as in the editor),
     // so the family owning the columns never hides a stored value.
     savedFields: (await import('./family-sheet-schema.js')).savedAttributeFields(flat.map((r) => r.categoryAttributes)),
+    savedFieldsFor: 'shared', // P3b S4 — only the saved keys that belong on Shared
   })
   const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets, coordinatesNotListed } = columnSet
 

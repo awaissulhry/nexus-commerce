@@ -8,11 +8,11 @@ Readback: 15 September 2026, 06:55:41–06:55:47 UTC. All five `GetItem` calls s
 
 | Workbook parent / listing | Rows | eBay item ID | Live status | Variants |
 |---|---:|---|---|---:|
-| GALE-JACKET | 2–22 | [257584954808](https://www.ebay.it/itm/257584954808) | Active | 20 |
-| IT-GALE-JACKET | 23–43 | [256564203510](https://www.ebay.it/itm/256564203510) | Active | 20 |
-| GALE-JACKET-ALT1 | 44–64 | [256566101420](https://www.ebay.it/itm/256566101420) | Active | 20 |
-| GALE-JACKET-ALT2 | 65–85 | [256566102729](https://www.ebay.it/itm/256566102729) | Active | 20 |
-| GALE-JACKET-ALT3 | 86–106 | [256566103703](https://www.ebay.it/itm/256566103703) | Active | 20 |
+| GALE-JACKET | 2–22 | [938554736087](https://www.ebay.it/itm/938554736087) | Active | 20 |
+| IT-GALE-JACKET | 23–43 | [913270132587](https://www.ebay.it/itm/913270132587) | Active | 20 |
+| GALE-JACKET-ALT1 | 44–64 | [949285812839](https://www.ebay.it/itm/949285812839) | Active | 20 |
+| GALE-JACKET-ALT2 | 65–85 | [910932382515](https://www.ebay.it/itm/910932382515) | Active | 20 |
+| GALE-JACKET-ALT3 | 86–106 | [950640873955](https://www.ebay.it/itm/950640873955) | Active | 20 |
 
 There are **one physical product family and four alternate listings**, represented by five parent rows plus 100 child rows. The same 20 variant SKUs occur once under each parent. There are 25 distinct source SKU strings because the four historical aliases have their own parent labels. The canonical product model needs only GALE-JACKET and its 20 variants, with five listing identities for each.
 

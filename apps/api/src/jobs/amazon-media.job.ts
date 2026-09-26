@@ -21,3 +21,9 @@ export function startAmazonMediaWorker() {
   timer.unref()
   void tick()
 }
+
+export async function stopAmazonMediaWorker(): Promise<void> {
+  if (timer) clearInterval(timer)
+  timer = undefined
+  while (running) await new Promise(resolve => setTimeout(resolve, 25))
+}

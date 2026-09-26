@@ -79,10 +79,10 @@ describe.runIf(canRun)('prisma/baseline.sql', () => {
 
     residual = execFileSync('npx', [
       'prisma', 'migrate', 'diff',
-      '--from-url', targetUrl,
-      '--to-schema-datamodel', 'prisma/schema.prisma',
+      '--from-config-datasource',
+      '--to-schema', 'prisma/schema.prisma',
       '--script',
-    ], { cwd: pkgRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    ], { cwd: pkgRoot, env: { ...process.env, DATABASE_URL: targetUrl, MIGRATION_DATABASE_URL: targetUrl }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   }, 600_000)
 
   afterAll(async () => { if (canRun) await admin(`DROP DATABASE IF EXISTS "${DB}"`) }, 60_000)
@@ -150,6 +150,8 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
              (SELECT count(*)::int FROM "Workspace" WHERE status = 'active') AS workspaces,
              (SELECT count(*)::int FROM information_schema.columns
                WHERE table_name = 'ChannelListing' AND column_name = 'variationExcluded') AS "deployedColumn"`)).rows[0]
+    await c.query(`INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt")
+      VALUES ('bootstrap-other-profile','Bootstrap other profile','test','bootstrap-other-profile',now())`)
     await c.end()
   }, 600_000)
 
@@ -173,4 +175,89 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
   it('carries the deployed-only column the disposable test database also adds', () => {
     expect(counts.deployedColumn).toBe(1)
   })
+
+  async function refusesInvalidReceiptState(sql: string, constraint: string) {
+    await asRuntime(async c => {
+      await expect(c.query(sql)).rejects.toMatchObject({ code: '23514', constraint })
+    })
+  }
+
+  async function asRuntime(work: (client: pg.Client) => Promise<void>) {
+    const c = new pg.Client({ connectionString: bootUrl })
+    await c.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE nexus_workspace_runtime')
+      await c.query("SELECT set_config('nexus.workspace_id', 'nexus_legacy_workspace', true)")
+      await work(c)
+    } finally { await c.query('ROLLBACK'); await c.end() }
+  }
+
+  it('refuses a negative grant generation under the actual runtime role', async () => {
+    await refusesInvalidReceiptState(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","grantVersion","updatedAt")
+      VALUES ('baseline-negative-grant','nexus_legacy_workspace','EBAY',-1,now())`, 'ChannelConnection_grant_version_check')
+  })
+
+  it('refuses a half-written processing lease under the actual runtime role', async () => {
+    await refusesInvalidReceiptState(`INSERT INTO "WebhookEvent" (id,"workspaceId",channel,"eventType","externalId",payload,"leaseToken","updatedAt")
+      VALUES ('baseline-unpaired-lease','nexus_legacy_workspace','EBAY','AUTHORIZATION_REVOCATION','baseline-lease','{}','test-fence',now())`, 'WebhookEvent_lease_pair_check')
+  })
+
+  it('routes newly connected Shopify, eBay and Etsy identities through their verified aliases', async () => {
+    await asRuntime(async c => {
+      for (const [channel, id, identity, expected] of [
+        ['SHOPIFY', 'shopify-bootstrap', { userId: 'shop-gid', username: 'shop.myshopify.com', extra: { myshopifyDomain: 'shop.myshopify.com' } }, ['shop.myshopify.com']],
+        ['EBAY', 'ebay-bootstrap', { userId: 'ebay-bootstrap', username: 'synthetic-seller' }, ['ebay-bootstrap', 'synthetic-seller']],
+        ['ETSY', 'etsy-bootstrap', { userId: 'etsy-user', extra: { shopId: '577001' } }, ['577001']],
+      ] as const) {
+        await c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId",identity,"isActive","updatedAt")
+          VALUES ($1,'nexus_legacy_workspace',$2,$1,$3,true,now())`, [id, channel, JSON.stringify(identity)])
+        const routes = await c.query('SELECT "inboundAliases" FROM "ChannelAccountRoute" WHERE "connectionId"=$1', [id])
+        expect(routes.rows[0].inboundAliases.sort()).toEqual([...expected].sort())
+      }
+    })
+  })
+
+  it('permits distinct active accounts and inactive history but refuses a duplicate active identity', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, external: string, active: boolean) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","updatedAt")
+        VALUES ($1,'nexus_legacy_workspace','EBAY',$2,$3,now())`, [id, external, active])
+      await insert('active-one', 'seller-one', true)
+      await insert('active-two', 'seller-two', true)
+      await insert('inactive-history', 'seller-one', false)
+      await expect(insert('duplicate-active', 'seller-one', true)).rejects.toMatchObject({ code: '23505', constraint: 'ChannelConnection_active_account_key' })
+    })
+  })
+
+  it('permits a primary in each profile but refuses a second primary in one profile/channel', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, workspaceId: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isPrimary","updatedAt")
+        VALUES ($1,$2,'EBAY',$1,true,now())`, [id, workspaceId])
+      await insert('primary-one', 'nexus_legacy_workspace')
+      await c.query("SELECT set_config('nexus.workspace_id', 'bootstrap-other-profile', true)")
+      await insert('primary-other', 'bootstrap-other-profile')
+      await c.query("SELECT set_config('nexus.workspace_id', 'nexus_legacy_workspace', true)")
+      await expect(insert('primary-duplicate', 'nexus_legacy_workspace')).rejects.toMatchObject({ code: '23505', constraint: 'ChannelConnection_workspace_channel_primary_key' })
+    })
+  })
+})
+
+describe.runIf(canRun)('fresh bootstrap atomicity', () => {
+  it('does not stamp completed history or leave partial tables when policy installation fails', async () => {
+    const failureDb = `nexus_bootstrap_failure_${process.pid}`
+    const failureUrl = `${localUrl!.slice(0, localUrl!.lastIndexOf('/'))}/${failureDb}`
+    await admin(`CREATE DATABASE "${failureDb}"`)
+    const c = new pg.Client({ connectionString: failureUrl })
+    await c.connect()
+    try {
+      // Deterministic policy-stage failure after the baseline/history stages.
+      await c.query('CREATE FUNCTION nexus_channel_route_sync() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$')
+      expect(() => execFileSync('node', [join(pkgRoot, 'scripts', 'bootstrap-fresh-database.mjs')], {
+        cwd: repoRoot, encoding: 'utf8', env: { ...process.env, DATABASE_URL: failureUrl }, stdio: 'pipe',
+      })).toThrow()
+      const remaining = await c.query("SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='public'")
+      expect(remaining.rows[0].n).toBe(0)
+      expect((await c.query("SELECT to_regclass('public._prisma_migrations') AS history")).rows[0].history).toBeNull()
+    } finally { await c.end(); await admin(`DROP DATABASE "${failureDb}"`) }
+  }, 60_000)
 })

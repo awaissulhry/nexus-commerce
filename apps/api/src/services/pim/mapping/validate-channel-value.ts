@@ -3,6 +3,17 @@ import { nativeFieldError, nativeFieldKeys, type NativeEdit } from '@nexus/share
 import { coerceForShape, isBlankValue } from '../sheet-values.js'
 import type { CatalogueField } from './field-catalogue.service.js'
 
+/**
+ * P6 (docs/attributes/PLAN.md §4.4) — "this value is not on the channel's closed list", whichever validator said it:
+ * `validateChannelValue` below, Ajv's `enum` keyword (schema-requirements.ts), or a Shopify `choices` rule
+ * (`validateShopifyField`). Such a finding is a FLAG (readiness, preview, a held publish), never a refusal to save.
+ * Pinned against each validator's real output in `off-list-error.vitest.test.ts`.
+ */
+const OFF_LIST_ERROR = /contains an unaccepted value\. Allowed values:|must be equal to one of the allowed values|Choose one of the store’s allowed values\./
+export function isOffListError(message: string): boolean {
+  return OFF_LIST_ERROR.test(message)
+}
+
 /** Validate the effective value, including each member of a multivalued field. */
 export function validateChannelValue(field: CatalogueField, input: unknown) {
   let value = input

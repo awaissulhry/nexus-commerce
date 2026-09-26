@@ -3,18 +3,18 @@ import { listingUrl } from './listingUrl'
 
 describe('listingUrl', () => {
   it('builds the per-site eBay URL, not the .com one eight other call sites use', () => {
-    expect(listingUrl('EBAY', 'IT', '257584954808')).toBe('https://www.ebay.it/itm/257584954808')
+    expect(listingUrl('EBAY', 'IT', '938554736087')).toBe('https://www.ebay.it/itm/938554736087')
     expect(listingUrl('EBAY', 'DE', '123')).toBe('https://www.ebay.de/itm/123')
   })
 
   it('uses co.uk for the UK, which the generic tld table would get wrong', () => {
     expect(listingUrl('EBAY', 'UK', '9')).toBe('https://www.ebay.co.uk/itm/9')
     expect(listingUrl('EBAY', 'GB', '9')).toBe('https://www.ebay.co.uk/itm/9')
-    expect(listingUrl('AMAZON', 'UK', 'B0BMS6ZZ4H')).toBe('https://www.amazon.co.uk/dp/B0BMS6ZZ4H')
+    expect(listingUrl('AMAZON', 'UK', 'B0FX4F79EF')).toBe('https://www.amazon.co.uk/dp/B0FX4F79EF')
   })
 
   it('builds Amazon /dp/ URLs from the ASIN', () => {
-    expect(listingUrl('AMAZON', 'IT', 'B0F7J163XJ')).toBe('https://www.amazon.it/dp/B0F7J163XJ')
+    expect(listingUrl('AMAZON', 'IT', 'B0FXD0620C')).toBe('https://www.amazon.it/dp/B0FXD0620C')
   })
 
   it('is case- and space-insensitive on channel and marketplace', () => {

@@ -102,7 +102,7 @@
     - text: Products
   - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
   - generic "GALE-JACKET"
-  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic "Amazon ASIN B0FXD0620C": B0FXD0620C
   - generic: Active
   - generic: Parent
   - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave

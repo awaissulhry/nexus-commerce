@@ -5,7 +5,7 @@ const { ebayAuthService } = await import('../src/services/ebay-auth.service.js')
 const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-trading-api.service.js')
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
-for (const id of ['256550346578', '256568112735', '257608449467', '255312097005']) {
+for (const id of ['256550346578', '256568112735', '922402495702', '255312097005']) {
   try {
     const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${id}</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })

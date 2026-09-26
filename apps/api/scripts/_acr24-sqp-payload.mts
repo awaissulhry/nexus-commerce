@@ -22,8 +22,8 @@ const WEEK_END = new Date('2026-07-25T00:00:00.000Z')
 const MARKETPLACE_ID = 'APJ6JRA9NG5V4' // IT
 
 const CASES: Array<{ label: string; asin: string }> = [
-  { label: 'AIREON (subject)', asin: 'B0F4NVZB6N' },   // AIREON-JACKET-NERO-NEO-MEN-XL
-  { label: 'GALE   (control)', asin: 'B0BMSH19GY' },   // GALE-JACKET-BLACK-MEN-XL, 41,343 impressions
+  { label: 'AIREON (subject)', asin: 'B0FXEC394C' },   // AIREON-JACKET-NERO-NEO-MEN-XL
+  { label: 'GALE   (control)', asin: 'B0FXFA789A' },   // GALE-JACKET-BLACK-MEN-XL, 41,343 impressions
 ]
 
 for (const c of CASES) {

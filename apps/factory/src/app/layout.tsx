@@ -16,18 +16,26 @@ import "./globals.css";
 
 import { Providers } from "@/components/Providers";
 
-const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans", display: "swap" });
+/* DS fonts (Owner, 2026-09-26: "Arial … must never happen again") — `adjustFontFallback: false` drops next/font's
+   metric fallback face, which is local("Arial"): with it, every glyph the loaded subsets lack (→ ≤ ≥ ✓ ↕ …) and all text
+   before the font arrived was drawn in Arial. The fallback is now the system UI font. `scripts/check-font-families.mjs`
+   holds this. */
+const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-sans", display: "swap", adjustFontFallback: false, fallback: ['ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'] });
 const display = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
   weight: ["400", "500", "600", "700"],
+  adjustFontFallback: false,
+  fallback: ['ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
 });
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
   weight: ["400", "500", "600", "700"],
+  adjustFontFallback: false,
+  fallback: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
 });
 
 export const metadata: Metadata = {

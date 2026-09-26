@@ -10,8 +10,13 @@
  * ENUM_DEPRECATED) so SchemaChange stays current and operators get warned before
  * Amazon retires a field/enum they use.
  *
- * Pattern mirrors catalog-refresh.job.ts (node-cron + recordCronRun).
- * Gated behind NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1. Default schedule: 04:00 UTC
+ * P4 (docs/attributes/PLAN.md §4.2, 2026-09-26): every channel whose rules Nexus caches per category — Amazon product
+ * types, eBay leaf categories, Etsy taxonomy nodes — for every coordinate a business uses, and ON by default (it was
+ * dormant unless NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1; now NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0 turns it off). A new
+ * version logs its changes and marks the affected families' readiness for a rebuild (schema-sync.service.ts).
+ * Shopify store definitions refresh on their own path (channel-specs/shopify.ts).
+ *
+ * Pattern mirrors catalog-refresh.job.ts (node-cron + recordCronRun). Default schedule: 04:00 UTC
  * daily (after catalog-refresh at 03:00) so they share the SP-API throttle budget.
  * Sequential with a small inter-call delay — the Product Type Definitions API is
  * rate-limited and a stale schema is not urgent.
@@ -32,58 +37,61 @@ const schemaService = new CategorySchemaService(prisma, amazonService)
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+/** The channels whose per-category rules this job refreshes. */
+export const REFRESHED_CHANNELS = ['AMAZON', 'EBAY', 'ETSY'] as const
+export type RefreshTarget = { channel: (typeof REFRESHED_CHANNELS)[number]; marketplace: string; productType: string }
+
 /**
- * Returns DISTINCT (marketplace, productType) pairs from active AMAZON schemas,
- * ordered by marketplace then productType (first-seen wins on duplicates).
- * A null marketplace defaults to 'IT' (Nexus primary market).
+ * Returns DISTINCT (channel, marketplace, productType) targets from active cached schemas,
+ * ordered by channel, marketplace, productType (first-seen wins on duplicates).
+ * A null Amazon marketplace defaults to 'IT' (Nexus primary market). Etsy's rules are global.
  */
-export async function collectInUseSchemaTargets(
-  client: PrismaClient,
-): Promise<{ marketplace: string; productType: string }[]> {
+export async function collectInUseSchemaTargets(client: PrismaClient): Promise<RefreshTarget[]> {
   const rows = await client.categorySchema.findMany({
-    where: { channel: 'AMAZON', isActive: true },
-    select: { marketplace: true, productType: true },
-    orderBy: [{ marketplace: 'asc' }, { productType: 'asc' }],
+    where: { channel: { in: [...REFRESHED_CHANNELS] }, isActive: true },
+    select: { channel: true, marketplace: true, productType: true },
+    orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { productType: 'asc' }],
   })
   const seen = new Set<string>()
-  const out: { marketplace: string; productType: string }[] = []
+  const out: RefreshTarget[] = []
   for (const r of rows) {
-    const mp = r.marketplace ?? 'IT'
-    const key = `${mp}:${r.productType}`
+    const channel = r.channel as RefreshTarget['channel']
+    const mp = r.marketplace ?? (channel === 'ETSY' ? 'GLOBAL' : 'IT')
+    const key = `${channel}:${mp}:${r.productType}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ marketplace: mp, productType: r.productType })
+    out.push({ channel, marketplace: mp, productType: r.productType })
   }
   return out
 }
 
 export async function runSchemaRefresh(): Promise<string> {
-  if (!(await amazonService.isConfigured())) {
-    logger.warn('schema-refresh cron: Amazon SP-API not configured — skipping')
-    return 'skipped=not-configured'
-  }
+  const amazonReady = await amazonService.isConfigured()
+  if (!amazonReady) logger.warn('schema-refresh cron: Amazon SP-API not configured — Amazon targets skipped')
 
   return recordCronRun('schema-refresh', async () => {
-    // Refresh every (productType, marketplace) actively in use — keeps browse-node
-    // enums and required-field rules ≤24h fresh for operators editing those types.
-    const pairs = await collectInUseSchemaTargets(prisma)
+    // Refresh every (channel, marketplace, category) actively in use — keeps required-field
+    // rules and option lists ≤24h fresh, and a change rebuilds the affected readiness.
+    const targets = await collectInUseSchemaTargets(prisma)
 
-    let refreshed = 0
-    let failed = 0
-    for (const { productType, marketplace } of pairs) {
+    const counts: Record<string, { refreshed: number; failed: number; skipped: number }> = {}
+    for (const { channel, productType, marketplace } of targets) {
+      const count = (counts[channel] ??= { refreshed: 0, failed: 0, skipped: 0 })
+      if (channel === 'AMAZON' && !amazonReady) { count.skipped++; continue }
       try {
-        await schemaService.refreshSchema({ channel: 'AMAZON', marketplace, productType })
-        refreshed++
+        await schemaService.refreshSchema({ channel, marketplace, productType })
+        count.refreshed++
       } catch (err) {
-        failed++
+        count.failed++
         logger.warn('schema-refresh cron: refresh failed', {
-          productType, marketplace, error: err instanceof Error ? err.message : String(err),
+          channel, productType, marketplace, error: err instanceof Error ? err.message : String(err),
         })
       }
-      await sleep(300) // throttle the Product Type Definitions API
+      await sleep(300) // throttle the providers' definition APIs
     }
 
-    const summary = `pairs=${pairs.length} refreshed=${refreshed} failed=${failed}`
+    const summary = `targets=${targets.length} ` + Object.entries(counts)
+      .map(([channel, c]) => `${channel}: refreshed=${c.refreshed} failed=${c.failed}${c.skipped ? ` skipped=${c.skipped}` : ''}`).join(' · ')
     logger.info(`schema-refresh cron: ${summary}`)
     return summary
   })
@@ -94,8 +102,9 @@ export function startSchemaRefreshCron(): void {
     logger.warn('schema-refresh cron: already started')
     return
   }
-  if (process.env.NEXUS_ENABLE_SCHEMA_REFRESH_CRON !== '1') {
-    logger.info('schema-refresh cron: dormant (set NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1 to enable)')
+  // P4 — on by default; `0` turns it off.
+  if (process.env.NEXUS_ENABLE_SCHEMA_REFRESH_CRON === '0') {
+    logger.info('schema-refresh cron: disabled (NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0)')
     return
   }
   const schedule = process.env.SCHEMA_REFRESH_CRON_SCHEDULE ?? '0 4 * * *' // 04:00 UTC daily

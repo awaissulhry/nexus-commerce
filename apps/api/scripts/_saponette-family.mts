@@ -26,10 +26,10 @@ const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-t
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
 const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
-<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>256566112769</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>961409849221</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
 const varBlocks = [...got.raw.matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)]
 const withSku = varBlocks.filter((m) => /<SKU>[^<]+<\/SKU>/.test(m[1]))
 const axes = [...(/<VariationSpecificsSet>([\s\S]*?)<\/VariationSpecificsSet>/.exec(got.raw)?.[1] ?? '').matchAll(/<Name>([^<]*)<\/Name>/g)].map((m) => m[1])
-console.log(`LIVE 256566112769: variations=${varBlocks.length} withSku=${withSku.length} axes=${JSON.stringify(axes)}`)
+console.log(`LIVE 961409849221: variations=${varBlocks.length} withSku=${withSku.length} axes=${JSON.stringify(axes)}`)
 console.log('  sample skus:', withSku.slice(0, 4).map((m) => /<SKU>([^<]+)<\/SKU>/.exec(m[1])?.[1]).join(', ') || '(none)')
 await prisma.$disconnect()

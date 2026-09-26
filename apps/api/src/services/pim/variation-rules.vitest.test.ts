@@ -6,7 +6,7 @@
  * arms against the LIVE aspect readings taken in Phase 0 (IT category 177104: Taglia / Colore / Scollatura; DE
  * category 177117: Groesse / Farbe / ...). The listing rows are the real ones: GALE-JACKET holds
  * `variationTheme = "SIZE/COLOR"` on its Amazon-DE child, `""` on Amazon-IT, `"Color,Size"` on its eBay-IT parent,
- * and item 257584954808 / ASIN B0F7J163XJ are LIVE.
+ * and item 938554736087 / ASIN B0FXD0620C are LIVE.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -131,7 +131,7 @@ describe('AMAZON - the three tiers, in order', () => {
   it('DERIVED on DE: the bare form wins by the deprecation marker, labelled from the bound titles', () => {
     const cell = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'DE', schema: amazonDE,
-      listing: listing({ version: 13, externalListingId: 'B0D8XBXM5H', listingStatus: 'ACTIVE' }),
+      listing: listing({ version: 13, externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
       limits: limitsFor('AMAZON', [...OUTERWEAR_DE.themes]),
     }))
     expect(cell.source).toMatchObject({ kind: 'derived', label: VT_COPY.derived, tieBreak: 'only-live' })
@@ -156,7 +156,7 @@ describe('AMAZON - the three tiers, in order', () => {
   it("OVERRIDE: a stored theme WINS over the derivation and keeps its spelling, even the deprecated one", () => {
     const cell = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'DE', schema: amazonDE,
-      listing: listing({ variationTheme: 'SIZE_NAME/COLOR_NAME', externalListingId: 'B0D8XBXM5H', listingStatus: 'ACTIVE' }),
+      listing: listing({ variationTheme: 'SIZE_NAME/COLOR_NAME', externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
     }))
     expect(cell.source).toMatchObject({ kind: 'override', label: VT_COPY.override, tieBreak: 'kept-from-listing' })
     expect(cell.theme).toEqual({ code: 'SIZE_NAME/COLOR_NAME', label: 'Größe / Farbe', deprecated: true })
@@ -167,14 +167,14 @@ describe('AMAZON - the three tiers, in order', () => {
   it("T16: `''` on a LIVE row is NOT an override - it falls through to the derivation", () => {
     const cell = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'IT', schema: amazonIT,
-      listing: listing({ variationTheme: '', version: 87, externalListingId: 'B0F7J163XJ', listingStatus: 'ACTIVE' }),
+      listing: listing({ variationTheme: '', version: 87, externalListingId: 'B0FXD0620C', listingStatus: 'ACTIVE' }),
     }))
     expect(cell.source.kind).toBe('derived')
     expect(cell.theme!.code).toBe('COLOR/SIZE')
     // the positive control in the same run: a real stored value on the identical input DOES override
     const overridden = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'IT', schema: amazonIT,
-      listing: listing({ variationTheme: 'SIZE/COLOR', version: 87, externalListingId: 'B0F7J163XJ', listingStatus: 'ACTIVE' }),
+      listing: listing({ variationTheme: 'SIZE/COLOR', version: 87, externalListingId: 'B0FXD0620C', listingStatus: 'ACTIVE' }),
     }))
     expect(overridden.source.kind).toBe('override')
   })
@@ -263,11 +263,11 @@ describe('AMAZON - the three tiers, in order', () => {
   it('LIVE on Amazon locks the cell with the Appendix A sentence and `new-parent`', () => {
     const cell = resolveVariationProjection(input({
       channel: 'AMAZON', market: 'DE', schema: amazonDE,
-      listing: listing({ externalListingId: 'B0D8XBXM5H', listingStatus: 'ACTIVE' }),
+      listing: listing({ externalListingId: 'B0FX4BC696', listingStatus: 'ACTIVE' }),
     }))
     expect(cell.locked).toEqual({
-      reason: 'Live on Amazon DE (B0D8XBXM5H) — changing the theme creates a new parent and relinks 20 children. Commit opens the plan.',
-      externalId: 'B0D8XBXM5H',
+      reason: 'Live on Amazon DE (B0FX4BC696) — changing the theme creates a new parent and relinks 20 children. Commit opens the plan.',
+      externalId: 'B0FX4BC696',
       setChangeIs: 'new-parent',
       orderChangeAllowed: false,
       /* VT.F item A5 — the CELL now serves the per-axis lock too, so the dock and the sheet cannot give two
@@ -315,7 +315,7 @@ describe('eBay - the precedence flip and the site aspects', () => {
   it('IT: the delivered names are the site aspects, and the stored set makes it an override', () => {
     const cell = resolveVariationProjection(input({
       channel: 'EBAY', market: 'IT', schema: itSchema,
-      listing: listing({ version: 18, externalListingId: '257584954808', listingStatus: 'ACTIVE', platformAttributes: { _variationAxes: ['Color', 'Size'] } }),
+      listing: listing({ version: 18, externalListingId: '938554736087', listingStatus: 'ACTIVE', platformAttributes: { _variationAxes: ['Color', 'Size'] } }),
     }))
     expect(cell.source).toMatchObject({ kind: 'override', label: VT_COPY.override })
     expect(cell.axes.map((a) => a.channelName)).toEqual(['Colore', 'Taglia'])
@@ -324,8 +324,8 @@ describe('eBay - the precedence flip and the site aspects', () => {
     expect(cell.candidates!.items.map((i) => i.code)).toEqual(['Taglia', 'Colore', 'Scollatura'])
     expect(cell.candidates!.limit).toBe(5)
     expect(cell.locked).toEqual({
-      reason: 'Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not.',
-      externalId: '257584954808', setChangeIs: 'relist', orderChangeAllowed: true, lockedAxisKeys: [],
+      reason: 'Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not.',
+      externalId: '938554736087', setChangeIs: 'relist', orderChangeAllowed: true, lockedAxisKeys: [],
     })
   })
 
@@ -637,16 +637,16 @@ describe('VT.1b item 3 (VT.4) — ONE definition of locked', () => {
   })
 
   it("a live AMAZON coordinate with no `__lastPublishedAxes` is LOCKED — the arm the projection used to miss", () => {
-    const live = listing({ externalListingId: 'B0F7J163XJ', listingStatus: 'ACTIVE', platformAttributes: {} })
+    const live = listing({ externalListingId: 'B0FXD0620C', listingStatus: 'ACTIVE', platformAttributes: {} })
     const lock = variationLockFor({ coordinate, family, listing: live })
     expect(lock).not.toBeNull()
     expect(lock!.setChangeIs).toBe('new-parent')
     expect(lock!.orderChangeAllowed).toBe(false)
-    expect(lock!.externalId).toBe('B0F7J163XJ')
+    expect(lock!.externalId).toBe('B0FXD0620C')
   })
 
   it('eBay says relist and allows a reorder; Shopify says in place', () => {
-    const live = listing({ externalListingId: '257584954808', listingStatus: 'ACTIVE' })
+    const live = listing({ externalListingId: '938554736087', listingStatus: 'ACTIVE' })
     expect(variationLockFor({ coordinate: { channel: 'EBAY', market: 'IT' }, family, listing: live })).toMatchObject({ setChangeIs: 'relist', orderChangeAllowed: true })
     expect(variationLockFor({ coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' }, family, listing: live })).toMatchObject({ setChangeIs: 'in-place', orderChangeAllowed: true })
   })
@@ -665,7 +665,7 @@ describe('VT.F A5 — lockedAxisKeys and addableAxes on the SHEET cell', () => {
     const cell = resolveVariationProjection(input({
       channel: 'EBAY', market: 'IT', schema: ebayIT,
       listing: listing({
-        externalListingId: '257584954808',
+        externalListingId: '938554736087',
         listingStatus: 'ACTIVE',
         platformAttributes: { __lastPublishedAxes: { EBAY_IT: ['Colore', 'Taglia'] } },
       }),
@@ -678,7 +678,7 @@ describe('VT.F A5 — lockedAxisKeys and addableAxes on the SHEET cell', () => {
        declared axes and every coordinate reads fully locked, so nothing can ever be changed anywhere. */
     const cell = resolveVariationProjection(input({
       channel: 'EBAY', market: 'IT', schema: ebayIT,
-      listing: listing({ externalListingId: '257584954808', listingStatus: 'ACTIVE', platformAttributes: {} }),
+      listing: listing({ externalListingId: '938554736087', listingStatus: 'ACTIVE', platformAttributes: {} }),
     }))
     expect(cell.locked).not.toBeNull()
     expect(cell.locked?.lockedAxisKeys).toEqual([])

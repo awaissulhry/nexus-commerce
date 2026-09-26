@@ -134,7 +134,7 @@
   color: var(--nds-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--nds-font-mono);
   background: var(--nds-surface-sunken);
   border-radius: var(--nds-radius-sm);
   padding: var(--nds-space-8);

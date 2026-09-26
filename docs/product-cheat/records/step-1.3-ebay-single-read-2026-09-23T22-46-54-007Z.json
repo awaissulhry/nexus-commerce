@@ -62,7 +62,7 @@
   {
    "sku": "GALE-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "256566102729",
+   "itemId": "910932382515",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -72,7 +72,7 @@
   {
    "sku": "GALE-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "256566103703",
+   "itemId": "950640873955",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -82,7 +82,7 @@
   {
    "sku": "GALE-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "256564203510",
+   "itemId": "913270132587",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -92,7 +92,7 @@
   {
    "sku": "GALE-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "256566101420",
+   "itemId": "949285812839",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -102,7 +102,7 @@
   {
    "sku": "IT-MOSS-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "257628770248",
+   "itemId": "971470411947",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -112,7 +112,7 @@
   {
    "sku": "AIRMESH-JACKET",
    "type": "COAT",
-   "itemId": "257611257473",
+   "itemId": "978166641275",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -122,7 +122,7 @@
   {
    "sku": "IT-MOSS-JACKET-ALT3",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257628771914",
+   "itemId": "921344383573",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -132,7 +132,7 @@
   {
    "sku": "IT-MOSS-JACKET-ALT2",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257628771359",
+   "itemId": "949156405822",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -142,7 +142,7 @@
   {
    "sku": "IT-MOSS-JACKET-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257628770752",
+   "itemId": "940129320775",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -152,7 +152,7 @@
   {
    "sku": "VENTRA-JACKET-ALT2",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257629965075",
+   "itemId": "917239473197",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -162,7 +162,7 @@
   {
    "sku": "VENTRA-JACKET-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257629964897",
+   "itemId": "920071994703",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -172,7 +172,7 @@
   {
    "sku": "VENTRA-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "257629891728",
+   "itemId": "983802912991",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -182,7 +182,7 @@
   {
    "sku": "AIRMESH-JACKET-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257628279998",
+   "itemId": "911059569434",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -192,7 +192,7 @@
   {
    "sku": "xavia-knee-slider-ALT5",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257630029991",
+   "itemId": "959230263762",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -202,7 +202,7 @@
   {
    "sku": "xavia-knee-slider-ALT4",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257630029794",
+   "itemId": "994653245108",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -212,7 +212,7 @@
   {
    "sku": "xavia-knee-slider-ALT3",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "256566112769",
+   "itemId": "961409849221",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -222,7 +222,7 @@
   {
    "sku": "xavia-knee-slider-ALT2",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "256566111017",
+   "itemId": "991093607845",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -232,7 +232,7 @@
   {
    "sku": "xavia-knee-slider-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "256566107046",
+   "itemId": "927461577758",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -242,7 +242,7 @@
   {
    "sku": "xavia-knee-slider",
    "type": "AUTO_ACCESSORY",
-   "itemId": "256550369887",
+   "itemId": "910792398942",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -252,7 +252,7 @@
   {
    "sku": "normal-knee-slider",
    "type": "AUTO_ACCESSORY",
-   "itemId": "257630525745",
+   "itemId": "980585376327",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -262,7 +262,7 @@
   {
    "sku": "normal-knee-slider-ALT2",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257630526103",
+   "itemId": "999393353526",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -272,7 +272,7 @@
   {
    "sku": "normal-knee-slider-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257630525898",
+   "itemId": "924401434695",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -282,7 +282,7 @@
   {
    "sku": "REGAL-JACKET-ALT1",
    "type": "EBAY_LISTING_SHELL",
-   "itemId": "257629988705",
+   "itemId": "996862918797",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -292,7 +292,7 @@
   {
    "sku": "REGAL-JACKET",
    "type": "OUTERWEAR",
-   "itemId": "257629988500",
+   "itemId": "944961568279",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",
@@ -302,7 +302,7 @@
   {
    "sku": "WATERPROOF-OVERJACKET-BLACK-MEN",
    "type": "OUTERWEAR",
-   "itemId": "257608449467",
+   "itemId": "922402495702",
    "ack": "Success",
    "listingStatus": "Active",
    "outOfStockControl": "true",

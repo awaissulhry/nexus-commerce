@@ -18,6 +18,7 @@ import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
+import { StockLocationUnresolved } from './default-stock-location.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -304,11 +305,7 @@ async function resolveLocationId(
     where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
     select: { id: true },
   })
-  if (!itMain) {
-    throw new Error(
-      'Choose a default warehouse in this business before changing stock.',
-    )
-  }
+  if (!itMain) throw new StockLocationUnresolved('default_location_missing')
   return itMain.id
 }
 
@@ -324,6 +321,35 @@ async function resolveLocationId(
  *
  * Returns the StockMovement row.
  */
+/**
+ * Not enough stock for what was asked — the ONE shortfall class (R7): a movement that would drive a
+ * level negative, or a hold beyond what is available (`forHold`, raised by stock-level.service). A
+ * caller tells a shortfall from a failure with `instanceof`, whichever primitive refused. Raised after
+ * reads and locks only, before anything is written, so a caller that owns the transaction may record
+ * the shortfall and continue; any other failure must roll that transaction back. Each message is the
+ * one that path always threw.
+ */
+export class InsufficientStockError extends Error {
+  readonly code = 'insufficient_stock'
+  /** Units asked for. */
+  readonly need: number
+  /** What there was: the on-hand quantity for a movement, the available units for a hold. */
+  readonly have: number
+  constructor(readonly productId: string, readonly locationId: string, readonly quantityBefore: number, readonly change: number, readonly what: 'movement' | 'hold' = 'movement') {
+    super(what === 'hold'
+      ? `reserveStock: insufficient available (need=${-change} have=${quantityBefore} productId=${productId} locationId=${locationId})`
+      : `applyStockMovement: would drive StockLevel quantity negative (product=${productId} location=${locationId} before=${quantityBefore} change=${change})`)
+    this.name = 'InsufficientStockError'
+    this.need = -change
+    this.have = quantityBefore
+  }
+
+  /** A hold of `need` units where only `available` are free. */
+  static forHold(need: number, available: number, productId: string, locationId: string): InsufficientStockError {
+    return new InsufficientStockError(productId, locationId, available, -need, 'hold')
+  }
+}
+
 export interface StockMovementTxResult {
   movement: any
   cascade: CascadeResult
@@ -395,11 +421,7 @@ export async function applyStockMovementInTx(
   const quantityBefore = existing?.quantity ?? 0
   const newQuantity = quantityBefore + change
   if (newQuantity < 0) {
-    throw new Error(
-      `applyStockMovement: would drive StockLevel quantity negative ` +
-        `(product=${productId} location=${resolvedLocationId} ` +
-        `before=${quantityBefore} change=${change})`,
-    )
+    throw new InsufficientStockError(productId, resolvedLocationId, quantityBefore, change)
   }
   const reserved = existing?.reserved ?? 0
   const newAvailable = newQuantity - reserved

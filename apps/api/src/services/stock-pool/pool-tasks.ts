@@ -285,6 +285,7 @@ export function kickStockPoolWork(): Promise<number> {
 
 /** Fire-and-forget after a commit that changed a pool. Never throws, never blocks the caller. */
 export function afterPoolChange(): void {
+  if (process.env.NEXUS_PROCESS_ROLE === 'api' || process.env.NEXUS_PROCESS_ROLE === 'scheduler') return
   void kickStockPoolWork()
 }
 
@@ -295,13 +296,14 @@ export function afterPoolChange(): void {
  * lender's own sale reaches the borrowers in about a second; the poll covers writers that do not
  * pass through there (the stock import, reservations).
  */
-export function startStockPoolWorker(): () => void {
+export function startStockPoolWorker(): () => Promise<void> {
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastWorkAt = 0
   const tick = async () => {
     if (stopped) return
     const found = await kickStockPoolWork()
+    if (stopped) return
     if (found > 0) lastWorkAt = Date.now()
     const busy = Date.now() - lastWorkAt < 60_000
     timer = setTimeout(tick, busy ? 2_000 : 10_000)
@@ -309,7 +311,7 @@ export function startStockPoolWorker(): () => void {
   }
   timer = setTimeout(tick, 5_000)
   timer.unref?.()
-  return () => { stopped = true; if (timer) clearTimeout(timer) }
+  return async () => { stopped = true; if (timer) clearTimeout(timer); await running }
 }
 
 function stateUuid(text: string): string {

@@ -37,7 +37,7 @@ const alias = (id: string | null, position: number, over: Partial<AliasGroup> = 
   label: id === null ? 'Primary' : `Listing ${position}`,
   position,
   status: 'ACTIVE',
-  externalListingId: id === null ? '257584954808' : `25656610${position}20`,
+  externalListingId: id === null ? '938554736087' : `25656610${position}20`,
   listingStatus: 'ACTIVE',
   isPublished: true,
   readiness: { percent: 100, state: 'ready', errors: 0, warnings: 0, rowsMissingRequired: 0 },
@@ -163,7 +163,7 @@ describe('summariseAlias', () => {
 
   it('flags an unadopted shell: a real listing id with no rows under it', () => {
     // The 22 EBAY_LISTING_SHELL products measured on prod.
-    const shell = alias('shell', 9, { externalListingId: '256564203510' })
+    const shell = alias('shell', 9, { externalListingId: '913270132587' })
     expect(summariseAlias([], shell).isUnadoptedShell).toBe(true)
     // A brand-new alias has no channel id yet, so it is NOT a shell — it is simply new.
     const fresh = alias('new', 9, { externalListingId: null })

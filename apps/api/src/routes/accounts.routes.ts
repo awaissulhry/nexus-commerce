@@ -76,7 +76,7 @@ export interface AccountRow {
    * True when the label is not a real account name. Two known cases, both measured:
    *   • eBay  — `ebay-auth.service.ts:451` writes the literal "eBay seller (verified)"
    *             because the OAuth scope in use carries no identity claim.
-   *   • Amazon — `displayName` is the raw merchant id (e.g. "A1VRHKTGYO1JNU").
+   *   • Amazon — `displayName` is the raw merchant id (e.g. "AFXSELLER8BC38").
    * MAP.2a shipped `accountLabel` for exactly this: set it and the label becomes
    * the operator's own name. Until someone does, the UI shows what we actually
    * hold and marks it, rather than inventing a friendlier name.

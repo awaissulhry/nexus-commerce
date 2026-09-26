@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, sendCommand, useCommandKey } from '@/lib/command-key'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
@@ -99,6 +100,7 @@ function UnboundSubmit({
   const [overallStatus, setOverallStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<Set<string>>(new Set())
+  const submitKey = useCommandKey()
 
   // Poll while any entry is in-flight (PENDING/SUBMITTING/SUBMITTED).
   // NOT_IMPLEMENTED entries are terminal v1 and don't drive polling.
@@ -286,16 +288,30 @@ function UnboundSubmit({
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(
+      // One key per publish intent. A retry after a lost response
+      // reuses it, so the server replays the first submit's result
+      // instead of publishing again.
+      const { response: res, body: json, conflict } = await sendCommand<
+        SubmitResponse & { error?: string }
+      >(
+        submitKey,
         `${getBackendUrl()}/api/listing-wizard/${wizardId}/submit`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         },
       )
-      const json = (await res.json()) as SubmitResponse & { error?: string }
-      if (!res.ok) {
-        setError(json?.error ?? `HTTP ${res.status}`)
+      if (conflict) {
+        setError(commandConflictMessage(conflict, 'publish request'))
+        return
+      }
+      if (!res.ok || !json) {
+        setError(
+          json?.error ??
+            (res.ok
+              ? 'The server returned no result. Reload to see whether the listing was submitted.'
+              : `HTTP ${res.status}`),
+        )
         return
       }
       setSubmissions(json.submissions)
@@ -371,6 +387,7 @@ function UnboundSubmit({
     poll,
     stopPolling,
     scheduleNextPoll,
+    submitKey,
   ])
 
   const onRetry = useCallback(

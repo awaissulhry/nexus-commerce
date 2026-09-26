@@ -4,7 +4,7 @@
 # (it stops auto-deploying after rebases or after the worker crashes
 # on a Redis hiccup). This workflow takes over: every push to main
 # builds and ships the new container via Railway CLI. The container
-# applies migrations at startup, after the image has finished building,
+# applies migrations in Railway's pre-deploy release step after building,
 # and Railway waits for /api/health/ready before switching traffic.
 #
 # Required secrets (set under repo Settings → Secrets and variables
@@ -29,8 +29,8 @@ on:
       - 'packages/events/**'
       - 'package.json'
       - 'package-lock.json'
-      - 'railway.toml'
       - '.github/workflows/deploy-api.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 concurrency:
@@ -56,6 +56,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Require prepared worker and scheduler services
+        env:
+          API_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
+          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
+        run: |
+          test -n "$API_SERVICE" && test -n "$WORKER_SERVICE" && test -n "$SCHEDULER_SERVICE" &&
+          test "$API_SERVICE" != "$WORKER_SERVICE" && test "$API_SERVICE" != "$SCHEDULER_SERVICE" && test "$WORKER_SERVICE" != "$SCHEDULER_SERVICE" || {
+            echo "Configure three distinct API, worker and scheduler services before deploying. See tasks/architecture-operations.md."
+            exit 1
+          }
 
       - uses: ./.github/actions/setup
 
@@ -116,3 +128,15 @@ jobs:
           done
           echo "✗ Railway did not serve the expected build after 36 readiness attempts"
           exit 1
+
+      - name: Deploy worker from the same release
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
+        run: railway up --service "$WORKER_SERVICE" --ci --message "Worker GitHub ${{ github.sha }}"
+
+      - name: Deploy scheduler from the same release
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
+        run: railway up --service "$SCHEDULER_SERVICE" --ci --message "Scheduler GitHub ${{ github.sha }}"

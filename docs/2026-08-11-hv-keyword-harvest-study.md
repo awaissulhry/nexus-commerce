@@ -127,16 +127,16 @@ rows**:
 |---|---|---|
 | `giacca moto` | 26 | **1** |
 | `motorrad jacke herren` | 26 | **1** |
-| `b0bmswm15b` | 25 | **0** |
+| `b0fxe444c9` | 25 | **0** |
 | `giubbotto moto uomo` | 25 | **1** |
 | `motorradjacke herren` | 24 | **1** |
-| `b0bms6zz4h` | 17 | **0** |
+| `b0fx4f79ef` | 17 | **0** |
 
 `promote_to_exact` calls `createKeywordLocal()` with **no existence check**. Every run that decides a
 term should be exact writes another row; one reaches Amazon and the rest are local ghosts. They
 inflate every keyword count in the system and cost nothing on Amazon because they never got there.
 
-**Two ASIN groups have zero Amazon ids at all** — `b0bmswm15b` ×25, `b0bms6zz4h` ×17. The harvest
+**Two ASIN groups have zero Amazon ids at all** — `b0fxe444c9` ×25, `b0fx4f79ef` ×17. The harvest
 service routes ASIN-shaped queries to PRODUCT targets, but these were written as KEYWORDs, 42 rows,
 none synced. Something upstream of that guard is still treating an ASIN as a keyword.
 
@@ -278,7 +278,7 @@ can currently answer "does harvesting work here", and it is the only question th
 2. **Should promotion always negate the source?** Today only the combined action does.
 3. **The 256 phantom rows — clean them up?** They are local-only and harmless to Amazon, but they
    inflate every count you read.
-4. **`b0bmswm15b` ×25 as a keyword.** Do you know what wrote ASINs in as keywords? The harvest
+4. **`b0fxe444c9` ×25 as a keyword.** Do you know what wrote ASINs in as keywords? The harvest
    service explicitly routes those to product targets.
 5. **The suggestion queue: 225 pending, 1 applied.** Work it, expire it, or stop filling it?
 

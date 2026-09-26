@@ -33,7 +33,9 @@ import { registerCatalogueSchema } from './schema-requirements.js'
 
 import prisma from '../../../db.js'
 import { ALLOWED_MASTER_FIELDS } from '../master-field-gate.js'
-import { masterDefaultRule } from './master-default-rule.js'
+import { masterDefaultRule, type ConceptLinks } from './master-default-rule.js'
+import { ATTRIBUTE_CONCEPTS } from '@nexus/shared/attribute-concepts'
+import type { AttributeChannel } from '@nexus/shared/attributes'
 import { sourceOwner, type SourceOwner } from './source-definition-plan.js'
 import { amazonClassificationSpec } from '../channel-specs/amazon.js'
 import { loadEtsyProductSpec } from '../channel-specs/etsy-loader.js'
@@ -230,8 +232,10 @@ export async function getFieldCatalogue(input: {
     throw err
   }
   const rules = getRulesFor(mapping, productType)
-  const customAttributes = await prisma.customAttribute.findMany({ select: { code: true, localizable: true } })
+  const customAttributes = await prisma.customAttribute.findMany({ select: { code: true, localizable: true, semanticKey: true } })
   const masterKeys = new Set([...ALLOWED_MASTER_FIELDS, ...customAttributes.map(a => a.code)])
+  // P5 (docs/attributes/PLAN.md §4.3) — concept → the master source holding it in THIS business.
+  const concepts: ConceptLinks | undefined = isAttributeChannel(channel) ? { channel, sourceFor: conceptSources(customAttributes) } : undefined
   const overlayKeys = new Set(
     productType ? Object.keys(mapping.byProductType?.[productType] ?? {}) : [],
   )
@@ -306,7 +310,7 @@ export async function getFieldCatalogue(input: {
     }
     const cap = specFields.get(key)
     const owner = cap ? sourceOwner(cap) : null
-    const rule = rules[key] ?? masterDefaultRule(cap, masterKeys)
+    const rule = rules[key] ?? masterDefaultRule(cap, masterKeys, concepts)
     const described = describeRule(rule)
     const row = rowByKey.get(key)
     const grp = cap?.group
@@ -392,4 +396,15 @@ export async function getFieldCatalogue(input: {
   }
   registerCatalogueSchema(catalogue, spec)
   return catalogue
+}
+
+const ATTRIBUTE_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
+function isAttributeChannel(channel: string): channel is AttributeChannel { return ATTRIBUTE_CHANNELS.has(channel) }
+
+/** P5 — concept key → master source: the master field a concept already is, or the business attribute linked to it. */
+export function conceptSources(attributes: Array<{ code: string; semanticKey: string | null }>): Map<string, string> {
+  const sources = new Map<string, string>()
+  for (const concept of ATTRIBUTE_CONCEPTS) if (concept.masterField) sources.set(concept.key, concept.masterField)
+  for (const attribute of attributes) if (attribute.semanticKey) sources.set(attribute.semanticKey, attribute.code)
+  return sources
 }

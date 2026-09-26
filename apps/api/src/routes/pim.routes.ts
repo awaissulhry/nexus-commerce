@@ -18,7 +18,7 @@ import { productReadCacheService } from '../services/product-read-cache.service.
  * surface.
  *
  * Each write endpoint:
- *   - Idempotency-Key header dedups via NN.2 idempotencyService
+ *   - Idempotency-Key receipts are enforced by the API's durable command hooks
  *   - Audit-logs via NN.4 auditLogService
  *   - Returns precise per-row errors so the client can highlight
  *     the offending rows on partial failure
@@ -30,7 +30,6 @@ import prisma from '../db.js'
 import { attachProduct, demoteProduct, promoteProduct, reparentProduct, relationshipParent, relationshipTransaction } from '../services/pim/product-relationship.service.js'
 import { relationshipAliasConflicts } from '../services/pim/relationship-alias-guard.js'
 import { auditLogService } from '../services/audit-log.service.js'
-import { idempotencyService } from '../services/idempotency.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 
 interface ChannelCoverageRow {
@@ -344,11 +343,6 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/pim/attach-to-parent', async (request, reply) => {
     const { parentId, productIds, axisValues } = request.body ?? ({} as any)
-    const idempotencyKey = request.headers['idempotency-key'] as
-      | string
-      | undefined
-    const cached = idempotencyService.lookup('pim-attach', idempotencyKey)
-    if (cached) return cached
 
     if (typeof parentId !== 'string' || !parentId || !Array.isArray(productIds) || productIds.length === 0 || productIds.some(id => typeof id !== 'string' || !id)) {
       return reply
@@ -386,7 +380,6 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
       const responseBody = { success: true, attached, errors, parentId }
-      idempotencyService.store('pim-attach', idempotencyKey, responseBody)
       return responseBody
     } catch (err) {
       fastify.log.error({ err }, '[pim/attach-to-parent] failed')
@@ -408,11 +401,6 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
     }
   }>('/pim/promote-to-parent', async (request, reply) => {
     const { productId, variationTheme, variationAxes } = request.body ?? ({} as any)
-    const idempotencyKey = request.headers['idempotency-key'] as
-      | string
-      | undefined
-    const cached = idempotencyService.lookup('pim-promote', idempotencyKey)
-    if (cached) return cached
 
     if (!productId) {
       return reply.code(400).send({ error: 'productId required' })
@@ -429,7 +417,6 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { source: 'pim-review' },
       })
       const responseBody = { success: true, productId }
-      idempotencyService.store('pim-promote', idempotencyKey, responseBody)
       return responseBody
     } catch (err) {
       fastify.log.error({ err }, '[pim/promote-to-parent] failed')
