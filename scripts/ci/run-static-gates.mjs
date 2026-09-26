@@ -89,6 +89,9 @@ const GATES = {
   'progress bar contrast self-test': node('scripts/check-progress-contrast.mjs', '--self-test'),
   'progress bar contrast (web)': node('scripts/check-progress-contrast.mjs', '--check'),
   'progress bar contrast (factory)': node('scripts/check-progress-contrast.mjs', '--check', '--tokens', 'apps/factory/src/design-system/styles/tokens.css'),
+  // 2026-09-27 — a box-shadow token (e.g. --nds-focus-ring) used as an outline colour is dropped by the browser: no focus ring.
+  'shadow token use self-test': node('scripts/check-shadow-token-use.mjs', '--self-test'),
+  'shadow token use': node('scripts/check-shadow-token-use.mjs'),
   'browser gate runner self-tests': nodeTest('scripts/run-browser-gates.test.mjs', 'scripts/lib/gate-write-guard.test.mjs', 'scripts/lib/gate-aloneness.test.mjs'),
   'DS-GAPS append-only': node('scripts/check-ds-gaps-append-only.mjs', '--check'),
   'DS api guard': node('apps/web/src/design-system/tools/api-guard.mjs'),

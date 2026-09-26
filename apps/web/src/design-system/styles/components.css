@@ -2909,11 +2909,13 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
    existing pill with no box of its own (Δ 0); the panel is placed by usePopoverPosition (position: fixed, inline). Text is
    --nds-text-strong / --nds-text only (R-49: text-2 and text-3 fail 7:1 today). */
 .nds-detailpop-trigger { all: unset; display: inline-flex; align-items: center; cursor: pointer; border-radius: var(--nds-radius-sm); }
-.nds-detailpop-trigger:focus-visible { outline: 2px solid var(--nds-focus-ring); outline-offset: -2px; }
+/* `--nds-primary`, not `--nds-focus-ring`: that token is a box-SHADOW value, so as an outline colour it was dropped whole
+   and the trigger had no visible focus (DS-GAPS, fixed 2026-09-27; guard scripts/check-shadow-token-use.mjs). */
+.nds-detailpop-trigger:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
 .nds-detailpop { z-index: var(--nds-z-popover); min-width: 240px; max-width: var(--nds-popover-max-w); background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); box-shadow: var(--nds-shadow-pop); padding: 12px;
   color: var(--nds-text-strong); font-size: var(--nds-font-size-sm-plus); line-height: 1.5; }
-.nds-detailpop:focus-visible { outline: 2px solid var(--nds-focus-ring); outline-offset: 2px; }
+.nds-detailpop:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 .nds-detailpop-h { font-weight: 600; margin-bottom: 8px; }
 .nds-detailpop-gh { font-weight: 600; margin: 8px 0 4px; }
 .nds-detailpop-list { list-style: none; margin: 0; padding: 0; }
