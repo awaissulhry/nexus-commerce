@@ -130,7 +130,7 @@ export async function coreSheetFields(locale = 'it'): Promise<FieldDefinition[]>
 
 /** Top-level Amazon attribute names of the business's cached schemas, per business, refreshed when a schema changes. */
 const amazonKeyCache = new Map<string, { stamp: string; keys: Set<string> }>()
-async function amazonSchemaKeys(): Promise<Set<string>> {
+export async function amazonSchemaKeys(): Promise<Set<string>> {
   const [stamp] = await prisma.$queryRaw<Array<{ s: string; w: string }>>`
     SELECT concat(count(*), ':', coalesce(max("fetchedAt")::text, '')) AS s, coalesce(max("workspaceId"), '') AS w
     FROM "CategorySchema" WHERE channel = 'AMAZON' AND "isActive" = true`

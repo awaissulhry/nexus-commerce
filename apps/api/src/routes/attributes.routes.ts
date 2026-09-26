@@ -51,6 +51,7 @@ import { attributeChoices, ChoicesError } from '../services/pim/attribute-choice
 import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
 import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
 import { applyPlacementProposal, placementProposalPreview, undoPlacementProposal } from '../services/pim/attribute-placement-correction.js'
+import { attributeUsages } from '../services/pim/attribute-usage.service.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const actorOf = (request: FastifyRequest): Actor => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null, ip: request.ip ?? null })
@@ -397,6 +398,9 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     return placementReply(reply, () => restoreAttribute(id, actorOf(request)))
   })
+  // P3b S6 — which connected channels use each attribute, and which are dormant (for the settings list, S8).
+  fastify.get('/attributes/usage', async () => ({ attributes: [...(await attributeUsages()).values()].sort((a, b) => a.code.localeCompare(b.code)) }))
+
   // P3b S5 — the reviewed cleanup: preview (with a fingerprint), apply approved groups, undo a whole batch.
   fastify.get('/attributes/placement-proposal', async () => placementProposalPreview())
   fastify.post('/attributes/placement-proposal/apply', async (request, reply) => {

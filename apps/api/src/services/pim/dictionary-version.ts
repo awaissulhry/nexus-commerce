@@ -1,5 +1,7 @@
 /**
- * P3b S4 (docs/attributes/PLAN.md §10.9) — the business dictionary's version, for cache keys.
+ * P3b S4 (docs/attributes/PLAN.md §10.9) — the business dictionary's version, for cache keys. Since S6 it also covers
+ * what the channel footprint and the "used by" marks read (accounts, markets and their mapping rules, cached Amazon
+ * schemas), so a connect or a mapping change shows at once too.
  *
  * The column caches (`getSheetColumns`, `getStudioColumns`, `GET /products/sheet/columns`) kept a column set for 5
  * minutes whatever changed in the dictionary, so a new attribute, a placement move or an archive showed up to 5 minutes
@@ -15,6 +17,9 @@ export async function dictionaryVersion(): Promise<string> {
       (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "FamilyAttribute"),
       (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "AttributeOption"),
       (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "AttributeGroup"),
-      (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "ProductFamily")) AS v`
+      (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "ProductFamily"),
+      (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "ChannelConnection"),
+      (SELECT concat(count(*), ':', coalesce(max("updatedAt")::text, '')) FROM "Marketplace"),
+      (SELECT concat(count(*), ':', coalesce(max("fetchedAt")::text, '')) FROM "CategorySchema" WHERE channel = 'AMAZON')) AS v`
   return row?.v ?? ''
 }
