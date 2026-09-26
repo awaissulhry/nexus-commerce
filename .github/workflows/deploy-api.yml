@@ -129,14 +129,27 @@ jobs:
           echo "✗ Railway did not serve the expected build after 36 readiness attempts"
           exit 1
 
-      - name: Deploy worker from the same release
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          WORKER_SERVICE: ${{ secrets.RAILWAY_WORKER_SERVICE }}
-        run: railway up --service "$WORKER_SERVICE" --ci --message "Worker GitHub ${{ github.sha }}"
+  # The worker and scheduler ship the same commit once the API serves it, side by side and each
+  # with its own time limit. In one job, three sequential builds overran its 25 minutes
+  # (2026-09-26): the job was cancelled while the scheduler's build was still running.
+  deploy-background:
+    needs: deploy
+    name: Ship ${{ matrix.role }} to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [worker, scheduler]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Deploy scheduler from the same release
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
+
+      - name: Deploy ${{ matrix.role }} from the same release
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          SCHEDULER_SERVICE: ${{ secrets.RAILWAY_SCHEDULER_SERVICE }}
-        run: railway up --service "$SCHEDULER_SERVICE" --ci --message "Scheduler GitHub ${{ github.sha }}"
+          SERVICE: ${{ matrix.role == 'worker' && secrets.RAILWAY_WORKER_SERVICE || secrets.RAILWAY_SCHEDULER_SERVICE }}
+        run: railway up --service "$SERVICE" --ci --message "${{ matrix.role }} GitHub ${{ github.sha }}"
