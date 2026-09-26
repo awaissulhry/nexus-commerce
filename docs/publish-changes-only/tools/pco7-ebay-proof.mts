@@ -99,6 +99,8 @@ async function discover(listingId?: string, requireMigration = false): Promise<T
   try {
     await db.query('BEGIN READ ONLY')
     if ((await db.query('SHOW transaction_read_only')).rows[0].transaction_read_only !== 'on') throw new Refusal('Discovery is not read only.')
+    // The server's runtime login sees rows only inside a business profile (row security); without it discovery finds nothing.
+    await db.query("SELECT set_config('nexus.workspace_id', $1, true)", [WORKSPACE])
     if (requireMigration) {
       const columns = await db.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='ChannelListingSnapshot' AND column_name IN ('outcome','acceptedAt')`)
       if (columns.rows.length !== 2) throw new Refusal('PCO receipt migration is missing. Deploy it before approving/executing this proof; this tool never migrates.')
