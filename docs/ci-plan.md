@@ -431,7 +431,7 @@ This is already built in commit `8b431c322`, on the unpushed branch:
 
 **It lands with Tier 0.** The Railway dashboard needs three settings:
 1. `MIGRATION_DATABASE_URL` is set on the API service.
-2. The worker and scheduler use "Config File Path" `railway.worker.toml` and `railway.scheduler.toml`.
+2. The worker and scheduler get their settings in Railway itself (Railway no longer lets a new service read a config file; see `tasks/architecture-operations.md`).
 3. **Native GitHub autodeploy is off** on all 3 services. Otherwise each push gets two deploys and two migration runs.
 
 These are Railway writes. They happen only on the Owner's word, or the Owner clicks them.
@@ -459,7 +459,7 @@ After #4, `RuntimePool` refuses any runtime login that owns objects or bypasses 
    `WITH INHERIT TRUE` is required: the web reads `UserSession` as the login (measured in #5). `scripts/ci/seed-smoke.mts` creates exactly this shape, and #5's smoke job runs the API and the web on it.
 
 2. **Railway:** create the `worker` and `scheduler` services from this repo.
-   - Config File Path: `railway.worker.toml` and `railway.scheduler.toml`.
+   - Settings in Railway (build, start, health check, region); see `tasks/architecture-operations.md`.
    - Copy the API's variables.
    - Source: none. Deploys come from GitHub Actions.
 

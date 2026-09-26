@@ -1,5 +1,0 @@
-# Set this as the scheduler service's Config File Path. API owns schema release.
-[deploy]
-startCommand = "npm run start:scheduler"
-healthcheckPath = "/health/ready"
-healthcheckTimeout = 90

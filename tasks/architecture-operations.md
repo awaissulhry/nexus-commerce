@@ -41,9 +41,15 @@ platform administrators or the release service cannot see both secret values.
 
 ## Process cutover
 
-Create the worker and scheduler services from the same repository/build as the API.
-Set their Config File Path to `/railway.worker.toml` and `/railway.scheduler.toml`
-respectively. They use `/health/ready`; only the API service runs schema migrations.
+Create the worker and scheduler services (`nexus-worker`, `nexus-scheduler`, created
+2026-09-26) with no source: only the deploy workflow deploys them, with `railway up`.
+Railway no longer lets a new service read a config file (Config as Code is deprecated),
+so their settings live in Railway: the API's build command; start `npm run start:worker`
+or `npm run start:scheduler`; health check `/health/ready`, 90 s; restart on failure;
+one replica in `europe-west4`. Only the API service runs schema migrations (its
+`railway.toml`, which Railway stops reading on 2026-12-01 — see tasks/todo.md).
+Their variables reference the API's (`${{@nexus/api.NAME}}`), except the two owner
+database URLs, so a rotated key changes in one place.
 Provide the required integration variables, restricted `DATABASE_URL`, and Redis
 connection. Set `ENABLE_QUEUE_WORKERS=1` on all three services: the worker consumes
 the queues, the API and the scheduler produce into them (with it off, every enqueue

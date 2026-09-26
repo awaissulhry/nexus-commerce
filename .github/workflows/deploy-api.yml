@@ -30,8 +30,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'railway.toml'
-      - 'railway.worker.toml'
-      - 'railway.scheduler.toml'
       - '.github/workflows/deploy-api.yml'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
