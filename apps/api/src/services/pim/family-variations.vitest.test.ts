@@ -22,7 +22,7 @@ vi.mock('./readiness-index.service.js', () => ({ produceReadinessForProducts: vi
 // Business profiles may be ON (CI runs both): every statement runs as the legacy business.
 aroundAll(run => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, run))
 import prisma from '../../db.js'
-import { FamilyVariationError, setFamilyVariationValues } from './family-variations.service.js'
+import { FamilyVariationError, setFamilyAxes, setFamilyVariationValues } from './family-variations.service.js'
 
 beforeEach(async () => {
   await prisma.productReadCache.deleteMany()
@@ -103,3 +103,27 @@ describe('setFamilyVariationValues', () => {
     expect((await read('fam')).version).toBe(7)
   })
 })
+
+describe('setFamilyAxes', () => {
+  it('stores the axes as attribute codes in order; the label mirror keeps each existing spelling, a new axis takes the attribute label', async () => {
+    await prisma.product.update({ where: { id: 'fam' }, data: { variationAxes: ['Taglia'] } })
+    const result = await setFamilyAxes('fam', { expectedVersion: 7, codes: ['color', 'size'] })
+    expect(result).toEqual({ version: 8 })
+    expect(await prisma.product.findUniqueOrThrow({ where: { id: 'fam' }, select: { variationAxisCodes: true, variationAxes: true, version: true } }))
+      .toEqual({ variationAxisCodes: ['color', 'size'], variationAxes: ['Color', 'Taglia'], version: 8 })
+  })
+
+  it('refuses an unknown or archived attribute, a repeated axis, a stale version, and a child', async () => {
+    await expect(setFamilyAxes('fam', { expectedVersion: 7, codes: ['material'] })).rejects.toThrow('material is not an attribute of the dictionary')
+    await expect(setFamilyAxes('fam', { expectedVersion: 7, codes: ['color', 'color'] })).rejects.toThrow('color twice')
+    await expect(setFamilyAxes('fam', { expectedVersion: 6, codes: ['color'] })).rejects.toThrow('This family changed')
+    await expect(setFamilyAxes('v1', { expectedVersion: 2, codes: ['color'] })).rejects.toThrow('family parent')
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: 'fam' } })).version).toBe(7)
+  })
+
+  it('the same codes again change nothing and keep the version', async () => {
+    await setFamilyAxes('fam', { expectedVersion: 7, codes: ['color', 'size'] })
+    expect(await setFamilyAxes('fam', { expectedVersion: 8, codes: ['color', 'size'] })).toEqual({ version: 8 })
+  })
+})
+
