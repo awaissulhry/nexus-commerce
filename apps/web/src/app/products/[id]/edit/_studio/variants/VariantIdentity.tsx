@@ -1,17 +1,19 @@
 'use client'
 
-import { CompletenessPill, IdentityBand, ProvenanceMark } from '@/design-system/grid'
+import { IdentityBand, ProvenanceMark } from '@/design-system/grid'
 import { ProductRoleChip } from '../sheet/ProductRoleChip'
 import type { MenuItemDef } from '@/design-system/components'
-import type { RowReadinessState } from '@/design-system/grid/renderers/readiness'
-import { filledAllFieldsTip } from '../sheet/master/readinessDetail'
 
-/** One identity composition for the shared family and every channel projection. */
-export function VariantIdentity({ sku, isParent, parentId, childCount, image, inherited, axes, suspect = [], pct, readiness, completenessTip, menuItems }: {
+/**
+ * One identity composition for the shared family, every channel projection and the Matrix.
+ *
+ * No completeness bar here (2026-09-27): as on the Information sheet, the bar lives in a progress COLUMN beside
+ * the Product cell (`sheet/progressColumns.ts`), in colour rule A, with the card that lists what is empty.
+ */
+export function VariantIdentity({ sku, isParent, parentId, childCount, image, inherited, axes, suspect = [], menuItems }: {
   sku: string; isParent: boolean; parentId?: string | null; childCount: number
   image?: string | null; inherited?: boolean; axes: string[]
-  suspect?: Array<{ reason: string }>; pct: number | null; menuItems?: MenuItemDef[]
-  readiness?: RowReadinessState | null; completenessTip?: string
+  suspect?: Array<{ reason: string }>; menuItems?: MenuItemDef[]
 }) {
   const secondary = isParent ? `Parent · ${childCount} variants` : axes.join(' · ')
   return <IdentityBand
@@ -21,7 +23,6 @@ export function VariantIdentity({ sku, isParent, parentId, childCount, image, in
     sku={sku}
     secondary={<>{secondary}{suspect.length > 0 && <span className="nds-cell-warning" aria-label="Shared axis values need review"> ⚠</span>}</>}
     secondaryTitle={suspect.map(entry => entry.reason).join(' ') || secondary}
-    trailing={<CompletenessPill pct={pct} state={readiness} tip={completenessTip ?? filledAllFieldsTip(pct)} />}
     menuItems={menuItems}
     menuLabel={`Actions for ${sku}`}
   />

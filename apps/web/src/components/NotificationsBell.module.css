@@ -90,7 +90,7 @@
   background: var(--nds-surface-hover);
 }
 .row:focus-visible {
-  outline: 2px solid var(--nds-focus-ring, var(--nds-text-link));
+  outline: 2px solid var(--nds-primary); /* not --nds-focus-ring: a box-shadow value, dropped as an outline colour (2026-09-27) */
   outline-offset: -2px;
 }
 .rowStatic {

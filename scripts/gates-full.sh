@@ -486,6 +486,14 @@ echo "→ Checking progress-bar contrast (web + factory, 3:1)..."
   exit 1
 }
 
+# 2026-09-27 — a box-shadow token (--nds-focus-ring, --nds-shadow-*) used where a colour belongs is dropped by the browser;
+# the DetailPopover and the notifications bell had no visible keyboard focus that way.
+echo "→ Checking shadow tokens are only used as shadows..."
+{ node scripts/check-shadow-token-use.mjs --self-test >/dev/null && node scripts/check-shadow-token-use.mjs >/dev/null; } || {
+  echo "❌ shadow-token misuse (run: node scripts/check-shadow-token-use.mjs)"
+  exit 1
+}
+
 # R-45 / R-50 / R-61 (A-43, A-48, 2026-09-24) — the three browser gates are back (removed 09-16, 7bd90cb11). Path-scoped (only when the
 # pushed commits touch a file a gate's reading depends on — each gate's own STAMP_FILES), OWN servers on free ports and the LOCAL
 # database, a RATCHET against scripts/browser-gates-baseline.json, and NOT MEASURED always fails. A UI push that runs editor-open costs

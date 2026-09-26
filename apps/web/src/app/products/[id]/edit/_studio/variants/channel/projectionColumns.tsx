@@ -38,7 +38,9 @@ import {
 
 import { planPin } from './pinValue'
 import type { ProjectionPage, ProjectionValue } from './types'
-import { projectionActionRow, projectionReadinessPill, type ProjectionRow } from './rows'
+import { projectionActionRow, type ProjectionRow } from './rows'
+import { SCOPE_PROGRESS_COLUMN, coordinateProgressValue, listingsHref, openInSheetAction, progressColumn, type CoordinateReadinessColumn } from '../../sheet/progressColumns'
+import { studioRowId } from '../../sheet/channel/types'
 
 /** What the cells need from the surface, read at paint time. */
 export interface ProjectionCellContext {
@@ -52,6 +54,12 @@ export interface ProjectionCellContext {
   onIncludedChange(id: string, included: boolean): void
   /** One click pins the resolved value for this coordinate; one click resets it (layout doc §1). */
   onPinToggle(childId: string, axisKey: string): void
+  /**
+   * The progress column (2026-09-27): this coordinate's readiness-index reading in the pressed language — the same one
+   * the Information sheet's market column reads. `null` = not loaded or not computed; the cell then says so.
+   */
+  readiness: CoordinateReadinessColumn | null
+  locale: string | null
 }
 
 /** One stable object per mounted surface. Its identity never changes; what it returns does. */
@@ -79,14 +87,63 @@ const IdentityCell = memo(function IdentityCell(p: ICellRendererParams<Projectio
   if (!source) return null
   const isParent = row.kind === 'parent'
   const actionRow = projectionActionRow(row, page)
-  const progress = projectionReadinessPill(source)
   return <VariantIdentity sku={source.sku} isParent={isParent} parentId={actionRow.parentId} childCount={page.children.length}
     image={source.image} inherited={row.child?.imageInherited} axes={(page.axes ?? []).map(axis => row.child?.sharedAxisValues?.[axis.key] ?? '—')}
-    suspect={row.child?.axisValuesSuspect} pct={progress.pct}
-    readiness={progress.state}
-    completenessTip={progress.tip}
+    suspect={row.child?.axisValuesSuspect}
     menuItems={rowMenu(actionRow)} />
 })
+
+/* ── the progress column ──────────────────────────────────────────────────────────────────── */
+
+/** `''` and `primary` both name the primary listing; the readiness index stores it as `null`. */
+const aliasOf = (aliasKey: string | null | undefined): string | null => (aliasKey && aliasKey !== 'primary' ? aliasKey : null)
+
+/**
+ * The coordinate's PROGRESS column (2026-09-27) — the Information sheet's market column, here: the same index reading,
+ * colour rule A and card. The fields are not columns on this page, so each one opens the Information sheet in this
+ * scope at that row and field; the footer opens the listings page for this coordinate.
+ */
+function progressOfCoordinate(host: ProjectionCellHost, label: string): ColDef<ProjectionRow> {
+  const sourceOf = (row: ProjectionRow | undefined) => (row ? row.child ?? row.parent : null)
+  return {
+    ...progressColumn<ProjectionRow>({
+      colId: SCOPE_PROGRESS_COLUMN,
+      headerName: label,
+      headerTooltip: `Progress on ${label}: filled ÷ every field ${label} applies, required and optional, from the readiness index. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`,
+      value: (row) => {
+        const source = sourceOf(row)
+        const readiness = host.get()?.readiness
+        if (!source || !readiness) return null
+        return coordinateProgressValue(readiness.byProduct[source.id], readiness.missingByProduct[source.id] ?? [], readiness.optionalByProduct[source.id] ?? [])
+      },
+      cell: {
+        scopeLabel: label,
+        subjectOf: (p) => sourceOf(p.data as ProjectionRow | undefined)?.sku ?? null,
+        actionFor: (field, _label, p) => {
+          const source = sourceOf(p.data as ProjectionRow | undefined)
+          const { page, locale } = host.get()
+          if (!source) return { kind: 'none', text: 'Edit it on the Information sheet.' }
+          const c = page.coordinate
+          const aliasId = aliasOf(c.aliasKey)
+          return openInSheetAction(`Open in ${c.label}`, { scope: c.channel, market: c.market, locale, accountId: c.accountId, aliasId, rowId: studioRowId(aliasId, source.id), field })
+        },
+        onGoTo: () => undefined,
+        footerLink: () => {
+          const { page, locale } = host.get()
+          return { label: `All products for ${page.coordinate.label}`, href: listingsHref({ channel: page.coordinate.channel, market: page.coordinate.market, language: locale }) }
+        },
+      },
+    }),
+    // Every column on this page is fixed in place; the header menu still pins it and Customise hides it.
+    suppressMovable: true,
+  }
+}
+
+/** Pure: this coordinate's column among the readiness matrix's columns (`coordinateReadinessColumns`). */
+export function coordinateReadingFor(columns: readonly CoordinateReadinessColumn[], coordinate: { channel: string; market: string; accountId: string | null; aliasKey: string }): CoordinateReadinessColumn | null {
+  return columns.find(c => c.channel === coordinate.channel && c.market === coordinate.market
+    && (c.accountId ?? null) === (coordinate.accountId ?? null) && (c.aliasId ?? null) === aliasOf(coordinate.aliasKey)) ?? null
+}
 
 /* ── a mapped axis value — the sheet's CascadeCell vocabulary ─────────────────────────────── */
 
@@ -287,6 +344,7 @@ export function projectionColumns(host: ProjectionCellHost, page: ProjectionPage
              engine and a page stylesheet may not address `.ag-*` at all. */
           cellClass: 'nds-cell-identity nds-cell-full-strength',
         },
+        progressOfCoordinate(host, page.coordinate.label),
       ],
     },
     {

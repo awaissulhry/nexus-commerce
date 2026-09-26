@@ -18,7 +18,6 @@
  */
 
 import { writeGate as substrateWriteGate } from '@/design-system/grid/editors/writeGate'
-import { readinessMeta } from '@/design-system/grid/renderers/readiness'
 
 import { aliasKeyOf, studioRowId, type AliasGroup, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types'
 
@@ -396,8 +395,8 @@ export function crossChannelColumnCount(
 }
 
 /**
- * The progress column's "cannot be scored" sentence for a row (2026-09-26) — the SAME rule `rowReadinessPill` applies:
- * an unscorable alias must not inherit a score from filled structural fields. `null` = scorable.
+ * The progress column's "cannot be scored" sentence for a row (2026-09-26) — the rule the band's readiness pill had
+ * (Q-LX6-1): an unscorable alias must not inherit a score from filled structural fields. `null` = scorable.
  */
 export function rowProgressUnscorable(row: StudioRow, alias: AliasGroup | undefined): string | null {
   const required = row.completeness?.required
@@ -406,13 +405,3 @@ export function rowProgressUnscorable(row: StudioRow, alias: AliasGroup | undefi
   return reason ?? (required?.total === 0 ? 'No required attributes are defined for this row.' : 'Readiness cannot be scored until this coordinate’s requirements are available.')
 }
 
-/** Match the listing band: required fields, using this row's own resolved counts. */
-export function rowReadinessPill(row: StudioRow, alias: AliasGroup | undefined) {
-  const required = row.completeness?.required
-  // An unscorable alias must not inherit a score from filled structural fields.
-  const pct = alias?.readiness.percent == null || !required?.total ? null : Math.round(100 * required.filled / required.total)
-  const reason = row.readiness.issues.find(issue => issue.label === 'Channel requirements')?.message
-  return { pct, state: row.readiness.state, tip: pct === null
-    ? `${row.sku} — ${reason ?? (required?.total === 0 ? 'No required attributes are defined for this row.' : 'Readiness cannot be scored until this coordinate’s requirements are available.')}`
-    : `${row.sku} — ${required!.filled} of ${required!.total} required channel fields filled · ${readinessMeta(row.readiness.state, 'row').label}` }
-}
