@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SheetImportChange, SheetImportChangesPage, SheetImportStatus } from '@nexus/shared/catalog-transfer'
 import { Button, Checkbox, SegmentedControl, Tag } from '@/design-system/primitives'
-import { Banner, DataGrid, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast, type Column } from '@/design-system/components'
+import { Banner, FileDropzone, FileRow, JobProgress, MetricStrip, Modal, Pagination, useToast } from '@/design-system/components'
+// The DS grid's DataGrid (AG Grid, identical props) — the retiring `components/DataGrid` is on the grid-kit ratchet.
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useStudioSave } from '../contracts'
 import { PublishDialog } from '../publication/PublishDialog'
@@ -150,14 +152,14 @@ export function ImportDialog({ open, onClose, productId, market, onApplied }: { 
   const label = status?.state === 'READY' ? applyLabel(status) : null
   const done = isFinished(status) ? doneView(status!) : null
   const columns: Column<SheetImportChange>[] = [
-    { key: 'sku', label: 'SKU', className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
-    { key: 'where', label: 'Where', className: styles.whereCol, render: c => c.destination },
-    { key: 'column', label: 'Column', className: styles.fieldCol, render: c => <span title={c.field}>{c.label}{c.locale && c.entity !== 'Products' ? ` · ${c.locale}` : ''}</span> },
-    { key: 'now', label: 'Now', className: styles.valueCol, render: c => <span className={styles.value} title={cellValue(c, 'before', 4000)}>{changeCells(c)[0]}</span> },
-    { key: 'new', label: 'New', className: styles.valueCol, render: c => c.problem && (c.status === 'problem' || c.status === 'failed')
+    { key: 'sku', label: 'SKU', width: 190, className: styles.skuCol, render: c => <span className={styles.mono} title={c.sku}>{c.sku}</span> },
+    { key: 'where', label: 'Where', width: 120, className: styles.whereCol, render: c => c.destination },
+    { key: 'column', label: 'Column', width: 140, className: styles.fieldCol, render: c => <span title={c.field}>{c.label}{c.locale && c.entity !== 'Products' ? ` · ${c.locale}` : ''}</span> },
+    { key: 'now', label: 'Now', width: 230, className: styles.valueCol, render: c => <span className={styles.value} title={cellValue(c, 'before', 4000)}>{changeCells(c)[0]}</span> },
+    { key: 'new', label: 'New', width: 230, className: styles.valueCol, render: c => c.problem && (c.status === 'problem' || c.status === 'failed')
       ? <span className={styles.problem}>{c.problem}{whereInFile(c) ? <span className={styles.muted}> · {whereInFile(c)}</span> : null}</span>
       : <span className={styles.value} title={cellValue(c, 'after', 4000)}>{changeCells(c)[1]}</span> },
-    { key: 'status', label: 'Status', className: styles.statusCol, render: c => <Tag tone={TONES[c.status]}>{STATUS_LABELS[c.status]}</Tag> },
+    { key: 'status', label: 'Status', width: 96, className: styles.statusCol, render: c => <Tag tone={TONES[c.status]}>{STATUS_LABELS[c.status]}</Tag> },
   ]
 
   const footer = <>

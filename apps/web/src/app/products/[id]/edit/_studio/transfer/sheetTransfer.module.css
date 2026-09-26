@@ -8,15 +8,11 @@
 .warning { margin: 0; color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); }
 .problem { color: var(--nds-danger-text); }
 .value { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-/* The change table: identity columns stay compact, the two values share the rest. */
-.skuCol { width: 190px; }
-.whereCol { width: 130px; white-space: nowrap; }
-.fieldCol { width: 150px; }
-.valueCol { width: 34%; min-width: 180px; }
-/* A value never widens the table: an automatic table layout sizes a column by its longest line. */
-.valueCol .value, .valueCol .problem { display: -webkit-box; max-width: 300px; white-space: normal; }
+/* The change table: the grid sizes its columns (Column.width); these classes only shape the text inside a cell. */
+.whereCol, .statusCol { white-space: nowrap; }
+.valueCol .value, .valueCol .problem { display: -webkit-box; white-space: normal; }
 .problem { -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; }
-.statusCol { width: 96px; white-space: nowrap; }
-.skuCol .mono { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* A long SKU wraps (the row grows) — never cut: the SKU is how a person finds the row in the file. */
+.skuCol .mono { white-space: normal; overflow-wrap: anywhere; }
 .mono { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .link { color: var(--nds-text-link); white-space: nowrap; }
