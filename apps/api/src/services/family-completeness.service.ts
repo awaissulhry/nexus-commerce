@@ -174,72 +174,114 @@ export function isFilled(v: unknown): boolean {
   return false
 }
 
+const COMPLETENESS_PRODUCT_SELECT = {
+  id: true,
+  familyId: true,
+  categoryAttributes: true,
+  workspaceId: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true,
+  translations: true, parent: { include: { translations: true } },
+} as const
+
+type CompletenessProduct = { id: string; familyId: string | null; categoryAttributes: unknown; parent: unknown } & Record<string, unknown>
+type CompletenessAttribute = { id: string; code: string; localizable: boolean }
+
+/** The completeness of one loaded product. Pure over its inputs; `compute` and `computeMany` both call it. */
+function completenessOf(product: CompletenessProduct, effective: EffectiveFamilyAttribute[], attrs: CompletenessAttribute[]): CompletenessResult {
+  // Build attributeId → code lookup, restricted to the attrs that appear in `effective`.
+  const wanted = new Set(effective.map((e) => e.attributeId))
+  const own = attrs.filter((a) => wanted.has(a.id))
+  const attributeCodes = new Map(own.map((a) => [a.id, a.code]))
+  const localizableCodes = new Set(own.filter((a) => a.localizable).map((a) => a.code))
+
+  // Build code → value map. Layer 1: categoryAttributes JSON
+  // (the legacy + canonical store today). Layer 2: localizable
+  // attrs draw from ProductTranslation if any row has the value.
+  const values = new Map<string, unknown>()
+  const ca = (product.categoryAttributes ?? {}) as Record<string, unknown>
+  for (const [k, v] of Object.entries(ca)) values.set(k, v)
+
+  // Family completeness is the shared source-language view. Other languages cannot fill it.
+  for (const code of localizableCodes) {
+    const field = code === 'bullet_points' ? 'bulletPoints' : code
+    const resolved = resolveContent({ product: product as any, parent: product.parent as any, field,
+      localizableKeys: [...localizableCodes], address: { requested: PRIMARY_CONTENT_LOCALE } })
+    values.set(code, translationMissing(resolved, PRIMARY_CONTENT_LOCALE) ? null : resolved.value)
+  }
+
+  return {
+    productId: product.id,
+    familyId: product.familyId,
+    ...score(effective, values, attributeCodes),
+  }
+}
+
+const noFamily = (productId: string): CompletenessResult => ({
+  productId,
+  familyId: null,
+  filled: 0,
+  totalRequired: 0,
+  score: -1,
+  missing: [],
+  byChannel: {},
+})
+
 export class FamilyCompletenessService {
   constructor(private readonly client: PrismaClient = prisma) {}
 
   /** Compute completeness for a single product. */
   async compute(productId: string): Promise<CompletenessResult> {
-    const product = await this.client.product.findUnique({
-      where: { id: productId },
-      select: {
-        id: true,
-        familyId: true,
-        categoryAttributes: true,
-        workspaceId: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true,
-        translations: true, parent: { include: { translations: true } },
-      },
-    })
+    const product = await this.client.product.findUnique({ where: { id: productId }, select: COMPLETENESS_PRODUCT_SELECT })
     if (!product) {
       throw new Error(`FamilyCompletenessService: product ${productId} not found`)
     }
-    if (!product.familyId) {
-      return {
-        productId,
-        familyId: null,
-        filled: 0,
-        totalRequired: 0,
-        score: -1,
-        missing: [],
-        byChannel: {},
-      }
-    }
+    if (!product.familyId) return noFamily(productId)
 
     const effective = await familyHierarchyService.resolveEffectiveAttributes(
       product.familyId,
     )
-
-    // Build attributeId → code lookup. Restricted to the attrs that
-    // appear in `effective` (no need to fetch the entire registry).
-    const attrIds = effective.map((e) => e.attributeId)
     const attrs = await this.client.customAttribute.findMany({
-      where: { id: { in: attrIds } },
+      where: { id: { in: effective.map((e) => e.attributeId) } },
       select: { id: true, code: true, localizable: true },
     })
-    const attributeCodes = new Map(attrs.map((a) => [a.id, a.code]))
-    const localizableCodes = new Set(
-      attrs.filter((a) => a.localizable).map((a) => a.code),
-    )
+    return completenessOf(product as never, effective, attrs)
+  }
 
-    // Build code → value map. Layer 1: categoryAttributes JSON
-    // (the legacy + canonical store today). Layer 2: localizable
-    // attrs draw from ProductTranslation if any row has the value.
-    const values = new Map<string, unknown>()
-    const ca = (product.categoryAttributes ?? {}) as Record<string, unknown>
-    for (const [k, v] of Object.entries(ca)) values.set(k, v)
-
-    // Family completeness is the shared source-language view. Other languages cannot fill it.
-    for (const code of localizableCodes) {
-      const field = code === 'bullet_points' ? 'bulletPoints' : code
-      const resolved = resolveContent({ product: product as any, parent: product.parent as any, field,
-        localizableKeys: [...localizableCodes], address: { requested: PRIMARY_CONTENT_LOCALE } })
-      values.set(code, translationMissing(resolved, PRIMARY_CONTENT_LOCALE) ? null : resolved.value)
+  /**
+   * P3 (docs/attributes/PLAN.md §4.1) — the same answer as `compute` for many products, with a FIXED number of
+   * queries: one for the products, one per family hierarchy level, one for the attributes. `compute` per product cost
+   * three queries plus one per family ancestor, each, in sequence.
+   * A product that does not exist gets `{ error }`, with the message `compute` throws.
+   */
+  async computeMany(productIds: readonly string[]): Promise<Map<string, CompletenessResult | { error: string }>> {
+    const ids = [...new Set(productIds)]
+    const products = await this.client.product.findMany({ where: { id: { in: ids } }, select: COMPLETENESS_PRODUCT_SELECT })
+    const byId = new Map(products.map((p) => [p.id, p]))
+    const familyIds = [...new Set(products.map((p) => p.familyId).filter((id): id is string => !!id))]
+    const effectiveByFamily = new Map<string, EffectiveFamilyAttribute[] | { error: string }>()
+    if (familyIds.length) {
+      try {
+        for (const [id, effective] of await familyHierarchyService.resolveEffectiveAttributesMany(familyIds)) effectiveByFamily.set(id, effective)
+      } catch {
+        // One broken family must not fail the others: fall back to per-family resolution for the errors' sake.
+        for (const id of familyIds) {
+          try { effectiveByFamily.set(id, await familyHierarchyService.resolveEffectiveAttributes(id)) }
+          catch (err: any) { effectiveByFamily.set(id, { error: err?.message ?? String(err) }) }
+        }
+      }
     }
-
-    return {
-      productId,
-      familyId: product.familyId,
-      ...score(effective, values, attributeCodes),
+    const attributeIds = [...new Set([...effectiveByFamily.values()].flatMap((e) => (Array.isArray(e) ? e.map((a) => a.attributeId) : [])))]
+    const attrs = attributeIds.length
+      ? await this.client.customAttribute.findMany({ where: { id: { in: attributeIds } }, select: { id: true, code: true, localizable: true } })
+      : []
+    const results = new Map<string, CompletenessResult | { error: string }>()
+    for (const id of ids) {
+      const product = byId.get(id)
+      if (!product) { results.set(id, { error: `FamilyCompletenessService: product ${id} not found` }); continue }
+      if (!product.familyId) { results.set(id, noFamily(id)); continue }
+      const effective = effectiveByFamily.get(product.familyId)!
+      results.set(id, Array.isArray(effective) ? completenessOf(product as never, effective, attrs) : effective)
     }
+    return results
   }
 }
 

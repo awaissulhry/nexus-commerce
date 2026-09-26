@@ -1,5 +1,17 @@
 # PSIE — progress (newest at top)
 
+## 2026-09-26 (late) — CI round 2 + main moved again (#18 "fast bulk saves")
+- CI failed ONE gate: `grid kit` (a new use of the retiring `components/DataGrid`). The change table now uses the DS grid's
+  `DataGrid` (`design-system/grid/datagrid`, AG Grid, same props); widths moved to `Column.width`; long SKUs wrap.
+- `main` gained #18, which added the system-wide pending-readiness mechanism (`markReadinessPending`, `rebuildPendingFamily`,
+  the readiness-pending drain). The import now uses it: families are marked pending in the SAME transaction as the values
+  and rebuilt right after the commit; the drain finishes any a restart interrupts. `produceReadinessForProducts` honours
+  `deferReadiness` too. One conflict (`readiness-index.service.ts`) resolved keeping both sides.
+- Checked on main 71888bd6d: API `tsc` clean; 50/50 static gates; API 46 files / 550 passed (31 opt-in skips) + #18's race
+  suites on a real server 2/2 and 6/6; bench GALE 40 cells — save 3.7 s, total 6.9 s (first, cold run), 714 readiness rows
+  pending at DONE → 0 after the rebuild (5.1 s), Undo 40/40, 0 channel updates.
+- Published as a merge commit on the pushed branch (no force-push).
+
 ## 2026-09-26 (evening) — rebased onto main c5597f776 (Prisma 7, three-process API #4) and opened as a pull request
 - Rebase: no conflicts. `main` still runs catalog imports inside the API process with the route's 30 s recovery timer; the sheet import
   follows the same pattern (its recoverer is on that timer).

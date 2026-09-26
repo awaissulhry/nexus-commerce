@@ -303,6 +303,7 @@ CREATE TABLE "CustomAttribute" (
     "localizable" BOOLEAN NOT NULL DEFAULT false,
     "scope" TEXT NOT NULL DEFAULT 'global',
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "semanticKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -318,6 +319,8 @@ CREATE TABLE "AttributeOption" (
     "label" TEXT NOT NULL,
     "metadata" JSONB,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "synonyms" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -9401,6 +9404,7 @@ CREATE TABLE "ReadinessIndex" (
     "sortTitle" TEXT,
     "sortDescription" TEXT,
     "computedAt" TIMESTAMP(3) NOT NULL,
+    "pendingSince" TIMESTAMP(3),
 
     CONSTRAINT "ReadinessIndex_pkey" PRIMARY KEY ("id")
 );
@@ -9526,6 +9530,9 @@ CREATE INDEX "CustomAttribute_workspaceId_idx" ON "CustomAttribute"("workspaceId
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CustomAttribute_workspace_code_key" ON "CustomAttribute"("workspaceId", "code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CustomAttribute_workspace_semanticKey_key" ON "CustomAttribute"("workspaceId", "semanticKey");
 
 -- CreateIndex
 CREATE INDEX "AttributeOption_attributeId_idx" ON "AttributeOption"("attributeId");
@@ -14341,6 +14348,9 @@ CREATE INDEX "ReadinessIndex_productId_idx" ON "ReadinessIndex"("productId");
 
 -- CreateIndex
 CREATE INDEX "ReadinessIndex_workspaceId_idx" ON "ReadinessIndex"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ReadinessIndex_workspaceId_pendingSince_idx" ON "ReadinessIndex"("workspaceId", "pendingSince");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");

@@ -165,13 +165,16 @@ await withWorkspace({ workspaceId: 'nexus_legacy_workspace', actorUserId: null, 
     }
     await sheet.applySheetImport(started.jobId, null, review.reviewToken!)
     const done = await time('save (background)', () => wait(started.jobId, ['DONE', 'PARTIAL', 'FAILED']))
-    console.log(`  save ${done.state} · receipt ${JSON.stringify(done.receipt)} · readiness ${done.readiness ?? 'none'}`)
+    const pendingAtDone = await prisma.readinessIndex.count({ where: { product: { OR: [{ id: root.id }, { parentId: root.id }] }, pendingSince: { not: null } } }).catch(() => -1)
+    console.log(`  save ${done.state} · receipt ${JSON.stringify(done.receipt)} · readiness ${done.readiness ?? 'none'} · rows marked pending at DONE: ${pendingAtDone}`)
     // Readiness is rebuilt right after the save: time it, and prove it ran (the family's index rows are newer than the save).
     const readinessStarted = performance.now()
     let settled = done
     while (settled.readiness === 'pending') { await new Promise(r => setTimeout(r, 100)); settled = (await sheet.sheetImportStatus(started.jobId, null))! }
     timings['readiness (after save)'] = Math.round(performance.now() - readinessStarted)
     const familyIds = (await prisma.product.findMany({ where: { OR: [{ id: root.id }, { parentId: root.id }] }, select: { id: true } })).map(p => p.id)
+    const stillPending = await prisma.readinessIndex.count({ where: { productId: { in: familyIds }, pendingSince: { not: null } } }).catch(() => -1)
+    console.log(`  readiness rows still marked pending after the rebuild: ${stillPending} (expect 0)`)
     const newest = await prisma.readinessIndex.findFirst({ where: { productId: { in: familyIds } }, orderBy: { computedAt: 'desc' }, select: { computedAt: true } }).catch(() => null)
     console.log(`  readiness ${settled.readiness} after ${timings['readiness (after save)']} ms · newest index row ${newest?.computedAt?.toISOString() ?? 'unknown'} (save done ${done.completedAt})`)
     const saved = await prisma.importJobRow.findMany({ where: { jobId: started.jobId, completedAt: { not: null } }, orderBy: { completedAt: 'asc' }, select: { targetId: true, status: true, errorMessage: true, completedAt: true } })

@@ -663,6 +663,10 @@ model CustomAttribute {
   localizable  Boolean @default(false)
   scope        String  @default("global") // 'global' | 'per_variant'
   sortOrder    Int     @default(0)
+  /// P3 (docs/attributes/PLAN.md §4.1) — the concept this attribute IS (`@nexus/shared/attribute-concepts`), e.g.
+  /// 'color'. Channel fields bound to the concept link to this attribute with no mapping setup. At most one attribute
+  /// per concept per business; NULL = a business-only attribute with no standard meaning.
+  semanticKey  String?
 
   options          AttributeOption[]
   familyAttributes FamilyAttribute[]
@@ -671,6 +675,7 @@ model CustomAttribute {
   updatedAt DateTime @updatedAt
 
   @@unique([workspaceId, code], name: "workspace_code", map: "CustomAttribute_workspace_code_key")
+  @@unique([workspaceId, semanticKey], name: "workspace_semanticKey", map: "CustomAttribute_workspace_semanticKey_key")
   @@index([groupId])
   @@index([workspaceId])
 }
@@ -693,6 +698,10 @@ model AttributeOption {
   metadata Json? // { color: '#ff0000' } | { texturePath: '/...' }
 
   sortOrder Int @default(0)
+  /// P3 — other spellings of this option ('Nero', 'Schwarz' for 'black'), used to MATCH values to channel lists.
+  synonyms   String[]  @default([])
+  /// P3 — a retired option: no longer offered, but values already saved with its code stay valid and readable.
+  archivedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -19799,11 +19808,17 @@ model ReadinessIndex {
   sortTitle       String?
   sortDescription String?
   computedAt      DateTime
+  /// P2 (docs/attributes/PLAN.md §4.7) — set when a write changed this product's values but readiness was NOT rebuilt
+  /// inside that write (a bulk edit spanning more families than `INLINE_READINESS_MAX_FAMILIES`). The row still holds
+  /// the PREVIOUS answer; a reader must say "checking…" instead of showing it as current. The pending-readiness drain
+  /// rebuilds the family (oldest `pendingSince` first) and the rebuilt rows carry NULL. NULL = the row is current.
+  pendingSince    DateTime?
 
   @@unique([workspaceId, productId, coordinateKey, language], name: "productId_coordinateKey_language")
   @@index([channel, market, language, state])
   @@index([productId])
   @@index([workspaceId])
+  @@index([workspaceId, pendingSince])
 }
 
 /// PLAN Step 3.5a (A-36, R-36) — what a CHANNEL holds that differs from what Nexus holds, per listing coordinate.

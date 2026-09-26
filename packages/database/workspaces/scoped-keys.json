@@ -107,7 +107,8 @@
   },
   "CustomAttribute": {
     "scalar": {
-      "code": "workspace_code"
+      "code": "workspace_code",
+      "semanticKey": "workspace_semanticKey"
     },
     "compound": {},
     "relations": [

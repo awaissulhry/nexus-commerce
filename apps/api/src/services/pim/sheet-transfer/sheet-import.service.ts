@@ -42,7 +42,7 @@ import { clearFieldCatalogueCache } from '../mapping/field-catalogue.service.js'
 import { createReferenceResolver } from '../reference-values.service.js'
 import { withCachedSchemas } from '../cached-schema-context.js'
 import { productReadCacheService } from '../../product-read-cache.service.js'
-import { deferReadiness, reconcileFamilyReadiness } from '../readiness-index.service.js'
+import { deferReadiness, markReadinessPending, rebuildPendingFamily } from '../readiness-index.service.js'
 
 export const SHEET_IMPORT_KIND = 'sheet-import-v1'
 const LEASE_MS = 60_000
@@ -374,10 +374,15 @@ async function saveSheetImport(jobId: string) {
     const save = (item: typeof pending[number], readCacheIds: Set<string>) => applyTransferRecord({ jobId, item, boundary: payload.boundary, mode: 'update', sharedCopy: false,
       contracts, reference, declaredProductSkus, userId: job.userId, options: { queueOutbound: false, readCacheIds } })
     const refresh = async (ids: Set<string>) => { if (ids.size) await productReadCacheService.refreshInTransaction(prisma as unknown as Prisma.TransactionClient, [...ids]) }
-    // 🔴 Readiness is NOT rebuilt inside the save transactions (the Owner's choice, 2026-09-26): each family is noted and
-    // rebuilt once, right after the last save commits (`refreshSheetReadiness`). The values are saved first, and fast.
+    // 🔴 Readiness is NOT rebuilt inside the save transactions (the Owner's choice, 2026-09-26): each family is noted,
+    // marked pending in the SAME transaction as its values (no reader shows the old answer as current), and rebuilt once
+    // right after the last save commits (`refreshSheetReadiness`). The readiness-pending drain finishes an interrupted one.
     const families = new Set<string>()
-    const transaction = <T>(work: () => Promise<T>) => deferReadiness(families, () => inDatabaseTransaction(prisma, work))
+    const transaction = <T>(work: () => Promise<T>) => deferReadiness(families, () => inDatabaseTransaction(prisma, async () => {
+      const result = await work()
+      if (families.size) await markReadinessPending([...families])
+      return result
+    }))
     const renew = (count: number) => prisma.bulkOperation.updateMany({ where: { id: jobId, status: 'SAVING' }, data: { processed: { increment: count }, expiresAt: new Date(Date.now() + LEASE_MS) } })
     await withCachedSchemas(async () => {
       for (let offset = 0; offset < pending.length; offset += SAVE_CHUNK) {
@@ -440,9 +445,9 @@ async function saveSheetImport(jobId: string) {
 const refreshing = new Set<string>()
 /**
  * Rebuild the readiness of every family a save touched, once each, after the save committed. The job is already DONE
- * (the page shows it); `readiness` says `pending` until this ends, and the page reloads the sheet again then. A family
- * that cannot be rebuilt is `failed` (named in the job) and is rebuilt by its next edit; an interrupted rebuild is
- * finished by `recoverSheetImports`.
+ * (the page shows it); `readiness` says `pending` until this ends, and the page reloads the sheet again then. The rows
+ * stay marked pending until rebuilt, so a family that fails here is rebuilt by the readiness-pending drain; the job
+ * says `failed` so the page can say so. An interrupted rebuild is finished by `recoverSheetImports` and by the drain.
  */
 export async function refreshSheetReadiness(jobId: string) {
   if (refreshing.has(jobId)) return
@@ -454,7 +459,8 @@ export async function refreshSheetReadiness(jobId: string) {
     const started = performance.now()
     const failures: string[] = []
     for (const root of readiness.roots) {
-      try { await reconcileFamilyReadiness(root) } catch (error) { failures.push(error instanceof Error ? error.message : String(error)) }
+      // 0 = nothing pending any more (the drain or another worker got there first) — also done.
+      try { await rebuildPendingFamily(root) } catch (error) { failures.push(error instanceof Error ? error.message : String(error)) }
     }
     // Only the readiness keys change: the rest of the job (an undo being linked meanwhile) is never overwritten.
     await prisma.$executeRawUnsafe(`UPDATE "BulkOperation" SET "changes" = jsonb_set(jsonb_set("changes", '{readiness,state}', to_jsonb($2::text)), '{readiness,error}', to_jsonb($3::text)) WHERE "id" = $1`,
