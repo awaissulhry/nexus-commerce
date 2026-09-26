@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0–S2 merged; S3, S4 built 2026-09-26 (placement, archive, undo; Shared follows placement, at once); S5 next (its production apply needs the Owner's word per business) | §10.9 |
+| P3b | 🟡 S0–S3 merged; S4, S5 (API) built 2026-09-26; S5's production apply waits for the Owner's word, per business | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -856,6 +856,30 @@ keys per attribute and readiness rows by state.
 - **Told the product-sheet session first** (its memory file): what Shared now shows, and that
   `sheet-columns.service.ts` / `studio-sheet.service.ts` changed by a few lines each.
 
+**S5 built — API (2026-09-26, branch `feat/attributes-p3b-s5`): the reviewed cleanup of the shared set.**
+
+- `@nexus/shared/attribute-placement-proposal` — the study's 242 attributes as data, codes and groups only: 54 core,
+  69 Amazon, 4 eBay (`item_specific_quantity`, `item_specific_unit`, `packageType`, `type`), 1 Shopify
+  (`shopify_product_type`), 36 duplicate, 78 not relevant (the study says "about 37 / 77": its split is a judgement in
+  prose; here a same fact or "derive from" = duplicate, the rest = not relevant; both archive). The four disputed rows
+  are listed apart.
+- `GET /api/attributes/placement-proposal` — the proposal read against the business's dictionary: each row's current
+  state, the proposed action (core → Shared, a channel group → placed on that channel, duplicate / not relevant →
+  archived) and `blocked` (with the reason) where a family requirement forbids it; attributes the proposal does not
+  know are listed and left alone; a fingerprint of every state read.
+- `POST /api/attributes/placement-proposal/apply` `{ fingerprint, groups | 'all', includeDisputed? }` — refused (409)
+  when the dictionary changed after the preview; applies only the approved groups, never a disputed row unless named;
+  one transaction built from the S3 moves, each audited with the batch id.
+  `POST /api/attributes/placement-proposal/:batchId/undo` — restores the whole batch, only while every row still equals
+  what the batch made.
+- Tests: `attribute-placement-correction.vitest.test.ts` (6, profiles off and on; 4 planted mistakes caught): the
+  counts, the preview (disputed apart, a required row blocked), a stale preview refused with nothing changed, one
+  group changing only its own rows and undone exactly, "approve the rest" leaving only the core and the undecided
+  disputed rows on Shared and undone exactly, and two businesses kept apart.
+- **Not applied to any business.** The Owner decides per business: the groups, and each disputed row (the study's view
+  or the concept list's). The review screen (`settings/pim/attributes/placement/`) is the product-sheet session's; until
+  it exists the preview can be read and approved from this report.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
 The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
@@ -873,6 +897,7 @@ The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the de
 | Save a dictionary attribute on the Shared scope with no market chosen | `PATCH /api/products/bulk` without `marketplaceContexts` | Works for family and saved attributes. An Amazon-only attribute still needs the scope. |
 | Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
 | Move an attribute to a channel, archive, restore, undo (P3b S3; settings screen S8) | `PATCH /api/attributes/:id/placement`, `POST …/archive`, `POST …/restore`, `POST /api/attributes/placement-changes/:auditId/undo` | 409 answers carry the reason (and `details`); `DELETE /api/attributes/:id` now says "Archive it instead" for a used attribute. |
+| The cleanup review screen (P3b S5) | `GET /api/attributes/placement-proposal` → `{ revision, fingerprint, disputed[], groups[{ group, rows, changes, blocked }], notInProposal }`; `POST …/apply { fingerprint, groups, includeDisputed }` → `{ batchId }`; `POST …/:batchId/undo` | Show the disputed rows first; a 409 on apply means "load again". |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 
