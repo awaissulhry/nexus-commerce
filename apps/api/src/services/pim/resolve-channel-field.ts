@@ -522,6 +522,8 @@ export interface ResolveChannelFieldInput {
    *  data-backed transform ops. resolveChannelField fills ctx.values
    *  (the resolved attributes) itself; the caller supplies the lookups. */
   transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'lookupSizeScale' | 'maxLength' | 'namedExpression' | 'lookupPath'>
+  /** P7 — `resolvedAttrsView(resolvedAttrs)`, built once per product by a caller that resolves many fields. */
+  attrsView?: ResolvedAttrsView
 }
 
 export interface ResolvedChannelField {
@@ -550,10 +552,29 @@ export interface ResolvedChannelField {
   translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
 }
 
-function flattenResolved(r: ResolvedAttributes): Record<string, unknown> {
+/**
+ * P7 (docs/attributes/PLAN.md §10.8) — the lookups every field of ONE product shares: the flat value map, the attribute
+ * keys and the keys that carry a language. `resolveChannelField` used to rebuild all three for every field, so a product
+ * with 160 fields and 300 attributes did 160 × 300 × 3 steps; measured 2026-09-26 that was the largest single cost of a
+ * readiness rebuild. Build it once per product with `resolvedAttrsView` and pass it as `attrsView` (resolveBatch does).
+ * The view is a snapshot: build it AFTER the last change to `resolvedAttrs`.
+ */
+export interface ResolvedAttrsView {
+  flat: Record<string, unknown>
+  keys: ReadonlySet<string>
+  languageKeys: ReadonlySet<string>
+}
+
+export function resolvedAttrsView(r: ResolvedAttributes): ResolvedAttrsView {
   const flat: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(r)) flat[k] = v.value
-  return flat
+  const keys = new Set<string>()
+  const languageKeys = new Set<string>()
+  for (const [k, v] of Object.entries(r)) {
+    flat[k] = v.value
+    keys.add(k)
+    if (v.language) languageKeys.add(k)
+  }
+  return { flat, keys, languageKeys }
 }
 
 /** A.1 provenance values that mean "a per-coordinate channel override
@@ -566,11 +587,12 @@ const OVERRIDE_SOURCES: ReadonlySet<ValueSource> = new Set<ValueSource>([
 export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedChannelField {
   const { fieldKey, rule, resolvedAttrs, product, locale, link, locked } = input
   const warnings: string[] = []
-  const flat = flattenResolved(resolvedAttrs)
+  const view = input.attrsView ?? resolvedAttrsView(resolvedAttrs)
+  const flat = view.flat
 
   // 1. rule.source → fallback → transforms (the legacy value formula).
   const sourceRaw = resolveSourcePath(rule.source, flat, product, locale)
-  const sourceKey = contentPathAddress(rule.source, locale, Object.keys(resolvedAttrs))?.field ?? rule.source.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]
+  const sourceKey = contentPathAddress(rule.source, locale, view.keys)?.field ?? rule.source.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]
   warnings.push(...(resolvedAttrs[sourceKey]?.warnings ?? []))
   let value: unknown = sourceRaw
   let usedFallback = false
@@ -610,7 +632,7 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
 
   // 3. Cross-language translate flag (linked TRANSLATE, different langs).
   const effectivePath = (usedFallback ? rule.fallback! : rule.source).replace(/\{locale\}/g, locale)
-  const address = contentPathAddress(effectivePath, locale, Object.keys(resolvedAttrs).filter(key => resolvedAttrs[key].language))
+  const address = contentPathAddress(effectivePath, locale, view.languageKeys)
   const pathHit = address && address.requested !== normalizeLanguage(locale)
     ? resolveContentPath({ product: product as ContentProduct, parent: product.parent, path: effectivePath,
         listing: product.contentListing, localizableKeys: [address.field], address: { requested: locale, ...(product.contentListing ? { coordinate: product.contentListing.coordinate } : {}) } }) : null
