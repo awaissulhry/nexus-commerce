@@ -39,7 +39,7 @@ import {
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
 import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
-import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
+import { CRON_JOBS, readCronCard, summaryCount } from '../services/runtime-status/cron-status.service.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { loadPagePoolSources, loadPoolSources, pooledStockRisk, summarizePoolSources, unitsForState, type PoolSource } from '../services/stock-pool/pool-sources.js'
@@ -537,7 +537,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   //
   //   amazonFbaCron   — last successful reconciliation (any delta) +
   //                     whether the cron is currently configured
-  //   reservationSweep — in-process state from the sweep job
+  //   reservationSweep — scheduled in the scheduler process + last recorded run (CronRun)
   //   outboundQueue   — counts of QUANTITY_UPDATE rows by syncStatus
   //                     (PENDING / SYNCING / FAILED) — proves the
   //                     Phase 13 cascade fan-out is draining
@@ -609,7 +609,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           // (T.1 — better than silent overselling).
           silentDriftRisk: ebayCredsPresent && !ebayRealApi,
         },
-        reservationSweep: getReservationSweepStatus(),
+        reservationSweep: await readCronCard(CRON_JOBS.reservationSweep, {
+          fieldPrefix: 'reservationSweep.',
+          fields: (status) => ({ lastReleasedCount: summaryCount(status.lastSuccess?.outputSummary, 'released') }),
+        }),
         outboundQueue: {
           pending: outboundCounts.PENDING ?? 0,
           syncing: outboundCounts.SYNCING ?? 0,

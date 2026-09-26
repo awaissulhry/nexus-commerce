@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0 built 2026-09-26 (fixtures F1–F4, today's behaviour pinned, the read-only measure script); S1 next | §10.9 |
+| P3b | 🟡 S0, S1 merged; S2, S3 built 2026-09-26 (readiness follows the footprint; placement, archive, undo); S4 next | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -762,6 +762,72 @@ keys per attribute and readiness rows by state.
   `apps/api/.env` is refused), so the stored-key and readiness counts for production wait for the Owner's run:
   `DATABASE_URL=<owner login> node --import tsx apps/api/scripts/attribute-scope-measure.mts`.
 
+**S1 built (2026-09-26, branch `feat/attributes-p3b-s1`):** `services/channel-footprint.service.ts` +
+`GET /api/channel-footprint` (reads with `listings.view`; the rule is the pure `footprintFrom`).
+
+- A channel is in the footprint when it has at least one ACTIVE account managed by oauth or env; an expired token
+  still counts. Its markets are its switched-on `Marketplace` rows; an Amazon market leaves only when Amazon said
+  `NOT_PARTICIPATING` (never checked, suspended, unknown and access-denied stay). A channel with switched-on markets
+  and no active account is `notConnected`; an account of a channel with no market (Amazon Ads) is ignored.
+- **The same answer as the web scope bar** (`_studio/studio-data.ts` + `scopes.ts:128`, its rule kept in the test as
+  the reference) on 5 shapes, including Xavia Racing's and Motovento's, **except two planned differences**: a channel
+  whose accounts are all disconnected (the bar shows it; the plan hides a removed channel), and an Amazon market Amazon
+  reports as not participating. Production today has neither (read 2026-09-26: Xavia Racing's 11 Amazon markets are
+  all `PARTICIPATING`; its eBay has an active account beside the revoked ones), so both answers agree there now.
+- Tests: `services/channel-footprint.vitest.test.ts` (21, profiles off and on): the unit table, the bar comparison,
+  the F1–F4 fixtures on PostgreSQL (each exactly its own channels; only switched-on markets), two businesses kept apart,
+  and the route's permission. 5 planted mistakes caught. RBAC coverage: 0 unmapped routes.
+- **For the product-sheet session:** the scope bar can read `GET /api/channel-footprint` instead of combining
+  `/api/marketplaces/grouped` with `/api/connections?all=true` (which needs `settings.integrations.manage`). That
+  switch is theirs; it brings the two planned differences with it.
+
+**S2 built (2026-09-26, branch `feat/attributes-p3b-s2`): readiness follows the footprint.**
+
+- `readinessChannelDestinations(footprint, markets)` (pure) — one channel destination per footprint channel × market ×
+  active account × market language. A market with no active account gets no row: **no more "No active account for
+  this destination" rows.** The Shared destinations are unchanged (one per language of every switched-on market; they
+  hold the catalogue sort keys).
+- `reconcileReadinessFootprint()` runs each minute in each business, before the pending drain (`readiness-pending.job.ts`;
+  a failed check is logged and retried, it never fails the drain): rows of a channel coordinate outside the footprint
+  are deleted (a disconnect; in production, the old no-account rows once, right after the deploy), and a footprint
+  coordinate with no row marks every family's Shared rows pending, so the drain rebuilds them. It reads the same
+  destinations function as the rebuild, so it never asks for a row a rebuild cannot write (no loop). A business with no
+  rows yet is left to the nightly reconcile.
+- Tests: B5 flipped in `attribute-scope-baseline` (F1 eBay rows only; F3 Shared rows only; the Shared rows identical);
+  `readiness-footprint.vitest.test.ts` (4): an old no-account row deleted in its own business only, connect → pending
+  → drain → rows, disconnect → rows deleted, a settled check does nothing. Profiles off and on; 3 planted mistakes
+  caught; readiness/mapping area 102 files pass (profiles ON: only the 7 known baseline files); real-PostgreSQL runner
+  32 suites; 51/51 static gates.
+- **Told the listings-readiness session** (its memory file, 2026-09-26): its rule "a listing with no index row is Not
+  checked" now covers listings on a channel with no active account (before, an `absent` row); totals counted from index
+  rows shrink.
+
+**S3 built (2026-09-26, branch `feat/attributes-p3b-s3`): placement, archive instead of delete, undo.**
+
+- Migration `20260926n_attr_placement` (additive): `CustomAttribute.placement` (`'shared'` by default),
+  `placementChannels`, `archivedAt`. `baseline.sql` regenerated; drift, ownership, policy parity, expand/contract and
+  the migration upgrade check on a throwaway server pass; database tests 72.
+- `services/pim/attribute-placement.service.ts`:
+  - `setAttributePlacement` — a label (D1 = A): no value moves. A move to channels restricts an "everywhere" family
+    requirement to those channels; a family that requires the attribute on a channel outside them blocks the move
+    (409, naming each family and channel — a required attribute is never hidden). Moving back to Shared changes no
+    requirement. A no-op writes nothing.
+  - `undoPlacementChange(auditId)` — restores the audit row's `before`, only while the attribute still equals its
+    `after` (otherwise 409: undo the later change first).
+  - `archiveAttribute` / `restoreAttribute` — archive refuses a required attribute.
+  - `deleteAttribute` — refuses an attribute with stored values (products or translations) or family links: 409
+    "Archive it instead" with the counts. Deletes an unused one.
+  - Every change writes an `AuditLog` row (`attribute.placement` / `.archive` / `.restore` / `.delete`) with before
+    and after, IN the same transaction (the undo reads it).
+- Routes (`pim.manage`, the existing `/api/attributes` rule): `PATCH /attributes/:id/placement`
+  `{ placement, channels }`, `POST /attributes/:id/archive`, `POST /attributes/:id/restore`,
+  `POST /attributes/placement-changes/:auditId/undo`; `DELETE /attributes/:id` now answers 409 for a used attribute.
+- Tests: `attribute-placement.vitest.test.ts` (14, profiles off and on; 4 planted mistakes caught), including
+  **publish parity on F4**: the eBay values resolved for the product and the Shared view's columns are identical before
+  and after moving three Amazon-only attributes to Amazon. (The Shared-view half flips on purpose in S4.)
+- Full API suite on the private copy: profiles OFF, only the 4 local-only files fail; profiles ON, only the files in
+  `profiles-on-baseline.ci.json` with their counts, plus the same local-only files.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
 The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
@@ -777,6 +843,8 @@ The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the de
 | Say who requires a missing field ("Required by Amazon · IT", "Required by Family: Jackets") | `ReadinessIndex.missing[].requiredBy` — relayed as-is by `GET /api/products/:id/readiness` (`matrix[].missing`) | On `requiredEmpty` entries. Absent on a row rebuilt before P7 = not recorded. The condition source is not separate yet (§10.8). |
 | Filter "missing a required field at eBay DE" | `GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&field][&requiredBy][&language][&accountId][&take][&after]` | `checkedProducts` / `pendingProducts` say what was not checked or is being rebuilt; show "checking…", never "none missing", for those. |
 | Save a dictionary attribute on the Shared scope with no market chosen | `PATCH /api/products/bulk` without `marketplaceContexts` | Works for family and saved attributes. An Amazon-only attribute still needs the scope. |
+| Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
+| Move an attribute to a channel, archive, restore, undo (P3b S3; settings screen S8) | `PATCH /api/attributes/:id/placement`, `POST …/archive`, `POST …/restore`, `POST /api/attributes/placement-changes/:auditId/undo` | 409 answers carry the reason (and `details`); `DELETE /api/attributes/:id` now says "Archive it instead" for a used attribute. |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 

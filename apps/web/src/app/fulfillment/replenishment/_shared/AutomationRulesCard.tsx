@@ -91,11 +91,13 @@ export function AutomationRulesCard() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
+  // The cron runs in the scheduler process: null = it did not report, and `unknown` says why.
   const [cronStatus, setCronStatus] = useState<{
-    scheduled: boolean
+    scheduled: boolean | null
     lastRunAt: string | null
     lastSummary: string | null
-    enabledFlag: boolean
+    enabledFlag: boolean | null
+    unknown?: Array<{ field: string; reason: string }>
   } | null>(null)
 
   const fetchRules = useCallback(async () => {
@@ -388,20 +390,28 @@ export function AutomationRulesCard() {
                   : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
             )}
             title={
-              cronStatus.lastSummary
-                ? t('replenishment.automation.header.cronTooltip', {
-                    summary: cronStatus.lastSummary,
+              cronStatus.enabledFlag === null || cronStatus.scheduled === null
+                ? t('replenishment.automation.header.cronUnknownTooltip', {
+                    reason: cronStatus.unknown?.[0]?.reason ?? '—',
                   })
-                : t('replenishment.automation.header.cronNoRuns')
+                : cronStatus.lastSummary
+                  ? t('replenishment.automation.header.cronTooltip', {
+                      summary: cronStatus.lastSummary,
+                    })
+                  : t('replenishment.automation.header.cronNoRuns')
             }
           >
-            {!cronStatus.enabledFlag
+            {cronStatus.enabledFlag === false
               ? t('replenishment.automation.header.cronOff')
-              : cronStatus.lastRunAt
-                ? t('replenishment.automation.header.cronLastRun', {
-                    ago: relativeTime(cronStatus.lastRunAt),
-                  })
-                : t('replenishment.automation.header.cronWaiting')}
+              : cronStatus.enabledFlag === null || cronStatus.scheduled === null
+                ? t('replenishment.automation.header.cronUnknown')
+                : !cronStatus.scheduled
+                  ? t('replenishment.automation.header.cronNotScheduled')
+                  : cronStatus.lastRunAt
+                    ? t('replenishment.automation.header.cronLastRun', {
+                        ago: relativeTime(cronStatus.lastRunAt),
+                      })
+                    : t('replenishment.automation.header.cronWaiting')}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1.5">

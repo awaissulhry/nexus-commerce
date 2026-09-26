@@ -32,6 +32,8 @@
  *     that sells NOWHERE YET: the column model reads Marketplace and ChannelListing, so only a real server
  *     can show that the reference market belongs to the SHARING business and that the receiving profile,
  *     which has no Marketplace row, must not be refused by the strict check.
+ *   · `category-tree-concurrency.vitest.test.ts` (2026-09-26) — concurrent category moves, creates, membership
+ *     replacements and Categories workspace commands serialize on the business's category-tree lock.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -109,6 +111,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay price read-back dedupe (JSON-path key, classes, 24 h, per business)', file: 'src/services/ebay-price-readback-postgres.vitest.test.ts', expect: 4 },
   { name: 'master-price currency refusal (own transaction, caller rollback and commit)', file: 'src/services/master-price-currency-postgres.vitest.test.ts', expect: 3 },
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
+  { name: 'category tree races (moves, creates, memberships and workspace commands serialize on the tree lock)', file: 'src/services/category-tree-concurrency.vitest.test.ts', expect: 5 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

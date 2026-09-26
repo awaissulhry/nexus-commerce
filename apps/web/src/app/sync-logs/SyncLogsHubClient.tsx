@@ -207,11 +207,14 @@ export interface AlertsRollup {
 }
 
 interface CircuitState {
-  state: 'closed' | 'open' | 'half-open'
+  /** Worst state any process holds; 'unknown' when the rest are closed but a process is not reporting. */
+  state: 'closed' | 'open' | 'half-open' | 'unknown'
   failureCount: number
   openedAt: string | null
   lastError: string | null
   keyCount: number
+  complete?: boolean
+  unknown?: Array<{ owner: string; reason: string }>
 }
 
 interface CircuitBreakersPayload {
@@ -289,6 +292,16 @@ export default function SyncLogsHubClient({
   const [knownCrons, setKnownCrons] = useState<Set<string>>(new Set())
   const { toast } = useToast()
   const { t } = useTranslations()
+
+  // Circuits live in each process (API, worker, scheduler); after a reset, show what they now report.
+  const reloadCircuits = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/dashboard/circuit-breakers`, { cache: 'no-store' })
+      if (res.ok) setCircuits(await res.json())
+    } catch {
+      // keep the last answer; the next refresh retries
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -570,17 +583,13 @@ export default function SyncLogsHubClient({
               onReset={async (channel) => {
                 setResettingCircuit(channel)
                 try {
-                  const res = await fetch(
+                  // No optimistic "closed": the worker and the scheduler apply a reset on their next
+                  // heartbeat, so the row shows what every process reports afterwards.
+                  await fetch(
                     `${getBackendUrl()}/api/dashboard/circuit-breakers/${channel}/reset`,
                     { method: 'POST' },
                   )
-                  if (res.ok) {
-                    // Optimistic update
-                    setCircuits((prev) => prev ? {
-                      ...prev,
-                      [channel]: { ...prev[channel as keyof CircuitBreakersPayload], state: 'closed', failureCount: 0, openedAt: null, lastError: null },
-                    } : prev)
-                  }
+                  await reloadCircuits()
                 } finally {
                   setResettingCircuit(null)
                 }
@@ -1181,6 +1190,8 @@ function CircuitBreakerRow({
           const isOpen = s.state === 'open'
           const isHalf = s.state === 'half-open'
           const isClosed = s.state === 'closed'
+          const isUnknown = s.state === 'unknown'
+          const notReporting = (s.unknown ?? []).map((u) => u.owner).join(', ')
 
           return (
             <div
@@ -1188,7 +1199,7 @@ function CircuitBreakerRow({
               className={cn(
                 'rounded-lg border px-3 py-2 flex items-start justify-between gap-2',
                 isOpen && 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30',
-                isHalf && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
+                (isHalf || isUnknown) && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
                 isClosed && 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
               )}
             >
@@ -1197,22 +1208,27 @@ function CircuitBreakerRow({
                   <span className={cn(
                     'w-2 h-2 rounded-full flex-shrink-0',
                     isOpen && 'bg-amber-500',
-                    isHalf && 'bg-amber-400',
+                    (isHalf || isUnknown) && 'bg-amber-400',
                     isClosed && 'bg-emerald-500',
                   )} />
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{ch}</span>
                   <span className={cn(
                     'text-[10px] font-medium',
                     isOpen && 'text-amber-700 dark:text-amber-400',
-                    isHalf && 'text-amber-600 dark:text-amber-400',
+                    (isHalf || isUnknown) && 'text-amber-600 dark:text-amber-400',
                     isClosed && 'text-emerald-600 dark:text-emerald-400',
                   )}>
                     {s.state.toUpperCase()}
                   </span>
                 </div>
-                {isClosed ? (
-                  <div className="text-[10px] text-tertiary dark:text-slate-500">
-                    {s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
+                {isClosed || isUnknown ? (
+                  <div
+                    className="text-[10px] text-tertiary dark:text-slate-500"
+                    title={isUnknown ? (s.unknown ?? []).map((u) => u.reason).join('\n') : undefined}
+                  >
+                    {isUnknown
+                      ? `Not reporting: ${notReporting}`
+                      : s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
                   </div>
                 ) : (
                   <>
@@ -1227,7 +1243,7 @@ function CircuitBreakerRow({
                   </>
                 )}
               </div>
-              {!isClosed && (
+              {(isOpen || isHalf) && (
                 <button
                   type="button"
                   title={`Force reset ${ch} circuit`}

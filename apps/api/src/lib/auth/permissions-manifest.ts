@@ -423,6 +423,8 @@ export const ENTRIES: Entry[] = [
   RW(F.listingsView, F.channelsSync, pfx('/api/ebay')),
   RW(F.listingsView, F.channelsSync, pfx('/listings')),
   RW(F.listingsView, F.channelsSync, pfx('/marketplaces')),
+  // P3b S1 — which channels and markets the business uses; read by the sheet and readiness screens.
+  P(F.listingsView, (m, p) => isRead(m) && p === '/api/channel-footprint'),
   RW(F.listingsView, F.channelsSync, pfx('/api/marketplaces')),
   RW(F.listingsView, F.channelsSync, pfx('/shopify')),
   RW(F.listingsView, F.channelsSync, pfx('/woocommerce')),

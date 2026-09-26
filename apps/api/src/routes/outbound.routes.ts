@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import outboundSyncService from "../services/outbound-sync.service.js";
-import { getSyncWorkerStatus } from "../workers/sync.worker.js";
+import { readSyncWorkerStatus } from "../services/runtime-status/process-views.service.js";
 
 export async function outboundRoutes(app: FastifyInstance) {
   /**
@@ -151,7 +151,19 @@ export async function outboundRoutes(app: FastifyInstance) {
       return reply.send({
         success: true,
         stats: {
-          ...stats,
+          // `queued` counts queueProductUpdate calls made by THIS API process since it started. Nothing
+          // counts processed/succeeded/failed (the worker processes the rows); queueStatus has the real
+          // per-status row counts.
+          queued: stats.queued,
+          processed: null,
+          succeeded: null,
+          failed: null,
+          queuedScope: "this API process since it started",
+          unknown: (["processed", "succeeded", "failed"] as const).map((field) => ({
+            field,
+            owner: "worker",
+            reason: "no process counts it; queueStatus holds the queue rows by status",
+          })),
           queueStatus: statusCounts,
           queueByChannel: channelCounts,
           totalQueued: queueItems.length,
@@ -302,11 +314,13 @@ export async function outboundRoutes(app: FastifyInstance) {
 
   /**
    * GET /api/outbound/worker-status
-   * Get the status of the background sync worker (Autopilot)
+   * Get the status of the background sync worker (Autopilot). It runs in the
+   * worker process, so this reads the worker's runtime snapshot; with no live
+   * worker heartbeat every value is null and `status.unknown` says why.
    */
   app.get("/api/outbound/worker-status", async (request, reply) => {
     try {
-      const status = getSyncWorkerStatus();
+      const status = await readSyncWorkerStatus();
       return reply.send({
         success: true,
         status,
