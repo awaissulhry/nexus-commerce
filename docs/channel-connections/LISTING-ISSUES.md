@@ -1,8 +1,8 @@
 # Saved listing issues
 
-Status: implemented locally in `/private/tmp/cx-lane-listing-issues`, independent
-review pending. No integration, deployment, activation or production verification.
-P3.3's Diagnostics card is included; the studio pane remains owned by PES.3.
+Status: **deployed 2026-09-26** in release B+C (PR #32) after the review rework below; no switch.
+Not production-verified (no browser check in production yet). P3.3's Diagnostics card is included;
+the studio pane remains owned by PES.3. The implementation notes below keep their lane-time wording.
 
 ## API contract for both consumers
 

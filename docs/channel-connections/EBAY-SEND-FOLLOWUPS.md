@@ -3,7 +3,10 @@
 Branch `fix/cx-ebay-send-followups`, based on Package A `e565504c6` with the approved price
 read-back lane merged (`5cfd8366e`). Reworked after the independent design review of
 2026-09-26 (`2026-09-26-APPROACH-REVIEW.md`, "eBay price per market" and the B1/B2 and
-variation-confirmation rows). Not integrated, deployed or switched on.
+variation-confirmation rows). **Deployed 2026-09-26** in release B+C (PR #32). No switch: the
+market rule, FIXED_PRICE selection and report-only read-backs run now; price heal
+(`NEXUS_ENABLE_PRICE_READBACK_HEAL`) stays OFF. Not production-verified. The sections below keep
+their lane-time wording.
 
 ## What the lane does now
 

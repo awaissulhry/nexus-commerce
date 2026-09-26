@@ -1,5 +1,16 @@
 # Etsy ingest activation — prepared, not executed
 
+**Status (2026-09-26): deployed, not enabled.** The receipt ingest, its poll and its tables
+(migrations `20260926p/q/r`) shipped in release B+C (PR #32, `93215463f`). Both Etsy switches are
+OFF, no activation row (T0) exists, and no Etsy webhook has ever arrived, so nothing is ingested yet.
+Current state of every switch: [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
+
+Stock rule for Etsy (Owner ruling 2026-09-26, replaces S1 "hold when paid"): a receipt holds its
+stock as soon as it arrives, also while Etsy is still processing the payment; if the payment fails
+Etsy cancels the receipt and the hold is given back; the stock is taken when the whole receipt has
+shipped. A cancellation or refund after (part of) a shipment keeps the shipped units taken and
+tells the owners. Details: [the stock model](2026-09-26-STOCK-MODEL.md).
+
 The receipt writer uses **explicit per-account activation**, not the first webhook or poll, as
 H1's boundary at Etsy's **whole-second precision**. New activation records use the beginning of
 the database clock's current second; an older subsecond value is interpreted the same way without
@@ -14,6 +25,8 @@ It requires a separate Owner approval, verified workspace and connection IDs, an
 that the connection still names the intended Etsy shop/seller. No credentials are read by it.
 
 1. Deploy the reviewed ingest code and additive migrations with both processing switches OFF.
+   **Done 2026-09-26 (PR #32).** Before T0, the Owner registers the Etsy webhook and sets
+   `ETSY_WEBHOOK_SIGNING_SECRET`; one signed event is then read back with ingest still off.
 2. Obtain explicit approval to establish T0 for the selected account. Confirm its workspace,
    connection ID, shop ID and seller user ID using authorized metadata reads.
 3. Run the following transaction with those verified values. An existing activation is retained;
@@ -97,7 +110,9 @@ and sufficient vendor budget. No live vendor probe was made and no stronger guar
 
 ## Release status
 
-Local implementation and tests only; no deployment, activation or live proof. The ingest fixes
-through c621418e have independent approval. Stable line mapping after SKU changes is now locally
-fixed and awaiting independent review. Terminal shipment settlement (including pooled partial
-shipments) still needs its own fix and review before the Etsy lane is ready to ship or enable.
+Deployed 2026-09-26 in release B+C (PR #32), after independent review of the ingest, the stock
+model and the poller. The earlier open items are closed on `main`: a line stays mapped to its first
+product after a SKU change, and the terminal settlement is the stock model's whole-receipt consume
+(no per-line or pooled line-level consumption). Not enabled and not production-verified: activation
+(T0), the switches and the first real `order.paid` each wait for the Owner's yes, in the order above.
+The single-window offset limit described under "Poll recovery contract" still applies.
