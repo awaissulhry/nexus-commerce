@@ -19,6 +19,8 @@ import { startAmazonSqsPollCron } from '../jobs/amazon-sqs-poll.job.js'
 import { startAmazonSecretRotationCron } from '../jobs/amazon-secret-rotation.job.js'
 import { startAmsSqsPollCron } from '../jobs/ams-sqs-poll.job.js'
 import { startInboundRetryCron } from '../jobs/inbound-retry.job.js'
+import { registerStatusSection } from '../lib/runtime-status/process-snapshot.js'
+import { amsPollerFacts } from '../services/ams-sqs.service.js'
 
 /** The API may enqueue work with ENABLE_QUEUE_WORKERS=1 but never consumes it. */
 export async function startWorker(): Promise<() => Promise<void>> {
@@ -44,6 +46,8 @@ export async function startWorker(): Promise<() => Promise<void>> {
     startAmazonSecretRotationCron()
     startInboundRetryCron()
     if (envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')) startAmsSqsPollCron()
+    // GET /api/advertising/cron-status reads the AMS poller's configuration from here, where it runs.
+    registerStatusSection('ams', amsPollerFacts)
     if (process.env.NEXUS_ENABLE_STOCK_POOL_WORKER !== '0') stopPollers.push(startStockPoolWorker())
     if (process.env.NEXUS_ENABLE_ASSORTMENT_SYNC !== '0') stopPollers.push(startAssortmentSyncWorker())
     startAmazonMediaWorker()

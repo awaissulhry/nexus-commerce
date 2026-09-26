@@ -108,9 +108,13 @@ import { startObservabilityRetentionCron } from "../jobs/observability-retention
 import { startAlertEvaluatorCron } from "../jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "../jobs/repricing-evaluator.job.js";
 import { envEnabled } from "../utils/env-flag.js";
-import { markCronStep } from "../jobs/cron-startup-state.js";
+import { cronStartupState, markCronStep } from "../jobs/cron-startup-state.js";
+import { registerStatusSection } from "../lib/runtime-status/process-snapshot.js";
 
 export async function startScheduler(): Promise<void> {
+  // GET /api/advertising/cron-status reports how far the ads-cron block got from this process's snapshot.
+  registerStatusSection('cronStartup', () => ({ ...cronStartupState }));
+
   // NN.14 / OO.1 — daily cron for abandoned wizard cleanup. Now
   // gated behind NEXUS_ENABLE_WIZARD_CLEANUP=1 so the destructive
   // path is opt-in. The cron only deletes DRAFT wizards whose
