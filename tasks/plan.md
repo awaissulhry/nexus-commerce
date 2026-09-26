@@ -100,3 +100,26 @@ defaults until the coordinated operational cutover is performed.
 - [BullMQ schedulers](https://docs.bullmq.io/guide/job-schedulers/),
   [idempotent jobs](https://docs.bullmq.io/patterns/idempotent-jobs): scheduler
   identity does not replace business idempotency.
+
+## Review and corrections — 2026-09-26
+
+The first implementation session ended before its last slice (inbox claims, command
+receipts, event atomicity) was committed. A second review of that slice and of the
+committed branch found and fixed these defects before anything shipped:
+
+| Area | Defect | Correction |
+|---|---|---|
+| Runtime login | The operations note asked for a NOINHERIT grant; the web's session reader queries without SET ROLE, so every signed-in page would fail (measured by PR #5's smoke). The pool guard accepted that login. | Grant `WITH INHERIT TRUE, SET TRUE`; the guard refuses a login that does not inherit; a real-PG test proves RLS holds without SET ROLE. |
+| Command receipts | Keys over 200 characters were refused, but the web builds `pim-attach` keys from every selected id (7+ products → HTTP 400). | Keys are stored as SHA-256; any length works. |
+| Command receipts | Receipts never expired, so attach → detach → attach (same content key) silently replayed the first result; a FAILED wizard submit replayed forever. | 10-minute window (the old cache's), expired receipts are replaced and swept nightly; a keyless wizard submit is keyed on the wizard's saved state. |
+| Command receipts | Every status was stored, so a failed command could never be retried with its key. | Only 2xx responses are stored; any other response releases the key. |
+| Command receipts | The response was stored after compression, so a replay to a client without gzip was unreadable. | The JSON value is stored before serialization; replays are encoded per request. |
+| Command receipts | A key reused with a different request answered 409, the "still running" status. | 422, per the IETF Idempotency-Key draft. |
+| Inbox | Automatic recovery of rows stranded before this release had no age bound: weeks-old deliveries would be replayed over newer data. | Not collected; Sync Logs still replays them on purpose. New arrivals are due when recorded, so nothing new can strand. |
+| Inbox | Retention kept every `pending`/`failed` row forever, including rejected signatures. | Retention keeps only rows that are claimed or scheduled for retry. |
+| Inbox | The retry sweep claimed a whole batch with the sweep's start time; later events could receive an already-expired lease and run twice. | Each claim reads the database clock. |
+| Stockout | A concurrent open made the insert fail inside the transaction, aborting it. | `ON CONFLICT DO NOTHING` (skipDuplicates) keeps the transaction usable. |
+| Tests | Two job suites were never run against the slice and failed. | Updated to the claim-based flow; skipped claims no longer count as successes. |
+
+Deliberately not in this change: aligning web and Factory to React 19 (a separate
+cross-app migration) and changing the web's content-built idempotency keys.

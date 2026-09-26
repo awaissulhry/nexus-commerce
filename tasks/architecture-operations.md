@@ -101,3 +101,6 @@ archive. Consumers must be idempotent and tolerate reordering even within a subj
 - [ ] Required CI/branch protection and native deploy path restrictions verified.
 - [ ] Exact deployed build passes readiness and critical authenticated user flows.
 - [ ] Inbox/outbox age, failure counts and worker activity checked after cutover.
+- [ ] Webhook rows left `pending` with no retry time before this release are not
+      replayed automatically (a weeks-old delivery could overwrite newer data). Review
+      them in Sync Logs and replay the ones still relevant.
