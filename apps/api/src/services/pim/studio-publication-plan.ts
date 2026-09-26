@@ -38,7 +38,12 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: scope.channel,
     marketplace: scope.marketplace, channelConnectionId: scope.accountId, aliasKey: destination.aliasKey ?? '' }, include: { translations: true, offers: true } })
   const excludedIds = await readExcludedListingIds(listings.map(l => l.id))
-  const selected = products.filter(p => !listings.some(l => l.productId === p.id && excludedIds.has(l.id)))
+  // VTR step 0 — the one "included" rule Information and the dock use (`studio-sheet.service.ts`, `family-projection.service.ts`):
+  // a VARIANT is in this listing only with its own row here that is not excluded. A variant with no row is not sent.
+  const selected = products.filter(p => {
+    const rows = listings.filter(l => l.productId === p.id)
+    return (p.id === parent.id || rows.length > 0) && !rows.some(l => excludedIds.has(l.id))
+  })
     .sort((a, b) => Number(b.id === parent.id) - Number(a.id === parent.id) || a.sku.localeCompare(b.sku))
   const closed = scope.channel === 'AMAZON' ? await closedMarketSet(selected.map(p => p.id)) : new Set<string>()
   const skipped = selected.filter(p => closed.has(`${p.id}|${scope.marketplace}`))

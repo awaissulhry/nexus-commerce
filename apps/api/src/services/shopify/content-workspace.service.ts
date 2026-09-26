@@ -37,7 +37,8 @@ export function applyShopifyVariationProjection(draft: ShopifyContent, projectio
 export const CONTENT_KEY = '_nexusContent'
 export const PUBLISH_KEY = '_nexusContentPublish'
 export const object = (v: unknown): Record<string, any> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, any> : {}
-export const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
+// A never-saved document is `undefined`, which JSON cannot spell; it hashes as null so a first open does not throw.
+export const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v ?? null)).digest('hex')
 export type ContentScope = { accountId?: string; listingId?: string; market?: string }
 
 export async function contentDestination(productId: string, scope: ContentScope) {

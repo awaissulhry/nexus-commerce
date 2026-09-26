@@ -32,11 +32,13 @@ vi.mock('./channel-specs/index.js', async original => ({
     { key: 'aspect_Marca', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Marca'] } },
   ] }),
 }))
-vi.mock('./stored-variation-projection.js', () => ({
+// VTR step 0: the real `channelAxisValues`; no axis cell is resolved here, so the stored values go out unchanged.
+vi.mock('./stored-variation-projection.js', async original => ({
+  ...(await original<typeof import('./stored-variation-projection.js')>()),
   loadStoredVariationProjection: async () => ({ input: { family: { variants: [
     { id: 'c1', axisValues: { color: 'Nero', size: 'M' } },
     { id: 'c2', axisValues: { color: 'Nero', size: 'L' } },
-  ] } } }),
+  ] } }, cell: { axes: [] } }),
 }))
 vi.mock('./variation-rules.service.js', () => ({
   resolveVariationProjection: () => ({ axes: [

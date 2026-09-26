@@ -49,8 +49,9 @@ export interface ReadinessIssue {
    *
    * VT.1b widened it with the three variation kinds for the same reason: the catalogue's
    * `variation-mapping:unset|collides` filter narrows on `missing[].kind`, never on the sentence.
+   * VTR step 0 added the two publish re-checks (`theme-deprecated`, `value-missing`).
    */
-  kind?: 'language-fallback' | 'theme-unset' | 'collision' | 'attribute-unbound'
+  kind?: 'language-fallback' | 'theme-unset' | 'collision' | 'attribute-unbound' | 'theme-deprecated' | 'value-missing'
 }
 
 export interface SheetReadiness {

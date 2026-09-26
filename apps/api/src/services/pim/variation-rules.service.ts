@@ -19,7 +19,7 @@
  */
 
 import { hasVariationMappingOverride, parseVariationMapping } from '@nexus/shared/variation-mapping'
-import { variationCollisionGroups, variationCollisionSummary } from './variation-collisions.js'
+import { variationAxisValue, variationCollisionGroups, variationCollisionSummary } from './variation-collisions.js'
 import type { ProjectionLimits, ProjectionVocabulary } from './family-projection-limits.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import {
@@ -81,6 +81,8 @@ export interface VariationThemeCell {
   masterCandidates: Array<{ key: string; label: string; axisKey: string; valueCount: number }> | null
   dropped: string[]
   collisions: { unresolved: number; summary: string } | null
+  /** VTR step 0 — INCLUDED variants with no value on a delivered axis; `skus` capped at 10. `null` = variants not read (not computed is not zero). */
+  valueGaps: { unresolved: number; summary: string; skus: string[] } | null
   locked: {
     reason: string
     externalId: string | null
@@ -486,6 +488,7 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
     masterCandidates: input.family.masterCandidates ?? [],
     dropped: [],
     collisions: null,
+    valueGaps: null,
     locked: null,
     /* MASTER's `+ Add axis` list is `masterCandidates` (the per-variant editable scalar columns, T1's
        rule) — a different vocabulary from a channel's "family axis not delivered here", so this is
@@ -518,6 +521,7 @@ function channelShell(input: ResolveVariationInput): VariationThemeCell {
     masterCandidates: null,
     dropped: [],
     collisions: null,
+    valueGaps: null,
     locked: lockFor(input),
     /* Filled by each channel branch once it knows what it delivers — `applyAddableAxes` at the end of
        each resolver, so no branch can forget it and no branch computes its own list. */
@@ -738,6 +742,7 @@ function applyLimitAndCollisions(cell: VariationThemeCell, input: ResolveVariati
   cell.addableAxes = addableAxesFor(cell, input.family)
   cell.dropped = cell.axes.filter((a) => !a.included).map((a) => a.axisKey)
   cell.collisions = collisionsFor(cell, input)
+  cell.valueGaps = valueGapsFor(cell, input)
 }
 
 /**
@@ -755,6 +760,19 @@ export function collisionsFor(cell: VariationThemeCell, input: ResolveVariationI
 
 }
 
+/** VTR step 0 — the listing wizard refuses a child with no value for a theme attribute; publish now reads the same fact. */
+export function valueGapsFor(cell: VariationThemeCell, input: ResolveVariationInput): VariationThemeCell['valueGaps'] {
+  const variants = input.family.variants
+  if (!variants) return null
+  const axes = cell.axes.filter(a => a.included)
+  const gaps = variants.filter(v => v.included).map(v => ({ sku: v.sku, axes: axes.filter(a => !variationAxisValue(v.axisValues, a.familyKey).trim()).map(a => a.label) }))
+    .filter(v => v.axes.length > 0)
+  if (!gaps.length) return { unresolved: 0, summary: '', skus: [] }
+  const named = gaps.slice(0, 10).map(v => `${v.sku} (${v.axes.join(', ')})`).join(', ')
+  return { unresolved: gaps.length, skus: gaps.slice(0, 10).map(v => v.sku),
+    summary: `${gaps.length} ${gaps.length === 1 ? 'variant has' : 'variants have'} no value for an axis on ${input.coordinate.label}: ${named}${gaps.length > 10 ? ` and ${gaps.length - 10} more` : ''}.` }
+}
+
 /**
  * VT.1 Phase 5 — the three readiness items a variation projection can raise (`docs/vt1-contracts.md` §4).
  *
@@ -767,8 +785,10 @@ export function collisionsFor(cell: VariationThemeCell, input: ResolveVariationI
  *    (`collision_unresolved`), so the two agree.
  *  - `attribute-unbound` WARNING: the push still goes out with the axis missing — which is exactly what the
  *    adapter's `${axis}_name` fallback did silently before VT.1 replaced it.
+ *  - VTR step 0: `theme-deprecated` (ERROR on a draft, WARNING on a live listing) and `value-missing` (ERROR) — the two
+ *    checks the listing wizard made and studio publish did not.
  */
-export type VariationReadinessKind = 'theme-unset' | 'collision' | 'attribute-unbound'
+export type VariationReadinessKind = 'theme-unset' | 'collision' | 'attribute-unbound' | 'theme-deprecated' | 'value-missing'
 
 export interface VariationReadinessItem {
   /** The FACT the catalogue filter and the readiness index narrow on — never the sentence. */
@@ -814,6 +834,21 @@ export function variationReadinessItems(cell: VariationThemeCell | null, coordin
       subjects: cell.axes.map((a) => a.axisKey),
       severity: 'error',
     })
+  }
+  // VTR step 0 — the projection save refuses a deprecated Amazon theme, so a draft cannot publish one either. A LIVE
+  // listing keeps its theme (changing it means a new parent), so there it warns and other updates still go out.
+  if (cell.theme?.deprecated) {
+    out.push({
+      kind: 'theme-deprecated',
+      coordinate: coordinateLabel,
+      message: `Amazon has deprecated the variation theme ${cell.theme.code} on ${coordinateLabel}. ${cell.locked
+        ? 'The live listing keeps it; new variants and a theme change need a current theme.' : 'Choose a current theme before publishing.'}`,
+      subjects: [cell.theme.code],
+      severity: cell.locked ? 'warning' : 'error',
+    })
+  }
+  if (cell.valueGaps && cell.valueGaps.unresolved > 0) {
+    out.push({ kind: 'value-missing', coordinate: coordinateLabel, message: cell.valueGaps.summary, subjects: cell.valueGaps.skus, severity: 'error' })
   }
   if (cell.collisions && cell.collisions.unresolved > 0) {
     out.push({
