@@ -5566,6 +5566,8 @@ CREATE TABLE "SavedView" (
     "name" TEXT NOT NULL,
     "filters" JSONB NOT NULL,
     "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "shared" BOOLEAN NOT NULL DEFAULT false,
+    "defaultProductTypes" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

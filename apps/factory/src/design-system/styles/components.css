@@ -710,6 +710,14 @@ body.nds-drawer-resizing * {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  /* Never past the viewport: usePopoverPosition publishes the room on the side it opened. */
+  max-height: var(--nds-popover-room, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* A capped flex column would SHRINK its rows to fit; the rows keep their height and the panel scrolls. */
+.nds-menu > * {
+  flex-shrink: 0;
 }
 .nds-menu button,
 .nds-menu a[role='menuitem'] {

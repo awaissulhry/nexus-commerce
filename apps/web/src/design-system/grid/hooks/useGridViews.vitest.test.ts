@@ -7,7 +7,13 @@ const response = (overrides: Partial<ApiView> = {}): ApiView => ({ id: 'one', na
 
 describe('saved-view acknowledgements before list refresh', () => {
   it('inserts a committed view even when no list response follows', () => {
-    expect(acknowledgeGridView([], response())).toEqual([view({ updatedAt: response().updatedAt, legacyShared: false })])
+    // An older server omits the SHEET-VIEWS P2 fields: the view reads as my own and unshared.
+    expect(acknowledgeGridView([], response())).toEqual([view({ updatedAt: response().updatedAt, legacyShared: false, owned: true, shared: false, teamShared: false, sharedBy: null, defaultProductTypes: [] })])
+  })
+
+  it('keeps a teammate\'s shared view as theirs, with its name and product-type defaults', () => {
+    const [team] = acknowledgeGridView([], response({ owned: false, shared: true, teamShared: true, sharedBy: 'Bob Rossi', defaultProductTypes: ['OUTERWEAR'] }))
+    expect(team).toMatchObject({ owned: false, shared: true, teamShared: true, sharedBy: 'Bob Rossi', defaultProductTypes: ['OUTERWEAR'] })
   })
 
   it('replaces a shared template with the same-name personal copy', () => {

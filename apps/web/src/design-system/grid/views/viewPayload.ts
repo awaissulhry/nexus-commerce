@@ -26,6 +26,7 @@
  * Either schema may carry the optional `ViewDisplay` fields (widths, sort, row height) — see below.
  */
 import type { GridDensityName } from '../../tokens/grid'
+import type { ViewRule } from './viewRules'
 
 export const COLUMNS_VIEW_SCHEMA = 2
 export const SHEET_LAYOUT_SCHEMA = 3
@@ -92,6 +93,11 @@ export interface ColumnsViewPayloadV2 extends ViewDisplay {
   columns: string[]
   /** A view chip (a row filter) the view applies as well. Absent or null = none. */
   chip?: string | null
+  /**
+   * SHEET-VIEWS step 5 — what the view FOLLOWS besides its keys (`viewRules.ts`): a group, the required
+   * fields, the fields with gaps. Resolved when applied, so a new attribute joins by itself. Optional.
+   */
+  rules?: ViewRule[]
 }
 
 /** A complete sheet layout, including columns currently hidden or unavailable on this scope. */

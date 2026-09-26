@@ -53,6 +53,8 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         onSaveCurrentView={columns.saveCurrentAs}
         onUpdateCurrentView={columns.updateView}
         describeView={columns.describeView}
+        productType={columns.productType}
+        viewColumnCount={columns.viewColumnCount}
         density={columns.density}
         onDensity={columns.setDensity}
         chips={chips.chips}

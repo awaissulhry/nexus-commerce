@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import type { GridApi, GridState } from '@/design-system/grid'
 import {
   ALL_VIEW_ID, arrangementColumnState, columnStateToPrefs, columnsViewPayload,
-  isColumnsViewPayload, pickGridState, prefsToColumnState, resolveLanding, resolvePreset, useGridState, viewDisplayOf,
+  isColumnsViewPayload, pickGridState, prefsToColumnState, productTypeDefaultView, resolveLanding, resolvePreset, useGridState, viewDisplayOf,
+  describeViewRules, viewRulesFor, viewRulesOf, withViewRules,
   type ColumnsViewPayload, type GridStateApi, type GridStateKey, type GridViewPreset,
-  type Landing, type PrefsBridgeOptions, type SavedGridView, type UseGridStateOptions, type ViewDisplay,
+  type Landing, type PrefsBridgeOptions, type SavedGridView, type UseGridStateOptions, type ViewDisplay, type ViewRule, type ViewRuleFacts,
 } from '@/design-system/grid'
 import type { GridDensityName } from '@/design-system/tokens/grid'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
@@ -15,7 +16,7 @@ import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/
 import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
 import { columnLanguages, languageProjectionReady, LANGUAGES_VIEW_ID } from './languages'
-import { alwaysColumnsFor, orderColumnKeys, sheetViews, structuralColumnKeys, type ViewContext } from './views'
+import { alwaysColumnsFor, GAPS_VIEW_ID, orderColumnKeys, REQUIRED_VIEW_ID, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import { defaultViewKeys } from './slotListColumns'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 
@@ -44,6 +45,15 @@ function readSheetDensity(): GridDensityName | null {
 function writeSheetDensity(density: GridDensityName): void {
   try { window.localStorage.setItem(SHEET_DENSITY_KEY, density) } catch { /* private mode: the choice lasts this visit */ }
 }
+/** "OUTERWEAR" → "Outerwear", "SAFETY_HELMET" → "Safety helmet": the menu's words for a stored product-type code. */
+export function productTypeLabel(code: string): string {
+  const words = code.trim().toLowerCase().replace(/[_-]+/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** A preset whose SAVED view follows a rule rather than freezing today's keys (SHEET-VIEWS step 5). */
+const PRESET_RULES: Readonly<Record<string, ViewRule>> = { [REQUIRED_VIEW_ID]: { kind: 'required' }, [GAPS_VIEW_ID]: { kind: 'gaps' } }
+
 export type ActiveColumns =
   | { kind: 'all' }
   | { kind: 'preset'; id: string; label: string }
@@ -63,6 +73,13 @@ export interface UseSheetColumnsArgs<TRow, TPage> {
   setChip?: (id: string | null) => void
   /** Personal working layout, isolated by scope and market. Named views remain reusable. */
   layoutSurface: string
+  /**
+   * SHEET-VIEWS step 4 — the family parent's product type (`OUTERWEAR`). A view that is the default for it
+   * opens first: mine, then the team's, then the working layout, my global default, All attributes.
+   * `undefined` = not read yet, and the sheet WAITS to land (measured: master landed on its media column
+   * before the family arrived, so a type default never won); `null` = read, and the family has no type.
+   */
+  productType: string | null | undefined
   grid: Pick<UseGridStateOptions<TPage>, 'surface' | 'viewsSurface' | 'baseUrl' | 'getPageState' | 'applyPageState' | 'omitScroll'>
 }
 export interface SheetColumnsApi<TPage> {
@@ -97,6 +114,10 @@ export interface SheetColumnsApi<TPage> {
   /** The sheet's row height. A view that carries one sets it; so does the toolbar. */
   density: GridDensityName
   setDensity: (density: GridDensityName) => void
+  /** The product type on screen, for the views menu's "Make default for <Type> products". */
+  productType: { code: string; label: string } | null
+  /** The views menu's count for a saved view: its keys plus what its rules add here (`withViewRules`). */
+  viewColumnCount: (view: SavedGridView<TPage>) => number | null
 }
 
 export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>): SheetColumnsApi<TPage> {
@@ -123,7 +144,19 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     return [{ key: identityColumn, label: 'Identity (SKU, readiness)', locked: true }, ...columns.map((c) => ({ key: c.key, label: c.label, group: c.group, groupKey: c.groupKey }))]
   }, [columns, identityColumn])
   const views = useMemo(() => sheetViews(columns, viewCtx, serverViews), [columns, viewCtx, serverViews])
+  /* SHEET-VIEWS step 5 — the row facts a rule view follows. Read through a ref when a view is applied, so a
+     gap fixed while editing does not pull its column off screen: a rule resolves at APPLY time, not live. */
+  const ruleFacts = useMemo<ViewRuleFacts>(() => ({
+    required: new Set(columns.filter((c) => c.requiredBy.length > 0 || viewCtx.requiredKeys?.includes(c.key)).map((c) => c.key)),
+    gaps: new Set((viewCtx.flaggedKeys ?? []).filter((k) => attributeKeys.has(k))),
+  }), [columns, viewCtx, attributeKeys])
+  const ruleFactsRef = useRef(ruleFacts)
+  ruleFactsRef.current = ruleFacts
+  const productTypeCode = a.productType?.trim().toUpperCase() || null
+  const productType = useMemo(() => (productTypeCode ? { code: productTypeCode, label: productTypeLabel(productTypeCode) } : null), [productTypeCode])
   const [active, setActive] = useState<ActiveColumns>({ kind: 'all' })
+  const activeRef = useRef(active)
+  activeRef.current = active
   const [landing, setLanding] = useState<Landing | null>(null)
   const [landedScope, setLandedScope] = useState<string | null>(null)
   const [landedGrid, setLandedGrid] = useState<GridApi<TRow> | null>(null)
@@ -187,8 +220,10 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   }, [apiRef, specs, addressableSet, gridLocks, prefsBridge])
 
   const activate = useCallback((next: ActiveColumns, payload: ColumnsViewPayload, restoreLocks = true) => {
+    // The STORED payload is kept (its rules too); what shows is its keys plus what its rules match here today.
     layoutRef.current = payload
-    const keys = [...alwaysColumns, ...visibleLayoutKeys(payload, specs)]
+    const applied = withViewRules(payload, specs, preferencesFromLayout(payload, specs), ruleFactsRef.current)
+    const keys = [...alwaysColumns, ...visibleLayoutKeys(applied, specs)]
     activeColumnsRef.current = keys
     setActive(next)
     applyToGrid(keys, true, restoreLocks && payload.v === 3 ? payload.lockedColumns : undefined)
@@ -268,6 +303,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   useEffect(() => {
     const api = apiRef.current
     if (landed || !api || api.isDestroyed() || !gridReady || !orderedKeys.length || !gridState.loaded || loadState.surface !== layoutSurface || !loadState.ready) return
+    if (a.productType === undefined && !(landedScope === layoutSurface && layoutRef.current)) return
     const colIds = api.getColumnState().map((c) => c.colId)
     if (!orderedKeys.some((k) => colIds.includes(k))) return
     const savedState = recoveryState ?? gridState.lastUsed?.gridState
@@ -283,13 +319,21 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
       return
     }
     const working = workingRef.current.record
-    const dv = gridState.defaultView
-    const l = resolveLanding({ orderedKeys, always: alwaysColumns, defaultView: dv ? { id: dv.id, name: dv.name, payload: dv.payload } : null })
-    setLanding(l)
     // A language URL is an explicit projection. A previous one-language working layout
     // must not remove it on reload; a matching saved layout still keeps its membership.
     const matchesSelection = (keys: readonly string[]) => !languageView?.selected || JSON.stringify(columnLanguages(keys)) === JSON.stringify(languageView.selected)
-    if (working && matchesSelection(working.filters.columns)) {
+    /* SHEET-VIEWS step 4 (Owner-approved order): my default for this product type > the team's default for it
+       > the working layout > my global default > All attributes. */
+    const typeView = productTypeDefaultView(gridState.views, productTypeCode)
+    const typeDefault = typeView && isColumnsViewPayload(typeView.payload) && matchesSelection(typeView.payload.columns) ? { view: typeView, payload: typeView.payload } : null
+    const dv = gridState.defaultView
+    const landingView = typeDefault?.view ?? dv
+    const l = resolveLanding({ orderedKeys, always: alwaysColumns, defaultView: landingView ? { id: landingView.id, name: landingView.name, payload: landingView.payload } : null })
+    setLanding(l)
+    if (typeDefault) {
+      applySaved(typeDefault.payload, typeDefault.view)
+      gridState.markActive(typeDefault.view.id)
+    } else if (working && matchesSelection(working.filters.columns)) {
       const languages = columnLanguages(working.filters.columns)
       if (languageView && JSON.stringify(languages) !== JSON.stringify(languageView.selected ?? [])) { languageView.set(languages.length ? languages : null); return }
       const named = gridState.views.find((v) => JSON.stringify(v.payload) === JSON.stringify(working.filters))
@@ -306,7 +350,7 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     }
     setLandedScope(layoutSurface)
     setLandedGrid(api)
-  }, [recoveryState, landedScope, activeChip, applyToGrid, landed, apiRef, gridReady, orderedKeys, landingKeys, gridState, loadState, layoutSurface, alwaysColumns, activate, specs, setChip, applySaved, attributeKeys])
+  }, [recoveryState, landedScope, activeChip, applyToGrid, landed, apiRef, gridReady, orderedKeys, landingKeys, gridState, loadState, layoutSurface, alwaysColumns, activate, specs, setChip, applySaved, attributeKeys, productTypeCode, a.productType])
 
   const keySignature = JSON.stringify(orderedKeys)
   const lastSignature = useRef(keySignature)
@@ -381,6 +425,14 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     /* A NAMED view keeps everything on screen (2026-09-26): widths, sort and row height ride with its
        columns. The personal working layout stays columns-only — its widths follow the browser. */
     const payload = { ...layoutFromPreferences(specs, value, alwaysColumns), ...(named?.chip ? { chip: named.chip } : {}), ...(named ? captureDisplay() : {}) }
+    /* SHEET-VIEWS step 5 — a NAMED view also stores what it follows: every fully ticked group, and the
+       Required / Has gaps rule when that preset (or the view itself) offers it and all its columns stay ticked. */
+    if (named) {
+      const current = activeRef.current
+      const offered = [...viewRulesOf(named.view?.payload), ...(current.kind === 'preset' && PRESET_RULES[current.id] ? [PRESET_RULES[current.id]] : [])]
+      const rules = viewRulesFor(value, specs, ruleFactsRef.current, offered)
+      if (rules.length) payload.rules = rules
+    }
     saving.current = true
     try {
       let id: string | null = null
@@ -422,9 +474,17 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     if (!isColumnsViewPayload(view.payload)) return view.payload ? { note: 'Saved in an older format — open it to convert' } : { note: 'Holds no columns' }
     const missing = view.payload.columns.filter((k) => !attributeKeys.has(k))
     const legacy = view.legacyShared ? 'Shared legacy template; saving creates your personal copy.' : ''
-    if (!missing.length) return legacy ? { note: legacy } : null
-    return { note: `${missing.length} of ${view.payload.columns.length} not on this product type: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', …' : ''}`, title: [legacy, missing.join(', ')].filter(Boolean).join(' ') }
-  }, [attributeKeys])
+    // SHEET-VIEWS step 5 — say what a rule view follows, so a column that joined by itself is no surprise.
+    const follows = describeViewRules(viewRulesOf(view.payload), specs, preferencesFromLayout(view.payload, specs))
+    if (!missing.length) return legacy || follows ? { note: [follows, legacy].filter(Boolean).join(' · ') } : null
+    return {
+      note: [follows, `${missing.length} of ${view.payload.columns.length} not on this product type: ${missing.slice(0, 4).join(', ')}${missing.length > 4 ? ', …' : ''}`].filter(Boolean).join(' · '),
+      title: [legacy, missing.join(', ')].filter(Boolean).join(' '),
+    }
+  }, [attributeKeys, specs])
+  const viewColumnCount = useCallback((view: SavedGridView<TPage>) => (isColumnsViewPayload(view.payload)
+    ? withViewRules(view.payload, specs, preferencesFromLayout(view.payload, specs), ruleFactsRef.current).columns.length
+    : null), [specs])
   return {
     gridState, initialState: recoveryState ?? gridState.initialState, captureGridState,
     presets: views.presets, viewsSource: views.source, active,
@@ -434,6 +494,6 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     landed, landing, loadError: loadError ?? gridState.loadError, orderedKeys, preferenceColumns: specs, alwaysColumns, allColumnKeys,
     applyPreset, applyCustom, currentPreferences, currentPayload, savePreferences, savePreferencesAs,
     updatePreferences, reloadSavedPreferences, saveCurrentAs, updateView, describeView, visibleAttributeKeys,
-    density, setDensity,
+    density, setDensity, productType, viewColumnCount,
   }
 }

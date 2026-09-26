@@ -582,6 +582,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         activeChip: active,
         setChip: setActive,
         layoutSurface: `product-edit:layout:${channel.toUpperCase()}:${marketplace.toUpperCase()}`,
+        productType: data ? data.family?.productType ?? null : undefined,
         grid: {
             surface: surfaceKey,
             viewsSurface: `product-edit:views:${channel.toUpperCase()}`,

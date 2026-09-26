@@ -6,6 +6,8 @@ const WORKING_NAME = 'Current layout'
 const isSheetSurface = (surface: string) => /^product-edit:(views|layout):/.test(surface)
 const isProductsGridSurface = (surface: string) => surface === 'products-next' || surface === 'products-next:layout'
 const isWorkingSurface = (surface: string) => surface.startsWith('product-edit:layout:') || surface === 'products-next:layout'
+/** SHEET-VIEWS P2 — only a product sheet's NAMED views can be shared or be a product type's default. */
+const isSheetViewsSurface = (surface: string) => surface.startsWith('product-edit:views:')
 
 export class SavedViewError extends Error {
   constructor(message: string, readonly status = 400) { super(message) }
@@ -55,12 +57,34 @@ function validateViewDisplay(value: Record<string, unknown>): void {
   }
 }
 
+/**
+ * SHEET-VIEWS step 5 (2026-09-26) — what a sheet view FOLLOWS besides its keys (web
+ * `design-system/grid/views/viewRules.ts`): a group, the required fields, the fields with gaps. Optional;
+ * present must be a short list of known rules, each once, because the client resolves it into columns.
+ */
+const VIEW_RULE_KINDS = new Set(['group', 'required', 'gaps'])
+function validateViewRules(value: Record<string, unknown>): void {
+  const rules = value.rules
+  if (rules === undefined) return
+  const ids = Array.isArray(rules) && rules.length <= 200 && rules.every((rule) =>
+    record(rule) && typeof rule.kind === 'string' && VIEW_RULE_KINDS.has(rule.kind) &&
+    (rule.kind === 'group' ? typeof rule.group === 'string' && rule.group.trim().length > 0 && rule.group.length <= 500 : rule.group === undefined))
+    ? (rules as Array<{ kind: string; group?: string }>).map((rule) => `${rule.kind}:${rule.group ?? ''}`)
+    : null
+  if (!ids || new Set(ids).size !== ids.length) {
+    throw new SavedViewError('View rules must be up to 200 distinct group, required or gaps rules')
+  }
+}
+
 function validateColumnsPayload(value: unknown, allowLegacyGridState: boolean): void {
   if (!record(value)) throw new SavedViewError('A sheet view needs a valid columns payload')
   // Retain older named views; they are upgraded by the client when explicitly saved.
   if (allowLegacyGridState && value.v === 1 && record(value.gridState)) return
   const common = value.kind === 'columns' && keys(value.columns) && (value.chip === undefined || value.chip === null || typeof value.chip === 'string')
-  if (value.v === 2 && common) return validateViewDisplay(value)
+  if (value.v === 2 && common) {
+    validateViewRules(value)
+    return validateViewDisplay(value)
+  }
   if (value.v !== 3 || !common || !keys(value.columnOrder) || !keys(value.lockedColumns) || !keys(value.groupOrder) || !record(value.groupOverrides)) {
     throw new SavedViewError('A sheet layout needs columns, columnOrder, lockedColumns, groupOrder and groupOverrides')
   }
@@ -71,6 +95,7 @@ function validateColumnsPayload(value: unknown, allowLegacyGridState: boolean): 
   if (!(value.columns as string[]).every((key) => ordered.has(key)) || !value.lockedColumns.every((key) => ordered.has(key))) {
     throw new SavedViewError('The column order must include every visible and locked column')
   }
+  validateViewRules(value)
   validateViewDisplay(value)
 }
 
@@ -120,6 +145,10 @@ export interface SavedViewWriteInput {
   surface?: unknown
   filters?: unknown
   isDefault?: unknown
+  /** SHEET-VIEWS P2 — the owner shares the view with the business. */
+  shared?: unknown
+  /** SHEET-VIEWS P2 — the product types this view opens by default for. */
+  defaultProductTypes?: unknown
   expectedUpdatedAt?: unknown
   workingLayout?: WorkingLayoutInput
 }
@@ -151,20 +180,46 @@ async function saveWorking(tx: Tx, userId: string, input: unknown) {
   return tx.savedView.findUniqueOrThrow({ where: { id: current.id } })
 }
 
+function productTypesOf(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 50 || !value.every((type) => typeof type === 'string' && type.trim().length > 0 && type.length <= 100)) {
+    throw new SavedViewError('defaultProductTypes must be a list of up to 50 product types')
+  }
+  return [...new Set(value.map((type: string) => type.trim().toUpperCase()))]
+}
+
+/** A teammate's name for a shared view — the profile's display name only, never an email. */
+async function ownerNames(ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map()
+  const profiles = await prisma.userProfile.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } })
+  return new Map(profiles.filter((p) => p.displayName.trim()).map((p) => [p.id, p.displayName.trim()]))
+}
+
 export async function listSavedViews(userId: string, surface: string) {
   surface = surfaceOf(surface)
+  const own = userId === LEGACY_OWNER || isWorkingSurface(surface) ? userId : { in: [userId, LEGACY_OWNER] }
   const rows = await prisma.savedView.findMany({
-    where: { userId: userId === LEGACY_OWNER || isWorkingSurface(surface) ? userId : { in: [userId, LEGACY_OWNER] }, surface },
+    // SHEET-VIEWS P2 — a teammate's SHARED view is listed too (row-level security keeps it inside the business).
+    where: isSheetViewsSurface(surface) && userId !== LEGACY_OWNER ? { surface, OR: [{ userId: own }, { shared: true }] } : { userId: own, surface },
     orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
   })
   const ownedNames = new Set(rows.filter((row) => row.userId === userId).map((row) => row.name))
   const ownDefault = rows.some((row) => row.userId === userId && row.isDefault)
-  return rows.filter((row) => row.userId === userId || !ownedNames.has(row.name)).map((row) => ({
-    ...row,
-    // Older shared templates remain discoverable; a personal default always wins.
-    isDefault: row.isDefault && (!ownDefault || row.userId === userId),
-    legacyShared: row.userId !== userId,
-  }))
+  const names = await ownerNames([...new Set(rows.filter((row) => row.userId !== userId && row.userId !== LEGACY_OWNER).map((row) => row.userId))])
+  // A legacy template with the name of one of mine was replaced by my copy; a teammate's view never is.
+  return rows.filter((row) => row.userId === userId || row.userId !== LEGACY_OWNER || !ownedNames.has(row.name)).map((row) => {
+    const owned = row.userId === userId
+    const legacy = !owned && row.userId === LEGACY_OWNER
+    return {
+      ...row,
+      // Older shared templates remain discoverable; a personal default always wins. A teammate's own
+      // default is theirs — it never becomes mine.
+      isDefault: row.isDefault && (owned || (legacy && !ownDefault)),
+      legacyShared: legacy,
+      owned,
+      teamShared: !owned && !legacy && row.shared,
+      sharedBy: !owned && !legacy ? names.get(row.userId) ?? null : null,
+    }
+  })
 }
 
 /** One transaction for the view, default flag, and optional current-layout companion. */
@@ -196,6 +251,25 @@ export async function writeSavedView(userId: string, id: string | null, input: S
       validateSavedViewPayload(surface, filters)
       const isDefault = isWorkingSurface(surface) ? false : (input.isDefault as boolean | undefined) ?? existing?.isDefault ?? false
       const owned = existing?.userId === userId
+      /* SHEET-VIEWS P2 — sharing and product-type defaults: a sheet's named views only, and only the
+         owner's (a legacy template edited here becomes the editor's own copy first, as before). */
+      if ((input.shared !== undefined || input.defaultProductTypes !== undefined) && !isSheetViewsSurface(surface)) {
+        throw new SavedViewError('Only a product sheet view can be shared or be a product type default')
+      }
+      if (input.shared !== undefined && typeof input.shared !== 'boolean') throw new SavedViewError('shared must be a boolean')
+      const shared = (input.shared as boolean | undefined) ?? (owned ? existing!.shared ?? false : false)
+      const defaultProductTypes = input.defaultProductTypes !== undefined ? productTypesOf(input.defaultProductTypes) : owned ? existing!.defaultProductTypes ?? [] : []
+      if (defaultProductTypes.length) {
+        // One default per (owner, surface, product type): taking a type moves it off my other views.
+        const holders = await tx.savedView.findMany({ where: { userId, surface, defaultProductTypes: { hasSome: defaultProductTypes }, ...(owned ? { id: { not: existing!.id } } : {}) } })
+        for (const previous of holders) {
+          const changed = await tx.savedView.updateMany({
+            where: { id: previous.id, userId, updatedAt: previous.updatedAt },
+            data: { defaultProductTypes: (previous.defaultProductTypes ?? []).filter((type) => !defaultProductTypes.includes(type)), updatedAt: nextTimestamp(previous.updatedAt) },
+          })
+          if (changed.count !== 1) throw stale()
+        }
+      }
       if (isDefault) {
         const defaults = await tx.savedView.findMany({ where: { userId, surface, isDefault: true, ...(owned ? { id: { not: existing!.id } } : {}) } })
         for (const previous of defaults) {
@@ -210,16 +284,16 @@ export async function writeSavedView(userId: string, id: string | null, input: S
       if (existing && owned) {
         const changed = await tx.savedView.updateMany({
           where: { id: existing.id, userId, ...(expected ? { updatedAt: expected } : {}) },
-          data: { name, filters: filters as Prisma.InputJsonValue, isDefault, updatedAt: nextTimestamp(existing.updatedAt) },
+          data: { name, filters: filters as Prisma.InputJsonValue, isDefault, shared, defaultProductTypes, updatedAt: nextTimestamp(existing.updatedAt) },
         })
         if (changed.count !== 1) throw stale()
         saved = await tx.savedView.findUniqueOrThrow({ where: { id: existing.id } })
       } else {
         // Editing a legacy shared view makes an owned copy; never take it away from other users.
-        saved = await tx.savedView.create({ data: { userId, surface, name, filters: filters as Prisma.InputJsonValue, isDefault } })
+        saved = await tx.savedView.create({ data: { userId, surface, name, filters: filters as Prisma.InputJsonValue, isDefault, shared, defaultProductTypes } })
       }
       const workingLayout = input.workingLayout === undefined ? undefined : await saveWorking(tx, userId, input.workingLayout)
-      return { ...saved, legacyShared: false, ...(workingLayout ? { workingLayout } : {}) }
+      return { ...saved, legacyShared: false, owned: true, teamShared: false, sharedBy: null, ...(workingLayout ? { workingLayout } : {}) }
     }, { isolationLevel: 'Serializable' })
   } catch (error) {
     const code = (error as { code?: string }).code

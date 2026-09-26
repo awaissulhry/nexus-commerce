@@ -18,6 +18,12 @@
  * the sheet's builder, which is its Customise dialog), Save as view…, Update, Rename…, Duplicate…,
  * Make default / Clear default, Delete with a confirm — and a saved view can carry a NOTE from the
  * surface (the columns it names that this product type lacks). The anchored popover hosts each small conversation while the Views trigger keeps its place.
+ *
+ * SHEET-VIEWS P2 (Owner-approved 2026-09-26) — TEAM views and product-type defaults. My views come first,
+ * then, after a rule, the views teammates shared ("Shared by <name>" under each). A teammate's view can be
+ * applied and duplicated, never changed: its only verb is "Duplicate…". My own view gains "Share with
+ * team" / "Stop sharing" and, when the surface names a product type, "Make default for <Type> products".
+ * Both verbs appear only when the caller's views API offers them, so every other caller is unchanged.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -35,6 +41,9 @@ import type { GridViewPreset } from '../views/presets'
 
 export interface GridViewsMenuProps<TPage> {
   views: Pick<GridStateApi<TPage>, 'views' | 'activeId' | 'save' | 'apply' | 'remove' | 'rename' | 'duplicate' | 'setDefault' | 'clearDefault'>
+    & Partial<Pick<GridStateApi<TPage>, 'setShared' | 'setTypeDefault'>>
+  /** The product type on screen — `code` as stored (`OUTERWEAR`), `label` as read. Enables the type-default verb. */
+  productType?: { code: string; label: string } | null
   /** Named column sets this surface ships with. Omit for a surface that has none. */
   presets?: readonly GridViewPreset[]
   /** The preset currently applied, if any — shown ticked, and named on the trigger. */
@@ -55,6 +64,8 @@ export interface GridViewsMenuProps<TPage> {
   onUpdateCurrent?: (view: SavedGridView<TPage>) => Promise<unknown>
   /** A note under a saved view — e.g. the columns it names that this product type lacks. */
   describeView?: (view: SavedGridView<TPage>) => { note?: ReactNode; title?: string } | null
+  /** The count `showCounts` prints for a saved view. Default: its stored keys. A rule view counts what its rules add here too. */
+  viewColumnCount?: (view: SavedGridView<TPage>) => number | null
   /**
    * `minimal` (CH.1, the studio sheets, Owner 2026-09-05): pick · save · update · default · delete.
    * No "New view…", no Rename…, no Duplicate… — machinery a one-operator sheet does not need.
@@ -116,8 +127,10 @@ export function GridViewsMenu<TPage>({
   onSaveCurrent,
   onUpdateCurrent,
   describeView,
+  viewColumnCount,
   manage = 'full',
   presetInMenu,
+  productType = null,
 }: GridViewsMenuProps<TPage>) {
   const { toast, inline } = useSafeToast()
   const [prompt, setPrompt] = useState<Prompt | null>(null)
@@ -144,7 +157,10 @@ export function GridViewsMenu<TPage>({
   }
 
   const count = (n: number) => (showCounts ? ` (${n})` : '')
-  const countOf = (v: SavedGridView<TPage>) => (isColumnsViewPayload(v.payload) ? count(v.payload.columns.length) : '')
+  const countOf = (v: SavedGridView<TPage>) => {
+    const n = viewColumnCount ? viewColumnCount(v) : isColumnsViewPayload(v.payload) ? v.payload.columns.length : null
+    return n === null ? '' : count(n)
+  }
 
   const presetItems: MenuItemDef[] = presets.filter((p) => (presetInMenu ? presetInMenu(p) : true)).map((p) => ({
     id: `preset:${p.id}`,
@@ -158,22 +174,37 @@ export function GridViewsMenu<TPage>({
     onSelect: () => onApplyPreset?.(p),
   }))
 
-  const savedItems: MenuItemDef[] = views.views.map((v) => {
+  const typeCode = productType?.code.trim().toUpperCase() || null
+  /** A teammate's shared view: applied and duplicated, never changed. A legacy template is not one — saving it makes my copy. */
+  const isTeammates = (v: SavedGridView<TPage>) => !!v.teamShared || (v.owned === false && !v.legacyShared)
+  const savedItem = (v: SavedGridView<TPage>): MenuItemDef => {
     const d = describeView?.(v) ?? null
+    const team = isTeammates(v)
+    const sharedBy = team ? `Shared by ${v.sharedBy ?? 'a teammate'}` : null
+    const note = sharedBy && d?.note ? <>{sharedBy} · {d.note}</> : sharedBy ?? d?.note
     return {
       id: v.id,
       label: (
         <>
           {v.name}{countOf(v)}
           {v.isDefault ? ' · default' : ''}
+          {typeCode && v.defaultProductTypes?.includes(typeCode) ? ` · ${productType!.label} default` : ''}
+          {!team && v.shared ? ' · shared' : ''}
           {v.id === views.activeId ? ' ✓' : ''}
         </>
       ),
-      ...(d?.note ? { description: d.note } : {}),
+      ...(note ? { description: note } : {}),
       ...(d?.title ? { title: d.title } : {}),
       onSelect: () => views.apply(v),
     }
-  })
+  }
+  const mineItems = views.views.filter((v) => !isTeammates(v)).map(savedItem)
+  const teamItems = views.views.filter(isTeammates).map(savedItem)
+  const savedItems: MenuItemDef[] = [
+    ...mineItems,
+    ...(mineItems.length && teamItems.length ? [{ id: 'sep-team', separator: true } as MenuItemDef] : []),
+    ...teamItems,
+  ]
 
   const open = (p: Prompt, initial = '') => { setName(initial); setPrompt(p) }
 
@@ -184,7 +215,9 @@ export function GridViewsMenu<TPage>({
     { id: 'sep-1', separator: true },
     ...(onNewView && manage === 'full' ? [{ id: 'new', label: 'New view…', onSelect: onNewView }] : []),
     { id: 'save-new', label: 'Save as view…', onSelect: () => open({ mode: 'save' }) },
-    ...(active
+    ...(active && isTeammates(active)
+      ? [{ id: 'duplicate', label: 'Duplicate…', title: 'Make your own copy of this team view', onSelect: () => open({ mode: 'duplicate', view: active }, `${active.name} copy`) }]
+      : active
       ? [
           {
             id: 'update',
@@ -200,6 +233,16 @@ export function GridViewsMenu<TPage>({
           active.isDefault
             ? { id: 'default', label: 'Clear default', onSelect: () => void run('Default cleared — the sheet lands on all attributes again', () => views.clearDefault(active.id)) }
             : { id: 'default', label: 'Make default', title: 'This scope lands on this view instead of all attributes', onSelect: () => void run('Default view set', () => views.setDefault(active.id)) },
+          ...(typeCode && views.setTypeDefault && !active.legacyShared
+            ? [active.defaultProductTypes?.includes(typeCode)
+                ? { id: 'type-default', label: `Stop default for ${productType!.label} products`, onSelect: () => void run(`${productType!.label} products no longer open on this view`, () => views.setTypeDefault!(active.id, typeCode, false)) }
+                : { id: 'type-default', label: `Make default for ${productType!.label} products`, title: `Every ${productType!.label} product opens on this view${active.shared ? ', for your team too' : ''}`, onSelect: () => void run(`${productType!.label} products open on this view`, () => views.setTypeDefault!(active.id, typeCode, true)) }]
+            : []),
+          ...(views.setShared && !active.legacyShared
+            ? [active.shared
+                ? { id: 'share', label: 'Stop sharing', title: 'Your team no longer sees this view', onSelect: () => void run('View is private again', () => views.setShared!(active.id, false)) }
+                : { id: 'share', label: 'Share with team', title: 'Everyone in your business can apply and copy it; only you can change it', onSelect: () => void run('View shared with your team', () => views.setShared!(active.id, true)) }]
+            : []),
           { id: 'delete', label: 'Delete…', onSelect: () => open({ mode: 'delete', view: active }) },
         ]
       : []),
@@ -227,7 +270,7 @@ export function GridViewsMenu<TPage>({
         }
       }}>
       {prompt.mode === 'delete' ? <>
-        <div>Delete “{prompt.view.name}”?</div>
+        <div>Delete “{prompt.view.name}”?{prompt.view.shared ? ' Your team loses it too.' : ''}</div>
         <div className="nds-confirm-actions">
           <Button size="sm" data-autofocus disabled={busy} onClick={closePrompt}>Cancel</Button>
           <Button size="sm" variant="danger" disabled={busy} onClick={() => { if (!busy) void run('View deleted', () => views.remove(prompt.view.id)) }}>Delete</Button>

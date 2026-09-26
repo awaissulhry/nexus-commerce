@@ -12460,6 +12460,10 @@ model SavedView {
   name        String
   filters     Json
   isDefault   Boolean  @default(false)
+  /// SHEET-VIEWS P2 (2026-09-26): shown to everyone in the business on the same surface; only the owner changes it.
+  shared      Boolean  @default(false)
+  /// SHEET-VIEWS P2: product types this view opens by default for — the owner's own, or the team's when `shared`.
+  defaultProductTypes String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

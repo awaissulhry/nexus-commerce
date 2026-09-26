@@ -58,6 +58,26 @@ export interface Landing {
   source: LandingSource
 }
 
+/**
+ * SHEET-VIEWS step 4 (Owner-approved 2026-09-26) — the saved view a PRODUCT TYPE opens on, if any.
+ *
+ * My own default for the type wins; otherwise the newest team view a teammate made the type's default.
+ * The sheet ranks this ahead of the working layout and the global default, so jackets always open the
+ * same way however the last session left them. Codes compare upper-case, as the server stores them.
+ */
+export function productTypeDefaultView<V extends { owned?: boolean; teamShared?: boolean; defaultProductTypes?: readonly string[]; updatedAt: string; payload: unknown }>(
+  views: readonly V[],
+  productType: string | null | undefined,
+): V | null {
+  const code = productType?.trim().toUpperCase()
+  if (!code) return null
+  const fits = (view: V) => isColumnsViewPayload(view.payload) && !!view.defaultProductTypes?.includes(code)
+  const mine = views.find((view) => view.owned !== false && fits(view))
+  if (mine) return mine
+  return views.filter((view) => view.teamShared && fits(view))
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0] ?? null
+}
+
 /** Identity first, then every column, each once. The ground state of every sheet. */
 export function allColumns(orderedKeys: readonly string[], always: readonly string[]): string[] {
   const seen = new Set<string>()

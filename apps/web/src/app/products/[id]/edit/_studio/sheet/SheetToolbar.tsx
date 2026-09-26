@@ -94,6 +94,10 @@ export interface SheetToolbarProps<TPage> {
   onNewView?: () => void
   /** A note under a saved view — the columns it names that this product type lacks. */
   describeView?: (view: SavedGridView<TPage>) => { note?: string; title?: string } | null
+  /** SHEET-VIEWS step 4 — the product type on screen; the views menu offers "Make default for <Type> products". */
+  productType?: { code: string; label: string } | null
+  /** The column count beside a saved view — a rule view counts what its rules add on this product type. */
+  viewColumnCount?: (view: SavedGridView<TPage>) => number | null
   /** Already filtered by `isViewChipVisible` — `useViewChips()` does it. Do not re-filter. */
   chips?: readonly ViewChip[]
   activeChipId?: string | null
@@ -238,6 +242,8 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
                   onSaveCurrent={p.onSaveCurrentView}
                   onUpdateCurrent={p.onUpdateCurrentView}
                   describeView={p.describeView}
+                  productType={p.productType}
+                  viewColumnCount={p.viewColumnCount}
                 />
                 {/* Daily column sets stay beside the view menu; other presets remain in the menu. */}
                 {p.presets.filter((x) => x.id === REQUIRED_VIEW_ID || x.id === LANGUAGES_VIEW_ID).map((x) => {

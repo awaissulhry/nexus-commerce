@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 
-type Row = { id: string; userId: string; surface: string; name: string; filters: unknown; isDefault: boolean; createdAt: Date; updatedAt: Date }
+type Row = { id: string; userId: string; surface: string; name: string; filters: unknown; isDefault: boolean; shared?: boolean; defaultProductTypes?: string[]; createdAt: Date; updatedAt: Date }
 const db = vi.hoisted(() => ({ rows: [] as Row[], alerts: [] as Array<{ savedViewId: string; isActive: boolean; lastFiredAt: Date | null }>, forceConflict: false, failCreateName: '', serial: 0 }))
 
 function matches(row: Row, where: Record<string, any>): boolean {
   return Object.entries(where).every(([key, value]) => {
-    const actual = row[key as keyof Row]
+    if (key === 'OR') return (value as Record<string, any>[]).some((branch) => matches(row, branch))
+    const actual = row[key as keyof Row] ?? (key === 'shared' ? false : key === 'defaultProductTypes' ? [] : undefined)
+    if (value && typeof value === 'object' && 'hasSome' in value) return (actual as string[]).some((type) => value.hasSome.includes(type))
     if (value instanceof Date) return actual instanceof Date && actual.getTime() === value.getTime()
     if (value && typeof value === 'object') {
       if ('in' in value) return value.in.includes(actual)
@@ -21,6 +23,7 @@ const savedView = {
   findMany: vi.fn(async ({ where }: { where: Record<string, any> }) => structuredClone(db.rows.filter((row) => matches(row, where)))),
   findUniqueOrThrow: vi.fn(async ({ where }: { where: { id: string } }) => structuredClone(db.rows.find((row) => row.id === where.id)!)),
   create: vi.fn(async ({ data }: { data: Omit<Row, 'id' | 'createdAt' | 'updatedAt'> }) => {
+    data = { shared: false, defaultProductTypes: [], ...data }
     if (data.name === db.failCreateName) throw new Error('Storage unavailable')
     if (db.rows.some((row) => row.userId === data.userId && row.surface === data.surface && row.name === data.name)) throw Object.assign(new Error('duplicate'), { code: 'P2002' })
     const row = { ...data, id: `new-${++db.serial}`, createdAt: new Date(), updatedAt: new Date() }
@@ -44,8 +47,10 @@ const transaction = vi.fn(async (fn: (tx: { savedView: typeof savedView }) => Pr
   catch (error) { db.rows = before; throw error }
 })
 
+const profiles = [{ id: 'bob', displayName: 'Bob Rossi' }, { id: 'carol', displayName: '' }]
 vi.mock('../db.js', () => ({ default: {
   get savedView() { return savedView },
+  userProfile: { findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => profiles.filter((p) => where.id.in.includes(p.id))) },
   savedViewAlert: { findMany: vi.fn(async () => db.alerts) },
   get $transaction() { return transaction },
 } }))
@@ -344,5 +349,72 @@ describe('products grid durable layout parity', () => {
     { v: 2, gridState: {}, page: {} },
   ])('rejects malformed products grid envelopes', async (filters) => {
     expect((await send('POST', '/saved-views', { name: 'Bad envelope', surface: PRODUCTS_NAMED, filters })).statusCode).toBe(400)
+  })
+})
+
+describe('team views and product-type defaults (SHEET-VIEWS P2)', () => {
+  it('lists a teammate\'s SHARED view with its owner, never their private views or their default', async () => {
+    seed({ id: 'bob-shared', userId: 'bob', name: 'Launch', shared: true, isDefault: true })
+    seed({ id: 'bob-private', userId: 'bob', name: 'Private' })
+    seed({ id: 'carol-shared', userId: 'carol', name: 'Carol view', shared: true })
+    seed({ id: 'mine', name: 'Launch' })
+    const items = (await send('GET', `/saved-views?surface=${NAMED}`)).json().items as Array<Record<string, unknown>>
+    expect(items.map((item) => item.id).sort()).toEqual(['bob-shared', 'carol-shared', 'mine'])
+    const bob = items.find((item) => item.id === 'bob-shared')!
+    expect(bob).toMatchObject({ owned: false, teamShared: true, sharedBy: 'Bob Rossi', isDefault: false, legacyShared: false })
+    // A teammate with no display name is not named by their email or id.
+    expect(items.find((item) => item.id === 'carol-shared')!.sharedBy).toBeNull()
+    expect(items.find((item) => item.id === 'mine')).toMatchObject({ owned: true, teamShared: false })
+  })
+
+  it('keeps a shared view the owner\'s: a teammate can neither change nor delete it', async () => {
+    seed({ id: 'bob-shared', userId: 'bob', name: 'Launch', shared: true })
+    expect((await send('PATCH', '/saved-views/bob-shared', { expectedUpdatedAt: stamp, name: 'Mine now' })).statusCode).toBe(404)
+    expect((await send('DELETE', '/saved-views/bob-shared')).statusCode).toBe(404)
+    expect(db.rows[0]).toMatchObject({ userId: 'bob', name: 'Launch' })
+  })
+
+  it('shares, and moves a product-type default off my other views', async () => {
+    seed({ id: 'old', name: 'Old jackets', defaultProductTypes: ['OUTERWEAR', 'PANTS'] })
+    seed({ id: 'new', name: 'New jackets' })
+    const response = await send('PATCH', '/saved-views/new', { expectedUpdatedAt: stamp, shared: true, defaultProductTypes: ['outerwear'] })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({ shared: true, defaultProductTypes: ['OUTERWEAR'] })
+    expect(db.rows.find((row) => row.id === 'old')!.defaultProductTypes).toEqual(['PANTS'])
+  })
+
+  it('refuses sharing outside a sheet\'s named views, and a malformed type list', async () => {
+    expect((await send('POST', '/saved-views', { surface: WORKING, name: 'Current layout', filters: payload(), shared: true })).statusCode).toBe(400)
+    expect((await send('POST', '/saved-views', { surface: 'products', name: 'Catalog', filters: {}, defaultProductTypes: ['OUTERWEAR'] })).statusCode).toBe(400)
+    expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Bad', filters: payload(), defaultProductTypes: 'OUTERWEAR' })).statusCode).toBe(400)
+    expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Bad2', filters: payload(), shared: 'yes' })).statusCode).toBe(400)
+    expect(db.rows).toEqual([])
+  })
+})
+
+describe('rule views (SHEET-VIEWS step 5)', () => {
+  it('stores a view that follows groups, the required fields and the gaps', async () => {
+    const rules = [{ kind: 'group', group: 'content' }, { kind: 'required' }, { kind: 'gaps' }]
+    const response = await send('POST', '/saved-views', { surface: NAMED, name: 'Follows', filters: { ...payload(), rules } })
+    expect(response.statusCode).toBe(200)
+    expect((db.rows[0].filters as { rules: unknown }).rules).toEqual(rules)
+  })
+
+  it('refuses a rule it does not know, a malformed or repeated rule, and too many rules', async () => {
+    for (const rules of [
+      'required',
+      [{ kind: 'locale', locale: 'it' }],
+      [{ kind: 'group' }],
+      [{ kind: 'group', group: '   ' }],
+      [{ kind: 'required', group: 'content' }],
+      [{ kind: 'gaps' }, { kind: 'gaps' }],
+      [{ kind: 'group', group: 'content' }, { kind: 'group', group: 'content' }],
+      Array.from({ length: 201 }, (_, index) => ({ kind: 'group', group: `g${index}` })),
+    ]) {
+      expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Bad rules', filters: { ...payload(), rules } })).statusCode, JSON.stringify(rules).slice(0, 60)).toBe(400)
+    }
+    // A schema-2 (columns only) view is checked the same way.
+    expect((await send('POST', '/saved-views', { surface: NAMED, name: 'Bad v2', filters: { v: 2, kind: 'columns', columns: ['brand'], rules: [{ kind: 'nope' }] } })).statusCode).toBe(400)
+    expect(db.rows).toEqual([])
   })
 })

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ALL_VIEW_ID } from '@/design-system/grid/views/presets'
 
-import { ALWAYS_COLUMNS, alwaysColumnsFor, essentialsColumns, IDENTITY_COLUMN, orderColumnKeys, REQUIRED_VIEW_ID, rowIsMissingRequired, sheetViews, structuralColumnKeys, type ViewContext } from './views'
+import { ALWAYS_COLUMNS, alwaysColumnsFor, essentialsColumns, GAPS_VIEW_ID, IDENTITY_COLUMN, orderColumnKeys, REQUIRED_VIEW_ID, rowIsMissingRequired, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import type { SheetColumn } from './master/types'
 
 const col = (over: Partial<SheetColumn> & Pick<SheetColumn, 'key'>): SheetColumn => ({
@@ -113,6 +113,15 @@ describe('sheetViews — complete and focused Information views', () => {
     const cols = [...COLUMNS, col({ key: 'sku', group: 'Identity', storage: 'column', requiredBy: ['Amazon · IT'] })]
     const required = sheetViews(cols, ctx).presets.find((v) => v.id === REQUIRED_VIEW_ID)!
     expect(required.columns).not.toContain('sku')
+  })
+
+  it('offers "Has gaps" — the columns readiness flags on a row in view, in the sheet order — only when there is a gap', () => {
+    const flagged = sheetViews(COLUMNS, { ...ctx, flaggedKeys: ['fabric_type', 'sku', 'brand', 'not_a_column'] })
+    const gaps = flagged.presets.find((v) => v.id === GAPS_VIEW_ID)!
+    expect(gaps.label).toBe('Has gaps')
+    expect(gaps.columns).toEqual(['brand', 'fabric_type'])
+    expect(flagged.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'languages', GAPS_VIEW_ID, 'essentials', 'localized-content'])
+    expect(sheetViews(COLUMNS, { ...ctx, flaggedKeys: [] }).presets.map((v) => v.id)).not.toContain(GAPS_VIEW_ID)
   })
 
   it('omits an empty Required set while retaining useful content views', () => {
