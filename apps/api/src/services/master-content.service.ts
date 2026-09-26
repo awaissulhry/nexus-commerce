@@ -33,6 +33,11 @@ export interface MasterContentUpdateContext {
   reason?: string
   idempotencyKey?: string
   applyGrace?: boolean
+  /**
+   * PSIE (the Owner's D1 (a), 2026-09-26) — `false` = cascade the values but queue NO channel update: the product
+   * sheet's import saves Nexus only, and sending is its own step. Default: queue, exactly as before.
+   */
+  queueOutbound?: boolean
   tx?: Prisma.TransactionClient
   /**
    * The caller already wrote the master content (e.g. PATCH /products/bulk writes
@@ -141,7 +146,7 @@ export class MasterContentService {
         cascadedListingIds.push(listing.id)
         // The existing content sync queue consumes a language-qualified payload.
         // Caller transactions leave scheduling to the drain after commit.
-        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false) {
+        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false && ctx.queueOutbound !== false) {
           const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
           const queue = await createOutboundRow(tx, { data: { productId: listing.productId, channelListingId: listing.id, channelConnectionId: listing.channelConnectionId, targetChannel: listing.channel as any,
             targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',

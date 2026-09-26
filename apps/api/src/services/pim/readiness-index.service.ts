@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
-import { beforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 // LX.F2 R-LX-17 — the ONE resolver, the same function the catalogue projection calls.
@@ -13,11 +14,33 @@ import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readine
 
 type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
-/** One family refresh per outer write, after cascades/formulas and before commit. */
+const deferredFamilies = new AsyncLocalStorage<Set<string>>()
+/**
+ * PSIE (the Owner's choice, 2026-09-26) — inside `work`, a readiness refresh is only NOTED (the family's root id) and
+ * never run in the write's transaction. The caller rebuilds each noted family once, right after its writes commit, with
+ * `reconcileFamilyReadiness`. Used by the product sheet's import only; every other writer keeps readiness in its own
+ * transaction, exactly as before.
+ */
+export function deferReadiness<T>(families: Set<string>, work: () => Promise<T>): Promise<T> {
+  return deferredFamilies.run(families, work)
+}
+
+/**
+ * One family refresh per outer write, after cascades/formulas and before commit.
+ *
+ * PSIE — a whole-family refresh covers every coordinate of that family, so inside one transaction a scoped refresh
+ * is skipped once the whole family is registered, and registering the whole family drops the scoped ones. A
+ * transaction that saves many records of one family (the sheet import) then rebuilds its readiness ONCE.
+ */
 export async function produceReadiness(productId: string, scope?: ReadinessScope) {
   const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
-  await beforeDatabaseCommit(`readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`, () => reconcileFamilyReadiness(rootId, scope))
+  const deferred = deferredFamilies.getStore()
+  if (deferred) { deferred.add(rootId); return }
+  const family = `readiness:${rootId}`
+  if (scope && hasBeforeDatabaseCommit(family)) return
+  if (!scope) dropBeforeDatabaseCommit(`${family}:`)
+  await beforeDatabaseCommit(scope ? `${family}:${JSON.stringify(scope)}` : family, () => reconcileFamilyReadiness(rootId, scope))
 }
 
 /** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */

@@ -46,7 +46,7 @@ export async function catalogWorkbookTemplate(input: { market: string; familyId:
     if (!account?.isActive || account.channelType !== c.channel || account.marketplace && !['GLOBAL', c.marketplace].includes(account.marketplace) || !market?.language) throw new Error('Choose an active account and configured marketplace that match this destination')
     const languages = await marketLanguages(c.channel, c.marketplace)
     for (const language of languages) if (language !== PRIMARY_CONTENT_LOCALE) includedLocales.add(language)
-    const contract = await contracts.channel(c.channel, c.marketplace, c.category)
+    const contract = await contracts.channel(c.channel, c.marketplace, c.category, c.accountId)
     const categoryKey = transferCategoryField(c.channel)
     scopes.push({ ...c, locale: '', sheet: `${c.channel} ${c.marketplace} ${i + 1}`, entity: 'Overrides',
       fields: [{ field: categoryKey, label: 'Channel category', type: c.channel === 'ETSY' ? 'number' : 'text', required: c.channel === 'SHOPIFY' ? 'optional' : 'required' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey && !channelContentField(f, contract.masterLocalizableKeys)).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))],

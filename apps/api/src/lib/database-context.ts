@@ -53,6 +53,16 @@ export async function afterDatabaseCommit(key: string, effect: () => Promise<unk
   await effect()
 }
 
+/** PSIE — is a before-commit producer with this key already registered in the active transaction? */
+export function hasBeforeDatabaseCommit(key: string): boolean {
+  return context.getStore()?.producers.has(key) ?? false
+}
+/** PSIE — drop registered before-commit producers whose key starts with `prefix` (a wider producer covers them). */
+export function dropBeforeDatabaseCommit(prefix: string): void {
+  const producers = context.getStore()?.producers
+  if (producers) for (const key of [...producers.keys()]) if (key.startsWith(prefix)) producers.delete(key)
+}
+
 /** Deduplicated synchronous producers: failure rolls the entire content transaction back. */
 export async function beforeDatabaseCommit(key: string, producer: () => Promise<unknown>) {
   const active = context.getStore()
