@@ -29,7 +29,7 @@ describe('readFamilyVariationsReport', () => {
     // 'Verde' (FAM) and 'verde' (FAM2) are ONE option to create, counted once.
     expect(report.totals).toEqual({ families: 3, variants: 4, optionsToCreate: 1,
       issues: { 'theme-without-axes': 1, 'axis-without-attribute': 0, empty: 1, 'new-option': 2, 'store-conflict': 0, 'store-legacy-only': 0, duplicate: 0 } })
-    expect(report.families[0].variants[1].values.color).toMatchObject({ text: 'Verde', option: null, newOption: 'verde' })
+    expect(report.families[0].variants[1].values.color).toMatchObject({ text: 'Verde', option: null, newOption: 'green' })
     expect(db.product.update).not.toHaveBeenCalled()
     expect(db.product.updateMany).not.toHaveBeenCalled()
   })

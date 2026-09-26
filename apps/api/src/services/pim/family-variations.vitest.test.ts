@@ -80,8 +80,8 @@ describe('setFamilyVariationValues', () => {
       .rejects.toThrow('"Verde" is not a Color value yet')
     expect((await read('fam')).version).toBe(7)
     const added = await setFamilyVariationValues('fam', { expectedVersion: 7, changes: [{ productId: 'v3', axis: 'color', value: 'Verde', addOption: true }] })
-    expect(added.createdOptions).toEqual([{ axis: 'color', code: 'verde', label: 'Verde' }])
-    expect(await prisma.attributeOption.findFirst({ where: { attributeId: 'a-color', code: 'verde' }, select: { label: true, sortOrder: true } })).toEqual({ label: 'Verde', sortOrder: 3 })
+    expect(added.createdOptions).toEqual([{ axis: 'color', code: 'green', label: 'Verde' }])
+    expect(await prisma.attributeOption.findFirst({ where: { attributeId: 'a-color', code: 'green' }, select: { label: true, sortOrder: true } })).toEqual({ label: 'Verde', sortOrder: 3 })
   })
 
   it('refuses two COMPLETE variants with the same values, and writes nothing', async () => {

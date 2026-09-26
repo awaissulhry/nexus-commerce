@@ -20,7 +20,7 @@ import { produceReadinessForProducts } from './readiness-index.service.js'
 import { variationBag } from './shared-variation-values.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { variationAxisValue } from './variation-collisions.js'
-import { attributeForAxis, matchValue, newOptionCode, valueIdentity, type DictionaryAttribute } from './family-variations-core.js'
+import { attributeForAxis, codeForNewOption, matchValue, valueIdentity, type DictionaryAttribute } from './family-variations-core.js'
 
 export class FamilyVariationError extends Error {
   constructor(message: string, readonly status = 409, readonly details?: Record<string, unknown>) {
@@ -92,7 +92,7 @@ export async function setFamilyVariationValues(familyId: string, input: { expect
         if (match) saved = match.spelled
         else if (!change.addOption) throw new FamilyVariationError(`"${text}" is not a ${axis.attribute.label} value yet. Choose "Save as a new option" to add it.`, 422, { axis: axis.attribute.code, value: text })
         else {
-          const code = newOptionCode(text, axis.attribute.options.map(o => o.code))
+          const code = codeForNewOption(text, axis.attribute)
           const sortOrder = Math.max(0, ...axis.attribute.options.map(o => o.sortOrder)) + 1
           const option = await prisma.attributeOption.create({ data: { attributeId: axis.attribute.id, code, label: text, sortOrder },
             select: { id: true, code: true, label: true, metadata: true, synonyms: true, sortOrder: true, archivedAt: true } })

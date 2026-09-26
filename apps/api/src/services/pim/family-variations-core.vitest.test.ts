@@ -7,7 +7,7 @@
  *  · the backfill planner reads the three value stores and REPORTS every conflict, empty slot and duplicate — it decides nothing.
  */
 import { describe, expect, it } from 'vitest'
-import { attributeForAxis, matchValue, newOptionCode, optionForValue, planFamilyVariations, type DictionaryAttribute } from './family-variations-core.js'
+import { attributeForAxis, codeForNewOption, matchValue, newOptionCode, optionForValue, planFamilyVariations, type DictionaryAttribute } from './family-variations-core.js'
 
 const option = (code: string, label: string, extra: Partial<DictionaryAttribute['options'][number]> = {}) =>
   ({ id: `o-${code}`, code, label, metadata: null, synonyms: [], sortOrder: 0, archivedAt: null, ...extra })
@@ -87,6 +87,21 @@ describe('newOptionCode', () => {
   })
 })
 
+describe('codeForNewOption — one code set with the attributes lane (concept codes first)', () => {
+  it('a value the concept list knows gets the concept code, converted by the starter rule ("Verde" → green, "3XL" → 3xl)', () => {
+    expect(codeForNewOption('Verde', COLOR)).toBe('green')
+    expect(codeForNewOption('3XL', SIZE)).toBe('3xl')
+  })
+  it('a value the concept does not know gets a code from its text; an attribute with no concept too', () => {
+    expect(codeForNewOption('XXS', SIZE)).toBe('xxs')
+    expect(codeForNewOption('Crema e Vino | Giacca', COLOR)).toBe('crema_e_vino_giacca')
+    expect(codeForNewOption('Slim', FIT)).toBe('slim')
+  })
+  it('never reuses a code the attribute already has', () => {
+    expect(codeForNewOption('Nero', COLOR)).toBe('black_2')
+  })
+})
+
 describe('planFamilyVariations — the backfill report (decides nothing)', () => {
   const variant = (id: string, stores: { variations?: Record<string, unknown>; flat?: Record<string, unknown>; legacy?: Record<string, unknown> }, included = true) =>
     ({ id, sku: id.toUpperCase(), included, categoryAttributes: { ...(stores.flat ?? {}), ...(stores.variations ? { variations: stores.variations } : {}) }, variantAttributes: stores.legacy ?? null })
@@ -108,7 +123,7 @@ describe('planFamilyVariations — the backfill report (decides nothing)', () =>
     expect(cell('a', 'color')).toMatchObject({ text: 'Nero', option: 'black', from: 'variations' })
     expect(cell('b', 'size')).toMatchObject({ text: 'L', option: 'l', from: 'legacy' })
     expect(cell('c', 'size')).toMatchObject({ text: 'XXL', option: 'xxl', from: 'variations', conflict: ['XS', 'XXL'] })
-    expect(cell('d', 'color')).toMatchObject({ text: 'Verde', option: null, newOption: 'verde' })
+    expect(cell('d', 'color')).toMatchObject({ text: 'Verde', option: null, newOption: 'green' })
     expect(cell('e', 'size')).toMatchObject({ text: '', option: null, empty: true })
     expect(plan.issues.map(i => i.kind).sort()).toEqual(['duplicate', 'empty', 'new-option', 'store-conflict', 'store-legacy-only'])
     expect(plan.issues.find(i => i.kind === 'duplicate')).toMatchObject({ skus: ['A', 'F'] })

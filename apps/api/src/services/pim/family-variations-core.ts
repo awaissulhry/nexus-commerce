@@ -5,6 +5,7 @@
  * (`AttributeOption`: code, default label, `metadata.labels` per language, synonyms — the attributes lane's model). These functions
  * decide nothing about the database: the writer and the backfill call them, and the backfill only REPORTS what they find.
  */
+import { conceptByKey, conceptValueCode } from '@nexus/shared/attribute-concepts'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { variationCollisionGroups } from './variation-collisions.js'
 
@@ -103,6 +104,19 @@ export function newOptionCode(text: string, taken: readonly string[]): string {
   }
 }
 
+/**
+ * The code a NEW option of this attribute gets — ONE code set with the attributes lane: the attribute's concept value code first
+ * ("Verde" → `green`, converted by the starter rule in `attribute-concepts-rows.ts optionsFor`), else a code from the text.
+ * Never a code the attribute already has.
+ */
+export function codeForNewOption(text: string, attribute: DictionaryAttribute): string {
+  const taken = attribute.options.map(o => o.code)
+  const concept = conceptByKey(attribute.semanticKey)
+  const fromConcept = concept ? conceptValueCode(concept, text)?.toLowerCase().replace(/[^a-z0-9_]+/g, '_') : undefined
+  if (fromConcept && !taken.includes(fromConcept)) return fromConcept
+  return newOptionCode(fromConcept ?? text, taken)
+}
+
 // ------------------------------------------------------------------
 // The backfill report
 // ------------------------------------------------------------------
@@ -195,7 +209,8 @@ export function planFamilyVariations(input: FamilyVariationsInput): FamilyVariat
         const perAttribute = newCodes.get(code) ?? new Map<string, string>()
         newCodes.set(code, perAttribute)
         const folded = foldValue(chosen.text)
-        const newCode = perAttribute.get(folded) ?? newOptionCode(chosen.text, [...axis.attribute.options.map(o => o.code), ...perAttribute.values()])
+        const newCode = perAttribute.get(folded) ?? codeForNewOption(chosen.text, { ...axis.attribute, options: [...axis.attribute.options,
+          ...[...perAttribute.values()].map(code => ({ id: code, code, label: code, metadata: null, synonyms: [], sortOrder: 0, archivedAt: null }))] })
         perAttribute.set(folded, newCode)
         planned.newOption = newCode
         group(`new:${code}:${newCode}`, () => ({ kind: 'new-option', axis: code, text: chosen.text, code: newCode, skus: [] }), v.sku)
