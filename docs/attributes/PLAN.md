@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0 (merged), S1, S2 built 2026-09-26 (the channel footprint; readiness follows it); S3 next | §10.9 |
+| P3b | 🟡 S0, S1 merged; S2, S3 built 2026-09-26 (readiness follows the footprint; placement, archive, undo); S4 next | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -802,6 +802,32 @@ keys per attribute and readiness rows by state.
   checked" now covers listings on a channel with no active account (before, an `absent` row); totals counted from index
   rows shrink.
 
+**S3 built (2026-09-26, branch `feat/attributes-p3b-s3`): placement, archive instead of delete, undo.**
+
+- Migration `20260926n_attr_placement` (additive): `CustomAttribute.placement` (`'shared'` by default),
+  `placementChannels`, `archivedAt`. `baseline.sql` regenerated; drift, ownership, policy parity, expand/contract and
+  the migration upgrade check on a throwaway server pass; database tests 72.
+- `services/pim/attribute-placement.service.ts`:
+  - `setAttributePlacement` — a label (D1 = A): no value moves. A move to channels restricts an "everywhere" family
+    requirement to those channels; a family that requires the attribute on a channel outside them blocks the move
+    (409, naming each family and channel — a required attribute is never hidden). Moving back to Shared changes no
+    requirement. A no-op writes nothing.
+  - `undoPlacementChange(auditId)` — restores the audit row's `before`, only while the attribute still equals its
+    `after` (otherwise 409: undo the later change first).
+  - `archiveAttribute` / `restoreAttribute` — archive refuses a required attribute.
+  - `deleteAttribute` — refuses an attribute with stored values (products or translations) or family links: 409
+    "Archive it instead" with the counts. Deletes an unused one.
+  - Every change writes an `AuditLog` row (`attribute.placement` / `.archive` / `.restore` / `.delete`) with before
+    and after, IN the same transaction (the undo reads it).
+- Routes (`pim.manage`, the existing `/api/attributes` rule): `PATCH /attributes/:id/placement`
+  `{ placement, channels }`, `POST /attributes/:id/archive`, `POST /attributes/:id/restore`,
+  `POST /attributes/placement-changes/:auditId/undo`; `DELETE /attributes/:id` now answers 409 for a used attribute.
+- Tests: `attribute-placement.vitest.test.ts` (14, profiles off and on; 4 planted mistakes caught), including
+  **publish parity on F4**: the eBay values resolved for the product and the Shared view's columns are identical before
+  and after moving three Amazon-only attributes to Amazon. (The Shared-view half flips on purpose in S4.)
+- Full API suite on the private copy: profiles OFF, only the 4 local-only files fail; profiles ON, only the files in
+  `profiles-on-baseline.ci.json` with their counts, plus the same local-only files.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
 The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
@@ -818,6 +844,7 @@ The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the de
 | Filter "missing a required field at eBay DE" | `GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&field][&requiredBy][&language][&accountId][&take][&after]` | `checkedProducts` / `pendingProducts` say what was not checked or is being rebuilt; show "checking…", never "none missing", for those. |
 | Save a dictionary attribute on the Shared scope with no market chosen | `PATCH /api/products/bulk` without `marketplaceContexts` | Works for family and saved attributes. An Amazon-only attribute still needs the scope. |
 | Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
+| Move an attribute to a channel, archive, restore, undo (P3b S3; settings screen S8) | `PATCH /api/attributes/:id/placement`, `POST …/archive`, `POST …/restore`, `POST /api/attributes/placement-changes/:auditId/undo` | 409 answers carry the reason (and `details`); `DELETE /api/attributes/:id` now says "Archive it instead" for a used attribute. |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 
