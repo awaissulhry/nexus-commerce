@@ -1,3 +1,4 @@
+import { listActiveConnections } from '../connection-resolver.service.js'
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
 import { assertCsvRectangle, parseCatalogCsv } from './catalog-csv-dialect.js'
 import { TRANSFER_MAX_FILE_BYTES, TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
@@ -426,7 +427,8 @@ const record = (v: unknown): Record<string, any> => v && typeof v === 'object' &
 
 /** The store a Shopify file belongs to: the one named (when it is a Shopify store), else the only one connected. */
 async function chooseStore(prisma: Db, requested: string | undefined, productId: string | undefined): Promise<{ id: string; label: string }> {
-  const stores = await prisma.channelConnection.findMany({ where: { channelType: 'SHOPIFY', isActive: true }, select: { id: true, displayName: true, accountLabel: true }, orderBy: { id: 'asc' } })
+  // MAP.3 — the resolver lists the stores; no ambient connection lookup (the caller names the store, or there is one).
+  const stores = await listActiveConnections('SHOPIFY')
   const label = (s: typeof stores[number]) => s.displayName ?? s.accountLabel ?? 'Shopify store'
   const named = requested ? stores.find(s => s.id === requested) : undefined
   if (named) return { id: named.id, label: label(named) }
@@ -531,6 +533,7 @@ export function shopifyFilePreview(table: ShopifyCsvTable, result: ShopifyCsvRes
 /** The active Shopify stores, for the File mappings page's store choice. */
 export async function shopifyStores(): Promise<{ id: string; label: string }[]> {
   const { default: prisma } = await import('../../db.js')
-  const stores = await prisma.channelConnection.findMany({ where: { channelType: 'SHOPIFY', isActive: true }, select: { id: true, displayName: true, accountLabel: true }, orderBy: { id: 'asc' } })
+  // MAP.3 — the resolver lists the stores; no ambient connection lookup (the caller names the store, or there is one).
+  const stores = await listActiveConnections('SHOPIFY')
   return stores.map(s => ({ id: s.id, label: s.displayName ?? s.accountLabel ?? 'Shopify store' }))
 }
