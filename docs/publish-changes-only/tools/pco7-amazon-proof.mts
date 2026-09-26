@@ -5,15 +5,20 @@
  * Default is PLAN. Preparation makes catalog/schema reads in BEGIN READ ONLY, canonical listing GETs and validation
  * previews. Canonical clients can record normal OAuth refresh/leases and gateway logs. No catalog content or queue edit.
  * Execution requires the Owner's per-run word for this exact proposal. It sends at most one canary and one restore feed.
+ * On the production server (`railway ssh`, no .env; since 2026-09-26 only the server can open the KMS-sealed channel logins)
+ * the service's own settings are used; the same database-target check applies, and there is no git push to wait for.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { parse } from 'dotenv'
 import pg from 'pg'
 
-const ROOT = '/Users/awais/nexus-commerce', WORKSPACE = 'nexus_legacy_workspace'
+// The checkout this tool lives in, so the proof runs the code beside it (a fixed path ran a stale checkout).
+const ROOT = fileURLToPath(new URL('../../..', import.meta.url)).replace(/\/$/, ''), WORKSPACE = 'nexus_legacy_workspace'
+const SERVER = process.env.RAILWAY_ENVIRONMENT_NAME === 'production' && !existsSync(`${ROOT}/.env`)
 const SKU = 'GALE-JACKET-BLACK-MEN-S', MARKET = 'IT', MARKETPLACE_ID = 'APJ6JRA9NG5V4', ATTRIBUTE = 'generic_keyword', LANGUAGE = 'it_IT'
 const args = process.argv.slice(2), prepare = args.includes('--prepare'), execute = args.includes('--execute-approved')
 const arg = (key: string) => { const index = args.indexOf(`--${key}`); return index < 0 ? undefined : args[index + 1] }
@@ -32,13 +37,14 @@ const digest = (value: unknown) => createHash('sha256').update(canonical(value))
 const same = (a: unknown, b: unknown) => digest(a) === digest(b)
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 function noPush() {
+  if (SERVER) return // the production container has no git, no push and no ps
   try {
     const output = execSync('ps -axo pid=,command= | /usr/bin/grep -E "^ *[0-9]+ (/[^ ]*/)?git push|^ *[0-9]+ /bin/bash \\.githooks/pre-push"', { encoding: 'utf8', shell: '/bin/zsh' })
     if (output.trim()) throw new Error('A push is active; no evidence file will be edited.')
   } catch (error: any) { if (error.status !== 1 || error.stderr?.toString().trim()) throw error }
 }
 const save = (path: string, value: unknown, exclusive = false) => { noPush(); writeFileSync(path, JSON.stringify(value, null, 2) + '\n', { flag: exclusive ? 'wx' : 'w', mode: 0o600 }) }
-const env = parse(readFileSync(`${ROOT}/.env`, 'utf8')), database = new URL(env.DATABASE_URL)
+const env = SERVER ? process.env as Record<string, string> : parse(readFileSync(`${ROOT}/.env`, 'utf8')), database = new URL(env.DATABASE_URL)
 if (database.hostname !== 'ep-purple-river-altf6t3y-pooler.c-3.eu-central-1.aws.neon.tech' || database.pathname !== '/neondb') throw new Error('Unexpected production database target.')
 for (const [key, value] of Object.entries(env)) if (/^(DATABASE_URL$|DIRECT_URL$|NEXUS_|AMAZON_|AWS_)/.test(key)) process.env[key] = value
 Object.assign(process.env, { NEXUS_WORKSPACES_ENABLED: '1', NEXUS_DATABASE_POOL_MAX: '2', NEXUS_DISABLE_BACKGROUND_JOBS: '1', ENABLE_QUEUE_WORKERS: '0',
