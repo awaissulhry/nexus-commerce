@@ -423,3 +423,31 @@ headers are not on any official page.
 10. Category 177104: leaf status and full path.
 11. Current eBay file limits on an official page (only a forum reply by eBay's tools team gives 14.9 MB and 150,000
     lines).
+
+## 7. N0 — measured on the Owner's files (2026-09-26; the files stay on the Owner's Mac)
+
+**Shopify product export** ("Plain CSV", 43 products): comma-separated, UTF-8 **without** BOM, LF line endings,
+prices with a decimal point. 77 columns, 333 rows: 43 product rows, 47 variant rows with a SKU, 249 extra-picture rows.
+It uses the **classic** header names (`Handle`, `Body (HTML)`, `Variant SKU`, `Variant Price`, `Variant Compare At
+Price`, `Image Src`, `SEO Title`, `Status`), plus `Option1..3 Linked To`, the `Unit Price …` columns, `Variant Tax Code`
+and `Cost per item`. The barcode header is **`Variant Barcodes`** (plural). 25 product metafield columns, named
+`Label (product.metafields.<namespace>.<key>)`. No variant metafield columns. So §2.1's "new names" are what the reader
+must also accept; the export writes the names this file uses.
+
+**eBay category template** (Seller Hub, ebay.it, category 177104, downloaded as `.xlsx`): 5 sheets — two instruction
+sheets, **`Listings`** (the data), hidden `Categories` (177104 and 177111 with their condition ids) and hidden
+`ListingStaticData` (allowed values). On `Listings`: three `#INFO` rows (`Created=<epoch>`, `Version=1.0`,
+`Template=fx_category_template_EBAY_IT`, plus the colour legend), then the header on **row 4**:
+`*Action(SiteID=Italy|Country=IT|Currency=EUR|Version=1193)` and 65 more columns, English names. Data rows start at
+row 5 (column D, `Category name`, is a formula). About 706,000 cell drop-downs.
+- **Only one item specific column: `C:Marca`.** Other aspects (Colore, Taglia, Materiale, …) are added as extra `C:`
+  columns by the seller.
+- **`Action` allows `Add` only**, and there is **no item-number column**: this template creates new listings.
+  Whether the same upload accepts `Revise` rows with an item number is **not verified** (it needs one real upload).
+- Policies by **name** (`Shipping profile name`, `Return profile name`, `Payment profile name`); GPSR columns
+  (`Manufacturer …`, `Responsible Person 1 …`, `Product Safety …`, `Regulatory Document Ids`); `Condition ID`,
+  `Format`, `Duration`, `Buy It Now price`, Best Offer columns (`Best Offer Enabled`, `Best Offer Auto Accept Price`,
+  `Minimum Best Offer Price`), `VAT%`, `Location`, two shipping-service groups, `Max dispatch time`, returns columns,
+  `P:EPID`, `VideoID`, `Schedule Time`.
+- It is an `.xlsx`, not a CSV: the reader takes both (Seller Hub offers both), and the export writes into the
+  downloaded workbook itself (as the Amazon export writes into Amazon's template), keeping its sheets and drop-downs.
