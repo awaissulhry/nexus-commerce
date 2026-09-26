@@ -89,8 +89,12 @@ if (missing.length) problems.push(`migrations not applied to the upgraded databa
 
 // 2. The same residue against the PR's schema.prisma.
 function residue(url) {
-  const out = execFileSync(PRISMA, ['migrate', 'diff', '--from-url', url, '--to-schema-datamodel', 'packages/database/prisma/schema.prisma', '--script'], {
+  // Prisma 7 reads the database from prisma.config.ts, which prefers MIGRATION_DATABASE_URL. Both
+  // are set here, so a value from a developer's .env (dotenv never overrides) cannot be diffed.
+  const out = execFileSync(PRISMA, ['migrate', 'diff', '--config', 'packages/database/prisma.config.ts',
+    '--from-config-datasource', '--to-schema', 'packages/database/prisma/schema.prisma', '--script'], {
     cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, MIGRATION_DATABASE_URL: url, DATABASE_URL: url },
   })
   return out.replace(/--[^\n]*/g, '').split(';').map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean)
 }
