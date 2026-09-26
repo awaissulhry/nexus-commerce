@@ -11,7 +11,7 @@ const baseline = process.argv[2]
 const historicalIndexes = process.argv.includes('--historical-indexes')
 if (!baseline) throw new Error('Provide the pre-workspace schema snapshot to rehearse.')
 const legacySchema = await readFile(baseline, 'utf8')
-const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', baseline, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--config', `${root}/packages/database/prisma.config.ts`, '--from-empty', '--to-schema', baseline, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
 const db = await PGlite.create()
 try {
   await db.exec(sql)

@@ -14,7 +14,6 @@ import { RESTORABLE_MASTER_FIELDS } from '../services/pim/restorable-fields.js'
 import { buildUploadPlan, parseUploadBuffer, summarisePlan, type PlanRow } from '../services/products/bulk-upload.service.js'
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
-import { idempotencyService } from '../services/idempotency.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { countProductStats, listProducts, type ProductListQuery } from '../services/products/list-products.service.js'
@@ -2200,14 +2199,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     const { productIds, sourceContext, targetContexts, columnsOnly } =
       request.body ?? {}
 
-    // NN.2 — idempotency on the replicate fan-out. Double-clicked
-    // 'Replicate' should not write the same target listings twice.
-    const idempotencyKey = request.headers['idempotency-key'] as
-      | string
-      | undefined
-    const cached = idempotencyService.lookup('replicate', idempotencyKey)
-    if (cached) return cached
-
     if (!Array.isArray(productIds) || productIds.length === 0) {
       return reply.code(400).send({ error: 'productIds required' })
     }
@@ -2433,9 +2424,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       skippedNoSource,
       errors,
     }
-    // NN.2 — store the replicate result so a duplicate request with
-    // the same Idempotency-Key returns identical bytes.
-    idempotencyService.store('replicate', idempotencyKey, responseBody)
     return responseBody
   })
 

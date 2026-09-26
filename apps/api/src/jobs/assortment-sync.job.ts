@@ -21,6 +21,10 @@ let stopWorker: (() => void) | null = null
 
 export function startAssortmentSync(): void {
   if (!stopWorker) stopWorker = startAssortmentSyncWorker()
+  startAssortmentRepair()
+}
+
+export function startAssortmentRepair(): void {
   if (scheduledTask) return
   scheduledTask = cron.schedule('17 3 * * *', async () => {
     try {

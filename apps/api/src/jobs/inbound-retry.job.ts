@@ -34,8 +34,9 @@ import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { withIngressWorkspace } from '../lib/workspace-ingress.js'
-import { completeInbound, deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
+import { deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
 import { canReplayInbound, inboundHandlerFor } from '../services/cx/ingress/handlers.js'
+import { claimInbound, inboundDatabaseNow, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 
 const BATCH = 50
 
@@ -51,7 +52,8 @@ let lastRunAt: Date | null = null
 let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
 
 /** One sweep. Exported so a test can run it without a scheduler. */
-export async function runInboundRetrySweep(now: Date = new Date()): Promise<InboundRetryStats> {
+export async function runInboundRetrySweep(now?: Date): Promise<InboundRetryStats> {
+  now ??= await inboundDatabaseNow()
   const stats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
   const events = await dueInboundEvents(BATCH, now)
   stats.due = events.length
@@ -79,25 +81,30 @@ export async function runInboundRetrySweep(now: Date = new Date()): Promise<Inbo
     }
 
     try {
-      await withIngressWorkspace(event.workspaceId, async () => {
-        const handler = await inboundHandlerFor(event.channel, event.eventType)
-        // canReplayInbound just said yes, so a null here means the registry and the
-        // module disagree — a wrong export name. Say so rather than reporting the
-        // TypeError that calling null would raise.
-        if (!handler) throw new Error(`The replay registry lists ${event.channel}/${event.eventType} but its handler could not be loaded.`)
-        // The account comes from the LEDGER ROW, not from the payload and not from a
-        // lookup: the stored payload is the channel's own body and names no Nexus
-        // account, and deducing one means "the only connected account" — the ambient
-        // resolution the MAP.3 ratchet forbids.
-        await handler(event.payload, { connectionId: event.connectionId, eventType: event.eventType, channel: event.channel })
-        await completeInbound(event.id, true)
+      const ran = await withIngressWorkspace(event.workspaceId, async () => {
+        // Claimed at the database's current time, not the sweep's start: a slow batch
+        // would otherwise hand later events a lease that has already expired.
+        const claim = await claimInbound(event.id)
+        if (!claim) return false // another worker holds it, or it changed since it was selected
+        await runWithInboundClaim(claim, async (stored, signal) => {
+          const handler = await inboundHandlerFor(stored.channel, stored.eventType)
+          // canReplayInbound just said yes, so a null here means the registry and the
+          // module disagree — a wrong export name. Say so rather than reporting the
+          // TypeError that calling null would raise.
+          if (!handler) throw new Error(`The replay registry lists ${event.channel}/${event.eventType} but its handler could not be loaded.`)
+          // The account and payload come from the CLAIMED LEDGER ROW, not from the
+          // selection above and not from a lookup: the stored payload is the channel's
+          // own body and names no Nexus account, and deducing one means "the only
+          // connected account" — the ambient resolution the MAP.3 ratchet forbids.
+          signal.throwIfAborted()
+          await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
+        })
+        return true
       })
-      stats.succeeded++
+      if (ran) stats.succeeded++
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      // `completeInbound` decides between another backoff and dead letters; it is the
-      // one place that knows the attempt budget.
-      await withIngressWorkspace(event.workspaceId, () => completeInbound(event.id, false, message))
+      // The claim owner has scheduled retry or dead-lettered the exhausted attempt.
       stats.failed++
       logger.warn('[inbound-retry] replay failed', { id: event.id, channel: event.channel, eventType: event.eventType, error: message })
     }

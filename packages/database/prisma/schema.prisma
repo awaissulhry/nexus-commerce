@@ -2,9 +2,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator modelMetadata {
+  provider = "nexus-model-metadata"
+  output   = "../workspaces"
+}
+
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum FulfillmentMethod {
@@ -5137,6 +5141,30 @@ model PasswordResetToken {
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
 
+/// One Idempotency-Key command: claimed before its handler runs, replayed while it
+/// lasts. Semantics live in apps/api/src/lib/command-idempotency.ts.
+model CommandReceipt {
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// The command, e.g. "pim-attach". A key is unique within its command.
+  scope       String
+  /// SHA-256 of the client's Idempotency-Key, so a key of any length fits.
+  keyHash     String
+  /// SHA-256 of the canonical request (params, query, body, actor).
+  requestHash String
+  actorUserId String?
+  /// pending (handler running) | completed (a 2xx response is stored)
+  status      String   @default("pending")
+  httpStatus  Int?
+  response    Json?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, scope, keyHash], name: "scope_keyHash")
+  @@index([workspaceId, expiresAt])
+}
+
 model WebhookEvent {
   // Business ownership comes from verified database context.
   workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -5172,6 +5200,10 @@ model WebhookEvent {
   attempts      Int       @default(0)
   deliveries    Int       @default(0)
   nextAttemptAt DateTime?
+  processingToken String?
+  processingUntil DateTime?
+  rawBody Bytes?
+  verificationHeaders Json?
   // Tri-state on purpose: true = checked and passed, false = checked and
   // failed, null = this transport carries no signature. Amazon's SQS
   // notifications are unsigned JSON trusted via the queue's IAM policy, so

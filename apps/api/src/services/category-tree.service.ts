@@ -70,8 +70,13 @@ type CategoryNode = {
 export class CategoryTreeService {
   constructor(private readonly db: Prisma.TransactionClient | typeof prisma = prisma) {}
 
+  // Keep the runtime capability check separate from TypeScript narrowing: the
+  // Prisma 7 transaction type contains an index signature, so an `in` guard
+  // narrows the other branch to never even though interactive clients omit it.
+  private ownsTransaction(): boolean { return '$transaction' in this.db }
+
   private transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-    return '$transaction' in this.db ? this.db.$transaction(work, { maxWait: 10_000, timeout: 30_000 }) : work(this.db)
+    return this.ownsTransaction() ? (this.db as typeof prisma).$transaction(work, { maxWait: 10_000, timeout: 30_000 }) : work(this.db)
   }
 
   /** All tree writes, including legacy routes, share one business-scoped lock. */
@@ -142,7 +147,7 @@ export class CategoryTreeService {
   // ── Writes ───────────────────────────────────────────────────────────
 
   async create(input: CreateCategoryInput) {
-    if ('$transaction' in this.db) return this.withLock(service => service.create(input))
+    if (this.ownsTransaction()) return this.withLock(service => service.create(input))
     const parentId = input.parentId ?? null
     let parentDepth = -1
     if (parentId) {
@@ -183,7 +188,7 @@ export class CategoryTreeService {
   }
 
   async update(categoryId: string, patch: UpdateCategoryInput) {
-    if ('$transaction' in this.db) return this.withLock(service => service.update(categoryId, patch))
+    if (this.ownsTransaction()) return this.withLock(service => service.update(categoryId, patch))
     const exists = await this.db.category.findUnique({
       where: { id: categoryId },
       select: { id: true, parentId: true },
@@ -216,7 +221,7 @@ export class CategoryTreeService {
    *   3. Recompute depth on the moved subtree + update Category.parentId.
    */
   async move(categoryId: string, newParentId: string | null) {
-    if ('$transaction' in this.db) return this.withLock(async (service, tx) => {
+    if (this.ownsTransaction()) return this.withLock(async (service, tx) => {
       const { categoryDirectory, categoryChangeImpact } = await import('./taxonomy/category-workspace.js')
       const directory = await categoryDirectory(tx)
       const impact = await categoryChangeImpact({ action: 'move', id: categoryId, parentId: newParentId, expectedToken: directory.token }, tx)
@@ -296,7 +301,7 @@ export class CategoryTreeService {
    * ProductCategory rows would otherwise cascade-delete silently).
    */
   async remove(categoryId: string) {
-    if ('$transaction' in this.db) return this.withLock(service => service.remove(categoryId))
+    if (this.ownsTransaction()) return this.withLock(service => service.remove(categoryId))
     const node = await this.db.category.findUnique({
       where: { id: categoryId },
       select: {
@@ -334,7 +339,7 @@ export class CategoryTreeService {
     categoryIds: string[],
     opts: { primaryId?: string | null; source?: EventSource; userId?: string | null } = {},
   ) {
-    if ('$transaction' in this.db) {
+    if (this.ownsTransaction()) {
       const result = await this.withLock(service => service.assign(productId, categoryIds, opts))
       productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { categories: result.categoryIds, primaryCategoryId: result.primaryCategoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
       return result
@@ -385,7 +390,7 @@ export class CategoryTreeService {
     categoryId: string,
     opts: { source?: EventSource; userId?: string | null } = {},
   ) {
-    if ('$transaction' in this.db) {
+    if (this.ownsTransaction()) {
       const result = await this.withLock(service => service.unassign(productId, categoryId, opts))
       if (result.removed) productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { unassignedCategory: categoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
       return result

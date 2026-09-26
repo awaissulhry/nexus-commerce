@@ -1,0 +1,7075 @@
+{
+  "models": [
+    {
+      "name": "Product",
+      "fields": [
+        {
+          "name": "family",
+          "kind": "object",
+          "type": "ProductFamily",
+          "relationFromFields": [
+            "familyId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "workflowStage",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": [
+            "workflowStageId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "workflowTransitions",
+          "kind": "object",
+          "type": "WorkflowTransition",
+          "relationFromFields": []
+        },
+        {
+          "name": "workflowComments",
+          "kind": "object",
+          "type": "WorkflowComment",
+          "relationFromFields": []
+        },
+        {
+          "name": "tierPrices",
+          "kind": "object",
+          "type": "ProductTierPrice",
+          "relationFromFields": []
+        },
+        {
+          "name": "assetUsages",
+          "kind": "object",
+          "type": "AssetUsage",
+          "relationFromFields": []
+        },
+        {
+          "name": "aPlusContentAttachments",
+          "kind": "object",
+          "type": "APlusContentAsin",
+          "relationFromFields": []
+        },
+        {
+          "name": "repricingRules",
+          "kind": "object",
+          "type": "RepricingRule",
+          "relationFromFields": []
+        },
+        {
+          "name": "priceChangeEvents",
+          "kind": "object",
+          "type": "PriceChangeEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "categories",
+          "kind": "object",
+          "type": "ProductCategory",
+          "relationFromFields": []
+        },
+        {
+          "name": "costLayers",
+          "kind": "object",
+          "type": "StockCostLayer",
+          "relationFromFields": []
+        },
+        {
+          "name": "parent",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "parentId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "children",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": []
+        },
+        {
+          "name": "masterProduct",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "masterProductId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "masterVariations",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": []
+        },
+        {
+          "name": "variations",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": []
+        },
+        {
+          "name": "images",
+          "kind": "object",
+          "type": "ProductImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingImages",
+          "kind": "object",
+          "type": "ListingImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingWizards",
+          "kind": "object",
+          "type": "ListingWizard",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelListings",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingAliases",
+          "kind": "object",
+          "type": "ProductListingAlias",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelListingImages",
+          "kind": "object",
+          "type": "ChannelListingImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "listings",
+          "kind": "object",
+          "type": "Listing",
+          "relationFromFields": []
+        },
+        {
+          "name": "draftListings",
+          "kind": "object",
+          "type": "DraftListing",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockLogs",
+          "kind": "object",
+          "type": "StockLog",
+          "relationFromFields": []
+        },
+        {
+          "name": "marketplaceSyncs",
+          "kind": "object",
+          "type": "MarketplaceSync",
+          "relationFromFields": []
+        },
+        {
+          "name": "fbaShipmentItems",
+          "kind": "object",
+          "type": "FBAShipmentItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "pricingRuleProducts",
+          "kind": "object",
+          "type": "PricingRuleProduct",
+          "relationFromFields": []
+        },
+        {
+          "name": "syncHealthLogs",
+          "kind": "object",
+          "type": "SyncHealthLog",
+          "relationFromFields": []
+        },
+        {
+          "name": "syncLogs",
+          "kind": "object",
+          "type": "SyncLog",
+          "relationFromFields": []
+        },
+        {
+          "name": "orderItems",
+          "kind": "object",
+          "type": "OrderItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "outboundSyncQueue",
+          "kind": "object",
+          "type": "OutboundSyncQueue",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockLevels",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": []
+        },
+        {
+          "name": "fbaInventoryDetails",
+          "kind": "object",
+          "type": "FbaInventoryDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "lots",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": []
+        },
+        {
+          "name": "serials",
+          "kind": "object",
+          "type": "SerialNumber",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelStockEvents",
+          "kind": "object",
+          "type": "ChannelStockEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelLiveImages",
+          "kind": "object",
+          "type": "ChannelLiveImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "scheduledImagePublishes",
+          "kind": "object",
+          "type": "ScheduledImagePublish",
+          "relationFromFields": []
+        },
+        {
+          "name": "readinessIndex",
+          "kind": "object",
+          "type": "ReadinessIndex",
+          "relationFromFields": []
+        },
+        {
+          "name": "translations",
+          "kind": "object",
+          "type": "ProductTranslation",
+          "relationFromFields": []
+        },
+        {
+          "name": "relationsFrom",
+          "kind": "object",
+          "type": "ProductRelation",
+          "relationFromFields": []
+        },
+        {
+          "name": "relationsTo",
+          "kind": "object",
+          "type": "ProductRelation",
+          "relationFromFields": []
+        },
+        {
+          "name": "seoEntries",
+          "kind": "object",
+          "type": "ProductSeo",
+          "relationFromFields": []
+        },
+        {
+          "name": "workflowAssignments",
+          "kind": "object",
+          "type": "WorkflowAssignment",
+          "relationFromFields": []
+        },
+        {
+          "name": "recommendations",
+          "kind": "object",
+          "type": "ReplenishmentRecommendation",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockoutEvents",
+          "kind": "object",
+          "type": "StockoutEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "substitutionsAsPrimary",
+          "kind": "object",
+          "type": "ProductSubstitution",
+          "relationFromFields": []
+        },
+        {
+          "name": "substitutionsAsSubstitute",
+          "kind": "object",
+          "type": "ProductSubstitution",
+          "relationFromFields": []
+        },
+        {
+          "name": "wizardStepEvents",
+          "kind": "object",
+          "type": "WizardStepEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelPublishAttempts",
+          "kind": "object",
+          "type": "ChannelPublishAttempt",
+          "relationFromFields": []
+        },
+        {
+          "name": "amazonImageFeedJobs",
+          "kind": "object",
+          "type": "AmazonImageFeedJob",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelImagePublishJobs",
+          "kind": "object",
+          "type": "ChannelImagePublishJob",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingRecoveryEvents",
+          "kind": "object",
+          "type": "ListingRecoveryEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "buyBoxHistory",
+          "kind": "object",
+          "type": "BuyBoxHistory",
+          "relationFromFields": []
+        },
+        {
+          "name": "scheduledChanges",
+          "kind": "object",
+          "type": "ScheduledProductChange",
+          "relationFromFields": []
+        },
+        {
+          "name": "adProductAds",
+          "kind": "object",
+          "type": "AdProductAd",
+          "relationFromFields": []
+        },
+        {
+          "name": "fbaStorageAges",
+          "kind": "object",
+          "type": "FbaStorageAge",
+          "relationFromFields": []
+        },
+        {
+          "name": "productProfitDailies",
+          "kind": "object",
+          "type": "ProductProfitDaily",
+          "relationFromFields": []
+        },
+        {
+          "name": "reviews",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": []
+        },
+        {
+          "name": "reviewSpikes",
+          "kind": "object",
+          "type": "ReviewSpike",
+          "relationFromFields": []
+        },
+        {
+          "name": "amazonReviewInsights",
+          "kind": "object",
+          "type": "AmazonReviewInsight",
+          "relationFromFields": []
+        },
+        {
+          "name": "qualitySnapshots",
+          "kind": "object",
+          "type": "ListingQualitySnapshot",
+          "relationFromFields": []
+        },
+        {
+          "name": "fieldLinkGroups",
+          "kind": "object",
+          "type": "FieldLinkGroup",
+          "relationFromFields": []
+        },
+        {
+          "name": "skuAliases",
+          "kind": "object",
+          "type": "SkuAlias",
+          "relationFromFields": []
+        },
+        {
+          "name": "certificates",
+          "kind": "object",
+          "type": "ProductCertificate",
+          "relationFromFields": []
+        },
+        {
+          "name": "cellFormulas",
+          "kind": "object",
+          "type": "CellFormula",
+          "relationFromFields": []
+        },
+        {
+          "name": "assortmentMembers",
+          "kind": "object",
+          "type": "AssortmentMember",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockPoolLinks",
+          "kind": "object",
+          "type": "StockPoolLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockPoolTasks",
+          "kind": "object",
+          "type": "StockPoolTask",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "SkuAlias",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockImportJob",
+      "fields": []
+    },
+    {
+      "name": "ProductFamily",
+      "fields": [
+        {
+          "name": "parentFamily",
+          "kind": "object",
+          "type": "ProductFamily",
+          "relationFromFields": [
+            "parentFamilyId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "childFamilies",
+          "kind": "object",
+          "type": "ProductFamily",
+          "relationFromFields": []
+        },
+        {
+          "name": "products",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": []
+        },
+        {
+          "name": "familyAttributes",
+          "kind": "object",
+          "type": "FamilyAttribute",
+          "relationFromFields": []
+        },
+        {
+          "name": "workflow",
+          "kind": "object",
+          "type": "ProductWorkflow",
+          "relationFromFields": [
+            "workflowId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "AttributeGroup",
+      "fields": [
+        {
+          "name": "attributes",
+          "kind": "object",
+          "type": "CustomAttribute",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CustomAttribute",
+      "fields": [
+        {
+          "name": "group",
+          "kind": "object",
+          "type": "AttributeGroup",
+          "relationFromFields": [
+            "groupId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "options",
+          "kind": "object",
+          "type": "AttributeOption",
+          "relationFromFields": []
+        },
+        {
+          "name": "familyAttributes",
+          "kind": "object",
+          "type": "FamilyAttribute",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AttributeOption",
+      "fields": [
+        {
+          "name": "attribute",
+          "kind": "object",
+          "type": "CustomAttribute",
+          "relationFromFields": [
+            "attributeId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FamilyAttribute",
+      "fields": [
+        {
+          "name": "family",
+          "kind": "object",
+          "type": "ProductFamily",
+          "relationFromFields": [
+            "familyId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "attribute",
+          "kind": "object",
+          "type": "CustomAttribute",
+          "relationFromFields": [
+            "attributeId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductWorkflow",
+      "fields": [
+        {
+          "name": "stages",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": []
+        },
+        {
+          "name": "families",
+          "kind": "object",
+          "type": "ProductFamily",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "WorkflowStage",
+      "fields": [
+        {
+          "name": "workflow",
+          "kind": "object",
+          "type": "ProductWorkflow",
+          "relationFromFields": [
+            "workflowId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "productsHere",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": []
+        },
+        {
+          "name": "transitionsFrom",
+          "kind": "object",
+          "type": "WorkflowTransition",
+          "relationFromFields": []
+        },
+        {
+          "name": "transitionsTo",
+          "kind": "object",
+          "type": "WorkflowTransition",
+          "relationFromFields": []
+        },
+        {
+          "name": "comments",
+          "kind": "object",
+          "type": "WorkflowComment",
+          "relationFromFields": []
+        },
+        {
+          "name": "assignments",
+          "kind": "object",
+          "type": "WorkflowAssignment",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "WorkflowTransition",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "fromStage",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": [
+            "fromStageId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "toStage",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": [
+            "toStageId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowComment",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "stage",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": [
+            "stageId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowAssignment",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "stage",
+          "kind": "object",
+          "type": "WorkflowStage",
+          "relationFromFields": [
+            "stageId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "assignee",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "assigneeId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CustomerGroup",
+      "fields": [
+        {
+          "name": "tierPrices",
+          "kind": "object",
+          "type": "ProductTierPrice",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ProductTierPrice",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "customerGroup",
+          "kind": "object",
+          "type": "CustomerGroup",
+          "relationFromFields": [
+            "customerGroupId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "DigitalAsset",
+      "fields": [
+        {
+          "name": "usages",
+          "kind": "object",
+          "type": "AssetUsage",
+          "relationFromFields": []
+        },
+        {
+          "name": "tags",
+          "kind": "object",
+          "type": "AssetTag",
+          "relationFromFields": []
+        },
+        {
+          "name": "folder",
+          "kind": "object",
+          "type": "AssetFolder",
+          "relationFromFields": [
+            "folderId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "localeOverlays",
+          "kind": "object",
+          "type": "AssetLocaleOverlay",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AssetFolder",
+      "fields": [
+        {
+          "name": "parent",
+          "kind": "object",
+          "type": "AssetFolder",
+          "relationFromFields": [
+            "parentId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "children",
+          "kind": "object",
+          "type": "AssetFolder",
+          "relationFromFields": []
+        },
+        {
+          "name": "assets",
+          "kind": "object",
+          "type": "DigitalAsset",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AssetUsage",
+      "fields": [
+        {
+          "name": "asset",
+          "kind": "object",
+          "type": "DigitalAsset",
+          "relationFromFields": [
+            "assetId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "RepricingRule",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "decisions",
+          "kind": "object",
+          "type": "RepricingDecision",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "RepricingDecision",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "RepricingRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductVariation",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "images",
+          "kind": "object",
+          "type": "VariantImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingImages",
+          "kind": "object",
+          "type": "ListingImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelListings",
+          "kind": "object",
+          "type": "VariantChannelListing",
+          "relationFromFields": []
+        },
+        {
+          "name": "syncHealthLogs",
+          "kind": "object",
+          "type": "SyncHealthLog",
+          "relationFromFields": []
+        },
+        {
+          "name": "pricingRules",
+          "kind": "object",
+          "type": "PricingRuleVariation",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockLevels",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": []
+        },
+        {
+          "name": "lots",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": []
+        },
+        {
+          "name": "serials",
+          "kind": "object",
+          "type": "SerialNumber",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "VariantImage",
+      "fields": [
+        {
+          "name": "variant",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variantId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "VariantChannelListing",
+      "fields": [
+        {
+          "name": "variant",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variantId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelListing",
+      "fields": [
+        {
+          "name": "translations",
+          "kind": "object",
+          "type": "ChannelListingTranslation",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingClaims",
+          "kind": "object",
+          "type": "ChannelListingClaim",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelDrifts",
+          "kind": "object",
+          "type": "ChannelDrift",
+          "relationFromFields": []
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "offers",
+          "kind": "object",
+          "type": "Offer",
+          "relationFromFields": []
+        },
+        {
+          "name": "images",
+          "kind": "object",
+          "type": "ChannelListingImage",
+          "relationFromFields": []
+        },
+        {
+          "name": "outboundSyncQueue",
+          "kind": "object",
+          "type": "OutboundSyncQueue",
+          "relationFromFields": []
+        },
+        {
+          "name": "overrideHistory",
+          "kind": "object",
+          "type": "ChannelListingOverride",
+          "relationFromFields": []
+        },
+        {
+          "name": "syncAttempts",
+          "kind": "object",
+          "type": "SyncAttempt",
+          "relationFromFields": []
+        },
+        {
+          "name": "amazonSuppressions",
+          "kind": "object",
+          "type": "AmazonSuppression",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingIssues",
+          "kind": "object",
+          "type": "ListingIssue",
+          "relationFromFields": []
+        },
+        {
+          "name": "snapshots",
+          "kind": "object",
+          "type": "ChannelListingSnapshot",
+          "relationFromFields": []
+        },
+        {
+          "name": "ebayWatcherStats",
+          "kind": "object",
+          "type": "EbayWatcherStats",
+          "relationFromFields": []
+        },
+        {
+          "name": "ebayMarkdowns",
+          "kind": "object",
+          "type": "EbayMarkdown",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "alias",
+          "kind": "object",
+          "type": "ProductListingAlias",
+          "relationFromFields": [
+            "aliasId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductListingAlias",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "listings",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ChannelListingSnapshot",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Marketplace",
+      "fields": []
+    },
+    {
+      "name": "ChannelListingOverride",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FieldLinkGroup",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FieldValueMap",
+      "fields": []
+    },
+    {
+      "name": "SizeScaleMap",
+      "fields": []
+    },
+    {
+      "name": "MappingRevision",
+      "fields": []
+    },
+    {
+      "name": "SyncAttempt",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "listingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AmazonSuppression",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "listingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ListingIssue",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "listingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Offer",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ListingRecoveryEvent",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelListingImage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductImage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ]
+        },
+        {
+          "name": "derivedFrom",
+          "kind": "object",
+          "type": "ProductImage",
+          "relationFromFields": [
+            "derivedFromImageId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "derivatives",
+          "kind": "object",
+          "type": "ProductImage",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "TerminologyPreference",
+      "fields": []
+    },
+    {
+      "name": "BrandVoice",
+      "fields": []
+    },
+    {
+      "name": "MarketplaceSync",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Channel",
+      "fields": [
+        {
+          "name": "listings",
+          "kind": "object",
+          "type": "Listing",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "Listing",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ]
+        },
+        {
+          "name": "channel",
+          "kind": "object",
+          "type": "Channel",
+          "relationFromFields": [
+            "channelId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "DraftListing",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockLog",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "FBAShipment",
+      "fields": [
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "FBAShipmentItem",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "FBAShipmentItem",
+      "fields": [
+        {
+          "name": "shipment",
+          "kind": "object",
+          "type": "FBAShipment",
+          "relationFromFields": [
+            "shipmentId"
+          ]
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PricingRule",
+      "fields": [
+        {
+          "name": "products",
+          "kind": "object",
+          "type": "PricingRuleProduct",
+          "relationFromFields": []
+        },
+        {
+          "name": "variations",
+          "kind": "object",
+          "type": "PricingRuleVariation",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "PricingRuleProduct",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "PricingRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PricingRuleVariation",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "PricingRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SyncHealthLog",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "BulkActionJob",
+      "fields": [
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "BulkActionItem",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "BulkActionItem",
+      "fields": [
+        {
+          "name": "job",
+          "kind": "object",
+          "type": "BulkActionJob",
+          "relationFromFields": [
+            "jobId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SellerFeedback",
+      "fields": []
+    },
+    {
+      "name": "Campaign",
+      "fields": [
+        {
+          "name": "adGroups",
+          "kind": "object",
+          "type": "AdGroup",
+          "relationFromFields": []
+        },
+        {
+          "name": "bidHistory",
+          "kind": "object",
+          "type": "CampaignBidHistory",
+          "relationFromFields": []
+        },
+        {
+          "name": "ruleAssignments",
+          "kind": "object",
+          "type": "CampaignRuleAssignment",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AdGroup",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "Campaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "targets",
+          "kind": "object",
+          "type": "AdTarget",
+          "relationFromFields": []
+        },
+        {
+          "name": "productAds",
+          "kind": "object",
+          "type": "AdProductAd",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AdTarget",
+      "fields": [
+        {
+          "name": "adGroup",
+          "kind": "object",
+          "type": "AdGroup",
+          "relationFromFields": [
+            "adGroupId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdProductAd",
+      "fields": [
+        {
+          "name": "adGroup",
+          "kind": "object",
+          "type": "AdGroup",
+          "relationFromFields": [
+            "adGroupId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "AdProductSet",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsConnection",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsProfile",
+      "fields": []
+    },
+    {
+      "name": "KeywordWatchlist",
+      "fields": [
+        {
+          "name": "terms",
+          "kind": "object",
+          "type": "KeywordWatchlistTerm",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "KeywordWatchlistTerm",
+      "fields": [
+        {
+          "name": "watchlist",
+          "kind": "object",
+          "type": "KeywordWatchlist",
+          "relationFromFields": [
+            "watchlistId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "KeywordCoverageSet",
+      "fields": [
+        {
+          "name": "terms",
+          "kind": "object",
+          "type": "KeywordCoverageTerm",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "KeywordCoverageTerm",
+      "fields": [
+        {
+          "name": "set",
+          "kind": "object",
+          "type": "KeywordCoverageSet",
+          "relationFromFields": [
+            "setId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AmazonAdsPortfolio",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsDailyPerformance",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsHourlyPerformance",
+      "fields": []
+    },
+    {
+      "name": "AdBudgetUsageSample",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsSearchTerm",
+      "fields": []
+    },
+    {
+      "name": "SearchQueryPerformance",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsPlacementReport",
+      "fields": []
+    },
+    {
+      "name": "DataKioskQueryJob",
+      "fields": []
+    },
+    {
+      "name": "AmazonEconomicsDaily",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsBrandMetric",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsBrandBuildingMetric",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsReportJob",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsExportJob",
+      "fields": []
+    },
+    {
+      "name": "FbaStorageAge",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ProductProfitDaily",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdDrift",
+      "fields": []
+    },
+    {
+      "name": "AdvertisingActionLog",
+      "fields": []
+    },
+    {
+      "name": "BudgetPool",
+      "fields": [
+        {
+          "name": "allocations",
+          "kind": "object",
+          "type": "BudgetPoolAllocation",
+          "relationFromFields": []
+        },
+        {
+          "name": "rebalances",
+          "kind": "object",
+          "type": "BudgetPoolRebalance",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "BudgetPoolAllocation",
+      "fields": [
+        {
+          "name": "budgetPool",
+          "kind": "object",
+          "type": "BudgetPool",
+          "relationFromFields": [
+            "budgetPoolId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BudgetPoolRebalance",
+      "fields": [
+        {
+          "name": "budgetPool",
+          "kind": "object",
+          "type": "BudgetPool",
+          "relationFromFields": [
+            "budgetPoolId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CampaignBidHistory",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "Campaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Coupon",
+      "fields": []
+    },
+    {
+      "name": "AccountSettings",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "NotificationPreference",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "NotificationWebhook",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ApiKey",
+      "fields": []
+    },
+    {
+      "name": "UserProfile",
+      "fields": [
+        {
+          "name": "workspaceMemberships",
+          "kind": "object",
+          "type": "WorkspaceMembership",
+          "relationFromFields": []
+        },
+        {
+          "name": "workflowAssignments",
+          "kind": "object",
+          "type": "WorkflowAssignment",
+          "relationFromFields": []
+        },
+        {
+          "name": "recoveryCodes",
+          "kind": "object",
+          "type": "TwoFactorRecoveryCode",
+          "relationFromFields": []
+        },
+        {
+          "name": "sessions",
+          "kind": "object",
+          "type": "UserSession",
+          "relationFromFields": []
+        },
+        {
+          "name": "loginEvents",
+          "kind": "object",
+          "type": "LoginEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "notificationPrefs",
+          "kind": "object",
+          "type": "NotificationPreference",
+          "relationFromFields": []
+        },
+        {
+          "name": "notificationWebhooks",
+          "kind": "object",
+          "type": "NotificationWebhook",
+          "relationFromFields": []
+        },
+        {
+          "name": "consents",
+          "kind": "object",
+          "type": "ConsentRecord",
+          "relationFromFields": []
+        },
+        {
+          "name": "exportRequests",
+          "kind": "object",
+          "type": "DataExportRequest",
+          "relationFromFields": []
+        },
+        {
+          "name": "roleAssignments",
+          "kind": "object",
+          "type": "UserRole",
+          "relationFromFields": []
+        },
+        {
+          "name": "resetTokens",
+          "kind": "object",
+          "type": "PasswordResetToken",
+          "relationFromFields": []
+        },
+        {
+          "name": "invitationsSent",
+          "kind": "object",
+          "type": "Invitation",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ConsentRecord",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "DataRetentionPolicy",
+      "fields": []
+    },
+    {
+      "name": "DataExportRequest",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "TwoFactorRecoveryCode",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "UserSession",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "LoginEvent",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "Role",
+      "fields": [
+        {
+          "name": "workspaceAssignments",
+          "kind": "object",
+          "type": "WorkspaceMemberRole",
+          "relationFromFields": []
+        },
+        {
+          "name": "assignments",
+          "kind": "object",
+          "type": "UserRole",
+          "relationFromFields": []
+        },
+        {
+          "name": "invitations",
+          "kind": "object",
+          "type": "Invitation",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "UserRole",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "role",
+          "kind": "object",
+          "type": "Role",
+          "relationFromFields": [
+            "roleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Invitation",
+      "fields": [
+        {
+          "name": "role",
+          "kind": "object",
+          "type": "Role",
+          "relationFromFields": [
+            "roleId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "invitedBy",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "invitedByUserId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PasswordResetToken",
+      "fields": [
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CommandReceipt",
+      "fields": []
+    },
+    {
+      "name": "WebhookEvent",
+      "fields": []
+    },
+    {
+      "name": "ChannelLiveImage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelStockEvent",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "RateLimitLog",
+      "fields": []
+    },
+    {
+      "name": "SyncLog",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SyncError",
+      "fields": []
+    },
+    {
+      "name": "Order",
+      "fields": [
+        {
+          "name": "customer",
+          "kind": "object",
+          "type": "Customer",
+          "relationFromFields": [
+            "customerId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "OrderItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "financialTransactions",
+          "kind": "object",
+          "type": "FinancialTransaction",
+          "relationFromFields": []
+        },
+        {
+          "name": "shipments",
+          "kind": "object",
+          "type": "Shipment",
+          "relationFromFields": []
+        },
+        {
+          "name": "returns",
+          "kind": "object",
+          "type": "Return",
+          "relationFromFields": []
+        },
+        {
+          "name": "reviewRequests",
+          "kind": "object",
+          "type": "ReviewRequest",
+          "relationFromFields": []
+        },
+        {
+          "name": "reviewSentimentChecks",
+          "kind": "object",
+          "type": "ReviewSentimentCheck",
+          "relationFromFields": []
+        },
+        {
+          "name": "tags",
+          "kind": "object",
+          "type": "OrderTag",
+          "relationFromFields": []
+        },
+        {
+          "name": "mcfShipments",
+          "kind": "object",
+          "type": "MCFShipment",
+          "relationFromFields": []
+        },
+        {
+          "name": "riskScore",
+          "kind": "object",
+          "type": "OrderRiskScore",
+          "relationFromFields": []
+        },
+        {
+          "name": "fiscalInvoice",
+          "kind": "object",
+          "type": "FiscalInvoice",
+          "relationFromFields": []
+        },
+        {
+          "name": "notes",
+          "kind": "object",
+          "type": "OrderNote",
+          "relationFromFields": []
+        },
+        {
+          "name": "routingDecisions",
+          "kind": "object",
+          "type": "RoutingDecision",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "Customer",
+      "fields": [
+        {
+          "name": "orders",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": []
+        },
+        {
+          "name": "addresses",
+          "kind": "object",
+          "type": "CustomerAddress",
+          "relationFromFields": []
+        },
+        {
+          "name": "notes",
+          "kind": "object",
+          "type": "CustomerNote",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CustomerSegment",
+      "fields": []
+    },
+    {
+      "name": "CustomerAddress",
+      "fields": [
+        {
+          "name": "customer",
+          "kind": "object",
+          "type": "Customer",
+          "relationFromFields": [
+            "customerId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CustomerNote",
+      "fields": [
+        {
+          "name": "customer",
+          "kind": "object",
+          "type": "Customer",
+          "relationFromFields": [
+            "customerId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FiscalInvoiceCounter",
+      "fields": []
+    },
+    {
+      "name": "FiscalInvoice",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "creditNotes",
+          "kind": "object",
+          "type": "CreditNote",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CreditNoteCounter",
+      "fields": []
+    },
+    {
+      "name": "CreditNote",
+      "fields": [
+        {
+          "name": "refund",
+          "kind": "object",
+          "type": "Refund",
+          "relationFromFields": [
+            "refundId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "originalInvoice",
+          "kind": "object",
+          "type": "FiscalInvoice",
+          "relationFromFields": [
+            "originalInvoiceId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "OrderNote",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "OrderRiskScore",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "OrderItem",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "DailySalesAggregate",
+      "fields": []
+    },
+    {
+      "name": "ReplenishmentForecast",
+      "fields": []
+    },
+    {
+      "name": "ForecastModelAssignment",
+      "fields": []
+    },
+    {
+      "name": "ForecastAccuracy",
+      "fields": []
+    },
+    {
+      "name": "BrandSettings",
+      "fields": []
+    },
+    {
+      "name": "RetailEvent",
+      "fields": [
+        {
+          "name": "priceActions",
+          "kind": "object",
+          "type": "RetailEventPriceAction",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "PricingSnapshot",
+      "fields": []
+    },
+    {
+      "name": "PriceChangeEvent",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BuyBoxHistory",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FxRate",
+      "fields": []
+    },
+    {
+      "name": "RetailEventPriceAction",
+      "fields": [
+        {
+          "name": "event",
+          "kind": "object",
+          "type": "RetailEvent",
+          "relationFromFields": [
+            "eventId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SettlementReport",
+      "fields": []
+    },
+    {
+      "name": "FinancialTransaction",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelConnection",
+      "fields": [
+        {
+          "name": "ingressRoute",
+          "kind": "object",
+          "type": "ChannelAccountRoute",
+          "relationFromFields": []
+        },
+        {
+          "name": "grants",
+          "kind": "object",
+          "type": "ChannelAccountGrant",
+          "relationFromFields": []
+        },
+        {
+          "name": "memberAccess",
+          "kind": "object",
+          "type": "WorkspaceMemberAccount",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingClaims",
+          "kind": "object",
+          "type": "ChannelListingClaim",
+          "relationFromFields": []
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "scopes",
+          "kind": "object",
+          "type": "ConnectionScope",
+          "relationFromFields": []
+        },
+        {
+          "name": "events",
+          "kind": "object",
+          "type": "ConnectionEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "variantListings",
+          "kind": "object",
+          "type": "VariantChannelListing",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelListings",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingAliases",
+          "kind": "object",
+          "type": "ProductListingAlias",
+          "relationFromFields": []
+        },
+        {
+          "name": "sharedListingMemberships",
+          "kind": "object",
+          "type": "SharedListingMembership",
+          "relationFromFields": []
+        },
+        {
+          "name": "orders",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": []
+        },
+        {
+          "name": "syncChannelPolicies",
+          "kind": "object",
+          "type": "SyncChannelPolicy",
+          "relationFromFields": []
+        },
+        {
+          "name": "ebayCampaigns",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ConnectionScope",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelApp",
+      "fields": []
+    },
+    {
+      "name": "OAuthSession",
+      "fields": []
+    },
+    {
+      "name": "ConnectionEvent",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "OutboundSyncQueue",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BulkOperation",
+      "fields": []
+    },
+    {
+      "name": "BulkOpsTemplate",
+      "fields": []
+    },
+    {
+      "name": "BulkActionTemplate",
+      "fields": []
+    },
+    {
+      "name": "ScheduledBulkAction",
+      "fields": []
+    },
+    {
+      "name": "BulkAutomationApproval",
+      "fields": []
+    },
+    {
+      "name": "FlatFileImport",
+      "fields": []
+    },
+    {
+      "name": "ImportJob",
+      "fields": [
+        {
+          "name": "rows",
+          "kind": "object",
+          "type": "ImportJobRow",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobRow",
+      "fields": [
+        {
+          "name": "job",
+          "kind": "object",
+          "type": "ImportJob",
+          "relationFromFields": [
+            "jobId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ScheduledImport",
+      "fields": []
+    },
+    {
+      "name": "ExportJob",
+      "fields": []
+    },
+    {
+      "name": "ScheduledExport",
+      "fields": []
+    },
+    {
+      "name": "MarketplaceTaxonomy",
+      "fields": [
+        {
+          "name": "snapshots",
+          "kind": "object",
+          "type": "MarketplaceTaxonomySnapshot",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "MarketplaceTaxonomySnapshot",
+      "fields": [
+        {
+          "name": "source",
+          "kind": "object",
+          "type": "MarketplaceTaxonomy",
+          "relationFromFields": [
+            "sourceId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "nodes",
+          "kind": "object",
+          "type": "MarketplaceTaxonomyNode",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "MarketplaceTaxonomyNode",
+      "fields": [
+        {
+          "name": "snapshot",
+          "kind": "object",
+          "type": "MarketplaceTaxonomySnapshot",
+          "relationFromFields": [
+            "snapshotId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CategorySchema",
+      "fields": []
+    },
+    {
+      "name": "GtinExemptionApplication",
+      "fields": []
+    },
+    {
+      "name": "ListingWizard",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "stepEvents",
+          "kind": "object",
+          "type": "WizardStepEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "scheduledPublishes",
+          "kind": "object",
+          "type": "ScheduledWizardPublish",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ScheduledImagePublish",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ScheduledWizardPublish",
+      "fields": [
+        {
+          "name": "wizard",
+          "kind": "object",
+          "type": "ListingWizard",
+          "relationFromFields": [
+            "wizardId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "WizardStepEvent",
+      "fields": [
+        {
+          "name": "wizard",
+          "kind": "object",
+          "type": "ListingWizard",
+          "relationFromFields": [
+            "wizardId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "WizardTemplate",
+      "fields": []
+    },
+    {
+      "name": "AuditLog",
+      "fields": []
+    },
+    {
+      "name": "APlusContent",
+      "fields": [
+        {
+          "name": "master",
+          "kind": "object",
+          "type": "APlusContent",
+          "relationFromFields": [
+            "masterContentId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "localizations",
+          "kind": "object",
+          "type": "APlusContent",
+          "relationFromFields": []
+        },
+        {
+          "name": "asinAttachments",
+          "kind": "object",
+          "type": "APlusContentAsin",
+          "relationFromFields": []
+        },
+        {
+          "name": "modules",
+          "kind": "object",
+          "type": "APlusModule",
+          "relationFromFields": []
+        },
+        {
+          "name": "versions",
+          "kind": "object",
+          "type": "APlusContentVersion",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "APlusContentVersion",
+      "fields": [
+        {
+          "name": "content",
+          "kind": "object",
+          "type": "APlusContent",
+          "relationFromFields": [
+            "contentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "APlusContentAsin",
+      "fields": [
+        {
+          "name": "content",
+          "kind": "object",
+          "type": "APlusContent",
+          "relationFromFields": [
+            "contentId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "APlusModule",
+      "fields": [
+        {
+          "name": "content",
+          "kind": "object",
+          "type": "APlusContent",
+          "relationFromFields": [
+            "contentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BrandStory",
+      "fields": [
+        {
+          "name": "master",
+          "kind": "object",
+          "type": "BrandStory",
+          "relationFromFields": [
+            "masterStoryId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "localizations",
+          "kind": "object",
+          "type": "BrandStory",
+          "relationFromFields": []
+        },
+        {
+          "name": "modules",
+          "kind": "object",
+          "type": "BrandStoryModule",
+          "relationFromFields": []
+        },
+        {
+          "name": "versions",
+          "kind": "object",
+          "type": "BrandStoryVersion",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "BrandStoryModule",
+      "fields": [
+        {
+          "name": "story",
+          "kind": "object",
+          "type": "BrandStory",
+          "relationFromFields": [
+            "storyId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BrandStoryVersion",
+      "fields": [
+        {
+          "name": "story",
+          "kind": "object",
+          "type": "BrandStory",
+          "relationFromFields": [
+            "storyId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BrandKit",
+      "fields": [
+        {
+          "name": "watermarks",
+          "kind": "object",
+          "type": "BrandWatermarkTemplate",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "BrandWatermarkTemplate",
+      "fields": [
+        {
+          "name": "brandKit",
+          "kind": "object",
+          "type": "BrandKit",
+          "relationFromFields": [
+            "workspaceId",
+            "brand"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AssetLocaleOverlay",
+      "fields": [
+        {
+          "name": "asset",
+          "kind": "object",
+          "type": "DigitalAsset",
+          "relationFromFields": [
+            "assetId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ListingImage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AmazonMediaRun",
+      "fields": []
+    },
+    {
+      "name": "AmazonImageFeedJob",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AmazonFlatFileFeedJob",
+      "fields": []
+    },
+    {
+      "name": "EbayPushJob",
+      "fields": []
+    },
+    {
+      "name": "ChannelImagePublishJob",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SchemaChange",
+      "fields": []
+    },
+    {
+      "name": "Warehouse",
+      "fields": [
+        {
+          "name": "defaultCarrierAccount",
+          "kind": "object",
+          "type": "CarrierAccount",
+          "relationFromFields": [
+            "defaultCarrierAccountId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "stockMovements",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        },
+        {
+          "name": "shipments",
+          "kind": "object",
+          "type": "Shipment",
+          "relationFromFields": []
+        },
+        {
+          "name": "inboundShipments",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": []
+        },
+        {
+          "name": "purchaseOrders",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": []
+        },
+        {
+          "name": "poTemplates",
+          "kind": "object",
+          "type": "PoTemplate",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockLocation",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": []
+        },
+        {
+          "name": "orderRoutingRules",
+          "kind": "object",
+          "type": "OrderRoutingRule",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockLocation",
+      "fields": [
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "stockLevels",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": []
+        },
+        {
+          "name": "movements",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        },
+        {
+          "name": "movementsFrom",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        },
+        {
+          "name": "movementsTo",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockoutEvents",
+          "kind": "object",
+          "type": "StockoutEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "cycleCounts",
+          "kind": "object",
+          "type": "CycleCount",
+          "relationFromFields": []
+        },
+        {
+          "name": "costLayers",
+          "kind": "object",
+          "type": "StockCostLayer",
+          "relationFromFields": []
+        },
+        {
+          "name": "serials",
+          "kind": "object",
+          "type": "SerialNumber",
+          "relationFromFields": []
+        },
+        {
+          "name": "bins",
+          "kind": "object",
+          "type": "StockBin",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockLevel",
+      "fields": [
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ]
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "reservations",
+          "kind": "object",
+          "type": "StockReservation",
+          "relationFromFields": []
+        },
+        {
+          "name": "binQuantities",
+          "kind": "object",
+          "type": "StockBinQuantity",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockReservation",
+      "fields": [
+        {
+          "name": "stockLevel",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": [
+            "stockLevelId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockMovement",
+      "fields": [
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ]
+        },
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ]
+        },
+        {
+          "name": "fromLocation",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "fromLocationId"
+          ]
+        },
+        {
+          "name": "toLocation",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "toLocationId"
+          ]
+        },
+        {
+          "name": "lot",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": [
+            "lotId"
+          ]
+        },
+        {
+          "name": "serial",
+          "kind": "object",
+          "type": "SerialNumber",
+          "relationFromFields": [
+            "serialNumberId"
+          ]
+        },
+        {
+          "name": "bin",
+          "kind": "object",
+          "type": "StockBin",
+          "relationFromFields": [
+            "binId"
+          ]
+        },
+        {
+          "name": "lotsOriginated",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockCostLayer",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "lot",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": [
+            "lotId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "Lot",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "originMovement",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": [
+            "originStockMovementId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "movements",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        },
+        {
+          "name": "costLayers",
+          "kind": "object",
+          "type": "StockCostLayer",
+          "relationFromFields": []
+        },
+        {
+          "name": "recalls",
+          "kind": "object",
+          "type": "LotRecall",
+          "relationFromFields": []
+        },
+        {
+          "name": "serials",
+          "kind": "object",
+          "type": "SerialNumber",
+          "relationFromFields": []
+        },
+        {
+          "name": "returnItems",
+          "kind": "object",
+          "type": "ReturnItem",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "SerialNumber",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "variation",
+          "kind": "object",
+          "type": "ProductVariation",
+          "relationFromFields": [
+            "variationId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "lot",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": [
+            "lotId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "movements",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockBin",
+      "fields": [
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "quantities",
+          "kind": "object",
+          "type": "StockBinQuantity",
+          "relationFromFields": []
+        },
+        {
+          "name": "movements",
+          "kind": "object",
+          "type": "StockMovement",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockBinQuantity",
+      "fields": [
+        {
+          "name": "stockLevel",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": [
+            "stockLevelId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "bin",
+          "kind": "object",
+          "type": "StockBin",
+          "relationFromFields": [
+            "binId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "LotRecall",
+      "fields": [
+        {
+          "name": "lot",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": [
+            "lotId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "YearEndSnapshot",
+      "fields": []
+    },
+    {
+      "name": "FbaInventoryDetail",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "MCFShipment",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Carrier",
+      "fields": [
+        {
+          "name": "serviceMappings",
+          "kind": "object",
+          "type": "CarrierServiceMapping",
+          "relationFromFields": []
+        },
+        {
+          "name": "services",
+          "kind": "object",
+          "type": "CarrierService",
+          "relationFromFields": []
+        },
+        {
+          "name": "metrics",
+          "kind": "object",
+          "type": "CarrierMetric",
+          "relationFromFields": []
+        },
+        {
+          "name": "pickupSchedules",
+          "kind": "object",
+          "type": "PickupSchedule",
+          "relationFromFields": []
+        },
+        {
+          "name": "accounts",
+          "kind": "object",
+          "type": "CarrierAccount",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CarrierService",
+      "fields": [
+        {
+          "name": "carrier",
+          "kind": "object",
+          "type": "Carrier",
+          "relationFromFields": [
+            "carrierId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "mappings",
+          "kind": "object",
+          "type": "CarrierServiceMapping",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CarrierServiceMapping",
+      "fields": [
+        {
+          "name": "carrier",
+          "kind": "object",
+          "type": "Carrier",
+          "relationFromFields": [
+            "carrierId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "service",
+          "kind": "object",
+          "type": "CarrierService",
+          "relationFromFields": [
+            "serviceId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CarrierMetric",
+      "fields": [
+        {
+          "name": "carrier",
+          "kind": "object",
+          "type": "Carrier",
+          "relationFromFields": [
+            "carrierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PickupSchedule",
+      "fields": [
+        {
+          "name": "carrier",
+          "kind": "object",
+          "type": "Carrier",
+          "relationFromFields": [
+            "carrierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CarrierAccount",
+      "fields": [
+        {
+          "name": "carrier",
+          "kind": "object",
+          "type": "Carrier",
+          "relationFromFields": [
+            "carrierId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "warehouses",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "Shipment",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ]
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "ShipmentItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "trackingEvents",
+          "kind": "object",
+          "type": "TrackingEvent",
+          "relationFromFields": []
+        },
+        {
+          "name": "trackingMessageLogs",
+          "kind": "object",
+          "type": "TrackingMessageLog",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "TrackingEvent",
+      "fields": [
+        {
+          "name": "shipment",
+          "kind": "object",
+          "type": "Shipment",
+          "relationFromFields": [
+            "shipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "TrackingMessageLog",
+      "fields": [
+        {
+          "name": "shipment",
+          "kind": "object",
+          "type": "Shipment",
+          "relationFromFields": [
+            "shipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShipmentItem",
+      "fields": [
+        {
+          "name": "shipment",
+          "kind": "object",
+          "type": "Shipment",
+          "relationFromFields": [
+            "shipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShippingRule",
+      "fields": []
+    },
+    {
+      "name": "Supplier",
+      "fields": [
+        {
+          "name": "products",
+          "kind": "object",
+          "type": "SupplierProduct",
+          "relationFromFields": []
+        },
+        {
+          "name": "purchaseOrders",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": []
+        },
+        {
+          "name": "poTemplates",
+          "kind": "object",
+          "type": "PoTemplate",
+          "relationFromFields": []
+        },
+        {
+          "name": "shippingProfile",
+          "kind": "object",
+          "type": "SupplierShippingProfile",
+          "relationFromFields": []
+        },
+        {
+          "name": "contacts",
+          "kind": "object",
+          "type": "SupplierContact",
+          "relationFromFields": []
+        },
+        {
+          "name": "comms",
+          "kind": "object",
+          "type": "SupplierComm",
+          "relationFromFields": []
+        },
+        {
+          "name": "followUps",
+          "kind": "object",
+          "type": "SupplierFollowUp",
+          "relationFromFields": []
+        },
+        {
+          "name": "devCandidates",
+          "kind": "object",
+          "type": "DevelopmentProjectSupplier",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "SupplierShippingProfile",
+      "fields": [
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SupplierProduct",
+      "fields": [
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PurchaseOrder",
+      "fields": [
+        {
+          "name": "developmentProject",
+          "kind": "object",
+          "type": "DevelopmentProject",
+          "relationFromFields": [
+            "developmentProjectId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ]
+        },
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ]
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "PurchaseOrderItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "inboundShipments",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": []
+        },
+        {
+          "name": "attachments",
+          "kind": "object",
+          "type": "PurchaseOrderAttachment",
+          "relationFromFields": []
+        },
+        {
+          "name": "revisions",
+          "kind": "object",
+          "type": "PurchaseOrderRevision",
+          "relationFromFields": []
+        },
+        {
+          "name": "comments",
+          "kind": "object",
+          "type": "PoComment",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "PurchaseOrderItem",
+      "fields": [
+        {
+          "name": "purchaseOrder",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": [
+            "purchaseOrderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "inboundShipmentItems",
+          "kind": "object",
+          "type": "InboundShipmentItem",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "PurchaseOrderAttachment",
+      "fields": [
+        {
+          "name": "purchaseOrder",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": [
+            "purchaseOrderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PurchaseOrderRevision",
+      "fields": [
+        {
+          "name": "purchaseOrder",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": [
+            "purchaseOrderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PoComment",
+      "fields": [
+        {
+          "name": "purchaseOrder",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": [
+            "purchaseOrderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PoEventLog",
+      "fields": []
+    },
+    {
+      "name": "PoTemplate",
+      "fields": [
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "PoTemplateItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "schedules",
+          "kind": "object",
+          "type": "PoSchedule",
+          "relationFromFields": []
+        },
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "PoTemplateItem",
+      "fields": [
+        {
+          "name": "template",
+          "kind": "object",
+          "type": "PoTemplate",
+          "relationFromFields": [
+            "templateId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "PoSchedule",
+      "fields": [
+        {
+          "name": "template",
+          "kind": "object",
+          "type": "PoTemplate",
+          "relationFromFields": [
+            "templateId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "InboundShipment",
+      "fields": [
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ]
+        },
+        {
+          "name": "purchaseOrder",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": [
+            "purchaseOrderId"
+          ]
+        },
+        {
+          "name": "workOrder",
+          "kind": "object",
+          "type": "WorkOrder",
+          "relationFromFields": [
+            "workOrderId"
+          ]
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "InboundShipmentItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "attachments",
+          "kind": "object",
+          "type": "InboundShipmentAttachment",
+          "relationFromFields": []
+        },
+        {
+          "name": "discrepancies",
+          "kind": "object",
+          "type": "InboundDiscrepancy",
+          "relationFromFields": []
+        },
+        {
+          "name": "fbaInboundPlansV2",
+          "kind": "object",
+          "type": "FbaInboundPlanV2",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "InboundShipmentAttachment",
+      "fields": [
+        {
+          "name": "inboundShipment",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": [
+            "inboundShipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "InboundDiscrepancy",
+      "fields": [
+        {
+          "name": "inboundShipment",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": [
+            "inboundShipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "inboundShipmentItem",
+          "kind": "object",
+          "type": "InboundShipmentItem",
+          "relationFromFields": [
+            "inboundShipmentItemId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "InboundShipmentItem",
+      "fields": [
+        {
+          "name": "inboundShipment",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": [
+            "inboundShipmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "purchaseOrderItem",
+          "kind": "object",
+          "type": "PurchaseOrderItem",
+          "relationFromFields": [
+            "purchaseOrderItemId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "receipts",
+          "kind": "object",
+          "type": "InboundReceipt",
+          "relationFromFields": []
+        },
+        {
+          "name": "discrepancies",
+          "kind": "object",
+          "type": "InboundDiscrepancy",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "InboundReceipt",
+      "fields": [
+        {
+          "name": "inboundShipmentItem",
+          "kind": "object",
+          "type": "InboundShipmentItem",
+          "relationFromFields": [
+            "inboundShipmentItemId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "WorkOrder",
+      "fields": [
+        {
+          "name": "inboundShipments",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "Return",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "ReturnItem",
+          "relationFromFields": []
+        },
+        {
+          "name": "refunds",
+          "kind": "object",
+          "type": "Refund",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ReturnItem",
+      "fields": [
+        {
+          "name": "return",
+          "kind": "object",
+          "type": "Return",
+          "relationFromFields": [
+            "returnId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "lot",
+          "kind": "object",
+          "type": "Lot",
+          "relationFromFields": [
+            "lotId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "Refund",
+      "fields": [
+        {
+          "name": "return",
+          "kind": "object",
+          "type": "Return",
+          "relationFromFields": [
+            "returnId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "attempts",
+          "kind": "object",
+          "type": "RefundAttempt",
+          "relationFromFields": []
+        },
+        {
+          "name": "creditNote",
+          "kind": "object",
+          "type": "CreditNote",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "RefundAttempt",
+      "fields": [
+        {
+          "name": "refund",
+          "kind": "object",
+          "type": "Refund",
+          "relationFromFields": [
+            "refundId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ReturnPolicy",
+      "fields": []
+    },
+    {
+      "name": "ReplenishmentRule",
+      "fields": []
+    },
+    {
+      "name": "ReplenishmentRecommendation",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CycleCount",
+      "fields": [
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "items",
+          "kind": "object",
+          "type": "CycleCountItem",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CycleCountItem",
+      "fields": [
+        {
+          "name": "cycleCount",
+          "kind": "object",
+          "type": "CycleCount",
+          "relationFromFields": [
+            "cycleCountId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "OrderRoutingRule",
+      "fields": [
+        {
+          "name": "warehouse",
+          "kind": "object",
+          "type": "Warehouse",
+          "relationFromFields": [
+            "warehouseId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ReplenishmentSavedView",
+      "fields": []
+    },
+    {
+      "name": "CronRun",
+      "fields": []
+    },
+    {
+      "name": "OutboundApiCallLog",
+      "fields": []
+    },
+    {
+      "name": "SyncLogErrorGroup",
+      "fields": []
+    },
+    {
+      "name": "SyncLogSavedSearch",
+      "fields": []
+    },
+    {
+      "name": "AlertRule",
+      "fields": [
+        {
+          "name": "events",
+          "kind": "object",
+          "type": "AlertEvent",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AlertEvent",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "AlertRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductSubstitution",
+      "fields": [
+        {
+          "name": "primary",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "primaryProductId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "substitute",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "substituteProductId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockoutEvent",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "location",
+          "kind": "object",
+          "type": "StockLocation",
+          "relationFromFields": [
+            "locationId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AutoPoRunLog",
+      "fields": []
+    },
+    {
+      "name": "FbaRestockReport",
+      "fields": [
+        {
+          "name": "rows",
+          "kind": "object",
+          "type": "FbaRestockRow",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "FbaRestockRow",
+      "fields": [
+        {
+          "name": "report",
+          "kind": "object",
+          "type": "FbaRestockReport",
+          "relationFromFields": [
+            "reportId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FbaInboundPlanV2",
+      "fields": [
+        {
+          "name": "inboundShipment",
+          "kind": "object",
+          "type": "InboundShipment",
+          "relationFromFields": [
+            "inboundShipmentId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "Tag",
+      "fields": [
+        {
+          "name": "products",
+          "kind": "object",
+          "type": "ProductTag",
+          "relationFromFields": []
+        },
+        {
+          "name": "orders",
+          "kind": "object",
+          "type": "OrderTag",
+          "relationFromFields": []
+        },
+        {
+          "name": "assets",
+          "kind": "object",
+          "type": "AssetTag",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AssetTag",
+      "fields": [
+        {
+          "name": "asset",
+          "kind": "object",
+          "type": "DigitalAsset",
+          "relationFromFields": [
+            "assetId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "tag",
+          "kind": "object",
+          "type": "Tag",
+          "relationFromFields": [
+            "tagId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductTag",
+      "fields": [
+        {
+          "name": "tag",
+          "kind": "object",
+          "type": "Tag",
+          "relationFromFields": [
+            "tagId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "Bundle",
+      "fields": [
+        {
+          "name": "components",
+          "kind": "object",
+          "type": "BundleComponent",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "BundleComponent",
+      "fields": [
+        {
+          "name": "bundle",
+          "kind": "object",
+          "type": "Bundle",
+          "relationFromFields": [
+            "bundleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SavedView",
+      "fields": [
+        {
+          "name": "alerts",
+          "kind": "object",
+          "type": "SavedViewAlert",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "Review",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "sentiment",
+          "kind": "object",
+          "type": "ReviewSentiment",
+          "relationFromFields": []
+        },
+        {
+          "name": "responses",
+          "kind": "object",
+          "type": "ReviewResponse",
+          "relationFromFields": []
+        },
+        {
+          "name": "attributedRequest",
+          "kind": "object",
+          "type": "ReviewRequest",
+          "relationFromFields": [
+            "attributedRequestId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "attributedRule",
+          "kind": "object",
+          "type": "ReviewRule",
+          "relationFromFields": [
+            "attributedRuleId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ReviewResponse",
+      "fields": [
+        {
+          "name": "review",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": [
+            "reviewId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ReviewSpotlight",
+      "fields": []
+    },
+    {
+      "name": "ReviewActionItem",
+      "fields": []
+    },
+    {
+      "name": "ReviewSentiment",
+      "fields": [
+        {
+          "name": "review",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": [
+            "reviewId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ReviewCategoryRate",
+      "fields": []
+    },
+    {
+      "name": "ReviewSpike",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "AmazonReviewInsight",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ReviewRequest",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "ReviewRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "sentimentCheck",
+          "kind": "object",
+          "type": "ReviewSentimentCheck",
+          "relationFromFields": []
+        },
+        {
+          "name": "attributedReviews",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ReviewRule",
+      "fields": [
+        {
+          "name": "requests",
+          "kind": "object",
+          "type": "ReviewRequest",
+          "relationFromFields": []
+        },
+        {
+          "name": "sentimentChecks",
+          "kind": "object",
+          "type": "ReviewSentimentCheck",
+          "relationFromFields": []
+        },
+        {
+          "name": "attributedReviews",
+          "kind": "object",
+          "type": "Review",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ReviewTimingDefault",
+      "fields": []
+    },
+    {
+      "name": "ReviewSendWindow",
+      "fields": []
+    },
+    {
+      "name": "ReviewSentimentCheck",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "ReviewRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "reviewRequest",
+          "kind": "object",
+          "type": "ReviewRequest",
+          "relationFromFields": [
+            "reviewRequestId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ReviewMailerState",
+      "fields": [
+        {
+          "name": "id",
+          "kind": "scalar",
+          "type": "String",
+          "isId": true,
+          "default": "default"
+        }
+      ]
+    },
+    {
+      "name": "EmailSuppression",
+      "fields": []
+    },
+    {
+      "name": "OrderTag",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "tag",
+          "kind": "object",
+          "type": "Tag",
+          "relationFromFields": [
+            "tagId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AiUsageLog",
+      "fields": []
+    },
+    {
+      "name": "AiFeatureModelPref",
+      "fields": []
+    },
+    {
+      "name": "ProductAiDraft",
+      "fields": []
+    },
+    {
+      "name": "AgentDefinition",
+      "fields": [
+        {
+          "name": "runs",
+          "kind": "object",
+          "type": "AgentRun",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AgentRun",
+      "fields": [
+        {
+          "name": "agent",
+          "kind": "object",
+          "type": "AgentDefinition",
+          "relationFromFields": [
+            "agentId"
+          ]
+        },
+        {
+          "name": "approvals",
+          "kind": "object",
+          "type": "AgentApproval",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AgentTool",
+      "fields": []
+    },
+    {
+      "name": "AgentApproval",
+      "fields": [
+        {
+          "name": "agentRun",
+          "kind": "object",
+          "type": "AgentRun",
+          "relationFromFields": [
+            "agentRunId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AgentMemory",
+      "fields": []
+    },
+    {
+      "name": "PromptTemplate",
+      "fields": []
+    },
+    {
+      "name": "Goal",
+      "fields": []
+    },
+    {
+      "name": "DashboardLayout",
+      "fields": []
+    },
+    {
+      "name": "DashboardView",
+      "fields": []
+    },
+    {
+      "name": "ScheduledReport",
+      "fields": []
+    },
+    {
+      "name": "Notification",
+      "fields": []
+    },
+    {
+      "name": "SavedViewAlert",
+      "fields": [
+        {
+          "name": "savedView",
+          "kind": "object",
+          "type": "SavedView",
+          "relationFromFields": [
+            "savedViewId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductTranslation",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductRelation",
+      "fields": [
+        {
+          "name": "fromProduct",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "fromProductId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "toProduct",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "toProductId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductSeo",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductCertificate",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelPublishAttempt",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "EbayCampaign",
+      "fields": [
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "adGroups",
+          "kind": "object",
+          "type": "EbayAdGroup",
+          "relationFromFields": []
+        },
+        {
+          "name": "ads",
+          "kind": "object",
+          "type": "EbayAd",
+          "relationFromFields": []
+        },
+        {
+          "name": "keywords",
+          "kind": "object",
+          "type": "EbayKeyword",
+          "relationFromFields": []
+        },
+        {
+          "name": "negativeKeywords",
+          "kind": "object",
+          "type": "EbayNegativeKeyword",
+          "relationFromFields": []
+        },
+        {
+          "name": "automationPolicy",
+          "kind": "object",
+          "type": "EbayCampaignAutomationPolicy",
+          "relationFromFields": []
+        },
+        {
+          "name": "rateDiscovery",
+          "kind": "object",
+          "type": "EbayRateDiscoveryPlan",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "EbayRateDiscoveryPlan",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayCampaignAutomationPolicy",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayAdGroup",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "keywords",
+          "kind": "object",
+          "type": "EbayKeyword",
+          "relationFromFields": []
+        },
+        {
+          "name": "ads",
+          "kind": "object",
+          "type": "EbayAd",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "EbayAd",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "adGroup",
+          "kind": "object",
+          "type": "EbayAdGroup",
+          "relationFromFields": [
+            "adGroupId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "EbayKeyword",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "adGroup",
+          "kind": "object",
+          "type": "EbayAdGroup",
+          "relationFromFields": [
+            "adGroupId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayNegativeKeyword",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "EbayCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayAdsReportTask",
+      "fields": []
+    },
+    {
+      "name": "EbayAdsDailyPerformance",
+      "fields": []
+    },
+    {
+      "name": "EbayListingIndex",
+      "fields": []
+    },
+    {
+      "name": "EbayListingEconomics",
+      "fields": []
+    },
+    {
+      "name": "MarketingAutomationState",
+      "fields": []
+    },
+    {
+      "name": "MarketingSpendCeiling",
+      "fields": []
+    },
+    {
+      "name": "EbayAdsRule",
+      "fields": [
+        {
+          "name": "executions",
+          "kind": "object",
+          "type": "EbayAdsRuleExecution",
+          "relationFromFields": []
+        },
+        {
+          "name": "versions",
+          "kind": "object",
+          "type": "EbayAdsRuleVersion",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "EbayAdsRuleVersion",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "EbayAdsRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayAdsRuleExecution",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "EbayAdsRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayAdsProposal",
+      "fields": []
+    },
+    {
+      "name": "EbayAdsDigest",
+      "fields": []
+    },
+    {
+      "name": "EbayWatcherStats",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayMarkdown",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayVolumePromotion",
+      "fields": []
+    },
+    {
+      "name": "EbayVolumeTierTemplate",
+      "fields": []
+    },
+    {
+      "name": "ScheduledProductChange",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AutomationRule",
+      "fields": [
+        {
+          "name": "executions",
+          "kind": "object",
+          "type": "AutomationRuleExecution",
+          "relationFromFields": []
+        },
+        {
+          "name": "assignments",
+          "kind": "object",
+          "type": "CampaignRuleAssignment",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CampaignRuleAssignment",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "Campaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "AutomationRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AutomationRuleTemplate",
+      "fields": []
+    },
+    {
+      "name": "AutomationRuleExecution",
+      "fields": [
+        {
+          "name": "rule",
+          "kind": "object",
+          "type": "AutomationRule",
+          "relationFromFields": [
+            "ruleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdsRuleSuggestion",
+      "fields": []
+    },
+    {
+      "name": "AdsSuggestionMute",
+      "fields": []
+    },
+    {
+      "name": "KeywordRank",
+      "fields": []
+    },
+    {
+      "name": "Scenario",
+      "fields": [
+        {
+          "name": "runs",
+          "kind": "object",
+          "type": "ScenarioRun",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ScenarioRun",
+      "fields": [
+        {
+          "name": "scenario",
+          "kind": "object",
+          "type": "Scenario",
+          "relationFromFields": [
+            "scenarioId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ListingReconciliation",
+      "fields": []
+    },
+    {
+      "name": "FlatFilePullRecord",
+      "fields": []
+    },
+    {
+      "name": "FlatFilePullJob",
+      "fields": []
+    },
+    {
+      "name": "CatalogOrganizeSession",
+      "fields": [
+        {
+          "name": "changes",
+          "kind": "object",
+          "type": "CatalogOrganizeChange",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CatalogOrganizeChange",
+      "fields": [
+        {
+          "name": "session",
+          "kind": "object",
+          "type": "CatalogOrganizeSession",
+          "relationFromFields": [
+            "sessionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductReadCache",
+      "fields": []
+    },
+    {
+      "name": "Category",
+      "fields": [
+        {
+          "name": "parent",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": [
+            "parentId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "children",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": []
+        },
+        {
+          "name": "ancestorLinks",
+          "kind": "object",
+          "type": "CategoryClosure",
+          "relationFromFields": []
+        },
+        {
+          "name": "descendantLinks",
+          "kind": "object",
+          "type": "CategoryClosure",
+          "relationFromFields": []
+        },
+        {
+          "name": "products",
+          "kind": "object",
+          "type": "ProductCategory",
+          "relationFromFields": []
+        },
+        {
+          "name": "channelMappings",
+          "kind": "object",
+          "type": "CategoryChannelMapping",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CategoryClosure",
+      "fields": [
+        {
+          "name": "ancestor",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": [
+            "ancestorId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "descendant",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": [
+            "descendantId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductCategory",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "category",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": [
+            "categoryId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FnskuLabelTemplate",
+      "fields": []
+    },
+    {
+      "name": "ProductEvent",
+      "fields": []
+    },
+    {
+      "name": "ListingQualitySnapshot",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "RoutingDecision",
+      "fields": [
+        {
+          "name": "order",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "orderId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "FeedTransformRule",
+      "fields": []
+    },
+    {
+      "name": "ChannelSchema",
+      "fields": []
+    },
+    {
+      "name": "FbaReimbursement",
+      "fields": []
+    },
+    {
+      "name": "FbaInventoryAdjustment",
+      "fields": []
+    },
+    {
+      "name": "MarketingCampaign",
+      "fields": [
+        {
+          "name": "links",
+          "kind": "object",
+          "type": "MarketingCampaignLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "targets",
+          "kind": "object",
+          "type": "CampaignTarget",
+          "relationFromFields": []
+        },
+        {
+          "name": "metrics",
+          "kind": "object",
+          "type": "CampaignMetric",
+          "relationFromFields": []
+        },
+        {
+          "name": "actions",
+          "kind": "object",
+          "type": "CampaignAction",
+          "relationFromFields": []
+        },
+        {
+          "name": "allocations",
+          "kind": "object",
+          "type": "CampaignBudgetAllocation",
+          "relationFromFields": []
+        },
+        {
+          "name": "calendarEntries",
+          "kind": "object",
+          "type": "CalendarEntry",
+          "relationFromFields": []
+        },
+        {
+          "name": "amazonAds",
+          "kind": "object",
+          "type": "AmazonAdsCampaignDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "ebayPromoted",
+          "kind": "object",
+          "type": "EbayPromotedDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "discount",
+          "kind": "object",
+          "type": "DiscountDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "externalAds",
+          "kind": "object",
+          "type": "ExternalAdsDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "contentPush",
+          "kind": "object",
+          "type": "ContentPushDetail",
+          "relationFromFields": []
+        },
+        {
+          "name": "outreach",
+          "kind": "object",
+          "type": "OutreachDetail",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "MarketingCampaignLink",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AmazonAdsCampaignDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EbayPromotedDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "DiscountDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ExternalAdsDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ContentPushDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "OutreachDetail",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdMutation",
+      "fields": []
+    },
+    {
+      "name": "AdBlueprintApplication",
+      "fields": []
+    },
+    {
+      "name": "AdKeywordProtection",
+      "fields": []
+    },
+    {
+      "name": "AdNegativeReview",
+      "fields": []
+    },
+    {
+      "name": "AdBlueprint",
+      "fields": []
+    },
+    {
+      "name": "CampaignTarget",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CampaignBudget",
+      "fields": [
+        {
+          "name": "allocations",
+          "kind": "object",
+          "type": "CampaignBudgetAllocation",
+          "relationFromFields": []
+        },
+        {
+          "name": "rebalances",
+          "kind": "object",
+          "type": "CampaignBudgetRebalance",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CampaignBudgetAllocation",
+      "fields": [
+        {
+          "name": "budget",
+          "kind": "object",
+          "type": "CampaignBudget",
+          "relationFromFields": [
+            "budgetId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CampaignBudgetRebalance",
+      "fields": [
+        {
+          "name": "budget",
+          "kind": "object",
+          "type": "CampaignBudget",
+          "relationFromFields": [
+            "budgetId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CampaignMetric",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "CampaignAction",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "CalendarEntry",
+      "fields": [
+        {
+          "name": "campaign",
+          "kind": "object",
+          "type": "MarketingCampaign",
+          "relationFromFields": [
+            "campaignId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdSchedule",
+      "fields": [
+        {
+          "name": "group",
+          "kind": "object",
+          "type": "RankScheduleGroup",
+          "relationFromFields": [
+            "groupId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "RankScheduleGroup",
+      "fields": [
+        {
+          "name": "schedules",
+          "kind": "object",
+          "type": "AdSchedule",
+          "relationFromFields": []
+        },
+        {
+          "name": "versions",
+          "kind": "object",
+          "type": "RankScheduleVersion",
+          "relationFromFields": []
+        },
+        {
+          "name": "events",
+          "kind": "object",
+          "type": "RankScheduleEvent",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "RankScheduleEvent",
+      "fields": [
+        {
+          "name": "group",
+          "kind": "object",
+          "type": "RankScheduleGroup",
+          "relationFromFields": [
+            "groupId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "RankScheduleVersion",
+      "fields": [
+        {
+          "name": "group",
+          "kind": "object",
+          "type": "RankScheduleGroup",
+          "relationFromFields": [
+            "groupId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "BudgetSchedule",
+      "fields": []
+    },
+    {
+      "name": "AutopilotPlan",
+      "fields": [
+        {
+          "name": "decisions",
+          "kind": "object",
+          "type": "AutopilotDecision",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AutopilotDecision",
+      "fields": [
+        {
+          "name": "plan",
+          "kind": "object",
+          "type": "AutopilotPlan",
+          "relationFromFields": [
+            "planId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "RankTarget",
+      "fields": []
+    },
+    {
+      "name": "RankScheduleTemplate",
+      "fields": []
+    },
+    {
+      "name": "ProductRankPlan",
+      "fields": []
+    },
+    {
+      "name": "AdAudience",
+      "fields": []
+    },
+    {
+      "name": "AdBudgetPlan",
+      "fields": []
+    },
+    {
+      "name": "AdProductGoal",
+      "fields": []
+    },
+    {
+      "name": "SupplierContact",
+      "fields": [
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SupplierComm",
+      "fields": [
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SupplierFollowUp",
+      "fields": [
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "DevelopmentProject",
+      "fields": [
+        {
+          "name": "candidates",
+          "kind": "object",
+          "type": "DevelopmentProjectSupplier",
+          "relationFromFields": []
+        },
+        {
+          "name": "attachments",
+          "kind": "object",
+          "type": "DevelopmentAttachment",
+          "relationFromFields": []
+        },
+        {
+          "name": "purchaseOrders",
+          "kind": "object",
+          "type": "PurchaseOrder",
+          "relationFromFields": []
+        },
+        {
+          "name": "certifications",
+          "kind": "object",
+          "type": "DevelopmentCertification",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "DevelopmentProjectSupplier",
+      "fields": [
+        {
+          "name": "project",
+          "kind": "object",
+          "type": "DevelopmentProject",
+          "relationFromFields": [
+            "projectId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "supplier",
+          "kind": "object",
+          "type": "Supplier",
+          "relationFromFields": [
+            "supplierId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "DevelopmentAttachment",
+      "fields": [
+        {
+          "name": "project",
+          "kind": "object",
+          "type": "DevelopmentProject",
+          "relationFromFields": [
+            "projectId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "DevelopmentCertification",
+      "fields": [
+        {
+          "name": "project",
+          "kind": "object",
+          "type": "DevelopmentProject",
+          "relationFromFields": [
+            "projectId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdsAutomationState",
+      "fields": [
+        {
+          "name": "id",
+          "kind": "scalar",
+          "type": "String",
+          "isId": true,
+          "default": "singleton"
+        }
+      ]
+    },
+    {
+      "name": "AmazonReportRun",
+      "fields": []
+    },
+    {
+      "name": "SharedListingMembership",
+      "fields": [
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "SyncChannelPolicy",
+      "fields": [
+        {
+          "name": "channelConnection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "channelConnectionId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "SyncControlAudit",
+      "fields": []
+    },
+    {
+      "name": "EbayDescriptionTheme",
+      "fields": []
+    },
+    {
+      "name": "AmazonTemplateVault",
+      "fields": []
+    },
+    {
+      "name": "AmazonFamilyWorkbook",
+      "fields": []
+    },
+    {
+      "name": "ReportShareLink",
+      "fields": []
+    },
+    {
+      "name": "SavedReport",
+      "fields": [
+        {
+          "name": "versions",
+          "kind": "object",
+          "type": "SavedReportVersion",
+          "relationFromFields": []
+        },
+        {
+          "name": "schedules",
+          "kind": "object",
+          "type": "ReportSchedule",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "SavedReportVersion",
+      "fields": [
+        {
+          "name": "savedReport",
+          "kind": "object",
+          "type": "SavedReport",
+          "relationFromFields": [
+            "savedReportId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ReportSchedule",
+      "fields": [
+        {
+          "name": "savedReport",
+          "kind": "object",
+          "type": "SavedReport",
+          "relationFromFields": [
+            "savedReportId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "deliveries",
+          "kind": "object",
+          "type": "ReportDelivery",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ReportDelivery",
+      "fields": [
+        {
+          "name": "schedule",
+          "kind": "object",
+          "type": "ReportSchedule",
+          "relationFromFields": [
+            "scheduleId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AdsConsoleImport",
+      "fields": [
+        {
+          "name": "rows",
+          "kind": "object",
+          "type": "AdsConsoleRow",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AdsConsoleRow",
+      "fields": [
+        {
+          "name": "import",
+          "kind": "object",
+          "type": "AdsConsoleImport",
+          "relationFromFields": [
+            "importId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CustomMetric",
+      "fields": []
+    },
+    {
+      "name": "AgentCharter",
+      "fields": []
+    },
+    {
+      "name": "AgentCharterRevision",
+      "fields": []
+    },
+    {
+      "name": "AgentEvalRun",
+      "fields": []
+    },
+    {
+      "name": "AgentControlAudit",
+      "fields": []
+    },
+    {
+      "name": "AgentObservation",
+      "fields": []
+    },
+    {
+      "name": "AgentFinding",
+      "fields": []
+    },
+    {
+      "name": "AgentPlan",
+      "fields": []
+    },
+    {
+      "name": "AgentStrategy",
+      "fields": []
+    },
+    {
+      "name": "AgentStep",
+      "fields": []
+    },
+    {
+      "name": "AgentExemplar",
+      "fields": []
+    },
+    {
+      "name": "AgentScorecard",
+      "fields": []
+    },
+    {
+      "name": "GraphEdge",
+      "fields": []
+    },
+    {
+      "name": "AgentFleetState",
+      "fields": [
+        {
+          "name": "id",
+          "kind": "scalar",
+          "type": "String",
+          "isId": true,
+          "default": "singleton"
+        }
+      ]
+    },
+    {
+      "name": "AgentShadowGrade",
+      "fields": []
+    },
+    {
+      "name": "AgentWorkflow",
+      "fields": []
+    },
+    {
+      "name": "AgentWorkflowRevision",
+      "fields": []
+    },
+    {
+      "name": "AgentAssignment",
+      "fields": []
+    },
+    {
+      "name": "AgentFindingRun",
+      "fields": []
+    },
+    {
+      "name": "AdsHarvestPolicy",
+      "fields": []
+    },
+    {
+      "name": "AdsHarvestDestination",
+      "fields": []
+    },
+    {
+      "name": "SqpReportRequest",
+      "fields": []
+    },
+    {
+      "name": "AdSpendCeiling",
+      "fields": []
+    },
+    {
+      "name": "AdBidPolicy",
+      "fields": []
+    },
+    {
+      "name": "AdWriteRefusal",
+      "fields": []
+    },
+    {
+      "name": "AutomationRefusalDaily",
+      "fields": []
+    },
+    {
+      "name": "KeywordBidProposal",
+      "fields": []
+    },
+    {
+      "name": "EventOutbox",
+      "fields": []
+    },
+    {
+      "name": "CategoryChannelMapping",
+      "fields": [
+        {
+          "name": "category",
+          "kind": "object",
+          "type": "Category",
+          "relationFromFields": [
+            "categoryId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "CellFormula",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "MasterFieldRule",
+      "fields": []
+    },
+    {
+      "name": "MasterFieldRuleRevision",
+      "fields": []
+    },
+    {
+      "name": "Workspace",
+      "fields": [
+        {
+          "name": "accountOwnership",
+          "kind": "object",
+          "type": "ChannelAccountOwnership",
+          "relationFromFields": []
+        },
+        {
+          "name": "ingressRoutes",
+          "kind": "object",
+          "type": "ChannelAccountRoute",
+          "relationFromFields": []
+        },
+        {
+          "name": "guestAccountGrants",
+          "kind": "object",
+          "type": "ChannelAccountGrant",
+          "relationFromFields": []
+        },
+        {
+          "name": "listingClaims",
+          "kind": "object",
+          "type": "ChannelListingClaim",
+          "relationFromFields": []
+        },
+        {
+          "name": "sharedAccountGrants",
+          "kind": "object",
+          "type": "ChannelAccountGrant",
+          "relationFromFields": []
+        },
+        {
+          "name": "assortmentSharesOffered",
+          "kind": "object",
+          "type": "AssortmentShare",
+          "relationFromFields": []
+        },
+        {
+          "name": "assortmentSharesReceived",
+          "kind": "object",
+          "type": "AssortmentShare",
+          "relationFromFields": []
+        },
+        {
+          "name": "catalogLinksAsSource",
+          "kind": "object",
+          "type": "CatalogLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "catalogLinksAsTarget",
+          "kind": "object",
+          "type": "CatalogLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockPoolGrantsLent",
+          "kind": "object",
+          "type": "StockPoolGrant",
+          "relationFromFields": []
+        },
+        {
+          "name": "stockPoolGrantsBorrowed",
+          "kind": "object",
+          "type": "StockPoolGrant",
+          "relationFromFields": []
+        },
+        {
+          "name": "memberships",
+          "kind": "object",
+          "type": "WorkspaceMembership",
+          "relationFromFields": []
+        },
+        {
+          "name": "accounts",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": []
+        },
+        {
+          "name": "settings",
+          "kind": "object",
+          "type": "AccountSettings",
+          "relationFromFields": []
+        },
+        {
+          "name": "invitations",
+          "kind": "object",
+          "type": "WorkspaceInvitation",
+          "relationFromFields": []
+        },
+        {
+          "name": "audit",
+          "kind": "object",
+          "type": "WorkspaceAudit",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceMembership",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "user",
+          "kind": "object",
+          "type": "UserProfile",
+          "relationFromFields": [
+            "userId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "roles",
+          "kind": "object",
+          "type": "WorkspaceMemberRole",
+          "relationFromFields": []
+        },
+        {
+          "name": "accountLimit",
+          "kind": "object",
+          "type": "WorkspaceMemberAccountLimit",
+          "relationFromFields": []
+        },
+        {
+          "name": "accounts",
+          "kind": "object",
+          "type": "WorkspaceMemberAccount",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceMemberRole",
+      "fields": [
+        {
+          "name": "membership",
+          "kind": "object",
+          "type": "WorkspaceMembership",
+          "relationFromFields": [
+            "membershipId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "role",
+          "kind": "object",
+          "type": "Role",
+          "relationFromFields": [
+            "roleId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceInvitation",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceAudit",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "ChannelAccountOwnership",
+      "fields": [
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceMemberAccountLimit",
+      "fields": [
+        {
+          "name": "membership",
+          "kind": "object",
+          "type": "WorkspaceMembership",
+          "relationFromFields": [
+            "membershipId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceMemberAccount",
+      "fields": [
+        {
+          "name": "membership",
+          "kind": "object",
+          "type": "WorkspaceMembership",
+          "relationFromFields": [
+            "membershipId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelListingClaim",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "SetNull"
+        }
+      ]
+    },
+    {
+      "name": "ChannelAccountGrant",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "ownerWorkspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "ownerWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "Assortment",
+      "fields": [
+        {
+          "name": "members",
+          "kind": "object",
+          "type": "AssortmentMember",
+          "relationFromFields": []
+        },
+        {
+          "name": "shares",
+          "kind": "object",
+          "type": "AssortmentShare",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AssortmentMember",
+      "fields": [
+        {
+          "name": "assortment",
+          "kind": "object",
+          "type": "Assortment",
+          "relationFromFields": [
+            "assortmentId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "AssortmentShare",
+      "fields": [
+        {
+          "name": "assortment",
+          "kind": "object",
+          "type": "Assortment",
+          "relationFromFields": [
+            "assortmentId",
+            "ownerWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "ownerWorkspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "ownerWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "links",
+          "kind": "object",
+          "type": "CatalogLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "copyRuns",
+          "kind": "object",
+          "type": "AssortmentCopyRun",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "CatalogLink",
+      "fields": [
+        {
+          "name": "share",
+          "kind": "object",
+          "type": "AssortmentShare",
+          "relationFromFields": [
+            "shareId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "sourceWorkspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "sourceWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "targetWorkspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "targetWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "stockPoolLinks",
+          "kind": "object",
+          "type": "StockPoolLink",
+          "relationFromFields": []
+        },
+        {
+          "name": "changes",
+          "kind": "object",
+          "type": "AssortmentChange",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "AssortmentChange",
+      "fields": [
+        {
+          "name": "link",
+          "kind": "object",
+          "type": "CatalogLink",
+          "relationFromFields": [
+            "linkId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "AssortmentCopyRun",
+      "fields": [
+        {
+          "name": "share",
+          "kind": "object",
+          "type": "AssortmentShare",
+          "relationFromFields": [
+            "shareId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "StockPoolGrant",
+      "fields": [
+        {
+          "name": "ownerWorkspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "ownerWorkspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "links",
+          "kind": "object",
+          "type": "StockPoolLink",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockPoolLink",
+      "fields": [
+        {
+          "name": "grant",
+          "kind": "object",
+          "type": "StockPoolGrant",
+          "relationFromFields": [
+            "grantId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "catalogLink",
+          "kind": "object",
+          "type": "CatalogLink",
+          "relationFromFields": [
+            "catalogLinkId"
+          ],
+          "relationOnDelete": "Restrict"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockPoolTask",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelAccountRoute",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "workspace",
+          "kind": "object",
+          "type": "Workspace",
+          "relationFromFields": [
+            "workspaceId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "ChannelListingTranslation",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ReadinessIndex",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelDrift",
+      "fields": [
+        {
+          "name": "channelListing",
+          "kind": "object",
+          "type": "ChannelListing",
+          "relationFromFields": [
+            "channelListingId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "SellerReferenceLabel",
+      "fields": []
+    }
+  ]
+}

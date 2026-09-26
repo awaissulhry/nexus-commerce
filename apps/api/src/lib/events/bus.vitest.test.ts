@@ -105,7 +105,7 @@ describe('cross-replica intake', () => {
     await bus.startIntake()
     const seen: TestEvent[] = []
     bus.subscribe((e) => seen.push(e))
-    await broker.publish([envelope('product.updated', {})])
+    await broker.publish([envelope('product.updated', { productId: 'remote' })])
     expect(seen).toHaveLength(1)   // not 2
     await bus.stopIntake()
   })

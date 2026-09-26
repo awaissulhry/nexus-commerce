@@ -4,11 +4,16 @@ import { logger } from '../../utils/logger.js'
 
 /** Legacy interval workers use the same ownership and leases as cron schedules. */
 export async function runProfileTimer(name: string, work: () => Promise<unknown>, periodMs = 60_000): Promise<void> {
-  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1' || workspaceContext()) { await work(); return }
+  if (process.env.NEXUS_REQUIRE_CRON_LEASE !== '1' && (process.env.NEXUS_WORKSPACES_ENABLED !== '1' || workspaceContext())) { await work(); return }
   const { visitActiveWorkspaces } = await import('../workspace-sweep.js')
   const { redis } = await import('../queue.js')
   const scheduledAt = Date.now()
   try {
+    if (process.env.NEXUS_WORKSPACES_ENABLED !== '1' || workspaceContext()) {
+      const id = workspaceContext()?.workspaceId ?? 'legacy'
+      await runWorkspaceTick(redis.connection, `timer:${name}:workspace:${id}`, scheduledAt, async () => { await work() }, periodMs)
+      return
+    }
     await visitActiveWorkspaces(async () => {
       const id = requireWorkspace().workspaceId
       try { await runWorkspaceTick(redis.connection, `timer:${name}:workspace:${id}`, scheduledAt, async () => { await work() }, periodMs) }

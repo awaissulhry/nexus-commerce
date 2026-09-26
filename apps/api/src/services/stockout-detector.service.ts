@@ -27,7 +27,6 @@ import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 // EV.2 — a stockout was detected but never published. Now it is a fact
 // anything can subscribe to, not just a row in a table someone must poll.
-import prismaForEvents from '../db.js'
 import { publishEvent } from '../lib/events/publish.js'
 
 export type DetectorTrigger = 'cron' | 'movement' | 'manual'
@@ -94,20 +93,20 @@ interface Snapshot {
   sellingPriceCents: number | null
 }
 
-async function resolveSnapshot(args: SnapshotInput): Promise<Snapshot> {
+async function resolveSnapshot(args: SnapshotInput, db: Prisma.TransactionClient = prisma): Promise<Snapshot> {
   const since = new Date(Date.now() - 30 * 86400_000)
   // Product has no back-relation to ReplenishmentRule (one-way: rule
   // points at product). Query rule separately when costPrice is null.
   const [agg, product, rule] = await Promise.all([
-    prisma.dailySalesAggregate.aggregate({
+    db.dailySalesAggregate.aggregate({
       where: { sku: args.sku, day: { gte: since } },
       _sum: { unitsSold: true },
     }),
-    prisma.product.findUnique({
+    db.product.findUnique({
       where: { id: args.productId },
       select: { basePrice: true, costPrice: true },
     }),
-    prisma.replenishmentRule.findUnique({
+    db.replenishmentRule.findUnique({
       where: { workspace_productId: workspaceKey({ productId: args.productId }) },
       select: { preferredSupplierId: true },
     }),
@@ -120,7 +119,7 @@ async function resolveSnapshot(args: SnapshotInput): Promise<Snapshot> {
   if (product?.costPrice != null) {
     unitCostCents = Math.round(Number(product.costPrice) * 100)
   } else if (rule?.preferredSupplierId) {
-    const sp = await prisma.supplierProduct.findFirst({
+    const sp = await db.supplierProduct.findFirst({
       where: { supplierId: rule.preferredSupplierId, productId: args.productId },
       select: { costCents: true },
     })
@@ -141,18 +140,21 @@ export async function openStockoutEvent(args: {
   sku: string
   locationId: string | null
   detectedBy: DetectorTrigger
-}): Promise<{ id: string; alreadyOpen: boolean } | null> {
+}, db: Prisma.TransactionClient = prisma): Promise<{ id: string; alreadyOpen: boolean } | null> {
   // Idempotent: short-circuit if an open event for this scope already exists.
-  const existing = await prisma.stockoutEvent.findFirst({
+  const existing = await db.stockoutEvent.findFirst({
     where: { productId: args.productId, locationId: args.locationId, endedAt: null },
     select: { id: true },
   })
   if (existing) return { id: existing.id, alreadyOpen: true }
 
-  const snap = await resolveSnapshot({ productId: args.productId, sku: args.sku })
+  const snap = await resolveSnapshot({ productId: args.productId, sku: args.sku }, db)
   try {
-    const created = await prisma.stockoutEvent.create({
-      data: {
+    // ON CONFLICT DO NOTHING (skipDuplicates), not a caught unique violation: inside a
+    // caller's transaction a violation aborts the transaction, and the re-read below
+    // would fail with it. The partial unique index allows one open event per scope.
+    const [created] = await db.stockoutEvent.createManyAndReturn({
+      data: [{
         productId: args.productId,
         sku: args.sku,
         locationId: args.locationId,
@@ -165,19 +167,18 @@ export async function openStockoutEvent(args: {
           snap.sellingPriceCents != null && snap.unitCostCents != null
             ? snap.sellingPriceCents - snap.unitCostCents
             : null,
-      },
+      }],
+      skipDuplicates: true,
       select: { id: true },
     })
-    return { id: created.id, alreadyOpen: false }
+    if (created) return { id: created.id, alreadyOpen: false }
+    // Race: another caller opened the event a moment earlier. Re-read.
+    const refreshed = await db.stockoutEvent.findFirst({
+      where: { productId: args.productId, locationId: args.locationId, endedAt: null },
+      select: { id: true },
+    })
+    return refreshed ? { id: refreshed.id, alreadyOpen: true } : null
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      // Race: another caller opened the event a moment earlier. Re-read.
-      const refreshed = await prisma.stockoutEvent.findFirst({
-        where: { productId: args.productId, locationId: args.locationId, endedAt: null },
-        select: { id: true },
-      })
-      if (refreshed) return { id: refreshed.id, alreadyOpen: true }
-    }
     logger.warn('stockout-detector: open failed', {
       productId: args.productId,
       locationId: args.locationId,
@@ -191,8 +192,8 @@ export async function closeStockoutEvent(args: {
   productId: string
   locationId: string | null
   closedBy: DetectorTrigger
-}): Promise<{ id: string; loss: LossResult } | null> {
-  const open = await prisma.stockoutEvent.findFirst({
+}, db: Prisma.TransactionClient = prisma): Promise<{ id: string; loss: LossResult } | null> {
+  const open = await db.stockoutEvent.findFirst({
     where: { productId: args.productId, locationId: args.locationId, endedAt: null },
   })
   if (!open) return null
@@ -206,8 +207,8 @@ export async function closeStockoutEvent(args: {
     unitCostCents: open.unitCostCents,
   })
 
-  await prisma.stockoutEvent.update({
-    where: { id: open.id },
+  const changed = await db.stockoutEvent.updateMany({
+    where: { id: open.id, endedAt: null },
     data: {
       endedAt: now,
       closedBy: args.closedBy,
@@ -217,7 +218,7 @@ export async function closeStockoutEvent(args: {
       estimatedLostMargin: loss.estimatedLostMargin,
     },
   })
-  return { id: open.id, loss }
+  return changed.count === 1 ? { id: open.id, loss } : null
 }
 
 // ─── Movement-driven hook ───────────────────────────────────────
@@ -239,34 +240,42 @@ export async function handleMovementStockoutTransition(args: {
   })
   if (transition === 'NO_TRANSITION') return
 
+  // The ledger row and its event commit together or not at all (the outbox is in the
+  // same database). The lock serialises movements for one scope, so two concurrent
+  // transitions cannot both open, or both close, and publish twice.
   try {
-    if (transition === 'STOCKOUT_OPENED') {
-      await openStockoutEvent({
-        productId: args.productId,
-        sku: args.sku,
-        locationId: args.locationId,
-        detectedBy: 'movement',
-      })
-      await publishEvent(prismaForEvents, 'inventory.stockout', {
-        productId: args.productId,
-        sku: args.sku,
-        locationId: args.locationId,
-        previousAvailable: args.prevAvailable,
-        availableNow: Math.max(0, args.nextAvailable),
-      })
-    } else {
-      await closeStockoutEvent({
-        productId: args.productId,
-        locationId: args.locationId,
-        closedBy: 'movement',
-      })
-      await publishEvent(prismaForEvents, 'inventory.stockout_cleared', {
-        productId: args.productId,
-        sku: args.sku,
-        locationId: args.locationId,
-        availableNow: Math.max(1, args.nextAvailable),
-      })
-    }
+    await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`stockout:${args.productId}:${args.locationId ?? ''}`}, 0))`
+      if (transition === 'STOCKOUT_OPENED') {
+        const opened = await openStockoutEvent({
+          productId: args.productId,
+          sku: args.sku,
+          locationId: args.locationId,
+          detectedBy: 'movement',
+        }, tx)
+        if (!opened || opened.alreadyOpen) return
+        await publishEvent(tx, 'inventory.stockout', {
+          productId: args.productId,
+          sku: args.sku,
+          locationId: args.locationId,
+          previousAvailable: args.prevAvailable,
+          availableNow: Math.max(0, args.nextAvailable),
+        })
+      } else {
+        const closed = await closeStockoutEvent({
+          productId: args.productId,
+          locationId: args.locationId,
+          closedBy: 'movement',
+        }, tx)
+        if (!closed) return
+        await publishEvent(tx, 'inventory.stockout_cleared', {
+          productId: args.productId,
+          sku: args.sku,
+          locationId: args.locationId,
+          availableNow: Math.max(1, args.nextAvailable),
+        })
+      }
+    })
   } catch (err) {
     logger.warn('stockout-detector: movement hook failed', {
       productId: args.productId,

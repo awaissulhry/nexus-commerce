@@ -16,7 +16,8 @@ import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.se
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { WebhookValidator, registerRawJsonParser } from "../utils/webhook.js";
-import { completeInbound, recordInbound } from "../services/cx/ingress/ledger.js";
+import { recordInbound } from "../services/cx/ingress/ledger.js";
+import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js';
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from "../lib/workspace-ingress.js";
 import { inboundHandlerFor } from "../services/cx/ingress/handlers.js";
 import type { RawBodyRequest } from "../utils/webhook.js";
@@ -1141,16 +1142,19 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
               channel: "SHOPIFY", eventType, externalId: deliveryId ?? null, rawBody: body ?? null,
               payload: payload ?? {}, signatureOk: true, verifiedBy: "shopify_hmac",
               providerTimestamp: parseShopifyTriggeredAt(request), status: "pending",
+              headers: request.headers,
             });
+            if (!written.id) return reply.status(503).send({ success: false, error: 'The inbound ledger is unavailable.' });
+            if (written.duplicate && written.existingStatus === 'done') return reply.send({ success: true });
+            const claim = await claimInbound(written.id);
+            if (!claim) return reply.send({ success: true, queued: true });
             try {
               // No connected shop routes here — that is the normal case for
               // `shop/redact`. The handler is told so explicitly rather than left to
               // guess an account.
-              await handle(payload, { connectionId: null });
-              await completeInbound(written.id, true);
+              await runWithInboundClaim(claim, stored => handle(stored.payload as ShopifyWebhookPayload, { connectionId: stored.connectionId }));
             } catch (handlerError) {
               const message = handlerError instanceof Error ? handlerError.message : String(handlerError);
-              await completeInbound(written.id, false, message);
               logger.error(`[ShopifyWebhooks] ${eventType} failed`, { error: message });
             }
             // 200 regardless: the notice is recorded, and Shopify measures us on the
@@ -1191,6 +1195,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
           connectionId: route.connectionId,
           providerTimestamp: parseShopifyTriggeredAt(request),
           status: "pending",
+          headers: request.headers,
         });
 
         // No row means the ledger itself is unavailable. Answering 200 would ack an
@@ -1208,17 +1213,17 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
         if (written.duplicate && written.existingStatus === "done") {
           return reply.send({ success: true, message: "Already processed" });
         }
+        const claim = await claimInbound(written.id);
+        if (!claim) return reply.send({ success: true, queued: true });
 
         try {
           // P2.6 — the handler is told WHICH account this webhook routed to, so a
           // revoke never has to work it out for itself.
-          const result = await handle(payload, { connectionId: route.connectionId });
-          await completeInbound(written.id, true);
+          const result = await runWithInboundClaim(claim, stored => handle(stored.payload as ShopifyWebhookPayload, { connectionId: stored.connectionId }));
           const extra = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
           return reply.send({ success: true, ...extra });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          await completeInbound(written.id, false, message);
           logger.error(`[ShopifyWebhooks] ${eventType} failed`, { error: message });
           return reply.status(500).send({ success: false, error: message });
         }

@@ -448,6 +448,7 @@
     "AssortmentMember",
     "AssortmentCopyRun",
     "StockPoolLink",
-    "StockPoolTask"
+    "StockPoolTask",
+    "CommandReceipt"
   ]
 }
