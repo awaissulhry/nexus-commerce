@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0 + S1 built 2026-09-26 (fixtures and today's behaviour pinned; the channel footprint); S2 next | §10.9 |
+| P3b | 🟡 S0 (merged), S1, S2 built 2026-09-26 (the channel footprint; readiness follows it); S3 next | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -780,6 +780,27 @@ keys per attribute and readiness rows by state.
 - **For the product-sheet session:** the scope bar can read `GET /api/channel-footprint` instead of combining
   `/api/marketplaces/grouped` with `/api/connections?all=true` (which needs `settings.integrations.manage`). That
   switch is theirs; it brings the two planned differences with it.
+
+**S2 built (2026-09-26, branch `feat/attributes-p3b-s2`): readiness follows the footprint.**
+
+- `readinessChannelDestinations(footprint, markets)` (pure) — one channel destination per footprint channel × market ×
+  active account × market language. A market with no active account gets no row: **no more "No active account for
+  this destination" rows.** The Shared destinations are unchanged (one per language of every switched-on market; they
+  hold the catalogue sort keys).
+- `reconcileReadinessFootprint()` runs each minute in each business, before the pending drain (`readiness-pending.job.ts`;
+  a failed check is logged and retried, it never fails the drain): rows of a channel coordinate outside the footprint
+  are deleted (a disconnect; in production, the old no-account rows once, right after the deploy), and a footprint
+  coordinate with no row marks every family's Shared rows pending, so the drain rebuilds them. It reads the same
+  destinations function as the rebuild, so it never asks for a row a rebuild cannot write (no loop). A business with no
+  rows yet is left to the nightly reconcile.
+- Tests: B5 flipped in `attribute-scope-baseline` (F1 eBay rows only; F3 Shared rows only; the Shared rows identical);
+  `readiness-footprint.vitest.test.ts` (4): an old no-account row deleted in its own business only, connect → pending
+  → drain → rows, disconnect → rows deleted, a settled check does nothing. Profiles off and on; 3 planted mistakes
+  caught; readiness/mapping area 102 files pass (profiles ON: only the 7 known baseline files); real-PostgreSQL runner
+  32 suites; 51/51 static gates.
+- **Told the listings-readiness session** (its memory file, 2026-09-26): its rule "a listing with no index row is Not
+  checked" now covers listings on a channel with no active account (before, an `absent` row); totals counted from index
+  rows shrink.
 
 ## 11. For the product-sheet session (the screens are theirs)
 
