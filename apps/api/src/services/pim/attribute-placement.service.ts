@@ -13,6 +13,7 @@
 import { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
+import { canonicalVariantAxis } from './variant-attribute-keys.js'
 
 export const PLACEMENT_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE'] as const
 export type Placement = 'shared' | 'channel'
@@ -85,11 +86,40 @@ async function writeState(id: string, from: PlacementState, to: PlacementState, 
     userId: actor.userId ?? null, ip: actor.ip ?? null, ...(metadata ? { metadata } : {}) } })
 }
 
+/**
+ * Axis guard (asked by the variation-theme lane, 2026-09-26) — an attribute a family VARIES BY is never hidden.
+ * Today a family's axes are the labels on its root product (`Product.variationAxes`, e.g. "Colore", "Taglia"); a label
+ * names this attribute when its canonical axis (`canonicalVariantAxis`, the shared synonym table) equals the canonical
+ * form of the attribute's code, concept or label. (When the variation-theme lane stores the attribute CODE in a family's
+ * axis list, that list joins this check.)
+ */
+export function axesNaming(attribute: { code: string; label: string; semanticKey: string | null }, axisLabels: readonly string[]): string[] {
+  const names = new Set([attribute.code, attribute.semanticKey, attribute.label].filter((v): v is string => !!v).map(canonicalVariantAxis))
+  return [...new Set(axisLabels.filter(axis => names.has(canonicalVariantAxis(axis))))].sort()
+}
+
+/** Every variation-axis label on the business's live family roots. */
+export async function familyAxisLabels(): Promise<string[]> {
+  const rows = await prisma.$queryRaw<Array<{ axis: string }>>`
+    SELECT DISTINCT unnest("variationAxes") AS axis FROM "Product" WHERE "parentId" IS NULL AND "deletedAt" IS NULL`
+  return rows.map(r => r.axis).filter(Boolean)
+}
+
+async function refuseIfAxis(id: string, what: string) {
+  const attribute = await prisma.customAttribute.findUnique({ where: { id }, select: { code: true, label: true, semanticKey: true } })
+  if (!attribute) return
+  const axes = axesNaming(attribute, await familyAxisLabels())
+  if (axes.length) {
+    throw new PlacementError(409, `${attribute.code} is a variation axis (${axes.join(', ')}); a variation axis is never hidden, so it cannot be ${what}.`, { axes })
+  }
+}
+
 export async function setAttributePlacement(id: string, input: { placement?: unknown; channels?: unknown }, actor: Actor = {}, extra: AuditExtra = {}) {
   const next = parsePlacement(input)
   return inDatabaseTransaction(prisma, async () => {
     const { state: before, archivedAt, code } = await stateOf(id)
     if (archivedAt) throw new PlacementError(409, `${code} is archived; restore it before moving it`)
+    if (next.placement === 'channel') await refuseIfAxis(id, 'moved to a channel')
     const { requirements, conflicts } = requirementsAfter(before.requirements, next)
     if (conflicts.length) {
       throw new PlacementError(409, `${code} is required on ${conflicts.map(c => `${c.channels.join(', ')} in the family ${c.familyLabel}`).join('; ')}. `
@@ -134,6 +164,7 @@ export async function archiveAttribute(id: string, actor: Actor = {}, extra: Aud
   return inDatabaseTransaction(prisma, async () => {
     const { state, archivedAt, code } = await stateOf(id)
     if (archivedAt) return { changed: false as const, archivedAt }
+    await refuseIfAxis(id, 'archived')
     if (state.requirements.length) {
       throw new PlacementError(409, `${code} is required in ${state.requirements.map(r => r.familyLabel).join(', ')}; make it optional there first — a required attribute is never hidden.`)
     }
