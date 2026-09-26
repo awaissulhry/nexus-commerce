@@ -1,0 +1,13 @@
+/* PROGRESS COLUMNS lab (2026-09-26). Layout and the legend only — the bar, the card and the cell mark are the design
+   system's (`ProgressCell`, `components.css` / `grid.css`, tokens `--nds-progress-*`). */
+.lab { display: flex; flex-direction: column; gap: var(--nds-space-12); padding: var(--nds-space-16); max-width: 1320px; }
+.lab h1 { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.notes { font-size: var(--nds-font-size-sm); color: var(--nds-text); line-height: 1.5; margin: 0; padding-left: var(--nds-space-16); }
+.notes li { margin-block: var(--nds-space-2); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--nds-space-12); font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.legend span { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.swatch { width: 18px; height: 6px; border-radius: var(--nds-radius-full); display: inline-block; }
+.complete { background: var(--nds-progress-complete); box-shadow: inset 0 0 0 1px var(--nds-progress-complete-edge); }
+.partial { background: var(--nds-progress-partial); box-shadow: inset 0 0 0 1px var(--nds-progress-partial-edge); }
+.missing { background: var(--nds-progress-missing); box-shadow: inset 0 0 0 1px var(--nds-progress-missing-edge); }
+.status { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); margin: 0; }

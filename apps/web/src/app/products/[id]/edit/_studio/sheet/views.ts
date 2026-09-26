@@ -131,7 +131,9 @@ export function alwaysColumnsFor(addressable: readonly string[], structural: rea
  * QUESTION FOR THE OWNER rather than assumed.
  */
 export function structuralColumnKeys(columns: readonly SheetColumn[]): string[] {
-  return columns.filter((c) => c.kind === 'variationTheme').map((c) => c.key)
+  // Progress columns (2026-09-26) join for the same reason: every saved view predates them, and a view saved before a
+  // column existed cannot have excluded it. They are movable, lockable and hideable like any column.
+  return columns.filter((c) => c.kind === 'variationTheme' || c.managedBy === 'progress').map((c) => c.key)
 }
 
 /** The #173 rule, as a preset. Was the landing view (`'narrow'`); the id changed with the role. */

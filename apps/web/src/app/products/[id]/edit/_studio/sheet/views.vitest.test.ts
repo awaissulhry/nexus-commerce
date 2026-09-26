@@ -271,3 +271,10 @@ describe('R-VT-1 — a saved view may not silently drop a structural column', ()
     expect(keys[0]).toBe('variation_theme')
   })
 })
+
+describe('progress columns are structural (2026-09-26)', () => {
+  it('a progress column joins the always-columns, so a view saved before it existed cannot drop it', () => {
+    const cols = [{ key: 'progress:scope', managedBy: 'progress', kind: 'text' }, { key: 'brand', kind: 'text' }, { key: 'variation_theme', kind: 'variationTheme' }] as never
+    expect(structuralColumnKeys(cols)).toEqual(['progress:scope', 'variation_theme'])
+  })
+})

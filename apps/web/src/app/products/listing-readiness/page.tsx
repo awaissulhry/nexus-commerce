@@ -10,6 +10,7 @@ import { readinessMeta, SCOPE_READINESS_STATES } from '@/design-system/grid'
 import { transferApi } from '../catalog-transfer/transferApi'
 import { TranslateDialog, languageLabel, useCatalogLanguages } from '../next/TranslateDialog'
 import styles from './readiness.module.css'
+import { issueFieldHref } from './issueHref'
 
 type Options = { families: Array<{ id: string; label: string }>; markets: Array<{ channel: string; code: string; name: string }> }
 export default function ListingReadiness() {
@@ -36,7 +37,8 @@ export default function ListingReadiness() {
     { key: 'destination', label: 'Destination', render: (row: ListingReadinessRow) => <span>{row.channel} {row.marketplace}<br />{row.accountName}</span> },
     { key: 'language', label: 'Language', render: (row: ListingReadinessRow) => languageLabel(row.locale) },
     { key: 'state', label: 'Readiness', render: (row: ListingReadinessRow) => { const meta = readinessMeta(row.state, 'scope'); return <Tag tone={meta.tone}>{meta.label} · {row.pct === null ? '—' : `${row.pct}%`}</Tag> } },
-    { key: 'missing', label: 'Needs attention', render: (row: ListingReadinessRow) => row.issues.length ? <Disclosure summary={`${row.issues.length} ${row.issues.length === 1 ? 'issue' : 'issues'} to review`}><ul className={styles.issues}>{row.issues.map((issue, i) => <li key={i} title={issue.message}>{issue.label}: {issue.message}</li>)}</ul></Disclosure> : '—' },
+    // Each issue opens its exact field in the studio (the progress columns plan, 2026-09-26).
+    { key: 'missing', label: 'Needs attention', render: (row: ListingReadinessRow) => row.issues.length ? <Disclosure summary={`${row.issues.length} ${row.issues.length === 1 ? 'issue' : 'issues'} to review`}><ul className={styles.issues}>{row.issues.map((issue, i) => <li key={i} title={issue.message}>{issue.field ? <Link className={styles.issueLink} href={issueFieldHref(row, issue.field)} title={`Open ${issue.label} for ${row.sku} in the studio`}>{issue.label}</Link> : issue.label}: {issue.message}</li>)}</ul></Disclosure> : '—' },
     { key: 'actions', label: 'Actions', render: (row: ListingReadinessRow) => <Button asChild size="sm"><Link href={row.editorHref}>Open in studio</Link></Button> },
   ], [])
   return <div className={styles.workspace}>

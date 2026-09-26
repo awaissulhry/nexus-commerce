@@ -395,6 +395,17 @@ export function crossChannelColumnCount(
   return Object.values(row.values).filter((c) => c?.affectsAllChannels && c.editable !== false && c.writable !== false).length
 }
 
+/**
+ * The progress column's "cannot be scored" sentence for a row (2026-09-26) — the SAME rule `rowReadinessPill` applies:
+ * an unscorable alias must not inherit a score from filled structural fields. `null` = scorable.
+ */
+export function rowProgressUnscorable(row: StudioRow, alias: AliasGroup | undefined): string | null {
+  const required = row.completeness?.required
+  if (alias?.readiness.percent != null && required?.total) return null
+  const reason = row.readiness.issues.find(issue => issue.label === 'Channel requirements')?.message
+  return reason ?? (required?.total === 0 ? 'No required attributes are defined for this row.' : 'Readiness cannot be scored until this coordinate’s requirements are available.')
+}
+
 /** Match the listing band: required fields, using this row's own resolved counts. */
 export function rowReadinessPill(row: StudioRow, alias: AliasGroup | undefined) {
   const required = row.completeness?.required

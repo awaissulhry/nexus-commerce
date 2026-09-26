@@ -104,6 +104,8 @@ export interface SheetCellValue {
 export interface MasterCompleteness {
   overall: { filled: number; total: number; pct: number }
   required: { filled: number; total: number; missing: Array<{ key: string; label: string }> }
+  /** Progress columns (2026-09-26) — the applicable fields that are NOT required; absent on an older payload = not recorded. */
+  optional?: { filled: number; total: number; missing: Array<{ key: string; label: string }> }
   byGroup: Array<{ group: string; filled: number; total: number }>
 }
 

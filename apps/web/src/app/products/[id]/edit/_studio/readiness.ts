@@ -99,11 +99,19 @@ export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
         const req = v.required as { filled?: unknown; total?: unknown } | undefined
         const required = req && typeof req.filled === 'number' && Number.isFinite(req.filled) && typeof req.total === 'number' && Number.isFinite(req.total)
           ? { filled: req.filled, total: req.total } : undefined
+        // Progress columns (2026-09-26) — the optional side, with the same strictness: a half-count is dropped, and a
+        // dropped or absent side is left OUT and reads as NOT RECORDED, never as "nothing optional is empty".
+        const opt = v.optional as { filled?: unknown; total?: unknown } | null | undefined
+        const optional = opt && typeof opt.filled === 'number' && Number.isFinite(opt.filled) && typeof opt.total === 'number' && Number.isFinite(opt.total)
+          ? { filled: opt.filled, total: opt.total } : null
         byProduct[productId] = { pct, state: v.state as ScopeReadiness['state'], ...(typeof v.note === 'string' ? { note: v.note } : {}),
-          ...(required ? { required } : {}), ...(typeof v.computedAt === 'string' ? { computedAt: v.computedAt } : {}) }
+          ...(required ? { required } : {}), ...(optional ? { optional } : {}), ...(typeof v.computedAt === 'string' ? { computedAt: v.computedAt } : {}) }
       }
     }
+    const optionalMissing = Array.isArray(raw.optionalMissing) ? raw.optionalMissing
+      .filter((m: Record<string, unknown>) => m && ['productId', 'field', 'label'].every(key => typeof m[key] === 'string'))
+      .map((m: Record<string, unknown>) => ({ productId: m.productId as string, field: m.field as string, label: m.label as string })) : []
     return [{ ...score, coordinateKey: raw.coordinateKey, channel: raw.channel, market: raw.market, accountId: raw.accountId, aliasId: raw.aliasId,
-      language: raw.language, label: raw.label, missing, byProduct, computedAt: typeof raw.computedAt === 'string' ? raw.computedAt : null }]
+      language: raw.language, label: raw.label, missing, optionalMissing, byProduct, computedAt: typeof raw.computedAt === 'string' ? raw.computedAt : null }]
   })
 }
