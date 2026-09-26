@@ -7,8 +7,8 @@ const destination = { productId: 'family', channel: 'EBAY' as const, marketplace
 const group = (overrides: Record<string, unknown> = {}) => ({ title: 'Jacket', description: '<p>Warm</p>', imageUrls: ['https://img.example/1.jpg'],
   aspects: { Marca: ['Brand'], 'Tipo di prodotto': ['Giacca'] }, variantSKUs: ['FAM-RED-M', 'FAM-RED-L'],
   variesBy: { specifications: [{ name: 'Colore', values: ['Rosso'] }, { name: 'Taglia', values: ['M', 'L'] }] }, ...overrides })
-const inventoryItem = (size: string, quantity: number, groupIds = ['FAM']) =>
-  ({ product: { aspects: { Colore: ['Rosso'], Taglia: [size] } }, availability: { shipToLocationAvailability: { quantity } }, groupIds })
+const inventoryItem = (size: string, quantity: number, inventoryItemGroupKeys = ['FAM']) =>
+  ({ product: { aspects: { Colore: ['Rosso'], Taglia: [size] } }, availability: { shipToLocationAvailability: { quantity } }, inventoryItemGroupKeys })
 const getItemXml = `<?xml version="1.0"?><GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents"><Item><ItemID>9000000001</ItemID><Variations>
   <Variation><SKU>FAM-RED-M</SKU><StartPrice currencyID="EUR">19.90</StartPrice></Variation>
   <Variation><SKU>FAM-RED-L</SKU><StartPrice currencyID="EUR">21.90</StartPrice></Variation></Variations></Item></GetItemResponse>`

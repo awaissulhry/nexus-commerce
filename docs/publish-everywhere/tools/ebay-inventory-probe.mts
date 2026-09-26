@@ -115,7 +115,7 @@ try {
       // 1. What buyers see: listing type, variations, sales per variation, item specifics.
       let live: Record<string, unknown> = {}, readError: string | null = null
       try {
-        const answer = await callTradingApi('GetItem', `<?xml version="1.0"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(item)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`,
+        const answer = await callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(item)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`,
           { oauthToken, siteId: SITE[MARKET], connectionId: account, market: MARKET })
         if (!answer.raw || !['Success', 'Warning'].includes(answer.ack)) readError = 'GetItem not acknowledged'
         else live = parseEbayItemDocument(answer.raw)

@@ -107,7 +107,7 @@ try {
     const before = await read()
     if (before.revision !== proposal.beforeRevision || canonical(before.raw.group) !== canonical(proposal.originalGroup)) throw new Error('The live group changed since preparation. Nothing was sent.')
     Object.assign(process.env, { NEXUS_ENABLE_EBAY_PUBLISH: 'true', EBAY_PUBLISH_MODE: 'live' })
-    const { recordPublicationRequests } = await import(join(ROOT, 'apps/api/src/services/pim/studio-publication-records.js'))
+    const { recordPublicationRequests, settlePublicationRecords } = await import(join(ROOT, 'apps/api/src/services/pim/studio-publication-records.js'))
     const owner = { productId: found.parent.productId, sku: found.parent.sku }
     async function step(phase: 'temporary' | 'restore', group: Record<string, unknown>, expectedRevision: string) {
       const operationId = `pe-ebay-inventory-${stored.digest.slice(0, 24)}-${phase}`
@@ -122,8 +122,19 @@ try {
       const listingDescription = ebayXmlText((receipt.readBack?.raw.item as any)?.Description) ?? ''
       const groupMatches = canonical(receipt.readBack?.raw.group?.description) === canonical(group.description)
       const listingHasComment = listingDescription.includes(proposal.comment)
-      await prisma.channelListingSnapshot.updateMany({ where: { publishEventId: operationId, reason: 'publish-proof' },
-        data: { outcome: groupMatches ? 'ACCEPTED' : 'UNKNOWN', ...(groupMatches ? { acceptedAt: new Date() } : {}) } })
+      // The official settle step, scoped to this proof's publish-proof rows: journal AND audit move together (as the Amazon proof).
+      const result = { id: operationId, status: groupMatches ? 'VERIFIED' : 'UNVERIFIED', message: 'Proof read-back',
+        results: [{ sku: owner.sku, status: groupMatches ? 'VERIFIED' : 'ACCEPTED', reference: proposal.groupKey, message: groupMatches ? 'Read back' : 'Read-back differs' }] }
+      await prisma.$transaction(async (tx: any) => {
+        const proofTx = new Proxy(tx, { get(target, key) {
+          if (key !== 'channelListingSnapshot') { const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value }
+          return new Proxy(target.channelListingSnapshot, { get(model, method) {
+            if (method === 'findMany') return (q: any) => model.findMany({ ...q, where: { ...q.where, reason: 'publish-proof' } })
+            const value = Reflect.get(model, method); return typeof value === 'function' ? value.bind(model) : value
+          } })
+        } })
+        await settlePublicationRecords(proofTx, context, result)
+      })
       checkpoint(`${phase}-read-back`, { groupMatches, listingHasComment, listingDescriptionBytes: Buffer.byteLength(listingDescription), senderVerified: receipt.verified, warnings: receipt.warnings })
       if (!groupMatches) throw new Error(`${phase}: the group read-back does not show the sent description. Stop; inspect the listing.`)
       return { receipt, listingHasComment }
