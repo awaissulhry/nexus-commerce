@@ -116,10 +116,12 @@ price lane became one market per row; Amazon Finances shipped A0/A1/A2/A5 only (
 
 ## Phase 3 — remaining engineering (Package C, same discipline)
 
-**Done as part of release B+C (PR #32)**, except: the eBay privacy destructive step (Owner chose
-option A on 2026-09-26: remove personal data now, keep what tax law needs — recorded, not built) and
-the P1.8 eBay notification reads. Amazon/Shopify cancellation retry parity was dropped (under the
-stock model those channels take no stock at ingest). `stock_blocked` is retried automatically (R6).
+**Done as part of release B+C (PR #32)**, including the P1.8 missing checks (eBay notification
+reads, Amazon getListingsItem as "sign-in and reachability"), except the eBay privacy destructive
+step (Owner chose option A on 2026-09-26: remove personal data now, keep what tax law needs —
+recorded, not built). Dropped: Amazon/Shopify cancellation retry parity (under the stock model those
+channels take no stock at ingest) and the membership `channelConnectionId` backfill (nothing needed
+it). `stock_blocked` is retried automatically (R6).
 
 - P3.3 listing-issues API (own route) + Diagnostics card (design system only; browser-verified 390/1280,
   light/dark, keyboard); the studio pane itself belongs to PES.3 — hand over, do not edit `_studio/`.

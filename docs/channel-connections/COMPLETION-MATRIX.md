@@ -20,7 +20,7 @@ A requirement with no code yet is **not implemented**; P5.5 and P6.7 are **not r
 
 ## Latest checkpoint — 2026-09-26
 
-**Three channel releases are deployed today, every new switch is OFF, and nothing new is enabled.**
+**PR #4 and three channel releases were deployed today; every new switch is OFF and nothing new is enabled.**
 Merges happen by pull request; the Owner decides each merge.
 
 | Release | Merged to `main` (UTC) | What it contains | Migrations | State |
@@ -33,7 +33,7 @@ Merges happen by pull request; the Owner decides each merge.
 Production after PR #32: the API, worker and scheduler deployments reached Railway SUCCESS between
 18:47 and 19:11; public health at 19:23 reported `healthy` and build `93215463`. The pre-deploy
 migration step is part of that deployment. Health still reports existing Amazon Ads integrity
-findings (see "Not built" below); a healthy response is not a blanket operational verdict.
+findings (see "Held or not built" below); a healthy response is not a blanket operational verdict.
 
 What is **not** claimed: no B+C behaviour has a recorded real-event proof yet, and the stock repair
 for the orders the FBM bug deducted twice has not run (it needs its own Owner yes, after the hotfix is
@@ -63,7 +63,7 @@ Both carry the release's `packages/database` byte for byte.
 
 | Item | State | Where |
 |---|---|---|
-| Amazon Finances A3/A4 (identity migration, 2024 writer) | implemented (held) | branch `fix/cx-amazon-finances`; waits for the A2 dry run on real data |
+| Amazon Finances A3/A4 (identity migration, 2024 writer) | implemented (held) | local branch `fix/cx-amazon-finances` (not pushed); waits for the A2 dry run on real data |
 | eBay notifications end to end (seller-token subscriptions, handlers marked ready) | not implemented (planning) | every topic is still `handlerMissing`, so setup subscribes nothing |
 | Amazon Ads drift fix (drift rows that cannot close) | not implemented (planning) | outside this plan's packages |
 | Shopify order webhooks | not implemented (planning) | Shopify stays connected; no order webhook registered |

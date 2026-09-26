@@ -199,7 +199,7 @@ revert lever, and P4.5e's disconnect enforcement is built on its `throw`.
   existed, so an empty shop produced **silence** — indistinguishable from a crash. It took a
   positive control to tell them apart. Fixed: the census logs always, including `total: 0`.
 
-## ▶ START HERE — scope is AMAZON, eBAY and ETSY only
+## ▶ The 2026-09-21 start point (historical; start from COMPLETION-MATRIX now) — scope is AMAZON, eBAY and ETSY only
 
 The Owner narrowed it on 2026-09-21: *"we'll add the remaining channels later. Currently, we'll
 keep our focus solely on Amazon, eBay, and Etsy."* **P8 is deferred**, and Shopify and WooCommerce
@@ -228,7 +228,7 @@ anything.
 ---
 
 **P6 is COMPLETE** as far as code can take it: `P6.2`, `P6.4`, `P6.6` (+**R-2**) and
-`P6.8`'s instrumentation are built; `P6.7` is **PARTIAL** and its row is **OPEN**.
+`P6.8`'s instrumentation are built (all deployed); `P6.7` was **PARTIAL** at this point and was **resolved later on 2026-09-21** (nothing to add; see the package history above).
 
 ### Two P6 rows are waiting on the Owner, not on code
 
@@ -539,7 +539,7 @@ statement about production, ask which profile it came from — and look for the 
 profile's line.**
 Earlier: P3.6 deploy `92ec6158` from `22eafb4bf`: `Applying migration 20260920e_p36_trace_id`, `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}`. The migration applied, so `traceId` exists in production — but **no row carries one yet**; the first queued change creates the first. Earlier: P3.3–P3.5 deploy `d39ece61` from `b36fe4c80`: `channel-alerts cron: scheduled {"schedule":"*/15 * * * *"}`, `suppression-issues cron: scheduled {"schedule":"25 4 * * *","amazonPull":"off"}` (the P3.2 correction landed), and — the one that matters — **the sweep actually ran**, once per business profile: `[channel-alerts] sweep {"created":0,"deduped":0,"belowThreshold":0}` and `{"created":0,"deduped":0,"belowThreshold":1}`. The `belowThreshold: 1` is the proof: an alert was **evaluated** against real production data and correctly stayed quiet. Earlier: P3.2 deploy `421fee4f` from `c86c20424`: `Applying migration 20260920d_p32_listing_issue_occurred_at`, `suppression-issues cron: scheduled`, **570 requests / 0 errors** in the hour after. Earlier: P2.2 deploy `f9910fac`: `amazon-notification-reconcile cron started {"schedule":"40 3 * * *"}`. P2.3 deploy `816c4e48`: `ebay-notification-reconcile cron started {"schedule":"55 3 * * *"}`. P2.4–P3.1 pushed and deployed; **none verified by real traffic yet** — see section 4. Earlier: P2.1 — deploy `ee4d1810` from `c8265b1dc`: `Applying migration 20260920a_p21_inbound_retry` + `…20260920b_p21_inbound_route_aliases`, `inbound-retry cron started {"schedule":"* * * * *"}`, **363 requests / 0 errors** in the 25 min after (the retry path itself has not yet been hit by real traffic). Earlier: anonymous `GET /api/monitoring/queue-stats` → **401**, with `/api/health` → **200** in the same run as the control; `Applying migration 20260919a_p11_gateway_call_ledger` in the deploy log; the contract cron logs itself off; **0 × 5xx** since the deploy.
 
-## 3. What was built today, and what each package found
+## 3. What was built on 2026-09-20/21, and what each package found (historical; current states in COMPLETION-MATRIX)
 
 **P5.1 is built and P5.3 is measured.** The deadline package is done, so the
 plan's order now points at **P4**.
