@@ -681,8 +681,10 @@ left as it is and reported as a follow-up.
   `category`, Etsy `taxonomy_id`), drives the listing pin, the resolver fill (a blank stored value in the channel's own
   category field gets the mapped category; a stored value still wins), the studio sheet fill (only the coordinate
   channel's own column; the label stays "master", VTR's to change) and the sheet's missing-schema issue key (on Shopify
-  it named `productType`). Etsy `taxonomy_id` keeps the mapped id as TEXT in the cell; validation reads it as a number
-  (`0` and non-numbers are flagged) — no Etsy writer sends `taxonomy_id` today. Tests: `resolve-batch.vitest.test.ts`
+  it named `productType`). Etsy `taxonomy_id` (a number field; an integer in Etsy's schema) kept the mapped id as TEXT
+  in #48; **fixed in PR #71**: `categoryFieldValue(kind, id)` fills a number field with a number when the id is all
+  digits, else leaves it as it came so validation names it (`0` and non-numbers are flagged). VTR's step 4 uses the
+  same helper. Tests: `resolve-batch.vitest.test.ts`
   (the mock keeps the real map) and `studio-sheet-category-fill.vitest.test.ts`; 6 planted mistakes caught. Trap: 8
   test files mock `category-mapping.service.js`; a mock without the new export fails only where `resolveBatch` runs
   (`ebay-presentation-workflow`, fixed with `importOriginal`); the catalog-transfer mocks are import/export files and
@@ -952,8 +954,26 @@ Codes (`conceptOptionCode`, the one rule, also used by `optionsFor`): color `bla
 orange brown pink purple beige multicolour`; size `xxs xs s m l xl xxl 3xl 4xl 5xl one_size`. `label` = the primary
 content language (Italian), `metadata.labels` = `{ en, it, de, fr, es }` from the concept's new `valueLabels`,
 `synonyms` = the other spellings. The concept list gained `XXS` and "Arancia" (`CONCEPTS_REVISION` 2026-09-26.2).
-Follow-up, not done: a NEW business's starter dictionary still creates color/size without options (`optionsFor` fills
-only `select` concepts) — run `concepts/options` after creating one, or seed it in the starter (the Owner's call).
+**Quality follow-ups (the Owner: "go with your recommendations… AAA quality", 2026-09-27):**
+- PR #68 (`2688a2aa4`): a NEW business starts with the colour/size options — `optionsFor` (starter, and a concept
+  attribute created by `concepts/apply`) seeds `SEEDED_OPTION_CONCEPTS` through `seededOption`, the builder the backfill
+  uses too, so a new business's options are the ones the backfill made (its test finds all 24 `present`). Same PR:
+  concept adoption never links an ARCHIVED attribute (an archived adopt code is skipped; an archived attribute holding
+  the concept's own code blocks the create with "Restore it"). 4 planted mistakes caught.
+- PR #71 (`b33649e62`): Etsy's mapped category as a number (above). 4 planted mistakes caught.
+- Both LIVE on API build `36f0f4fc` (2026-09-26 23:13 UTC). Read-back: `concepts/options` dry run still 24 present, 0
+  to create, on both businesses. No live Etsy example exists yet: Motovento's products have no mapped Etsy category
+  (the Etsy `taxonomy_id` cell is empty — measured empty, not a failure); the number rule is proven by the tests.
+- Decided (Owner, 2026-09-27, on this lane's recommendation): the numeric sizes VTR's backfill found on Xavia Racing
+  (44–60) stay BUSINESS options of its size attribute, not concept values — a number means different things per size
+  system. If one is ever added to the concept, `concepts/options` matches the existing option by its label and makes
+  no duplicate.
+- Checked, no change: Motovento after its adoption — 22 of 100 live attributes used (was 3); `color`, `size`,
+  `material` used by eBay and Etsy; the 78 dormant are mostly the 43 placed on Amazon (not connected), as intended.
+- Outside this lane, handed over: the deploy smoke step gave up after 3 min while Railway was still going live, so a
+  good deploy showed "failure" and skipped the worker and scheduler; and one build died on Railway's builder
+  downloading `mise`. The CI session confirmed both and fixed them in PR #72 (12-min window, fail fast on a FAILED
+  deployment, retry only a builder download error) — the Owner merges it.
 
 **S6 built — API (2026-09-26, branch `feat/attributes-p3b-s6`): "used by" and dormant.**
 
