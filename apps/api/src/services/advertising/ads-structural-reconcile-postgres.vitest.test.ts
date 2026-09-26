@@ -43,7 +43,7 @@ const allRows = async () => byKey((await database.pool.query(
 )).rows)
 
 describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on evidence, per profile, in real PostgreSQL', () => {
-  const ids = { campaign: '', group: '', agrees: '', differs: '', unreported: '' }
+  const ids = { campaign: '', group: '', agrees: '', differs: '', unreported: '', archivedNeverSent: '', liveNeverSent: '' }
 
   beforeAll(async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
@@ -60,17 +60,21 @@ describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on 
       } })).id
       const group = await db.adGroup.create({ data: { campaignId: ids.campaign, externalAdGroupId: 'G-EXT', name: 'Group', status: 'ENABLED', defaultBidCents: 50 } })
       ids.group = group.id
-      const keyword = (text: string, externalTargetId: string) => db.adTarget.create({ data: {
-        adGroupId: group.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: text, externalTargetId, status: 'ENABLED', bidCents: 50,
+      const keyword = (text: string, externalTargetId: string | null, status: 'ENABLED' | 'ARCHIVED' = 'ENABLED') => db.adTarget.create({ data: {
+        adGroupId: group.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: text, externalTargetId, status, bidCents: 50,
       } }).then((t) => t.id)
       ids.agrees = await keyword('boots', 'K1-EXT')
       ids.differs = await keyword('shoes', 'K2-EXT')
       ids.unreported = await keyword('socks', 'K3-EXT')
+      ids.archivedNeverSent = await keyword('laces', null, 'ARCHIVED')
+      ids.liveNeverSent = await keyword('soles', null)
       await drift('AD_TARGET', ids.agrees, 'state') // agrees again → closes
       await drift('AD_TARGET', ids.differs, 'state') // still differs → stays open
       await drift('AD_TARGET', ids.unreported, 'state') // Amazon did not report state → stays open
       await drift('CAMPAIGN', ids.campaign, 'status') // the settings sync's field; the reconcile compares `state` → stays open
       await drift('CAMPAIGN', ids.campaign, 'name') // compared and agrees → closes
+      await drift('AD_TARGET', ids.archivedNeverSent, 'existence') // S3: archived here, nothing on Amazon → agrees, closes
+      await drift('AD_TARGET', ids.liveNeverSent, 'existence') // S3: live here, never sent → stays, a write that never landed
     })
     // Profile A holds a row with the identical key. Profile B's run must not see it, let alone close it.
     await inProfile(PROFILE_A, () => drift('AD_TARGET', ids.agrees, 'state'))
@@ -89,17 +93,23 @@ describe.skipIf(!concurrentDatabaseUrl())('structural reconcile closes drift on 
     const r = await inProfile(PROFILE_B, () => runStructuralReconcileOnce())
     expect(r.errors).toEqual([])
     expect(r.ok).toBe(true)
-    expect(r.driftRowsResolved).toBe(2)
+    expect(r.driftRowsResolved).toBe(3)
     expect(r.driftRowsOpened).toBe(0)
+    expect(r.archivedNeverSent).toBe(1)
     const b = (entityType: string, entityId: string, field: string, closed: boolean, occurrences = 1): Row => ({ workspaceId: PROFILE_B, entityType, entityId, field, closed, occurrences })
     expect(await allRows()).toEqual(byKey([
       { workspaceId: PROFILE_A, entityType: 'AD_TARGET', entityId: ids.agrees, field: 'state', closed: false, occurrences: 1 },
       b('AD_TARGET', ids.agrees, 'state', true),
       b('AD_TARGET', ids.differs, 'state', false, 2),
       b('AD_TARGET', ids.unreported, 'state', false),
+      b('AD_TARGET', ids.archivedNeverSent, 'existence', true),
+      b('AD_TARGET', ids.liveNeverSent, 'existence', false, 2),
       b('CAMPAIGN', ids.campaign, 'name', true),
       b('CAMPAIGN', ids.campaign, 'status', false),
     ]))
+    const classOf = async (entityId: string) => (await database.pool.query(`SELECT classification FROM "AdDrift" WHERE "entityId" = $1`, [entityId])).rows.map((x) => x.classification)
+    expect(await classOf(ids.liveNeverSent)).toEqual(['WRITE_FAILED'])
+    expect(await classOf(ids.differs)).toEqual(['EXTERNAL_CHANGE'])
 
     // A run that could not read everything knows nothing for certain: a row that agrees stays open.
     await inProfile(PROFILE_B, () => drift('AD_GROUP', ids.group, 'name'))

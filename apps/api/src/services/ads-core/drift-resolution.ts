@@ -56,18 +56,37 @@ const driftKey = (entityType: string, entityId: string, field: string) => `${ent
 const amazonReturnedIt = (e: LaunchEntityResult) => e.verdict === 'VERIFIED' || e.verdict === 'MISMATCH'
 
 /**
+ * S3 — archived here and never sent to Amazon: we want nothing live and Amazon holds nothing, so on existence the
+ * two agree. Measured on production: 206 SP keywords in this state were re-opened as drift on every run.
+ *
+ * Applied only here, in the reconcile's closing logic. verifyEntity still says NOT_PUSHED for them, because it also
+ * writes launch receipts, and a receipt must never call an entity Amazon never saw verified.
+ */
+const archivedNeverSent = (e: LaunchEntityResult) => e.verdict === 'NOT_PUSHED' && e.localState === 'archived'
+
+/**
+ * S3 — a live entity we never sent is one of our writes that never landed: WRITE_FAILED. Classifying it as an
+ * EXTERNAL_CHANGE told the operator somebody edited it on Amazon, which nobody did.
+ */
+export const neverSent = (d: DriftFinding): boolean => d.field === 'existence' && d.entity.verdict === 'NOT_PUSHED'
+
+/**
  * Fold one batch's results into `evidence`, and return the differences to record.
  *
  * Every difference goes into `evidence.observed` here, before the caller writes anything, so a row whose save
  * throws can never be closed as though it agreed.
  */
-export function assessEntities(entities: readonly LaunchEntityResult[], evidence: DriftEvidence): { record: DriftFinding[]; bidDeltas: number } {
+export function assessEntities(
+  entities: readonly LaunchEntityResult[],
+  evidence: DriftEvidence,
+): { record: DriftFinding[]; bidDeltas: number; archivedNeverSent: number } {
   const record: DriftFinding[] = []
   let bidDeltas = 0
+  let archivedUnsent = 0
   for (const e of entities) {
     const entityType = DRIFT_ENTITY_TYPE[e.entityType]
     const fields = new Set(e.compared)
-    if (amazonReturnedIt(e)) fields.add('existence')
+    if (amazonReturnedIt(e) || archivedNeverSent(e)) fields.add('existence')
     const byId = evidence.compared.get(entityType) ?? new Map<string, Set<string>>()
     evidence.compared.set(entityType, byId)
     const known = byId.get(e.localId) ?? new Set<string>()
@@ -75,6 +94,8 @@ export function assessEntities(entities: readonly LaunchEntityResult[], evidence
     byId.set(e.localId, known)
 
     if (e.verdict === 'VERIFIED') continue
+    // Agreement, not a finding: counted so the reconcile reports it rather than hiding it.
+    if (archivedNeverSent(e)) { archivedUnsent++; continue }
     // A verdict with no per-field delta (NOT_PUSHED / MISSING_ON_AMAZON) is recorded against a synthetic
     // `existence` field so it gets a row of its own rather than being invisible.
     const deltas = e.deltas.length ? e.deltas : [{ field: 'existence', intended: 'on Amazon', observed: e.verdict === 'NOT_PUSHED' ? 'never sent' : 'not returned' }]
@@ -84,7 +105,7 @@ export function assessEntities(entities: readonly LaunchEntityResult[], evidence
       record.push({ entityType, entity: e, field: d.field, intended: d.intended, observed: d.observed })
     }
   }
-  return { record, bidDeltas }
+  return { record, bidDeltas, archivedNeverSent: archivedUnsent }
 }
 
 /** The ids of the open rows this run's evidence closes. Nothing, unless the run was clean. */

@@ -31,8 +31,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { verifyLaunch } from './ads-launch-verify.service.js'
 import { verifyCampaignPortfolios } from './ads-create.service.js'
-import type { LaunchEntityResult } from '../ads-core/launch-verify.js'
-import { assessEntities, emptyEvidence, rowsToClose, type DriftEvidence } from '../ads-core/drift-resolution.js'
+import { assessEntities, emptyEvidence, neverSent, rowsToClose, type DriftEvidence, type DriftFinding } from '../ads-core/drift-resolution.js'
 
 /**
  * Fields this reconcile opens drift rows for. STRUCTURE — not bids (`BID_FIELDS` in drift-resolution).
@@ -85,6 +84,11 @@ export interface StructuralReconcileResult {
    * owns those. Surfaced so the suppression is a reported number rather than a silent policy.
    */
   bidDeltasNotRecorded: number
+  /**
+   * S3 — entities archived here that never reached Amazon. Counted in `notPushed` (the launch verifier's number) but
+   * treated as agreement: no drift row, and an open `existence` row for them closes. Reported, not silent.
+   */
+  archivedNeverSent: number
   portfoliosRepaired: number
   errors: string[]
 }
@@ -99,7 +103,7 @@ export async function runStructuralReconcileOnce(opts: {
   const out: StructuralReconcileResult = {
     ok: true, campaignsChecked: 0, campaignsTruncated: 0, entitiesChecked: 0,
     verified: 0, mismatch: 0, missingOnAmazon: 0, notPushed: 0, uncovered: 0,
-    driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, portfoliosRepaired: 0, errors: [],
+    driftRowsOpened: 0, driftRowsResolved: 0, bidDeltasNotRecorded: 0, archivedNeverSent: 0, portfoliosRepaired: 0, errors: [],
   }
   const limit = opts.limit ?? 400
 
@@ -149,8 +153,9 @@ export async function runStructuralReconcileOnce(opts: {
 
     // Every difference is folded into `evidence` before any row is written, so a bid delta (never recorded) and a
     // row whose save throws both keep their key out of the resolve pass below.
-    const { record, bidDeltas } = assessEntities(v.entities, evidence)
+    const { record, bidDeltas, archivedNeverSent } = assessEntities(v.entities, evidence)
     out.bidDeltasNotRecorded += bidDeltas
+    out.archivedNeverSent += archivedNeverSent
     for (const d of record) {
       // An unrecognised field is recorded rather than dropped: a new comparison added later
       // should default to visible, not silently ignored.
@@ -158,7 +163,7 @@ export async function runStructuralReconcileOnce(opts: {
         logger.info('[AX-VT.5] recording drift for an unlisted field', { field: d.field })
       }
       try {
-        out.driftRowsOpened += await openDrift(d.entityType, d.entity, d.field, d.intended, d.observed)
+        out.driftRowsOpened += await openDrift(d)
       } catch (err) {
         out.errors.push(`drift ${d.entity.label}/${d.field}: ${(err as Error).message.slice(0, 90)}`)
       }
@@ -218,20 +223,16 @@ async function closeAgreeingRows(evidence: DriftEvidence, runOk: boolean): Promi
   return closed
 }
 
-async function openDrift(
-  entityType: string,
-  e: LaunchEntityResult,
-  field: string,
-  intended: string | null,
-  observed: string | null,
-): Promise<number> {
+async function openDrift(d: DriftFinding): Promise<number> {
+  const { entityType, entity: e, field, intended, observed } = d
   const { classifyDrift } = await import('../ads-core/drift.js')
   // Local write history lives on Campaign; for child entities we have no per-entity stamp, so the
   // classification falls back to EXTERNAL_CHANGE rather than inventing a write time.
   const camp = entityType === 'CAMPAIGN'
     ? await prisma.campaign.findUnique({ where: { id: e.localId }, select: { marketplace: true, lastSyncedAt: true, lastSyncStatus: true } })
     : null
-  const classification = classifyDrift({
+  // S3 — except a live entity we never sent: that is our write that never landed, whatever the timestamps say.
+  const classification = neverSent(d) ? 'WRITE_FAILED' : classifyDrift({
     ours: intended, theirs: observed,
     lastWriteAt: camp?.lastSyncedAt ?? null,
     lastWriteStatus: camp?.lastSyncStatus ?? null,

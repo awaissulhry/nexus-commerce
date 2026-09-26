@@ -130,6 +130,26 @@ describe('S2 — compared names only the fields where both sides were read', () 
   })
 })
 
+/**
+ * S3 (2026-09-26) — "archived here and never sent" is agreement for the structural reconcile's drift rows, and
+ * NOT here. verifyEntity also writes launch receipts, and a receipt must never call an entity Amazon never saw
+ * verified. It only passes our state through, so the reconcile can apply its own rule.
+ */
+describe('S3 — verifyEntity stays strict about entities Amazon never saw', () => {
+  it('an archived entity we never sent is still NOT_PUSHED, and counts against the receipt', () => {
+    const r = verifyEntity(pair({ externalId: null, intended: { name: 'A', state: 'ARCHIVED' } }))
+    expect(r.verdict).toBe('NOT_PUSHED')
+    expect(r.localState).toBe('archived')
+    expect(summarise([r])).toMatchObject({ ok: false, verified: 0, notPushed: 1 })
+  })
+
+  it('passes our state through for every verdict, and null when we hold none', () => {
+    expect(verifyEntity(pair()).localState).toBe('enabled')
+    expect(verifyEntity(pair({ observed: undefined, intended: { name: 'A', state: 'PAUSED' } })).localState).toBe('paused')
+    expect(verifyEntity(pair({ intended: { name: 'A' } })).localState).toBeNull()
+  })
+})
+
 describe('AX-VT.4 — summary', () => {
   it('ok only when everything verified', () => {
     const ok = summarise([verifyEntity(pair()), verifyEntity(pair({ localId: 'c2' }))])

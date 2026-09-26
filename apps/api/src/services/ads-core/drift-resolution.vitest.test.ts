@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { verifyEntity, type EntityPair, type LaunchEntityResult } from './launch-verify.js'
-import { assessEntities, emptyEvidence, rowsToClose, type OpenDriftRow } from './drift-resolution.js'
+import { assessEntities, emptyEvidence, neverSent, rowsToClose, type OpenDriftRow } from './drift-resolution.js'
 
 const keyword = (id: string, over: Partial<EntityPair> = {}) => verifyEntity({
   entityType: 'KEYWORD', localId: id, externalId: `${id}-ext`, label: id,
@@ -117,5 +117,46 @@ describe('S2 — rows the reconcile does not own', () => {
     const target = verifyEntity({ entityType: 'TARGET', localId: 't1', externalId: 't1-ext', label: 't1', intended: { state: 'ENABLED' }, observed: { state: 'enabled' } })
     const r = run([keyword('k1'), target], [row('k1', 'state'), row('t1', 'state'), row('k1', 'state', 'AD_GROUP'), row('k1', 'state', 'KEYWORD')])
     expect(r.closed).toEqual(['AD_TARGET:k1:state', 'AD_TARGET:t1:state'])
+  })
+})
+
+/**
+ * S3 (2026-09-26) — an entity archived here that never reached Amazon: we want nothing live, Amazon holds nothing,
+ * so the two agree. Its `existence` row closes and is not recorded again. Measured on production: 206 SP keywords
+ * in that state were re-opened as drift on every run. The rule lives only here, in the reconcile's closing logic;
+ * verifyEntity still calls them NOT_PUSHED for launch receipts.
+ */
+describe('S3 — archived and never sent is agreement; live and never sent is a write that never landed', () => {
+  const archived = (id: string) => keyword(id, { externalId: null, intended: { keywordText: 'boots', matchType: 'EXACT', state: 'ARCHIVED', bid: 0.5 } })
+
+  it('archived and never sent: the existence row closes, nothing is recorded, and the count is reported', () => {
+    const r = run([archived('k1')], [row('k1', 'existence')])
+    expect(r.closed).toEqual(['AD_TARGET:k1:existence'])
+    expect(r.record).toEqual([])
+    expect(r.archivedNeverSent).toBe(1)
+  })
+
+  it('only existence: the other rows of an archived, never-sent entity stay open (nothing was compared)', () => {
+    expect(run([archived('k1')], [row('k1', 'state'), row('k1', 'keywordText')]).closed).toEqual([])
+  })
+
+  it('live and never sent, enabled or paused, stays a finding', () => {
+    const paused = keyword('k2', { externalId: null, intended: { keywordText: 'boots', matchType: 'EXACT', state: 'PAUSED', bid: 0.5 } })
+    const r = run([keyword('k1', { externalId: null }), paused], [row('k1', 'existence'), row('k2', 'existence')])
+    expect(r.closed).toEqual([])
+    expect(r.record.map((d) => [d.entity.localId, d.field, d.observed])).toEqual([['k1', 'existence', 'never sent'], ['k2', 'existence', 'never sent']])
+    expect(r.archivedNeverSent).toBe(0)
+  })
+
+  it('archived but holding an id Amazon does not return is still a finding', () => {
+    const gone = keyword('k1', { observed: undefined, intended: { keywordText: 'boots', matchType: 'EXACT', state: 'ARCHIVED', bid: 0.5 } })
+    const r = run([gone], [row('k1', 'existence')])
+    expect(r.closed).toEqual([])
+    expect(r.record.map((d) => d.observed)).toEqual(['not returned'])
+  })
+
+  it('a live entity we never sent is ours to explain: the finding is classed WRITE_FAILED, nothing else is', () => {
+    const r = run([keyword('k1', { externalId: null }), keyword('k2', { observed: undefined }), keyword('k3', { observed: { keywordText: 'boots', matchType: 'EXACT', state: 'paused', bid: 0.5 } })], [])
+    expect(r.record.map((d) => [d.entity.localId, neverSent(d)])).toEqual([['k1', true], ['k2', false], ['k3', false]])
   })
 })

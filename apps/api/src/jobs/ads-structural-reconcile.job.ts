@@ -35,6 +35,8 @@ export async function runStructuralReconcileCron(): Promise<void> {
       `mismatch=${r.mismatch}`,
       `missing=${r.missingOnAmazon}`,
       `notPushed=${r.notPushed}`,
+      // S3 — of those, archived here and never sent: agreement, not drift.
+      r.archivedNeverSent ? `archivedNeverSent=${r.archivedNeverSent}` : '',
       `uncovered=${r.uncovered}`,
       `driftOpened=${r.driftRowsOpened}`,
       `driftResolved=${r.driftRowsResolved}`,

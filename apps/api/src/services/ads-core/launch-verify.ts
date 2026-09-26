@@ -47,6 +47,12 @@ export interface LaunchEntityResult {
    * skipped rather than called a mismatch. Empty when Amazon returned no entity (NOT_PUSHED, MISSING_ON_AMAZON).
    */
   compared: string[]
+  /**
+   * S3 — our own state for the entity ('enabled', 'paused', 'archived'), normalised, or null when we hold none. Passed
+   * through only: it never changes the verdict. The structural reconcile uses it to tell an entity archived here and
+   * never sent (agreement) from a live one that never reached Amazon; a launch receipt still calls both NOT_PUSHED.
+   */
+  localState: string | null
 }
 
 export interface LaunchVerificationSummary {
@@ -87,6 +93,7 @@ export function verifyEntity(pair: EntityPair, nullIsMeaningful: readonly string
   const base = {
     entityType: pair.entityType, localId: pair.localId,
     externalId: pair.externalId, label: pair.label,
+    localState: normaliseForCompare(pair.intended.state),
   }
   if (!pair.externalId) return { ...base, verdict: 'NOT_PUSHED', deltas: [], compared: [] }
   if (pair.observed === undefined) return { ...base, verdict: 'MISSING_ON_AMAZON', deltas: [], compared: [] }
