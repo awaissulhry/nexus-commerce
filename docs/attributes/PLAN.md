@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | ⬜ planned 2026-09-26 (Owner approved the study plan; S0's live read done, §10.9) | §10.9 |
+| P3b | 🟡 S0 built 2026-09-26 (fixtures F1–F4, today's behaviour pinned, the read-only measure script); S1 next | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -742,6 +742,25 @@ Order: S0 → S1 → S2 (no more fake Amazon rows) → S3 → S4 → S5 (the Sha
 
 This closes the study's gap about the live list. Still to measure in S0 (needs the measure script, read-only): stored
 keys per attribute and readiness rows by state.
+
+**S0 built (2026-09-26, branch `feat/attributes-p3b-s0`):**
+
+- `test-support/attribute-scope-dictionary.json` — the study's 242 attributes (code, label, type, class only).
+- `test-support/attribute-scope-fixtures.ts` — F1 eBay only, F2 Amazon only, F3 no channel, F4 Motovento-shaped
+  (the 242 in a Jackets family, created like the copy does), each through the real `workspaceService.create`.
+  A test account needs its own account id: the active-account unique index is not per business.
+- `pim/attribute-scope-baseline.vitest.test.ts` pins today (5 tests, profiles off and on; 4 planted mistakes caught):
+  B1 every business has the same 19 switched-on markets, whatever it connected (S1/S2 flip it); B2 a product with no
+  family sees none of the dictionary on Shared, not even the starter set (S4); B3 an Amazon-only bag key comes back as
+  "Additional saved attributes" (S4); B4 a Motovento-shaped family shows all 242 on Shared (S3/S5); B5 an eBay-only
+  business gets Amazon readiness rows marked "No active account" (S2). Each later step changes its assertion in the
+  same commit.
+- `apps/api/scripts/attribute-scope-measure.mts` — per business: dictionary, families, shared-bag keys (products per
+  key, dictionary or not), readiness rows by channel and state (with the "No active account" count), accounts and
+  markets. One transaction, `SET TRANSACTION READ ONLY` (checked), rolled back; counts and codes only. Run on the
+  private copy. **A production run needs a login that sees every business; this session cannot read one** (reading
+  `apps/api/.env` is refused), so the stored-key and readiness counts for production wait for the Owner's run:
+  `DATABASE_URL=<owner login> node --import tsx apps/api/scripts/attribute-scope-measure.mts`.
 
 ## 11. For the product-sheet session (the screens are theirs)
 
