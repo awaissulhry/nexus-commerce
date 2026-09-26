@@ -371,7 +371,10 @@ export function computeReadiness(input: {
 // ────────────────────────────────────────────────────────────────────
 
 export function completenessFor(columns: SheetColumn[], row: { isParent: boolean; productType: string | null; familyId?: string | null }, values: Record<string, SheetCellValue>): MasterCompleteness {
-  const applicable = columns.filter((c) => applies(c, row))
+  // The variation theme is SET ON THE PARENT: a child's cell does not apply (the sheet hatches it, "Set on the parent"),
+  // so it is not an empty field of the child. Counting it put "Variation theme" in every child's progress card as an
+  // empty optional field whose "Go to" landed on a locked cell (found on the progress columns, 2026-09-26).
+  const applicable = columns.filter((c) => applies(c, row) && !(c.kind === 'variationTheme' && !row.isParent))
   const asMaster: MasterAttribute[] = applicable.map((c) => ({
     key: c.key,
     label: c.label,
