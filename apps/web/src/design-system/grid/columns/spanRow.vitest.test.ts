@@ -97,3 +97,19 @@ describe('bandColSpan', () => {
     expect(span({ column: col('name'), api })).toBe(1)
   })
 })
+
+describe('stopBefore — a column the band leaves alone (the progress columns, 2026-09-26)', () => {
+  const withProgress = [col('ag-Grid-SelectionColumn', 'left'), col('alias', 'left'), col('sku', 'left'), col('progress:scope', 'left'), col('name')]
+  const isProgress = (id: string) => id.startsWith('progress:')
+  it('ends the span at the first stop column, so the band row keeps its own cell there', () => {
+    expect(spanWithinSection(withProgress, col('alias', 'left'), isProgress)).toBe(2)
+  })
+  it('a stop column BEFORE the band changes nothing, and none at all spans the whole section', () => {
+    expect(spanWithinSection(withProgress, col('sku', 'left'), (id) => id === 'alias')).toBe(2)
+    expect(spanWithinSection(withProgress, col('alias', 'left'), () => false)).toBe(3)
+  })
+  it('reaches bandColSpan', () => {
+    const span = bandColSpan<{ kind: string }>({ isBand: (d) => d?.kind === 'alias', stopBefore: isProgress })
+    expect(span({ data: { kind: 'alias' }, column: col('alias', 'left'), api: { getAllDisplayedColumns: () => withProgress } })).toBe(2)
+  })
+})

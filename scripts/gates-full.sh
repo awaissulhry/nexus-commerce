@@ -469,6 +469,16 @@ echo "→ Checking 7:1 contrast on the design-system tokens (web + factory, 0 / 
   exit 1
 }
 
+# Progress columns (2026-09-26) — every progress-bar tone clears 3:1 (WCAG 1.4.11) on every grid row ground, light and dark, web AND
+# factory; the self-test proves the check fails without the tone edges.
+echo "→ Checking progress-bar contrast (web + factory, 3:1)..."
+{ node scripts/check-progress-contrast.mjs --self-test >/dev/null \
+  && node scripts/check-progress-contrast.mjs --check >/dev/null \
+  && node scripts/check-progress-contrast.mjs --check --tokens apps/factory/src/design-system/styles/tokens.css >/dev/null; } || {
+  echo "❌ progress contrast FAILED (run: node scripts/check-progress-contrast.mjs [--tokens apps/factory/src/design-system/styles/tokens.css])"
+  exit 1
+}
+
 # R-45 / R-50 / R-61 (A-43, A-48, 2026-09-24) — the three browser gates are back (removed 09-16, 7bd90cb11). Path-scoped (only when the
 # pushed commits touch a file a gate's reading depends on — each gate's own STAMP_FILES), OWN servers on free ports and the LOCAL
 # database, a RATCHET against scripts/browser-gates-baseline.json, and NOT MEASURED always fails. A UI push that runs editor-open costs

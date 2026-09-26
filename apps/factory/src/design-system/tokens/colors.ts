@@ -71,6 +71,11 @@ export const palette = {
     700: '#c2410c',
     text: '#6b4800', // status-pill "warn" text — R-49 (A-51): 7.42 on amber.soft (#9a6700 was 4.39)
   },
+  /**
+   * Progress bars (2026-09-26) — the BRIGHT signal hues the Owner asked for ("bright green / red / yellow"), light and
+   * dark steps. Only `--nds-progress-*` uses them. `yellowEdge` is the 1px edge bright yellow needs to reach 3:1.
+   */
+  signal: { red: '#dc2626', redDark: '#f87171', yellow: '#eab308', yellowEdge: '#a16207', yellowDark: '#facc15', greenDark: '#22c55e', trackDark: '#3a4758' },
   /** Manual targeting + Sponsored-Products chip. */
   purple: { bg: '#f3e8ff', 600: '#7400bc', 700: '#6d28d9' },
   /** Sponsored Display chip. */

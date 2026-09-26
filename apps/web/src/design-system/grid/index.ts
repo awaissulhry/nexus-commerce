@@ -92,6 +92,8 @@ export { useGridState, readLastUsed, writeLastUsed, clearLastUsed, lastUsedKey, 
 export { compareSortValues, compareForAgGrid, type SortDir, type SortValue } from './sortValues'
 export * from './renderers'
 export { cellDetailKeys, CELL_DETAIL_TRIGGER, type CellDetailKeyParams } from './cellDetail'
+// Progress columns (2026-09-26) — "Go to <field>": open the row, scroll it to the middle, put the cursor in the cell, mark it.
+export { landOnCell, collapsedAncestors, LANDING_CLASS, LANDING_MS, type LandOptions, type LandingGridApi, type LandingRowNode } from './landOnCell'
 export {
   gridSelection, selectionColumn, integerColumn, moneyColumn, euroColumn, percentColumn, deltaColumn, dateColumn, statusColumn, textColumn,
   stockColumn, lockedColumn, holdColumn, actionsColumn, type GridSelectionOptions, type ActionsColumnOptions,

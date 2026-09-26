@@ -55,6 +55,10 @@ export { GridLoadingOverlay, GridNoRowsOverlay, type GridLoadingOverlayParams, t
 // PES.2 — media cells (PES.7's matrices): the picture lives in the cell VALUE, handlers in context.
 export { mediaCellState, mediaCellClasses, mediaCellTitle, mediaCellAcceptsDrop, mediaRenditionWidth, type MediaCellState, type MediaCellValue } from './mediaCell'
 export { MediaCell, MediaCellProvider, MEDIA_MATRIX_GRID_OPTIONS, type MediaCellHandlers } from './MediaCellView'
+// Progress columns (2026-09-26) — colour rule A, the card model, the meter cell and its card.
+export { progressTone, progressPercent, combinedPercent, progressDetailModel, progressTriggerLabel, progressText, progressListKey, progressAge, PROGRESS_TONE_WORD, OPTIONAL_NOT_RECORDED, REQUIRED_NAMES_NOT_RECORDED, type ProgressTone, type ProgressField, type ProgressValue, type ProgressAction, type ProgressDetailItem, type ProgressDetailGroup, type ProgressDetailModel } from './progress'
+export { ProgressCell, type ProgressCellParams } from './ProgressCell'
+export { ProgressDetailCard, type ProgressDetailCardProps } from './ProgressDetailCard'
 // PES.2 — readiness: the ONE tone/label source for BOTH vocabularies (programme §3).
 export { readinessMeta, readyPillTone, ROW_READINESS_STATES, SCOPE_READINESS_STATES, type ReadinessMeta, type ReadinessTone, type ReadinessStateName, type RowReadinessState, type ScopeReadinessState } from './readiness'
 // VP.5 — the PROJECTION vocabulary: a third table whose every tone is READ from readinessMeta.

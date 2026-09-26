@@ -49,8 +49,13 @@ export interface IdentityBandProps {
   secondary?: ReactNode
   /** Full text for the second line when it truncates. */
   secondaryTitle?: string
-  /** Pinned RIGHT: readiness, and any state pill the scope owns. */
+  /** Pinned RIGHT: any state the scope owns. (The completeness bar moved to the sheet's progress columns, 2026-09-26.) */
   trailing?: ReactNode
+  /**
+   * The band's hover sentence — everything a narrow band cannot print (a listing band: label · listing status ·
+   * variants). It used to ride on the readiness pill's tooltip; the pill left the band (2026-09-26), the sentence did not.
+   */
+  title?: string
   /**
    * The row's verb menu, rendered as the LAST trailing item (#724).
    *
@@ -66,10 +71,10 @@ export interface IdentityBandProps {
 
 export const IdentityBand = memo(function IdentityBand({
   expand, role, image, photoCount, noImage, imageMark, sku, secondary, secondaryTitle, trailing,
-  menuItems, menuLabel,
+  menuItems, menuLabel, title,
 }: IdentityBandProps) {
   return (
-    <div className="nds-identity-band">
+    <div className="nds-identity-band" title={title}>
       {expand}
       {role}
       {!noImage && (
