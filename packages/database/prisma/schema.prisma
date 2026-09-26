@@ -667,6 +667,14 @@ model CustomAttribute {
   /// 'color'. Channel fields bound to the concept link to this attribute with no mapping setup. At most one attribute
   /// per concept per business; NULL = a business-only attribute with no standard meaning.
   semanticKey  String?
+  /// P3b S3 (docs/attributes/PLAN.md §10.9) — WHERE the attribute belongs: 'shared' (the Shared scope) or 'channel'
+  /// (only the channels in `placementChannels`). A label, not a data move: the value stays where it is, and a channel
+  /// scope reads the same key. Not `scope`, which already means per-variant.
+  placement         String   @default("shared")
+  /// Channel codes ('AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE') when `placement = 'channel'`; empty otherwise.
+  placementChannels String[] @default([])
+  /// Archived = retired instead of deleted: hidden from new work, its values and links kept. NULL = active.
+  archivedAt        DateTime?
 
   options          AttributeOption[]
   familyAttributes FamilyAttribute[]
