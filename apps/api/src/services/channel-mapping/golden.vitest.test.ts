@@ -39,11 +39,11 @@ describe('CHMAP golden files (anonymised copies of the Owner’s files)', () => 
   }
 
   // NCF N8 — the public repository keeps no store data: the committed Shopify copy passes the anonymiser's scan, and the
-  // scan itself is shown to work (a store link and a private word planted into a copy are both caught).
+  // scan itself is shown to work (a store link and a planted original value are both caught).
   it('shopify-product-csv — the committed copy carries no store link or private word (scan with positive control)', () => {
     const text = readFileSync(new URL('shopify-product-csv.csv', DIR), 'utf8')
     expect(scanShopifyCsv(text)).toEqual([])
-    expect(scanShopifyCsv(`${text}https://cdn.shopify.com/s/files/1/0000/0001/files/a.jpg,Xavia Racing\n`)).toEqual(['a private word remains', 'a store link remains', 'a store host remains'])
+    expect(scanShopifyCsv(`${text}https://cdn.shopify.com/s/files/1/0000/0001/files/a.jpg,planted-original\n`, ['planted-original'])).toEqual(['an original value remains', 'a store link remains', 'a store host remains'])
     // Shopify's own export shape survives: comma, LF, no BOM, the classic headers.
     expect(text.charCodeAt(0)).not.toBe(0xfeff)
     expect(text.includes('\r')).toBe(false)
