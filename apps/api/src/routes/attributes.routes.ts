@@ -50,6 +50,7 @@ import { applyConceptDictionary, conceptDictionaryPlan } from '../services/pim/a
 import { attributeChoices, ChoicesError } from '../services/pim/attribute-choices.service.js'
 import { DictionaryError, OPTION_TYPES, semanticKeyRefusal, upsertAttributes, type AttributeUpsert } from '../services/pim/attribute-dictionary.service.js'
 import { archiveAttribute, deleteAttribute, PlacementError, restoreAttribute, setAttributePlacement, undoPlacementChange, type Actor } from '../services/pim/attribute-placement.service.js'
+import { applyPlacementProposal, placementProposalPreview, undoPlacementProposal } from '../services/pim/attribute-placement-correction.js'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 const actorOf = (request: FastifyRequest): Actor => ({ userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null, ip: request.ip ?? null })
@@ -395,6 +396,17 @@ const attributesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/attributes/:id/restore', async (request, reply) => {
     const { id } = request.params as { id: string }
     return placementReply(reply, () => restoreAttribute(id, actorOf(request)))
+  })
+  // P3b S5 — the reviewed cleanup: preview (with a fingerprint), apply approved groups, undo a whole batch.
+  fastify.get('/attributes/placement-proposal', async () => placementProposalPreview())
+  fastify.post('/attributes/placement-proposal/apply', async (request, reply) => {
+    const body = (request.body ?? {}) as { fingerprint?: unknown; groups?: unknown; includeDisputed?: unknown }
+    if (typeof body.fingerprint !== 'string') return reply.code(400).send({ error: 'fingerprint is required (from GET /attributes/placement-proposal)' })
+    return placementReply(reply, () => applyPlacementProposal({ fingerprint: body.fingerprint as string, groups: body.groups as never, includeDisputed: body.includeDisputed as never }, actorOf(request)))
+  })
+  fastify.post('/attributes/placement-proposal/:batchId/undo', async (request, reply) => {
+    const { batchId } = request.params as { batchId: string }
+    return placementReply(reply, () => undoPlacementProposal(batchId, actorOf(request)))
   })
   fastify.post('/attributes/placement-changes/:auditId/undo', async (request, reply) => {
     const { auditId } = request.params as { auditId: string }
