@@ -233,6 +233,26 @@ REVOKE ALL ON FUNCTION public.nexus_ebay_quarantine_cipher_batch(text[]) FROM PU
 GRANT EXECUTE ON FUNCTION public.nexus_ebay_quarantine_cipher_batch(text[]) TO nexus_ebay_quarantine_custodian;
 ALTER FUNCTION public.nexus_ebay_quarantine_cipher_batch(text[]) OWNER TO nexus_ebay_quarantine_writer;
 
+-- Deletion review census: aggregate metadata only. Acknowledgement/retention is not erasure.
+CREATE OR REPLACE FUNCTION public.nexus_ebay_deletion_quarantine_census()
+RETURNS TABLE (environment text,notices integer,deliveries integer,unresolved integer,
+  "reviewRequired" integer,"legacyReason" integer,"otherReason" integer,"oldestReceivedAt" timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog, pg_temp AS $$
+  SELECT e.environment,count(q.id)::int,COALESCE(sum(q.deliveries),0)::int,
+    count(q.id) FILTER (WHERE q."resolvedReceiptId" IS NULL)::int,
+    count(q.id) FILTER (WHERE q.reason='account_deletion_review_required')::int,
+    count(q.id) FILTER (WHERE q.reason='subject_or_topic_unresolved')::int,
+    count(q.id) FILTER (WHERE q.reason NOT IN ('account_deletion_review_required','subject_or_topic_unresolved'))::int,
+    min(q."receivedAt") AT TIME ZONE 'UTC'
+  FROM (VALUES ('production'::text),('sandbox'::text)) e(environment)
+  LEFT JOIN public."EbayNoticeQuarantine" q ON q.environment=e.environment
+    AND q."signatureOk"=true AND q.topic='MARKETPLACE_ACCOUNT_DELETION'
+  GROUP BY e.environment ORDER BY e.environment;
+$$;
+REVOKE ALL ON FUNCTION public.nexus_ebay_deletion_quarantine_census() FROM PUBLIC,nexus_workspace_runtime;
+GRANT EXECUTE ON FUNCTION public.nexus_ebay_deletion_quarantine_census() TO nexus_ebay_quarantine_maintenance;
+ALTER FUNCTION public.nexus_ebay_deletion_quarantine_census() OWNER TO nexus_ebay_quarantine_writer;
+
 REVOKE CREATE ON SCHEMA public FROM nexus_ebay_quarantine_writer;
 GRANT nexus_ebay_quarantine_writer TO CURRENT_USER WITH INHERIT FALSE, SET FALSE;
 DO $$ BEGIN

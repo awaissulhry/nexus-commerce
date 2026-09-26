@@ -5254,6 +5254,7 @@ model WebhookEvent {
 // No tenant-facing payload reader. Routing proof is immutable; a dedicated audited
 // CAS may rewrap ciphertext. Owner handoff links one business receipt without deleting history.
 model EbayNoticeQuarantine {
+  erasureRequests       ErasureRequest[]
   id                    String    @id @default(uuid())
   environment           String
   signatureOk           Boolean   @default(false)
@@ -5274,10 +5275,43 @@ model EbayNoticeQuarantine {
   resolvedReceiptId     String?   @unique
   resolvedReceipt       WebhookEvent? @relation(fields: [resolvedReceiptId], references: [id], onDelete: Restrict)
   resolvedAt            DateTime?
+  // Verified deletion notices only. eBay is acknowledged at storage; the retry worker
+  // reviews the stored notice later (lease/backoff here), never inside the HTTP answer.
+  reviewAttempts        Int       @default(0)
+  reviewNextAt          DateTime?
+  reviewedAt            DateTime?
+  reviewOutcome         String?
 
   @@unique([environment, signatureOk, externalId])
   @@index([subjectHash, receivedAt])
   @@index([firstOwnerWorkspaceId, resolvedAt])
+  @@index([topic, reviewedAt, reviewNextAt])
+}
+
+// One business's record of one eBay deletion notice that matched its data; no personal data.
+// REVIEW_REQUIRED -> HELD | DISMISSED (active owner); HELD -> COMPLETED (system executor only).
+// DISMISSED and COMPLETED are done: the record stays, and deleting its notice or order clears
+// the pointer. An open record keeps both (database guard in workspaces/ebay-erasure-review.sql).
+model ErasureRequest {
+  workspaceId      String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String   @id @default(uuid())
+  quarantineId     String?
+  quarantine       EbayNoticeQuarantine? @relation(fields: [quarantineId], references: [id], onDelete: SetNull)
+  evidenceOrderId  String?
+  evidenceOrder    Order?   @relation(fields: [evidenceOrderId], references: [id], onDelete: SetNull)
+  channel          String   @default("EBAY")
+  environment      String
+  // Which rule matched: 'user_id' (eBay's immutable ID, which eBay also puts in the order's
+  // buyer username field for some U.S. buyers) or 'username' (mutable name, fallback only).
+  matchBasis       String
+  status           String   @default("REVIEW_REQUIRED")
+  createdAt        DateTime @default(now())
+  decidedAt        DateTime?
+
+  @@unique([workspaceId, quarantineId], name: "workspace_quarantine", map: "ErasureRequest_workspace_quarantine_key")
+  @@index([workspaceId, status, createdAt])
+  @@index([evidenceOrderId])
+  @@index([quarantineId, status])
 }
 
 // Application maintenance only. Database function inserts atomically with rewrap;
@@ -5552,6 +5586,7 @@ enum OrderStatus {
 }
 
 model Order {
+  erasureRequests ErasureRequest[]
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String @id @default(cuid())
@@ -6851,6 +6886,9 @@ model ChannelConnection {
   // connection. Cascade so revoking a connection sweeps its
   // campaigns (operationally, eBay also disables them server-side).
   ebayCampaigns            EbayCampaign[]
+  // CX Etsy — receipt ingest state (activation time, poll cursor, lease) and durable refusals.
+  etsyReceiptIngest        EtsyReceiptIngest[]
+  etsyReceiptRefusals      EtsyReceiptRefusal[]
 
   @@index([workspaceId, channelType])
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
@@ -19790,6 +19828,66 @@ model StockPoolLink {
   @@index([grantId])
   @@index([catalogLinkId])
   @@index([productId])
+  @@index([workspaceId])
+}
+
+/// CX Etsy (2026-09-24) — one row per connected Etsy account whose ORDER INGEST was ever enabled.
+/// `activatedAt` is explicit T0 at Etsy's whole-second precision (H1). The poller keeps its
+/// fixed creation-window reconciliation checkpoint, lease and last complete-cycle outcome here.
+model EtsyReceiptIngest {
+  // Business ownership comes from verified database context.
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  connectionId        String
+  connection          ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  activatedAt         DateTime          @default(dbgenerated("date_trunc('second'::text, clock_timestamp())"))
+  /// Last committed timestamp; receipt ID is diagnostic, not an API sort tiebreak.
+  cursorUpdatedAt     DateTime?
+  cursorReceiptId     String?
+  /// Legacy updated-window checkpoint; retained for additive rollout, no longer read.
+  scanUpdatedAt       DateTime?
+  /// Fixed, closed creation-second horizon for the recurring reconciliation scan.
+  scanCreatedThrough  DateTime?
+  scanExpectedCount   Int?
+  scanOffset          Int               @default(0)
+  leaseToken          String?
+  leaseUntil          DateTime?
+  lastPollStartedAt   DateTime?
+  /// Last fully completed reconciliation cycle, never a capped or failed run.
+  lastPollSucceededAt DateTime?
+  /// SUCCESS | PARTIAL | FAILED
+  lastPollStatus      String?
+  lastPollError       String?
+  /// More receipts remained when the last run stopped at its page cap.
+  backlog             Boolean           @default(false)
+  lastPollCounts      Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, connectionId], name: "workspace_connectionId", map: "EtsyReceiptIngest_connectionId_key")
+  @@index([workspaceId])
+}
+
+/// CX Etsy (2026-09-24) — an Etsy receipt Nexus refused to ingest, and why. Durable so that a
+/// refused receipt is never only a log line: the poller moves past it, the owner can see it.
+model EtsyReceiptRefusal {
+  // Business ownership comes from verified database context.
+  workspaceId    String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id             String            @id @default(cuid())
+  connectionId   String
+  connection     ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  receiptId      String
+  /// Etsy's updated_timestamp of the refused version, or 'unknown'.
+  receiptVersion String
+  /// webhook | poll | replay
+  source         String
+  code           String
+  message        String
+  path           String?
+  createdAt      DateTime          @default(now())
+
+  @@unique([workspaceId, connectionId, receiptId, receiptVersion, code], name: "connectionId_receiptId_receiptVersion_code", map: "EtsyReceiptRefusal_version_code_key")
+  @@index([connectionId, createdAt])
   @@index([workspaceId])
 }
 

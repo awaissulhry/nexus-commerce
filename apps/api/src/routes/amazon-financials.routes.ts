@@ -24,7 +24,8 @@ const amazonFinancialsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // A probe reads one page; a dry run traverses a complete bounded window.
-      // Neither authorizes money writes or a live channel call by itself.
+      // Neither authorizes money writes or a live channel call by itself. Neither writes a finance
+      // row; both still write the gateway's ordinary call-ledger rows for each Amazon read.
       if (body.probe === true) {
         const end = new Date(Date.now() - 180_000)
         const days = typeof body.daysBack === 'number' && body.daysBack > 0 ? Math.min(body.daysBack, 30) : 1

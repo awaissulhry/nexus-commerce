@@ -31,11 +31,11 @@
  * does not retry is the state this package exists to end.
  */
 
-import cron from '../lib/cron/clustered.js'
+import cron, { schedulePlatform } from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { withIngressWorkspace } from '../lib/workspace-ingress.js'
-import { deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
+import { deadLetterInbound, dueInboundEvents, InboundDeferred, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
 import { canReplayInbound, inboundHandlerFor } from '../services/cx/ingress/handlers.js'
 import { dueEbayInboundEvents, processEbayInbound, ebayInboundProcessingEnabled } from '../services/cx/ingress/ebay-processing.js'
 import { claimInbound, inboundDatabaseNow, runWithInboundClaim } from '../services/cx/ingress/claims.js'
@@ -52,6 +52,7 @@ export interface InboundRetryStats {
 }
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
+let deletionReviewTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
 let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 }
 
@@ -126,6 +127,8 @@ export async function runInboundRetrySweep(now?: Date): Promise<InboundRetryStat
       })
       if (ran) stats.succeeded++
     } catch (error) {
+      // The claim rescheduled the event without spending an attempt (a sign-in hold).
+      if (error instanceof InboundDeferred) { stats.deferred++; continue }
       const message = error instanceof Error ? error.message : String(error)
       // The claim owner has scheduled retry or dead-lettered the exhausted attempt.
       stats.failed++
@@ -161,9 +164,22 @@ export function startInboundRetryCron(): void {
       logger.error('inbound-retry cron: failure', { error: err instanceof Error ? err.message : String(err) })
     })
   })
+  // eBay deletion notices are acknowledged at storage and reviewed here, later. They belong to no
+  // business yet, so one platform tick reviews them — never once per profile. Dormant unless the
+  // privacy review switch is exactly 1 (the review itself checks it again).
+  deletionReviewTask = schedulePlatform(schedule, async () => {
+    if (process.env.NEXUS_ENABLE_EBAY_PRIVACY_REVIEW !== '1') return
+    await recordCronRun('ebay-deletion-review', async () => {
+      const { reviewPendingEbayDeletions } = await import('../services/cx/ingress/ebay-erasure-review.js')
+      const result = await reviewPendingEbayDeletions()
+      return result.kind === 'held' ? 'held' : `claimed=${result.claimed} reviewed=${result.reviewed} unsupported=${result.unsupported} failed=${result.failed}`
+    }).catch((err) => {
+      logger.error('ebay-deletion-review cron: failure', { error: err instanceof Error ? err.message : String(err) })
+    })
+  })
   logger.info('inbound-retry cron started', { schedule, ebayProcessingEnabled: ebayInboundProcessingEnabled() })
 }
 
 export function inboundRetryStatus() {
-  return { running: !!scheduledTask, lastRunAt, lastStats }
+  return { running: !!scheduledTask, deletionReviewScheduled: !!deletionReviewTask, lastRunAt, lastStats }
 }

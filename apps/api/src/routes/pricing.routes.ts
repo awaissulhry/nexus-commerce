@@ -19,7 +19,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { resolvePrice } from '../services/pricing-engine.service.js'
+import { isPriceRefusal, resolvePrice } from '../services/pricing-engine.service.js'
 import {
   refreshSnapshotsForSkus,
   refreshAllSnapshots,
@@ -156,6 +156,9 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       })
       return result
     } catch (error: any) {
+      // CX — a pricing refusal (no FX rate, no market currency) is configuration, not a server fault:
+      // its own 4xx (400, as the codebase's market-currency refusal) and its sentence.
+      if (isPriceRefusal(error)) return reply.code(error.statusCode ?? 400).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[pricing/explain] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }

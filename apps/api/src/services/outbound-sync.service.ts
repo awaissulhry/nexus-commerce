@@ -41,6 +41,7 @@ import { listingPublishService } from "./listing-publish.service.js";
 import { resolveComplianceById, buildShopifyComplianceMetafields } from "./compliance-resolver.service.js";
 import { computeAvailableToPublish } from "./available-to-publish.service.js";
 import { priceRefusalFor } from "./price-bounds.service.js";
+import { confirmEbayOfferPrice, ebayFixedPriceOfferOf, ebayMarketplaceIdOf, offerPriceOf, pickEbayPriceOffer } from "./ebay-price-readback.service.js";
 import { detectEuIntentConflict, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from "./amazon-eu-quantity-guard.js";
 import { resolveMembershipIntended, routedAvailable } from "./sync-control-core.js";
 import { marketCurrency } from './pim/market-currency.js';
@@ -483,6 +484,8 @@ interface SyncResult {
    *  published). The worker marks these SKIPPED, not SUCCESS, so the grid doesn't
    *  show false green. */
   dryRun?: boolean;
+  /** CX (review 2026-09-26) — report-only work to start AFTER the row is written (`startAfterAnswer`). */
+  afterAnswer?: () => Promise<unknown>;
 }
 
 interface ProcessingStats {
@@ -572,6 +575,19 @@ export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promis
 
 /** Per-item dispatch ceiling for the backstop loop (env-overridable). */
 const DISPATCH_TIMEOUT_MS = Math.max(5_000, Number(process.env.NEXUS_SYNC_DISPATCH_TIMEOUT_MS ?? '45000') || 45_000);
+
+/**
+ * CX (review 2026-09-26) — start a result's report-only follow-up (the eBay price read-back) once its queue row is
+ * WRITTEN. Called by every completion writer after the row's update: the follow-up never spends the row's dispatch
+ * budget, never delays its answer, and can never change it. Not awaited; it never throws into the caller.
+ */
+export function startAfterAnswer(result: { afterAnswer?: () => Promise<unknown> } | null | undefined): void {
+  const run = result?.afterAnswer
+  if (!run) return
+  void Promise.resolve().then(run).catch((err) => {
+    logger.warn('outbound-sync: after-answer work failed (report-only; the row keeps its answer)', { error: err instanceof Error ? err.message : String(err) })
+  })
+}
 
 export class OutboundSyncService {
   private stats = {
@@ -938,6 +954,7 @@ export class OutboundSyncService {
               where: { id: item.id },
               data: completion,
             });
+            startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
           } else {
@@ -1020,6 +1037,7 @@ export class OutboundSyncService {
               where: { id: item.id },
               data: completion,
             });
+            startAfterAnswer(result);
             if (completion.syncStatus === 'SKIPPED') stats.skipped++;
             else stats.succeeded++;
           } else {
@@ -1417,7 +1435,6 @@ export class OutboundSyncService {
 
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
-    const marketplaceId = payload?.marketplaceId ?? "EBAY_IT";
 
     // FCF.2 / 1.4 — defensive pool cap (defence-in-depth). The cascade now
     // queues reserved-adjusted available, but a stale/pre-fix or manually
@@ -1438,10 +1455,31 @@ export class OutboundSyncService {
           })
           .catch(() => null)
       : null;
+    // CX (review 2026-09-26) — ONE market per row, resolved once. eBay's Inventory API offers a SKU on one
+    // marketplace ("the same SKU value can not be offered across multiple eBay marketplaces" — getOffers), so the
+    // row's quantity, content and price all go to the same market. This defaulted to EBAY_IT, so a DE listing's
+    // quantity went to EBAY_IT beside a price sent to EBAY_DE. As on Amazon (A-24): the row's own LISTING decides;
+    // a row without one uses the market it names; a row that names another market than its listing, or none at
+    // all, is refused — nothing sent, the reason on the row.
+    const listingMarket = ebayMarketplaceIdOf((cl as { marketplace?: string } | null)?.marketplace);
+    const requestedMarkets = [payload?.marketplaceId, payload?.marketplace].map((m) => ebayMarketplaceIdOf(m)).filter((m): m is string => !!m);
+    const marketplaceId = listingMarket ?? requestedMarkets[0] ?? null;
+    const conflicting = requestedMarkets.find((m) => m !== marketplaceId);
+    const marketRefusal = !marketplaceId
+      ? "This eBay row names no eBay market and has no listing to take one from, so nothing was sent."
+      : conflicting
+        ? (listingMarket
+          ? `This eBay row asks for ${conflicting}, but its listing is on ${marketplaceId}, so nothing was sent.`
+          : `This eBay row names two markets (${marketplaceId} and ${conflicting}), so nothing was sent.`)
+        : null;
+    if (marketRefusal || !marketplaceId) {
+      const refusal = marketRefusal ?? "This eBay row names no eBay market, so nothing was sent.";
+      return { success: false, queueId, channel: "EBAY", status: "FAILED", message: refusal, error: refusal, errorCode: "EBAY_MARKET_UNRESOLVED", retryable: false };
+    }
     // SC.1 — pause guard (listing + channel-market policy), re-checked at
     // dispatch time like the Amazon lane.
     try {
-      const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? 'IT');
+      const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? marketplaceId);
       if (scp?.pushesPaused) {
         return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
       }
@@ -1640,12 +1678,15 @@ export class OutboundSyncService {
     // the full-replace never wipes existing content); price → the OFFER
     // (different endpoint). Either or both may run depending on the payload.
     const apiBase = getEbayApiBaseForMode(mode);
-    const currency = await ebayCurrencyForMarket(marketplaceId);
     const headers = await ebayInventoryHeaders(token, marketplaceId);
 
     // Task 3: gate the new per-listing isolation behind an env flag (default ON).
     // Set NEXUS_EBAY_FAILURE_ISOLATION=0 to fall back to pre-Task-3 behavior.
     const failureIsolationEnabled = process.env.NEXUS_EBAY_FAILURE_ISOLATION !== '0';
+    // B1 — the price read-back, handed to the caller to start once the row has its answer.
+    let priceReadback: (() => Promise<unknown>) | undefined;
+    // P4.4 (CX) — whether 7a already sent quantity/content (a later price refusal says so).
+    let itemWritten = false;
 
     const ebayFail = (
       message: string,
@@ -1713,14 +1754,15 @@ export class OutboundSyncService {
       const contentTouched =
         !!payload.mappingAspects || !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
       if (payload.quantity !== undefined && !contentTouched) {
-        // Offer id (read of the OFFER, never the item — zero image risk).
+        // Offer id (read of the OFFER, never the item — zero image risk). CX — the FIXED_PRICE offer of this market;
+        // none or several → item-level quantity only (the auction offer eBay may list first is never raised).
         let offerId: string | null = null;
         try {
           const bySku = await ebaySend(connection.id,
             `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
             { headers },
           );
-          if (bySku.ok) offerId = ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null;
+          if (bySku.ok) offerId = ebayFixedPriceOfferOf(((await bySku.json().catch(() => ({}))) as { offers?: unknown }).offers, marketplaceId)?.offerId ?? null;
         } catch { /* unpublished listing — item-level quantity alone is fine */ }
         const bulkBody = {
           requests: [{
@@ -1741,6 +1783,7 @@ export class OutboundSyncService {
             ?? (await bulkRes.text().catch(() => "")).slice(0, 300);
           return ebayFail(`bulk_update_price_quantity ${rowStatus}: ${detail}`, "failed", rowStatus);
         }
+        itemWritten = true;
         // fall through to 7b (price/offer handling) below — item untouched.
       } else if (touchesItem) {
         const itemUrl = `${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
@@ -1775,8 +1818,9 @@ export class OutboundSyncService {
                 `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`,
                 { headers },
               );
+              // CX — the parked FIXED_PRICE offer of this market, never `offers[0]` (possibly the auction).
               const offerId = bySku.ok
-                ? ((await bySku.json().catch(() => ({}))) as { offers?: Array<{ offerId?: string }> }).offers?.[0]?.offerId ?? null
+                ? ebayFixedPriceOfferOf(((await bySku.json().catch(() => ({}))) as { offers?: unknown }).offers, marketplaceId)?.offerId ?? null
                 : null;
               if (offerId) {
                 const getFull = await ebaySend(connection.id, `${apiBase}/sell/inventory/v1/offer/${offerId}`, { headers });
@@ -1812,41 +1856,58 @@ export class OutboundSyncService {
             return ebayFail(`inventory_item PUT ${putRes.status}: ${errBody.slice(0, 300)}`, "failed", putRes.status);
           }
         }
+        itemWritten = true;
       }
 
-      // 7b. Price → offer (resolve the offer by SKU, then PUT its pricingSummary).
+      // 7b. Price → the FIXED_PRICE offer of this row's market, priced in that market's currency, then a read-back.
       if (payload.price !== undefined) {
+        // A refusal names what it did NOT send, and what 7a already did.
+        const sentNote = () => (itemWritten ? " The quantity/content in this row were already sent." : "");
+        const priceFail = (message: string, httpStatus?: number | null) => ebayFail(`${message}${sentNote()}`, "failed", httpStatus);
+        // Resolved here, not for every row: a quantity row on a market with no configured currency still goes out.
+        let priceCurrency: string;
+        try {
+          priceCurrency = await ebayCurrencyForMarket(marketplaceId);
+        } catch (err) {
+          return priceFail(`${err instanceof Error ? err.message : String(err)} The price was not written.`, 400);
+        }
+        // Stays AFTER 7a on purpose: 7a can raise the offer's availableQuantity (bulk update, 25004
+        // heal), and the PUT below sends the whole offer — read earlier, it would put the old one back.
         const offersRes = await ebaySend(connection.id,
-          `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
+          `${apiBase}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${encodeURIComponent(marketplaceId)}`,
           { method: "GET", headers },
         );
         if (!offersRes.ok) {
-          return ebayFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)}`, "failed", offersRes.status);
+          return priceFail(`get offers ${offersRes.status}: ${(await offersRes.text().catch(() => "")).slice(0, 300)} The price was not written.`, offersRes.status);
         }
-        const offersData = (await offersRes.json().catch(() => ({}))) as {
-          offers?: Array<Record<string, any>>;
-        };
-        const offer = offersData.offers?.[0];
-        if (!offer?.offerId) {
-          // No offer = the listing was never published; same root cause as a 404.
-          // Pass 404 so classifyEbayFailure routes this as EBAY_VALIDATION:
-          // non-retryable + does not trip the marketplace circuit.
-          return ebayFail(`No eBay offer for SKU "${sku}" — publish the listing before syncing price.`, "failed", 404);
-        }
-        const offerRes = await ebaySend(connection.id,
-          `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offer.offerId)}`,
-          {
-            method: "PUT",
-            headers,
-            body: JSON.stringify(buildEbayOfferUpdate(offer, payload.price, currency)),
-          },
-        );
+        const offersData = (await offersRes.json().catch(() => ({}))) as { offers?: unknown };
+        // Exactly one FIXED_PRICE offer of this marketplace; none or several → refused before the PUT
+        // (404 / 409 → EBAY_VALIDATION: terminal, does not trip the marketplace circuit).
+        const pick = pickEbayPriceOffer(offersData.offers, marketplaceId, sku);
+        if (!pick.offer) return priceFail(pick.reason, pick.status);
+        const offerId = String(pick.offer.offerId);
+        const offerUrl = `${apiBase}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+        const offerRes = await ebaySend(connection.id, offerUrl, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(buildEbayOfferUpdate(pick.offer, payload.price, priceCurrency)),
+        });
         if (!offerRes.ok) {
-          return ebayFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`, "failed", offerRes.status);
+          return priceFail(`offer PUT ${offerRes.status}: ${(await offerRes.text().catch(() => "")).slice(0, 300)}`, offerRes.status);
         }
+        // The write happened (200 or 204). B1 reads the offer back ONCE — but only AFTER the row has its answer
+        // (`afterAnswer`, started by the completion writer): a read inside the dispatch budget could hold the row
+        // past its timer, which resets it and sends the PUT again. Report-only: the row stays SUCCESS whatever it
+        // finds, and nothing is re-sent — an automatic price correction is a money write the Owner has not ruled on.
+        const expected = { price: Number(payload.price), currency: priceCurrency };
+        const previous = offerPriceOf(pick.offer);
+        priceReadback = () => confirmEbayOfferPrice({ connectionId: connection.id, offerUrl, headers, expected, previous,
+          sku, marketplaceId, offerId, productId: product?.id ?? null, queueId });
       }
     } catch (err) {
-      return ebayFail(err instanceof Error ? err.message : String(err), "timeout");
+      // Once 7a has written, a throw can only come from the price step.
+      const note = itemWritten && payload.price !== undefined ? " The quantity/content in this row were already sent." : "";
+      return ebayFail(`${err instanceof Error ? err.message : String(err)}${note}`, "timeout");
     }
 
     recordEbayOutcome(connection.id, marketplaceId, true);
@@ -1867,6 +1928,7 @@ export class OutboundSyncService {
       channel: "EBAY",
       status: "SUCCESS",
       message: `Product ${sku} synced to eBay`,
+      ...(priceReadback ? { afterAnswer: priceReadback } : {}),
     };
   }
 

@@ -6,6 +6,10 @@
   "main": "./dist/vault.js",
   "types": "./dist/vault.d.ts",
   "exports": {
+    "./channel-listing-issues": {
+      "types": "./dist/channel-listing-issues.d.ts",
+      "default": "./dist/channel-listing-issues.js"
+    },
     "./attributes": {
       "types": "./dist/attributes.d.ts",
       "default": "./dist/attributes.js"

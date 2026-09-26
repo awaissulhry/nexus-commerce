@@ -20,7 +20,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import prisma from '../db.js'
-import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
+import { callTradingApi, siteIdForMarket, escapeXml, parseStartPrice } from './ebay-trading-api.service.js'
 
 export interface RelabelPlanEntry {
   fromSku: string
@@ -244,14 +244,14 @@ export async function adoptSkulessVariations(
   const priceBySpecs = new Map<string, number>()
   for (const vm of got.raw.matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)) {
     const block = vm[1]
-    const price = /<StartPrice[^>]*>([\d.]+)<\/StartPrice>/.exec(block)?.[1]
+    const price = parseStartPrice(block)?.value // the shared parser: absent or unreadable → skipped, never NaN
     if (price == null) continue
     const specs: string[] = []
     const specsBlock = /<VariationSpecifics>([\s\S]*?)<\/VariationSpecifics>/.exec(block)?.[1] ?? ''
     for (const nv of specsBlock.matchAll(/<NameValueList>[\s\S]*?<Name>([^<]*)<\/Name>[\s\S]*?<Value>([^<]*)<\/Value>[\s\S]*?<\/NameValueList>/g)) {
       specs.push(`${nv[1].trim().toLowerCase()}=${nv[2].trim().toLowerCase()}`)
     }
-    priceBySpecs.set(specs.sort().join('|'), Number(price))
+    priceBySpecs.set(specs.sort().join('|'), price)
   }
   const keyOf = (specifics: Record<string, string>) =>
     Object.entries(specifics).map(([k, v]) => `${k.trim().toLowerCase()}=${String(v).trim().toLowerCase()}`).sort().join('|')

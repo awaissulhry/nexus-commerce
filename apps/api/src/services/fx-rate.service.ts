@@ -30,6 +30,11 @@ const FETCH_TIMEOUT_MS = 8_000
 // changes (unlikely — Italian seller, EUR-priced catalog).
 const MASTER_CURRENCY = process.env.NEXUS_MASTER_CURRENCY ?? 'EUR'
 
+/** The currency Product.basePrice is kept in (NEXUS_MASTER_CURRENCY, default EUR) — read per call. */
+export function masterCurrency(): string {
+  return (process.env.NEXUS_MASTER_CURRENCY ?? 'EUR').trim().toUpperCase()
+}
+
 /**
  * Look up the exchange rate from `from` to `to` as of `asOf`. Falls back
  * to the most-recent rate when today's hasn't been fetched (e.g. weekend,
@@ -44,6 +49,32 @@ export async function getFxRate(
   to: string,
   asOf: Date = new Date(),
 ): Promise<number> {
+  // No rate at all → 1, as before, for the callers that report in EUR (ads, revenue, fulfilment).
+  // A PRICE must not do that: the pricing engine reads `storedFxRate` and refuses instead.
+  return (await storedFxRate(prisma, from, to, asOf)) ?? 1
+}
+
+/**
+ * CX (review 2026-09-26) — a missing rate is a refusal, not 1:1: priced at 1:1, a €19.90 master went out as
+ * £19.90. Thrown by the pricing engine; its batch callers refuse that one cell and carry on.
+ */
+export class FxRateMissingError extends Error {
+  readonly code = 'fx_rate_missing'
+  readonly statusCode = 400
+  constructor(readonly from: string, readonly to: string, where: string) {
+    super(`No ${from}→${to} exchange rate is stored, so no ${to} price was computed for ${where} — a missing rate is never treated as 1:1. Add the rate, then price again.`)
+    this.name = 'FxRateMissingError'
+  }
+}
+
+/** The stored rate from → to (manual first; else the most recent up to `asOf`), 1 for the same currency, or null
+ *  when no rate for the pair was EVER stored. */
+export async function storedFxRate(
+  prisma: PrismaClient,
+  from: string,
+  to: string,
+  asOf: Date = new Date(),
+): Promise<number | null> {
   if (from === to) return 1
   const day = startOfDay(asOf)
 
@@ -72,8 +103,8 @@ export async function getFxRate(
   })
   if (latest) return Number(latest.rate)
 
-  // No rate at all. Caller's warning system surfaces this.
-  return 1
+  // No rate at all.
+  return null
 }
 
 /**

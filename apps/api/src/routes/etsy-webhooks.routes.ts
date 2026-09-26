@@ -22,7 +22,7 @@ import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
 import { verifyStandardWebhook } from '../services/cx/ingress/standard-webhooks.js'
-import { recordInbound, inboundNotRecorded } from '../services/cx/ingress/ledger.js'
+import { recordInbound, inboundNotRecorded, InboundDeferred } from '../services/cx/ingress/ledger.js'
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 
@@ -78,7 +78,7 @@ export function etsyReceiptIdFrom(payload: unknown): string | null {
  */
 export async function handleEtsyOrderEvent(
   payload: unknown,
-  context?: { connectionId: string | null },
+  context?: { connectionId: string | null; eventType?: string; signal?: AbortSignal },
 ): Promise<void> {
   const receiptId = etsyReceiptIdFrom(payload)
   if (!receiptId) {
@@ -99,9 +99,24 @@ export async function handleEtsyOrderEvent(
   }
   const { pullEtsyReceipt } = await import('../services/etsy/receipts.service.js')
   const shopId = (payload as Record<string, unknown> | null)?.shop_id
+  const ingest = await import('../services/etsy/receipt-ingest.js')
+  if (ingest.etsyOrderIngestEnabled()) {
+    await ingestEtsyOrderEvent(accountId, receiptId, shopId == null ? null : String(shopId), context ?? { connectionId: accountId })
+    return
+  }
+  // The switch is read by each process on its own (API receiver, worker retry, scheduler poll). With it
+  // OFF here, an ACTIVATED account's event must not be finished as a read-back: the claim would mark it
+  // done with no order and no hold. Hold it for a process with the switch on, spending no attempt.
+  if (await ingest.etsyIngestActivated(accountId)) {
+    const held = `Etsy order ingest is off in this process (${ingest.ETSY_ORDER_INGEST_FLAG} is not 1) but the account is activated: the event is held for a process with it on.`
+    logger.warn('[etsy-webhooks] Etsy order ingest is off in this process; an activated account\'s event stays held', { receiptId, flag: ingest.ETSY_ORDER_INGEST_FLAG })
+    throw new InboundDeferred(held, ingest.ETSY_AUTH_HOLD_MS)
+  }
+  // E1 — `null` is Etsy's 404 only. An expired token, a rate limit or an outage throws its own
+  // typed error, which fails this event with that reason (still retryable, still a 500 to Etsy).
   const receipt = await pullEtsyReceipt(accountId, receiptId, shopId == null ? undefined : String(shopId))
   if (!receipt) {
-    throw new Error(`Etsy receipt ${receiptId} could not be read back for this shop.`)
+    throw new Error(`Etsy receipt ${receiptId} was not found in this shop (HTTP 404).`)
   }
   // Ingesting a receipt into Order/OrderItem is not done here. Etsy's order shape has
   // never been observed in this installation, and P2.1 means the payload and the
@@ -111,6 +126,57 @@ export async function handleEtsyOrderEvent(
   logger.warn('[etsy-webhooks] receipt read back; order ingest is not implemented yet', {
     receiptId, status: receipt.status ?? null, isPaid: receipt.is_paid ?? null,
     transactions: receipt.transactions?.length ?? 0,
+  })
+}
+
+/**
+ * E4 — with `NEXUS_ENABLE_ETSY_ORDER_INGEST=1`: exactly ONE account (the ledger row's) and ONE
+ * receipt (the event's), read back from Etsy, normalised, and written by the shared writer, which
+ * completes the ledger row in its own transaction.
+ *
+ * Outcomes: a sign-in problem (401, or Nexus holding the account) is deferred WITHOUT spending an
+ * attempt; 429, 5xx and no answer fail with the normal back-off; Etsy's 404 and every refusal fail
+ * with their code (and a refused receipt is also stored). order.delivered is believed only when
+ * the receipt read shows the order shipped; otherwise the status is left alone.
+ */
+async function ingestEtsyOrderEvent(
+  accountId: string,
+  receiptId: string,
+  claimedShopId: string | null,
+  context: { connectionId: string | null; eventType?: string; signal?: AbortSignal },
+): Promise<void> {
+  const ingest = await import('../services/etsy/receipt-ingest.js')
+  const { pullEtsyReceipt, EtsyReceiptReadError } = await import('../services/etsy/receipts.service.js')
+  const binding = await ingest.etsyIngestBinding(accountId)
+  try {
+    await ingest.requireEtsyIngestActivation(accountId)
+  } catch (error) {
+    if (!(error instanceof ingest.EtsyIngestRefused) || error.code !== 'not_activated') throw error
+    throw new InboundDeferred(error.message, ingest.ETSY_AUTH_HOLD_MS)
+  }
+  let raw: unknown
+  try {
+    raw = await pullEtsyReceipt(accountId, receiptId, claimedShopId ?? undefined)
+  } catch (error) {
+    if (error instanceof EtsyReceiptReadError && error.kind === 'unauthorized') {
+      throw new InboundDeferred(`auth hold: ${error.message}`, ingest.ETSY_AUTH_HOLD_MS)
+    }
+    throw error
+  }
+  if (!raw) throw new ingest.EtsyIngestRefused('not_found', `Etsy receipt ${receiptId} was not found in this shop (HTTP 404).`)
+  const outcome = await ingest.ingestEtsyReceipt({
+    // The claim that runs this handler completes the ledger row after the write commits
+    // (PR #4's processing claims); the writer does not.
+    connectionId: accountId, raw, binding, source: context.eventType ? 'webhook' : 'replay',
+    deliveredEvent: context.eventType === 'order.delivered',
+    expectedReceiptId: receiptId, claimedShopId,
+  })
+  if (outcome.kind === 'receipt_refused') throw new ingest.EtsyIngestRefused(outcome.refusal.code, outcome.refusal.message)
+  if (outcome.kind === 'refused') throw new ingest.EtsyIngestRefused(outcome.code, outcome.message)
+  logger.info('[etsy-webhooks] receipt ingested', {
+    receiptId, outcome: outcome.kind,
+    ...(outcome.kind === 'written' ? { status: outcome.status, created: outcome.created, warnings: outcome.warnings.map((w) => w.code) } : {}),
+    ...(outcome.kind === 'skipped' ? { reason: outcome.reason } : {}),
   })
 }
 
@@ -173,6 +239,7 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
     }
 
     return withIngressWorkspace(route.workspaceId, async () => {
+      const ingestOn = process.env.NEXUS_ENABLE_ETSY_ORDER_INGEST === '1'
       const written = await recordInbound({
         channel: 'ETSY', eventType,
         // Etsy's own delivery id, which is stable across ITS retries and different for
@@ -185,6 +252,10 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
       if (!written.id) {
         logger.error(`[etsy-webhooks] not acked: ${inboundNotRecorded(written)}`, { eventType })
         return reply.status(503).send({ error: `Not recorded: ${inboundNotRecorded(written)}.` })
+      }
+      if (ingestOn) {
+        // E6 — the account's last verified delivery (never counted as freshness; only a poll is).
+        await (await import('../services/etsy/receipt-ingest.js')).stampEtsyInbound(route.connectionId)
       }
       if (written.duplicate && written.existingStatus === 'done') {
         return reply.send({ success: true, message: 'Already processed' })
@@ -199,9 +270,14 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
         return reply.send({ success: true, message: 'Recorded' })
       }
       try {
-        await runWithInboundClaim(claim, stored => handleEtsyOrderEvent(stored.payload, { connectionId: stored.connectionId }))
+        await runWithInboundClaim(claim, (stored, signal) => handleEtsyOrderEvent(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, signal }))
         return reply.send({ success: true })
       } catch (error) {
+        if (error instanceof InboundDeferred) {
+          // The claim rescheduled it without spending an attempt; Etsy is told to try again too.
+          logger.warn('[etsy-webhooks] deferred', { eventType, error: error.message })
+          return reply.status(503).send({ error: error.message })
+        }
         const message = error instanceof Error ? error.message : String(error)
         logger.error('[etsy-webhooks] handling failed', { eventType, error: message })
         return reply.status(500).send({ error: message })

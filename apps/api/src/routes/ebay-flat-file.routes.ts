@@ -2,6 +2,7 @@ import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
+import { ebayFixedPriceOfferOf } from '../services/ebay-price-readback.service.js';
 import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -2035,8 +2036,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           } else {
             // Child row → end just this variation's offer.
             const gr = await ebaySend(connection.id, `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${marketplaceId}`, { headers: endHeaders });
-            const gj = gr.ok ? (await gr.json() as { offers?: Array<{ offerId?: string }> }) : {};
-            const offerId = gj.offers?.[0]?.offerId;
+            // CX — the variation's FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+            const gj = gr.ok ? (await gr.json() as { offers?: unknown }) : {};
+            const offerId = ebayFixedPriceOfferOf((gj as { offers?: unknown }).offers, marketplaceId)?.offerId as string | undefined;
             if (!offerId) {
               perRowResults.push({ sku, market: mp, status: 'ERROR', message: 'no live offer on this market — nothing to end' });
               continue;
@@ -2744,8 +2746,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
             let offerId: string | null = null;
             if (getOfferRes.ok) {
-              const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
-              offerId = offerData.offers?.[0]?.offerId ?? null;
+              // CX — the FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+              const offerData = (await getOfferRes.json()) as { offers?: unknown };
+              offerId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.offerId ?? null;
             }
 
             if (offerId) {
@@ -3492,7 +3495,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           }
 
           const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string; availableQuantity?: number; pricingSummary?: { price?: { value?: string; currency?: string } }; listingPolicies?: unknown; merchantLocationKey?: string; categoryId?: string; format?: string }> };
-          const existingOffer = offerData.offers?.[0];
+          // CX — the FIXED_PRICE offer of this market, never `offers[0]` (possibly an auction).
+          const existingOffer = ebayFixedPriceOfferOf(offerData.offers, marketplaceId) as NonNullable<typeof offerData.offers>[number] | null;
           const offerId = existingOffer?.offerId;
 
           if (!offerId) {
@@ -3665,8 +3669,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          const offerData = (await getOfferRes.json()) as { offers?: Array<{ offerId: string }> };
-          const offerId = offerData.offers?.[0]?.offerId;
+          // CX — the FIXED_PRICE offer of this market, never `offers[0]`: an auction offer is never deleted here.
+          const offerData = (await getOfferRes.json()) as { offers?: unknown };
+          const offerId = ebayFixedPriceOfferOf(offerData.offers, marketplaceId)?.offerId as string | undefined;
 
           if (!offerId) {
             // No offer on eBay — reset DB status if stale

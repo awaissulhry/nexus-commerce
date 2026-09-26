@@ -14,7 +14,8 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
-it.each(['MARKETPLACE_ACCOUNT_DELETION', 'AUTHORIZATION_REVOCATION'])('does not advertise the incomplete %s handler as ready', topicId => {
+// ORDER_CONFIRMATION has a dormant stored-receipt executor; admission still quarantines it and it stays unready.
+it.each(['MARKETPLACE_ACCOUNT_DELETION', 'AUTHORIZATION_REVOCATION', 'ORDER_CONFIRMATION'])('does not advertise the incomplete %s handler as ready', topicId => {
   expect(EBAY_DESIRED_TOPICS.find(topic => topic.topicId === topicId)?.handlerMissing).toBe(true)
 })
 

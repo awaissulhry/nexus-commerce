@@ -270,7 +270,8 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
           `[ORDER INGESTION] Skipping local stock decrement for FBA order ${order.id} (FBA cron syncs AMAZON-EU-FBA pool every 15min)`,
         )
       } else {
-        const { consumeWithFefo } = await import('./lot.service.js')
+        // R2 — the take is the stock service's (lot-aware, the order's ORDER_PLACED movement).
+        const { takeOrderUnitsWithLots } = await import('./stock-level.service.js')
         const pooledTaken = new Set<string>()
         for (const item of orderItems) {
           try {
@@ -301,19 +302,12 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
               continue
             }
 
-            const result = await consumeWithFefo({
+            const result = await takeOrderUnitsWithLots({
               productId: product.id,
               quantity: item.quantity,
-              reason: 'ORDER_PLACED',
-              referenceType: 'Order',
-              referenceId: order.id,
               orderId: order.id,
               actor: 'mock-order-ingestion',
               notes: `Mock order ingestion (channel=${channel}, fulfillment=${fulfillmentMethod ?? 'n/a'})`,
-              // Don't block orders on partial lot coverage — the
-              // remainder consumes as non-lot stock with a notes
-              // prefix the rimanenze report can split out later.
-              allowShortfall: true,
             })
 
             logger.info(

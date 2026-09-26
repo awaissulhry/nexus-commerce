@@ -2085,6 +2085,7 @@
   "syncLogs.hub.kpi.cron.stuck": "{n} stuck",
   "syncLogs.hub.kpi.cron.failed": "{n} failed",
   "syncLogs.hub.kpi.cron.healthy": "{n} healthy",
+  "syncLogs.hub.kpi.cron.incomplete": "{n} partial or not configured",
   "syncLogs.hub.kpi.latency.p99": "p99 {n}ms",
   "syncLogs.hub.section.channels": "Channels",
   "syncLogs.hub.section.crons": "Cron jobs",

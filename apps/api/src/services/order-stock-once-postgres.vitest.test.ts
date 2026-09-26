@@ -21,7 +21,7 @@ import { withWorkspace } from '../lib/workspace-context.js'
 import { logger } from '../utils/logger.js'
 
 let database: Awaited<ReturnType<typeof concurrentDatabase>>
-const upstream = vi.hoisted(() => ({ orders: [] as unknown[], items: new Map<string, unknown[]>() }))
+const upstream = vi.hoisted(() => ({ orders: [] as unknown[], items: new Map<string, unknown[]>(), accounts: [] as unknown[] }))
 
 vi.mock('../db.js', () => ({
   default: new Proxy({} as Record<string, unknown>, {
@@ -31,8 +31,8 @@ vi.mock('../db.js', () => ({
 vi.mock('./marketplaces/amazon.service.js', () => ({
   AmazonService: class {
     async isConfigured() { return true }
-    async fetchOrders() { return upstream.orders }
-    async fetchOrderItems(amazonOrderId: string) { return upstream.items.get(amazonOrderId) ?? [] }
+    async fetchOrders(opts: { accountId?: string }) { upstream.accounts.push(opts?.accountId); return upstream.orders }
+    async fetchOrderItems(amazonOrderId: string, accountId?: string) { upstream.accounts.push(accountId); return upstream.items.get(amazonOrderId) ?? [] }
     async fetchOrderById() { return null }
   },
 }))
@@ -74,6 +74,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
   let amazon: InstanceType<typeof import('./amazon-orders.service.js').AmazonOrdersService>
   let mainId = ''
   let fbaId = ''
+  let amazonAccountId = ''
 
   const seedProduct = async (locationId = mainId, onHand = 10) => {
     const productId = randomUUID(), sku = `ONCE-${productId.slice(0, 8)}`, stockLevelId = randomUUID()
@@ -145,6 +146,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
     mainId = randomUUID()
     fbaId = randomUUID()
     await q(`INSERT INTO "StockLocation" (id,"workspaceId",type,code,name,"updatedAt") VALUES ($1,$3,'WAREHOUSE','IT-MAIN','Main',now()), ($2,$3,'AMAZON_FBA','AMAZON-EU-FBA','FBA',now())`, [mainId, fbaId, WS])
+    // CX A0: an Amazon poll reads through the business's one usable Amazon account and stamps it.
+    amazonAccountId = randomUUID()
+    await q(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","managedBy","authStatus","updatedAt") VALUES ($1,$2,'AMAZON','SELLERONCE',true,'oauth','connected',now())`, [amazonAccountId, WS])
     levels = await import('./stock-level.service.js')
     movement = await import('./stock-movement.service.js')
     reconciler = await import('./reservation-reconcile.js')
@@ -453,6 +457,22 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
       { type: 'inventory.reservation_consumed', quantity: 2, availableAfter: null },
       { type: 'inventory.reservation_released', quantity: 1, availableAfter: 7 }, // 9 on hand, 2 still held
     ])
+  })
+
+  it('16. Amazon FBM with the account stamp (CX A0) — every read names the one account, the order keeps it, and re-reads take nothing more', async () => {
+    const p = await seedProduct()
+    const amazonId = `AMZ-${randomUUID()}`, lines = [{ sku: p.sku, quantity: 2 }]
+    upstream.accounts.length = 0
+    const order = await amazonRead(amazonId, 'unshipped', lines)
+    await amazonRead(amazonId, 'shipped', lines)
+    await amazonRead(amazonId, 'shipped', lines)
+    await reconcile()
+    // Positive control: the order list and the item reads were asked (3 polls × 2 reads), each for the account.
+    expect(upstream.accounts).toEqual(Array(6).fill(amazonAccountId))
+    expect((await q(`SELECT "channelConnectionId" FROM "Order" WHERE id=$1`, [order.id]))[0].channelConnectionId).toBe(amazonAccountId)
+    expect(await level(p.productId)).toEqual({ quantity: 8, reserved: 0, available: 8 })
+    expect(await taken(order.id)).toBe(2)
+    expect((await holds(order.id)).map(({ quantity, state }) => ({ quantity, state }))).toEqual([{ quantity: 2, state: 'consumed' }])
   })
 
   it('9. Shopify — the normal flow takes the line once, and a re-delivered orders/create after fulfilment holds nothing more', async () => {

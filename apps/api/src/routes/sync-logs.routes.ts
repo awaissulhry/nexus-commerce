@@ -38,9 +38,9 @@ import {
   isKnownCron,
   listKnownCrons,
 } from '../jobs/cron-registry.js'
-import { recordCronRun } from '../utils/cron-observability.js'
+import { recordCronRun, type CronCompletedStatus } from '../utils/cron-observability.js'
 import { inboundHandlerFor, inboundReceiptHandlerFor, canReplayInbound, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
-import { completeInbound, deadLetterInbound, replayInbound } from '../services/cx/ingress/ledger.js'
+import { completeInbound, deadLetterInbound, InboundDeferred, replayInbound } from '../services/cx/ingress/ledger.js'
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { ebayInboundProcessingReady } from '../services/cx/ingress/ebay-processing.js'
@@ -541,7 +541,9 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
           if (typeof result === 'string' && result.trim()) return result
           if (result && typeof result === 'object' && 'summary' in result) {
             const s = (result as { summary?: unknown }).summary
-            if (typeof s === 'string' && s.trim()) return s
+            // P1.8 review — a completed-but-not-green status (PARTIAL, NOT_CONFIGURED) travels with its
+            // summary; reducing the result to the string recorded a hand-run partial as SUCCESS.
+            if (typeof s === 'string' && s.trim()) return { summary: s, cronStatus: (result as { cronStatus?: CronCompletedStatus }).cronStatus }
           }
           return 'manual trigger'
         },
@@ -1167,11 +1169,17 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         if (canReplayInbound(event.channel, event.eventType)) {
           const claim = await claimInbound(event.id)
           if (!claim) return reply.code(202).send({ success: true, queued: true })
-          await runWithInboundClaim(claim, async (stored, signal) => {
-            const handler = await inboundHandlerFor(stored.channel, stored.eventType)
-            if (!handler) throw new ReplayUnsupported('The stored event has no replay handler.')
-            await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
-          })
+          try {
+            await runWithInboundClaim(claim, async (stored, signal) => {
+              const handler = await inboundHandlerFor(stored.channel, stored.eventType)
+              if (!handler) throw new ReplayUnsupported('The stored event has no replay handler.')
+              await handler(stored.payload, { connectionId: stored.connectionId, eventType: stored.eventType, channel: stored.channel, signal })
+            })
+          } catch (handlerErr) {
+            // The claim rescheduled it without spending an attempt (a sign-in hold): say so.
+            if (handlerErr instanceof InboundDeferred) return reply.code(409).send({ success: false, error: handlerErr.message, deferred: true })
+            throw handlerErr
+          }
           return reply.send({ success: true })
         }
 

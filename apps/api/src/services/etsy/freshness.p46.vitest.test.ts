@@ -41,7 +41,7 @@ describe('P4.6e — etsyFreshnessCensus', () => {
       { lastSyncedAt: agoMs(8 * HOUR) },
       { lastSyncedAt: null },
       { lastSyncedAt: agoMs(30 * HOUR) },
-    ], NOW)).toEqual({ total: 4, stale: 3, neverSynced: 1, oldestAt: new Date(NOW - 30 * HOUR).toISOString() })
+    ], NOW)).toEqual({ total: 4, stale: 3, neverSynced: 1, oldestAt: new Date(NOW - 30 * HOUR).toISOString(), noAccount: 0, missingAtEtsy: 0, failed: 0 })
   })
   it('🟢 all fresh: nothing to report', () => {
     expect(etsyFreshnessCensus([{ lastSyncedAt: agoMs(HOUR) }], NOW))
@@ -50,10 +50,10 @@ describe('P4.6e — etsyFreshnessCensus', () => {
   it('🔴 today\'s measured shape: every row never synced', () => {
     // `etsy-sync` is registry-only and its client cannot authenticate, so this is production.
     expect(etsyFreshnessCensus([{ lastSyncedAt: null }, { lastSyncedAt: null }], NOW))
-      .toEqual({ total: 2, stale: 2, neverSynced: 2, oldestAt: null })
+      .toEqual({ total: 2, stale: 2, neverSynced: 2, oldestAt: null, noAccount: 0, missingAtEtsy: 0, failed: 0 })
   })
   it('an empty shop is not a breach', () => {
-    expect(etsyFreshnessCensus([], NOW)).toEqual({ total: 0, stale: 0, neverSynced: 0, oldestAt: null })
+    expect(etsyFreshnessCensus([], NOW)).toEqual({ total: 0, stale: 0, neverSynced: 0, oldestAt: null, noAccount: 0, missingAtEtsy: 0, failed: 0 })
   })
 })
 
@@ -82,7 +82,7 @@ describe('P4.6e — the alert it feeds', () => {
     // logged when rows existed. "No Etsy listings" and "the block threw" looked identical.
     const { staleChannelDataAlert } = await import('../cx/channel-alerts.service.js')
     const empty = etsyFreshnessCensus([], NOW)
-    expect(empty).toEqual({ total: 0, stale: 0, neverSynced: 0, oldestAt: null })
+    expect(empty).toEqual({ total: 0, stale: 0, neverSynced: 0, oldestAt: null, noAccount: 0, missingAtEtsy: 0, failed: 0 })
     expect(staleChannelDataAlert('Etsy', empty, 6)).toBeNull()
   })
 })

@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
-import { inboundBackoffMs, isVerifiedInbound, MAX_INBOUND_ATTEMPTS, VERIFIED_INBOUND_WHERE } from './ledger.js'
+import { inboundBackoffMs, InboundDeferred, isVerifiedInbound, MAX_INBOUND_ATTEMPTS, VERIFIED_INBOUND_WHERE } from './ledger.js'
 
 /** How long one claim lasts without renewal. Renewed every LEASE_RENEWAL_MS while the handler runs. */
 const LEASE_MS = 5 * 60_000
@@ -112,6 +112,21 @@ export async function finishInboundClaim(claim: InboundClaim, ok: boolean, error
 }
 
 /**
+ * Reschedule a claimed attempt WITHOUT spending it (InboundDeferred: a sign-in hold). Fenced like a
+ * finish: returns false when the claim was lost, and the row then belongs to someone else.
+ */
+export async function deferInboundClaim(claim: InboundClaim, reason: string, delayMs: number, now?: Date): Promise<boolean> {
+  now ??= await inboundDatabaseNow()
+  const text = reason.slice(0, 500)
+  const result = await prisma.webhookEvent.updateMany({ where: stillOwned(claim, now), data: {
+    status: 'failed', attempts: { decrement: 1 }, isProcessed: false, processedAt: null,
+    processingToken: null, processingUntil: null, nextAttemptAt: new Date(now.getTime() + delayMs),
+    lastError: text, error: text,
+  } })
+  return result.count === 1
+}
+
+/**
  * Run `work` under a claim: renew the lease while it runs, then finish the row.
  *
  * If a renewal finds the lease lost, `signal` aborts and the result is not recorded:
@@ -143,7 +158,10 @@ export async function runWithInboundClaim<T>(claim: InboundClaim, work: (claim: 
   } catch (error) {
     clearInterval(timer)
     await renewal
-    if (!controller.signal.aborted) await finishInboundClaim(claim, false, error instanceof Error ? error.message : String(error))
+    if (!controller.signal.aborted) {
+      if (error instanceof InboundDeferred) await deferInboundClaim(claim, error.message, error.delayMs)
+      else await finishInboundClaim(claim, false, error instanceof Error ? error.message : String(error))
+    }
     throw error
   } finally {
     clearInterval(timer)

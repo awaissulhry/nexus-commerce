@@ -34,7 +34,11 @@ export function concurrentDatabaseUrl(): URL | null {
   return url
 }
 
-export async function concurrentDatabase(options: { maxConnections?: number } = {}) {
+/**
+ * `timeZone` is set on the database right after CREATE DATABASE, before any session opens, so every
+ * session of both pools inherits it (the pools stay open from setup to close).
+ */
+export async function concurrentDatabase(options: { maxConnections?: number; timeZone?: string } = {}) {
   const server = concurrentDatabaseUrl()
   if (!server) throw new Error(`${CONCURRENT_PG_ENV} is not set.`)
   const root = fileURLToPath(new URL('../../../../', import.meta.url))
@@ -86,6 +90,10 @@ export async function concurrentDatabase(options: { maxConnections?: number } = 
   try {
     await admin.query(`CREATE DATABASE ${name}`)
     databaseCreated = true
+    if (options.timeZone !== undefined) {
+      if (!/^[A-Za-z0-9_/+-]+$/.test(options.timeZone)) throw new Error('concurrentDatabase: timeZone must be an IANA zone name')
+      await admin.query(`ALTER DATABASE ${name} SET timezone TO '${options.timeZone}'`)
+    }
     await pool.query(schemaSql)
     // Same deployed-only column formulaDatabase() adds; see the note there.
     await pool.query('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false')

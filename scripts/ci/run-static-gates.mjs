@@ -75,6 +75,7 @@ const GATES = {
   'route ⇄ prisma (PH.4a)': node('scripts/check-route-prisma-ratchet.mjs', '--check'),
   'context boundary (PH.4b)': node('scripts/check-context-boundary.mjs', '--check'),
   'stock writer lock (AE.1)': node('scripts/check-stock-writer-lock.mjs', '--check'),
+  'stock writer gate self-test': nodeTest('scripts/check-stock-writer-lock.test.mjs'),
   'sync ledger source': node('scripts/check-sync-ledger-source.mjs'),
   'market currency (P4.4a)': node('apps/api/scripts/check-market-currency.mjs'),
   'clustered cron (EV.4)': node('scripts/check-cron-clustered.mjs'),
