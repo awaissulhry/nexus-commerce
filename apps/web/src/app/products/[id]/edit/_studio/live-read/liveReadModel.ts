@@ -68,19 +68,32 @@ export interface LiveContentRow {
   state: 'same' | 'differs' | 'not-compared' | 'absent' | 'unread'
 }
 
+/** A field id as the publish review writes it: `aspect:<key>`, Amazon `<root>:["<marketplaceId>","<language>"]`, or a plain key. */
+function parseField(field: string): { root: string; language: string | null; aspect: boolean } {
+  if (field.startsWith('aspect:')) return { root: field.slice('aspect:'.length), language: null, aspect: true }
+  const amazon = /^([^:[\]]+):(\[.*\])$/.exec(field)
+  if (amazon) {
+    try {
+      const [, language] = JSON.parse(amazon[2]) as unknown[]
+      return { root: amazon[1], language: typeof language === 'string' ? language : null, aspect: false }
+    } catch { /* not an Amazon id: fall through to a plain key */ }
+  }
+  return { root: field, language: null, aspect: false }
+}
+
 function fieldLabel(field: string): string {
-  if (field.startsWith('aspect:')) return field.slice('aspect:'.length)
-  const at = field.indexOf('@')
-  if (at > 0) { const [market, language] = field.slice(at + 1).split('/'); return `${field.slice(0, at)} (${[market, language].filter(Boolean).join(', ')})` }
-  return /^[a-z]+$/.test(field) ? field[0].toUpperCase() + field.slice(1) : field
+  const { root, language, aspect } = parseField(field)
+  if (aspect) return root
+  if (language) return `${root} (${language})`
+  return /^[a-z]+$/.test(root) ? root[0].toUpperCase() + root.slice(1) : root
 }
 
 /** Where the sheet keeps a publish-review field when its key is not the field id itself. */
 const SHEET_KEYS: Record<string, string> = { title: 'name', pictures: 'imageUrls' }
 
-/** The sheet's value for a live field: same key, then the root (`aspect:<key>`, Amazon `root@market/lang`), then the sheet's own name for it, then the folded key. */
+/** The sheet's value for a live field: same key, then its root, then the sheet's own name for it, then the folded root. */
 function sheetValue(field: string, nexus: Record<string, unknown>): unknown {
-  const root = field.startsWith('aspect:') ? field.slice('aspect:'.length) : field.includes('@') ? field.slice(0, field.indexOf('@')) : field
+  const { root } = parseField(field)
   for (const key of [field, root, SHEET_KEYS[root]]) if (key && key in nexus) return nexus[key]
   const folded = Object.keys(nexus).find(key => fold(key) === fold(root))
   return folded === undefined ? undefined : nexus[folded]

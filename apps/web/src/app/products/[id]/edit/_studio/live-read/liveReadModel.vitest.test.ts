@@ -62,13 +62,13 @@ describe('contentRows', () => {
       title: { state: 'value', value: 'Giacca Racing' },
       description: { state: 'value', value: '<p>Nuova</p>' },
       'aspect:Marca': { state: 'value', value: ['Xavia'] },
-      'item_name@IT/it': { state: 'unread', reason: 'throttled' },
+      'item_name:["MKT-IT","it_IT"]': { state: 'unread', reason: 'throttled' },
       pictures: { state: 'absent' },
     } }), { title: 'Giacca Racing', description: '<p>Vecchia</p>' })
     expect(rows).toEqual([
       { field: 'aspect:Marca', label: 'Marca', live: 'Xavia', nexus: null, state: 'not-compared' },
       { field: 'description', label: 'Description', live: '<p>Nuova</p>', nexus: '<p>Vecchia</p>', state: 'differs' },
-      { field: 'item_name@IT/it', label: 'item_name (IT, it)', live: 'Could not read: throttled', nexus: null, state: 'unread' },
+      { field: 'item_name:["MKT-IT","it_IT"]', label: 'item_name (it_IT)', live: 'Could not read: throttled', nexus: null, state: 'unread' },
       { field: 'pictures', label: 'Pictures', live: 'Not on the channel', nexus: null, state: 'absent' },
       { field: 'title', label: 'Title', live: 'Giacca Racing', nexus: 'Giacca Racing', state: 'same' },
     ])
@@ -119,6 +119,21 @@ describe('errorGroups', () => {
       { label: 'Listing', reason: 'The eBay group could not be read (no answer).', names: [] },
       { label: '3 variants', reason: 'The eBay item could not be read (no answer).', names: ['A', 'B', 'C'] },
       { label: 'price', reason: 'Key missing', names: [] },
+    ])
+  })
+})
+
+describe('contentRows — Amazon fields', () => {
+  it('matches an Amazon field id (root:["<marketplaceId>","<language>"], as the publish review writes it) to the sheet\'s root key', () => {
+    const rows = contentRows(read({ content: {
+      'item_name:["MKT-IT","it_IT"]': { state: 'value', value: ['Giacca Gale'] },
+      'bullet_point:["MKT-IT","it_IT"]': { state: 'value', value: ['A', 'B'] },
+      brand: { state: 'value', value: [{ value: 'Xavia' }] },
+    } }), { item_name: 'Giacca Gale', bullet_point: ['A', 'C'] })
+    expect(rows.map(r => [r.label, r.nexus, r.state])).toEqual([
+      ['Brand', null, 'not-compared'],
+      ['bullet_point (it_IT)', 'A, C', 'differs'],
+      ['item_name (it_IT)', 'Giacca Gale', 'same'],
     ])
   })
 })
