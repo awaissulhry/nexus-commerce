@@ -6144,7 +6144,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       lastLaunchVerification: lastReceipt
         ? { at: lastReceipt.createdAt, status: lastReceipt.amazonResponseStatus, ok: receipt?.ok ?? null, total: receipt?.total ?? null, verified: receipt?.verified ?? null, mismatch: receipt?.mismatch ?? null, missingOnAmazon: receipt?.missingOnAmazon ?? null, notPushed: receipt?.notPushed ?? null, uncovered: receipt?.uncovered ?? null }
         : null,
-      integrity: integrity ? { severity: integrity.severity, findings: integrity.findings } : null,
+      // S1 — this profile's own detail. The public /api/health shows only the worst severity and the findings, with
+      // nothing that names a profile; the count says why a profile with nothing to sync has no settings-sync finding.
+      integrity: integrity ? { severity: integrity.severity, findings: integrity.findings, settingsSyncScope: integrity.snapshot.settingsSyncScope } : null,
     }
   })
 

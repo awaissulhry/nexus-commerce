@@ -15,6 +15,8 @@ const healthy = (over: Partial<IntegritySnapshot> = {}): IntegritySnapshot => ({
   openDriftRows: 0,
   driftNeedsAttention: 0,
   minutesSinceStructuralReconcile: 30,
+  // S1 — this profile has live Sponsored Products campaigns for the settings sync to verify.
+  settingsSyncScope: 200,
   ...over,
 })
 
@@ -96,6 +98,27 @@ describe('evaluateIntegrity — sync stalls', () => {
     const r = evaluateIntegrity(healthy({ minutesSinceSettingsSync: null }))
     expect(r.findings.some((f) => f.code === 'ADS_SETTINGS_SYNC_NEVER')).toBe(true)
   })
+  // S1 (2026-09-26) — production showed ADS_SETTINGS_SYNC_NEVER CRITICAL for a business profile with no
+  // campaigns and no Ads connection: it can never have a sync time, because there is nothing to sync.
+  it('a profile with nothing for the settings sync to verify raises no settings-sync finding', () => {
+    for (const minutesSinceSettingsSync of [null, 999]) {
+      const r = evaluateIntegrity(healthy({ settingsSyncScope: 0, minutesSinceSettingsSync }))
+      expect(r.findings.map((f) => f.code)).not.toContain('ADS_SETTINGS_SYNC_NEVER')
+      expect(r.findings.map((f) => f.code)).not.toContain('ADS_SETTINGS_SYNC_STALE')
+      expect(r.severity).toBe('OK')
+    }
+  })
+  it('positive control: one campaign to verify and no sync time is still CRITICAL, and stale is still stale', () => {
+    const never = evaluateIntegrity(healthy({ settingsSyncScope: 1, minutesSinceSettingsSync: null }))
+    expect(never.severity).toBe('CRITICAL')
+    expect(never.findings.map((f) => f.code)).toContain('ADS_SETTINGS_SYNC_NEVER')
+    const stale = evaluateIntegrity(healthy({ settingsSyncScope: 1, minutesSinceSettingsSync: 999 }))
+    expect(stale.findings.map((f) => f.code)).toContain('ADS_SETTINGS_SYNC_STALE')
+  })
+  it('a snapshot without the scope count (an older caller) keeps the check rather than going quiet', () => {
+    const r = evaluateIntegrity(healthy({ settingsSyncScope: undefined as never, minutesSinceSettingsSync: null }))
+    expect(r.findings.map((f) => f.code)).toContain('ADS_SETTINGS_SYNC_NEVER')
+  })
   it('AMS silence is a WARN, not an outage', () => {
     const r = evaluateIntegrity(healthy({ minutesSinceAmsIngest: 600 }))
     expect(r.severity).toBe('WARN')
@@ -157,7 +180,7 @@ describe('WF.2 ADS_WRITE_KIND_FAILING', () => {
     deadLettersLastHour: 0, deadLetters24h: 0, orphanedTargets: 0, orphanedLast24h: 0,
     minutesSinceSettingsSync: 5, minutesSinceAmsIngest: 5, campaignsFailedWrite: 0,
     campaignsInUnwritableMarket: 0, openDriftRows: 0, driftNeedsAttention: 0,
-    minutesSinceStructuralReconcile: 5, writeOutcomesByKind: [], ...over,
+    minutesSinceStructuralReconcile: 5, settingsSyncScope: 200, writeOutcomesByKind: [], ...over,
   })
   const codes = (s: IntegritySnapshot) => evaluateIntegrity(s).findings.map((f) => f.code)
 

@@ -156,6 +156,10 @@ afterwards.
 Then leave it 24h. The 20-minute settings sync reconciles Amazon's own state back, and `/api/health`
 → `adsIntegrity` reports problems on its own.
 
+`adsIntegrity` there is the worst severity across all business profiles and names no profile. The signed-in
+`GET /api/advertising/trust` shows the current profile's own `integrity`, including `settingsSyncScope`: the
+settings-sync checks run only when that count of live Sponsored Products campaigns with an Amazon id is above 0.
+
 ---
 
 ## If something looks wrong
