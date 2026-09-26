@@ -23,7 +23,7 @@
 import prisma from '../../db.js'
 import { getAvailableFields, type FieldDefinition } from './field-registry.service.js'
 import { getResolvedRules } from './schema-mapping.service.js'
-import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
+import { AMAZON_NON_ATTRIBUTE_KEYS } from './amazon-plumbing-keys.js'
 
 export interface MasterAttribute {
   /** categoryAttributes key (e.g. 'material_type') — the master path is
@@ -53,25 +53,9 @@ function humanize(s: string): string {
     .join(' ')
 }
 
-// Amazon's schema includes plumbing that is NOT a product attribute the master
-// should hold: content (handled by the locale section), identity (identity
-// card), and offer/fulfillment/variation/envelope keys. Exclude them so the
-// master schema only surfaces genuine product attributes (material, color,
-// size, care, armor, …). Content keys still import as content via MA.7's
-// FLATFILE_CONTENT map.
-const NON_ATTRIBUTE_KEYS = new Set([
-  // content → locale/content section
-  ...CONTENT_ROOTS,
-  // identity → identity card
-  'brand', 'manufacturer',
-  'externally_assigned_product_identifier', 'supplier_declared_has_product_identifier_exemption', 'merchant_suggested_asin',
-  // offer / price / fulfillment plumbing
-  'purchasable_offer', 'list_price', 'condition_type', 'condition_note',
-  'fulfillment_availability', 'merchant_shipping_group', 'max_order_quantity', 'main_offer_image_locator',
-  // variation / browse / envelope plumbing
-  'parentage_level', 'child_parent_sku_relationship', 'variation_theme', 'skip_offer',
-  'recommended_browse_nodes', 'browse_node', 'item_type_keyword', 'product_tax_code',
-])
+// Amazon plumbing that is NOT a product attribute the master should hold (content, identity, offer, variation and
+// envelope keys) — one list, shared with the Shared view's saved-key filter (`amazon-plumbing-keys.ts`).
+const NON_ATTRIBUTE_KEYS = AMAZON_NON_ATTRIBUTE_KEYS
 
 /** Pure: fold the registry's category FieldDefinitions + the mapping-rule
  *  `categoryAttributes.*` sources into the master attribute schema. Schema
