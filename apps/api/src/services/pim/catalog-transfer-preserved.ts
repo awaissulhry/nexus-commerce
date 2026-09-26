@@ -33,7 +33,7 @@ export async function preservedTransferOverrides(jobId: string, targets: Transfe
     let fields: { fieldKey: string; sheetKey?: string; channelStore?: Parameters<typeof storedChannelState>[1] }[] = fallback
     if (category || transferIsStore(listing.channel)) {
       try {
-        const canonical = (await contracts.channel(listing.channel, listing.marketplace, category)).fields
+        const canonical = (await contracts.channel(listing.channel, listing.marketplace, category, listing.channelConnectionId)).fields
         const keys = new Set(canonical.flatMap(f => [f.fieldKey, f.sheetKey].filter(Boolean)))
         const flags = new Set(canonical.flatMap(f => f.channelStore?.kind === 'listingColumn' ? [f.channelStore.followFlag] : []))
         fields = [...canonical, ...fallback.filter(f => !keys.has(f.fieldKey) && (!f.channelStore || !flags.has(f.channelStore.followFlag)))]

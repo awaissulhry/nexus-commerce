@@ -14,6 +14,7 @@ import { listingReadiness } from '../services/pim/listing-readiness.service.js'
 import { productTransferOptions, resolveProductTransferBoundary, checkProductTransferBoundary } from '../services/pim/catalog-product-transfer.js'
 import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { workspaceContext } from '../lib/workspace-context.js'
+import { recoverSheetImports } from '../services/pim/sheet-transfer/sheet-import.service.js'
 import { writeEditorWorkbook, inspectEditorTransfer, readEditorInput, readEditorTransfer, requireEditorVersions, readCatalogTransferUpload, PRODUCT_TRANSFER_MAX_BYTES, type ChannelFileDecisions } from '../services/pim/catalog-editor-workbook.js'
 
 const actor = (request: FastifyRequest) => (request as FastifyRequest & { authUser?: { id?: string } }).authUser?.id ?? null
@@ -60,7 +61,7 @@ function confirmedDeletesOf(raw: string | undefined): Pick<ChannelFileDecisions,
 export async function recoverImportsInEveryBusiness(visit: (work: () => Promise<void>) => Promise<void> = visitActiveWorkspaces,
   log: (failure: { err: unknown; workspaceId: string | null; recoverer: string }) => void = () => {}) {
   await visit(async () => {
-    for (const [recoverer, recover] of [['catalog-transfers', recoverCatalogTransfers], ['transfer-jobs', recoverTransferJobs]] as const) {
+    for (const [recoverer, recover] of [['catalog-transfers', recoverCatalogTransfers], ['transfer-jobs', recoverTransferJobs], ['sheet-imports', recoverSheetImports]] as const) {
       try { await recover() } catch (err) { log({ err, workspaceId: workspaceContext()?.workspaceId ?? null, recoverer }) }
     }
   })

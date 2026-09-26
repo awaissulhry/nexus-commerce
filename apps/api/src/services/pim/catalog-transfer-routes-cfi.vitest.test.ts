@@ -25,6 +25,10 @@ vi.mock('./catalog-transfer.service.js', async importOriginal => ({ ...await imp
 vi.mock('./catalog-transfer-jobs.js', async importOriginal => ({ ...await importOriginal<object>(),
   recoverTransferJobs: async () => { seen.recoveries.push({ recoverer: 'transfer-jobs', workspaceId: workspaceContext()?.workspaceId ?? null }) },
   stageTransferJob: async (input: { market: string }) => { seen.staged.push({ market: input.market }); return { jobId: 'job-1', state: 'PREVIEWING' } } }))
+// PSIE — the product sheet's imports are the third recoverer.
+vi.mock('./sheet-transfer/sheet-import.service.js', async importOriginal => ({ ...await importOriginal<object>(),
+  recoverSheetImports: async () => { seen.recoveries.push({ recoverer: 'sheet-imports', workspaceId: workspaceContext()?.workspaceId ?? null }) },
+}))
 vi.mock('./catalog-editor-workbook.js', async importOriginal => ({ ...await importOriginal<object>(),
   readCatalogTransferUpload: async (_buffer: Buffer, _filename: string, input: { market: string }) => { seen.reads.push({ market: input.market }); return { rows: [], issues: [], market: input.market || 'DE' } } }))
 
@@ -35,11 +39,11 @@ afterAll(() => { if (workspacesWere === undefined) delete process.env.NEXUS_WORK
 afterEach(() => { seen.recoveries.length = 0; seen.failIn = null; seen.reads.length = 0; seen.staged.length = 0; vi.useRealTimers() })
 
 describe('interrupted imports are recovered inside every business', () => {
-  it('runs both recoverers once per active business, inside that business', async () => {
+  it('runs every recoverer once per active business, inside that business', async () => {
     await recoverImportsInEveryBusiness()
     expect(seen.recoveries).toEqual([
-      { recoverer: 'catalog-transfers', workspaceId: 'ws-a' }, { recoverer: 'transfer-jobs', workspaceId: 'ws-a' },
-      { recoverer: 'catalog-transfers', workspaceId: 'ws-b' }, { recoverer: 'transfer-jobs', workspaceId: 'ws-b' },
+      { recoverer: 'catalog-transfers', workspaceId: 'ws-a' }, { recoverer: 'transfer-jobs', workspaceId: 'ws-a' }, { recoverer: 'sheet-imports', workspaceId: 'ws-a' },
+      { recoverer: 'catalog-transfers', workspaceId: 'ws-b' }, { recoverer: 'transfer-jobs', workspaceId: 'ws-b' }, { recoverer: 'sheet-imports', workspaceId: 'ws-b' },
     ])
   })
 
@@ -48,7 +52,7 @@ describe('interrupted imports are recovered inside every business', () => {
     const failures: { workspaceId: string | null; recoverer: string }[] = []
     await recoverImportsInEveryBusiness(undefined, failure => failures.push({ workspaceId: failure.workspaceId, recoverer: failure.recoverer }))
     expect(failures).toEqual([{ workspaceId: 'ws-a', recoverer: 'catalog-transfers' }])
-    expect(seen.recoveries.map(r => `${r.recoverer}@${r.workspaceId}`)).toEqual(['catalog-transfers@ws-a', 'transfer-jobs@ws-a', 'catalog-transfers@ws-b', 'transfer-jobs@ws-b'])
+    expect(seen.recoveries.map(r => `${r.recoverer}@${r.workspaceId}`)).toEqual(['catalog-transfers@ws-a', 'transfer-jobs@ws-a', 'sheet-imports@ws-a', 'catalog-transfers@ws-b', 'transfer-jobs@ws-b', 'sheet-imports@ws-b'])
   })
 
   it('the routes’ 30-second timer does exactly that', async () => {
@@ -58,7 +62,7 @@ describe('interrupted imports are recovered inside every business', () => {
     await app.ready()
     try {
       await vi.advanceTimersByTimeAsync(30_000)
-      expect(seen.recoveries.map(r => `${r.recoverer}@${r.workspaceId}`)).toEqual(['catalog-transfers@ws-a', 'transfer-jobs@ws-a', 'catalog-transfers@ws-b', 'transfer-jobs@ws-b'])
+      expect(seen.recoveries.map(r => `${r.recoverer}@${r.workspaceId}`)).toEqual(['catalog-transfers@ws-a', 'transfer-jobs@ws-a', 'sheet-imports@ws-a', 'catalog-transfers@ws-b', 'transfer-jobs@ws-b', 'sheet-imports@ws-b'])
     } finally { await app.close() }
   })
 })

@@ -34,7 +34,6 @@
     "[\"apps/web/src/app/products/[id]/edit/_studio/images/shopify/ShopifyContentWorkspace.tsx\",\"remove\",\"Remove assignment\"]": 1,
     "[\"apps/web/src/app/products/[id]/edit/_studio/images/shopify/ShopifyContentWorkspace.tsx\",\"live\",\"I approve the reviewed product changes, including the saved status and any effect on a live or archived product.\"]": 1,
     "[\"apps/web/src/app/products/[id]/edit/_studio/images/shopify/ShopifyFieldValue.tsx\",\"remove\",\"Remove\"]": 1,
-    "[\"apps/web/src/app/products/[id]/edit/_studio/import/ProductTransferDrawer.tsx\",\"resolve\",\"Finish saving or resolve the unsaved editor changes before importing or exporting.\"]": 1,
     "[\"apps/web/src/app/products/[id]/edit/_studio/import/diffModel.ts\",\"live\",\"already written are live. Check the record before re-running the file.\"]": 1,
     "[\"apps/web/src/app/products/[id]/edit/_studio/matrix/MatrixSurface.tsx\",\"live\",\"— the rows below are still live; the identity line falls back to the SKU.\"]": 1,
     "[\"apps/web/src/app/products/[id]/edit/_studio/media/ProductMediaDialog.tsx\",\"remove\",\"A gallery can contain up to 250 files. Remove gallery references before adding more.\"]": 1,

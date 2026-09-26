@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
-import { afterDatabaseCommit, beforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 // LX.F2 R-LX-17 — the ONE resolver, the same function the catalogue projection calls.
@@ -17,10 +18,33 @@ export type ReadinessScope = { channel: string; market: string; accountId: strin
 
 const producerKey = (rootId: string, scope?: ReadinessScope) => `readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`
 
-/** One family refresh per outer write, after cascades/formulas and before commit. */
+const deferredFamilies = new AsyncLocalStorage<Set<string>>()
+/**
+ * PSIE (the Owner's choice, 2026-09-26) — inside `work`, a readiness refresh is only NOTED (the family's root id) and
+ * never run in the write's transaction. The caller marks the noted families pending in that same transaction
+ * (`markReadinessPending`, so no reader shows the old answer as current) and rebuilds each one right after the commit
+ * (`rebuildPendingFamily`); the readiness-pending drain finishes any a restart interrupted. Used by the product sheet's
+ * import only; every other writer keeps its own readiness path.
+ */
+export function deferReadiness<T>(families: Set<string>, work: () => Promise<T>): Promise<T> {
+  return deferredFamilies.run(families, work)
+}
+
+/**
+ * One family refresh per outer write, after cascades/formulas and before commit.
+ *
+ * PSIE — a whole-family refresh covers every coordinate of that family, so inside one transaction a scoped refresh
+ * is skipped once the whole family is registered, and registering the whole family drops the scoped ones. A
+ * transaction that saves many records of one family (the sheet import) then rebuilds its readiness ONCE.
+ */
 export async function produceReadiness(productId: string, scope?: ReadinessScope) {
   const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
+  const deferred = deferredFamilies.getStore()
+  if (deferred) { deferred.add(rootId); return }
+  const family = producerKey(rootId)
+  if (scope && hasBeforeDatabaseCommit(family)) return
+  if (!scope) dropBeforeDatabaseCommit(`${family}:`)
   await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
 }
 
@@ -51,6 +75,9 @@ export async function produceReadinessForProducts(productIds: string[], scope?: 
   if (!productIds.length) return { inline: 0, pending: 0 }
   const rows = await prisma.product.findMany({ where: { id: { in: [...new Set(productIds)] } }, select: { id: true, parentId: true } })
   const roots = [...new Set(rows.map(row => row.parentId ?? row.id))].sort()
+  // PSIE — inside `deferReadiness` (the sheet import) the families are only noted, as in `produceReadiness`.
+  const deferred = deferredFamilies.getStore()
+  if (deferred) { roots.forEach(rootId => deferred.add(rootId)); return { inline: 0, pending: roots.length } }
   if (roots.length <= INLINE_READINESS_MAX_FAMILIES) {
     for (const rootId of roots) await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
     return { inline: roots.length, pending: 0 }

@@ -26,6 +26,7 @@
  * quotes are doubled; rows end CRLF. `downloadCsv` prepends a UTF-8 BOM — without it Excel reads
  * the file as the local 8-bit codepage and every Italian product name arrives mojibake.
  */
+import { downloadBlob } from '../../lib/download'
 
 export interface CsvColumn<TRow> {
   header: string
@@ -67,16 +68,8 @@ export function toCsv<TRow>(rows: readonly TRow[], columns: readonly CsvColumn<T
 export function downloadCsv(fileName: string, csv: string): void {
   if (typeof document === 'undefined') return
   const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  // Revoked on the next frame: revoking synchronously races the click in Safari and the file
-  // arrives empty.
-  requestAnimationFrame(() => URL.revokeObjectURL(url))
+  // The anchor click and the deferred revoke live in `lib/download` (PSIE, 2026-09-26).
+  downloadBlob(blob, fileName)
 }
 
 /**
