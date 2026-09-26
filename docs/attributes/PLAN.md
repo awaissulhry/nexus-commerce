@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0–S6 and the axis guard merged and LIVE (API build `efa02341`, 2026-09-26 20:01 UTC); **S5 APPLIED on both businesses 2026-09-26** (Xavia Racing 184 changes, Motovento 146; disputed: 3 kept on Shared, `collar_style` archived); S7 needs the assortment owner; S9 open | §10.9 |
+| P3b | 🟡 S0–S6 and the axis guard merged and LIVE (API build `efa02341`, 2026-09-26 20:01 UTC); **S5 APPLIED on both businesses 2026-09-26** (Xavia Racing 184 changes, Motovento 146; disputed: 3 kept on Shared, `collar_style` archived); evening: concept adoption on Motovento, colour/size options on both (#59), Amazon plumbing keys off Shared (#60); S7 needs the assortment owner; S9 open | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -920,21 +920,40 @@ what the batch made. The Motovento apply left Xavia's dictionary unchanged (read
   `merchant_shipping_group`, `merchant_suggested_asin`, `recommended_browse_nodes`, `parentage_level`, `skip_offer`,
   `supplier_declared_has_product_identifier_exemption`). S4 hides an unknown saved key only when it is an Amazon
   attribute of the BUSINESS's cached schemas; Motovento has no Amazon connection, so the Amazon-looking keys stay.
-  **Open (Owner):** also hide keys that are Amazon attributes of ANY cached schema, or leave them.
+  **Decided (Owner, 2026-09-26): hide them — PR #60.** Another business's schemas cannot be read (row-level
+  security), so the filter uses the code-defined Amazon non-attribute list instead (`amazon-plumbing-keys.ts`, moved
+  out of `master-schema.service.ts`): 8 of the 9 go. `armorType` is no Amazon key (an old Nexus key) and stays, per the
+  S4 rule for a real old key. Read-back after the deploy: see "Evening follow-ups" below.
 - 32 of Xavia's 33 attribute columns are hidden by default: that is the old MS.1 rule (`DEFAULT_VISIBLE_GROUPS` —
   only Identity, Content, Identifiers, Pricing or a required column show by default), not S5 or S6. `color`, `size`,
   `material` on Xavia are `usedBy` Amazon, eBay, Shopify and not dormant.
 - Motovento: 94 of 97 live attributes are DORMANT (S6) — concept adoption (step A) ran only on Xavia, so eBay and Etsy
-  declare nothing through a concept there. **Open (Owner):** run step A on Motovento (a prod write; dry run first).
+  declare nothing through a concept there. **Decided (Owner): run step A on Motovento — DONE, see below.**
 - **Asked by VTR the same evening:** in production `color` and `size` have 0 options on both businesses (their concepts
   are kind `text`, so adoption made none; `optionsFor()` only fills `select` concepts). VTR's step 1b would create 31
   (colour 21, size 10). The concept lists hold color 13 codes and size 10 codes. Codes never change, so ONE code set:
-  **Open (Owner):** (A) this lane creates the options from the concept lists first and VTR's backfill links to them, or
-  (B) VTR creates them with the concept codes. Recommended: A; VTR agrees (its step 1b would then only LINK, never
+  **Decided (Owner, 2026-09-26): A** — this lane creates the options from the concept lists first and VTR's backfill
+  links to them (option B was: VTR creates them with the concept codes). VTR agrees (its step 1b would then only LINK, never
   create, and report what it cannot match). Production values the concept lists miss (VTR's read-only report): the
   Italian spelling "Arancia" (a synonym for orange), size "XXS", and 12 mixed values (colour + gender or garment, e.g.
-  "Nero | Donna") — the Owner decides whether those stay colour values; they are NOT added until he answers. A NEW
-  value typed on the sheet gets the concept code when it matches a concept spelling, else a code from the text.
+  "Nero | Donna") — the Owner decided (in VTR's session) they STAY colour values as BUSINESS options VTR 1b creates
+  (codes from the text); they are not concept values. A NEW value typed on the sheet gets the concept code when it
+  matches a concept spelling, else a code from the text.
+
+**Evening follow-ups (2026-09-26, the Owner's answers to the three open items above).**
+
+| Step | What | Result |
+|---|---|---|
+| Concept adoption (step A) on Motovento | `POST /api/attributes/concepts/apply` dry run, then `dryRun: false` | Dry run 20 adopt · 3 create (`size_system`, `occasion`, `certification` — Motovento has no `ceCertification`) · 0 blocked; every adopt target live and on Shared (the adoption code predates archiving and would link an archived attribute — checked row by row). After: 200 attributes, Shared 54, 23 concept-linked; a new dry run finds all 23 linked. Xavia unchanged. |
+| Colour and size options (PR #59, `c269a60eb`) | `POST /api/attributes/concepts/options` — new: the concept value list as options of the attribute linked to the concept; dry run by default; an existing option is never changed or duplicated (`present` / `matched`) | Live on build `c269a60e`. Dry run on each business: 24 create (color 13, size 11), 0 present, 0 matched. Written ~21:50 UTC: Xavia color 13 · size 11, Motovento color 13 · size 11; a new dry run finds 24 present. `GET /api/attributes/color/choices` → 13 business choices ("Nero", "Bianco"…), `optionMode` open (off-list values still save). VTR told (its 1b production dry run links to these). |
+| Amazon plumbing keys on Shared (PR #60, `1f65c75ef`) | `sharedSavedFields` also drops a saved key in `AMAZON_NON_ATTRIBUTE_KEYS` | Live on build `95701018` (API 22:19 UTC). Read-back, studio columns at master scope: Motovento 32 attribute columns = 31 core + `armorType` (was 40: the 8 Amazon keys are gone); Xavia 33, unchanged. No value touched. |
+
+Codes (`conceptOptionCode`, the one rule, also used by `optionsFor`): color `black white grey red blue green yellow
+orange brown pink purple beige multicolour`; size `xxs xs s m l xl xxl 3xl 4xl 5xl one_size`. `label` = the primary
+content language (Italian), `metadata.labels` = `{ en, it, de, fr, es }` from the concept's new `valueLabels`,
+`synonyms` = the other spellings. The concept list gained `XXS` and "Arancia" (`CONCEPTS_REVISION` 2026-09-26.2).
+Follow-up, not done: a NEW business's starter dictionary still creates color/size without options (`optionsFor` fills
+only `select` concepts) — run `concepts/options` after creating one, or seed it in the starter (the Owner's call).
 
 **S6 built — API (2026-09-26, branch `feat/attributes-p3b-s6`): "used by" and dormant.**
 
