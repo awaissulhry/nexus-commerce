@@ -297,7 +297,14 @@ export function buildMasterColumns(
         validation,
         provenance: prov,
         roundTrip: rt,
-        extra: { 'nds-cell-chip-hit': (p) => !!p.data && !!isChipCell && isChipCell(p.data.id, col.key) },
+        extra: {
+          'nds-cell-chip-hit': (p) => !!p.data && !!isChipCell && isChipCell(p.data.id, col.key),
+          /* 2026-09-26 — the column does not apply to this row (a per-variation field on the parent, a
+             field outside this product type or family, a slot past the category's cardinality): the
+             engine's hatch. `applies`, not `editable` — a read-only value that DOES apply is not
+             "not for this row", and the tooltip below already says which of the two it is. */
+          'nds-cell-na': (p) => !!p.data && !applies(p.data, col),
+        },
       }),
       /*
        * The cell's ONE tooltip (#662). COMPOSED, not an early return: the save reason used to be

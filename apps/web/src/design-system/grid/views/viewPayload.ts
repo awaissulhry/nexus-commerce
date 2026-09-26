@@ -22,12 +22,70 @@
  * Schema 3 also stores hidden-column order, locks and presentation group overrides. Schema 2
  * stays readable and writable for callers that only arrange visible columns. Schema 1 grid-state
  * payloads keep reading through `isGridStatePayload` in `useGridViews`.
+ *
+ * Either schema may carry the optional `ViewDisplay` fields (widths, sort, row height) — see below.
  */
+import type { GridDensityName } from '../../tokens/grid'
 
 export const COLUMNS_VIEW_SCHEMA = 2
 export const SHEET_LAYOUT_SCHEMA = 3
 
-export interface ColumnsViewPayloadV2 {
+/**
+ * 2026-09-26 (Owner: "a view keeps everything") — what a saved view restores BESIDES its columns.
+ * Every field is optional and additive, so no schema number moves: a view saved before this reads
+ * unchanged, and a field it lacks leaves that part of the screen as it is. Stored keys are column
+ * keys, like `columns`, so a width for a column this product type lacks is simply not applied.
+ */
+export interface ViewDisplay {
+  /** Column key → width in px (whole pixels, `VIEW_WIDTH_MIN`–`VIEW_WIDTH_MAX`). */
+  columnWidths?: Record<string, number>
+  /** Sort in priority order. `[]` means "unsorted" and clears a sort; absent leaves it alone. */
+  sort?: ViewSort[]
+  /** Row height tier — the same names `GridDensityToggle` and the grid speak. */
+  density?: GridDensityName
+}
+
+export interface ViewSort {
+  colId: string
+  sort: 'asc' | 'desc'
+}
+
+export const VIEW_WIDTH_MIN = 20
+export const VIEW_WIDTH_MAX = 2000
+export const VIEW_SORT_MAX = 50
+const DENSITIES: readonly GridDensityName[] = ['compact', 'cozy', 'spacious']
+
+/**
+ * The display part of a stored view, CHECKED: an entry that is not a real width, sort or density is
+ * dropped rather than applied. The server refuses a bad write (`validateSavedViewPayload`); this is
+ * the read side, for rows written by anything else.
+ */
+export function viewDisplayOf(payload: unknown): ViewDisplay {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {}
+  const p = payload as Record<string, unknown>
+  const out: ViewDisplay = {}
+  if (p.columnWidths && typeof p.columnWidths === 'object' && !Array.isArray(p.columnWidths)) {
+    const widths = Object.entries(p.columnWidths as Record<string, unknown>).filter(
+      (entry): entry is [string, number] =>
+        entry[0].trim().length > 0 && typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= VIEW_WIDTH_MIN && entry[1] <= VIEW_WIDTH_MAX,
+    )
+    out.columnWidths = Object.fromEntries(widths.map(([key, px]) => [key, Math.round(px)]))
+  }
+  if (Array.isArray(p.sort)) {
+    const seen = new Set<string>()
+    out.sort = p.sort.filter((entry): entry is ViewSort => {
+      if (!entry || typeof entry !== 'object') return false
+      const { colId, sort } = entry as Partial<ViewSort>
+      if (typeof colId !== 'string' || !colId.trim() || (sort !== 'asc' && sort !== 'desc') || seen.has(colId)) return false
+      seen.add(colId)
+      return true
+    }).slice(0, VIEW_SORT_MAX).map(({ colId, sort }) => ({ colId, sort }))
+  }
+  if (typeof p.density === 'string' && (DENSITIES as readonly string[]).includes(p.density)) out.density = p.density as GridDensityName
+  return out
+}
+
+export interface ColumnsViewPayloadV2 extends ViewDisplay {
   v: typeof COLUMNS_VIEW_SCHEMA
   kind: 'columns'
   /** Column keys in the order the view shows them. De-duplicated; identity columns never stored. */

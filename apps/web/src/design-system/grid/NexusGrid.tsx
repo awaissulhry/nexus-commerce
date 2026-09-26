@@ -36,6 +36,7 @@ import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
 import { useAgThemeMode } from './hooks/useAgThemeMode'
 import { useGridDensity } from './hooks/useGridDensity'
+import { GridEmptyCellsContext, type GridEmptyCells } from './renderers/emptyCells'
 import './theme/grid.css'
 
 registerGridModules()
@@ -127,6 +128,14 @@ export interface NexusGridProps<T> extends AgGridReactProps<T> {
    * "Reset columns" that call these. Omit it and AG's items stay.
    */
   columnDialog?: { customise?: () => void; reset?: () => void }
+  /**
+   * What an empty cell draws (2026-09-26). `dash` — the default, and right for any grid of numbers,
+   * where "nothing measured" and a measured 0 must look different. `blank` — an EDITING grid (the
+   * product sheet), where an empty cell is just a value nobody entered yet: `EmptyValue` draws nothing
+   * and tells a screen reader "No value". A measured zero keeps its dash either way.
+   * See `renderers/emptyCells.ts`.
+   */
+  emptyCells?: GridEmptyCells
 }
 
 /** AG's own icon markup, so a custom item sits in the menu like a built-in one. */
@@ -144,6 +153,7 @@ export function NexusGrid<T>({
   className,
   flatTree = false,
   columnDialog,
+  emptyCells = 'dash',
   defaultColDef,
   selectionColumnDef,
   onColumnPinned,
@@ -405,7 +415,9 @@ export function NexusGrid<T>({
         // (cell horizontal padding tightens at `compact`, as the DS grid's does).
         data-density={density}
         data-rows={rows}
+        data-empty-cells={emptyCells}
       >
+        <GridEmptyCellsContext.Provider value={emptyCells}>
         <AgGridReact<T>
           theme={workspaceGridTheme}
           rowHeight={rowHeight}
@@ -428,6 +440,7 @@ export function NexusGrid<T>({
           popupParent={typeof document !== 'undefined' ? document.body : undefined}
           {...agProps}
         />
+        </GridEmptyCellsContext.Provider>
       </div>
     </>
   )

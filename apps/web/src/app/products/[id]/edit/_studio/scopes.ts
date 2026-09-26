@@ -207,6 +207,17 @@ export function defaultLocaleFor(market: string, marketplaces: MarketplaceLite[]
   return scopeLanguages(channel, market, marketplaces, null)[0] ?? null
 }
 
+/**
+ * The content language after a MARKET change on a channel scope (2026-09-26): the language the operator
+ * chose, while the new market still accepts it; otherwise the new market's first. It used to be the new
+ * market's first every time, while the call site's comment said "only re-default when the operator had
+ * not pinned one" — a French choice on Amazon BE was dropped on a move to a French market.
+ */
+export function localeForMarketChange(channel: string, nextMarket: string, chosen: string | null, marketplaces: MarketplaceLite[]): string | null {
+  const accepted = scopeLanguages(channel, nextMarket, marketplaces, null)
+  return chosen && accepted.includes(chosen) ? chosen : accepted[0] ?? null
+}
+
 /** Is this channel actually sold in this market? A chip outside its markets is disabled, not hidden. */
 export function channelServesMarket(
   channel: string,

@@ -141,6 +141,11 @@ export interface PreferencesViewSave {
   onSaveAs: (name: string, value: PreferencesValue) => Promise<unknown>
   /** Apply the draft AND overwrite the active view with it. Same contract. */
   onUpdate?: (value: PreferencesValue) => Promise<unknown>
+  /**
+   * Open with the view-name field already showing — the dialog was opened by a views menu's
+   * "New view…", so the job is to name what gets built here (2026-09-26). Read when the dialog opens.
+   */
+  startNaming?: boolean
 }
 
 export interface PreferencesModalProps {
@@ -990,7 +995,7 @@ export function PreferencesModal({
   })
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setDraft(value); setTab('columns'); setNaming(false); setViewName(''); setViewBusy(false); setViewError(null); busyRef.current = false; resetInteraction()
+      setDraft(value); setTab('columns'); setNaming(!!viewSave?.startNaming); setViewName(''); setViewBusy(false); setViewError(null); busyRef.current = false; resetInteraction()
     }
     wasOpen.current = open
     // A parent refresh must never replace an unsaved draft. Only a new open or explicit Reload does.

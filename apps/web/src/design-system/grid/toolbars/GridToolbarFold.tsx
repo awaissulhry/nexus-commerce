@@ -43,7 +43,10 @@
  * (which takes `MenuItemDef[]`, i.e. a second rendering of every control it shows).
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
+
+import { usePopoverPosition } from '../../components/usePopoverPosition'
 
 /**
  * The same monotone overflow measurement, exposed for the SECOND priority R-LX-18 names: once the
@@ -141,6 +144,23 @@ export function useToolbarStatusCompaction(anchor: RefObject<HTMLElement | null>
   return useMonotoneToolbarOverflow(anchor, armed)
 }
 
+/**
+ * SHEET-VIEWS (2026-09-26) — a fold tier that fires only once the tier before it has folded and the
+ * bar is STILL over. The same monotone measurement and the same `armed` contract as
+ * `useToolbarStatusCompaction`, named for what it is, so a surface can put a CHEAPER fold in front of
+ * its verbs without borrowing the status tier's name.
+ *
+ * Why the sheet needed it, measured on master·IT at a 1728px viewport: the row-height control
+ * (Compact · Cozy · Spacious) is **206px + 8px gap**. With it in the actions group the bar needed
+ * **1430px**, so `useToolbarOverflow` latched below a ≈1498px viewport and moved `Export` and `Import`
+ * into `⋯` along with it — where before they stayed on the bar down to ≈1284px. Folding the row height
+ * FIRST (`useToolbarOverflow`) and the verbs only after (`useToolbarOverflowTier(anchor, thatFolded)`)
+ * keeps both verbs on the bar across 1284–1498px again.
+ */
+export function useToolbarOverflowTier(anchor: RefObject<HTMLElement | null>, armed: boolean): boolean {
+  return useMonotoneToolbarOverflow(anchor, armed)
+}
+
 export interface GridToolbarFoldProps {
   /** The trigger's word when folded, e.g. `Filters`. */
   label: string
@@ -166,12 +186,25 @@ export interface GridToolbarFoldProps {
 }
 
 export function GridToolbarFold({ label, count, mode = 'overflow', activeLabel, children }: GridToolbarFoldProps) {
+  const [open, setOpen] = useState(false)
   const host = useRef<HTMLSpanElement>(null)
-  const panel = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
+  /**
+   * 🔴 SHEET-VIEWS (2026-09-26, Owner: "it opens the dropdown under the table, but it should be layered
+   * above"). The panel was `position: absolute` inside `.nds-toolbar`, which is `overflow: auto` (it
+   * scrolls sideways at narrow widths), inside `.nds-gridcard`, which is `overflow: hidden`. An
+   * overflow box clips an absolutely-positioned descendant whatever its z-index, so the open panel
+   * (measured: `aria-expanded="true"`, 190×190 at 1113,186) was cut off at the toolbar's bottom edge
+   * and `elementFromPoint` inside it returned an AG cell — the Filters button did nothing visible.
+   * Now the panel is portaled to `<body>` and placed by `usePopoverPosition`, the DS's one answer to
+   * exactly this clipping (its header names the modal and grid cases) and what `GridViewsMenu` uses.
+   * It stays MOUNTED once portaled, so a chip's own state still survives closing the panel.
+   */
+  const { popRef: panel, style: panelStyle } = usePopoverPosition(open, trigger, { width: 'auto', align: 'start', offset: 6 })
+  const [portalReady, setPortalReady] = useState(false)
+  useEffect(() => { setPortalReady(true) }, [])
   /** `null` = not measured yet; render inline so the first measurement sees the real widths. */
   const [neededWidth, setNeededWidth] = useState<number | null>(null)
-  const [open, setOpen] = useState(false)
   const panelId = useId()
   /**
    * 🔴 A group with NOTHING in it must never fold: a trigger where there were no controls ADDS width
@@ -243,10 +276,17 @@ export function GridToolbarFold({ label, count, mode = 'overflow', activeLabel, 
           : count !== undefined && <span className="nds-toolbar-fold-count">{count}</span>}
         <ChevronDown size={11} />
       </button>
-      {/* Kept MOUNTED and hidden, so a chip's own state survives closing the panel. */}
-      <div id={panelId} ref={panel} className="nds-toolbar-fold-panel" role="group" aria-label={label} hidden={!open}>
-        {children}
-      </div>
+      {/* Kept MOUNTED and hidden, so a chip's own state survives closing the panel. Portaled after the
+          first client render (a server render has no `<body>` to portal into). `dark` follows the
+          trigger's scope, as `GridViewsMenu`'s prompt does, because `<body>` may sit outside it. */}
+      {portalReady && createPortal(
+        <div id={panelId} ref={panel} style={panelStyle}
+          className={`nds-toolbar-fold-panel${trigger.current?.closest('.dark') ? ' dark' : ''}`}
+          role="group" aria-label={label} hidden={!open}>
+          {children}
+        </div>,
+        document.body,
+      )}
     </span>
   )
 }

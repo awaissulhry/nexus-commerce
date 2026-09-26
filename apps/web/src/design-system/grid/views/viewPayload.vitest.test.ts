@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { COLUMNS_VIEW_SCHEMA, SHEET_LAYOUT_SCHEMA, columnsViewPayload, isColumnsViewPayload, sheetLayoutPayload } from './viewPayload'
+import { COLUMNS_VIEW_SCHEMA, SHEET_LAYOUT_SCHEMA, columnsViewPayload, isColumnsViewPayload, sheetLayoutPayload, viewDisplayOf } from './viewPayload'
 
 describe('columnsViewPayload', () => {
   it('stores the keys in the given order, once each, blanks dropped', () => {
@@ -85,5 +85,35 @@ describe('isColumnsViewPayload — checked, never cast', () => {
     expect(isColumnsViewPayload(null)).toBe(false)
     expect(isColumnsViewPayload('x')).toBe(false)
     expect(isColumnsViewPayload(['a'])).toBe(false)
+  })
+})
+
+describe('viewDisplayOf — what a view restores besides its columns (2026-09-26)', () => {
+  it('reads widths, sort and row height exactly as stored', () => {
+    const display = viewDisplayOf({ ...columnsViewPayload(['brand']), columnWidths: { brand: 180.4, color: 96 }, sort: [{ colId: 'color', sort: 'desc' }, { colId: 'brand', sort: 'asc' }], density: 'compact' })
+    expect(display).toEqual({ columnWidths: { brand: 180, color: 96 }, sort: [{ colId: 'color', sort: 'desc' }, { colId: 'brand', sort: 'asc' }], density: 'compact' })
+  })
+
+  it('returns nothing for a view saved before the fields existed, so it leaves the screen alone', () => {
+    expect(viewDisplayOf(columnsViewPayload(['brand']))).toEqual({})
+    expect(viewDisplayOf(null)).toEqual({})
+    expect(viewDisplayOf(['brand'])).toEqual({})
+  })
+
+  it('keeps an EMPTY sort — it means "unsorted", which is different from absent', () => {
+    expect(viewDisplayOf({ sort: [] })).toEqual({ sort: [] })
+  })
+
+  it('drops every entry the grid could not apply instead of applying it', () => {
+    const display = viewDisplayOf({
+      columnWidths: { brand: 5, color: 'wide', size: 3000, ' ': 100, material: 140 },
+      sort: [{ colId: 'brand', sort: 'up' }, { colId: '', sort: 'asc' }, { colId: 'color', sort: 'asc' }, { colId: 'color', sort: 'desc' }, 'size'],
+      density: 'tiny',
+    })
+    expect(display).toEqual({ columnWidths: { material: 140 }, sort: [{ colId: 'color', sort: 'asc' }] })
+  })
+
+  it('a payload carrying the fields is still a columns view (the fields are additive)', () => {
+    expect(isColumnsViewPayload({ ...columnsViewPayload(['brand']), density: 'cozy', sort: [] })).toBe(true)
   })
 })

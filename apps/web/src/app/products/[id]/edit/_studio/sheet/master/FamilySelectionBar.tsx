@@ -32,25 +32,30 @@ export interface FamilySelectionBarProps {
   onDone?: (result: ActionResult) => void
 }
 
-export const FamilySelectionBar = memo(function FamilySelectionBar({ rows, actions, onClear, onDone }: FamilySelectionBarProps) {
+/**
+ * SHEET-VIEWS (Owner, 2026-09-26: the selection bar "looks very odd … the action buttons don't look
+ * great"). The VERBS, in one place: the sheet shows them in its toolbar while rows are selected (the
+ * products grid's `GridSelectionActions` shape), the Variants tab keeps them in its `BulkActionBar` —
+ * same buttons, same reasons, same confirm, so the two hosts cannot drift.
+ *
+ * A destructive verb is drawn `danger` only when it can RUN. A disabled danger button rendered as a
+ * pale pink block (measured on master·IT with two variations selected: "Delete child…" in a washed-out
+ * red fill) — it read as a broken control, not an unavailable one. Unavailable, it is a plain disabled
+ * button like its neighbours; its label and its reason (the InfoTip) still say what it is.
+ */
+export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, actions, onDone }: Omit<FamilySelectionBarProps, 'onClear'>) {
   const { press, busy, problem, confirmElement } = useActionPress<StudioRow>(onDone)
   const offered = useMemo(() => actionsFor(actions, SELECTION, rows), [actions, rows])
-
   if (rows.length === 0) return null
-
-  // The DS bar prints `count + noun` verbatim, so the noun carries the plural. "1 rows selected"
-  // was on screen before this.
-  const noun = rows.length === 1 ? 'row selected' : 'rows selected'
-
   return (
-    <BulkActionBar count={rows.length} noun={noun} onClear={onClear}>
+    <>
       {problem && <span className="nds-cell-stock-out" role="alert">{problem}</span>}
       {offered.map(({ action, availability }) => {
         const runnable = isRunnable(availability)
         const button = (
           <Button
             size="sm"
-            variant={action.danger ? 'danger' : 'secondary'}
+            variant={action.danger && runnable ? 'danger' : 'secondary'}
             disabled={!runnable || busy !== null}
             onClick={() => void press(action, rows)}
           >
@@ -63,6 +68,20 @@ export const FamilySelectionBar = memo(function FamilySelectionBar({ rows, actio
           : <span key={action.id}>{button}</span>
       })}
       {confirmElement}
+    </>
+  )
+})
+
+export const FamilySelectionBar = memo(function FamilySelectionBar({ rows, actions, onClear, onDone }: FamilySelectionBarProps) {
+  if (rows.length === 0) return null
+
+  // The DS bar prints `count + noun` verbatim, so the noun carries the plural. "1 rows selected"
+  // was on screen before this.
+  const noun = rows.length === 1 ? 'row selected' : 'rows selected'
+
+  return (
+    <BulkActionBar count={rows.length} noun={noun} onClear={onClear}>
+      <FamilySelectionVerbs rows={rows} actions={actions} onDone={onDone} />
     </BulkActionBar>
   )
 })

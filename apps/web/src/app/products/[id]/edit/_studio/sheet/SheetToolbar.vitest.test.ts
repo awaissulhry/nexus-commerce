@@ -82,24 +82,47 @@ describe('SheetToolbar overflow holds', () => {
 })
 
 
+/* The filters are a DS `Menu` since 2026-09-26 (Owner: a dropdown, not chips). A closed menu renders no
+   rows into static markup, so the rows are read from the declarations handed to the menu. */
+function filterRows(overrides: Partial<SheetToolbarProps<unknown>>) {
+  menuInputs.length = 0
+  renderToStaticMarkup(createElement(SheetToolbar, { visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(), ...overrides }))
+  const items = menuInputs.find(list => list.some(item => item.id === 'filter:all'))!
+  const text = (node: unknown) => renderToStaticMarkup(createElement(Fragment, null, node as never))
+  return items.filter(item => !item.separator).map(item => ({ id: item.id, label: text(item.label), description: text(item.description) }))
+}
+
 describe('SheetToolbar data contracts', () => {
   it('prints the producer quantity and keeps filter breadth in the detail', () => {
-    const markup = renderToStaticMarkup(createElement(SheetToolbar, {
-      visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(),
+    const rows = filterRows({
       chips: [{ id: 'mapping-errors', label: 'Mapping errors', count: { n: 63, unit: 'cells' },
         cells: { byRow: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [String(i), ['a', 'b', 'c']])) } }],
-    }))
-    expect(markup).toContain('63 cells')
-    expect(markup).toContain('63 affected cells across 3 columns and 21 rows')
+    })
+    const row = rows.find(r => r.id === 'filter:mapping-errors')!
+    expect(row.label).toContain('63 cells')
+    expect(row.description).toContain('63 affected cells across 3 columns and 21 rows')
   })
 
   it('never replaces a declared variant count with the number of affected columns', () => {
-    const markup = renderToStaticMarkup(createElement(SheetToolbar, {
-      visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(),
-      chips: [{ id: 'excluded', label: 'Excluded', count: { n: 4, unit: 'variants' }, cells: { byRow: {} } }],
-    }))
-    expect(markup).toContain('4 variants')
-    expect(markup).not.toContain('0 columns')
+    const row = filterRows({ chips: [{ id: 'excluded', label: 'Excluded', count: { n: 4, unit: 'variants' }, cells: { byRow: {} } }] })
+      .find(r => r.id === 'filter:excluded')!
+    expect(row.label).toContain('4 variants')
+    expect(row.description).not.toContain('0 columns')
+  })
+
+  it('is one dropdown: "All rows" first and ticked, then one row per filter; the active one is ticked instead', () => {
+    const chips = [
+      { id: 'missing-required', label: 'Missing required', count: { n: 41, unit: 'cells' as const }, cells: { byRow: {} } },
+      { id: 'warnings', label: 'Warnings', count: null, note: 'Not counted yet', cells: { byRow: {} } },
+    ]
+    const idle = filterRows({ chips })
+    expect(idle.map(r => r.id)).toEqual(['filter:all', 'filter:missing-required', 'filter:warnings'])
+    expect(idle[0].label).toContain('✓')
+    // `null` is "not counted", never 0.
+    expect(idle[2].label).not.toContain('0')
+    const active = filterRows({ chips, activeChipId: 'missing-required' })
+    expect(active[0].label).not.toContain('✓')
+    expect(active[1].label).toContain('✓')
   })
 
   it('renders declared status and keeps its danger announcement', () => {
@@ -121,3 +144,32 @@ const buttonStatus: ToolbarStatus = [createElement('button', null, 'Open dialog'
 const commandStatus: ToolbarStatus = [{ tone: 'info', label: 'Open dialog', onClick: () => {} }]
 void buttonStatus
 void commandStatus
+
+describe('SheetToolbar selection state (SHEET-VIEWS, Owner 2026-09-26: the products grid shape)', () => {
+  const base = { visible: 41, total: 41, search: 'jacket', onSearch: vi.fn(), density: 'compact' as const, onDensity: vi.fn() }
+  const verbs = createElement('button', { className: 'verb' }, 'Unlink from parent')
+
+  it('swaps the search field for the verbs and Clear, counts the selection once, and steps the row height aside', () => {
+    const markup = renderToStaticMarkup(createElement(SheetToolbar, { ...base, selected: 2, selectionActions: verbs, onClearSelection: vi.fn() }))
+    expect(markup).toContain('Selected <b>2</b> rows')
+    expect(markup).toContain('nds-grid-selbar')
+    expect(markup).toContain('Unlink from parent')
+    expect(markup).toContain('>Clear<')
+    expect(markup).not.toContain('Find a SKU or a name')
+    expect(markup).not.toContain('Spacious')
+  })
+
+  it('keeps the ordinary bar when nothing is selected, even with verbs supplied', () => {
+    const markup = renderToStaticMarkup(createElement(SheetToolbar, { ...base, selected: 0, selectionActions: verbs, onClearSelection: vi.fn() }))
+    expect(markup).toContain('Find a SKU or a name')
+    expect(markup).toContain('Spacious')
+    expect(markup).not.toContain('nds-grid-selbar')
+  })
+
+  it('a scope with NO verbs keeps its bar while rows are selected and counts them beside the rows', () => {
+    const markup = renderToStaticMarkup(createElement(SheetToolbar, { ...base, selected: 3 }))
+    expect(markup).toContain('Find a SKU or a name')
+    expect(markup).toContain('<b>3</b> selected')
+    expect(markup).not.toContain('nds-grid-selbar')
+  })
+})

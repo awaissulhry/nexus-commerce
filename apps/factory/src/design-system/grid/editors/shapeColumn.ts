@@ -116,6 +116,9 @@ export function variationThemeColumnDef<T>(
       'nds-cell-is-inherited': (p: { data?: T }) => memberOf(p.data) === 'inherited',
       'nds-cell-is-pinned': (p: { data?: T }) => memberOf(p.data) === 'pinned',
       'nds-cell-is-inherited-override': () => false,
+      /* A child row holds no projection — the structure is the parent's (`variationThemeState` reads
+         a null cell as `child`). The hatch says "not for this row" where the cell itself draws nothing. */
+      'nds-cell-na': (p: { data?: T }) => !!p.data && cellOf(p.data) === null,
     } as never,
     /* An object, not a scalar — AG would otherwise infer a type from it and coerce it. */
     cellDataType: false,
