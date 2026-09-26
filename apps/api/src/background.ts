@@ -6,6 +6,7 @@ import { stopScheduledTasks } from './lib/cron/clustered.js'
 import { closeBroker } from './lib/events/index.js'
 import { initOtel } from './utils/otel-setup.js'
 import { logger } from './utils/logger.js'
+import { markProcessReady } from './lib/runtime-status/process-snapshot.js'
 
 const role = process.argv[2]
 if (role !== 'worker' && role !== 'scheduler') throw new Error('Background process role must be worker or scheduler')
@@ -21,6 +22,7 @@ process.env.EVENT_SOURCE = role
 void initOtel()
 let ready = false
 let stop: (() => Promise<void>) | undefined
+let stopStatus: (() => Promise<void>) | undefined
 const server = createServer((request, response) => {
   if (request.url !== '/health/ready') { response.writeHead(404).end(); return }
   response.writeHead(ready && redis.connection.status === 'ready' ? 200 : 503, { 'content-type': 'application/json' })
@@ -31,6 +33,10 @@ deadline.unref()
 async function start() {
 try {
   await prisma.$queryRaw`SELECT 1`
+  // The API reports this process's crons, circuits and startup step from the heartbeat it publishes to Redis
+  // (lib/runtime-status). Started before the role so a hang during startup is visible; `ready` follows below.
+  const { startRuntimeStatusPublisher } = await import('./services/runtime-status/publisher.service.js')
+  stopStatus = startRuntimeStatusPublisher()
   if (role === 'worker') {
     const { startWorker } = await import('./runtime/worker.js')
     stop = await startWorker()
@@ -45,6 +51,7 @@ try {
     server.listen(Number(process.env.PORT ?? 8081), '0.0.0.0', resolve)
   })
   ready = true
+  markProcessReady()
   clearTimeout(deadline)
   logger.info('Background service ready', { role })
 } catch (error) {
@@ -63,6 +70,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, async ()
   timeout.unref()
   try {
     await new Promise<void>(resolve => server.close(() => resolve()))
+    markProcessReady(false)
+    await stopStatus?.()
     await stop?.()
     await prisma.$disconnect()
     process.exit(0)

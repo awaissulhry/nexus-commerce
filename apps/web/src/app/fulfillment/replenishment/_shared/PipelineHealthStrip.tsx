@@ -17,7 +17,9 @@ interface PipelineHealth {
     'forecast' | 'forecast-accuracy' | 'abc-classification',
     {
       lastRun: { startedAt: string; finishedAt: string | null; status: string; outputSummary: string | null; triggeredBy: string } | null
-      enabledFlag: boolean
+      /** As the scheduler process sees it; null when the scheduler did not report (`unknown` says why). */
+      enabledFlag: boolean | null
+      unknown?: Array<{ reason: string }>
     }
   >
 }
@@ -143,17 +145,21 @@ export function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData?:
 
         {cronChips.map(({ key, labelKey }) => {
           const c = health.crons[key]
-          const tone: 'green' | 'amber' | 'red' | 'slate' = !c.enabledFlag ? 'slate'
+          const flagUnknown = c.enabledFlag === null || c.enabledFlag === undefined
+          const tone: 'green' | 'amber' | 'red' | 'slate' = c.enabledFlag === false ? 'slate'
             : c.lastRun?.status === 'SUCCESS' ? 'green'
             : c.lastRun?.status === 'FAILED'  ? 'red'
+            : flagUnknown ? 'slate'
             : 'amber'
           const detail = c.lastRun
             ? `${c.lastRun.status} · ${ageBadge(c.lastRun.startedAt).text}${c.lastRun.outputSummary ? ' · ' + c.lastRun.outputSummary : ''}`
+            : flagUnknown ? t('replenishment.pipeline.flagUnknown', { reason: c.unknown?.[0]?.reason ?? '—' })
             : c.enabledFlag ? t('replenishment.pipeline.noRuns') : t('replenishment.pipeline.disabled')
           return (
             <span key={key} className={cn('text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium', TONE_CLASSES[tone])}
               title={t('replenishment.pipeline.tooltip.cron', { name: key, detail })}>
-              {t(labelKey)}: {!c.enabledFlag ? t('replenishment.pipeline.cronOff') : c.lastRun?.status ?? '—'}
+              {t(labelKey)}: {c.enabledFlag === false ? t('replenishment.pipeline.cronOff')
+                : c.lastRun?.status ?? (flagUnknown ? t('replenishment.pipeline.cronUnknown') : '—')}
             </span>
           )
         })}

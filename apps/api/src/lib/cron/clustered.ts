@@ -62,11 +62,22 @@ export type ClusteredOptions = Parameters<typeof nodeCron.schedule>[2] & { lockT
 const registrationCounts = new Map<string, number>()
 const scheduledTasks = new Set<ScheduledTask>()
 const activeTicks = new Set<Promise<void>>()
+/** The module that registered each live schedule, without its .ts/.js extension (e.g. `jobs/auto-po-replenishment.job`). */
+const registeredModules = new Map<ScheduledTask, string>()
 
 export async function stopScheduledTasks(): Promise<void> {
   await Promise.all([...scheduledTasks].map(task => task.stop()))
   scheduledTasks.clear()
+  registeredModules.clear()
   await Promise.allSettled([...activeTicks])
+}
+
+/**
+ * Which modules have a schedule registered in THIS process. The scheduler publishes it (lib/runtime-status)
+ * so the API can say whether a cron is scheduled — the API registers none of them itself.
+ */
+export function registeredCronModules(): string[] {
+  return [...new Set(registeredModules.values())].sort()
 }
 
 /**
@@ -191,6 +202,7 @@ function schedule(
     options,
   )
   scheduledTasks.add(task)
+  registeredModules.set(task, file.replace(/\.(ts|js)$/, ''))
   return task
 }
 
