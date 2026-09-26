@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -82,7 +82,7 @@ drops. The Bash permission rule for docs/channel-connections/build/tools/prod-ce
 saved; do not ask again. The credential-source blocker is resolved: both preserved readers already
 reference /Users/awais/nexus-commerce/.env; the approved tool reads that existing file from the
 isolated cwd without editing/copying it or executing scripts in the shared tree. Config review
-APPROVE; census00:40:32Z shows332eBaylistings allIT,232followmaster, so no currency exception now.
+APPROVE; census00:40:32Z shows every eBay listing on IT (figures kept in the local evidence), so no currency exception now.
 Rerun before Package B ships; if any non-IT eBay listing then follows master price, ask me first.
 
 Historical source77 checkpoint (superseded by the latest checkpoint above): Package A merged the newest fetched published main
@@ -94,7 +94,7 @@ AAA106pairs/zero below7:1. Logs are in RELEASE-C9-C11F6C.md. recovery/cx-2026092
 has exact database parity, source APPROVE and full hook PASS: 33 DB; 11,792 API/340 existing skips;
 4,850 web/13; both builds;127 security;RBAC2727/0;309realPG/23suites/zero skips;
 profiles955files/41known217tests none worse. HTTP rehearsal passed00:12:13Z, jobs00:15:11Z on
-2026-09-25, source77/recoverya5: PG17.11/NOSUPERUSER,471→479exact8CX,a22 refuses exactly8,
+2026-09-25, source77/recoverya5: PG17.11/NOSUPERUSER, exactly 8 CX migrations added, a22 refuses exactly8,
 recovery-release-recovery200expectedbuilds,fullhistory/checksums/roles/objects unchanged;
 each jobs boot alive45s,initialized once,ebayProcessingEnabledfalse. No package/ref is pushed/deployed.
 Tools44604ff9d source/tool/docs reviews APPROVE; expanded29/29synthetic tests and39/39assertion-killed
@@ -102,7 +102,7 @@ mutations pass (13original+26additional),zero unresolved survivors. An initial r
 was killed after a precise wrong-count regression; evidence retained. Runtime guards restored
 byte-for-byte to44604ff9d. Final docs/tools commit hook and both
 exact-build rehearsals remain pending; application/database/hook/workflow trees still match source77. Public health was healthy200,
-build a22f2fc3, at 2026-09-24T23:49:30.532Z, with existing five quantity mismatches/critical Ads
+build a22f2fc3, at 2026-09-24T23:49:30.532Z, with existing quantity mismatches/critical Ads
 alerts. Railway CLI read fallback confirms base deployment 674bf97f-fd44-438d-b662-7348a810ccba
 SUCCESS at the same GitHub SHA; remote main rechecked unchanged at2026-09-25 00:15Z. Read current RELEASE-C9-C11F6C.md
 commands; old recovery branches are history only.

@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -251,7 +251,7 @@ Historical source checkpoint: release `77c787559` merges published main `a22f2fc
 `recovery/cx-20260925` is `38c99a7af` + that same published main + the exact release database tree
 and prescribed maintenance/concurrent-database test files. Release exact-head full hook passes;
 recovery database parity, source APPROVE and full hook pass. Source77/recoverya5 HTTP rehearsal
-passed at2026-09-25 00:12:13Z and jobs at00:15:11Z (471→479,exact8CX,base refuses,exact builds,
+passed at2026-09-25 00:12:13Z and jobs at00:15:11Z (exactly 8 CX migrations added, base refuses, exact builds,
 unchanged history/checksums/roles/objects; each jobs boot alive45s and processing held).
 The final docs/tools commit hook and both exact-build rehearsals remain pending; set
 `CX_RELEASE_SHA=<final-release-sha>` explicitly because defaults pin source77. No package or recovery

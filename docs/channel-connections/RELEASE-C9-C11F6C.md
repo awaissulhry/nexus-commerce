@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -80,18 +80,18 @@ separates them. No production write, vendor call, credential or environment chan
 
 | Aggregate | Corrected 00:40:32Z result |
 |---|---|
-| Migration history | 472 applied; zero unresolved; two historical rolled-back rows |
-| eBay listing market / master price | All 332 IT; 232 follow master price, 100 do not |
+| Migration history | Zero unresolved; historical rolled-back rows only |
+| eBay listing market / master price | All IT; some follow the master price, some do not (figures kept in the local evidence) |
 | Pending eBay prices | Zero |
-| Active eBay connections | Two; both have seller IDs and resolvable default warehouses |
+| Active eBay connections | All have seller IDs and resolvable default warehouses |
 | Recent eBay orders / seven-day notices | Zero / zero |
 | Finance duplicate groups | Zero |
-| Missing finance account attribution | 70 finance rows across 59 orders |
-| Recent Amazon orders without attribution | 39 |
-| Active Etsy connections | One; no new shop-route or Shopify ownership proof from this census |
+| Missing finance account attribution | Present (figures kept in the local evidence) |
+| Recent Amazon orders without attribution | Present (figures kept in the local evidence) |
+| Active Etsy connections | Present; no new shop-route or Shopify ownership proof from this census |
 
 The non-IT master-price exception is not triggered by this snapshot. Rerun the census before
-Package B shipping. The subsequent01:01:54Z census verified the exact active Etsy shop57783036→Motovento route and one connected Shopify; see the latest checkpoint and production-census-20260925-010154.json (kept locally; not in the public repo).
+Package B shipping. The subsequent01:01:54Z census verified the exact active Etsy shop57783036→Motovento route and the connected Shopify; see the latest checkpoint and production-census-20260925-010154.json (kept locally; not in the public repo).
 
 **Historical source checkpoint: source `77c787559` and recovery `a5efa0dd9` are independently reviewed, fully gated and
 locally rehearsed. Final docs/tools commit hook and exact-build rehearsals remain pending. No package
@@ -105,10 +105,10 @@ narrow scope confirmation before main push.** Follow
 | Base (published main, serving) | `a22f2fc361488c3620d6c8110344e8200c46ebb2` — public health HTTP 200/healthy/`a22f2fc3` at 2026-09-24T23:49:30.532Z |
 | Release code | `77c787559d95dc394df358a9fea7b10179b6d5a0` on `fix/channel-connections-20260922`, clean merge of the published base; docs/tools commits follow, with application/database/hook/workflow trees unchanged |
 | Recovery artifact | `a5efa0dd9` on `recovery/cx-20260925`: `38c99a7af` + the same published main + release database tree + prescribed maintenance/concurrent-database test files; database tree is byte-identical |
-| New migrations at startup | Rehearsed 471 → 479: exactly `20260923a..h_cx_*`, all additive; base includes main's later-named `20260924a_a53`. Production migration proof remains pending |
+| New migrations at startup | Rehearsed: exactly `20260923a..h_cx_*` added, all additive; base includes main's later-named `20260924a_a53`. Production migration proof remains pending |
 | Current proof | Source/recovery/tool/docs reviews APPROVE; source and recovery full hooks exit 0; HTTP/jobs rehearsals pass for source77/recoverya5. Final docs/tools commit hook and exact-build rehearsals pending |
 
-The public health response still reports five quantity mismatches and critical Ads integrity alerts.
+The public health response still reports quantity mismatches and critical Ads integrity alerts.
 It does not refresh private runtime, switch, migration or business-state evidence.
 A 2026-09-25 Railway CLI read (fallback because MCP is unavailable) confirms deployment
 `674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at GitHub SHA
@@ -230,8 +230,8 @@ Throwaway PostgreSQL 17.11 with a NOSUPERUSER owner; no production data or real 
 Evidence under `/private/tmp/cx-release-20260923/docs/channel-connections/build/evidence/`:
 `rehearsal-20260925-source-77c787559/` and `rehearsal-jobs-20260925-source-77c787559/`.
 
-1. Serving-base `a22` bootstrap has 471 finished history rows. Source77 applies exactly the eight
-   `20260923a..h_cx_*` migrations, producing 479 rows; no unfinished migrations.
+1. Serving-base `a22` bootstrap history is complete. Source77 applies exactly the eight
+   `20260923a..h_cx_*` migrations on top of it; no unfinished migrations.
 2. Negative control: `a22` refuses exactly those eight applied-but-missing migrations.
 3. Recovery → release → recovery each returns HTTP 200 with its expected exact build.
 4. Full migration history/checksums remain identical; maintenance roles, role attributes,
@@ -276,8 +276,8 @@ Logs under `/private/tmp/cx-completion-20260922`; new evidence must cover the cu
 This old `0a` proof is superseded by the source77/recoverya5 rehearsal above. Final-commit checks remain pending.
 
 `rehearsal/rehearsal.log` and `rehearsal-jobs/rehearsal-jobs.log`:
-1. Published `0a` bootstrap → 468 history rows; its gate passes.
-2. Release `migrate-direct` applies exactly `20260923a..h` → 476 rows, zero unfinished.
+1. Published `0a` bootstrap history is complete; its gate passes.
+2. Release `migrate-direct` applies exactly `20260923a..h` (eight more rows), zero unfinished.
 3. Negative control: `0a` then refuses ("8 migrations applied with no folder"), exit 1.
 4. Recovery boots on the migrated database: ready 200, build `fdd368e0`, "No pending migrations".
 5. Release boots on the same database: ready 200, build `d72abc2f`. Recovery boots again afterwards.
@@ -305,7 +305,7 @@ Held-processing behaviour itself is proven by the rollout (9) and processing (17
    CX_BASE_SHA=bc39f98d96ceaddcf0990cb9b9d5b29bc62c7f70 CX_RELEASE_SHA=<final-release-sha> CX_RECOVERY_SHA=34c376113380f4c803d4f91190f94c06126c56a2 bash docs/channel-connections/build/tools/rehearse-jobs.sh
    ```
 
-   Replace the release placeholder before execution. Expected history is473→481,
+   Replace the release placeholder before execution. Expected history: the base plus
    exactly eight CX additions after the published PCO baseline. Preserve earlier proof.
 3. Publish the already gated recovery SHA from the **clean final release checkout**,
    letting the unmodified push hook gate that final release HEAD:

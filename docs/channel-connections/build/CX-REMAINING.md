@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -1503,10 +1503,11 @@ New rehearsal has not run. Current serving baseline63 was confirmed ready/health
 Census configuration source review APPROVE; existing shared-root .env read from isolated cwd only.
 Approved read-only runs00:37:30Z/00:40:32Z; corrected final root-worktree evidence:
 docs/channel-connections/build/evidence/production-census-20260925-004032.json (kept locally; not in the public repo).
-472applied migrations,0unresolved,2historical rolledback (initial metric corrected).
-332eBaylistings allIT:232followmaster/100not,0pending prices;2activeconnections with seller IDs and
-resolvable warehouses;0recent eBayorders/7daynotices;0finance duplicate groups;
-70finance rows/59orders lack account and39recentAmazonorders unattributed. Active Etsy1;
+Zero unresolved migrations, historical rolled-back rows only (initial metric corrected).
+Every eBay listing IT (some follow master), no pending prices; the active connections have seller IDs
+and resolvable warehouses; no recent eBay orders or 7-day notices; no finance duplicate groups;
+some finance rows/orders lack an account and some recent Amazon orders are unattributed
+(measured; figures kept in the local evidence). Etsy active;
 route/Shopify aggregate additions under review, not run. No new ownership claim.
 Currency exception not triggered; rerun beforeBshipping. Consent-probe yes still required after
 concrete package gates/rehearsal; general deployment approval remains in force.
@@ -1533,7 +1534,7 @@ Log `/private/tmp/cx-recovery-20260923/package-a-recovery-gate-a5efa0dd9.log`; s
 `/private/tmp/cx-recovery-20260923/docs/channel-connections/build/evidence/recovery-a5efa0dd9/`.
 
 Source77/recoverya5 HTTP rehearsal PASS2026-09-25 00:12:13Z, jobs PASS00:15:11Z.
-Throwaway PG17.11/NOSUPERUSER:471→479exact8CX migrations; basea22 refuses exactly8;
+Throwaway PG17.11/NOSUPERUSER: exactly 8 CX migrations added; basea22 refuses exactly8;
 recovery-release-recoveryHTTP200expectedbuilds; fullhistory/checksums, maintenance roles/attrs,
 objects and pinned definers unchanged. Each jobs boot alive45s, initialized once,
 ebayProcessingEnabledfalse. Evidence under release helper docs/channel-connections/build/evidence/
@@ -1575,7 +1576,7 @@ automatic deploy gate; never weaken/skip it or re-request general deployment per
 
 Release code `d72abc2fd` (C9–C11f6c + test-support teardown fix). Recovery `fdd368e0c` on
 `recovery/cx-20260923`: exactly 38c99a7af application code; `packages/database` byte-identical to
-the release (476 migration folders, `20260923a..h` sha256 equal); one test line taken from the
+the release (same migration folders, `20260923a..h` sha256 equal); one test line taken from the
 release (maintenance suite pins the fixed `search_path`); the teardown fix cherry-picked.
 
 Gate history (all retained): first run failed one guard test because the clean worktree had no
@@ -1590,6 +1591,6 @@ worker. Reproduced in a throwaway container (`realpg-autovacuum-teardown-proof.l
 Rehearsal (`rehearsal/`, `rehearsal-jobs/`): first attempt booted from the wrong working directory
 (the shared tree); its migrate gate refused immediately, nothing was applied or started and the
 shared tree was unchanged (the scripts that ran there only read files). Corrected run: 0a bootstrap
-468 → release applies `20260923a..h` → 0a refuses → recovery, release, recovery all ready 200 with
+→ release applies `20260923a..h` → 0a refuses → recovery, release, recovery all ready 200 with
 their exact builds; checksums and objects unchanged; background-jobs-on boots initialize with
 processing held.

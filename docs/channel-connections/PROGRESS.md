@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -89,7 +89,7 @@ grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
 
 - **Published/serving baseline:** fetched main `a22f2fc361488c3620d6c8110344e8200c46ebb2`;
   public health HTTP 200/healthy/build `a22f2fc3` at **2026-09-24T23:49:30.532Z**.
-  Five quantity mismatches and critical Ads integrity alerts remain. This public read
+  Quantity mismatches and critical Ads integrity alerts remain. This public read
   does not refresh private business, migration, runtime or switch evidence.
   A 2026-09-25 Railway CLI read (MCP unavailable) confirms base deployment
   `674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at the same GitHub SHA; remote main
@@ -111,7 +111,7 @@ grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
   Earlier recovery branches are historical only.
 - **Source rehearsal passed:** HTTP at **2026-09-25 00:12:13Z**, jobs at **00:15:11Z**,
   for source `77c787559` / recovery `a5efa0dd9`, PostgreSQL 17.11, NOSUPERUSER owner.
-  History 471 → 479, exactly eight CX migrations; `a22` refuses those exact eight;
+  History grows by exactly eight CX migrations; `a22` refuses those exact eight;
   recovery → release → recovery returns 200 with exact builds, unchanged full history,
   checksums, roles/attributes/objects and pinned definers. Each jobs boot stays alive
   45 seconds, initializes once and reports `ebayProcessingEnabled:false`.

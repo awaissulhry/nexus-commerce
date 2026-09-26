@@ -26,7 +26,7 @@ Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
 `package-a-3be0a62e1/` and `recovery-34c376113/`.
 
 HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
-bootstrap→release adds exactly eight CX migrations (**473→481**); old base refuses;
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
 recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
 migration history/checksums and role/object invariants. Jobs initialized with processing
 held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
@@ -34,14 +34,14 @@ Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the sou
 pre-checkout pass are preserved but are not substituted for the clean3be gate.
 
 Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
-473 applied migrations, zero unresolved failures, two rolled-back historical rows; all332
-eBay listings IT (232 follow master), two active sellers with default warehouses; no v0
-finance duplicates, **73 finance rows/62 orders unattributed**,39 recent Amazon orders
-unattributed; exact Etsy shop57783036 active Motovento route; one active connected Shopify.
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
 No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
 shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
 with positive DB-source match. Refresh before publication; no newer switch verification is
-claimed. Public health at06:54:44Z reported15 quantity mismatches and existing critical Ads
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
 findings; healthy readiness is not a blanket operational verdict.
 
 Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
@@ -80,7 +80,7 @@ grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
 
 - **Published/serving baseline:** fetched main `a22f2fc361488c3620d6c8110344e8200c46ebb2`;
   public health HTTP 200/healthy/build `a22f2fc3` at **2026-09-24T23:49:30.532Z**.
-  Five quantity mismatches and critical Ads integrity alerts remain. This public read
+  Quantity mismatches and critical Ads integrity alerts remain. This public read
   does not refresh private business, migration, runtime or switch evidence.
   A 2026-09-25 Railway CLI read (MCP unavailable) confirms base deployment
   `674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at the same GitHub SHA; remote main
@@ -102,7 +102,7 @@ grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
   Earlier recovery branches are historical only.
 - **Source rehearsal passed:** HTTP at **2026-09-25 00:12:13Z**, jobs at **00:15:11Z**,
   for source `77c787559` / recovery `a5efa0dd9`, PostgreSQL 17.11, NOSUPERUSER owner.
-  History 471 → 479, exactly eight CX migrations; `a22` refuses those exact eight;
+  History grows by exactly eight CX migrations; `a22` refuses those exact eight;
   recovery → release → recovery returns 200 with exact builds, unchanged full history,
   checksums, roles/attributes/objects and pinned definers. Each jobs boot stays alive
   45 seconds, initializes once and reports `ebayProcessingEnabled:false`.
@@ -215,11 +215,11 @@ proof remains dated. New continuation slices are still unpushed/undeployed.
 | P4.1 | Per-channel publish lanes; build/P4.1.md | Baseline | Per-operation live publication proof incomplete | Keep previews, account policy and Presence boundaries | Live publish approval |
 | P4.2 | Image gateway/readback; build/P4.2.md | Baseline | Sweep historically on; positive-count proof required | Read current sweep counts/issues, preserve channels out of scope | Observation/live calls |
 | P4.3 | Baseline stock guards; local order-writer and Etsy holds lanes await re-review/integration | Baseline only | S1 hold on paid/deduct on shipment and H1 from activation are decided; new ingest OFF | Integrate lanes together; stock concurrency/pool/hold/cancel proof; Phase 3 retry parity | Package B/C + separate activation |
-| P4.4 | eBay price read-back lane `915b0b4fa` implemented locally, final re-review pending | Baseline partial; lane unmerged | No new vendor read proof; 00:40:32Z census:332IT listings/232followmaster, no non-IT exception | Rerun census before Package B; ask Owner if any non-IT listing then follows master price; Phase 3 variation confirmation/quantity offers lookup | Census + conditional currency approval + live read proof |
+| P4.4 | eBay price read-back lane `915b0b4fa` implemented locally, final re-review pending | Baseline partial; lane unmerged | No new vendor read proof; 00:40:32Z census: every listing IT (figures kept in the local evidence), no non-IT exception | Rerun census before Package B; ask Owner if any non-IT listing then follows master price; Phase 3 variation confirmation/quantity offers lookup | Census + conditional currency approval + live read proof |
 | P4.5 | Regional Ads discovery/disconnect/expiry; build/P4.5a-h.md | Baseline partial | No reconnect needed; Manual Collection wire value unresolved | Verify daily region repair and accepted SB contract | No reconnect; live probe only approved |
 | P4.6 | Baseline writers; Etsy lane cf032a270 adds listing freshness stamps/read-error wording locally | Baseline partial; lane unmerged | Mode not freshly verified; zero stored listings is dated evidence | Re-review/integrate Package B; demonstrate supported writes | First write/mode approval |
 | P5.1 | Orders 2026 adapter + quantity-4 live money proof; build/P5.1.md | Baseline | Enablement still gated | Set switch only approved; production quantities/totals/pagination verify | Production config approval |
-| P5.2 | C4 containment deployed; lane 509d8af99 implements finance identity/single-writer/attribution locally, re-review pending | C4 deployed 439d9e3d3; lane unmerged | v0 retained; new-API writer held; 00:40:32Z census:zero duplicate groups,70finance rows/59orders lack account,39recentAmazonorders unattributed | Re-review/integrate Package B; Phase 4 corrected dry run, attribution backfill and boundary flip | Separate dry-run/backfill/cutover approval |
+| P5.2 | C4 containment deployed; lane 509d8af99 implements finance identity/single-writer/attribution locally, re-review pending | C4 deployed 439d9e3d3; lane unmerged | v0 retained; new-API writer held; 00:40:32Z census: zero duplicate groups; unattributed finance rows/orders and recent Amazon orders present (figures kept in the local evidence) | Re-review/integrate Package B; Phase 4 corrected dry run, attribution backfill and boundary flip | Separate dry-run/backfill/cutover approval |
 | P5.3 | One Shopify version accessor; build/P5.3.md | Baseline | 2026-07 historical traffic; preserve connected store | Quarterly version maintenance remains operational | None current scope |
 | P5.4 | No buyer-PII/RDT path; build/P5.4.md | Baseline | Historical 4,464 order census; privacy ratchet | Keep data-minimization choice; no RDT invented | None |
 | P5.5 | Search Returns not on official decommission list | Not required | Supported read retained | No speculative replacement | None |
