@@ -107,11 +107,16 @@ describe.skipIf(!concurrentDatabaseUrl())('inbound receipt identity in real Post
       .toEqual([{ eventType: 'ORDER_CONFIRMATION', signatureOk: true, verifiedBy: 'ebay_ecdsa', deliveries: 1 }])
   })
 
-  it('treats null ownership and unsigned transport evidence as explicit identity values', async () => {
+  it('binds an unrouted receipt to the first account that arrives, and treats unsigned transport evidence as identity', async () => {
     const unbound = { ...receipt(), connectionId: null }
     const first = await inProfile(OWNER, () => recordInbound(unbound))
     expect(await inProfile(OWNER, () => recordInbound(unbound))).toMatchObject({ id: first.id, duplicate: true })
-    expect(await inProfile(OWNER, () => recordInbound({ ...unbound, connectionId: 'seller-a' })))
+    // A delivery recorded before its account had a route is the same delivery once it has one.
+    expect(await inProfile(OWNER, () => recordInbound({ ...unbound, connectionId: 'seller-a' }))).toMatchObject({ id: first.id, duplicate: true })
+    expect((await database.pool.query('SELECT "connectionId",deliveries FROM "WebhookEvent" WHERE id=$1', [first.id])).rows)
+      .toEqual([{ connectionId: 'seller-a', deliveries: 3 }])
+    // Bound: an account that cannot be shown to be the same is refused.
+    expect(await inProfile(OWNER, () => recordInbound({ ...unbound, connectionId: 'seller-b' })))
       .toMatchObject({ id: null, conflict: 'identity_mismatch' })
     const unsigned = { ...receipt(), channel: 'AMAZON', signatureOk: null, verifiedBy: 'sqs_iam' as const }
     const trusted = await inProfile(OWNER, () => recordInbound(unsigned))

@@ -16,7 +16,7 @@ import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.se
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { WebhookValidator, registerRawJsonParser } from "../utils/webhook.js";
-import { recordInbound } from "../services/cx/ingress/ledger.js";
+import { inboundNotRecorded, recordInbound } from "../services/cx/ingress/ledger.js";
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js';
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from "../lib/workspace-ingress.js";
 import { inboundHandlerFor } from "../services/cx/ingress/handlers.js";
@@ -1144,7 +1144,10 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
               providerTimestamp: parseShopifyTriggeredAt(request), status: "pending",
               headers: request.headers,
             });
-            if (!written.id) return reply.status(503).send({ success: false, error: 'The inbound ledger is unavailable.' });
+            if (!written.id) {
+              logger.error(`[ShopifyWebhooks] webhook not acked: ${inboundNotRecorded(written)}`, { eventType });
+              return reply.status(503).send({ success: false, error: `Not recorded: ${inboundNotRecorded(written)}.` });
+            }
             if (written.duplicate && written.existingStatus === 'done') return reply.send({ success: true });
             const claim = await claimInbound(written.id);
             if (!claim) return reply.send({ success: true, queued: true });
@@ -1202,8 +1205,8 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
         // event nothing recorded and nothing handled; a 503 keeps it on Shopify's
         // retry schedule. Same rule the Amazon poller follows: ledger first.
         if (!written.id) {
-          logger.error("[ShopifyWebhooks] inbound ledger unavailable — webhook not acked", { eventType, deliveryId });
-          return reply.status(503).send({ success: false, error: "The inbound ledger is unavailable." });
+          logger.error(`[ShopifyWebhooks] webhook not acked: ${inboundNotRecorded(written)}`, { eventType, deliveryId });
+          return reply.status(503).send({ success: false, error: `Not recorded: ${inboundNotRecorded(written)}.` });
         }
 
         // Only a FINISHED event is a duplicate worth short-circuiting. Shopify resends

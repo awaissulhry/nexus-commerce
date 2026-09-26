@@ -102,6 +102,13 @@ export interface InboundWriteResult {
   existingStatus?: InboundStatus
 }
 
+/** A receiver's words for a write that returned no receipt: an identity refusal is not an outage. */
+export function inboundNotRecorded(result: Pick<InboundWriteResult, 'conflict'>): string {
+  return result.conflict === 'identity_mismatch'
+    ? 'the delivery ID is already bound to another account, event type or trust verdict'
+    : 'the inbound ledger is unavailable'
+}
+
 export function digestOf(body: Buffer | string | null | undefined): string | null {
   if (body === null || body === undefined) return null
   return crypto.createHash('sha256').update(body).digest('hex')
@@ -131,7 +138,24 @@ export async function recordInboundInTx(tx: Prisma.TransactionClient, rec: Inbou
   return persistInbound(tx, rec, history)
 }
 
-async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' | '$queryRaw'>, rec: InboundRecord,
+type LedgerClient = Pick<Prisma.TransactionClient, 'webhookEvent' | 'channelConnection' | '$queryRaw'>
+
+/**
+ * Is an arrival under `next` the same delivery as the one stored under `stored`? The account
+ * is the identity, not the connection row: a delivery recorded before its shop had a route
+ * (NULL) or under an earlier row of the same account (disconnect, then a fresh Connect) is the
+ * same delivery, and binds to the arriving row. An arrival with no route keeps the stored
+ * binding. Two rows that cannot be shown to be one account are different identities.
+ */
+async function redeliveryBinding(db: LedgerClient, stored: string | null, next: string | null): Promise<'keep' | 'bind' | 'mismatch'> {
+  if (stored === next || next === null) return 'keep'
+  if (stored === null) return 'bind'
+  const rows = await db.channelConnection.findMany({ where: { id: { in: [stored, next] } }, select: { id: true, channelType: true, externalAccountId: true } })
+  const [a, b] = [rows.find(row => row.id === stored), rows.find(row => row.id === next)]
+  return a && b && a.channelType === b.channelType && a.externalAccountId && a.externalAccountId === b.externalAccountId ? 'bind' : 'mismatch'
+}
+
+async function persistInbound(db: LedgerClient, rec: InboundRecord,
   history?: { receivedAt: Date; deliveries: number },
 ): Promise<InboundWriteResult> {
   const payloadDigest = digestOf(rec.rawBody ?? null)
@@ -186,24 +210,34 @@ async function persistInbound(db: Pick<Prisma.TransactionClient, 'webhookEvent' 
     })
     if (inserted.count === 1) return { id, duplicate: false }
 
-    try {
-      const existing = await db.webhookEvent.update({
-        where: {
-          channel_externalId: workspaceKey({ channel: rec.channel, externalId }),
-          eventType: rec.eventType,
-          connectionId: rec.connectionId ?? null,
-          signatureOk: rec.signatureOk,
-          verifiedBy: rec.verifiedBy,
-        },
-        data: { deliveries: { increment: history?.deliveries ?? 1 } },
-        select: { id: true, status: true },
-      })
-      return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
-    } catch (err) {
-      if ((err as { code?: string })?.code !== 'P2025') throw err
-      logger.warn('[cx-ingress] delivery identity conflicts with its stored receipt', { channel: rec.channel, eventType: rec.eventType })
-      return { id: null, duplicate: true, conflict: 'identity_mismatch' }
+    // A redelivery. Event type and trust verdict must match exactly; the account is compared as
+    // an identity (redeliveryBinding). The UPDATE is conditional on the connection read, so of
+    // concurrent redeliveries one binds and the rest are re-evaluated against that binding.
+    const key = workspaceKey({ channel: rec.channel, externalId })
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const stored = await db.webhookEvent.findUnique({ where: { channel_externalId: key },
+        select: { id: true, status: true, eventType: true, connectionId: true, signatureOk: true, verifiedBy: true } })
+      if (!stored) break
+      const binding = stored.eventType === rec.eventType && stored.signatureOk === rec.signatureOk && stored.verifiedBy === (rec.verifiedBy ?? null)
+        ? await redeliveryBinding(db, stored.connectionId, rec.connectionId ?? null)
+        : 'mismatch'
+      if (binding === 'mismatch') {
+        logger.warn('[cx-ingress] delivery identity conflicts with its stored receipt', { channel: rec.channel, eventType: rec.eventType })
+        return { id: null, duplicate: true, conflict: 'identity_mismatch' }
+      }
+      try {
+        const existing = await db.webhookEvent.update({
+          where: { channel_externalId: key, eventType: rec.eventType, signatureOk: rec.signatureOk, verifiedBy: rec.verifiedBy, connectionId: stored.connectionId },
+          data: { deliveries: { increment: history?.deliveries ?? 1 }, ...(binding === 'bind' ? { connectionId: rec.connectionId ?? null } : {}) },
+          select: { id: true, status: true },
+        })
+        return { id: existing.id, duplicate: true, existingStatus: existing.status as InboundStatus }
+      } catch (err) {
+        if ((err as { code?: string })?.code !== 'P2025') throw err
+        // The stored binding changed since it was read: evaluate the arrival against the new one.
+      }
     }
+    return { id: null, duplicate: false }
   } catch (err) {
     const code = (err as { code?: unknown })?.code
     logger.error('[cx-ingress] could not record an inbound event', {

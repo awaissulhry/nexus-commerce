@@ -20,7 +20,7 @@ import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { archiveCompletedInbound } from '../services/cx/ingress/archive.js'
+import { archiveCompletedInbound, scrubExpiredInbound } from '../services/cx/ingress/archive.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -34,6 +34,8 @@ interface SweepSummary {
   archivedByKey: Record<string, number>
   totalArchived: number
   archiveLimitReached: boolean
+  scrubbedByKey: Record<string, number>
+  scrubLimitReached: boolean
 }
 
 /**
@@ -81,6 +83,8 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
     archivedByKey: {},
     totalArchived: 0,
     archiveLimitReached: false,
+    scrubbedByKey: {},
+    scrubLimitReached: false,
   }
   if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0') {
     lastRunAt = new Date()
@@ -112,6 +116,14 @@ export async function runRetentionSweepOnce(): Promise<SweepSummary> {
       summary.archiveLimitReached = result.limitReached
     } catch {
       summary.skippedKeys.push('webhookEvents (archive unavailable; history retained)')
+    }
+    // Bounded retention of the personal data in retained rows (rawBody, payload, headers).
+    try {
+      const scrub = await scrubExpiredInbound(inboundDays)
+      summary.scrubbedByKey.webhookEvents = scrub.scrubbed
+      summary.scrubLimitReached = scrub.limitReached
+    } catch {
+      summary.skippedKeys.push('webhookEvents (payload expiry unavailable; retried next run)')
     }
   } else summary.skippedKeys.push('webhookEvents (no valid archive policy)')
 
@@ -163,7 +175,7 @@ export function startRetentionSweepCron(): void {
     if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0') return
     await recordCronRun('retention-sweep', async () => {
       const r = await runRetentionSweepOnce()
-      return `keys=${r.scannedKeys} deleted=${r.totalDeleted} archived=${r.totalArchived} archiveLimitReached=${r.archiveLimitReached} skipped=${r.skippedKeys.length}`
+      return `keys=${r.scannedKeys} deleted=${r.totalDeleted} archived=${r.totalArchived} archiveLimitReached=${r.archiveLimitReached} scrubbed=${r.scrubbedByKey.webhookEvents ?? 0} scrubLimitReached=${r.scrubLimitReached} skipped=${r.skippedKeys.length}`
     }).catch((err) => {
       logger.error('retention-sweep: top-level failure', {
         error: err instanceof Error ? err.message : String(err),

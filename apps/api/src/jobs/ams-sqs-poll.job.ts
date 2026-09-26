@@ -12,7 +12,7 @@
 
 import cron, { schedulePlatform } from '../lib/cron/clustered.js'
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
-import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { completeInbound, inboundNotRecorded, recordInbound } from '../services/cx/ingress/ledger.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { isAmsSqsConfigured, pollAmsRaw, deleteAmsMessage, parseAmsBody } from '../services/ams-sqs.service.js'
@@ -78,7 +78,7 @@ export async function runAmsSqsPoll(): Promise<void> {
               // tell a redelivery from a new message, and with an incrementing write
               // that is the one situation where guessing is expensive. Leave it on the
               // queue.
-              logger.error('[ams-sqs-poll] inbound ledger unavailable — message retained', { messageId: msg.messageId })
+              logger.error(`[ams-sqs-poll] message retained: ${inboundNotRecorded(seen)}`, { messageId: msg.messageId })
               failed += 1
               continue
             }

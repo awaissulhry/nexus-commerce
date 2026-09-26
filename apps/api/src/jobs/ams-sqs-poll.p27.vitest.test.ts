@@ -29,6 +29,7 @@ vi.mock('../services/ams-sqs.service.js', () => ({
 vi.mock('../services/cx/ingress/ledger.js', () => ({
   recordInbound: async (rec: any) => { recorded.push(rec); return nextWrite },
   completeInbound: async (id: any, ok: boolean, error?: string) => { completed.push({ id, ok, error }) },
+  inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
 }))
 vi.mock('../lib/workspace-ingress.js', () => ({
   legacyIngress: (work: any) => work(),

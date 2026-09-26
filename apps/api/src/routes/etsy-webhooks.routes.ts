@@ -22,7 +22,7 @@ import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
 import { verifyStandardWebhook } from '../services/cx/ingress/standard-webhooks.js'
-import { recordInbound } from '../services/cx/ingress/ledger.js'
+import { recordInbound, inboundNotRecorded } from '../services/cx/ingress/ledger.js'
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 
@@ -183,8 +183,8 @@ export default async function etsyWebhookRoutes(app: FastifyInstance): Promise<v
         headers: request.headers,
       })
       if (!written.id) {
-        logger.error('[etsy-webhooks] inbound ledger unavailable — not acked', { eventType })
-        return reply.status(503).send({ error: 'The inbound ledger is unavailable.' })
+        logger.error(`[etsy-webhooks] not acked: ${inboundNotRecorded(written)}`, { eventType })
+        return reply.status(503).send({ error: `Not recorded: ${inboundNotRecorded(written)}.` })
       }
       if (written.duplicate && written.existingStatus === 'done') {
         return reply.send({ success: true, message: 'Already processed' })

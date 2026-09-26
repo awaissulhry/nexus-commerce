@@ -21,7 +21,7 @@ import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import prisma from '../db.js'
-import { completeInbound, recordInbound } from '../services/cx/ingress/ledger.js'
+import { completeInbound, inboundNotRecorded, recordInbound } from '../services/cx/ingress/ledger.js'
 import { LEGACY_WORKSPACE_ID } from '../lib/workspace-context.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -82,6 +82,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
         // notification) so /api/admin/push-latency can compute the
         // (ingestedAt - providerTimestamp) percentile per source.
         let webhookEventId: string | null = null
+        let notRecorded = inboundNotRecorded({})
         {
           const raw = msg.rawPayload as any
           const eventTimeRaw =
@@ -121,6 +122,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
               status: 'pending',
             })
             webhookEventId = written.id
+            notRecorded = inboundNotRecorded(written)
           } catch {
             webhookEventId = null
           }
@@ -128,7 +130,7 @@ export async function handleSqsMessage(message: SqsOrderMessage, tally: { proces
         // P0.6 — ledger first. Without a row, nothing is handled and nothing is deleted: the message
         // stays on the queue and comes back after its visibility timeout.
         if (!webhookEventId) {
-          logger.error('[SQS poll] inbound ledger unavailable — message retained for retry', { messageId: msg.messageId, type: msg.notificationType })
+          logger.error(`[SQS poll] message retained for retry: ${notRecorded}`, { messageId: msg.messageId, type: msg.notificationType })
           tally.skipped++
           continue
         }
@@ -585,7 +587,7 @@ async function handleCredentialOnNotificationsQueue(message: SqsOrderMessage, ta
     status: 'pending',
   }))
   if (!written.id) {
-    logger.error('[SQS poll] inbound ledger unavailable — credential notification retained', { messageId: message.messageId })
+    logger.error(`[SQS poll] credential notification retained: ${inboundNotRecorded(written)}`, { messageId: message.messageId })
     tally.skipped++
     return
   }

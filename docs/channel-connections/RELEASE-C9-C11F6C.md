@@ -170,10 +170,12 @@ verified eBay receipts (`ebay_ecdsa`) are leased only by `ebay-claims.ts`; every
 - **Writers:** `completeInbound`, `deadLetterInbound` and `replayInbound` keep both guards (`channel <> 'EBAY'` or
   the eBay path, and `processingToken IS NULL`). Manual replay sends eBay to its processor before the generic claim.
 - **Retention:** `WebhookEvent` is archived, never deleted; archive eligibility also requires no processing claim.
-  #4's `deleteMany` of webhook rows is removed (the DELETE trigger would refuse it). Rejected and stranded rows are
-  therefore retained, not expired: a growth follow-up for the Owner, not a deletion.
-- **Receipt identity:** Package A's rule is kept: a delivery ID bound to another account or trust verdict is refused
-  (`identity_mismatch`), where #4 counted it as a redelivery. Review point: a reconnected Shopify shop's retries.
+  Personal data expires by UPDATE (`rawBody`/`payload`/`verificationHeaders` cleared, metadata kept) on untrusted and
+  archived rows after #4's window (policy `webhookEvents` days on `createdAt`), in bounded batches in the scheduler's
+  retention job; leased, claimed, scheduled, verified-unarchived and quarantine-linked rows are never touched.
+- **Receipt identity:** the account is the identity, not the connection row: an unrouted (NULL) or same-account
+  receipt binds to the arriving connection (conditional update, binds once); a different account is refused and
+  receivers name it as such, not as a ledger outage.
 - **Processes:** eBay processing runs inside inbound-retry in the **worker**; archival runs in the retention sweep in
   the **scheduler**; the receiver and sealing run in the **API**. Set `NEXUS_ENABLE_EBAY_INBOUND_PROCESSING`
   identically on all three services (unset/`0` now). Package A's suites pass under the restricted runtime login.
