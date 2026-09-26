@@ -116,3 +116,96 @@ export const EBAY_WORKBOOK_COLUMNS = {
   /** Delete-like lifecycle words in the `Action` column, in the languages our workbooks use. */
   deleteActionPattern: '^(end|delete|withdraw|chiudi|termina|elimina|beenden|löschen|loschen|supprimer|terminer|retirer|finalizar|eliminar|retirar)\\b',
 } as const
+
+/**
+ * NCF (`docs/studies/native-channel-files.md` §2, §7) — Shopify's own product CSV (admin → Products → Export).
+ *
+ * `header` is the CLASSIC name Shopify's export writes today — measured on the Owner's file (2026-09-26: 77 columns,
+ * `Handle`, `Body (HTML)`, `Variant SKU`, `Variant Barcodes` …); the export writes these. `aliases` are the newer names
+ * of Shopify's help-page sample (§2.1, S4 — not measured on a real export); the reader accepts both.
+ * `role` is what the column is to Nexus; `field` the Shopify spec field a mapped column carries
+ * (`pim/channel-specs/store.ts`, keys as `shopifyMappingFieldKey`); `level` says whether Shopify reads it from the first
+ * row of a product (`product`) or from every variant row (`variant`). Headers are case-sensitive (S2).
+ * Plain values only.
+ */
+export type ShopifyCsvRole =
+  | 'handle' // the product's identity; groups its rows
+  | 'sku' // the variant's identity
+  | 'field' // a Shopify field Nexus carries (`field`)
+  | 'price' | 'compareAt' // the one price door, record-only on import
+  | 'option' // variant structure: never imported, always exported as Shopify holds it
+  | 'lifecycle' // Status / Published: never imported
+  | 'stock' // inventory: never imported, never exported
+  | 'media' // pictures: Shopify keeps its media
+  | 'cost' // product cost: Nexus pricing owns it
+  | 'ignored' // a column Nexus does not carry
+export interface ShopifyCsvColumn { header: string; aliases: readonly string[]; role: ShopifyCsvRole; level: 'product' | 'variant' | 'image'; field?: string; reason?: string }
+
+/**
+ * NCF — measured 2026-09-26: Nexus's Shopify `weight` field cannot take a value through a transfer. Its spec checks the
+ * unit against `g, kg, oz, lb` (`channel-specs/store.ts`) while Shopify's own rule for the same field demands `GRAMS,
+ * KILOGRAMS, OUNCES, POUNDS` (`nativeFieldValueError`), so every value fails one of the two. Until that is settled the
+ * weight columns are left to Shopify.
+ */
+const WEIGHT = 'Weight is not carried by a file yet: Nexus’s Shopify weight field checks two unit vocabularies that disagree (g/kg/oz/lb and GRAMS/KILOGRAMS/…). Shopify keeps its weight; edit it in the Shopify tab.'
+
+export const SHOPIFY_CSV_COLUMNS = {
+  columns: [
+    { header: 'Handle', aliases: ['URL handle'], role: 'handle', level: 'product' },
+    { header: 'Title', aliases: [], role: 'field', level: 'product', field: 'title' },
+    { header: 'Body (HTML)', aliases: ['Description'], role: 'field', level: 'product', field: 'descriptionHtml' },
+    { header: 'Vendor', aliases: [], role: 'field', level: 'product', field: 'vendor' },
+    { header: 'Product Category', aliases: ['Product category'], role: 'field', level: 'product', field: 'category' },
+    { header: 'Type', aliases: [], role: 'field', level: 'product', field: 'productType' },
+    { header: 'Tags', aliases: [], role: 'field', level: 'product', field: 'tags' },
+    { header: 'Published', aliases: ['Published on online store'], role: 'lifecycle', level: 'product' },
+    { header: 'Option1 Name', aliases: ['Option1 name'], role: 'option', level: 'product' },
+    { header: 'Option1 Value', aliases: ['Option1 value'], role: 'option', level: 'variant' },
+    { header: 'Option1 Linked To', aliases: ['Option1 linked to'], role: 'option', level: 'product' },
+    { header: 'Option2 Name', aliases: ['Option2 name'], role: 'option', level: 'product' },
+    { header: 'Option2 Value', aliases: ['Option2 value'], role: 'option', level: 'variant' },
+    { header: 'Option2 Linked To', aliases: ['Option2 linked to'], role: 'option', level: 'product' },
+    { header: 'Option3 Name', aliases: ['Option3 name'], role: 'option', level: 'product' },
+    { header: 'Option3 Value', aliases: ['Option3 value'], role: 'option', level: 'variant' },
+    { header: 'Option3 Linked To', aliases: ['Option3 linked to'], role: 'option', level: 'product' },
+    { header: 'Variant SKU', aliases: ['SKU'], role: 'sku', level: 'variant' },
+    { header: 'Variant Grams', aliases: ['Weight value (grams)'], role: 'ignored', level: 'variant', reason: WEIGHT },
+    { header: 'Variant Inventory Tracker', aliases: ['Inventory tracker'], role: 'stock', level: 'variant' },
+    { header: 'Variant Inventory Qty', aliases: ['Inventory quantity'], role: 'stock', level: 'variant' },
+    { header: 'Variant Inventory Policy', aliases: ['Continue selling when out of stock'], role: 'field', level: 'variant', field: 'inventoryPolicy' },
+    { header: 'Variant Fulfillment Service', aliases: ['Fulfillment service'], role: 'stock', level: 'variant' },
+    { header: 'Variant Price', aliases: ['Price'], role: 'price', level: 'variant' },
+    { header: 'Variant Compare At Price', aliases: ['Compare-at price'], role: 'compareAt', level: 'variant' },
+    { header: 'Variant Requires Shipping', aliases: ['Requires shipping'], role: 'field', level: 'variant', field: 'requiresShipping' },
+    { header: 'Variant Taxable', aliases: ['Charge tax'], role: 'field', level: 'variant', field: 'taxable' },
+    { header: 'Unit Price Total Measure', aliases: ['Unit price total measure'], role: 'ignored', level: 'variant', reason: 'Unit prices are not carried by Nexus; Shopify keeps its own.' },
+    { header: 'Unit Price Total Measure Unit', aliases: ['Unit price total measure unit'], role: 'ignored', level: 'variant', reason: 'Unit prices are not carried by Nexus; Shopify keeps its own.' },
+    { header: 'Unit Price Base Measure', aliases: ['Unit price base measure'], role: 'ignored', level: 'variant', reason: 'Unit prices are not carried by Nexus; Shopify keeps its own.' },
+    { header: 'Unit Price Base Measure Unit', aliases: ['Unit price base measure unit'], role: 'ignored', level: 'variant', reason: 'Unit prices are not carried by Nexus; Shopify keeps its own.' },
+    { header: 'Variant Barcodes', aliases: ['Variant Barcode', 'Barcodes', 'Barcode'], role: 'field', level: 'variant', field: 'barcode' },
+    { header: 'Image Src', aliases: ['Product image URL'], role: 'media', level: 'image' },
+    { header: 'Image Position', aliases: ['Image position'], role: 'media', level: 'image' },
+    { header: 'Image Alt Text', aliases: ['Image alt text'], role: 'media', level: 'image' },
+    { header: 'Gift Card', aliases: ['Gift card'], role: 'ignored', level: 'product', reason: 'Gift cards are not sold through Nexus; Shopify keeps the setting.' },
+    { header: 'SEO Title', aliases: ['SEO title'], role: 'field', level: 'product', field: 'seo_title' },
+    { header: 'SEO Description', aliases: ['SEO description'], role: 'field', level: 'product', field: 'seo_description' },
+    { header: 'Variant Image', aliases: ['Variant image URL'], role: 'media', level: 'variant' },
+    { header: 'Variant Weight Unit', aliases: ['Weight unit for display'], role: 'ignored', level: 'variant', reason: WEIGHT },
+    { header: 'Variant Tax Code', aliases: ['Tax code'], role: 'ignored', level: 'variant', reason: 'Shopify tax codes are not carried by Nexus; Shopify keeps its own.' },
+    { header: 'Cost per item', aliases: [], role: 'cost', level: 'variant' },
+    { header: 'Status', aliases: [], role: 'lifecycle', level: 'product' },
+    { header: 'Collection', aliases: [], role: 'ignored', level: 'product', reason: 'Collections are managed in Shopify, not by the product file.' },
+  ] as readonly ShopifyCsvColumn[],
+  /** Shopify's Google Shopping app columns and its per-market columns: not carried by Nexus. */
+  ignoredPatterns: [
+    { pattern: '^Google Shopping / ', level: 'product', reason: 'Google Shopping app columns are not carried by Nexus; Shopify keeps them.' },
+    { pattern: '^(Included|Price|Compare-at price|Compare At Price) / ', level: 'variant', reason: 'Market prices and market inclusion are managed in Shopify Markets, not by Nexus.' },
+  ] as readonly { pattern: string; level: ShopifyCsvColumn['level']; reason: string }[],
+  /** The headers that make a CSV Shopify's product file (any spelling in the list). */
+  identity: { handle: ['Handle', 'URL handle'], title: ['Title'], variant: ['Variant SKU', 'SKU', 'Option1 Name', 'Option1 name'],
+    product: ['Body (HTML)', 'Description', 'Variant Price', 'Price', 'Vendor'] },
+  /** Shopify's inventory export (quantities by location): refused, stock is never imported from a file. */
+  inventoryHeaders: ['Location', 'On hand', 'On hand (current)', 'On hand (new)', 'Available', 'Available (not editable)', 'Incoming', 'Incoming (not editable)', 'Committed', 'Committed (not editable)', 'Unavailable', 'Unavailable (not editable)', 'COO', 'HS Code'],
+  /** A list metafield's values are separated by `; ` in Shopify's CSV (S1). */
+  listSeparator: '; ',
+} as const

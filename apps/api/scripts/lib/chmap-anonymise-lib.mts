@@ -5,6 +5,7 @@
  */
 import { createHash } from 'node:crypto'
 import JSZip from 'jszip'
+import { parse as parseCsv } from 'csv-parse/sync'
 
 
 /** Words that name the Owner's business or people, and hosts that serve its files. Whole words only (`regalo` stays). */
@@ -253,4 +254,81 @@ async function rewriteSettingsRow(zip: JSZip, sheetName: string, fake: Map<strin
     sst = sst.replace(/<si>([\s\S]*?)<\/si>/g, whole => { const index = i++; return cells.some(c => c.shared === index) ? '<si><t></t></si>' : whole })
     zip.file('xl/sharedStrings.xml', sst)
   }
+}
+
+/**
+ * NCF N8 — Shopify's own product CSV. Replaced, consistently (same original → same fake, across the file): handles
+ * (also where a metafield value names one), titles, bodies, SKUs, barcodes, vendor, product type, tags, SEO text,
+ * picture URLs (the store's CDN path and shop id go with them) and alt text, metafield values, prices and cost, stock
+ * numbers, Google Shopping labels/MPN. Kept: Shopify's own vocabulary (status, published, option names and values,
+ * booleans, units, tracker, policy, the taxonomy breadcrumb) and every header. The copy is then SCANNED
+ * (`scanShopifyCsv`): no replaced original may remain anywhere in its text, and no private word or store host; the
+ * scan's positive control (a planted original) must be caught, or the copy is refused.
+ */
+export function anonymiseShopifyCsv(bytes: Buffer, fake: Map<string, string> = new Map()) {
+  const hash = (value: string, n = 8) => createHash('sha256').update(`chmap-fixture:${value}`).digest('hex').slice(0, n)
+  const replace = (original: string, make: () => string) => { const key = original.trim(); if (!key) return original; if (!fake.has(key)) fake.set(key, make()); return fake.get(key)! }
+  const skuFake = (sku: string) => `FX-${hash(sku, 6).toUpperCase()}${/-(XXS|XS|S|M|L|XL|XXL|3XL|4XL|5XL|\d{2})$/.exec(sku)?.[0] ?? ''}`
+  const grid = parseCsv(bytes, { bom: true, relax_column_count: true }) as string[][]
+  const headers = grid[0]
+  const originals = new Set<string>()
+  const keep = (v: string) => v
+  const listOf = (v: string, sep: RegExp, join: string, make: (item: string) => string) => v.split(sep).map(s => s.trim()).filter(Boolean).map(item => { originals.add(item); return replace(item, () => make(item)) }).join(join)
+  const money = (v: string) => /^\d+(\.\d+)?$/.test(v.trim()) ? replace(`price:${v.trim()}`, () => `${40 + parseInt(hash(v, 4), 16) % 120}.00`) : v
+  const rule = (h: string): ((v: string) => string) => {
+    if (h === 'Handle' || h === 'URL handle') return v => replace(v, () => `fixture-product-${hash(v, 6)}`)
+    if (h === 'Title') return v => replace(v, () => `Fixture product ${hash(v, 6)}`)
+    if (h === 'Body (HTML)' || h === 'Description') return v => v.trim() ? replace(v, () => `<p>Fixture description ${hash(v, 8)}</p>`) : v
+    if (h === 'Vendor') return v => replace(v, () => 'ACME FIXTURE')
+    if (h === 'Type') return v => replace(v, () => `Fixture type ${hash(v, 4)}`)
+    if (h === 'Tags') return v => listOf(v, /,/, ', ', item => `tag-${hash(item, 4)}`)
+    if (h === 'Variant SKU' || h === 'SKU') return v => replace(v, () => skuFake(v.trim()))
+    if (/^Variant Barcodes?$|^Barcodes?$/.test(h)) return v => replace(v, () => `400${parseInt(hash(v, 9), 16).toString().padStart(10, '0').slice(0, 10)}`)
+    if (/^(Variant Price|Price|Variant Compare At Price|Compare-at price|Cost per item)$/.test(h)) return money
+    if (/^(Variant Inventory Qty|Inventory quantity)$/.test(h)) return v => /^-?\d+$/.test(v.trim()) ? String(parseInt(hash(`qty:${v}`, 4), 16) % 20) : v
+    if (/^(Image Src|Product image URL|Variant Image|Variant image URL)$/.test(h)) return v => replace(v, () => `https://example.test/fixture/${hash(v, 10)}.jpg`)
+    if (/^(Image Alt Text|Image alt text)$/.test(h)) return v => v.trim() ? replace(v, () => `Fixture picture ${hash(v, 4)}`) : v
+    if (/^SEO (Title|title)$/.test(h)) return v => replace(v, () => `Fixture SEO title ${hash(v, 6)}`)
+    if (/^SEO (Description|description)$/.test(h)) return v => replace(v, () => `Fixture SEO description ${hash(v, 6)}`)
+    if (/^Google Shopping \/ (MPN|Manufacturer part number|Custom Label|Custom label|Ad group name|Ads labels)/.test(h)) return v => replace(v, () => `fixture-${hash(v, 6)}`)
+    if (/\((product|variant)\.metafields\./.test(h)) return v => {
+      const t = v.trim()
+      if (!t || /^-?\d+(\.\d+)?$/.test(t) || /^(true|false)$/i.test(t)) return v
+      // A list value names items one by one (other products' handles, metaobject handles, texts): each item on its own.
+      return t.includes(';') ? listOf(t, /;/, '; ', item => fake.get(item) ?? `fixture-value-${hash(item, 6)}`) : (originals.add(t), replace(t, () => `Fixture value ${hash(t, 6)}`))
+    }
+    return keep
+  }
+  // Handles first, so a metafield that names another product's handle reuses that handle's fake.
+  const handleCol = headers.findIndex(h => h === 'Handle' || h === 'URL handle')
+  for (const line of grid.slice(1)) if (handleCol >= 0 && line[handleCol]?.trim()) rule(headers[handleCol])(line[handleCol])
+  const rules = headers.map(rule)
+  const rows = grid.slice(1).map(line => headers.map((h, i) => {
+    const value = line[i] ?? ''
+    if (!value.trim()) return value
+    const out = rules[i](value)
+    if (out !== value && value.trim().length > 5 && !/^\d+(\.\d+)?$/.test(value.trim())) originals.add(value.trim())
+    return out
+  }))
+  // A replaced word that Shopify's own vocabulary in the kept columns also carries (a product type inside the taxonomy
+  // breadcrumb, a colour that is also an option value) is Shopify's word, not the Owner's: it is not scanned for.
+  const vocabulary = rows.flatMap(line => line.filter((_, i) => rules[i] === keep)).filter(v => v.trim())
+  for (const original of [...originals]) if (vocabulary.some(v => v.includes(original))) originals.delete(original)
+  const cell = (v: string) => /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  const text = [headers, ...rows].map(line => line.map(cell).join(',')).join('\n') + '\n'
+  const leaks = scanShopifyCsv(text, originals)
+  // The scan's positive control: an original planted into a copy must be caught, or the scan proves nothing.
+  const planted = [...originals].find(o => o.length > 8 && !/^\d/.test(o))
+  const control = planted ? scanShopifyCsv(`${text}${planted}\n`, originals).length > leaks.length : false
+  return { bytes: Buffer.from(text, 'utf8'), fake, leaks, control, replaced: originals.size, rows: rows.length }
+}
+
+/** The scan: any replaced original, private word or store host left in the text. Empty = clean. Findings name no value. */
+export function scanShopifyCsv(text: string, originals: Iterable<string> = []): string[] {
+  const found: string[] = []
+  for (const original of originals) if (original.length > 5 && !/^\d+(\.\d+)?$/.test(original) && text.includes(original)) found.push('an original value remains')
+  for (const m of text.matchAll(new RegExp(PRIVATE_WORDS.source, 'gi'))) found.push('a private word remains')
+  for (const m of text.matchAll(new RegExp(PRIVATE_URL.source, 'gi'))) found.push('a store link remains')
+  for (const m of text.matchAll(/[a-z0-9-]+\.myshopify\.com|cdn\.shopify\.com\/s\/files\/\d/gi)) found.push('a store host remains')
+  return found
 }

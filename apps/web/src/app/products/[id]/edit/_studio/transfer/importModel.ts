@@ -7,7 +7,7 @@ export const IMPORT_ACCEPT = '.xlsx,.xlsm,.csv,.zip'
 export const IMPORT_MAX_BYTES = 50 * 1024 * 1024
 
 const FORMATS: Record<SheetImportFormat, string> = {
-  nexus: 'Nexus file', 'nexus-legacy': 'Older Nexus file', amazon: 'Amazon template', ebay: 'eBay file', csv: 'CSV file', undo: 'Undo',
+  nexus: 'Nexus file', 'nexus-legacy': 'Older Nexus file', amazon: 'Amazon template', ebay: 'eBay file', shopify: 'Shopify file', csv: 'CSV file', undo: 'Undo',
 }
 export const formatLabel = (format: SheetImportFormat) => FORMATS[format] ?? 'File'
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`

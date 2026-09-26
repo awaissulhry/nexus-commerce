@@ -16,6 +16,9 @@
  *     the existing instant lane with the price AND the sale window in its payload, so a price push never wipes the
  *     sale on Amazon (report 19 §5.9) and a sale push never wipes the price.
  *   - CAS on `ChannelListing.version` (bumped on every applied row); `noop` spends nothing.
+ *   - NCF D2 A — Shopify's compare-at price (`compareAt`), kept at `platformAttributes.compareAtPrice`
+ *     (`compare-at-price.ts`), through the same CAS and audit. Record-only: it comes from Shopify's own file, and no
+ *     PRICE_UPDATE carries it, so a sending write refuses it by name.
  *
  * `channel-pricing` PATCH, `pricing/bulk-override` and the Matrix door delegate here. No snapshot refresh: the
  * pricing engine's chain is in no publish path (M8) and its hourly cron re-materialises the snapshot.
@@ -30,6 +33,7 @@ import { readSaleWindows, saleWindowColumnsExist, validateSaleWindow, writeSaleW
 import { decimalToNumber } from './sheet-rows.service.js'
 import { CHANNEL_FIELD_MAP, channelOverrideKeys } from './channel-field-map.js'
 import { afterDatabaseCommit } from '../../lib/database-context.js'
+import { storedCompareAt, withCompareAt } from './compare-at-price.js'
 
 const VALID_SYNC_TARGETS = new Set(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE'])
 /** The same operator grace window the FOLLOW/PIN primitives use: 30 s to undo before the push leaves. */
@@ -69,6 +73,8 @@ interface PriceWriteFields {
   price?: number | null
   /** `undefined` = untouched; `{ value: null }` clears the sale. */
   sale?: { value: number | null; start: string | null; end: string | null }
+  /** NCF D2 A — Shopify's compare-at price. `undefined` = untouched; `null` = Shopify holds none. Record-only. */
+  compareAt?: number | null
 }
 
 /**
@@ -116,6 +122,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 const LISTING_SELECT = {
   id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, price: true, priceOverride: true,
   overrideData: true, salePrice: true, followMasterPrice: true, version: true, fulfillmentMethod: true, product: { select: { sku: true, basePrice: true } },
+  platformAttributes: true,
 } satisfies Prisma.ChannelListingSelect
 
 /** A-18 — the storage contract's historical `overrideData` keys that still carry this channel's price. */
@@ -127,7 +134,8 @@ function legacyPriceKeys(channel: string): string[] {
 
 /** A-17 — is the stored own price exactly the one the caller saw? Anything ambiguous answers no. */
 function priceAsSeen(t: PriceWriteTarget, row: { channel: string; price: unknown; priceOverride: unknown; followMasterPrice: boolean | null; overrideData: unknown }): boolean {
-  if (t.expectedPrice === undefined || t.sale !== undefined) return false
+  // A compare-at write is never retried: its value lives in the platform bag another writer may have changed in the gap.
+  if (t.expectedPrice === undefined || t.sale !== undefined || t.compareAt !== undefined) return false
   const bag = row.overrideData && typeof row.overrideData === 'object' ? row.overrideData : {}
   // A legacy key is a price the columns do not show; the caller cannot have seen it.
   if (legacyPriceKeys(row.channel).some(key => Object.prototype.hasOwnProperty.call(bag, key))) return false
@@ -204,7 +212,12 @@ export async function writeChannelPrices(input: {
     for (let attempt = 0; attempt < 2; attempt++) {
       const l = current
       const base = { productId: l.productId, channel: l.channel, marketplace: l.marketplace, queueId: null as string | null }
-      if (t.price === undefined && t.sale === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      if (t.price === undefined && t.sale === undefined && t.compareAt === undefined) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      if (t.compareAt !== undefined && l.channel !== 'SHOPIFY') { push({ ...base, outcome: 'refused', reason: 'Only a Shopify listing has a compare-at price', version: l.version }); continue targets }
+      if (t.compareAt !== undefined && !input.recordOnly) { push({ ...base, outcome: 'refused', reason: 'A compare-at price is recorded from Shopify’s own file only; change it in the Shopify tab.', version: l.version }); continue targets }
+      const nextCompare = t.compareAt === undefined ? undefined : t.compareAt === null ? null : round2(Number(t.compareAt))
+      if (nextCompare !== undefined && nextCompare !== null && (!Number.isFinite(nextCompare) || nextCompare < 0)) { push({ ...base, outcome: 'refused', reason: 'A compare-at price is zero or more', version: l.version }); continue targets }
+      const currentCompare = storedCompareAt(l.platformAttributes)
       const currency = currencyOf.get(`${l.channel}|${l.marketplace}`) ?? 'EUR'
       const currentPrice = decimalToNumber(l.price)
       const currentOverride = decimalToNumber(l.priceOverride)
@@ -223,7 +236,8 @@ export async function writeChannelPrices(input: {
       const dirtyPrice = priceKeys.some(key => Object.prototype.hasOwnProperty.call(l.overrideData ?? {}, key))
       const priceChanges = nextPrice !== undefined && (dirtyPrice || !(nextPrice === null ? l.followMasterPrice !== false && currentOverride == null : currentPrice === nextPrice && currentOverride === nextPrice && l.followMasterPrice === false))
       const saleChanges = nextSale !== undefined && (nextSale.value !== currentSale.value || nextSale.start !== currentSale.start || nextSale.end !== currentSale.end)
-      if (!priceChanges && !saleChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
+      const compareChanges = nextCompare !== undefined && (currentCompare.state !== 'stored' || currentCompare.value !== nextCompare)
+      if (!priceChanges && !saleChanges && !compareChanges) { push({ ...base, outcome: 'noop', version: l.version }); continue targets }
 
       const basePrice = decimalToNumber(l.product?.basePrice)
       const effectivePrice = priceChanges ? (nextPrice ?? basePrice) : (currentPrice ?? (l.followMasterPrice !== false ? basePrice : currentOverride))
@@ -231,6 +245,7 @@ export async function writeChannelPrices(input: {
       const sentences: string[] = []
       if (priceChanges) sentences.push(nextPrice == null ? `price cleared (was ${money(currentPrice, currency)}) — follows the base price` : `price ${money(currentPrice, currency)} → ${money(nextPrice, currency)}`)
       if (saleChanges) sentences.push(nextSale!.value == null ? `sale cleared (was ${money(currentSale.value, currency)})` : `sale ${money(nextSale!.value, currency)} ${nextSale!.start} → ${nextSale!.end}`)
+      if (compareChanges) sentences.push(`compare-at ${money(currentCompare.value, currency)} → ${money(nextCompare!, currency)}`)
       const reason = [input.reason, sentences.join(' · ')].filter(Boolean).join(': ')
       if (input.recordOnly && await db.outboundSyncQueue.count({ where: { channelListingId: l.id, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' } })) {
         push({ ...base, outcome: 'refused', reason: `A price change is waiting to be sent to ${l.channel}. Send or cancel it before importing the channel's price.`, version: l.version })
@@ -245,6 +260,8 @@ export async function writeChannelPrices(input: {
           else Object.assign(data, { price: nextPrice, priceOverride: nextPrice, followMasterPrice: false, lastOverrideAt: new Date(), lastOverrideBy: input.actor })
         }
         if (saleChanges) data.salePrice = effectiveSale.value
+        // The bag as read with this version: the compare-and-set below proves nobody changed it since.
+        if (compareChanges) data.platformAttributes = withCompareAt(l.platformAttributes, nextCompare!) as Prisma.InputJsonValue
         const guarded = await tx.channelListing.updateMany({ where: { id: l.id, version: l.version }, data })
         if (guarded.count !== 1) return null
         if (priceChanges && dirtyPrice) await tx.$executeRaw`
@@ -255,6 +272,9 @@ export async function writeChannelPrices(input: {
         if (priceChanges) {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'price', previousValue: currentOverride == null ? (currentPrice == null ? null : String(currentPrice)) : String(currentOverride), newValue: nextPrice == null ? null : String(nextPrice), reason, changedBy: input.actor } })
           await tx.priceChangeEvent.create({ data: priceChangeData({ productId: l.productId, sku: l.product?.sku ?? '', channel: l.channel, marketplace: l.marketplace, fulfillmentMethod: l.fulfillmentMethod ?? null, oldPrice: currentPrice, newPrice: nextPrice ?? basePrice, currency, source: input.source, reason, actor: input.actor }) })
+        }
+        if (compareChanges) {
+          await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'compareAtPrice', previousValue: currentCompare.value == null ? null : String(currentCompare.value), newValue: nextCompare == null ? null : String(nextCompare), reason, changedBy: input.actor } })
         }
         if (saleChanges) {
           await tx.channelListingOverride.create({ data: { channelListingId: l.id, fieldName: 'salePrice', previousValue: currentSale.value == null ? null : `${currentSale.value} ${currentSale.start ?? ''}→${currentSale.end ?? ''}`.trim(), newValue: effectiveSale.value == null ? null : `${effectiveSale.value} ${effectiveSale.start}→${effectiveSale.end}`, reason, changedBy: input.actor } })

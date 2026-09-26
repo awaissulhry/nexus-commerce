@@ -136,7 +136,7 @@ export function transferFileRow(row: TransferRow): Record<string, string> {
 
 export type SheetImportState = 'CHECKING' | 'READY' | 'SAVING' | 'DONE' | 'PARTIAL' | 'FAILED'
 /** What the file was: our editing file, an older Nexus file, a channel's own file, a CSV, or an undo. */
-export type SheetImportFormat = 'nexus' | 'nexus-legacy' | 'amazon' | 'ebay' | 'csv' | 'undo'
+export type SheetImportFormat = 'nexus' | 'nexus-legacy' | 'amazon' | 'ebay' | 'shopify' | 'csv' | 'undo'
 export interface SheetImportSummary {
   /** Changed cells the import will save. */
   changes: number

@@ -6,14 +6,16 @@
  * the golden pipeline in `manifest.json`. The real files are only read. Run it again when a golden file, a schema or
  * the mapping rules change on purpose; the golden test then pins the new result.
  *   cd apps/api && npx tsx scripts/chmap-golden-build.mts --dir "/path/LISTNGS"
+ * NCF N8 — Shopify's own product CSV (one file, no schema needed; the store's field list is pinned as NOT loaded):
+ *   cd apps/api && npx tsx scripts/chmap-golden-build.mts --shopify "/path/products_export_1.csv"
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 
 const arg = (name: string) => { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : undefined }
-const DIR = arg('dir'), PIN_ONLY = process.argv.includes('--pin-only')
-if (!DIR && !PIN_ONLY) throw new Error('--dir is required (or --pin-only to re-pin the existing fixtures)')
+const DIR = arg('dir'), PIN_ONLY = process.argv.includes('--pin-only'), SHOPIFY = arg('shopify')
+if (!DIR && !PIN_ONLY && !SHOPIFY) throw new Error('--dir is required (or --pin-only to re-pin the existing fixtures, or --shopify <file>)')
 const url = new URL(process.env.DATABASE_URL ?? 'postgres://invalid/none')
 if (!['127.0.0.1', 'localhost', '::1'].includes(url.hostname) || !/test/i.test(url.pathname)) throw new Error('refusing: a local database whose name contains "test" only')
 const OUT = new URL('../src/services/channel-mapping/__fixtures__/golden/', import.meta.url).pathname
@@ -37,7 +39,7 @@ const { detectAmazonTemplate } = await import('../src/services/amazon/template-w
 const { amazonProductTypes } = await import('../src/services/pim/catalog-amazon-workbook.js')
 const { loadAmazonSpec, loadEbaySpec } = await import('../src/services/pim/channel-specs/index.js')
 const { readEbayWorkbook } = await import('../src/services/pim/catalog-ebay-workbook.js')
-const { amazonGolden, ebayGolden, loadSpec } = await import('../src/services/channel-mapping/__tests__/golden-pipeline.js')
+const { amazonGolden, ebayGolden, shopifyGolden, loadSpec } = await import('../src/services/channel-mapping/__tests__/golden-pipeline.js')
 const { default: prisma } = await import('../src/db.js')
 const ExcelJS = (await import('exceljs')).default
 
@@ -53,6 +55,22 @@ function trim(spec: any) {
   return { ...spec, validationSchema: { properties }, fetchedAt: null }
 }
 
+if (SHOPIFY) {
+  // The Owner's file is only READ. The copy is anonymised and scanned (with the scan's own positive control) before it is written.
+  const { anonymiseShopifyCsv } = await import('./lib/chmap-anonymise-lib.mts')
+  const anon = anonymiseShopifyCsv(readFileSync(SHOPIFY))
+  if (!anon.control) throw new Error('the leak scan did not catch its planted positive control; no fixture written')
+  if (anon.leaks.length) throw new Error(`LEAK — ${anon.leaks.length} findings in the anonymised copy; no fixture written`)
+  const file = 'shopify-product-csv.csv'
+  writeFileSync(join(OUT, file), anon.bytes)
+  const expected = shopifyGolden(anon.bytes)
+  const current = JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8'))
+  const entry = { id: 'shopify-product-csv', kind: 'shopify', why: 'Shopify’s own product export: classic headers, variants without SKUs, picture rows, store fields not loaded', file, specs: [], expected }
+  current.fixtures = [...current.fixtures.filter((f: { id: string }) => f.id !== entry.id), entry]
+  writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(current, null, 1) + '\n')
+  console.log('shopify-product-csv', JSON.stringify({ rows: anon.rows, replacedValues: anon.replaced, scan: 'clean', control: 'caught', read: expected.read, roundTrip: expected.roundTrip, export: { ...expected.export, columnsLeftOut: expected.export.columnsLeftOut.length } }))
+  process.exit(0)
+}
 if (PIN_ONLY) {
   // Re-pin: the fixtures stay byte-for-byte; only the expected results are computed again from them.
   const { readFileSync: read } = await import('node:fs')
@@ -60,7 +78,7 @@ if (PIN_ONLY) {
   for (const f of current.fixtures) {
     const specs = new Map(f.specs.map((s: string) => { const spec = loadSpec(read(join(OUT, 'specs', s))); return [spec.category, spec] }))
     const bytes = read(join(OUT, f.file))
-    f.expected = f.kind === 'amazon' ? await amazonGolden(bytes, specs as never, f.market) : await ebayGolden(bytes, f.filename, specs as never)
+    f.expected = f.kind === 'amazon' ? await amazonGolden(bytes, specs as never, f.market) : f.kind === 'shopify' ? shopifyGolden(bytes) : await ebayGolden(bytes, f.filename, specs as never)
     console.log(f.id, JSON.stringify(f.expected.roundTrip))
   }
   writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(current, null, 1) + '\n')

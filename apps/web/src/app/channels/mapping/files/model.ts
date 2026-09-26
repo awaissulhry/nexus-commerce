@@ -16,20 +16,22 @@ import type { ActionFinding, ActionReview } from '@/design-system/grid'
 
 /* ── words ──────────────────────────────────────────────────────────────────────────────────────── */
 
-export const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay' }
+export const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify' }
 export const channelLabel = (channel: string) => CHANNEL_LABEL[channel] ?? channel
 
 const FORM_KIND_WORD: Record<MappingFormKind, (formKey: string) => string> = {
   AMAZON_TEMPLATE: key => `${productTypesWord(key)} template`,
   AMAZON_FLAT_FILE: key => `${productTypesWord(key)} flat file (old format)`,
   EBAY_WORKBOOK: key => `category ${key} workbook`,
+  // NCF — one store's product CSV; the form key is the store account, named by the screen, not here.
+  SHOPIFY_PRODUCT_CSV: () => 'product CSV',
 }
 const productTypesWord = (formKey: string) => formKey.split('+').filter(Boolean).join(' + ') || formKey
 
-/** "Amazon IT · COAT + PANTS template" — one channel file form in one market. */
+/** "Amazon IT · COAT + PANTS template" — one channel file form in one market. Shopify has no market: "Shopify · product CSV". */
 export function formLabel(s: Pick<MappingSetSummary, 'channel' | 'marketplace' | 'formKind' | 'formKey'>): string {
   const kind = FORM_KIND_WORD[s.formKind]?.(s.formKey) ?? `${s.formKind} ${s.formKey}`
-  return `${channelLabel(s.channel)} ${s.marketplace} · ${kind}`
+  return `${channelLabel(s.channel)}${s.marketplace === 'GLOBAL' ? '' : ` ${s.marketplace}`} · ${kind}`
 }
 
 export const STATUS_WORD = { ACTIVE: 'Active', DRAFT: 'Draft', RETIRED: 'Retired' } as const
@@ -337,7 +339,11 @@ export function parseSkus(text: string): string[] {
   return [...new Set(text.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean))]
 }
 
-export interface ExportSummary { rows: number; gaps: number; blankColumns: number; mapping: string }
+export interface ExportSummary {
+  rows: number; gaps: number; blankColumns: number; mapping: string
+  /** NCF — Shopify's product CSV: products written, columns left out on purpose, and the products not written (with why). */
+  products?: number; omitted?: string[]; refused?: { sku: string; reason: string }[]
+}
 
 /** `X-Nexus-Export-Summary`: URL-encoded JSON. Null when absent or not the expected shape — never a guess. */
 export function parseExportSummary(header: string | null | undefined): ExportSummary | null {
@@ -347,7 +353,11 @@ export function parseExportSummary(header: string | null | undefined): ExportSum
     const n = (k: string) => (typeof v[k] === 'number' && Number.isFinite(v[k]) ? (v[k] as number) : null)
     const rows = n('rows'), gaps = n('gaps'), blankColumns = n('blankColumns')
     if (rows == null || gaps == null || blankColumns == null || typeof v.mapping !== 'string') return null
-    return { rows, gaps, blankColumns, mapping: v.mapping }
+    const products = n('products')
+    const omitted = Array.isArray(v.omitted) && v.omitted.every(x => typeof x === 'string') ? v.omitted as string[] : undefined
+    const refused = Array.isArray(v.refused) && v.refused.every(x => x && typeof x === 'object' && typeof (x as { sku?: unknown }).sku === 'string' && typeof (x as { reason?: unknown }).reason === 'string')
+      ? (v.refused as { sku: string; reason: string }[]) : undefined
+    return { rows, gaps, blankColumns, mapping: v.mapping, ...(products != null ? { products } : {}), ...(omitted ? { omitted } : {}), ...(refused ? { refused } : {}) }
   } catch { return null }
 }
 
@@ -357,6 +367,45 @@ const plural = (n: number, one: string, many: string, fmt: (n: number) => string
 export function exportSummarySentence(s: ExportSummary, fmt: (n: number) => string = String): string {
   return `${plural(s.rows, 'row', 'rows', fmt)} written with ${s.mapping}. `
     + `${plural(s.gaps, 'required cell', 'required cells', fmt)} had no value in Nexus; ${plural(s.blankColumns, 'column', 'columns', fmt)} left blank on purpose.`
+}
+
+/**
+ * NCF — "28 variant rows of 4 products written with Shopify · product CSV · v2 (active). 1 product was not written;
+ * 59 columns were left out, so Shopify keeps its values there."
+ */
+export function shopifyExportSummarySentence(s: ExportSummary, fmt: (n: number) => string = String): string {
+  const products = s.products ?? 0
+  return `${plural(s.rows, 'variant row', 'variant rows', fmt)} of ${plural(products, 'product', 'products', fmt)} written with ${s.mapping}. `
+    + `${plural(s.gaps, 'product was', 'products were', fmt)} not written; ${plural(s.blankColumns, 'column was', 'columns were', fmt)} left out, so Shopify keeps its values there.`
+}
+
+/** The file a version writes: Amazon's own template, our eBay workbook, or Shopify's product CSV. */
+export function exportExtension(set: Pick<MappingSetSummary, 'channel'>): '.xlsm' | '.xlsx' | '.csv' {
+  return set.channel === 'AMAZON' ? '.xlsm' : set.channel === 'SHOPIFY' ? '.csv' : '.xlsx'
+}
+
+/** What names a version's form in its list row and header: the Amazon template version, or the Shopify store. */
+export function formSourceWord(set: Pick<MappingSetSummary, 'channel' | 'formKey' | 'templateVersion'>, stores: readonly { id: string; label: string }[] = [], prefix = 'Template'): string {
+  if (set.channel === 'SHOPIFY') return `Store ${stores.find(s => s.id === set.formKey)?.label ?? 'not connected'}`
+  return `${prefix} ${set.templateVersion ?? 'version not stated'}`
+}
+
+/* ── Shopify file preview (NCF) ─────────────────────────────────────────────────────────────────── */
+
+export interface ShopifyFilePreview {
+  setId: string; version: number; status: string; label: string; created: boolean
+  store: { id: string; label: string }
+  counts: { rows: number; products: number; cells: number; written: number; excluded: number; refused: number; linkProposals: number }
+  refused: { reason: string; cells: number }[]
+  excluded: { reason: string; cells: number }[]
+  warnings: string[]
+}
+
+/** "Read with Shopify · product CSV · v1 (draft), for ACME store. Of 5,045 filled cells, 198 would be imported, 338 excluded and 368 refused." */
+export function shopifyPreviewSentence(p: Pick<ShopifyFilePreview, 'label' | 'store' | 'counts' | 'created'>, fmt: (n: number) => string = String): string {
+  const c = p.counts
+  return `Read with ${p.label}, for ${p.store.label}. Of ${plural(c.cells, 'filled cell', 'filled cells', fmt)}, ${fmt(c.written)} would be imported, ${fmt(c.excluded)} excluded and ${fmt(c.refused)} refused.`
+    + `${p.created ? ' That version is new: review it before activating.' : ''}`
 }
 
 /** The file name a `Content-Disposition` header names (RFC 5987 `filename*` first), or null. */
@@ -398,7 +447,7 @@ function pushFieldName(fields: readonly Pick<MappingFieldRow, 'targetKind' | 'ta
  */
 export function pushImpactReview(set: Pick<MappingSetSummary, 'channel' | 'marketplace'> & { fields: readonly Pick<MappingFieldRow, 'targetKind' | 'targetKey' | 'label'>[] },
   impact: MappingPushImpact | null, failure?: string): { consequences: string[]; review?: ActionReview; findings: ActionFinding[] } {
-  const where = `${channelLabel(set.channel)} ${set.marketplace}`
+  const where = set.marketplace === 'GLOBAL' ? channelLabel(set.channel) : `${channelLabel(set.channel)} ${set.marketplace}`
   if (!impact) return { consequences: [], findings: [{ label: `What Nexus sends to ${where}${failure ? ` (${failure})` : ''}`, severity: 'unknown' }] }
   const findings: ActionFinding[] = impact.kept.map(k => ({ label: `Still sent: ${k}`, severity: 'warn' }))
   if (!impact.stops.length && !impact.starts.length) return { consequences: [`What Nexus sends to ${where} does not change.`], findings }

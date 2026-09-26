@@ -9,8 +9,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ExcelJS from 'exceljs'
 import { ooxmlWorkbook, amazonTemplateSheets, ATTRIBUTE_SHEET_HEADERS, EBAY_HEADERS } from './catalog-transfer-test/channel-file-fixtures.js'
+import { csvOf, SHOPIFY_INVENTORY_HEADERS, shopifySampleCsv } from './catalog-transfer-test/shopify-csv-fixtures.js'
 
-const calls = vi.hoisted(() => ({ sessions: 0, reads: [] as { filename: string; options: unknown }[], amazon: [] as { parsed: any; options: any }[], ebay: [] as { table: any; options: any }[], drawerEbay: [] as { table: any; productId: string; options: any }[] }))
+const calls = vi.hoisted(() => ({ sessions: 0, reads: [] as { filename: string; options: unknown }[], amazon: [] as { parsed: any; options: any }[], ebay: [] as { table: any; options: any }[], drawerEbay: [] as { table: any; productId: string; options: any }[], shopify: [] as { table: any; options: any }[] }))
 vi.mock('./workbook-parse.js', async importOriginal => {
   const real = await importOriginal<typeof import('./workbook-parse.js')>()
   return { ...real, openWorkbookParser: (options: Parameters<typeof real.openWorkbookParser>[0]) => {
@@ -24,13 +25,16 @@ vi.mock('./catalog-ebay-workbook.js', async importOriginal => ({ ...await import
   resolveEbayCatalogWorkbook: async (table: unknown, options: unknown) => { calls.ebay.push({ table, options }); return { rows: [], issues: [], exclusions: [] } },
   resolveEbayWorkbook: async (table: unknown, productId: string, options: unknown) => { calls.drawerEbay.push({ table, productId, options }); return { rows: [], issues: [], exclusions: [] } } }))
 
+vi.mock('./catalog-shopify-csv.js', async importOriginal => ({ ...await importOriginal<object>(),
+  resolveShopifyCsv: async (table: unknown, options: unknown) => { calls.shopify.push({ table, options }); return { rows: [], issues: [], exclusions: [], ledger: [], links: [], warnings: [], accountId: 'store' } } }))
+
 // The product group's listings, as `productTransferOptions` reports them — the drawer's only marketplace evidence.
 const group = vi.hoisted(() => ({ ebayMarkets: [] as string[] }))
 vi.mock('./catalog-product-transfer.js', async importOriginal => ({ ...await importOriginal<object>(),
   productTransferOptions: async (productId: string) => ({ productId, rootId: productId, products: [], locales: [], accounts: [], markets: [], familyId: null,
     listings: group.ebayMarkets.map((marketplace, i) => ({ id: `l${i}`, productId, channel: 'EBAY', accountId: 'ebay', marketplace, aliasKey: '', aliasLabel: 'Primary listing' })) }) }))
 const { readCatalogTransferUpload, readEditorTransfer } = await import('./catalog-editor-workbook.js')
-afterEach(() => { calls.sessions = 0; calls.reads.length = 0; calls.amazon.length = 0; calls.ebay.length = 0; calls.drawerEbay.length = 0; group.ebayMarkets = [] })
+afterEach(() => { calls.sessions = 0; calls.reads.length = 0; calls.amazon.length = 0; calls.ebay.length = 0; calls.drawerEbay.length = 0; calls.shopify.length = 0; group.ebayMarkets = [] })
 
 describe('the catalog page reads every workbook on the parse worker, by what it is', () => {
   it('reads an Amazon template chosen as "Nexus workbook" as an Amazon template, and says so', async () => {
@@ -71,6 +75,29 @@ describe('the catalog page reads every workbook on the parse worker, by what it 
     const parsed = await readCatalogTransferUpload(Buffer.from('entity,sku,channel,accountId,marketplace,aliasKey,locale,field,action,format,value,version\nProducts,GALE-JACKET,,,,,,name,SET,text,Gale,\n'), 'rows.csv', { market: 'IT', mode: 'update' })
     expect(calls.sessions).toBe(0)
     expect(parsed.rows).toHaveLength(1)
+  })
+
+  it('NCF — reads Shopify’s product CSV on the parse worker, by its header, whatever File type was chosen', async () => {
+    const parsed = await readCatalogTransferUpload(shopifySampleCsv(), 'products_export_1.csv', { format: 'catalog', market: '', mode: 'update', accountId: 'store', links: { 'acme-jacket': 'ACME-JACKET' } })
+    expect(calls.sessions).toBe(1)
+    expect(calls.reads.map(r => r.filename)).toEqual(['products_export_1.csv'])
+    expect(calls.shopify).toHaveLength(1)
+    expect(calls.shopify[0].table.records).toHaveLength(7)
+    expect(calls.shopify[0].options).toEqual({ accountId: 'store', links: { 'acme-jacket': 'ACME-JACKET' } })
+    expect(parsed.market).toBe('GLOBAL')
+    expect(parsed.warnings).toEqual(['products_export_1.csv is Shopify’s product CSV; it was read as one, not as a Nexus file.'])
+  })
+
+  it('NCF — the product sheet reads Shopify’s product CSV on the worker for its own product group', async () => {
+    const parsed = await readEditorTransfer(shopifySampleCsv(), 'products_export_1.csv', 'p1', 'owner', undefined, { links: { a: 'b' } })
+    expect(calls.shopify[0].options).toEqual({ productId: 'p1', links: { a: 'b' } })
+    expect(parsed.kinds).toEqual(['shopify'])
+  })
+
+  it('NCF — refuses Shopify’s inventory CSV with the stock sentence, without a worker', async () => {
+    await expect(readCatalogTransferUpload(csvOf(SHOPIFY_INVENTORY_HEADERS, [{ Handle: 'a', SKU: 'b', Location: 'Shop' }]), 'inventory_export_1.csv', { market: 'IT', mode: 'update' }))
+      .rejects.toThrow('inventory_export_1.csv is Shopify’s inventory CSV (quantities by location). Nexus never imports stock from a file')
+    expect(calls.sessions).toBe(0)
   })
 
   it('sends the Amazon attribute sheet to "Map a source file"', async () => {

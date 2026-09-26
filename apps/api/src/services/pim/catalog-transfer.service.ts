@@ -121,7 +121,7 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
   const formulas = await db.cellFormula.findMany({ where: { OR: [{ productId: { in: productIds } }, { product: { parentId: { in: productIds } } }] }, select: { productId: true, scope: true, channel: true, marketplace: true, locale: true, fieldKey: true, dependsOn: true, product: { select: { parentId: true } } } })
   // CFI-4/6 — only a channel file's price/sale and seller-SKU rows need these, so an operator file reads nothing more.
   const listingIds = listings.map(l => l.id)
-  const pricing = listingIds.length > 0 && rows.some(r => r.origin === 'channel-file' && r.entity === 'Overrides' && (r.field === 'price' || r.field === 'sale'))
+  const pricing = listingIds.length > 0 && rows.some(r => r.origin === 'channel-file' && r.entity === 'Overrides' && (r.field === 'price' || r.field === 'sale' || r.field === 'compareAt'))
   const identity = listingIds.length > 0 && rows.some(r => r.origin === 'channel-file' && r.entity === 'Listings' && (r.field === 'sellerSku' || r.field === 'presence'))
   const [pendingPrices, saleWindows, offers] = await Promise.all([
     pricing ? db.outboundSyncQueue.findMany({ where: { channelListingId: { in: listingIds }, syncType: 'PRICE_UPDATE', syncStatus: 'PENDING' }, select: { channelListingId: true } }) : Promise.resolve([]),
@@ -307,9 +307,9 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
     if (target.presence) channelFacts.ended = await recordChannelDeletion(tx, { id: entityId, version: listingVersion }, { userId, jobId })
     if (target.priceWrite) {
       const { writeChannelPrices } = await import('./channel-price-write.service.js')
-      const { price, sale, expectedPrice } = target.priceWrite
+      const { price, sale, compareAt, expectedPrice } = target.priceWrite
       const written = await writeChannelPrices({ tx, recordOnly: 'channel-file-import', actor: userId ?? 'catalog-transfer', source: 'CHANNEL_FILE_IMPORT', reason: `Channel file import (job ${jobId})`,
-        targets: [{ listingId: entityId, expectedVersion: channelFacts.ended?.version ?? listingVersion, expectedPrice, ...(price !== undefined ? { price } : {}), ...(sale ? { sale } : {}) }] })
+        targets: [{ listingId: entityId, expectedVersion: channelFacts.ended?.version ?? listingVersion, expectedPrice, ...(price !== undefined ? { price } : {}), ...(sale ? { sale } : {}), ...(compareAt !== undefined ? { compareAt } : {}) }] })
       const outcome = written.results[0]
       if (!outcome || !['applied', 'noop'].includes(outcome.outcome)) throw new TransferConflict(outcome?.reason ?? 'The channel price could not be recorded')
       channelFacts.price = { outcome: outcome.outcome, version: outcome.version }

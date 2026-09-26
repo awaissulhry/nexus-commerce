@@ -1,17 +1,21 @@
 /**
  * CHMAP (`docs/studies/channel-mappings.md` §8) — channel mappings as versioned data.
  *
- * One MAPPING SET = one channel file FORM (an Amazon template for its product types, or our eBay workbook)
- * for one marketplace, in one VERSION. Every channel column of the form has one FIELD row with the decision
+ * One MAPPING SET = one channel file FORM (an Amazon template for its product types, our eBay workbook, or
+ * Shopify's own product CSV for one store — NCF, `docs/studies/native-channel-files.md`) for one marketplace,
+ * in one VERSION. Every channel column of the form has one FIELD row with the decision
  * for it. Import, export and push read the same set; an ACTIVE set never changes (an edit makes a new DRAFT).
  * This module is the contract the API and the web share. Pure: no I/O.
  */
 
-export const MAPPING_CHANNELS = ['AMAZON', 'EBAY'] as const
+export const MAPPING_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
 export type MappingChannel = (typeof MAPPING_CHANNELS)[number]
 
-/** The shapes of channel file Nexus reads and writes. */
-export const MAPPING_FORM_KINDS = ['AMAZON_TEMPLATE', 'AMAZON_FLAT_FILE', 'EBAY_WORKBOOK'] as const
+/**
+ * The shapes of channel file Nexus reads and writes. `SHOPIFY_PRODUCT_CSV` = Shopify admin → Products → Export
+ * (one row per variant, extra rows for pictures); its form key is the store account (its metafields are its own).
+ */
+export const MAPPING_FORM_KINDS = ['AMAZON_TEMPLATE', 'AMAZON_FLAT_FILE', 'EBAY_WORKBOOK', 'SHOPIFY_PRODUCT_CSV'] as const
 export type MappingFormKind = (typeof MAPPING_FORM_KINDS)[number]
 
 export const MAPPING_SET_STATUSES = ['DRAFT', 'ACTIVE', 'RETIRED'] as const
@@ -39,8 +43,10 @@ export const MAPPING_TARGET_KINDS = [
   'itemSpecific', // an eBay item specific outside the category schema (`itemSpecifics.<name>`)
   'selector', // a schema selector the channel writer supplies (`apparel_size.size_system`)
   'price', 'sale', 'currency', // the price door (record-only on import)
+  'compareAt', // Shopify's compare-at price, through the same price door (NCF D2 A)
   'quantity', 'relationship', 'identifier', // other workflows own these
-  'image', // eBay Image 1..n (one ordered list)
+  'image', // eBay Image 1..n (one ordered list); Shopify's picture columns (its media workspace owns them)
+  'lifecycle', // Shopify Status / Published: listing lifecycle, never imported
   'none',
 ] as const
 export type MappingTargetKind = (typeof MAPPING_TARGET_KINDS)[number]
@@ -87,6 +93,7 @@ export interface MappingFieldRow {
   sortOrder: number
 }
 
+/** `sheet` is `CSV` for a text file (Shopify's product CSV). */
 export interface MappingLayout { sheet: string; labelRow: number | null; keyRow: number; dataRow: number | null }
 
 /** What identifies a form, read from a file. */
@@ -200,4 +207,13 @@ export function amazonChannelKey(header: string): string {
 /** eBay: the column name without the export's marks (`*` required, `○` recommended, `↕` variation, `⚠` ghost). */
 export function ebayColumnName(header: string): string {
   return header.replace(/\s*[○↕⚠*]+/gu, '').trim()
+}
+
+/**
+ * NCF — a Shopify product-CSV metafield column: `Label (product.metafields.<namespace>.<key>)`. `owner` is `product`
+ * (the only owner Shopify's product CSV carries) or `variant` (never exported by Shopify, refused when met).
+ */
+export function shopifyMetafieldColumn(header: string): { label: string; owner: 'product' | 'variant'; namespace: string; key: string } | null {
+  const m = /^(.*?)\s*\((product|variant)\.metafields\.([^.()\s]+)\.([^()\s]+)\)\s*$/.exec(header)
+  return m ? { label: m[1].trim(), owner: m[2] as 'product' | 'variant', namespace: m[3], key: m[4] } : null
 }

@@ -9,6 +9,8 @@ import { checkProductTransferBoundary, productTransferOptions } from './catalog-
 import { TransferConflict } from './catalog-transfer.service.js'
 import { resolveEbayWorkbook, resolveEbayCatalogWorkbook } from './catalog-ebay-workbook.js'
 import { resolveAmazonCatalogWorkbook } from './catalog-amazon-workbook.js'
+import { sniffCsv, shopifyInventoryDoor } from './channel-file-sniff.js'
+import { resolveShopifyCsv } from './catalog-shopify-csv.js'
 import { openWorkbookParser, type ParseSession } from './workbook-parse.js'
 import type { SourceExclusion } from './catalog-source-mapping.js'
 
@@ -22,7 +24,7 @@ interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND
 export interface IdentityProposal { fileSku: string; proposedSku: string; reason: string }
 interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[]; links?: IdentityProposal[]
   /** PSIE — what each part was (the parse worker's verdict), in upload order. */
-  kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon')[]
+  kinds?: ('editing' | 'wide' | 'transfer' | 'ebay' | 'amazon' | 'shopify')[]
   /** PSIE — the editing baseline the file was checked against, when it is a Nexus editing file. */
   exportId?: string }
 /**
@@ -92,6 +94,8 @@ async function readEditorPart(session: ParseSession, buffer: Buffer, filename: s
   // CFI-1 — Amazon's own template, scoped to this product group; account and marketplace resolve from the
   // file and the group's listings (BUILD.md D5). Like the eBay export its rows carry verified coordinates.
   if (outcome.kind === 'amazon') return { ...await resolveAmazonCatalogWorkbook(outcome.parsed, { productId, mode: 'update', links: decisions.links, confirmDeletes: decisions.confirmDeletes }), editing: true, kinds: ['amazon'] }
+  // NCF — Shopify's own product CSV (recognised by its header on the worker).
+  if (outcome.kind === 'shopify') return { ...await resolveShopifyCsv(outcome.table, { productId, links: decisions.links }), editing: true, kinds: ['shopify'] }
   return { ...outcome.parsed, kinds: [outcome.kind] }
 }
 
@@ -242,7 +246,12 @@ export async function readCatalogTransferUpload(buffer: Buffer, filename: string
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty file up to 10 MB')
   // A Nexus workbook or CSV names no marketplace of its own; its attribute dictionary needs the chosen one.
   const requireMarket = () => { if (!input.market) throw new Error(NEXUS_FILE_NEEDS_MARKET); return input.market }
-  if (!/\.xls[xm]$/i.test(filename)) { const market = requireMarket(); return { ...await readTransferFile(buffer, filename, { blankPolicy: input.blankPolicy }), market } }
+  // NCF — a CSV is read by what its header says: Shopify's product CSV goes to the parse worker like a channel
+  // workbook, Shopify's inventory CSV is refused (stock is never imported from a file), and every other CSV is read
+  // here exactly as before (no worker, no ExcelJS).
+  const csv = /\.csv$/i.test(filename) ? sniffCsv(buffer) : null
+  if (csv?.kind === 'shopify-inventory-csv') throw new Error(shopifyInventoryDoor(filename))
+  if (!/\.xls[xm]$/i.test(filename) && csv?.kind !== 'shopify-product-csv') { const market = requireMarket(); return { ...await readTransferFile(buffer, filename, { blankPolicy: input.blankPolicy }), market } }
   const session = openWorkbookParser({
     log: (event, detail) => log?.(event, detail),
     // An editing workbook belongs to the product it was exported from; the catalog page has no baseline for it.
@@ -263,6 +272,11 @@ export async function readCatalogTransferUpload(buffer: Buffer, filename: string
       // The table's marketplace came from its sheet, its file name, or the chosen one — in that order.
       const parsed = { ...await resolveEbayCatalogWorkbook(outcome.table, { ...decisions, market: input.market || undefined }) as ParsedInput, market: outcome.table.marketplace }
       return withWarning(parsed, `${filename} is an eBay workbook (sheet "${outcome.table.sheet}"); it was read as one${input.format === 'catalog' || !input.format ? ', not as a Nexus workbook' : ''}.`)
+    }
+    if (outcome.kind === 'shopify') {
+      // Shopify's file names no store: the one chosen on the page when it is a Shopify store, else the only one connected.
+      const parsed = await resolveShopifyCsv(outcome.table, { accountId: input.accountId || undefined, links: input.links })
+      return withWarning({ ...parsed, market: input.market || 'GLOBAL' } as ParsedInput & { market: string }, `${filename} is Shopify’s product CSV; it was read as one${input.format === 'catalog' || !input.format ? ', not as a Nexus file' : ''}.`)
     }
     const market = requireMarket()
     if (input.format === 'amazon') return { ...withWarning(outcome.parsed, `${filename} is not an Amazon template; it was read as a Nexus workbook.`), market }

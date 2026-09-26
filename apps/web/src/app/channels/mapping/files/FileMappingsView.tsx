@@ -21,11 +21,12 @@ import { Button, Pill } from '@/design-system/primitives'
 import { Banner, Card, EmptyState, Field, Listbox, PressableRow } from '@/design-system/components'
 import { PageHeader } from '@/design-system/patterns'
 import { formatDate, num } from '@/design-system/lib/format'
-import { listMappingSets, errorText } from './api'
-import { channelLabel, filterSets, groupByForm, marketsOf, STATUS_TONE, STATUS_WORD } from './model'
+import { listMappingSets, listShopifyStores, errorText } from './api'
+import { channelLabel, filterSets, formSourceWord, groupByForm, marketsOf, STATUS_TONE, STATUS_WORD } from './model'
 import { fileSetHref } from './urls'
 import { VersionDetail } from './VersionDetail'
 import { TemplateUploadDrawer } from './TemplateUpload'
+import { ShopifyFileDrawer } from './ShopifyFileUpload'
 import styles from './files.module.css'
 
 export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
@@ -39,6 +40,16 @@ export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
   const [channel, setChannel] = useState('')
   const [market, setMarket] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [readingShopify, setReadingShopify] = useState(false)
+  // NCF — a Shopify version's form key is its store: named from the connected stores (loaded only when one is listed).
+  const [stores, setStores] = useState<{ id: string; label: string }[]>([])
+  const hasShopify = (sets ?? []).some(s => s.channel === 'SHOPIFY')
+  useEffect(() => {
+    if (!hasShopify) return
+    const controller = new AbortController()
+    listShopifyStores(controller.signal).then(rows => { if (!controller.signal.aborted) setStores(rows) }).catch(() => { /* the row then says "not connected" */ })
+    return () => controller.abort()
+  }, [hasShopify, listLoad])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -65,6 +76,7 @@ export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
         subtitle="Which Nexus field each column of a channel file fills. Every template has its own versions; an active version never changes."
         actions={<>
           <Button variant="ghost" size="sm" onClick={() => setUploading(true)}><Upload size={14} aria-hidden /> Upload Amazon template</Button>
+          <Button variant="ghost" size="sm" onClick={() => setReadingShopify(true)}><Upload size={14} aria-hidden /> Read Shopify file</Button>
           <Button variant="ghost" size="sm" onClick={reloadList}><RefreshCw size={14} aria-hidden /> Refresh</Button>
         </>}
       />
@@ -103,7 +115,7 @@ export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
                 <Card key={group.key} header={group.label} headingLevel={2}
                   description={`${group.versions.length} version${group.versions.length === 1 ? '' : 's'}`}>
                   <div className={styles.versionRows}>
-                    {group.versions.map(set => <VersionRow key={set.id} set={set} current={set.id === selectedId} onSelect={() => select(set.id)} />)}
+                    {group.versions.map(set => <VersionRow key={set.id} set={set} stores={stores} current={set.id === selectedId} onSelect={() => select(set.id)} />)}
                   </div>
                 </Card>
               ))}
@@ -117,7 +129,7 @@ export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
               <div className={styles.backLink}>
                 <Button variant="link" size="sm" onClick={() => select(null)}>All versions</Button>
               </div>
-              <VersionDetail key={selectedId} setId={selectedId} sets={sets ?? []} onSelect={select} onListChanged={reloadList} />
+              <VersionDetail key={selectedId} setId={selectedId} sets={sets ?? []} stores={stores} onSelect={select} onListChanged={reloadList} />
             </>
           ) : (
             <EmptyState title="Choose a version" description="Pick a version on the left to see how each column of that file is read and written." />
@@ -125,11 +137,13 @@ export function FileMappingsView({ viewTabs }: { viewTabs: ReactNode }) {
         </section>
       </div>
       {uploading && <TemplateUploadDrawer onClose={() => setUploading(false)} onUploaded={result => { reloadList(); select(result.setId) }} />}
+      {readingShopify && <ShopifyFileDrawer onClose={() => setReadingShopify(false)} onRead={() => reloadList()}
+        onOpenVersion={id => { setReadingShopify(false); select(id) }} />}
     </div>
   )
 }
 
-function VersionRow({ set, current, onSelect }: { set: MappingSetSummary; current: boolean; onSelect: () => void }) {
+function VersionRow({ set, stores, current, onSelect }: { set: MappingSetSummary; stores: { id: string; label: string }[]; current: boolean; onSelect: () => void }) {
   const c = set.counts
   return (
     <PressableRow
@@ -140,7 +154,7 @@ function VersionRow({ set, current, onSelect }: { set: MappingSetSummary; curren
     >
       <div className={styles.versionBody}>
         <div className={styles.versionLine}>
-          <span>Template {set.templateVersion ?? 'version not stated'}</span>
+          <span>{formSourceWord(set, stores)}</span>
           <span>Created {formatDate(set.createdAt)}</span>
           {set.activatedAt && <span>Activated {formatDate(set.activatedAt)}</span>}
           {set.retiredAt && <span>Retired {formatDate(set.retiredAt)}</span>}
