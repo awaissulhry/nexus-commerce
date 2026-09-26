@@ -67,6 +67,7 @@ const q = async <T = Record<string, any>>(sql: string, params: unknown[] = []) =
 
 describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (needs ${CONCURRENT_PG_ENV})`, () => {
   let levels: typeof import('./stock-level.service.js')
+  let movement: typeof import('./stock-movement.service.js')
   let reconciler: typeof import('./reservation-reconcile.js')
   let shopify: typeof import('../routes/shopify-webhooks.js')
   let mcf: typeof import('./amazon-mcf.service.js')
@@ -110,6 +111,8 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
   const taken = async (orderId: string) => Number((await q(
     `SELECT COALESCE(-SUM(change),0)::text AS s FROM "StockMovement" WHERE "orderId"=$1 AND reason='RESERVATION_CONSUMED'`, [orderId]))[0].s)
   const reconcile = () => inBusiness(() => reconciler.reconcileOpenOrderReservations())
+  const restock = (productId: string, units: number) =>
+    inBusiness(() => movement.applyStockMovement({ productId, locationId: mainId, change: units, reason: 'INBOUND_RECEIVED', actor: 'test' }))
   const reserve = (orderId: string, productId: string, quantity: number, locationId = mainId) =>
     inBusiness(() => levels.reserveOpenOrder({ orderId, productId, locationId, quantity, actor: 'test' }))
   const consume = (orderId: string) => inBusiness(() => levels.consumeOpenOrder({ orderId, actor: 'test' }))
@@ -143,6 +146,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
     fbaId = randomUUID()
     await q(`INSERT INTO "StockLocation" (id,"workspaceId",type,code,name,"updatedAt") VALUES ($1,$3,'WAREHOUSE','IT-MAIN','Main',now()), ($2,$3,'AMAZON_FBA','AMAZON-EU-FBA','FBA',now())`, [mainId, fbaId, WS])
     levels = await import('./stock-level.service.js')
+    movement = await import('./stock-movement.service.js')
     reconciler = await import('./reservation-reconcile.js')
     shopify = await import('../routes/shopify-webhooks.js')
     mcf = await import('./amazon-mcf.service.js')
@@ -177,8 +181,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
     expect(await level(p.productId)).toEqual({ quantity: 8, reserved: 0, available: 8 })
     expect(await taken(order.id)).toBe(2)
     expect((await holds(order.id)).map(({ quantity, state }) => ({ quantity, state }))).toEqual([{ quantity: 2, state: 'consumed' }])
-    // And the read of a settled order no longer even asks for a hold.
-    expect(vi.mocked(levels.reserveOpenOrder)).not.toHaveBeenCalled()
+    // Positive control: every re-read of the shipped order DID ask for a hold (that is how an oversold
+    // line is taken later, arm 11) — the hold guard is what answered "already taken".
+    expect(vi.mocked(levels.reserveOpenOrder)).toHaveBeenCalledTimes(4)
   })
 
   it('2. Amazon FBM — an order first read as SHIPPED is held and taken exactly once', async () => {
@@ -320,6 +325,54 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
     expect(await level(p.productId)).toEqual({ quantity: 8, reserved: 0, available: 8 })
     expect(await taken(order.id)).toBe(2)
     expect((await holds(order.id)).filter((h) => h.state === 'open')).toEqual([])
+  })
+
+  it.each(['shipped', 'delivered'] as const)('11. Amazon FBM — an order that shipped while stock was short is taken once stock arrives (re-read as %s), and never again', async (later) => {
+    const p = await seedProduct(mainId, 1) // 1 on hand, the order wants 2: no hold at ingest
+    const amazonId = `AMZ-${randomUUID()}`, lines = [{ sku: p.sku, quantity: 2 }]
+    await amazonRead(amazonId, 'unshipped', lines)
+    const order = await amazonRead(amazonId, 'shipped', lines)
+    if (later === 'delivered') await amazonRead(amazonId, 'delivered', lines) // still short: now DELIVERED locally
+    await reconcile()
+    expect(await holds(order.id)).toEqual([]) // positive control: the line really was never held
+    expect(await level(p.productId)).toEqual({ quantity: 1, reserved: 0, available: 1 })
+
+    await restock(p.productId, 5)
+    expect(await level(p.productId)).toEqual({ quantity: 6, reserved: 0, available: 6 })
+    await amazonRead(amazonId, later, lines) // the next poll re-reads the shipped order
+    expect(await level(p.productId)).toEqual({ quantity: 6, reserved: 2, available: 4 })
+    await reconcile()
+    expect(await level(p.productId)).toEqual({ quantity: 4, reserved: 0, available: 4 })
+
+    for (let i = 0; i < 3; i++) {
+      await amazonRead(amazonId, later, lines)
+      await reconcile()
+    }
+    expect(await level(p.productId)).toEqual({ quantity: 4, reserved: 0, available: 4 })
+    expect(await taken(order.id)).toBe(2)
+    expect((await holds(order.id)).map(({ quantity, state }) => ({ quantity, state }))).toEqual([{ quantity: 2, state: 'consumed' }])
+  })
+
+  it('12. an oversold shipped line: polls and reconciles racing once stock arrives take it exactly once', async () => {
+    const p = await seedProduct(mainId, 0)
+    const amazonId = `AMZ-${randomUUID()}`, lines = [{ sku: p.sku, quantity: 2 }]
+    await amazonRead(amazonId, 'unshipped', lines)
+    const order = await amazonRead(amazonId, 'shipped', lines)
+    expect(await holds(order.id)).toEqual([])
+    await restock(p.productId, 5)
+    // Only the production writers: the poll's re-read is the one path that can hold this line (arm 8
+    // races direct re-holds). Six workers, alternating which of poll / reconcile goes first.
+    const worker = async (i: number) => {
+      for (let round = 0; round < 4; round++) {
+        if ((i + round) % 2 === 0) { await poll(); await reconcile() } else { await reconcile(); await poll() }
+      }
+    }
+    const settled = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => worker(i)))
+    expect(settled.flatMap((r) => (r.status === 'rejected' ? [String(r.reason)] : []))).toEqual([])
+    await reconcile()
+    expect(await level(p.productId)).toEqual({ quantity: 3, reserved: 0, available: 3 })
+    expect(await taken(order.id)).toBe(2)
+    expect((await holds(order.id)).map(({ quantity, state }) => ({ quantity, state }))).toEqual([{ quantity: 2, state: 'consumed' }])
   })
 
   it('9. Shopify — the normal flow takes the line once, and a re-delivered orders/create after fulfilment holds nothing more', async () => {

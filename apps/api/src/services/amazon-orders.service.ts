@@ -41,9 +41,11 @@ import { recascadeProduct } from './stock-movement.service.js'
 
 const amazonService = new AmazonService()
 
-// An FBM order already in one of these before a read has had its stock settled (taken or given back):
-// re-reading it must not hold stock again.
-const FBM_STOCK_SETTLED = new Set(['SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED', 'RETURNED'])
+// An FBM order already in one of these before a read had its stock given back, or its stock belongs to
+// the returns flow: a re-read must not hold stock again. SHIPPED/DELIVERED are deliberately absent — a
+// re-read is how a line that could not be held at ingest (oversold) is taken once stock is there, and
+// the hold/consume guards in stock-level.service keep every re-read to what the line still owes.
+const FBM_NO_HOLD_ON_REREAD = new Set(['CANCELLED', 'REFUNDED', 'RETURNED'])
 
 /** Map Amazon's status strings to our `OrderStatus` enum (extended in O.1). */
 type MappedOrderStatus =
@@ -905,10 +907,10 @@ export class AmazonOrdersService {
     // S.2: FBM stock lifecycle. FBA never touched here. Cancellations
     // are handled by the existing handleOrderCancelled cascade above
     // (which now also releases open reservations — see order-cancellation).
-    // Only a read that can still owe stock runs it: never for a cancelled order, and never for a
-    // re-read of one already settled — every poll re-read shipped orders and held them again. The
-    // first read as SHIPPED (new, or from PROCESSING) still reserves, then consumes.
-    if (fulfillmentMethod === 'FBM' && order.status !== 'CANCELLED' && !FBM_STOCK_SETTLED.has(existing?.status ?? '')) {
+    // Never for a cancelled order, nor a re-read of one already cancelled, refunded or returned. A
+    // re-read of a shipped order still runs: reserveOpenOrder holds only what the line still owes
+    // (nothing once taken — before, every re-read held the units again and the reconcile took them).
+    if (fulfillmentMethod === 'FBM' && order.status !== 'CANCELLED' && !FBM_NO_HOLD_ON_REREAD.has(existing?.status ?? '')) {
       await this.applyFbmStockLifecycle({
         orderId: order.id,
         rawAmazonOrderId: raw.AmazonOrderId,
