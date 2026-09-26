@@ -41,10 +41,10 @@
         "masterSku": null,
         "minMargin": 0,
         "updatedAt": "2026-09-12T14:45:22.575",
-        "amazonAsin": "B0DJ4926YX",
+        "amazonAsin": "B0FX8ACE1B",
         "ebayItemId": null,
         "importedAt": null,
-        "parentAsin": "B0F7J163XJ",
+        "parentAsin": "B0FXD0620C",
         "totalStock": 42,
         "weightUnit": null,
         "buyBoxPrice": null,
@@ -262,7 +262,7 @@
           "flash_point__value": "300.0",
           "lining_description": "Poliestere",
           "pocket_description": "Tasche interne pratiche per oggetti essenziali",
-          "external_product_id": "B0DJ4926YX",
+          "external_product_id": "B0FX8ACE1B",
           "product_description": "Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.",
           "list_price__currency": "EUR",
           "age_range_description": "Adulto",
@@ -271,7 +271,7 @@
           "apparel_size__body_type": "regular",
           "item_length_description": "Lunghezza standard",
           "merchant_shipping_group": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
-          "merchant_suggested_asin": "B0DJ4926YX",
+          "merchant_suggested_asin": "B0FX8ACE1B",
           "apparel_size__size_class": "alpha",
           "external_product_id_type": "ASIN",
           "fulfillment_availability": "",
@@ -335,7 +335,7 @@
         "validationErrors": null,
         "validationStatus": "VALID",
         "variationMapping": null,
-        "externalListingId": "B0DJ4926YX",
+        "externalListingId": "B0FX8ACE1B",
         "followMasterPrice": false,
         "followMasterTitle": false,
         "fulfillmentMethod": "FBA",
@@ -787,7 +787,7 @@
             ],
             "external_product_id": [
               {
-                "value": "B0DJ4926YX",
+                "value": "B0FX8ACE1B",
                 "language_tag": "it_IT",
                 "marketplace_id": "APJ6JRA9NG5V4"
               }
@@ -867,7 +867,7 @@
             ],
             "merchant_suggested_asin": [
               {
-                "value": "B0DJ4926YX",
+                "value": "B0FX8ACE1B",
                 "language_tag": "it_IT",
                 "marketplace_id": "APJ6JRA9NG5V4"
               }
@@ -1250,7 +1250,7 @@
           "apparel_size__body_type": "regular",
           "item_length_description": "Lunghezza standard",
           "merchant_shipping_group": "97f45510-00f4-4777-9ed2-36e5f60d1316",
-          "merchant_suggested_asin": "B0DJ4926YX",
+          "merchant_suggested_asin": "B0FX8ACE1B",
           "apparel_size__size_class": "alpha",
           "fulfillment_availability": "",
           "recommended_browse_nodes": "82838031",
@@ -1318,7 +1318,7 @@
         "validationErrors": null,
         "validationStatus": "VALID",
         "variationMapping": null,
-        "externalListingId": "B0DJ4926YX",
+        "externalListingId": "B0FX8ACE1B",
         "followMasterPrice": false,
         "followMasterTitle": false,
         "fulfillmentMethod": "FBA",
@@ -1776,7 +1776,7 @@
             ],
             "merchant_suggested_asin": [
               {
-                "value": "B0DJ4926YX",
+                "value": "B0FX8ACE1B",
                 "language_tag": "de_DE",
                 "marketplace_id": "A1PA6795UKMFR9"
               }
@@ -2146,7 +2146,7 @@
           "list_price__currency": "EUR",
           "age_range_description": "Adulte",
           "apparel_size__body_type": "regular",
-          "merchant_suggested_asin": "B0DJ4926YX",
+          "merchant_suggested_asin": "B0FX8ACE1B",
           "apparel_size__size_class": "alpha",
           "fulfillment_availability": "",
           "recommended_browse_nodes": "2429656031",
@@ -2191,7 +2191,7 @@
         "validationErrors": null,
         "validationStatus": "VALID",
         "variationMapping": null,
-        "externalListingId": "B0DJ4926YX",
+        "externalListingId": "B0FX8ACE1B",
         "followMasterPrice": false,
         "followMasterTitle": false,
         "fulfillmentMethod": "FBA",
@@ -2419,7 +2419,7 @@
             ],
             "merchant_suggested_asin": [
               {
-                "value": "B0DJ4926YX",
+                "value": "B0FX8ACE1B",
                 "language_tag": "fr_FR",
                 "marketplace_id": "A13V1IB3VIYZZH"
               }
@@ -2685,7 +2685,7 @@
           "apparel_size__body_type": "regular",
           "item_length_description": "Lunghezza standard",
           "merchant_shipping_group": "d58f923e-7fc4-460f-b301-20979179af41",
-          "merchant_suggested_asin": "B0DJ4926YX",
+          "merchant_suggested_asin": "B0FX8ACE1B",
           "apparel_size__size_class": "alpha",
           "fulfillment_availability": "",
           "recommended_browse_nodes": "2425315031",
@@ -2738,7 +2738,7 @@
         "validationErrors": null,
         "validationStatus": "VALID",
         "variationMapping": null,
-        "externalListingId": "B0DJ4926YX",
+        "externalListingId": "B0FX8ACE1B",
         "followMasterPrice": false,
         "followMasterTitle": false,
         "fulfillmentMethod": "FBA",
@@ -3202,7 +3202,7 @@
             ],
             "merchant_suggested_asin": [
               {
-                "value": "B0DJ4926YX",
+                "value": "B0FX8ACE1B",
                 "language_tag": "es_ES",
                 "marketplace_id": "A1RKKUPIHCS9HS"
               }
@@ -3472,7 +3472,7 @@
           "it_follow": "Follow",
           "it_status": "ACTIVE",
           "parentage": "child",
-          "it_item_id": "256566103703",
+          "it_item_id": "950640873955",
           "parent_sku": "GALE-JACKET-ALT3",
           "row_action": "",
           "category_id": "177104",
@@ -3536,7 +3536,7 @@
         "validationErrors": null,
         "validationStatus": "VALID",
         "variationMapping": null,
-        "externalListingId": "257584954808",
+        "externalListingId": "938554736087",
         "followMasterPrice": true,
         "followMasterTitle": false,
         "fulfillmentMethod": "FBM",
@@ -3886,7 +3886,7 @@
         "targetRegion": "IT",
         "targetChannel": "EBAY",
         "channelListingId": "cmqrogz72000fnjpk6gq7h7yo",
-        "externalListingId": "257584954808"
+        "externalListingId": "938554736087"
       },
       {
         "id": "cmrs6nlbe063xo1010j07ohqw",
@@ -3895,7 +3895,7 @@
         "offerId": null,
         "payload": {
           "sku": "GALE-JACKET-BLACK-MEN-XS",
-          "itemId": "257584954808",
+          "itemId": "938554736087",
           "market": "IT",
           "source": "STOCK_MOVEMENT_SHARED",
           "pushVia": "TRADING",
@@ -3920,7 +3920,7 @@
         "targetRegion": "IT",
         "targetChannel": "EBAY",
         "channelListingId": null,
-        "externalListingId": "257584954808"
+        "externalListingId": "938554736087"
       }
     ]
   }

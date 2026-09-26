@@ -27,8 +27,8 @@ Amazon's response for each exact seller SKU confirmed these two workbook identit
 
 | Seller SKU | Previous ASIN | Confirmed ASIN |
 | --- | --- | --- |
-| GALE-JACKET-BLACK-MEN-XXS | B0DJ4926YX | B0H7W8PH1F |
-| GALE-JACKET-YELLOW-MEN-XXS | B0DJ44CDWP | B0H7VXR9XT |
+| GALE-JACKET-BLACK-MEN-XXS | B0FX8ACE1B | B0H7W8PH1F |
+| GALE-JACKET-YELLOW-MEN-XXS | B0FXCB6EF4 | B0H7VXR9XT |
 
 The complete publication-facts resolver then reported zero local issues for all 21 products. This does not establish Amazon acceptance or storefront visibility.
 

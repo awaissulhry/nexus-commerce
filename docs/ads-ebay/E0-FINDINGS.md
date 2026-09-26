@@ -12,7 +12,7 @@
 
 ## F2 — Product-first ads is impossible today: 19 of 20 live listings are invisible to Nexus
 
-Live probe: the account has **20 active listings (all eBay IT)**; Nexus tracks **1** (`257584954808`, the shared-SKU GALE listing). The GALE jacket alone runs ~5 concurrent duplicate listings; 11 of 20 items have **no SKUs** (legacy, hand-created). Additionally `SharedListingMembership.status` is never flipped to `ENDED` by any code path, and `ebay-status-reconcile` is daily/default-OFF/Inventory-API-only.
+Live probe: the account has **20 active listings (all eBay IT)**; Nexus tracks **1** (`938554736087`, the shared-SKU GALE listing). The GALE jacket alone runs ~5 concurrent duplicate listings; 11 of 20 items have **no SKUs** (legacy, hand-created). Additionally `SharedListingMembership.status` is never flipped to `ENDED` by any code path, and `ebay-status-reconcile` is daily/default-OFF/Inventory-API-only.
 
 **Consequence:** the E2 listing-discovery sync + unified resolver (`E0-PRODUCT-LISTING-MAP.md` §6) is a hard prerequisite, ad attachment must be listingId-based, and ads need STALE-marking when itemIds die. Also: eBay rejected the `ItemRevised` notification subscription for this seller's Trading permission level, so end/relist detection must poll — it cannot rely on push.
 

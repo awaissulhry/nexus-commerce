@@ -337,7 +337,7 @@ export function ExportScopeModal({ open, onClose, api, grid, onDownloaded, onErr
             <Input
               id="esm-prod" fieldClassName="esm-field" value={product}
               onChange={(e) => setProduct(e.target.value)}
-              placeholder="XV-GALE-BLACK-M, or B0BMSC91YK — comma-separated"
+              placeholder="XV-GALE-BLACK-M, or B0FX7F7ECD — comma-separated"
             />
           </div>
         )}

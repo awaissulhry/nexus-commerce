@@ -11,7 +11,7 @@
 const { default: prisma } = await import('../src/db.js')
 
 const mem = await prisma.sharedListingMembership.findFirst({
-  where: { status: 'ACTIVE', itemId: '257629997552' }, // WATERPROOF IT (live-verified previously)
+  where: { status: 'ACTIVE', itemId: '977549306465' }, // WATERPROOF IT (live-verified previously)
   select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true },
 })
 if (!mem) { console.log('no ACTIVE membership found for probe item'); process.exit(1) }

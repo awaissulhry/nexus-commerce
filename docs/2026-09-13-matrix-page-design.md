@@ -335,7 +335,7 @@ off-limits. PES.5-ii + the shell adoption (D-MX6) before MX.F.
 
 **Fixtures:** GALE-JACKET `cmokmy3a40078pm0p1fvnu523` (Amazon IT/DE/FR/ES · eBay IT/DE · Shopify · Etsy; 16 FBA
 + 4 FBM children on Amazon; IT pinned 16 / DE following 21 — the disagreeing-intent case is real data); writes
-only on `VX-TEST-3AX` / disposable DRAFT rows under XAVIA; GALE's eBay·IT item 257584954808 and ASIN B0F7J163XJ
+only on `VX-TEST-3AX` / disposable DRAFT rows under XAVIA; GALE's eBay·IT item 938554736087 and ASIN B0FXD0620C
 are LIVE — read-only on channel coordinates. **Name the database before any write** (`:8091` → local Docker
 `nexus_development`, GALE version 59 today; Neon prod 51).
 

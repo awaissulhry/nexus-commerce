@@ -10,8 +10,8 @@
  *
  * 🔴 **A parent has no ad rows of its own — they belong to the variants.** Measured on
  * GALE-JACKET: the parent returns 0 for every identifier it has (`productId`, `sku`, and its own
- * `amazonAsin` B0F7J163XJ), while **every child sampled returns 93–107 product ads and 70–76
- * campaigns**. B0BMSH19GY, the ASIN the ad rows actually reference, belongs to one child
+ * `amazonAsin` B0FXD0620C), while **every child sampled returns 93–107 product ads and 70–76
+ * campaigns**. B0FXFA789A, the ASIN the ad rows actually reference, belongs to one child
  * (GALE-JACKET-BLACK-MEN-XL), not to the parent.
  *
  * So "no ads are running against this product" is true of the parent ROW and false about the

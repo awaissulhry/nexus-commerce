@@ -15,7 +15,7 @@ const win = periodWindow('WEEK', new Date(), SQP_LOOKBACK)
 const since = new Date(Date.now() - 3 * 3600_000)
 
 // The ASINs the crashed run created reports for, plus DE's — recovered from the log.
-const TESTED = new Set(['B0DJ4FLPHM', 'B0F5GLQ86P', 'B0BTC94BQQ'])
+const TESTED = new Set(['B0FXD81F1F', 'B0FX2CBAEE', 'B0FX78D453'])
 
 const list: any = await (sp as any).callAPI({
   operation: 'getReports', endpoint: 'reports',

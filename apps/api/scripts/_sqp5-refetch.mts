@@ -12,7 +12,7 @@ import '../src/env.js'
 import prisma from '../src/db.js'
 import { requestSqpReports, collectSqpReports } from '../src/services/advertising/sqp-async.service.js'
 
-const CORE = ['B0BMSH19GY', 'B0BMSWM15B', 'B0BMSJWW7L', 'B0BMS6ZZ4H', 'B0D8S567P5', 'B0DJ4926YX']
+const CORE = ['B0FXFA789A', 'B0FXE444C9', 'B0FX71011D', 'B0FX4F79EF', 'B0FX3098BE', 'B0FX8ACE1B']
 const WEEK = new Date('2026-08-02T00:00:00Z')
 const END = new Date('2026-08-08T00:00:00Z')
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

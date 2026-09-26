@@ -5,7 +5,7 @@ import { parseActiveList, parseItemDetail } from './ebay-listing-index.service.j
 // PictureURL[0] in GetItem) including entity decoding.
 
 describe('EV2 — parseActiveList galleryUrl', () => {
-  const xml = `<Item><ItemID>256550369887</ItemID><Title>Giacca Moto</Title>
+  const xml = `<Item><ItemID>910792398942</ItemID><Title>Giacca Moto</Title>
     <SellingStatus><CurrentPrice currencyID="EUR">109.99</CurrentPrice></SellingStatus>
     <PictureDetails><GalleryURL>https://i.ebayimg.com/images/g/abc/s-l140.jpg?ver=1&amp;x=2</GalleryURL></PictureDetails>
     <QuantityAvailable>7</QuantityAvailable></Item>`

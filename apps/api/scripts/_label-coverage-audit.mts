@@ -6,7 +6,7 @@ const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-t
 
 // 1) Saponette focus
 const sap = await prisma.channelListing.findFirst({
-  where: { channel: 'EBAY', externalListingId: '256566112769' },
+  where: { channel: 'EBAY', externalListingId: '961409849221' },
   select: { id: true, marketplace: true, region: true, externalListingId: true, platformAttributes: true,
     product: { select: { id: true, sku: true, parentId: true, productType: true, _count: { select: { children: true } },
       parent: { select: { sku: true } } } } },
@@ -19,7 +19,7 @@ if (sap) {
     marketplace: sap.marketplace, region: sap.region,
     lane: pa.__offerIds ? 'INVENTORY' : 'TRADING/legacy', shared_flag: pa.shared_sku_listing ?? false,
   }))
-  const mems = await prisma.sharedListingMembership.count({ where: { itemId: '256566112769' } })
+  const mems = await prisma.sharedListingMembership.count({ where: { itemId: '961409849221' } })
   console.log('SAPONETTE memberships:', mems)
 } else console.log('SAPONETTE: no CL with that itemId')
 

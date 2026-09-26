@@ -4,7 +4,7 @@ const { default: routes } = await import('../src/routes/ebay-flat-file.routes.js
 const app = Fastify({ logger: false })
 await app.register(routes)
 await app.ready()
-for (const itemId of ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']) {
+for (const itemId of ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']) {
   const r = await app.inject({ method: 'POST', url: '/ebay/flat-file/reconcile-item', payload: { itemId, marketplace: 'IT' } })
   const d = r.json() as any
   console.log(d.error ? `${itemId}: ERROR ${d.error}` : `${itemId}: live=${d.liveVariations} matched=${d.matched} staleRemoved=${d.removedStale}`)

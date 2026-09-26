@@ -256,8 +256,10 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
         includedData: ['summaries', 'attributes', 'images', 'issues', 'relationships'] as any,
       })
       const raw = (res.rawResponse ?? {}) as any
-      const search = await amazonSpApiClient.searchListingsItems({ sellerId, marketplaceId, asin: request.query.asin || 'B0BMS6ZZ4H', pageSize: 20 })
-      const catalog = await amazonSpApiClient.getCatalogItemImages(res.asin || request.query.asin || 'B0BMS6ZZ4H', marketplaceId)
+      // The ASIN comes from the listing or `?asin=`; with neither, these two reads are skipped (no real ASIN kept in the code).
+      const probeAsin = res.asin || request.query.asin
+      const search = request.query.asin || res.asin ? await amazonSpApiClient.searchListingsItems({ sellerId, marketplaceId, asin: request.query.asin || res.asin, pageSize: 20 }) : null
+      const catalog = probeAsin ? await amazonSpApiClient.getCatalogItemImages(probeAsin, marketplaceId) : null
       const attrs = raw.attributes ?? {}
       const imageAttributes: Record<string, unknown> = {}
       for (const k of Object.keys(attrs)) if (/image/i.test(k)) imageAttributes[k] = attrs[k]

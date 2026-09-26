@@ -15,10 +15,10 @@ The console's core promise is **product-first promotion**: pick a Nexus product 
 |---|---|---|
 | Live (active) items on the eBay account | **20** | Small enough to backfill mapping in minutes; catch-all rules campaign matters more than mega-bulk ops on day 1 |
 | Marketplace distribution | **100% eBay IT (site 101)** | DE/FR/ES have *zero live listings today* — multi-marketplace console is forward-looking, not current-state |
-| Tracked in Nexus (`ChannelListing.externalListingId`, any status) | **1 of 20** (item `257584954808`, the shared-SKU GALE listing) | **95% of the live account is invisible to Nexus** — a listing-discovery/import sync is a hard prerequisite (E2) |
+| Tracked in Nexus (`ChannelListing.externalListingId`, any status) | **1 of 20** (item `938554736087`, the shared-SKU GALE listing) | **95% of the live account is invisible to Nexus** — a listing-discovery/import sync is a hard prerequisite (E2) |
 | Multi-variation items | 8 of 20 (13–24 variations each, all with per-variation SKUs) | Variation-level SKUs exist only on Nexus-pushed or newer listings |
 | Items with NO SKUs at all | **11 of 20** (legacy hand-created listings) | **Ad attachment must be by `listingId`** (`bulkCreateAdsByListingId`); inventory-reference (SKU) attachment only works for a minority |
-| Duplicate-listing strategy in active use | Yes — e.g. GALE jacket ≈ **5 concurrent live items** (256564203510, 256566101420, 256566102729, 256566103703, 257584954808), Ventra jacket ×3, knee sliders ×4 | The product-first premise is real: promoting "GALE" must fan out to ~5 item IDs, each with its own price/qty/sales history |
+| Duplicate-listing strategy in active use | Yes — e.g. GALE jacket ≈ **5 concurrent live items** (913270132587, 949285812839, 910932382515, 950640873955, 938554736087), Ventra jacket ×3, knee sliders ×4 | The product-first premise is real: promoting "GALE" must fan out to ~5 item IDs, each with its own price/qty/sales history |
 | Sales activity | Present (e.g. 34, 27, 21 sold on top items) | Enough attributed-sale history for eBay suggested rates to be meaningful |
 | Currency | EUR (one anomaly: item `255137162735` lists in **USD** under the US "eBay Motors" category tree while `Site=Italy`) | Currency handling per listing, never assume EUR |
 | Categories | 177104 (moto jackets), 177101 (sliders), 183507 (back protectors), 177106 (leather jackets), 177117 (US Motors apparel) | All in apparel/protective trees → the 2026 size-standardization mandate applies to the jacket categories |

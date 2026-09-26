@@ -1,9 +1,9 @@
-/** READ-ONLY: why did ItemID 257611257473 (AIRMESH-JACKET) come back
+/** READ-ONLY: why did ItemID 978166641275 (AIRMESH-JACKET) come back
  *  'inventory-managed' from the description push, while its sibling revised?
  *  Mirrors the lane detection in ebay-description-push.service.ts exactly. */
 const { default: prisma } = await import('../src/db.js')
 
-const ITEM_ID = '257611257473'
+const ITEM_ID = '978166641275'
 const MARKET = 'IT'
 const REGION = 'IT'
 

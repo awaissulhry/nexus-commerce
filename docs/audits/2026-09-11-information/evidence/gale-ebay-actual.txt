@@ -102,7 +102,7 @@
     - text: Products
   - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
   - generic "GALE-JACKET"
-  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic "Amazon ASIN B0FXD0620C": B0FXD0620C
   - generic: Active
   - generic: Parent
   - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave
@@ -180,11 +180,11 @@
         - row [expanded]:
           - gridcell "Press Space to toggle row selection (unchecked)":
             - checkbox "Press Space to toggle row selection (unchecked)"
-          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing 257584954808 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing 938554736087 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
             - button "Collapse listing" [expanded]:
             - img "Parent · 20 children": P
             - generic: GALE-JACKET
-            - img "Primary · Listing active · Listing 257584954808 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
+            - img "Primary · Listing active · Listing 938554736087 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
               - generic: 100%
           - gridcell "Parent"
           - gridcell "Not measured":

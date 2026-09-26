@@ -2407,7 +2407,7 @@ export interface AdsEligibilityStatus {
  *
  *   { "eligibilityStatusList": [],
  *     "overallStatus": "ELIGIBLE",
- *     "productDetails": { "asin": "B0CFB7GTV7", "globalStoreSetting": null,
+ *     "productDetails": { "asin": "B0FXF87810", "globalStoreSetting": null,
  *                         "sku": "AIR-MESH-JACKET-MEN-L-BLACK" } }
  *
  * `asin`/`sku` are kept as optional top-level fields so a future flat shape

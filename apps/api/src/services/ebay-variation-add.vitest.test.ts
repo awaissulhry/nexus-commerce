@@ -30,11 +30,11 @@ describe('extendSpecificsSet', () => {
 describe('buildAddVariationsXml', () => {
   it('full extended set + ONLY new variations with price/qty/specifics', () => {
     const xml = buildAddVariationsXml(
-      '256566101420',
+      '949285812839',
       { Taglia: ['S', 'XXS'], Colore: ['Nero'] },
       [{ sku: 'GALE-JACKET-BLACK-MEN-XXS', price: 105, quantity: 7, specifics: { Taglia: 'XXS', Colore: 'Nero' } }],
     )
-    expect(xml).toContain('<ItemID>256566101420</ItemID>')
+    expect(xml).toContain('<ItemID>949285812839</ItemID>')
     expect(xml).toContain('<VariationSpecificsSet><NameValueList><Name>Taglia</Name><Value>S</Value><Value>XXS</Value>')
     expect(xml).toContain('<SKU>GALE-JACKET-BLACK-MEN-XXS</SKU><StartPrice>105.00</StartPrice><Quantity>7</Quantity>')
     expect((xml.match(/<Variation>/g) ?? []).length).toBe(1)

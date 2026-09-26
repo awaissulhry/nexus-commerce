@@ -15,7 +15,7 @@ After privately comparing the existing Railway configuration and verifying live 
 | eBay xaviaracing | Identity matches the saved immutable ID; account privileges; inventory read | All HTTP 200; inventory endpoint reports 226 items |
 | eBay motovento | Identity matches the saved immutable ID; account privileges; inventory read | All HTTP 200; inventory endpoint reports 0 items |
 | eBay application | App token; Italy taxonomy; category 177101 aspects | All HTTP 200; 14 aspects |
-| Amazon seller A1VRHKTGYO1JNU | LWA refresh; marketplace participation; AIRMESH-JACKET-BLACK-MEN-XL listing in Italy | All HTTP 200; live product type COAT |
+| Amazon seller AFXSELLER8BC38 | LWA refresh; marketplace participation; AIRMESH-JACKET-BLACK-MEN-XL listing in Italy | All HTTP 200; live product type COAT |
 | Amazon seller-specific definition | COAT / Italy / LISTING / ENFORCED; schema document download | Both HTTP 200; 157 schema properties |
 
 The eBay Inventory API item count is not the local listing count: they represent different records. The initial inventory probe needed an explicit `Accept-Language` header. The successful category probe uses a category from actual account listings. No listings were created, changed, deleted, or published.

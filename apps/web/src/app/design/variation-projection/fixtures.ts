@@ -106,7 +106,7 @@ export const COORDINATES: Coordinate[] = [
     axes: ['size', 'color', 'style'], theme: 'SIZE/COLOR/STYLE', source: 'rule', ruleLabel: 'Apparel default',
     axisNoun: 'theme', axisNounPlural: 'themes', limitAxes: 3, limitVariants: null,
     included: ALL, targets: { size: 'size_name', color: 'color_name', style: 'style_name' },
-    connected: true, externalId: 'B0F7J163XJ',
+    connected: true, externalId: 'B0FXD0620C',
   },
   {
     key: 'AMAZON:IT', channel: 'AMAZON', label: 'Amazon · IT', market: 'IT', aliasKey: '', aliasLabel: 'Primary',
@@ -422,7 +422,7 @@ export const PLANS: ThemeChangePlan[] = [
       { n: 1, verb: 'PUT', target: 'GALE-JACKET-P2', detail: 'A new parent SKU carrying the new theme.', reversible: true },
       { n: 2, verb: 'PATCH', target: '12 children', detail: 'child_parent_sku_relationship → the new parent, variation_theme → SIZE/COLOR/STYLE, plus style_name.', reversible: true },
       { n: 3, verb: 'READ', target: '12 children', detail: 'Read back after 8 s and confirm every child answers with the new parent.', reversible: true },
-      { n: 4, verb: 'DELETE', target: 'B0F7J163XJ', detail: 'The old parent listing, once every child has moved.', reversible: false },
+      { n: 4, verb: 'DELETE', target: 'B0FXD0620C', detail: 'The old parent listing, once every child has moved.', reversible: false },
     ],
     keeps: ['Child ASINs', 'Reviews', 'Sales history', 'Offers and prices'],
     loses: ['The parent ASIN and its URL', 'A+ content attached to the parent', 'Ads targeting the parent ASIN'],

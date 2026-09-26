@@ -4,11 +4,11 @@ import { buildRelabelXml, planSkulessAdoption } from './ebay-variation-relabel.s
 
 describe('buildRelabelXml', () => {
   it('one Variation per relabel, identified by specifics, carrying the NEW sku', () => {
-    const xml = buildRelabelXml('256566101420', [
+    const xml = buildRelabelXml('949285812839', [
       { fromSku: 'T1_Ne_L', toSku: 'GALE-JACKET-BLACK-MEN-L', specifics: { Colore: 'Nero', Taglia: 'L' } },
       { fromSku: 'T1_Gi_M', toSku: 'GALE-JACKET-YELLOW-MEN-M', specifics: { Colore: 'Giallo', Taglia: 'M' } },
     ])
-    expect(xml).toContain('<ItemID>256566101420</ItemID>')
+    expect(xml).toContain('<ItemID>949285812839</ItemID>')
     expect((xml.match(/<Variation>/g) ?? []).length).toBe(2)
     expect(xml).toContain('<SKU>GALE-JACKET-BLACK-MEN-L</SKU>')
     expect(xml).toContain('<Name>Colore</Name><Value>Nero</Value>')

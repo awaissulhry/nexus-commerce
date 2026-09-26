@@ -1989,12 +1989,13 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // Calls GET /aplus/2020-11-01/contentDocuments to see if Amazon
   // has any A+ Content published for this seller. If 0, Phase 9 is
   // a no-op (nothing to reconcile). If non-zero, we build the pull.
-  fastify.get('/aplus/probe', async () => {
+  // The ASIN relation probe runs only for an ASIN the caller names (`?asin=`); no real ASIN is kept in the code.
+  fastify.get<{ Querystring: { asin?: string } }>('/aplus/probe', async (request) => {
     const { amazonSellerFetch } = await import('../services/gateway/amazon-sdk.js')
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
     const probes: Array<{ name: string; path: string }> = [
       { name: 'aplus-listDocs', path: `/aplus/2020-11-01/contentDocuments?marketplaceId=${marketplaceId}&pageSize=20` },
-      { name: 'aplus-listAsins', path: `/aplus/2020-11-01/contentAsinRelations?marketplaceId=${marketplaceId}&asinSet=B0BMSC91YK` },
+      ...(request.query.asin ? [{ name: 'aplus-listAsins', path: `/aplus/2020-11-01/contentAsinRelations?marketplaceId=${marketplaceId}&asinSet=${encodeURIComponent(request.query.asin)}` }] : []),
     ]
     const results: Array<{ name: string; status: number; sample?: unknown; error?: string }> = []
     for (const p of probes) {

@@ -102,7 +102,7 @@
     - text: Products
   - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
   - generic "GALE-JACKET"
-  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic "Amazon ASIN B0FXD0620C": B0FXD0620C
   - generic: Active
   - generic: Parent
   - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave
@@ -188,11 +188,11 @@
         - row [expanded]:
           - gridcell "Press Space to toggle row selection (unchecked)":
             - checkbox "Press Space to toggle row selection (unchecked)"
-          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing B0F7J163XJ · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing B0FXD0620C · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
             - button "Collapse listing" [expanded]:
             - img "Parent · 20 children": P
             - generic: GALE-JACKET
-            - img "Primary · Listing active · Listing B0F7J163XJ · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
+            - img "Primary · Listing active · Listing B0FXD0620C · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
               - generic: 41%
           - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Product type"':
             - generic: OUTERWEAR
@@ -207,8 +207,8 @@
           - 'gridcell "Not measured Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, External Product ID"':
             - generic: —
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, External Product ID"':
-          - 'gridcell "B0F7J163XJ Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Manufacturer"':
             - generic: —
@@ -251,8 +251,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-3XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Manufacturer"':
@@ -298,8 +298,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-4XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Manufacturer"':
@@ -345,8 +345,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-5XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Manufacturer"':
@@ -392,8 +392,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-L, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-L, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-L, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-L, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-L, Manufacturer"':
@@ -439,8 +439,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-M, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-M, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-M, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-M, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-M, Manufacturer"':
@@ -486,8 +486,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-S, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-S, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-S, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-S, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-S, Manufacturer"':
@@ -533,8 +533,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XL, Manufacturer"':
@@ -580,8 +580,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XS, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XS, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XS, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XS, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XS, Manufacturer"':
@@ -627,8 +627,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Manufacturer"':
@@ -674,8 +674,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXS, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Manufacturer"':
@@ -721,8 +721,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Manufacturer"':
@@ -768,8 +768,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Manufacturer"':
@@ -815,8 +815,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Manufacturer"':
@@ -862,8 +862,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-L, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-L, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-L, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-L, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-L, Manufacturer"':
@@ -909,8 +909,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-M, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-M, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-M, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-M, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-M, Manufacturer"':
@@ -956,8 +956,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-S, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-S, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-S, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-S, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-S, Manufacturer"':
@@ -1003,8 +1003,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Manufacturer"':
@@ -1050,8 +1050,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XS, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Manufacturer"':
@@ -1097,8 +1097,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Manufacturer"':
@@ -1144,8 +1144,8 @@
             - generic: —
             - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
             - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, External Product ID"':
-          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Merchant Suggested ASIN"':
-            - generic: B0F7J163XJ
+          - 'gridcell "B0FXD0620C Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Merchant Suggested ASIN"':
+            - generic: B0FXD0620C
             - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
             - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Merchant Suggested ASIN"':
           - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Manufacturer"':

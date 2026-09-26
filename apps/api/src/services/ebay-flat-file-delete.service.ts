@@ -711,7 +711,7 @@ async function handleRemoveChannelListing(
     )
     // GUARD 2 — CROSS-MARKET / SHARED ItemID. An ItemID can legitimately be
     // referenced by another market's row or by live pool memberships: a DE row
-    // was found carrying the LIVE IT ItemID 257584954808, so deleting that DE
+    // was found carrying the LIVE IT ItemID 938554736087, so deleting that DE
     // row would have ENDED the live IT GALE listing (21 IT listing rows + 20
     // ACTIVE IT memberships hang off it). The target's own rows are already
     // deleted above, so ANY surviving reference proves the listing still

@@ -134,8 +134,8 @@ export const GALE_AMAZON_DE_DERIVED: VariationThemeCell = {
   dropped: [],
   collisions: null,
   locked: {
-    reason: 'Live on Amazon DE (B0D8XBXM5H) — changing the theme creates a new parent and relinks 20 children. Commit opens the plan.',
-    externalId: 'B0D8XBXM5H',
+    reason: 'Live on Amazon DE (B0FX4BC696) — changing the theme creates a new parent and relinks 20 children. Commit opens the plan.',
+    externalId: 'B0FX4BC696',
     setChangeIs: 'new-parent',
     orderChangeAllowed: false,
   },
@@ -154,7 +154,7 @@ export const GALE_AMAZON_DE_DERIVED: VariationThemeCell = {
 /**
  * 3 · eBay · IT — OVERRIDDEN on this coordinate. The parent listing row carries `"Color,Size"` and all 19
  * child rows carry it too (measured on local); the names DELIVERED are the site's variation-enabled aspects.
- * Live item 257584954808: changing the SET relists; reordering does not (Appendix A lock copy).
+ * Live item 938554736087: changing the SET relists; reordering does not (Appendix A lock copy).
  */
 export const GALE_EBAY_IT_OVERRIDDEN: VariationThemeCell = {
   axes: [
@@ -178,8 +178,8 @@ export const GALE_EBAY_IT_OVERRIDDEN: VariationThemeCell = {
   dropped: [],
   collisions: null,
   locked: {
-    reason: 'Live on eBay IT (item 257584954808) — changing the set relists it. Reordering does not.',
-    externalId: '257584954808',
+    reason: 'Live on eBay IT (item 938554736087) — changing the set relists it. Reordering does not.',
+    externalId: '938554736087',
     setChangeIs: 'relist',
     orderChangeAllowed: true,
   },

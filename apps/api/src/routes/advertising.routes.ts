@@ -12094,7 +12094,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── APS.3 — GET /advertising/eligibility ──────────────────────────────
   //
-  //   ?marketplace=IT&adType=sp&asins=B0F7J163XJ,B0CR629FDY
+  //   ?marketplace=IT&adType=sp&asins=B0FXD0620C,B0FX5D1762
   //
   // Deliberately a GET: the RBAC manifest maps reads under /api/advertising to
   // ads.view and writes to ads.campaigns.manage, and checking whether a product

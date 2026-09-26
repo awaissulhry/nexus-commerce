@@ -16,7 +16,7 @@
  *
  * Measured when it was written (local Docker `nexus_development`, 2026-09-13): 38 eBay parent listing rows; the
  * PUSH's declared axes identical on 38 of 38; the FAMILY-AXES read changes on exactly 1 — GALE-JACKET eBay·IT
- * (ACTIVE, item 257584954808), which read `["Color","Size"]` off the retired listing COLUMN while the push has been
+ * (ACTIVE, item 938554736087), which read `["Color","Size"]` off the retired listing COLUMN while the push has been
  * sending `["Colore","Taglia"]`. That one row is the Appendix C disagreement, and the change closes it by making
  * the read agree with what ships.
  */

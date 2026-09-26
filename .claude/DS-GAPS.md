@@ -1174,7 +1174,7 @@ theme (see the theme note at the end — the studio is pinned light in BOTH OS t
   disclosed in the ledger).
   **Verified on screen, reloaded**: `--nds-font-mono` resolves to
   `"JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, …` and **6 elements now render JetBrains
-  Mono** — `.nds-kbd` (⌘, K) and `.identity` (`GALE-JACKET`, `B0F7J163XJ`) — where before the reload
+  Mono** — `.nds-kbd` (⌘, K) and `.identity` (`GALE-JACKET`, `B0FXD0620C`) — where before the reload
   every mono element on the page rendered the OS stack.
   ⚠ **Not finished, and the most visible one is the remainder:** 21 elements still render
   `ui-monospace, SFMono-Regular, Menlo, monospace`, led by **`.nds-cell-sku`** — every SKU in the sheet —
@@ -4220,7 +4220,7 @@ into `aria-label`/`title` by hand. There is no DS primitive that pairs a disable
 every surface that needs it re-implements the pairing and a future one will forget the sentence —
 `reference_disabled_control_cannot_explain` is the trap, and the programme's own rule is that a held control is rendered
 and says why. Measured on screen (GALE eBay·IT, 1440×900): `aria-label="Color is the eBay specific Colore, locked: Live on
-eBay IT (item 257584954808) — changing the set relists it. Reordering does not."` VT.F did not add a primitive for it — a
+eBay IT (item 938554736087) — changing the set relists it. Reordering does not."` VT.F did not add a primitive for it — a
 final pass is the wrong place to introduce one — and records it as the gap it is. — apps/web/src/design-system/grid/editors/AxesPanelEditor.tsx:575
 
 

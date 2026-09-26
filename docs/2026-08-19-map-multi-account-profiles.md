@@ -787,7 +787,7 @@ both themes.**
 - **eBay has no seller identity.** `ebay-auth.service.ts:451` writes the literal
   `"eBay seller (verified)"` because the OAuth scope in use returns no name. MAP.4 must add the
   identity scope, or it cannot reject a duplicate account by sign-in name.
-- **Amazon's label is its merchant id.** `displayName` holds `A1VRHKTGYO1JNU`. Both are surfaced as
+- **Amazon's label is its merchant id.** `displayName` holds `AFXSELLER8BC38`. Both are surfaced as
   `labelIsPlaceholder`, which is the concrete case for MAP.2's `accountLabel`.
 
 ---

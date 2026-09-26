@@ -35,7 +35,7 @@ const qBefore = await queueCount()
 const projBefore = (await app.inject({ method: 'GET', url: `/products/${GALE}/studio/projection?channel=EBAY&market=IT&accountId=${ACCOUNT}` })).json() as any
 console.log('BEFORE   :', JSON.stringify(before), '| queue', qBefore)
 console.log('PREDICT  : isPublished TRUE→FALSE, variationExcluded FALSE→TRUE, syncPaused UNCHANGED (false),')
-console.log('           externalListingId KEPT (257584954808 is not lost by excluding), zero new queue rows.')
+console.log('           externalListingId KEPT (938554736087 is not lost by excluding), zero new queue rows.')
 if (before.isPublished !== true) {
   console.log('ABORT: this row is not isPublished=true, so it cannot exercise the arm. Nothing written.')
   process.exit(1)
