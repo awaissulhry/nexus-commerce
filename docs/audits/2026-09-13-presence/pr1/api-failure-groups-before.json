@@ -442,7 +442,7 @@
     },
     {
       "test": "createSharedListing > adopt belt: a row carrying a live ItemID never re-lists (no eBay call)",
-      "reason": "AssertionError: expected 'ERROR' to be 'SKIPPED_EXISTS' // Object.is equality\n\nExpected: \"SKIPPED_EXISTS\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:136:24\n    134|     const liveParent = { ...parent, it_item_id: '257584954808' }"
+      "reason": "AssertionError: expected 'ERROR' to be 'SKIPPED_EXISTS' // Object.is equality\n\nExpected: \"SKIPPED_EXISTS\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:136:24\n    134|     const liveParent = { ...parent, it_item_id: '938554736087' }"
     },
     {
       "test": "createSharedListing > adopt belt: variant-level ItemID also blocks re-listing",

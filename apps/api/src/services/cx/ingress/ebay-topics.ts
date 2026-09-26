@@ -86,8 +86,10 @@ export function ebayTopicAction(topic: string | null | undefined, payload: unkno
   if (name && TOPIC_ROUTES[name]) return { action: TOPIC_ROUTES[name], via: 'topic' }
   if (name && LEGACY_ALIASES[name]) return { action: LEGACY_ALIASES[name], via: 'legacy_alias' }
 
-  const data = (payload as any)?.notification?.data ?? (payload as any)?.notification ?? {}
-  const orderId = data?.orderId ?? data?.orderID
+  // eBay's order notices carry the order as an object (ebay-order-notice.ts). A flat `data.orderId`
+  // was this file's guess, never eBay's contract, and is no longer read. (No production caller:
+  // only the P2.3 test imports this module.)
+  const orderId = (payload as any)?.notification?.data?.order?.orderId
   if (typeof orderId === 'string' && orderId !== '') {
     // The loud line. If this ever fires in production it names the real topic id, which
     // is the one thing this file cannot supply for itself.

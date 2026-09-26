@@ -311,7 +311,7 @@ describe('VT.4 — the new parent SKU', () => {
 
 describe('VT.4 — the plan’s copy is the canvas’s', () => {
   it('titles, banner, keeps and loses come from the approved copy table', async () => {
-    getProjectionRead.mockResolvedValue(readFor('AMAZON', 'DE', [['Taglia', 'size'], ['Colore', 'color']], { theme: 'SIZE/COLOR', externalId: 'B0F7J163XJ' }))
+    getProjectionRead.mockResolvedValue(readFor('AMAZON', 'DE', [['Taglia', 'size'], ['Colore', 'color']], { theme: 'SIZE/COLOR', externalId: 'B0FXD0620C' }))
     const plan = await buildThemeChangePlan({
       productId: 'p-root', channel: 'AMAZON', market: 'DE', expectedVersion: 3, dryRun: true, theme: 'COLOR/SIZE',
       mapping: [{ axisKey: 'Colore', target: 'color', order: 0 }, { axisKey: 'Taglia', target: 'size', order: 1 }],
@@ -321,13 +321,13 @@ describe('VT.4 — the plan’s copy is the canvas’s', () => {
     expect(plan.banner).toBe(PLAN_COPY.amazonBanner)
     expect(plan.steps.map((s) => s.verb)).toEqual(['PUT', 'PATCH ×4', 'WAIT 8 s', 'DELETE'])
     expect(plan.steps.map((s) => s.reversible)).toEqual([true, true, null, false])
-    expect(plan.steps[3].target).toBe('VX-TEST-3AX (B0F7J163XJ)')
+    expect(plan.steps[3].target).toBe('VX-TEST-3AX (B0FXD0620C)')
     expect(plan.keeps).toEqual([
       'child ASINs, reviews and sales history',
       'offers, prices, FBA stock',
       'the Nexus product and its children',
     ])
-    expect(plan.loses[0]).toBe('the parent ASIN B0F7J163XJ and its URL')
+    expect(plan.loses[0]).toBe('the parent ASIN B0FXD0620C and its URL')
     expect(plan.dryRun).toBe(true)
     expect(plan.meta.providerCalls).toBe(0)
   })

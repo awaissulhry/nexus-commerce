@@ -63,10 +63,8 @@ import { drainAdsSyncOnce } from '../workers/ads-sync.worker.js'
 // the handlers are available before any rule fires.
 import '../services/advertising/automation-action-handlers.js'
 import { seedAdvertisingTemplates } from '../services/advertising/automation-templates.js'
-import {
-  runAdvertisingRuleEvaluatorOnce,
-  getAdvertisingRuleEvaluatorStatus,
-} from '../jobs/advertising-rule-evaluator.job.js'
+import { runAdvertisingRuleEvaluatorOnce } from '../jobs/advertising-rule-evaluator.job.js'
+import { CRON_JOBS, readCronCard } from '../services/runtime-status/cron-status.service.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import { rollbackByExecutionId } from '../services/advertising/rollback.service.js'
 import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmuteSuggestion } from '../services/advertising/ads-suggestions.service.js'
@@ -7523,8 +7521,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, summary }
   })
 
+  // Scheduled = registered in the scheduler process; runs and the summary from CronRun.
   fastify.get('/advertising/cron/advertising-rule-evaluator/status', async (_request, _reply) => {
-    return getAdvertisingRuleEvaluatorStatus()
+    return readCronCard(CRON_JOBS.advertisingRuleEvaluator, {
+      fields: (status) => ({ lastSummary: status.lastSuccess?.outputSummary ?? null }),
+    })
   })
 
   // ── AX.4: CREATE routes (campaign/adGroup/keyword/productAd) ─────────
@@ -12094,7 +12095,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── APS.3 — GET /advertising/eligibility ──────────────────────────────
   //
-  //   ?marketplace=IT&adType=sp&asins=B0F7J163XJ,B0CR629FDY
+  //   ?marketplace=IT&adType=sp&asins=B0FXD0620C,B0FX5D1762
   //
   // Deliberately a GET: the RBAC manifest maps reads under /api/advertising to
   // ads.view and writes to ads.campaigns.manage, and checking whether a product

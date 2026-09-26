@@ -39,8 +39,6 @@ const config: Config = {
           '-apple-system',
           'Segoe UI',
           'Roboto',
-          'Helvetica Neue',
-          'Arial',
           'sans-serif',
         ],
         // P0-FC — Space Grotesk display for headings/hero numerals.

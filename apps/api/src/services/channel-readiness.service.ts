@@ -154,22 +154,7 @@ export class ChannelReadinessService {
   constructor(private readonly client: PrismaClient = prisma) {}
 
   async compute(productId: string): Promise<ChannelReadinessResult> {
-    const product = await this.client.product.findUnique({
-      where: { id: productId },
-      select: {
-        id: true,
-        familyId: true,
-        brand: true,
-        productType: true,
-        description: true,
-        gtin: true,
-        upc: true,
-        ean: true,
-        basePrice: true,
-        weightValue: true,
-        _count: { select: { images: true } },
-      },
-    })
+    const product = await this.client.product.findUnique({ where: { id: productId }, select: READINESS_PRODUCT_SELECT })
     if (!product) {
       throw new Error(
         `ChannelReadinessService: product ${productId} not found`,
@@ -187,92 +172,147 @@ export class ChannelReadinessService {
             select: { id: true, label: true },
           })
         : []
-      const labelById = new Map(labelLookup.map((a) => [a.id, a.label]))
-
-      const channels: ChannelReadinessRow[] = ACTIVE_CHANNELS.map((ch) => {
-        const bc =
-          completeness.byChannel[ch] ??
-          completeness.byChannel.all
-        // Missing list filtered to attrs that apply to this channel.
-        // We don't have per-attr channel info on `missing` here, so
-        // fall back to "the global missing list" for the per-channel
-        // surface. This is conservative — surfaces a missing attr on
-        // every channel even if it's only required on Amazon. Wave
-        // 4+ refines via FamilyAttribute.channels lookup.
-        const missing = completeness.missing.map((m) => ({
-          key: m.attributeId,
-          label: labelById.get(m.attributeId) ?? m.attributeId,
-          source: 'family' as const,
-        }))
-        return {
-          channel: ch,
-          score: bc.score,
-          filled: bc.filled,
-          totalRequired: bc.totalRequired,
-          missing,
-        }
-      })
-
-      const averageScore = Math.round(
-        channels.reduce((acc, c) => acc + c.score, 0) /
-          Math.max(channels.length, 1),
-      )
-
-      return {
-        productId,
-        channels,
-        averageScore,
-        familyDriven: true,
-      }
+      return familyReadiness(productId, completeness, new Map(labelLookup.map((a) => [a.id, a.label])))
     }
 
-    // Fallback path — hard-coded per-channel minimums.
-    const projected: ProductForFallback = {
-      brand: product.brand,
-      productType: product.productType,
-      description: product.description,
-      gtin: product.gtin,
-      upc: product.upc,
-      ean: product.ean,
-      basePrice: product.basePrice as never,
-      weightValue: product.weightValue as never,
-      imageCount: product._count.images,
+    return fallbackReadiness(productId, product)
+  }
+
+  /**
+   * P3 (docs/attributes/PLAN.md §4.1) — the same answer as `compute` for many products, with a fixed number of queries
+   * (products, the batched family completeness, the labels) instead of several per product in sequence.
+   * A product that does not exist, or whose family cannot be resolved, gets `{ error }` with the message `compute` throws.
+   */
+  async computeMany(productIds: readonly string[]): Promise<Map<string, ChannelReadinessResult | { error: string }>> {
+    const ids = [...new Set(productIds)]
+    const products = await this.client.product.findMany({ where: { id: { in: ids } }, select: READINESS_PRODUCT_SELECT })
+    const byId = new Map(products.map((p) => [p.id, p]))
+    const familied = products.filter((p) => p.familyId).map((p) => p.id)
+    const completeness = familied.length ? await familyCompletenessService.computeMany(familied) : new Map()
+    const missingIds = [...new Set([...completeness.values()].flatMap((c) => ('error' in c ? [] : c.missing.map((m: { attributeId: string }) => m.attributeId))))]
+    const labels = missingIds.length
+      ? await this.client.customAttribute.findMany({ where: { id: { in: missingIds } }, select: { id: true, label: true } })
+      : []
+    const labelById = new Map(labels.map((a) => [a.id, a.label]))
+    const results = new Map<string, ChannelReadinessResult | { error: string }>()
+    for (const id of ids) {
+      const product = byId.get(id)
+      if (!product) { results.set(id, { error: `ChannelReadinessService: product ${id} not found` }); continue }
+      if (!product.familyId) { results.set(id, fallbackReadiness(id, product)); continue }
+      const c = completeness.get(id)!
+      results.set(id, 'error' in c ? c : familyReadiness(id, c, labelById))
     }
+    return results
+  }
+}
 
-    const channels: ChannelReadinessRow[] = ACTIVE_CHANNELS.map((ch) => {
-      const fields = FALLBACK_FIELDS_BY_CHANNEL[ch]
-      const missing: ChannelReadinessRow['missing'] = []
-      let filled = 0
-      for (const f of fields) {
-        if (f.isFilledFor(projected)) filled++
-        else
-          missing.push({
-            key: f.key,
-            label: f.label,
-            source: 'channel_minimum',
-          })
-      }
-      const total = fields.length
-      return {
-        channel: ch,
-        score: total === 0 ? 100 : Math.round((filled / total) * 100),
-        filled,
-        totalRequired: total,
-        missing,
-      }
-    })
+const READINESS_PRODUCT_SELECT = {
+  id: true,
+  familyId: true,
+  brand: true,
+  productType: true,
+  description: true,
+  gtin: true,
+  upc: true,
+  ean: true,
+  basePrice: true,
+  weightValue: true,
+  _count: { select: { images: true } },
+} as const
 
-    const averageScore = Math.round(
-      channels.reduce((acc, c) => acc + c.score, 0) /
-        Math.max(channels.length, 1),
-    )
-
+/** Family path — surfaces the family completeness per channel with readable labels. */
+function familyReadiness(
+  productId: string,
+  completeness: { byChannel: Record<string, { score: number; filled: number; totalRequired: number }>; missing: Array<{ attributeId: string }> },
+  labelById: ReadonlyMap<string, string>,
+): ChannelReadinessResult {
+  const channels: ChannelReadinessRow[] = ACTIVE_CHANNELS.map((ch) => {
+    const bc =
+      completeness.byChannel[ch] ??
+      completeness.byChannel.all
+    // Missing list filtered to attrs that apply to this channel.
+    // We don't have per-attr channel info on `missing` here, so
+    // fall back to "the global missing list" for the per-channel
+    // surface. This is conservative — surfaces a missing attr on
+    // every channel even if it's only required on Amazon. Wave
+    // 4+ refines via FamilyAttribute.channels lookup.
+    const missing = completeness.missing.map((m) => ({
+      key: m.attributeId,
+      label: labelById.get(m.attributeId) ?? m.attributeId,
+      source: 'family' as const,
+    }))
     return {
-      productId,
-      channels,
-      averageScore,
-      familyDriven: false,
+      channel: ch,
+      score: bc.score,
+      filled: bc.filled,
+      totalRequired: bc.totalRequired,
+      missing,
     }
+  })
+
+  const averageScore = Math.round(
+    channels.reduce((acc, c) => acc + c.score, 0) /
+      Math.max(channels.length, 1),
+  )
+
+  return {
+    productId,
+    channels,
+    averageScore,
+    familyDriven: true,
+  }
+}
+
+/** Fallback path — hard-coded per-channel minimums. */
+function fallbackReadiness(
+  productId: string,
+  product: { brand: string | null; productType: string | null; description: string | null; gtin: string | null; upc: string | null; ean: string | null; basePrice: unknown; weightValue: unknown; _count: { images: number } },
+): ChannelReadinessResult {
+  const projected: ProductForFallback = {
+    brand: product.brand,
+    productType: product.productType,
+    description: product.description,
+    gtin: product.gtin,
+    upc: product.upc,
+    ean: product.ean,
+    basePrice: product.basePrice as never,
+    weightValue: product.weightValue as never,
+    imageCount: product._count.images,
+  }
+
+  const channels: ChannelReadinessRow[] = ACTIVE_CHANNELS.map((ch) => {
+    const fields = FALLBACK_FIELDS_BY_CHANNEL[ch]
+    const missing: ChannelReadinessRow['missing'] = []
+    let filled = 0
+    for (const f of fields) {
+      if (f.isFilledFor(projected)) filled++
+      else
+        missing.push({
+          key: f.key,
+          label: f.label,
+          source: 'channel_minimum',
+        })
+    }
+    const total = fields.length
+    return {
+      channel: ch,
+      score: total === 0 ? 100 : Math.round((filled / total) * 100),
+      filled,
+      totalRequired: total,
+      missing,
+    }
+  })
+
+  const averageScore = Math.round(
+    channels.reduce((acc, c) => acc + c.score, 0) /
+      Math.max(channels.length, 1),
+  )
+
+  return {
+    productId,
+    channels,
+    averageScore,
+    familyDriven: false,
   }
 }
 

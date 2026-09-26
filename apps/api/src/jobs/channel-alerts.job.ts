@@ -136,9 +136,11 @@ export async function runChannelAlertSweep(now: number = Date.now()): Promise<Ch
     const { ETSY_MAX_CONTENT_AGE_MS, etsyFreshnessCensus } = await import('../services/etsy/freshness.js')
     const rows = await prisma.channelListing.findMany({
       where: { channel: 'ETSY' },
-      select: { lastSyncedAt: true },
+      select: { lastSyncedAt: true, lastSyncStatus: true },
     })
-    const census = etsyFreshnessCensus(rows, now)
+    // F5 — read against the DATABASE clock, the one the refresh stamps with.
+    const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
+    const census = etsyFreshnessCensus(rows, clock?.now?.getTime() ?? now)
     // 🔴 Logged ALWAYS, including `total: 0`.
     //
     // The first version wrapped this in `if (rows.length > 0)`, and production answered with

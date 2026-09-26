@@ -296,7 +296,7 @@ Measured with the strict key (same ad group · same match type · same text, cas
 Positive keywords by creation month: **2026-05 = 1,361 · 06 = 215 · 07 = 550 · 08 = 3.**
 **550 keywords were created in July and produced not one duplicate.** The guard holds.
 
-Same for the ASINs. 54 positive KEYWORD rows carry ASIN text (`b0bmswm15b` ×25, `b0bms6zz4h` ×17,
+Same for the ASINs. 54 positive KEYWORD rows carry ASIN text (`b0fxe444c9` ×25, `b0fx4f79ef` ×17,
 `b0dvzs4t8g` ×12), each confined to one ad group, all created 2026-06-01 → 2026-06-23, **all 54
 written by `automation:auto-harvest`** per the audit log — before H.5 routed ASIN queries to product
 targets. None has an Amazon id. And the engine's `applyHarvest` call passes no `plan`, so
@@ -2527,12 +2527,12 @@ held ever since. The two rows outside a group are both under AUTO campaigns.
 | × | market | campaign › ad group | text | sibling at Amazon |
 |---|---|---|---|---|
 | 25 | IT | IT_Exact_Gale_SV=2k+ › Exact_Gale… | `giacca moto` | — |
-| 25 | IT | IT_DEF_Gale_"Targets=All-A… | `b0bmswm15b` | — (ASIN) |
+| 25 | IT | IT_DEF_Gale_"Targets=All-A… | `b0fxe444c9` | — (ASIN) |
 | 24 | IT | Exact_Gale_SV_LessThan_1k… | `giubbotto moto uomo` | `16026030732543` |
 | 24 | DE | DE_Exact_3_Keywords | `motorrad jacke herren` | `252943870004724` |
 | 22 | DE | DE_Exact_3_Keywords | `motorradjacke herren` | `169513143345169` |
 | 18 | IT | IT_Exact_Gale_SV=6k+ › Exact_Gale… | `giacca moto uomo` | — |
-| 17 | IT | IT_DEF_Gale_"Targets=All-A… | `b0bms6zz4h` | — (ASIN) |
+| 17 | IT | IT_DEF_Gale_"Targets=All-A… | `b0fx4f79ef` | — (ASIN) |
 | 17 | DE | DE_Phrase_3_Keywords | `motorradjacke herren mit p…` | `126731108917969` |
 | 12 | DE | DE_Auto_Substitute | `b0dvzs4t8g` | — (ASIN **and** AUTO) |
 | 9 | DE | DE_Phrase_3_Keywords | `dünne motorradjacke mit pr…` | `204988683848148` |
@@ -2582,7 +2582,7 @@ which is the sync's timing and not evidence of age. The documented list settled 
 
 ## The three populations that must never be pushed
 
-- **54 ASIN-as-keyword rows** — 3 ASINs (`b0bmswm15b` ×25 · `b0bms6zz4h` ×17 · `b0dvzs4t8g` ×12),
+- **54 ASIN-as-keyword rows** — 3 ASINs (`b0fxe444c9` ×25 · `b0fx4f79ef` ×17 · `b0dvzs4t8g` ×12),
   **2 ad groups**, **0 with an Amazon id**, all written by `automation:auto-harvest` before H.5.
 - **14 rows under AUTO campaigns** — 12 of them are the `b0dvzs4t8g` ASIN rows in
   `DE_Auto_Substitute`, plus `motorradjacke 4xl` and `motorrad jacke herren` in `DE_Auto_Close`.

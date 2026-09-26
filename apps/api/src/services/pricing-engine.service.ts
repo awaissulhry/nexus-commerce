@@ -25,7 +25,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import type { PrismaClient } from '@prisma/client'
-import { getFxRate } from './fx-rate.service.js'
+import { FxRateMissingError, storedFxRate } from './fx-rate.service.js'
+import { marketCurrency } from './pim/market-currency.js'
 import { primaryConnectionIds } from './connection-resolver.service.js'
 
 export type PriceSource =
@@ -133,6 +134,12 @@ async function getLatestLandedCost(
   return Number.isFinite(landed) && landed > 0 ? landed : null
 }
 
+/** CX — the engine's configuration refusals (no FX rate, no market currency): a batch refuses that one cell. */
+export function isPriceRefusal(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return code === 'fx_rate_missing' || code === 'market_currency_unconfigured'
+}
+
 /**
  * Resolve a price for a single (sku, channel, marketplace, fm) tuple.
  *
@@ -152,7 +159,10 @@ export async function resolvePrice(
   const marketplace = await prisma.marketplace.findUnique({
     where: { channel_code: workspaceKey({ channel: input.channel, code: input.marketplace }) },
   })
-  const currency = marketplace?.currency ?? 'EUR'
+  // CX (main-session ruling 2026-09-26) — no Marketplace row, or no currency on it, is a REFUSAL
+  // (market_currency_unconfigured, the codebase's own): it read as EUR.
+  const currency = marketCurrency(input.channel, input.marketplace,
+    marketplace ? [{ channel: input.channel, code: input.marketplace, currency: marketplace.currency }] : [])
   const vatRate = marketplace?.vatRate ? Number(marketplace.vatRate) : 0
   const taxInclusive = marketplace?.taxInclusive ?? false
 
@@ -262,10 +272,10 @@ export async function resolvePrice(
   // Master price assumed to be in EUR. When marketplace currency differs,
   // we apply the most recent FX rate. fx-rate.service handles fallback to
   // the latest cached rate if today's hasn't been fetched.
-  const fxRate = currency === 'EUR' ? 1 : await getFxRate(prisma, 'EUR', currency, asOf)
-  if (currency !== 'EUR' && fxRate === 1) {
-    warnings.push(`No FX rate for EUR→${currency}; treating 1:1`)
-  }
+  // CX (review 2026-09-26) — no rate stored at all is a REFUSAL (it read as 1:1: a €10 master priced £10). Every
+  // FX-dependent number below (master inherit, rules, the cost/min/max/MAP floor) would be wrong, so nothing is priced.
+  const fxRate = currency === 'EUR' ? 1 : await storedFxRate(prisma, 'EUR', currency, asOf)
+  if (fxRate === null) throw new FxRateMissingError('EUR', currency, `SKU ${input.sku} on ${input.channel}/${input.marketplace}`)
 
   // ── Resolve landed cost (C.1) ───────────────────────────────────
   // Receipts via StockCostLayer (S.20) carry per-unit unitCost + freight

@@ -19,7 +19,7 @@
  * product-event.service.ts rather than touching the cache directly.
  */
 
-import { Prisma } from '@prisma/client'
+import { Prisma, type Category } from '@prisma/client'
 import prisma from '../db.js'
 import { lockCategoryTree } from './category-lock.js'
 import { productEventService, type EventSource } from './product-event.service.js'
@@ -68,17 +68,31 @@ type CategoryNode = {
 }
 
 export class CategoryTreeService {
-  constructor(private readonly db: Prisma.TransactionClient | typeof prisma = prisma) {}
+  /**
+   * `inTransaction` is true only for the instance `withLock` hands out: its `db` is an interactive
+   * transaction that already holds the business's category-tree lock, so its writes run inline.
+   * Every other instance opens that transaction and takes that lock for each write.
+   *
+   * It is an explicit flag because the client cannot be told apart at runtime. The business-scoped
+   * root client is a Proxy over `{}`, so `'$transaction' in prisma` is false, while its transaction
+   * proxy wraps the real transaction client, so the same check is true there. Sniffing it that way
+   * had the answer backwards: every write through the shared `categoryTreeService` ran with no
+   * transaction and no lock.
+   */
+  constructor(
+    private readonly db: Prisma.TransactionClient | typeof prisma = prisma,
+    private readonly inTransaction = false,
+  ) {}
 
   private transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-    return '$transaction' in this.db ? this.db.$transaction(work, { maxWait: 10_000, timeout: 30_000 }) : work(this.db)
+    return this.inTransaction ? work(this.db) : (this.db as typeof prisma).$transaction(work, { maxWait: 10_000, timeout: 30_000 })
   }
 
   /** All tree writes, including legacy routes, share one business-scoped lock. */
   async withLock<T>(work: (service: CategoryTreeService, tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.transaction(async tx => {
       await lockCategoryTree(tx)
-      return work(new CategoryTreeService(tx), tx)
+      return work(new CategoryTreeService(tx, true), tx)
     })
   }
 
@@ -141,8 +155,8 @@ export class CategoryTreeService {
 
   // ── Writes ───────────────────────────────────────────────────────────
 
-  async create(input: CreateCategoryInput) {
-    if ('$transaction' in this.db) return this.withLock(service => service.create(input))
+  async create(input: CreateCategoryInput): Promise<Category> {
+    if (!this.inTransaction) return this.withLock(service => service.create(input))
     const parentId = input.parentId ?? null
     let parentDepth = -1
     if (parentId) {
@@ -182,8 +196,8 @@ export class CategoryTreeService {
     })
   }
 
-  async update(categoryId: string, patch: UpdateCategoryInput) {
-    if ('$transaction' in this.db) return this.withLock(service => service.update(categoryId, patch))
+  async update(categoryId: string, patch: UpdateCategoryInput): Promise<Category> {
+    if (!this.inTransaction) return this.withLock(service => service.update(categoryId, patch))
     const exists = await this.db.category.findUnique({
       where: { id: categoryId },
       select: { id: true, parentId: true },
@@ -214,15 +228,26 @@ export class CategoryTreeService {
    *   2. Graft links from the NEW ancestors (incl. the new parent) to the
    *      subtree, at the correct combined depth.
    *   3. Recompute depth on the moved subtree + update Category.parentId.
+   *
+   * A direct caller (the legacy move route) gets the same validation responses as before, then the
+   * Categories workspace's inherited-assignment rule: a move that would change the channel category
+   * a product inherits is refused (409) until the category has its own assignment. The workspace's
+   * own command path (applyCategoryCommand) checks its full rule set, token included, before calling
+   * the locked instance.
    */
-  async move(categoryId: string, newParentId: string | null) {
-    if ('$transaction' in this.db) return this.withLock(async (service, tx) => {
-      const { categoryDirectory, categoryChangeImpact } = await import('./taxonomy/category-workspace.js')
-      const directory = await categoryDirectory(tx)
-      const impact = await categoryChangeImpact({ action: 'move', id: categoryId, parentId: newParentId, expectedToken: directory.token }, tx)
-      if (impact.blocked) throw new CategoryTreeError(impact.blocked, 409)
-      return service.move(categoryId, newParentId)
+  async move(categoryId: string, newParentId: string | null): Promise<void> {
+    if (!this.inTransaction) return this.withLock(async (service, tx) => {
+      const newParentDepth = await service.validateMove(categoryId, newParentId)
+      const { inheritedAssignmentMoveBlock } = await import('./taxonomy/category-workspace.js')
+      const blocked = await inheritedAssignmentMoveBlock(categoryId, newParentId, tx)
+      if (blocked) throw new CategoryTreeError(blocked, 409)
+      await service.rewriteAncestors(categoryId, newParentId, newParentDepth)
     })
+    await this.rewriteAncestors(categoryId, newParentId, await this.validateMove(categoryId, newParentId))
+  }
+
+  /** The move's checks; returns the new parent's depth (-1 for a top-level move). */
+  private async validateMove(categoryId: string, newParentId: string | null): Promise<number> {
     if (categoryId === newParentId) {
       throw new CategoryTreeError('A category cannot be its own parent')
     }
@@ -249,7 +274,10 @@ export class CategoryTreeService {
       }
       newParentDepth = parent.depth
     }
+    return newParentDepth
+  }
 
+  private async rewriteAncestors(categoryId: string, newParentId: string | null, newParentDepth: number) {
     await this.transaction(async (tx) => {
       // 1. Sever old cross-boundary links (old ancestors → subtree).
       await tx.$executeRaw`
@@ -295,8 +323,8 @@ export class CategoryTreeService {
    * We additionally refuse if products are still assigned (their
    * ProductCategory rows would otherwise cascade-delete silently).
    */
-  async remove(categoryId: string) {
-    if ('$transaction' in this.db) return this.withLock(service => service.remove(categoryId))
+  async remove(categoryId: string): Promise<void> {
+    if (!this.inTransaction) return this.withLock(service => service.remove(categoryId))
     const node = await this.db.category.findUnique({
       where: { id: categoryId },
       select: {
@@ -333,8 +361,8 @@ export class CategoryTreeService {
     productId: string,
     categoryIds: string[],
     opts: { primaryId?: string | null; source?: EventSource; userId?: string | null } = {},
-  ) {
-    if ('$transaction' in this.db) {
+  ): Promise<{ productId: string; categoryIds: string[]; primaryCategoryId: string }> {
+    if (!this.inTransaction) {
       const result = await this.withLock(service => service.assign(productId, categoryIds, opts))
       productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { categories: result.categoryIds, primaryCategoryId: result.primaryCategoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
       return result
@@ -384,8 +412,8 @@ export class CategoryTreeService {
     productId: string,
     categoryId: string,
     opts: { source?: EventSource; userId?: string | null } = {},
-  ) {
-    if ('$transaction' in this.db) {
+  ): Promise<{ productId: string; categoryId: string; removed: boolean }> {
+    if (!this.inTransaction) {
       const result = await this.withLock(service => service.unassign(productId, categoryId, opts))
       if (result.removed) productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { unassignedCategory: categoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
       return result

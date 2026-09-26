@@ -8,7 +8,7 @@
  * A viable second family needs three things, all checkable here:
  *   1. ad spend/impressions INSIDE 2026-07-19 → 07-25 (so it could appear at all)
  *   2. ASINs in the catalogue to request reports for
- *   3. a distinct Amazon parentAsin from GALE's B0F7J163XJ (else it is not a second family)
+ *   3. a distinct Amazon parentAsin from GALE's B0FXD0620C (else it is not a second family)
  */
 import '../src/env.js'
 const { default: prisma } = await import('../src/db.js')
@@ -57,7 +57,7 @@ const asins = await q<{ family: string; parent_asin: string; asins: bigint; impr
    AND s."startDate" = '2026-07-19'::date AND s."impressionsBrand" > 0
   GROUP BY 1 ORDER BY 3 DESC`)
 for (const r of asins) {
-  const gale = r.parent_asin === 'B0F7J163XJ'
+  const gale = r.parent_asin === 'B0FXD0620C'
   console.log(`  ${String(r.family).slice(0, 42).padEnd(44)} parent=${String(r.parent_asin).padEnd(12)} ${String(r.asins).padStart(3)} advertised ASINs · ${r.in_sqp} already measured${gale ? '   ← GALE, the family we already have' : ''}`)
 }
 

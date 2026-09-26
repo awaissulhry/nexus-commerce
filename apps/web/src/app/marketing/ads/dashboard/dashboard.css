@@ -73,11 +73,11 @@
    this grid's own register is left. The `.mono` / `.dim` / `.pos` / `.neg` inks below still apply
    — they were always descendant selectors, and the cells are spans now rather than `<td>`s. */
 .dash-pnl .nds-grid { font-variant-numeric: tabular-nums; }
-.dash-pnl .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.dash-pnl .mono { font-family: var(--nds-font-mono); font-size: 11px; }
 .dash-pnl .dim { color: var(--nds-text-muted); }
 .dash-pnl .pos { color: #067d62; font-weight: 700; }
 .dash-pnl .neg { color: var(--nds-red-500); font-weight: 700; }
-.dash-pnl-sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-blue-600); text-decoration: none; font-weight: 700; }
+.dash-pnl-sku { font-family: var(--nds-font-mono); font-size: 11px; color: var(--nds-blue-600); text-decoration: none; font-weight: 700; }
 .dash-pnl-sku:hover { text-decoration: underline; }
 .dash-pnl-b { display: inline-block; min-width: 40px; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; background: var(--nds-grey-100); color: var(--nds-grey-600); }
 .dash-pnl-b.b-good { background: #e6f4ef; color: #067d62; }

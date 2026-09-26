@@ -192,6 +192,13 @@ node scripts/check-css-radius-ratchet.mjs --check || {
   exit 1
 }
 
+# 2026-09-26 (Owner: "Arial … must never happen again") — every font the UI names is a DS token, and next/font never
+# falls back to its local("Arial") metric face. Strict, not a ratchet: the count is zero.
+node scripts/check-font-families.mjs --self-test && node scripts/check-font-families.mjs --check || {
+  echo "❌ DS fonts FAILED — see message above (rule + why: scripts/check-font-families.mjs header)"
+  exit 1
+}
+
 # 2026-09-02 (hub #575) — DS stylesheets must PARSE. A `*` immediately before a `/` inside a
 # comment ends that comment early, the rest of the block becomes declarations, and the whole route
 # comes back as a Turbopack error page (#262). No other gate reads CSS structure: tsc does not read

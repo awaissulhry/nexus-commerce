@@ -25,9 +25,7 @@ import { createOutboundRow } from '../services/outbound-rows.js'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
-import { getAllAmazonCircuitStates, resetAllAmazonCircuits } from '../services/amazon-publish-gate.service.js'
-import { getAllEbayCircuitStates, resetAllEbayCircuits } from '../services/ebay-publish-gate.service.js'
-import { getAllShopifyCircuitStates, resetAllShopifyCircuits } from '../services/shopify-publish-gate.service.js'
+import { isCircuitChannel, readCircuitBreakers, requestCircuitReset } from '../services/runtime-status/circuit-breakers.service.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 
@@ -3890,58 +3888,37 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   })
   // ── P3.3 — Circuit breaker state ──────────────────────────────────────────
   //
-  // Reads in-process state from publish gates (Amazon, eBay, Shopify).
-  // Safe to call frequently — no DB or Redis access.
+  // Each process (API, worker, scheduler) keeps its own publish circuits. They publish them to Redis and this
+  // aggregates them: per channel the worst state any process holds, and 'unknown' — naming the process —
+  // when all reporting processes are closed but one is not reporting. Shape unchanged, fields added
+  // (complete, reporting, unknown). services/runtime-status/circuit-breakers.service.ts.
 
   fastify.get('/dashboard/circuit-breakers', async (_request, reply) => {
-    // Aggregate per-channel: worst state wins (open > half-open > closed)
-    function aggregate(states: Record<string, { state: string; failureCount: number; openedAt: string | null; lastError?: string }>): {
-      state: 'closed' | 'open' | 'half-open'
-      failureCount: number
-      openedAt: string | null
-      lastError: string | null
-      keyCount: number
-    } {
-      const entries = Object.values(states)
-      if (entries.length === 0) return { state: 'closed', failureCount: 0, openedAt: null, lastError: null, keyCount: 0 }
-      const worst = entries.reduce((a, b) => {
-        const rank = (s: string) => s === 'open' ? 2 : s === 'half-open' ? 1 : 0
-        return rank(b.state) > rank(a.state) ? b : a
-      })
-      return {
-        state: worst.state as 'closed' | 'open' | 'half-open',
-        failureCount: worst.failureCount,
-        openedAt: worst.openedAt,
-        lastError: (worst as any).lastError ?? null,
-        keyCount: entries.length,
-      }
-    }
-
-    return reply.send({
-      AMAZON: aggregate(getAllAmazonCircuitStates()),
-      EBAY: aggregate(getAllEbayCircuitStates()),
-      SHOPIFY: aggregate(getAllShopifyCircuitStates()),
-    })
+    reply.header('Cache-Control', 'no-store')
+    return reply.send(await readCircuitBreakers())
   })
 
+  // A reset is recorded in Redis and applied by every process on its next heartbeat. 200: every process
+  // applied it. 202: recorded, but a process had not applied it yet or is not reporting (listed). 503: Redis
+  // is unreachable, so only this API process was reset.
   fastify.post<{ Params: { channel: string } }>(
     '/dashboard/circuit-breakers/:channel/reset',
     async (request, reply) => {
-      const { channel } = request.params
-      switch (channel.toUpperCase()) {
-        case 'AMAZON':
-          resetAllAmazonCircuits()
-          break
-        case 'EBAY':
-          resetAllEbayCircuits()
-          break
-        case 'SHOPIFY':
-          resetAllShopifyCircuits()
-          break
-        default:
-          return reply.code(400).send({ error: `Unknown channel: ${channel}` })
+      const channel = request.params.channel.toUpperCase()
+      if (!isCircuitChannel(channel)) return reply.code(400).send({ error: `Unknown channel: ${request.params.channel}` })
+      const outcome = await requestCircuitReset(channel)
+      const body = {
+        ok: outcome.recorded,
+        channel,
+        state: outcome.circuits.state,
+        complete: outcome.complete,
+        generation: outcome.generation,
+        acknowledgedBy: outcome.acknowledgedBy,
+        pending: outcome.pending,
+        unknown: outcome.circuits.unknown,
+        ...(outcome.reason ? { error: outcome.reason } : {}),
       }
-      return reply.send({ ok: true, channel: channel.toUpperCase(), state: 'closed' })
+      return reply.code(!outcome.recorded ? 503 : outcome.complete ? 200 : 202).send(body)
     },
   )
 }

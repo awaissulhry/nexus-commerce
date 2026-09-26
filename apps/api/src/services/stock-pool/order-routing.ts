@@ -1,8 +1,9 @@
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { poolConsume, poolPutBack, poolRelease, poolReserve, poolTake, refusalOf, type PoolRefusal } from './pool-doors.js'
 import { afterPoolChange } from './pool-tasks.js'
-import { notifyOwners } from './pool-notify.js'
+import { notifyOwners, notifyOwnersInTx, type PoolNotice } from './pool-notify.js'
 
 /**
  * Shared stock plan step 4 — orders, cancellations and returns through the doors (plan
@@ -44,11 +45,10 @@ async function ownIfNeverPooled(productId: string, error: unknown): Promise<Pool
   return failure(error)
 }
 
-async function refused(args: { orderId: string; productId: string; quantity: number; what: string; refusal: PoolRefusal }): Promise<void> {
-  const product = await prisma.product.findUnique({ where: { id: args.productId }, select: { sku: true } }).catch(() => null)
-  const sku = product?.sku ?? args.productId
-  logger.warn('[stock-pool] order refused by shared stock', { orderId: args.orderId, productId: args.productId, quantity: args.quantity, what: args.what, code: args.refusal.code, error: args.refusal.error })
-  await notifyOwners({
+type RefusedArgs = { orderId: string; productId: string; quantity: number; what: string; refusal: PoolRefusal }
+
+function refusalNotice(args: RefusedArgs, sku: string): PoolNotice {
+  return {
     type: 'stock-pool-order-refused',
     severity: 'danger',
     title: `Shared stock refused ${args.what} of ${args.quantity} × ${sku}`,
@@ -59,7 +59,13 @@ async function refused(args: { orderId: string; productId: string; quantity: num
     entityId: args.orderId,
     href: `/orders/${args.orderId}`,
     meta: { productId: args.productId, quantity: args.quantity, code: args.refusal.code },
-  })
+  }
+}
+
+async function refused(args: RefusedArgs): Promise<void> {
+  const product = await prisma.product.findUnique({ where: { id: args.productId }, select: { sku: true } }).catch(() => null)
+  logger.warn('[stock-pool] order refused by shared stock', { orderId: args.orderId, productId: args.productId, quantity: args.quantity, what: args.what, code: args.refusal.code, error: args.refusal.error })
+  await notifyOwners(refusalNotice(args, product?.sku ?? args.productId))
 }
 
 /** A sale with no hold (eBay, manual ingest): take at once from the pool, or say "own". */
@@ -81,6 +87,26 @@ export async function takeForOrder(args: { productId: string; quantity: number; 
   const took = r as Extract<typeof r, { ok: true }>
   if (!took.reused) afterPoolChange()
   return { via: 'pool', result: { taken: took.taken, reused: took.reused } }
+}
+
+/**
+ * `takeForOrder` inside a transaction the caller owns: the take, and a refusal's owner notice, commit
+ * or roll back with the order. A door that throws is not an unknown outcome here — it rolls the whole
+ * transaction back — so there is no own-stock fallback and no `door_failed` notice. The caller runs
+ * `afterPoolChange()` after its commit when `changed` is true.
+ */
+export async function takeForOrderInTx(tx: Prisma.TransactionClient, args: { productId: string; quantity: number; orderId: string; actor: string; workspaceId?: string }): Promise<RouteResult<{ taken: number; reused: boolean }> & { changed: boolean }> {
+  const r = await poolTake(tx, { productId: args.productId, quantity: args.quantity, orderRef: args.orderId, actor: args.actor })
+  const refusal = refusalOf(r)
+  if (refusal) {
+    if (refusal.code === 'not_pooled') return { via: 'own', changed: false }
+    const product = await tx.product.findUnique({ where: { id: args.productId }, select: { sku: true } })
+    logger.warn('[stock-pool] order refused by shared stock', { orderId: args.orderId, productId: args.productId, quantity: args.quantity, what: 'the sale', code: refusal.code, error: refusal.error })
+    await notifyOwnersInTx(tx, refusalNotice({ ...args, what: 'the sale', refusal }, product?.sku ?? args.productId), args.workspaceId)
+    return { via: 'refused', refusal, changed: false }
+  }
+  const took = r as Extract<typeof r, { ok: true }>
+  return { via: 'pool', result: { taken: took.taken, reused: took.reused }, changed: !took.reused }
 }
 
 /** A hold for an open order (Amazon FBM, Shopify): from the pool, or say "own". */
@@ -130,6 +156,9 @@ export async function consumePoolHolds(args: { orderId: string; actor?: string }
   return consumed
 }
 
+/** For callers that hold inside their own transaction: the same owner notice, sent after their commit. */
+export { refused as reportPoolOrderRefusal }
+
 export type PutBackRoute =
   | { via: 'pool'; reused: boolean }
   /** The order did not take this product from the pool: its own ledger decides. */
@@ -167,20 +196,4 @@ export async function putBackForOrder(args: {
   const { reused } = r as Extract<typeof r, { ok: true }>
   if (!reused) afterPoolChange()
   return { via: 'pool', reused }
-}
-
-/**
- * For a product that has ever sold from a pool, an own-stock restore needs proof that this order took
- * the units from own stock. (Without it, a cancellation "restores" units the order never took — found
- * while mapping, 2 — and for a pooled product that invents own stock the pool never had.) Products that
- * never used a pool keep today's behaviour.
- */
-export async function ownRestoreAllowed(args: { productId: string; orderId: string }): Promise<boolean> {
-  const everPooled = await prisma.stockPoolLink.findFirst({ where: { productId: args.productId }, select: { id: true } })
-  if (!everPooled) return true
-  const took = await prisma.stockMovement.findFirst({
-    where: { orderId: args.orderId, productId: args.productId, reason: { in: ['ORDER_PLACED', 'RESERVATION_CONSUMED'] }, change: { lt: 0 } },
-    select: { id: true },
-  })
-  return !!took
 }

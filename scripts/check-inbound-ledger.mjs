@@ -37,19 +37,15 @@ const UNREPLAYABLE = {
   // need that loop split out first; until then the retry worker dead-letters these on
   // the first sweep with that as the reason, which is visible rather than silent.
   AMAZON: '*',
-  // eBay's receiver decides what to do from the live notification envelope and syncs
-  // orders as a side effect. The replay endpoint re-syncs every eBay connection
-  // instead, which is why it is handled there and not by the registry.
-  EBAY: '*',
 }
 
-function walk(dir, out = []) {
+function walk(dir, out = [], extensions = /\.(ts|mts)$/) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name === 'dist') continue
-      walk(full, out)
-    } else if (/\.(ts|mts)$/.test(entry.name) && !/\.test\.ts$/.test(entry.name)) {
+      walk(full, out, extensions)
+    } else if (extensions.test(entry.name) && !/\.(test|spec)\.[cm]?[jt]s$/.test(entry.name)) {
       out.push(full)
     }
   }
@@ -57,20 +53,25 @@ function walk(dir, out = []) {
 }
 
 const files = walk(apiSrc)
+const operationalScripts = ['scripts', 'apps/api/scripts', 'packages/database/scripts']
+  .flatMap(dir => walk(path.join(root, dir), [], /\.[cm]?[jt]s$/))
 const failures = []
 
 // ── Rule 1: nothing deletes an inbound event ────────────────────────────────────
 const DELETE_PATTERNS = [
-  /\bwebhookEvent\s*\.\s*delete\b/,
-  /\bwebhookEvent\s*\.\s*deleteMany\b/,
-  /DELETE\s+FROM\s+"WebhookEvent"/i,
+  /\b(?:webhookEvent|ebayNoticeQuarantine)\s*\.\s*delete(?:Many)?\b/,
+  /DELETE\s+FROM\s+(?:public\.)?"(?:WebhookEvent|EbayNoticeQuarantine)"/i,
+  /TRUNCATE\s+(?:TABLE\s+)?(?:public\.)?"(?:WebhookEvent|EbayNoticeQuarantine)"/i,
 ]
-for (const file of files) {
-  const text = fs.readFileSync(file, 'utf8')
+for (const file of [...files, ...operationalScripts]) {
+  const text = withoutComments(fs.readFileSync(file, 'utf8'))
   for (const pattern of DELETE_PATTERNS) {
     if (pattern.test(text)) {
       failures.push(`${path.relative(root, file)}: deletes inbound events (${pattern}). Decision D8 — archive, never delete.`)
     }
+  }
+  if (/\bmodel\s*:\s*['"](?:webhookEvent|ebayNoticeQuarantine)['"]/.test(text) && /\.deleteMany\b/.test(text)) {
+    failures.push(`${path.relative(root, file)}: inbound history is registered in a dynamic delete dispatcher. Decision D8 — archive, never delete.`)
   }
 }
 if (seedDelete) {
@@ -185,7 +186,7 @@ for (const file of files) {
 // green caused by an empty file list is visible rather than reassuring.
 const writtenCount = [...written.values()].reduce((n, set) => n + set.size, 0)
 const handlerCount = [...handlers.values()].reduce((n, set) => n + set.size, 0)
-console.log(`[inbound-ledger] ${files.length} source files; ${writtenCount} event types written by receivers; ${handlerCount} replay handlers registered; ${registered.size} Shopify topics registered with Shopify.`)
+console.log(`[inbound-ledger] ${files.length} source files + ${operationalScripts.length} operational scripts; ${writtenCount} event types written by receivers; ${handlerCount} replay handlers registered; ${registered.size} Shopify topics registered with Shopify.`)
 if (files.length === 0 || handlerCount === 0 || registered.size === 0) {
   console.error('[inbound-ledger] FAIL: nothing was examined. This check cannot pass on an empty measurement.')
   process.exit(1)

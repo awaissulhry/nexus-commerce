@@ -5,7 +5,7 @@ const { default: routes } = await import('../src/routes/ebay-flat-file.routes.js
 const app = Fastify({ logger: false })
 await app.register(routes)
 await app.ready()
-for (const itemId of ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']) {
+for (const itemId of ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']) {
   const r = await app.inject({ method: 'GET', url: `/ebay/flat-file/verify-item?itemId=${itemId}&marketplace=IT` })
   const d = r.json() as any
   if (d.error) console.log(`${itemId}: ERROR ${String(d.error).slice(0, 160)}`)

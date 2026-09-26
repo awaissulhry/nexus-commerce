@@ -20,7 +20,7 @@ export function NoDataIllus({ size = 92 }: { size?: number }) {
       <line x1="30" y1="78" x2="100" y2="78" stroke="#dfe5ec" strokeWidth="2" strokeLinecap="round" />
       {/* green "?" badge */}
       <circle cx="34" cy="34" r="11" fill="#2cc38d" />
-      <text x="34" y="39" textAnchor="middle" fontSize="14" fontWeight="700" fill="#fff" fontFamily="system-ui, sans-serif">?</text>
+      <text x="34" y="39" textAnchor="middle" fontSize="14" fontWeight="700" fill="#fff">?</text>
       {/* magnifier */}
       <circle cx="92" cy="68" r="13" fill="#fff" stroke="#27303a" strokeWidth="3.2" />
       <line x1="101" y1="77" x2="110" y2="86" stroke="#27303a" strokeWidth="3.6" strokeLinecap="round" />

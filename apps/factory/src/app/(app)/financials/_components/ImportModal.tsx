@@ -87,7 +87,7 @@ export function ImportModal({ open, canPay, onClose, onApplied }: { open: boolea
             We propose matches by reference or amount; <b>nothing is recorded until you apply</b>.
           </div>
           <FileDropzone accept=".csv,.txt" maxBytes={2 * 1024 * 1024} onFiles={(files) => { void files[0]?.text().then((t) => setCsv(t)); }} hint="CSV or TXT · max 2MB · stays on this machine until you apply" />
-          <Textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={7} placeholder={"date,amount,description\n2026-07-01,500.00,Bonifico ORD-1"} style={{ fontFamily: "ui-monospace, monospace" }} aria-label="Bank statement rows" />
+          <Textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={7} placeholder={"date,amount,description\n2026-07-01,500.00,Bonifico ORD-1"} style={{ fontFamily: "var(--nds-font-mono)" }} aria-label="Bank statement rows" />
         </div>
       )}
 

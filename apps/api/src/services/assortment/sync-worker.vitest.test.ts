@@ -26,8 +26,9 @@ describe('AE.4 — the listener URL', () => {
   })
 
   it('matches the migration runner: the same input gives the same host', async () => {
-    const { readFileSync } = await import('node:fs')
-    const runner = readFileSync(new URL('../../../../../packages/database/scripts/migrate-direct.mjs', import.meta.url), 'utf8')
-    expect(runner).toContain(".replace('-pooler', '')")
+    const { migrationConnection } = await import('../../../../../packages/database/scripts/migration-connection.mjs')
+    for (const url of [pooled, direct, pooled.replace('secret', 'secret-pooler'), 'postgresql://dev@local-pooler.internal/test']) {
+      expect(listenUrlFrom({ DATABASE_URL: url })).toBe(migrationConnection({ DATABASE_URL: url }))
+    }
   })
 })

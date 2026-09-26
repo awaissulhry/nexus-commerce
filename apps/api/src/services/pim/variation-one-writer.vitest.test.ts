@@ -33,7 +33,7 @@ vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn(async () => u
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 vi.mock('../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn() } }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
-vi.mock('./readiness-index.service.js', () => ({ produceReadiness: vi.fn() }))
+vi.mock('./readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 // The eBay import's outside calls (2.6b): one account, one page of inventory items.
 const ebayItems = vi.hoisted(() => ({ items: [] as unknown[] }))
 vi.mock('../connection-resolver.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), tryResolveConnection: vi.fn(async () => ({ id: 'ebay-account', displayName: 'eBay' })) }))

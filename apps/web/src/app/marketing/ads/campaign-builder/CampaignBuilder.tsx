@@ -41,7 +41,7 @@ const REPLICATE: TypeCard = { key: 'replicate', title: 'Replicate Structure', Ic
 function AmazonMark() {
   return (
     <svg viewBox="0 0 24 16" width="17" height="12" aria-hidden style={{ display: 'block' }}>
-      <text x="0" y="12" fontSize="13" fontWeight="700" fill="#232f3e" fontFamily="Arial, sans-serif">a</text>
+      <text x="0" y="12" fontSize="13" fontWeight="700" fill="#232f3e">a</text>
       <path d="M2 13.5c3.2 2 7.5 2 10.6-.2" stroke="#ff9900" strokeWidth="1.6" fill="none" strokeLinecap="round" />
     </svg>
   )

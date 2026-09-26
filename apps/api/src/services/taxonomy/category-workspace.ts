@@ -33,6 +33,52 @@ function validateCommand(command: CategoryCommand) {
   }
 }
 
+type DirectoryRow = { id: string; parentId: string | null }
+type AssignmentRow = { categoryId: string; channel: string; marketplace: string; channelCategoryId: string; browseNodeId: string | null }
+const INHERITED_MOVE_BLOCKED = 'This move changes inherited channel assignments. Review explicit assignments for this category in Channel assignments before moving it.'
+
+/** The category and its descendants. Directory rows are depth-ordered, so a parent is always seen first. */
+function subtree(rows: DirectoryRow[], id: string | undefined) {
+  const affected = new Set<string>(id ? [id] : [])
+  for (const c of rows) if (c.parentId && affected.has(c.parentId)) affected.add(c.id)
+  return affected
+}
+
+/** Channel scopes (`CHANNEL/MARKET`) whose resolved assignment changes for a category of the moved subtree. */
+function inheritedAssignmentChanges(rows: DirectoryRow[], mappings: AssignmentRow[], affected: Set<string>, movedId: string | undefined, parentId: string | null) {
+  const parents = new Map(rows.map(c => [c.id, c.parentId]))
+  const scopes = [...new Set(mappings.map(m => `${m.channel}/${m.marketplace}`))]
+  const index = new Map(mappings.map(m => [`${m.categoryId}/${m.channel}/${m.marketplace}`, `${m.channelCategoryId}/${m.browseNodeId ?? ''}`]))
+  const resolve = (id: string, scope: string, moved: boolean): string | null => {
+    const [channel, market] = scope.split('/')
+    let at: string | null = id
+    const seen = new Set<string>()
+    while (at && !seen.has(at)) {
+      seen.add(at)
+      const hit = index.get(`${at}/${channel}/${market}`) ?? index.get(`${at}/${channel}/*`)
+      if (hit) return hit
+      at = moved && at === movedId ? parentId : parents.get(at) ?? null
+    }
+    return null
+  }
+  const inheritedChanges: string[] = []
+  for (const scope of scopes) if ([...affected].some(id => resolve(id, scope, false) !== resolve(id, scope, true))) inheritedChanges.push(scope)
+  return inheritedChanges
+}
+
+const assignmentRows = (db: Prisma.TransactionClient) => db.categoryChannelMapping.findMany({ select: { categoryId: true, channel: true, marketplace: true, channelCategoryId: true, browseNodeId: true } })
+
+/**
+ * The inherited-assignment rule alone, for a move made outside this workspace (the legacy
+ * POST /pim/categories/:id/move). The caller holds the category-tree lock and passes its
+ * transaction, so the directory read here is current and no revision token is involved.
+ */
+export async function inheritedAssignmentMoveBlock(id: string, parentId: string | null, db: Prisma.TransactionClient): Promise<string | null> {
+  const { rows } = await categoryDirectory(db)
+  const affected = subtree(rows, id)
+  return inheritedAssignmentChanges(rows, await assignmentRows(db), affected, id, parentId).length ? INHERITED_MOVE_BLOCKED : null
+}
+
 /** A move that changes inherited channel assignments must be resolved through mapping reviews first. */
 export async function categoryChangeImpact(command: CategoryCommand, db: Prisma.TransactionClient = prisma) {
   validateCommand(command)
@@ -40,32 +86,13 @@ export async function categoryChangeImpact(command: CategoryCommand, db: Prisma.
   if (directory.token !== command.expectedToken) throw new TaxonomyError('Categories or memberships changed. Reload and review the change again.', 409)
   const row = directory.rows.find(c => c.id === command.id)
   if (command.action !== 'create' && !row) throw new TaxonomyError('Category no longer exists.', 404)
-  const affected = new Set<string>(command.id ? [command.id] : [])
-  for (const c of directory.rows) if (c.parentId && affected.has(c.parentId)) affected.add(c.id)
+  const affected = subtree(directory.rows, command.id)
   if (['create', 'move'].includes(command.action) && command.parentId && !directory.rows.some(c => c.id === command.parentId && c.active)) throw new TaxonomyError('Choose an active parent category.')
   if (command.action === 'move' && command.parentId && affected.has(command.parentId)) throw new TaxonomyError('A category cannot move into itself or its descendants.')
   const productCount = affected.size ? await db.product.count({ where: { categories: { some: { categoryId: { in: [...affected] } } } } }) : 0
-  const mappings = affected.size ? await db.categoryChannelMapping.findMany({ select: { categoryId: true, channel: true, marketplace: true, channelCategoryId: true, browseNodeId: true } }) : []
-  const inheritedChanges: string[] = []
-  if (command.action === 'move') {
-    const parents = new Map(directory.rows.map(c => [c.id, c.parentId]))
-    const scopes = [...new Set(mappings.map(m => `${m.channel}/${m.marketplace}`))]
-    const index = new Map(mappings.map(m => [`${m.categoryId}/${m.channel}/${m.marketplace}`, `${m.channelCategoryId}/${m.browseNodeId ?? ''}`]))
-    const resolve = (id: string, scope: string, moved: boolean): string | null => {
-      const [channel, market] = scope.split('/')
-      let at: string | null = id
-      const seen = new Set<string>()
-      while (at && !seen.has(at)) {
-        seen.add(at)
-        const hit = index.get(`${at}/${channel}/${market}`) ?? index.get(`${at}/${channel}/*`)
-        if (hit) return hit
-        at = moved && at === command.id ? command.parentId ?? null : parents.get(at) ?? null
-      }
-      return null
-    }
-    for (const scope of scopes) if ([...affected].some(id => resolve(id, scope, false) !== resolve(id, scope, true))) inheritedChanges.push(scope)
-  }
-  const blocked = command.action === 'move' && inheritedChanges.length ? 'This move changes inherited channel assignments. Review explicit assignments for this category in Channel assignments before moving it.'
+  const mappings = affected.size ? await assignmentRows(db) : []
+  const inheritedChanges = command.action === 'move' ? inheritedAssignmentChanges(directory.rows, mappings, affected, command.id, command.parentId ?? null) : []
+  const blocked = command.action === 'move' && inheritedChanges.length ? INHERITED_MOVE_BLOCKED
     : command.action === 'delete' && row && (row.products || row.children || row.mappings) ? 'Only an empty category without child categories or channel assignments can be deleted.' : null
   return { row, productCount, descendantCount: Math.max(0, affected.size - 1), inheritedChanges, blocked, token: directory.token }
 }

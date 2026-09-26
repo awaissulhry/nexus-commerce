@@ -19,25 +19,25 @@
             "productId": "cmokmy3a40078pm0p1fvnu523",
             "channel": "AMAZON",
             "marketplace": "DE",
-            "externalListingId": "B0D8XBXM5H"
+            "externalListingId": "B0FX4BC696"
           },
           {
             "productId": "cmokmy3a40078pm0p1fvnu523",
             "channel": "AMAZON",
             "marketplace": "ES",
-            "externalListingId": "B0DJ4MVVYX"
+            "externalListingId": "B0FX21D89C"
           },
           {
             "productId": "cmokmy3a40078pm0p1fvnu523",
             "channel": "AMAZON",
             "marketplace": "IT",
-            "externalListingId": "B0F7J163XJ"
+            "externalListingId": "B0FXD0620C"
           },
           {
             "productId": "cmokmy3a40078pm0p1fvnu523",
             "channel": "EBAY",
             "marketplace": "IT",
-            "externalListingId": "257584954808"
+            "externalListingId": "938554736087"
           }
         ],
         "openOrders": [],
@@ -123,7 +123,7 @@
                     "channel": "EBAY",
                     "marketplace": "IT",
                     "region": "IT",
-                    "externalListingId": "257584954808",
+                    "externalListingId": "938554736087",
                     "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",
@@ -365,7 +365,7 @@
                     "channel": "AMAZON",
                     "marketplace": "DE",
                     "region": "DE",
-                    "externalListingId": "B0D8XBXM5H",
+                    "externalListingId": "B0FX4BC696",
                     "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",
@@ -429,7 +429,7 @@
                         ],
                         "merchant_suggested_asin": [
                           {
-                            "value": "B0F7J163XJ",
+                            "value": "B0FXD0620C",
                             "language_tag": "de_DE",
                             "marketplace_id": "A1PA6795UKMFR9"
                           }
@@ -468,7 +468,7 @@
                       "sku": "GALE-JACKET"
                     },
                     "channelConnection": {
-                      "displayName": "A1VRHKTGYO1JNU"
+                      "displayName": "AFXSELLER8BC38"
                     },
                     "alias": null
                   },
@@ -478,7 +478,7 @@
                     "channel": "AMAZON",
                     "marketplace": "ES",
                     "region": "ES",
-                    "externalListingId": "B0DJ4MVVYX",
+                    "externalListingId": "B0FX21D89C",
                     "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",
@@ -535,7 +535,7 @@
                         ],
                         "merchant_suggested_asin": [
                           {
-                            "value": "B0F7J163XJ",
+                            "value": "B0FXD0620C",
                             "language_tag": "es_ES",
                             "marketplace_id": "A1RKKUPIHCS9HS"
                           }
@@ -574,7 +574,7 @@
                       "sku": "GALE-JACKET"
                     },
                     "channelConnection": {
-                      "displayName": "A1VRHKTGYO1JNU"
+                      "displayName": "AFXSELLER8BC38"
                     },
                     "alias": null
                   },
@@ -584,7 +584,7 @@
                     "channel": "AMAZON",
                     "marketplace": "FR",
                     "region": "FR",
-                    "externalListingId": "B0D8XFSS9D",
+                    "externalListingId": "B0FXCEFB66",
                     "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",
@@ -612,7 +612,7 @@
                         ],
                         "merchant_suggested_asin": [
                           {
-                            "value": "B0F7J163XJ",
+                            "value": "B0FXD0620C",
                             "language_tag": "fr_FR",
                             "marketplace_id": "A13V1IB3VIYZZH"
                           }
@@ -633,7 +633,7 @@
                       },
                       "_amazonMediaObservations": {
                         "cmp27h0m20129nv01tlpf3zdq": {
-                          "asin": "B0D8XFSS9D",
+                          "asin": "B0FXCEFB66",
                           "error": null,
                           "slots": {},
                           "theme": "SIZE/COLOR",
@@ -712,7 +712,7 @@
                           "catalogError": null
                         },
                         "cmp27hc7e015env01bwjiqas3": {
-                          "asin": "B0BMS6ZZ4H",
+                          "asin": "B0FX4F79EF",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -800,7 +800,7 @@
                           "catalogError": null
                         },
                         "cmp27hcmv015hnv01txssklmx": {
-                          "asin": "B0BMSJWW7L",
+                          "asin": "B0FX71011D",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -888,7 +888,7 @@
                           "catalogError": null
                         },
                         "cmp27hcxu015knv01nwic3e6b": {
-                          "asin": "B0DJ4FLPHM",
+                          "asin": "B0FXD81F1F",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -976,7 +976,7 @@
                           "catalogError": null
                         },
                         "cmp27hdbo015nnv01s8vqgkxa": {
-                          "asin": "B0BMSWM15B",
+                          "asin": "B0FXE444C9",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1064,7 +1064,7 @@
                           "catalogError": null
                         },
                         "cmp27hdmd015qnv01kj9byec9": {
-                          "asin": "B0BMSC91YK",
+                          "asin": "B0FX7F7ECD",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1152,7 +1152,7 @@
                           "catalogError": null
                         },
                         "cmp27hdx9015tnv01oue03hh4": {
-                          "asin": "B0BMS5B768",
+                          "asin": "B0FX06FC3A",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1240,7 +1240,7 @@
                           "catalogError": null
                         },
                         "cmp27he8o015wnv01gyl6fwl9": {
-                          "asin": "B0BMSH19GY",
+                          "asin": "B0FXFA789A",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1328,7 +1328,7 @@
                           "catalogError": null
                         },
                         "cmp27hek3015znv01heu9lmj3": {
-                          "asin": "B0DJ4926YX",
+                          "asin": "B0FX8ACE1B",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1416,7 +1416,7 @@
                           "catalogError": null
                         },
                         "cmp27heuv0162nv01vf8rn1ky": {
-                          "asin": "B0BMSCJRYD",
+                          "asin": "B0FX772289",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
@@ -1517,7 +1517,7 @@
                           "catalogError": "Not checked"
                         },
                         "cmp27hffj0168nv015et62or7": {
-                          "asin": "B0D8SCXFLK",
+                          "asin": "B0FX9C3570",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -1611,7 +1611,7 @@
                           "catalogError": null
                         },
                         "cmp27hfq2016bnv018056n95r": {
-                          "asin": "B0D8RN2WRF",
+                          "asin": "B0FX4CB8B3",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -1705,7 +1705,7 @@
                           "catalogError": null
                         },
                         "cmp27hg1l016env01wbbzhwah": {
-                          "asin": "B0DJ4CB5N6",
+                          "asin": "B0FX50DF62",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -1794,7 +1794,7 @@
                           "catalogError": null
                         },
                         "cmp27hgcx016hnv01xaxl94sc": {
-                          "asin": "B0D8RPCJSH",
+                          "asin": "B0FX01259A",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -1888,7 +1888,7 @@
                           "catalogError": null
                         },
                         "cmp27hgo3016knv01bwwxlngr": {
-                          "asin": "B0D8RN4KDL",
+                          "asin": "B0FXA37E04",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -1982,7 +1982,7 @@
                           "catalogError": null
                         },
                         "cmp27hgzg016nnv01qtukkeru": {
-                          "asin": "B0D8SFVSGP",
+                          "asin": "B0FXD2AFD9",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -2076,7 +2076,7 @@
                           "catalogError": null
                         },
                         "cmp27hhbr016qnv01i65v79hj": {
-                          "asin": "B0D8S567P5",
+                          "asin": "B0FX3098BE",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -2170,7 +2170,7 @@
                           "catalogError": null
                         },
                         "cmp27hhmd016tnv01cs28az5r": {
-                          "asin": "B0DJ44CDWP",
+                          "asin": "B0FXCB6EF4",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -2264,7 +2264,7 @@
                           "catalogError": null
                         },
                         "cmp27hhxa016wnv011fp7qv6p": {
-                          "asin": "B0D8RPC284",
+                          "asin": "B0FX6CEC42",
                           "error": null,
                           "slots": {
                             "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
@@ -2377,7 +2377,7 @@
                       "sku": "GALE-JACKET"
                     },
                     "channelConnection": {
-                      "displayName": "A1VRHKTGYO1JNU"
+                      "displayName": "AFXSELLER8BC38"
                     },
                     "alias": null
                   },
@@ -2387,7 +2387,7 @@
                     "channel": "AMAZON",
                     "marketplace": "IT",
                     "region": "IT",
-                    "externalListingId": "B0F7J163XJ",
+                    "externalListingId": "B0FXD0620C",
                     "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",
@@ -2470,7 +2470,7 @@
                         ],
                         "external_product_id": [
                           {
-                            "value": "B0F7J163XJ",
+                            "value": "B0FXD0620C",
                             "language_tag": "it_IT",
                             "marketplace_id": "APJ6JRA9NG5V4"
                           }
@@ -2491,7 +2491,7 @@
                         ],
                         "merchant_suggested_asin": [
                           {
-                            "value": "B0F7J163XJ",
+                            "value": "B0FXD0620C",
                             "language_tag": "it_IT",
                             "marketplace_id": "APJ6JRA9NG5V4"
                           }
@@ -2545,7 +2545,7 @@
                       "sku": "GALE-JACKET"
                     },
                     "channelConnection": {
-                      "displayName": "A1VRHKTGYO1JNU"
+                      "displayName": "AFXSELLER8BC38"
                     },
                     "alias": null
                   },
@@ -2555,7 +2555,7 @@
                     "channel": "EBAY",
                     "marketplace": "IT",
                     "region": "IT",
-                    "externalListingId": "257584954808",
+                    "externalListingId": "938554736087",
                     "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
                     "aliasKey": "",
                     "fulfillmentMethod": "FBM",

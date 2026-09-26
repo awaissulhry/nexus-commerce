@@ -47,7 +47,7 @@ describe('variation theme in the record drawer', () => {
     expect(html).toContain('Color · Size')
     expect(html).toContain('Edit the variation theme in the sheet.')
     expect(html).not.toContain('[object Object]')
-    expect(html).toContain('readonly=""')
+    expect(html).toMatch(/readonly=""/i)
     expect(html).not.toContain('Write a formula')
     expect(html).not.toContain('Reset to the inherited value')
   })

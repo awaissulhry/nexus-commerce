@@ -57,6 +57,14 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    */
   block?: boolean
   /**
+   * Let the label break across lines — anywhere, if it must — instead of `.nds-btn`'s `nowrap`.
+   *
+   * For a link-like button whose label is DATA, such as a SKU: measured 2026-09-26 at a 390 px
+   * viewport, a 63-character SKU link was 642 px wide and pushed its card row off screen. Opt-in, so
+   * every existing button keeps its single line. Pairs with `inline` + `link`.
+   */
+  wrap?: boolean
+  /**
    * Hold a secondary action at the SECONDARY text tier instead of inheriting.
    *
    * `quiet` inherits its context's colour on purpose — the 25 `.acr-btn` sites needed that. But
@@ -108,10 +116,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * tokenized. Requires `styles/primitives.css`.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, muted, asChild, className, children, ...rest },
+  { variant = 'secondary', size = 'md', type = 'button', active, tone, inline, block, wrap, muted, asChild, className, children, ...rest },
   ref,
 ) {
-  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', muted ? 'muted' : '', inline ? 'inline' : '', className ?? '']
+  const cls = ['nds-btn', variant === 'secondary' ? '' : variant, size === 'md' ? '' : size, active ? 'on' : '', active && tone && tone !== 'neutral' ? tone : '', block ? 'block' : '', muted ? 'muted' : '', inline ? 'inline' : '', wrap ? 'wrap' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   if (asChild && isValidElement(children)) {

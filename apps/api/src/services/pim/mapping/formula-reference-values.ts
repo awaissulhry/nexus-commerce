@@ -61,6 +61,7 @@ export async function getFormulaColumns(input: {
     productTypes: channel === 'AMAZON' ? categories : [...new Set(family.map(p => p.productType).filter(Boolean))],
     familyIds: [...new Set(family.map(p => p.familyId).filter(Boolean))],
     savedFields: savedAttributeFields(family.map(p => p.categoryAttributes)),
+    savedFieldsFor: 'shared',
     variationAxes: [...new Set(family.flatMap(p => Array.isArray(p.variationAxes) ? p.variationAxes : []))],
     etsyCategoryIds: channel === 'ETSY' ? categories : [],
     ebayCategoryIds: channel === 'EBAY' ? categories : [],

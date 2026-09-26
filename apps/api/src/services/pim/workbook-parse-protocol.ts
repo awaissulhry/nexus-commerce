@@ -31,7 +31,11 @@ export type PartOutcome =
  * Per-part reading options the host passes through: the catalog page's "Blank cells" choice, and its chosen
  * marketplace — an eBay sheet named after its family states no market, so the operator's choice is the last hint.
  */
-export interface PartOptions { blankPolicy?: 'ignore' | 'clear'; market?: string }
+export interface PartOptions {
+  blankPolicy?: 'ignore' | 'clear'; market?: string
+  /** PSIE — an editing workbook returns only the cells the user changed (`readCatalogWorkbook`). */
+  changesOnly?: boolean
+}
 
 export type HostMessage =
   | { type: 'part'; partId: number; bytes: Uint8Array; filename: string; batchBudgetBytes: number; options?: PartOptions }

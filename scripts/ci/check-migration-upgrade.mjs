@@ -73,8 +73,8 @@ for (const db of ['nexus_upgrade_a_test', 'nexus_upgrade_b_test']) await admin.q
 await admin.end()
 
 step('A: bootstrap the BASE commit', TSX, ['scripts/ci/prepare-test-database.mts', '--url', A, '--database-dir', join(BASE_DIR, 'packages', 'database'), '--no-markets'])
-// The production release command, as railway.toml runs it: `cd packages/database && node scripts/migrate-direct.mjs`.
-step('A: apply the PR\'s migrations with the production release command', process.execPath, ['scripts/migrate-direct.mjs'], { DATABASE_URL: A, MIGRATION_DATABASE_URL: A, NODE_ENV: 'test' }, join(ROOT, 'packages', 'database'))
+// The production release command, as Railway's pre-deploy step runs it: `npm run db:migrate:deploy` from the repo root.
+step('A: apply the PR\'s migrations with the production release command', process.execPath, ['packages/database/scripts/migrate-direct.mjs'], { DATABASE_URL: A, MIGRATION_DATABASE_URL: A, NODE_ENV: 'test' }, ROOT)
 step('B: bootstrap the PR head', TSX, ['scripts/ci/prepare-test-database.mts', '--url', B, '--no-markets'])
 
 const problems = []
@@ -89,8 +89,12 @@ if (missing.length) problems.push(`migrations not applied to the upgraded databa
 
 // 2. The same residue against the PR's schema.prisma.
 function residue(url) {
-  const out = execFileSync(PRISMA, ['migrate', 'diff', '--from-url', url, '--to-schema-datamodel', 'packages/database/prisma/schema.prisma', '--script'], {
+  // Prisma 7 reads the database from prisma.config.ts, which prefers MIGRATION_DATABASE_URL. Both
+  // are set here, so a value from a developer's .env (dotenv never overrides) cannot be diffed.
+  const out = execFileSync(PRISMA, ['migrate', 'diff', '--config', 'packages/database/prisma.config.ts',
+    '--from-config-datasource', '--to-schema', 'packages/database/prisma/schema.prisma', '--script'], {
     cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, MIGRATION_DATABASE_URL: url, DATABASE_URL: url },
   })
   return out.replace(/--[^\n]*/g, '').split(';').map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean)
 }

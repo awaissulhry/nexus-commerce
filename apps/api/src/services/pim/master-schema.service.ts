@@ -23,6 +23,7 @@
 import prisma from '../../db.js'
 import { getAvailableFields, type FieldDefinition } from './field-registry.service.js'
 import { getResolvedRules } from './schema-mapping.service.js'
+import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
 
 export interface MasterAttribute {
   /** categoryAttributes key (e.g. 'material_type') — the master path is
@@ -60,7 +61,7 @@ function humanize(s: string): string {
 // FLATFILE_CONTENT map.
 const NON_ATTRIBUTE_KEYS = new Set([
   // content → locale/content section
-  'item_name', 'product_description', 'bullet_point', 'generic_keyword',
+  ...CONTENT_ROOTS,
   // identity → identity card
   'brand', 'manufacturer',
   'externally_assigned_product_identifier', 'supplier_declared_has_product_identifier_exemption', 'merchant_suggested_asin',

@@ -1,9 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { AmazonSyncService } from "../services/amazon-sync.service.js";
-import {
-  runSyncDriftDetection,
-  getSyncDriftDetectionStatus,
-} from "../jobs/sync-drift-detection.job.js";
+import { runSyncDriftDetection } from "../jobs/sync-drift-detection.job.js";
+import { CRON_JOBS, readCronCard } from "../services/runtime-status/cron-status.service.js";
 import { logger } from "../utils/logger.js";
 
 interface SyncCatalogBody {
@@ -53,10 +51,11 @@ export async function syncRoutes(app: FastifyInstance) {
   /**
    * P.2 — Cron status for the drift detector. Useful for ops to
    * confirm the cron is wired up + see when it last ran without
-   * grepping logs.
+   * grepping logs. Scheduled = registered in the scheduler process;
+   * runs from CronRun (runtime-status/cron-status.service.ts).
    */
   app.get('/sync/detect-drift/status', async (_request, reply) => {
-    return reply.send(getSyncDriftDetectionStatus());
+    return reply.send(await readCronCard(CRON_JOBS.syncDriftDetection, { memoryOnly: ['lastResult'] }));
   });
 
   /**

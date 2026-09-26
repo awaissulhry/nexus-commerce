@@ -19,6 +19,7 @@
 import prisma from '../../db.js'
 import { getResolvedRules } from './schema-mapping.service.js'
 import { getMasterAttributeSchema } from './master-schema.service.js'
+import { CONTENT_MASTER_FIELD } from '../channel-drift/amazon-content-compare.js'
 
 // Transforms whose output can't be reliably reversed to the master value.
 const NON_INVERTIBLE = new Set(['valueMap', 'sizeScale', 'template', 'translate', 'unit', 'numberFormat'])
@@ -157,12 +158,7 @@ export async function proposeImportFromChannel(input: {
 }
 
 // MA.7 — well-known Amazon flat-file content columns → master content fields.
-const FLATFILE_CONTENT: Record<string, string> = {
-  item_name: 'title',
-  product_description: 'description',
-  bullet_point: 'bulletPoints',
-  generic_keyword: 'keywords',
-}
+const FLATFILE_CONTENT: Record<string, string> = CONTENT_MASTER_FIELD
 
 /**
  * MA.7 — Propose master values from the FLAT-FILE data (read-only).

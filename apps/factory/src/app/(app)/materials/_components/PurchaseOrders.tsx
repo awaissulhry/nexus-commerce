@@ -141,12 +141,12 @@ export function PurchaseOrders({ materials, prefill, onConsumed }: { materials: 
                   <span><b>{l.materialName}</b><span style={{ color: "var(--nds-text-3)" }}> · {num(l.qty)} {l.unit.toLowerCase()}</span></span>
                   <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
                     {l.received >= l.qty ? <Pill tone="success">received</Pill> : l.received > 0 ? <Pill tone="warning">{num(l.received)}/{num(l.qty)}</Pill> : <span style={{ color: "var(--nds-text-3)" }}>—</span>}
-                    {canCost && l.lineTotalCents != null && <span style={{ fontFamily: "ui-monospace, monospace" }}>{eur(l.lineTotalCents)}</span>}
+                    {canCost && l.lineTotalCents != null && <span style={{ fontFamily: "var(--nds-font-mono)" }}>{eur(l.lineTotalCents)}</span>}
                   </span>
                 </div>
               ))}
             </div>
-            {canCost && po.totalCents != null && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}><span>Total</span><span style={{ fontFamily: "ui-monospace, monospace" }}>{eur(po.totalCents)}</span></div>}
+            {canCost && po.totalCents != null && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}><span>Total</span><span style={{ fontFamily: "var(--nds-font-mono)" }}>{eur(po.totalCents)}</span></div>}
           </div>
         )}
       </Drawer>

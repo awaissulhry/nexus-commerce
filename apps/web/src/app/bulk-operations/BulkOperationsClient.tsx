@@ -3820,7 +3820,7 @@ export default function BulkOperationsClient() {
                       ghost.style.fontSize = '11px'
                       ghost.style.fontWeight = '600'
                       ghost.style.borderRadius = '4px'
-                      ghost.style.fontFamily = 'system-ui, sans-serif'
+                      ghost.style.fontFamily = 'var(--nds-font-sans)'
                       document.body.appendChild(ghost)
                       e.dataTransfer.setDragImage(ghost, 10, 10)
                       // Defer removal so the browser has captured the
@@ -3965,7 +3965,7 @@ export default function BulkOperationsClient() {
                           ghost.style.fontSize = '11px'
                           ghost.style.fontWeight = '600'
                           ghost.style.borderRadius = '4px'
-                          ghost.style.fontFamily = 'system-ui, sans-serif'
+                          ghost.style.fontFamily = 'var(--nds-font-sans)'
                           document.body.appendChild(ghost)
                           e.dataTransfer.setDragImage(ghost, 10, 10)
                           window.setTimeout(() => ghost.remove(), 0)

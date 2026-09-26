@@ -42,10 +42,10 @@ import prisma from '../../../db.js'
 import { resolveAttributes } from '../attribute-resolver.js'
 import { getMappingForMarketplace, getRulesFor, type FieldMappingRule, type MarketplaceSchemaMapping } from '../schema-mapping.service.js'
 import {
-  resolveChannelField, isPresent, linkForCoordinate, type FieldLinkGroupLike,
+  resolveChannelField, resolvedAttrsView, isPresent, linkForCoordinate, type FieldLinkGroupLike,
 } from '../resolve-channel-field.js'
 import { getFieldCatalogue, type CatalogueField, type FieldCatalogue } from './field-catalogue.service.js'
-import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
+import { categoryForListing, channelCategoryField, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
 
 export interface ResolvedCell {
   content?: import('../content-resolver.js').ResolvedContent
@@ -301,8 +301,14 @@ export async function resolveBatch(input: {
     }
 
     const parent = full.parentId ? parentById.get(full.parentId) : null
-    const content = resolveContentAttributes({ product: full, parent, listing: listingByProduct.get(p.id), languages,
+    const listing = listingByProduct.get(p.id)
+    const content = resolveContentAttributes({ product: full, parent, listing, languages,
       requested: locale, localizableKeys: catalogue.masterLocalizableKeys })
+    // P7 (PLAN §10.8) — per-PRODUCT lookups, built once instead of once per field (the largest single cost of a
+    // readiness rebuild, measured 2026-09-26). `resolvedAttrs` is final here; nothing below changes it.
+    const attrsView = resolvedAttrsView(resolvedAttrs)
+    let fieldProduct: Record<string, unknown> | undefined
+    const productForFields = () => fieldProduct ??= { ...full, parent, contentListing: contentListing(full, listing, undefined, languages) }
 
     // Conditions can depend on a field outside the requested projection.
     const fields: CatalogueField[] = catalogue.fields
@@ -317,8 +323,7 @@ export async function resolveBatch(input: {
       // Only exact declared semantic matches qualify; an existing operator mapping keeps precedence.
       const rule: FieldMappingRule | null = rules[field.fieldKey] ?? field.rule ?? (field.sourceOwner ? null : masterDefaultRule({
         key: field.fieldKey, masterKey: field.sheetKey, channelStore: field.channelStore,
-      }, new Set(Object.keys(resolvedAttrs))))
-      const listing = listingByProduct.get(p.id)
+      }, attrsView.keys))
       const store = field.channelStore
       const contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
       const storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
@@ -330,7 +335,8 @@ export async function resolveBatch(input: {
           ? parentById.get(full.parentId)?.sku
           : channel === 'AMAZON' && field.fieldKey === 'child_parent_sku_relationship__child_relationship_type' && (full.isParent || full.parentId)
             ? 'variation' : undefined
-      const effectiveStored = isBlankValue(stored) && ((channel === 'AMAZON' && field.fieldKey === 'productType') || (channel === 'EBAY' && field.fieldKey === 'categoryId'))
+      // The mapped category fills the channel's own category field (one map for every channel).
+      const effectiveStored = isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
         ? categories[p.id]?.channelCategoryId : stored === undefined ? systemValue : stored
       // A deliberately cleared override is still an override; it must not revive Master.
       const hasStored = effectiveStored !== undefined
@@ -364,7 +370,8 @@ export async function resolveBatch(input: {
         fieldKey: field.fieldKey,
         rule: rule!,
         resolvedAttrs,
-        product: { ...full, parent, contentListing: contentListing(full, listing, undefined, languages) } as any,
+        attrsView,
+        product: productForFields() as any,
         locale,
         link,
         transformCtx: {

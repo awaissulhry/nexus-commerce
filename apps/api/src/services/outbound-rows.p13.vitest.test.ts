@@ -24,8 +24,8 @@ describe('P1.3 — the destination account is written with the row', () => {
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
     rows = await import('./outbound-rows.js')
     const q = (sql: string, params: unknown[] = []) => database.db.query(sql, params)
-    await q(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "isActive", "isPrimary", "authStatus", "updatedAt") VALUES
-      ($1, 'ebay-A', 'EBAY', true, true, 'connected', CURRENT_TIMESTAMP), ($1, 'ebay-B', 'EBAY', true, false, 'connected', CURRENT_TIMESTAMP)`, [LEGACY])
+    await q(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "externalAccountId", "isActive", "isPrimary", "authStatus", "updatedAt") VALUES
+      ($1, 'ebay-A', 'EBAY', 'fixture-ebay-A', true, true, 'connected', CURRENT_TIMESTAMP), ($1, 'ebay-B', 'EBAY', 'fixture-ebay-B', true, false, 'connected', CURRENT_TIMESTAMP)`, [LEGACY])
     await q(`INSERT INTO "Product" ("workspaceId", id, sku, name, "basePrice", "updatedAt") VALUES
       ($1, 'P1', 'SKU-1', 'One', 10, CURRENT_TIMESTAMP), ($1, 'P2', 'SKU-2', 'Two', 10, CURRENT_TIMESTAMP)`, [LEGACY])
     await q(`INSERT INTO "ChannelListing" ("workspaceId", id, "productId", "channelMarket", channel, region, marketplace, "channelConnectionId", "updatedAt") VALUES

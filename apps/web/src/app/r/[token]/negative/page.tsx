@@ -20,7 +20,7 @@ export default async function NegativeLandingPage({
   const { token } = await params
   return (
     <main style={{
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      fontFamily: 'var(--nds-font-sans)',
       maxWidth: '520px',
       margin: '0 auto',
       padding: '40px 24px',

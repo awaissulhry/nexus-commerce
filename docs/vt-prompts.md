@@ -25,7 +25,7 @@ You are building for an Owner who holds a zero-defect, best-in-industry bar. The
    (GALE `Product.version` 58) vs Neon prod (`Product.version` 51). Read the discriminator, write it in your ledger
    section, then write. Prod writes: NONE from a lane. Fixture writes: `VX-TEST-3AX` (create it under the XAVIA family,
    DRAFT, excluded on every coordinate, announced in the ledger before creation) and disposable DRAFT rows only. GALE-JACKET
-   is read-only on channel coordinates — its eBay·IT item 257584954808 and Amazon ASIN B0F7J163XJ are LIVE.
+   is read-only on channel coordinates — its eBay·IT item 938554736087 and Amazon ASIN B0FXD0620C are LIVE.
 4. **One definition, zero copies.** Grid chrome and column rules live in the ENGINE (`design-system/grid/**`) and are spread
    by BOTH sheet builders (`master/columns.tsx`, `master/channelColumns.tsx`) — `EDITOR_ONLY=parity node
    scripts/check-editor-open.mjs --strict` must include the new column. The editor is ONE component with two hosts

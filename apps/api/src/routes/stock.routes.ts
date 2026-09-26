@@ -33,13 +33,13 @@ import { buildCsv, buildXlsx, buildJobResultsExport, buildStockExport } from '..
 import { detectFileKind, parseCsv, parseJson, parseXlsx, sniffDelimiterSmart } from '../services/import/parsers.js'
 import {
   reserveStock,
-  releaseReservation,
+  releaseReservationFromStockPage,
   transferStock,
 } from '../services/stock-level.service.js'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { resolveAtp } from '../services/atp.service.js'
 import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
-import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
+import { CRON_JOBS, readCronCard, summaryCount } from '../services/runtime-status/cron-status.service.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { loadPagePoolSources, loadPoolSources, pooledStockRisk, summarizePoolSources, unitsForState, type PoolSource } from '../services/stock-pool/pool-sources.js'
@@ -537,7 +537,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   //
   //   amazonFbaCron   — last successful reconciliation (any delta) +
   //                     whether the cron is currently configured
-  //   reservationSweep — in-process state from the sweep job
+  //   reservationSweep — scheduled in the scheduler process + last recorded run (CronRun)
   //   outboundQueue   — counts of QUANTITY_UPDATE rows by syncStatus
   //                     (PENDING / SYNCING / FAILED) — proves the
   //                     Phase 13 cascade fan-out is draining
@@ -609,7 +609,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           // (T.1 — better than silent overselling).
           silentDriftRisk: ebayCredsPresent && !ebayRealApi,
         },
-        reservationSweep: getReservationSweepStatus(),
+        reservationSweep: await readCronCard(CRON_JOBS.reservationSweep, {
+          fieldPrefix: 'reservationSweep.',
+          fields: (status) => ({ lastReleasedCount: summaryCount(status.lastSuccess?.outputSummary, 'released') }),
+        }),
         outboundQueue: {
           pending: outboundCounts.PENDING ?? 0,
           syncing: outboundCounts.SYNCING ?? 0,
@@ -3784,9 +3787,20 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/stock/release/:reservationId', async (request, reply) => {
     try {
       const { reservationId } = request.params as { reservationId: string }
-      const updated = await releaseReservation(reservationId, {
+      // Own holds; and (re-review 2026-09-26) a hold of this business's stock kept for another business's
+      // cancelled or refunded order, lender only — the page confirms first.
+      const updated = await releaseReservationFromStockPage(reservationId, {
         actor: 'manual-release',
       })
+      const lent = updated as { consumerWorkspaceId?: string | null; consumerOrderRef?: string | null; quantity?: number }
+      if (lent.consumerWorkspaceId) {
+        const { auditLogService } = await import('../services/audit-log.service.js')
+        await auditLogService.write({
+          userId: (request as { user?: { id?: string } }).user?.id ?? null, ip: request.ip ?? null,
+          entityType: 'StockReservation', entityId: reservationId, action: 'lender-release-kept-pool-hold',
+          metadata: { consumerWorkspaceId: lent.consumerWorkspaceId, orderRef: lent.consumerOrderRef, quantity: lent.quantity },
+        })
+      }
       // AS.5 — mirror of /stock/reserve: releasing frees `available`, so
       // re-advertise it promptly instead of waiting for the drift heal.
       void (async () => {
@@ -3812,6 +3826,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       // Shared stock — a hold made here for another business's order: refused with its reason.
       if (error?.code === 'pool_hold') return reply.code(409).send({ error: error.message, code: error.code })
+      // The lender door's other refusals carry their own status (e.g. not_lent_hold, 404).
+      if (typeof error?.statusCode === 'number' && typeof error?.code === 'string') return reply.code(error.statusCode).send({ error: error.message, code: error.code })
       fastify.log.error({ err: error }, '[stock/release] failed')
       return reply.code(400).send({ error: error?.message ?? String(error) })
     }

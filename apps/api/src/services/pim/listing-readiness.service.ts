@@ -80,7 +80,7 @@ export async function listingReadiness(query: Record<string, unknown>, userId: s
     return { id: record.id, productId: record.productId, sku: record.product.sku, name: record.product.name,
       channel: record.channel ?? 'SHARED', marketplace: record.market ?? '', accountId: record.accountId, accountName: record.label,
       aliasKey: record.aliasId ?? '', locale: record.language, state: record.state as ListingReadinessRow['state'], pct: record.pct,
-      computedAt: record.computedAt.toISOString(), familyId: record.product.familyId,
+      computedAt: record.computedAt.toISOString(), ...(record.pendingSince ? { pendingSince: record.pendingSince.toISOString() } : {}), familyId: record.product.familyId,
       issues: missing.map(issue => ({ field: issue.field, label: issue.label, kind: 'missing', message: issue.reason })),
       editorHref: `/products/${encodeURIComponent(record.productId)}/edit/studio?${params}` }
   })

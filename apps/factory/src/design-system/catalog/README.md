@@ -204,3 +204,5 @@ PresenceMark axis=intent|fact|both (default both) separates adjacent columns; co
 `LoadedRowsSelectionHeader` composes Checkbox for explicit loaded-row selection. Use it as `selectionColumnDef.headerComponent`, with `rowSelection.headerCheckbox: false`, for server grids. It excludes pinned, unloaded and unselectable rows. The Web Grid catalog specimen demonstrates checked/mixed/unchecked states. Verify Space toggling, select/clear, sorting, and newly expanded rows remaining unselected in light/dark layouts.
 
 `DateTimeFieldExample` (Date and time) shows an end time from one minute to one year ahead in 15-minute steps, labelled by `Field`, with the stored ISO instant beside it. Verify: choose a day, then a time; on today, earlier times are not offered; the zone name follows the viewer's zone; keyboard reaches the date, then the time; light/dark; at 390 px the zone wraps under the controls.
+
+`Tag` supports neutral, info, success, warning and danger metadata. Its actual text/fill pairs are measured at 7:1 in light and dark; success/danger use the semantic text tokens (2026-09-25). Tag text is a label, so do not rely on color alone.

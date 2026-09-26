@@ -20,14 +20,14 @@ const aireon = (): SourceCampaign[] => [
   {
     name: 'IT-AIREON-SP-Brand-Exact', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [],
     adGroups: [{
-      name: 'IT-AIREON-SP-Brand-Exact Ad Group', defaultBidCents: 2, asins: ['B0FB41W1TD', 'B0FB41W1TE'],
+      name: 'IT-AIREON-SP-Brand-Exact Ad Group', defaultBidCents: 2, asins: ['B0FX9BEA2B', 'B0FB41W1TE'],
       targets: [kw('aireon'), kw('aireon jacket'), kw('giacca aireon')],
     }],
   },
   {
     name: 'IT-AIREON-SP-Category-Exact', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [],
     adGroups: [{
-      name: 'IT-AIREON-SP-Category-Exact Ad Group', defaultBidCents: 2, asins: ['B0FB41W1TD'],
+      name: 'IT-AIREON-SP-Category-Exact Ad Group', defaultBidCents: 2, asins: ['B0FX9BEA2B'],
       targets: [kw('giacca moto'), kw('abbigliamento moto'), kw('aireon'), kw('giacca moto', 'EXACT', true)],
     }],
   },
@@ -65,7 +65,7 @@ describe('classifyTarget', () => {
     expect(classifyTarget(kw('aireonaut helmet'), 'AIREON')).toBe('CATEGORY')
   })
   it('ASIN for product targets', () => {
-    expect(classifyTarget({ kind: 'PRODUCT', expressionValue: 'B0FB41W1TD' }, 'AIREON')).toBe('ASIN')
+    expect(classifyTarget({ kind: 'PRODUCT', expressionValue: 'B0FX9BEA2B' }, 'AIREON')).toBe('ASIN')
   })
   it('UNKNOWN for an empty expression rather than guessing', () => {
     expect(classifyTarget(kw(''), 'AIREON')).toBe('UNKNOWN')
@@ -93,7 +93,7 @@ describe('autoClauseOf', () => {
   })
   it('is null for anything that is not an auto target', () => {
     expect(autoClauseOf(kw('giacca moto'))).toBeNull()
-    expect(autoClauseOf({ kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0FB41W1TD' })).toBeNull()
+    expect(autoClauseOf({ kind: 'PRODUCT', expressionType: 'ASIN', expressionValue: 'B0FX9BEA2B' })).toBeNull()
   })
 })
 
@@ -225,7 +225,7 @@ describe('extractBlueprint', () => {
     expect(doc.stats.productAds).toBe(3)
     expect(doc.campaigns[0]!.adGroups[0]!.productAdCount).toBe(2)
     // ASINs are per-product and deliberately not part of the reusable doc.
-    expect(JSON.stringify(doc)).not.toContain('B0FB41W1TD')
+    expect(JSON.stringify(doc)).not.toContain('B0FX9BEA2B')
   })
 
   it('splits positives from negatives', () => {
@@ -277,7 +277,7 @@ describe('extractBlueprint — Auto campaigns', () => {
     name: 'IT-AIREON-SP-Auto', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 75 }],
     targetingType,
     adGroups: [{
-      name: 'IT-AIREON-SP-Auto Ad Group', defaultBidCents: 2, asins: ['B0FB41W1TD'],
+      name: 'IT-AIREON-SP-Auto Ad Group', defaultBidCents: 2, asins: ['B0FX9BEA2B'],
       targets: [auto('SEARCH_CLOSE_MATCH'), auto('SEARCH_LOOSE_MATCH'), auto('PRODUCT_SUBSTITUTES'), auto('PRODUCT_COMPLEMENTS'), kw('giacca moto', 'EXACT', true)],
     }],
   }]

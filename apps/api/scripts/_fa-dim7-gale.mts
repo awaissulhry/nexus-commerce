@@ -5,7 +5,7 @@ const lv = await prisma.stockLevel.findMany({ where: { productId: p!.id }, selec
 console.log('ledger', JSON.stringify(lv))
 const q = await prisma.outboundSyncQueue.findMany({ where: { productId: p!.id, syncType: 'QUANTITY_UPDATE' }, select: { createdAt: true, syncStatus: true, payload: true, externalListingId: true }, orderBy: { createdAt: 'desc' }, take: 5 })
 console.log('recent pushes', JSON.stringify(q, null, 1))
-// which SC row would exist for item 257584954808?
-const mem = await prisma.sharedListingMembership.count({ where: { itemId: '257584954808', status: 'ACTIVE' } })
-console.log('ACTIVE memberships on item 257584954808:', mem)
+// which SC row would exist for item 938554736087?
+const mem = await prisma.sharedListingMembership.count({ where: { itemId: '938554736087', status: 'ACTIVE' } })
+console.log('ACTIVE memberships on item 938554736087:', mem)
 await prisma.$disconnect()

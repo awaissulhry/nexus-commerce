@@ -8,6 +8,7 @@
 import cron from '../lib/cron/clustered.js'
 import OutboundSyncService, { withTimeout } from '../services/outbound-sync.service.js'
 import { logger } from '../utils/logger.js'
+import { registerStatusSection } from '../lib/runtime-status/process-snapshot.js'
 
 // Lock mechanism to prevent overlapping sync jobs
 let isProcessing = false
@@ -49,6 +50,8 @@ async function buildBullMQSkip(): Promise<((queueId: string) => Promise<boolean>
  */
 export function initializeSyncWorker() {
   logger.info('🤖 Initializing Autopilot Sync Worker...')
+  // The API reports this worker's status from the worker's runtime snapshot (GET /api/outbound/worker-status).
+  registerStatusSection('syncWorker', getSyncWorkerStatus)
 
   // PD-Q — if a cycle ever wedges (hung downstream call), isProcessing would
   // stick true forever and every later cycle would skip → silent backlog. After

@@ -7,11 +7,11 @@ family, 20 variants, one primary listing and all four requested aliases.
 
 | Listing | Role | eBay item ID | Variants |
 |---|---|---|---:|
-| GALE-JACKET | Primary | [257584954808](https://www.ebay.it/itm/257584954808) | 20 |
-| IT-GALE-JACKET | Alias 1 | [256564203510](https://www.ebay.it/itm/256564203510) | 20 |
-| GALE-JACKET-ALT1 | Alias 2 | [256566101420](https://www.ebay.it/itm/256566101420) | 20 |
-| GALE-JACKET-ALT2 | Alias 3 | [256566102729](https://www.ebay.it/itm/256566102729) | 20 |
-| GALE-JACKET-ALT3 | Alias 4 | [256566103703](https://www.ebay.it/itm/256566103703) | 20 |
+| GALE-JACKET | Primary | [938554736087](https://www.ebay.it/itm/938554736087) | 20 |
+| IT-GALE-JACKET | Alias 1 | [913270132587](https://www.ebay.it/itm/913270132587) | 20 |
+| GALE-JACKET-ALT1 | Alias 2 | [949285812839](https://www.ebay.it/itm/949285812839) | 20 |
+| GALE-JACKET-ALT2 | Alias 3 | [910932382515](https://www.ebay.it/itm/910932382515) | 20 |
+| GALE-JACKET-ALT3 | Alias 4 | [950640873955](https://www.ebay.it/itm/950640873955) | 20 |
 
 Direct eBay GetItem calls at 08:06 UTC returned Success for all five active
 listings owned by xaviaracing. All 100 child SKUs, parent associations, sizes,

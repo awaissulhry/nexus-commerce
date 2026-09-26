@@ -107,7 +107,8 @@
   },
   "CustomAttribute": {
     "scalar": {
-      "code": "workspace_code"
+      "code": "workspace_code",
+      "semanticKey": "workspace_semanticKey"
     },
     "compound": {},
     "relations": [
@@ -6238,6 +6239,137 @@
         "model": "ChannelListing",
         "from": [
           "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EtsyReceiptIngest": {
+    "scalar": {
+      "connectionId": "workspace_connectionId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EtsyReceiptRefusal": {
+    "scalar": {},
+    "compound": {
+      "connectionId_receiptId_receiptVersion_code": [
+        "connectionId",
+        "receiptId",
+        "receiptVersion",
+        "code"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CommandReceipt": {
+    "scalar": {},
+    "compound": {
+      "scope_keyHash": [
+        "scope",
+        "keyHash"
+      ]
+    },
+    "relations": []
+  },
+  "ErasureRequest": {
+    "scalar": {},
+    "compound": {
+      "workspace_quarantine": [
+        "quarantineId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "evidenceOrder",
+        "model": "Order",
+        "from": [
+          "evidenceOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "quarantine",
+        "model": "EbayNoticeQuarantine",
+        "from": [
+          "quarantineId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelMappingSet": {
+    "scalar": {},
+    "compound": {
+      "form_version": [
+        "channel",
+        "marketplace",
+        "formKind",
+        "formKey",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "ChannelMappingField": {
+    "scalar": {},
+    "compound": {
+      "set_channelKey": [
+        "setId",
+        "channelKey"
+      ]
+    },
+    "relations": [
+      {
+        "field": "set",
+        "model": "ChannelMappingSet",
+        "from": [
+          "setId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelMappingUse": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "set",
+        "model": "ChannelMappingSet",
+        "from": [
+          "setId"
         ],
         "to": [
           "id"

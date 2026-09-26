@@ -71,6 +71,7 @@ import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
 import { completenessFor, decimalToNumber, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
+import { channelCategoryField } from './mapping/category-mapping.service.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types — the contract PES.2 / PES.3 / PES.4 consume
@@ -1009,6 +1010,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     productTypes,
     familyIds: [...new Set(family.map(p => p.familyId).filter((v): v is string => !!v))],
     savedFields: savedAttributeFields(family.map(p => p.categoryAttributes)),
+    // P3b S4 — only the saved keys that belong on Shared (not channel-placed, archived or channel-only).
+    savedFieldsFor: 'shared',
     variationAxes,
     ebayCategoryIds,
     etsyCategoryIds: wantChannel === 'ETSY' ? context!.categories : [],
@@ -1338,7 +1341,9 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           }
         }
 
-        if (!base && coordinate && (col.key === 'categoryId' || col.key === 'productType' || col.key === 'taxonomy_id') && effectiveCategory) {
+        // The mapped category fills only the coordinate channel's own category field (`CHANNEL_CATEGORY_FIELD`), never
+        // another channel's key — Shopify's free-text `productType` is not its category.
+        if (!base && coordinate && col.key === channelCategoryField(coordinate.channel) && effectiveCategory) {
           base = { value: effectiveCategory, source: 'master', inheritedFrom: rootId, inherited: true }
         }
         const empty: SheetCellValue = { value: contentWireValue(null, col.slot ? undefined : col.shape), source: null, inheritedFrom: null, inherited: false }
@@ -1573,7 +1578,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         }
       }
       if (missingSchemaFor(effectiveCategory)) {
-        const categoryKey = coordinate?.channel === 'ETSY' ? 'taxonomy_id' : coordinate?.channel === 'EBAY' ? 'categoryId' : 'productType'
+        const categoryKey = channelCategoryField(coordinate?.channel) ?? 'productType'
         const categoryColumn = columns.find(column => column.key === categoryKey || Object.values(column.channels ?? {}).some(facts => facts.key === categoryKey))
         issues.push({ key: categoryColumn?.key ?? categoryKey, label: 'Channel requirements', severity: 'error',
           message: `Requirements for ${effectiveCategory ?? 'this category'} on ${coordinate!.label} are unavailable. Readiness cannot be verified until the category schema is loaded.` })

@@ -12,9 +12,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * Everything the builder reads outside the fixture is stubbed; `buildFlatRow`, `buildSharedListingInput` and the XML
  * serialiser are REAL.
  */
-const m = vi.hoisted(() => ({ currencyFill: undefined as string | undefined, findFirst: vi.fn(async () => null) }))
+const m = vi.hoisted(() => ({ currencyFill: undefined as string | undefined, findFirst: vi.fn(async () => null), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []) }))
 
-vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: m.findFirst } } }))
+// CHMAP M4: no ACTIVE mapping version, so the builder sends exactly what it sent before.
+vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: m.findFirst }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) } } }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: () => 'live' }))
 vi.mock('../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'token' } }))
 vi.mock('../ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: async (_db: unknown, input: { body: string }) => ({ html: `<p>${input.body}</p>`, warnings: [] }) }))
@@ -31,11 +32,13 @@ vi.mock('./channel-specs/index.js', async original => ({
     { key: 'aspect_Marca', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Marca'] } },
   ] }),
 }))
-vi.mock('./stored-variation-projection.js', () => ({
+// VTR step 0: the real `channelAxisValues`; no axis cell is resolved here, so the stored values go out unchanged.
+vi.mock('./stored-variation-projection.js', async original => ({
+  ...(await original<typeof import('./stored-variation-projection.js')>()),
   loadStoredVariationProjection: async () => ({ input: { family: { variants: [
     { id: 'c1', axisValues: { color: 'Nero', size: 'M' } },
     { id: 'c2', axisValues: { color: 'Nero', size: 'L' } },
-  ] } } }),
+  ] } }, cell: { axes: [] } }),
 }))
 vi.mock('./variation-rules.service.js', () => ({
   resolveVariationProjection: () => ({ axes: [
@@ -99,7 +102,10 @@ const GOLDEN_SPECIFICS: Record<string, string[]> = {
 }
 const asLists = (specifics: Record<string, string | string[]>) => Object.fromEntries(Object.entries(specifics).map(([k, v]) => [k, Array.isArray(v) ? v : [v]]))
 
-beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX; m.currencyFill = undefined })
+beforeEach(() => { process.env.NEXUS_EBAY_REAL_API = 'true'; delete process.env.EBAY_SANDBOX; m.currencyFill = undefined; m.sets.mockResolvedValue([]); m.mapFields.mockResolvedValue([]) })
+const mappingRow = (channelKey: string, targetKind: string, targetKey: string, extra: Record<string, unknown> = {}) => ({ id: channelKey, setId: 'set-1', channelKey, columnKey: channelKey, label: null, aliases: [], productTypes: [],
+  requirement: 'optional', templateRequirement: null, targetKind, targetKey, transform: [], direction: 'both', state: 'mapped', reason: null, decidedBy: 'rule', sortOrder: 0, ...extra })
+
 
 describe('the eBay studio builder — Title and ItemSpecifics', () => {
   it('golden: sends the resolved title and the overlaid, split item specifics (recorded before the extraction)', async () => {
@@ -130,6 +136,18 @@ describe('the eBay studio builder — Title and ItemSpecifics', () => {
     expect(built.shared.title).toBe(sent.title)
     expect(asLists(built.shared.itemSpecifics)).toEqual(sent.itemSpecifics)
     expect(built.itemId).toBe('111')
+  })
+
+  it('CHMAP M4: item specifics the Owner ignored in the ACTIVE mapping version are left out of the set eBay receives', async () => {
+    m.sets.mockResolvedValue([{ id: 'set-1', version: 3, formKey: '57988', marketplace: 'IT' }])
+    m.mapFields.mockResolvedValue([
+      mappingRow('aspect:Marca', 'channelField', 'aspect_Marca', { state: 'ignored', decidedBy: 'owner', reason: 'brand comes from the account' }),
+      mappingRow('specific:materiale', 'itemSpecific', 'itemSpecifics.materiale', { state: 'ignored', decidedBy: 'owner', reason: 'Amazon workaround' }),
+      mappingRow('Caratteristiche', 'channelField', 'aspect_Caratteristiche'),
+    ])
+    const sent = parseEbayItemContent((await builder.prepareEbayPublication(fixture())).xml)
+    expect(Object.keys(sent.itemSpecifics)).toEqual(['Caratteristiche'])
+    expect(sent.title).toBe(GOLDEN_TITLE)
   })
 
   it('parity: the extracted function keeps the builder\'s own refusals (an ItemID used outside the selection)', async () => {

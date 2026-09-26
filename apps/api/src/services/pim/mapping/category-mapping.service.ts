@@ -63,6 +63,18 @@ const EMPTY: ResolvedCategory = {
   reviewed: false,
 }
 
+/**
+ * The ONE map from a channel to the field that holds its category — on a listing (`platformAttributes`), in the
+ * channel spec, and on the sheet. The resolver (`resolve-batch.service.ts`) and the studio sheet (category fill and
+ * missing-schema issue) read it too (found by the variation-theme lane, 2026-09-26: before, they knew only Amazon and
+ * eBay, so Etsy's and Shopify's mapped category resolved empty, and Shopify's category landed in its free-text
+ * "Product type").
+ */
+export const CHANNEL_CATEGORY_FIELD: Readonly<Record<string, string>> = { AMAZON: 'productType', EBAY: 'categoryId', SHOPIFY: 'category', ETSY: 'taxonomy_id' }
+export function channelCategoryField(channel: string | null | undefined): string | null {
+  return channel ? CHANNEL_CATEGORY_FIELD[channel.toUpperCase()] ?? null : null
+}
+
 /** Existing listings can pin their own category. Amazon product types are never eBay category ids. */
 export function categoryForListing(
   category: ResolvedCategory | undefined,
@@ -72,8 +84,8 @@ export function categoryForListing(
   const ch = channel.toUpperCase()
   const attrs = platformAttributes && typeof platformAttributes === 'object'
     ? platformAttributes as Record<string, unknown> : {}
-  const raw = ch === 'AMAZON' ? attrs.productType : ch === 'EBAY' ? attrs.categoryId
-    : ch === 'SHOPIFY' ? attrs.category : ch === 'ETSY' ? attrs.taxonomy_id : null
+  const field = channelCategoryField(ch)
+  const raw = field ? attrs[field] : null
   // Store drafts support an explicit empty category, distinct from removing the override.
   if (raw === null && (ch === 'SHOPIFY' || ch === 'ETSY')) return { ...EMPTY }
   const id = typeof raw === 'string' ? raw.trim() : typeof raw === 'number' && Number.isFinite(raw) ? String(raw) : ''

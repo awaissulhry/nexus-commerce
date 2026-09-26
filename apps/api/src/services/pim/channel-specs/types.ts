@@ -17,7 +17,10 @@
  * This module is a leaf: no prisma, no imports from the sheet. Pure and node-loadable.
  */
 
-export type ChannelCode = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
+import type { AttributeChannel, AttributeLeafKind, AttributeRequirement, AttributeShape, Cardinality as SharedCardinality, OptionMode } from '@nexus/shared/attributes'
+
+/** P1 (docs/attributes/PLAN.md) — the base vocabulary lives in `@nexus/shared/attributes`; these names are its aliases. */
+export type ChannelCode = AttributeChannel
 
 /**
  * `scalar`  — one value.
@@ -29,19 +32,15 @@ export type ChannelCode = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
  * measure LEAF, keyed `parent__leaf` (`closure__type`, `battery__weight`) — the convention Amazon's
  * own flat-file manifest and the listing pull already use for these keys.
  */
-export type FieldShape = 'scalar' | 'list' | 'measure'
+export type FieldShape = AttributeShape
 
-export type LeafKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
+export type LeafKind = AttributeLeafKind
 
 /** Derived from the channel, never invented — see `reference_amazon_requirement_levels_derivation`. */
-export type Requirement = 'required' | 'requiredIfRelevant' | 'bestPractice' | 'optional'
+export type Requirement = AttributeRequirement
 
-export interface Cardinality {
-  /** The schema's minimum when the field is present at all. NOT a requirement signal. */
-  min: number
-  /** `null` = the channel declares no upper bound. */
-  max: number | null
-}
+/** `min` = the schema's minimum when the field is present at all (NOT a requirement signal); `max: null` = no upper bound. */
+export type Cardinality = SharedCardinality
 
 export interface ChannelGroup {
   key: string
@@ -108,7 +107,7 @@ export interface ChannelFieldSpec {
   options?: string[]
   optionLabels?: Record<string, string>
   /** `strict` = the channel accepts only the list. */
-  mode?: 'strict' | 'open'
+  mode?: OptionMode
   deprecatedOptions?: string[]
   maxLength?: number
   maxBytes?: number

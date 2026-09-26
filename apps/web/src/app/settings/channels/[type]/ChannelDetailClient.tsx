@@ -650,7 +650,7 @@ function AdvancedCard({ meta }: { meta: Record<string, unknown> | null }) {
             border: '1px solid var(--nds-border-subtle)',
             borderRadius: 'var(--nds-radius-md)',
             color: 'var(--nds-text-2)',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            fontFamily: 'var(--nds-font-mono)',
             overflowX: 'auto',
           }}
         >

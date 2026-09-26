@@ -170,7 +170,7 @@ describe('Presence W0 explicit route guards with NEXUS_RBAC_MODE unset', () => {
   })
 
   it('preflight shares selling risk without widening the legacy database predicate', async () => {
-    const held = { productId: 'product', channel: 'EBAY', marketplace: 'IT', region: 'IT', externalListingId: '257584954808', channelConnectionId: null, aliasKey: '' }
+    const held = { productId: 'product', channel: 'EBAY', marketplace: 'IT', region: 'IT', externalListingId: '938554736087', channelConnectionId: null, aliasKey: '' }
     mocks.listings.mockResolvedValue([{ ...held, externalListingId: '  ' }, held])
     const res = await app.inject({ method: 'GET', url: '/api/products/hard-delete-preflight?ids=product',
       headers: { 'x-test-user': 'session-user', 'x-test-permission': 'products.view' } })

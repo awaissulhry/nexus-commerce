@@ -2,9 +2,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator modelMetadata {
+  provider = "nexus-model-metadata"
+  output   = "../workspaces"
+}
+
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum FulfillmentMethod {
@@ -659,6 +663,18 @@ model CustomAttribute {
   localizable  Boolean @default(false)
   scope        String  @default("global") // 'global' | 'per_variant'
   sortOrder    Int     @default(0)
+  /// P3 (docs/attributes/PLAN.md §4.1) — the concept this attribute IS (`@nexus/shared/attribute-concepts`), e.g.
+  /// 'color'. Channel fields bound to the concept link to this attribute with no mapping setup. At most one attribute
+  /// per concept per business; NULL = a business-only attribute with no standard meaning.
+  semanticKey  String?
+  /// P3b S3 (docs/attributes/PLAN.md §10.9) — WHERE the attribute belongs: 'shared' (the Shared scope) or 'channel'
+  /// (only the channels in `placementChannels`). A label, not a data move: the value stays where it is, and a channel
+  /// scope reads the same key. Not `scope`, which already means per-variant.
+  placement         String   @default("shared")
+  /// Channel codes ('AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE') when `placement = 'channel'`; empty otherwise.
+  placementChannels String[] @default([])
+  /// Archived = retired instead of deleted: hidden from new work, its values and links kept. NULL = active.
+  archivedAt        DateTime?
 
   options          AttributeOption[]
   familyAttributes FamilyAttribute[]
@@ -667,6 +683,7 @@ model CustomAttribute {
   updatedAt DateTime @updatedAt
 
   @@unique([workspaceId, code], name: "workspace_code", map: "CustomAttribute_workspace_code_key")
+  @@unique([workspaceId, semanticKey], name: "workspace_semanticKey", map: "CustomAttribute_workspace_semanticKey_key")
   @@index([groupId])
   @@index([workspaceId])
 }
@@ -689,6 +706,10 @@ model AttributeOption {
   metadata Json? // { color: '#ff0000' } | { texturePath: '/...' }
 
   sortOrder Int @default(0)
+  /// P3 — other spellings of this option ('Nero', 'Schwarz' for 'black'), used to MATCH values to channel lists.
+  synonyms   String[]  @default([])
+  /// P3 — a retired option: no longer offered, but values already saved with its code stay valid and readable.
+  archivedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5137,7 +5158,32 @@ model PasswordResetToken {
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
 
+/// One Idempotency-Key command: claimed before its handler runs, replayed while it
+/// lasts. Semantics live in apps/api/src/lib/command-idempotency.ts.
+model CommandReceipt {
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// The command, e.g. "pim-attach". A key is unique within its command.
+  scope       String
+  /// SHA-256 of the client's Idempotency-Key, so a key of any length fits.
+  keyHash     String
+  /// SHA-256 of the canonical request (params, query, body, actor).
+  requestHash String
+  actorUserId String?
+  /// pending (handler running) | completed (a 2xx response is stored)
+  status      String   @default("pending")
+  httpStatus  Int?
+  response    Json?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, scope, keyHash], name: "scope_keyHash")
+  @@index([workspaceId, expiresAt])
+}
+
 model WebhookEvent {
+  ebayQuarantine EbayNoticeQuarantine?
   // Business ownership comes from verified database context.
   workspaceId String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String    @id @default(cuid())
@@ -5172,6 +5218,15 @@ model WebhookEvent {
   attempts      Int       @default(0)
   deliveries    Int       @default(0)
   nextAttemptAt DateTime?
+  // One owner per row type (cx/ingress/claims.ts and ebay-claims.ts). Verified eBay
+  // receipts are leased only by the eBay processor (leaseToken/leaseUntil); every
+  // other channel is claimed only by the generic claimant (processingToken/Until).
+  leaseToken    String?
+  leaseUntil    DateTime?
+  processingToken String?
+  processingUntil DateTime?
+  rawBody Bytes?
+  verificationHeaders Json?
   // Tri-state on purpose: true = checked and passed, false = checked and
   // failed, null = this transport carries no signature. Amazon's SQS
   // notifications are unsigned JSON trusted via the queue's IAM policy, so
@@ -5188,10 +5243,91 @@ model WebhookEvent {
   @@unique([workspaceId, channel, externalId], name: "channel_externalId", map: "WebhookEvent_channel_externalId_key")
   @@index([isProcessed])
   @@index([channel])
+  @@index([channel, externalId])
   @@index([channel, providerTimestamp])
   @@index([status, nextAttemptAt])
   @@index([connectionId])
   @@index([workspaceId])
+}
+
+// Application-scoped eBay notices whose business/account cannot yet be established.
+// No tenant-facing payload reader. Routing proof is immutable; a dedicated audited
+// CAS may rewrap ciphertext. Owner handoff links one business receipt without deleting history.
+model EbayNoticeQuarantine {
+  erasureRequests       ErasureRequest[]
+  id                    String    @id @default(uuid())
+  environment           String
+  signatureOk           Boolean   @default(false)
+  externalId            String
+  topic                 String
+  subjectHash           String?
+  firstOwnerWorkspaceId String?
+  // Rejected signatures retain metadata/digest only, never arbitrary private bodies.
+  payloadEnc            String?
+  payloadKeyId          String?
+  payloadDigest         String
+  verificationKeyId     String?
+  receivedAt            DateTime  @default(now())
+  lastReceivedAt        DateTime  @default(now())
+  deliveries            Int       @default(1)
+  reason                String
+  resolvedWorkspaceId   String?
+  resolvedReceiptId     String?   @unique
+  resolvedReceipt       WebhookEvent? @relation(fields: [resolvedReceiptId], references: [id], onDelete: Restrict)
+  resolvedAt            DateTime?
+  // Verified deletion notices only. eBay is acknowledged at storage; the retry worker
+  // reviews the stored notice later (lease/backoff here), never inside the HTTP answer.
+  reviewAttempts        Int       @default(0)
+  reviewNextAt          DateTime?
+  reviewedAt            DateTime?
+  reviewOutcome         String?
+
+  @@unique([environment, signatureOk, externalId])
+  @@index([subjectHash, receivedAt])
+  @@index([firstOwnerWorkspaceId, resolvedAt])
+  @@index([topic, reviewedAt, reviewNextAt])
+}
+
+// One business's record of one eBay deletion notice that matched its data; no personal data.
+// REVIEW_REQUIRED -> HELD | DISMISSED (active owner); HELD -> COMPLETED (system executor only).
+// DISMISSED and COMPLETED are done: the record stays, and deleting its notice or order clears
+// the pointer. An open record keeps both (database guard in workspaces/ebay-erasure-review.sql).
+model ErasureRequest {
+  workspaceId      String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String   @id @default(uuid())
+  quarantineId     String?
+  quarantine       EbayNoticeQuarantine? @relation(fields: [quarantineId], references: [id], onDelete: SetNull)
+  evidenceOrderId  String?
+  evidenceOrder    Order?   @relation(fields: [evidenceOrderId], references: [id], onDelete: SetNull)
+  channel          String   @default("EBAY")
+  environment      String
+  // Which rule matched: 'user_id' (eBay's immutable ID, which eBay also puts in the order's
+  // buyer username field for some U.S. buyers) or 'username' (mutable name, fallback only).
+  matchBasis       String
+  status           String   @default("REVIEW_REQUIRED")
+  createdAt        DateTime @default(now())
+  decidedAt        DateTime?
+
+  @@unique([workspaceId, quarantineId], name: "workspace_quarantine", map: "ErasureRequest_workspace_quarantine_key")
+  @@index([workspaceId, status, createdAt])
+  @@index([evidenceOrderId])
+  @@index([quarantineId, status])
+}
+
+// Application maintenance only. Database function inserts atomically with rewrap;
+// runtime has no access and history is append-only, including for ordinary owner SQL.
+model EbayQuarantineMaintenanceAudit {
+  operationId     String   @db.Uuid
+  quarantineId    String
+  recordedAt      DateTime @default(now())
+  sessionUser     String
+  oldKeyId        String
+  newKeyId        String
+  oldCipherDigest String
+  newCipherDigest String
+
+  @@id([operationId, quarantineId])
+  @@index([quarantineId, recordedAt])
 }
 
 // ── CS.1: Channel → us inbound stock event ───────────────────────────
@@ -5450,6 +5586,7 @@ enum OrderStatus {
 }
 
 model Order {
+  erasureRequests ErasureRequest[]
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id          String @id @default(cuid())
@@ -6726,6 +6863,9 @@ model ChannelConnection {
   // Distributed refresh lease (pgbouncer-safe; no advisory lock across HTTP).
   refreshLeaseUntil     DateTime?
   refreshLeaseOwner     String?
+  // Advances with a new consent/adoption, never an ordinary token refresh.
+  // Zero identifies a grant saved before version tracking was introduced.
+  grantVersion          Int       @default(0)
   // { userId, username, storeName?, storeUrl?, sellerId?, shopDomain? }
   identity              Json?
   apiVersion            String?
@@ -6746,6 +6886,9 @@ model ChannelConnection {
   // connection. Cascade so revoking a connection sweeps its
   // campaigns (operationally, eBay also disables them server-side).
   ebayCampaigns            EbayCampaign[]
+  // CX Etsy — receipt ingest state (activation time, poll cursor, lease) and durable refusals.
+  etsyReceiptIngest        EtsyReceiptIngest[]
+  etsyReceiptRefusals      EtsyReceiptRefusal[]
 
   @@index([workspaceId, channelType])
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
@@ -17519,6 +17662,99 @@ model AmazonTemplateVault {
   @@index([workspaceId])
 }
 
+/// CHMAP (`docs/studies/channel-mappings.md` §8) — ONE versioned mapping of a channel file FORM for one
+/// marketplace: an Amazon template (its product types) or our eBay workbook. An ACTIVE version never changes:
+/// an edit makes a new DRAFT (`basedOnId`), and activating it retires the ACTIVE one before it. At most one
+/// ACTIVE version per form (partial unique index in the migration). Import, export and push read it.
+model ChannelMappingSet {
+  // Business ownership comes from verified database context.
+  workspaceId        String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                 String    @id @default(cuid())
+  channel            String // AMAZON | EBAY
+  marketplace        String // IT | DE | FR | ES | UK …
+  formKind           String // AMAZON_TEMPLATE | AMAZON_FLAT_FILE | EBAY_WORKBOOK
+  formKey            String // Amazon: the template's product types joined by '+' (COAT+PANTS); eBay: the workbook layout
+  version            Int
+  status             String    @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  /// Amazon's own template id (the `AmazonTemplateVault` key); null for our own workbooks.
+  templateIdentifier String?
+  /// Amazon's `Version` setting (`2026.0713`).
+  templateVersion    String?
+  /// The file's content language (`it_IT`).
+  language           String?
+  /// { sheet, labelRow, keyRow, dataRow } — where the form keeps its rows.
+  layout             Json?
+  /// sha256 of the ordered channel keys: a re-downloaded copy of the same form matches.
+  keyFingerprint     String
+  basedOnId          String?
+  source             String // FILE | COPY | EDIT
+  notes              String?
+  createdBy          String?
+  activatedAt        DateTime?
+  activatedBy        String?
+  retiredAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  fields ChannelMappingField[]
+  uses   ChannelMappingUse[]
+
+  @@unique([workspaceId, channel, marketplace, formKind, formKey, version], name: "form_version")
+  @@index([workspaceId])
+  @@index([channel, marketplace, formKind, formKey, status])
+  @@index([templateIdentifier])
+}
+
+/// CHMAP — one channel column of a mapping version and the decision for it.
+model ChannelMappingField {
+  // Business ownership comes from verified database context.
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  setId               String
+  set                 ChannelMappingSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  /// Amazon: the key without its marketplace qualifier; eBay: the column name without its marks.
+  channelKey          String
+  /// The verbatim header in the file (`item_name[marketplace_id=…][language_tag=it_IT]#1.value`).
+  columnKey           String?
+  /// The channel's own label, in the market language.
+  label               String?
+  /// Other spellings of the same column (eBay's English-first headers).
+  aliases             String[]          @default([])
+  /// The form's product types this decision applies to; empty = all of them.
+  productTypes        String[]          @default([])
+  requirement         String? // required | requiredIfRelevant | bestPractice | optional (the channel schema)
+  templateRequirement String? // the template's own word (`Obbligatorio`)
+  targetKind          String // see `packages/shared/channel-mapping.ts`
+  targetKey           String?
+  transform           Json              @default("[]")
+  direction           String            @default("both") // in | out | both
+  state               String // mapped | ignored | managed | unmapped
+  reason              String?
+  decidedBy           String            @default("rule") // rule | owner
+  sortOrder           Int               @default(0)
+
+  @@unique([workspaceId, setId, channelKey], name: "set_channelKey")
+  @@index([setId])
+  @@index([workspaceId])
+}
+
+/// CHMAP — which mapping version an import, export or push used.
+model ChannelMappingUse {
+  // Business ownership comes from verified database context.
+  workspaceId String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String            @id @default(cuid())
+  setId       String
+  set         ChannelMappingSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  action      String // IMPORT | EXPORT | PUSH
+  /// A job id or a file name.
+  reference   String?
+  detail      Json?
+  createdAt   DateTime          @default(now())
+
+  @@index([setId, createdAt])
+  @@index([workspaceId])
+}
+
 // FFT.5a — the operator's own FILLED Amazon workbook, captured per
 // (familyKey, marketplace). It becomes THE Export-for-Amazon base for that
 // family on that market; the blank category template above stays the
@@ -19599,6 +19835,66 @@ model StockPoolLink {
   @@index([workspaceId])
 }
 
+/// CX Etsy (2026-09-24) — one row per connected Etsy account whose ORDER INGEST was ever enabled.
+/// `activatedAt` is explicit T0 at Etsy's whole-second precision (H1). The poller keeps its
+/// fixed creation-window reconciliation checkpoint, lease and last complete-cycle outcome here.
+model EtsyReceiptIngest {
+  // Business ownership comes from verified database context.
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  connectionId        String
+  connection          ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  activatedAt         DateTime          @default(dbgenerated("date_trunc('second'::text, clock_timestamp())"))
+  /// Last committed timestamp; receipt ID is diagnostic, not an API sort tiebreak.
+  cursorUpdatedAt     DateTime?
+  cursorReceiptId     String?
+  /// Legacy updated-window checkpoint; retained for additive rollout, no longer read.
+  scanUpdatedAt       DateTime?
+  /// Fixed, closed creation-second horizon for the recurring reconciliation scan.
+  scanCreatedThrough  DateTime?
+  scanExpectedCount   Int?
+  scanOffset          Int               @default(0)
+  leaseToken          String?
+  leaseUntil          DateTime?
+  lastPollStartedAt   DateTime?
+  /// Last fully completed reconciliation cycle, never a capped or failed run.
+  lastPollSucceededAt DateTime?
+  /// SUCCESS | PARTIAL | FAILED
+  lastPollStatus      String?
+  lastPollError       String?
+  /// More receipts remained when the last run stopped at its page cap.
+  backlog             Boolean           @default(false)
+  lastPollCounts      Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([workspaceId, connectionId], name: "workspace_connectionId", map: "EtsyReceiptIngest_connectionId_key")
+  @@index([workspaceId])
+}
+
+/// CX Etsy (2026-09-24) — an Etsy receipt Nexus refused to ingest, and why. Durable so that a
+/// refused receipt is never only a log line: the poller moves past it, the owner can see it.
+model EtsyReceiptRefusal {
+  // Business ownership comes from verified database context.
+  workspaceId    String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id             String            @id @default(cuid())
+  connectionId   String
+  connection     ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  receiptId      String
+  /// Etsy's updated_timestamp of the refused version, or 'unknown'.
+  receiptVersion String
+  /// webhook | poll | replay
+  source         String
+  code           String
+  message        String
+  path           String?
+  createdAt      DateTime          @default(now())
+
+  @@unique([workspaceId, connectionId, receiptId, receiptVersion, code], name: "connectionId_receiptId_receiptVersion_code", map: "EtsyReceiptRefusal_version_code_key")
+  @@index([connectionId, createdAt])
+  @@index([workspaceId])
+}
+
 /// Work a business must do because pool stock changed: re-work its own listings for one of its
 /// own products ("recascade"), or finish its own bookkeeping for a pool movement in its ledger
 /// ("settle"). Written by database triggers and by the pool doors, so no code path can forget it;
@@ -19722,11 +20018,17 @@ model ReadinessIndex {
   sortTitle       String?
   sortDescription String?
   computedAt      DateTime
+  /// P2 (docs/attributes/PLAN.md §4.7) — set when a write changed this product's values but readiness was NOT rebuilt
+  /// inside that write (a bulk edit spanning more families than `INLINE_READINESS_MAX_FAMILIES`). The row still holds
+  /// the PREVIOUS answer; a reader must say "checking…" instead of showing it as current. The pending-readiness drain
+  /// rebuilds the family (oldest `pendingSince` first) and the rebuilt rows carry NULL. NULL = the row is current.
+  pendingSince    DateTime?
 
   @@unique([workspaceId, productId, coordinateKey, language], name: "productId_coordinateKey_language")
   @@index([channel, market, language, state])
   @@index([productId])
   @@index([workspaceId])
+  @@index([workspaceId, pendingSince])
 }
 
 /// PLAN Step 3.5a (A-36, R-36) — what a CHANNEL holds that differs from what Nexus holds, per listing coordinate.

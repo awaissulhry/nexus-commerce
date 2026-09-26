@@ -22,7 +22,7 @@ const PLAN: ThemeChangePlan = {
   to: 'Colore',
   banner: 'Dry run — nothing is sent. eBay cannot change a variation set in place: the item is ended and relisted under a new ItemID. The live run is a separate approval and the Owner runs the first one.',
   steps: [
-    { n: 1, verb: 'END', target: 'item 257584954808', detail: 'Ends the live IT listing. Its ItemID is not reusable.', reversible: false },
+    { n: 1, verb: 'END', target: 'item 938554736087', detail: 'Ends the live IT listing. Its ItemID is not reusable.', reversible: false },
     { n: 2, verb: 'RELIST', target: 'Primary listing', detail: 'New item with the specifics Colore (was Colore · Taglia)', reversible: false, payload: { variesBy: { specifications: [{ name: 'Colore', values: ['Nero', 'Giallo'] }] } } },
     { n: 3, verb: 'WAIT 8 s', target: 'read-back', detail: 'The new ItemID is read back and stored on this coordinate before anything else runs', reversible: null },
     { n: 4, verb: 'PATCH', target: 'this listing record', detail: 'externalListingId → the new ItemID; the old one is kept in the listing history', reversible: true },

@@ -8,13 +8,13 @@ describe('parseReportTsv', () => {
   it('parses a listing-grain report with money → cents', () => {
     const tsv = [
       'listing_id\tday\timpressions\tclicks\tctr\tad_fees\tsale_amount\tquantity_sold',
-      '256564203510\t2026-07-01\t1200\t34\t2.83\t4.13\t109.99\t1',
-      '256566101420\t2026-07-01\t800\t12\t1.50\t0.00\t0.00\t0',
+      '913270132587\t2026-07-01\t1200\t34\t2.83\t4.13\t109.99\t1',
+      '949285812839\t2026-07-01\t800\t12\t1.50\t0.00\t0.00\t0',
     ].join('\n')
     const rows = parseReportTsv(tsv)!
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({
-      entityId: '256564203510',
+      entityId: '913270132587',
       entityType: 'LISTING',
       date: '2026-07-01',
       impressions: 1200,

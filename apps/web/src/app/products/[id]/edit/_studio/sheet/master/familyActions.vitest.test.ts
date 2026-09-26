@@ -282,12 +282,12 @@ describe('F3 — delete child: severity comes from what the server found', () =>
   })
 
   it('the confirmation NAMES the listing id rather than counting listings', async () => {
-    const c = ctx({ ops: ops({ listings: vi.fn(async () => [listed({ channel: 'amazon', marketplace: 'DE', externalListingId: 'B0F7J163XJ' })]) }) })
+    const c = ctx({ ops: ops({ listings: vi.fn(async () => [listed({ channel: 'amazon', marketplace: 'DE', externalListingId: 'B0FXD0620C' })]) }) })
     const impact = await find(c, 'delete-variant').preflight!([child('c1')])
-    expect(impact.findings?.[0]).toMatchObject({ label: 'amazon · DE — ACTIVE, B0F7J163XJ', severity: 'error' })
+    expect(impact.findings?.[0]).toMatchObject({ label: 'amazon · DE — ACTIVE, B0FXD0620C', severity: 'error' })
     // 🔴 and NOT also in consequences: the dialog renders both under their own headings, so filling
     // both printed every listing twice — seen on screen in the GDS lab.
-    expect(impact.consequences).not.toEqual(expect.arrayContaining([expect.stringContaining('B0F7J163XJ')]))
+    expect(impact.consequences).not.toEqual(expect.arrayContaining([expect.stringContaining('B0FXD0620C')]))
   })
 
   it('says plainly that there is no undo, and that listings cascade', async () => {

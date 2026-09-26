@@ -96,11 +96,11 @@
 .hl-pb-spin { animation: hl-pb-rot .9s linear infinite; }
 @keyframes hl-pb-rot { to { transform: rotate(360deg); } }
 .hl-pb-err { margin-bottom: 11px; padding: 9px 12px; border-radius: var(--nds-radius-lg); background: #fdeaea; color: var(--nds-note-error-icon); font-size: 12px; line-height: 1.55; }
-.hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: var(--nds-radius-sm); background: #fbdcdc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.hl-pb-err pre { margin: 8px 0 0; padding: 8px; border-radius: var(--nds-radius-sm); background: #fbdcdc; font-family: var(--nds-font-mono); font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
 .hl-pb-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 9px; font-size: 11.5px; color: var(--nds-text-2); }
 .hl-pb-meta b { color: #37495b; }
 .hl-pb-meta b.ok { color: #067d62; } .hl-pb-meta b.bad { color: var(--nds-red-500); }
-.hl-pb-meta .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.hl-pb-meta .mono { font-family: var(--nds-font-mono); }
 .hl-pb-meta .grow { flex: 1; } .hl-pb-meta .r { text-align: right; }
 
 /* The probe grid is the DS `DataGrid` at the `sm` density: it owns the wrapper, the header, the
@@ -108,7 +108,7 @@
    was a hard-coded 6 here, i.e. wrong the moment a column moved. The expanded row is the DS's own
    `.nds-grid-sub`, so the inks below hang off that instead of the old `.hl-pb-d`. */
 .hl-pb-r { cursor: pointer; }
-.hl-pb .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.hl-pb .mono { font-family: var(--nds-font-mono); font-size: 11px; }
 .hl-pb .dim { color: var(--nds-text-2); }
 .hl-pb .st { font-weight: 800; font-variant-numeric: tabular-nums; }
 .hl-pb .st.ok { color: #067d62; } .hl-pb .st.bad { color: var(--nds-note-error-icon); }
@@ -116,5 +116,5 @@
 .hl-pb .nds-grid-sub .nds-dg-sub { padding: 10px 14px 12px 32px; background: var(--nds-surface-raised); }
 .hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); margin: 8px 0 3px; }
 .hl-pb-k:first-child { margin-top: 0; }
-.hl-pb .nds-grid-sub pre { margin: 0; padding: 8px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
+.hl-pb .nds-grid-sub pre { margin: 0; padding: 8px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-family: var(--nds-font-mono); font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }
 .hl-pb .nds-grid-sub pre.wrap { white-space: pre-wrap; word-break: break-all; }
