@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import prisma from '../../db.js'
-import { afterDatabaseCommit, beforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+import { afterDatabaseCommit, beforeDatabaseCommit, dropBeforeDatabaseCommit, hasBeforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { getStudioSheet } from './studio-sheet.service.js'
 import { withCachedSchemas } from './cached-schema-context.js'
 // LX.F2 R-LX-17 — the ONE resolver, the same function the catalogue projection calls.
@@ -9,18 +10,42 @@ import { marketLanguages } from './market-languages.js'
 import { coordinatesFor, VARIATION_THEME_KEY } from './sheet-columns.service.js'
 // VT.1b — the provenance mapper and the cell type live with the resolver; this file only reads them.
 import { variationSourceFor, type VariationThemeCell } from './variation-rules.service.js'
-import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, type ReadinessCoordinate } from './readiness-model.js'
+import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, requirementSources, type ReadinessCoordinate } from './readiness-model.js'
 import { runResumableSweep, type SweepReport } from './resumable-sweep.js'
 import { logger } from '../../utils/logger.js'
+import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
 
 const producerKey = (rootId: string, scope?: ReadinessScope) => `readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`
 
-/** One family refresh per outer write, after cascades/formulas and before commit. */
+const deferredFamilies = new AsyncLocalStorage<Set<string>>()
+/**
+ * PSIE (the Owner's choice, 2026-09-26) — inside `work`, a readiness refresh is only NOTED (the family's root id) and
+ * never run in the write's transaction. The caller marks the noted families pending in that same transaction
+ * (`markReadinessPending`, so no reader shows the old answer as current) and rebuilds each one right after the commit
+ * (`rebuildPendingFamily`); the readiness-pending drain finishes any a restart interrupted. Used by the product sheet's
+ * import only; every other writer keeps its own readiness path.
+ */
+export function deferReadiness<T>(families: Set<string>, work: () => Promise<T>): Promise<T> {
+  return deferredFamilies.run(families, work)
+}
+
+/**
+ * One family refresh per outer write, after cascades/formulas and before commit.
+ *
+ * PSIE — a whole-family refresh covers every coordinate of that family, so inside one transaction a scoped refresh
+ * is skipped once the whole family is registered, and registering the whole family drops the scoped ones. A
+ * transaction that saves many records of one family (the sheet import) then rebuilds its readiness ONCE.
+ */
 export async function produceReadiness(productId: string, scope?: ReadinessScope) {
   const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
+  const deferred = deferredFamilies.getStore()
+  if (deferred) { deferred.add(rootId); return }
+  const family = producerKey(rootId)
+  if (scope && hasBeforeDatabaseCommit(family)) return
+  if (!scope) dropBeforeDatabaseCommit(`${family}:`)
   await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
 }
 
@@ -51,6 +76,9 @@ export async function produceReadinessForProducts(productIds: string[], scope?: 
   if (!productIds.length) return { inline: 0, pending: 0 }
   const rows = await prisma.product.findMany({ where: { id: { in: [...new Set(productIds)] } }, select: { id: true, parentId: true } })
   const roots = [...new Set(rows.map(row => row.parentId ?? row.id))].sort()
+  // PSIE — inside `deferReadiness` (the sheet import) the families are only noted, as in `produceReadiness`.
+  const deferred = deferredFamilies.getStore()
+  if (deferred) { roots.forEach(rootId => deferred.add(rootId)); return { inline: 0, pending: roots.length } }
   if (roots.length <= INLINE_READINESS_MAX_FAMILIES) {
     for (const rootId of roots) await beforeDatabaseCommit(producerKey(rootId, scope), () => reconcileFamilyReadiness(rootId, scope))
     return { inline: roots.length, pending: 0 }
@@ -178,34 +206,111 @@ export async function drainPendingReadiness(options: { budgetMs?: number; batchS
   })
 }
 
+export interface ReadinessDestination { coordinate: ReadinessCoordinate; language: string; label: string }
+type DestinationMarket = { channel: string; code: string; name?: string | null; isActive?: boolean; languages?: string[]; language?: string }
+
+/**
+ * P3b S2 (docs/attributes/PLAN.md §10.9) — the CHANNEL destinations of a readiness rebuild: one per footprint channel ×
+ * market × active account × market language. A market with no active account gets no row (before S2 it got an "absent"
+ * row, "No active account for this destination."). The Shared destinations are not here: they stay one per language of
+ * every switched-on market, because they hold the catalogue's sort keys.
+ *
+ * Pure. The rebuild and the footprint check (`reconcileReadinessFootprint`) both read it, so what the check expects is
+ * exactly what a rebuild writes — the check can never ask for a row the rebuild cannot produce.
+ */
+export function readinessChannelDestinations(footprint: ChannelFootprint, markets: readonly DestinationMarket[]): ReadinessDestination[] {
+  const out: ReadinessDestination[] = []
+  for (const channel of footprint.channels) {
+    for (const code of channel.markets) {
+      const market = markets.find(m => m.channel === channel.channel && m.code === code)
+      const coordinate = market ? coordinatesFor(market.code, [market as never])[0] : undefined
+      if (!market || !coordinate) continue
+      for (const account of channel.accounts) {
+        for (const language of marketLanguages(market.channel, market.code, [market as never])) {
+          out.push({ coordinate: { channel: channel.channel, market: code, accountId: account.id, aliasId: null }, language,
+            label: `${coordinate.label}${channel.accounts.length > 1 ? ` · ${account.label ?? 'Connected account'}` : ''}` })
+        }
+      }
+    }
+  }
+  return out
+}
+
+const coordinateOf = (row: { channel: string | null; market: string | null; accountId: string | null }) => JSON.stringify([row.channel, row.market, row.accountId])
+
+export interface FootprintReconcile {
+  /** Channel coordinates the index held that the footprint no longer has (a disconnected account, an old no-account row). */
+  removed: Array<{ channel: string; market: string | null; accountId: string | null; rows: number }>
+  /** Footprint coordinates with no row at all (a newly connected account or market). */
+  missing: Array<{ channel: string; market: string; accountId: string }>
+  /** Families pending after this check marked them (0 when nothing was marked). The drain rebuilds them. */
+  markedFamilies: number
+}
+
+/**
+ * P3b S2 — keep the readiness index in step with the channel footprint, whatever changed it (a connect, a disconnect,
+ * a revoked grant, a switched-off market). Runs in the business's context, each minute, before the pending drain:
+ *   · rows of a channel coordinate outside the footprint are DELETED — the index is derived, and a rebuild would not
+ *     write them; this also clears the old "No active account" rows once;
+ *   · a footprint coordinate that has no row at all marks every family's Shared rows pending, so the existing drain
+ *     rebuilds them (oldest first) and the new coordinate appears. Only when the business has rows already: a business
+ *     never computed is the nightly reconcile's.
+ * Cheap when nothing changed: the footprint (2 reads) and one DISTINCT over the `(channel, market, …)` index.
+ */
+export async function reconcileReadinessFootprint(): Promise<FootprintReconcile> {
+  const [markets, footprint, present] = await Promise.all([
+    prisma.marketplace.findMany({ where: { isActive: true } }),
+    channelFootprint(),
+    prisma.readinessIndex.groupBy({ by: ['channel', 'market', 'accountId'], where: { channel: { not: null } }, _count: { _all: true } }),
+  ])
+  const expected = new Map(readinessChannelDestinations(footprint, markets).map(d => [coordinateOf(d.coordinate), d.coordinate]))
+  const have = new Set(present.map(coordinateOf))
+  const removed: FootprintReconcile['removed'] = []
+  for (const row of present) {
+    if (expected.has(coordinateOf(row))) continue
+    const deleted = await prisma.readinessIndex.deleteMany({ where: { channel: row.channel, market: row.market, accountId: row.accountId } })
+    removed.push({ channel: row.channel!, market: row.market, accountId: row.accountId, rows: deleted.count })
+  }
+  const missing = [...expected.entries()].filter(([key]) => !have.has(key)).map(([, c]) => ({ channel: c.channel!, market: c.market!, accountId: c.accountId! }))
+  let markedFamilies = 0
+  if (missing.length) {
+    // Shared rows exist for every computed product; marking them makes the drain rebuild the whole family.
+    const markedRows = await prisma.$executeRaw`
+      UPDATE "ReadinessIndex" SET "pendingSince" = now()
+      WHERE id IN (
+        SELECT r.id FROM "ReadinessIndex" r JOIN "Product" p ON p.id = r."productId"
+        WHERE p."deletedAt" IS NULL AND r.channel IS NULL AND r."pendingSince" IS NULL
+        ORDER BY r.id FOR UPDATE OF r)`
+    if (markedRows > 0) markedFamilies = await countPendingReadinessFamilies()
+  }
+  return { removed, missing, markedFamilies }
+}
+
 /** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */
 export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope): Promise<number> {
   return inDatabaseTransaction(prisma, () => withCachedSchemas(async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
     const rootId = product.parentId ?? product.id
-    const [products, markets, accounts] = await Promise.all([
+    const [products, markets, footprint] = await Promise.all([
       // LX.F2 R-LX-17 — `translations` + `parent.translations` are loaded HERE, once per family, because the sort
       // projection below must come from the SAME `resolveContent()` call the catalogue's own projection makes
       // (`catalog-language.ts` `catalogLanguageValues`). Deriving it from the sheet cell instead would be a second
       // answer to "what does this cell say", and the two would drift the first time either changed.
       prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
-        select: { id: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
+        select: { id: true, parentId: true, familyId: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true,
           translations: true, parent: { select: { id: true, name: true, description: true, bulletPoints: true, keywords: true, categoryAttributes: true, localizedContent: true, translations: true } } } }),
       prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }] }),
-      prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, accountLabel: true, displayName: true } }),
+      // P3b S2 — the channel destinations follow the business's footprint (active accounts and their markets).
+      channelFootprint(),
     ])
     const languages = readinessLanguages(markets)
+    // P7 — the family names a `requiredBy` source reads ("Family: Jackets"). One query per rebuild.
+    const familyIds = [...new Set(products.map(p => p.familyId).filter((id): id is string => !!id))]
+    const familyLabels = new Map(familyIds.length ? (await prisma.productFamily.findMany({ where: { id: { in: familyIds } }, select: { id: true, label: true } })).map(f => [f.id, f.label]) : [])
     const destinations: Array<{ coordinate: ReadinessCoordinate; language: string; label: string }> = languages.map(language => ({
       coordinate: { channel: null, market: null, accountId: null, aliasId: null }, language, label: 'Shared product',
     }))
-    for (const market of markets) {
-      const coordinate = coordinatesFor(market.code, [market])[0]
-      if (!coordinate) continue
-      const owners = accounts.filter(a => a.channelType === market.channel)
-      for (const accountId of owners.length ? owners.map(a => a.id) : [null]) for (const language of marketLanguages(market.channel, market.code, [market])) {
-        destinations.push({ coordinate: { channel: market.channel, market: market.code, accountId, aliasId: null }, language, label: `${coordinate.label}${owners.length > 1 ? ` · ${owners.find(a => a.id === accountId)?.accountLabel ?? owners.find(a => a.id === accountId)?.displayName ?? 'Connected account'}` : ''}` })
-      }
-    }
+    destinations.push(...readinessChannelDestinations(footprint, markets))
     const computedAt = new Date()
     /**
      * LX.F2 R-LX-17 — the SORT KEY for `title@<lang>` / `description@<lang>`, from the one resolver.
@@ -250,6 +355,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         continue
       }
       const market = markets.find(m => m.channel === coordinate.channel && m.code === coordinate.market)
+      const columnByKey = new Map(sheet.columns.map(column => [column.key, column]))
       const mapping = market?.schemaMapping as { fields?: Record<string, unknown>; byProductType?: Record<string, Record<string, unknown>> } | null
       for (const row of sheet.rows) {
         const c = { ...coordinate, aliasId: row.aliasId }
@@ -263,7 +369,7 @@ export async function reconcileFamilyReadiness(productId: string, scope?: Readin
         // the wording changes. They read this key now.
         // A-45 (Step 4.3 #4) — the same entries, plus every required-and-empty field FLAGGED (`requiredEmpty`),
         // from the set behind `requiredFilled/requiredTotal`, so the completeness card can name them.
-        const missing = readinessMissingEntries(row)
+        const missing = readinessMissingEntries(row, field => requirementSources(columnByKey.get(field), row, coordinate.channel ? sheet.scope.label : null, id => familyLabels.get(id)))
         // VT.1b (VT.4's request) — the variation-rule PROVENANCE for this coordinate, from the cell the sheet already
         // computed. It is the one thing `missing[].kind` cannot express: a CORRECT mapping raises no readiness item, so
         // `derived` / `rule` / `overridden` are invisible to the filter without a column. `unset` and `collides` stay in

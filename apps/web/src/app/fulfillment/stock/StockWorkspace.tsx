@@ -189,9 +189,11 @@ type SyncStatus = {
     silentDriftRisk: boolean
   }
   reservationSweep: {
-    scheduled: boolean
+    /** Registered in the scheduler process; null when the scheduler did not report (`unknown` says why). */
+    scheduled: boolean | null
     lastRunAt: string | null
-    lastReleasedCount: number
+    lastReleasedCount: number | null
+    unknown?: Array<{ field: string; reason: string }>
   }
   outboundQueue: {
     pending: number
@@ -3560,12 +3562,14 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             <div className="text-slate-700 dark:text-slate-300 mt-0.5">
               {status.reservationSweep.scheduled
                 ? <span className="text-emerald-700">Scheduled · 5-min cadence</span>
-                : <span className="text-slate-500 dark:text-slate-400">Not scheduled</span>}
+                : <span className="text-slate-500 dark:text-slate-400" title={status.reservationSweep.unknown?.[0]?.reason}>
+                    {status.reservationSweep.scheduled === null ? 'Schedule unknown' : 'Not scheduled'}
+                  </span>}
             </div>
             {status.reservationSweep.lastRunAt && (
               <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                 Last run {formatRelative(status.reservationSweep.lastRunAt, t)}
-                {status.reservationSweep.lastReleasedCount > 0 && (
+                {(status.reservationSweep.lastReleasedCount ?? 0) > 0 && (
                   <span> · {status.reservationSweep.lastReleasedCount} released</span>
                 )}
               </div>

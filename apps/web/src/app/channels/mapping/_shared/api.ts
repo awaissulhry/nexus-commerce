@@ -15,7 +15,7 @@ import type {
 
 const base = () => `${getBackendUrl()}/api/pim`
 
-async function json<T>(url: string, init?: RequestInit): Promise<T> {
+export async function json<T>(url: string, init?: RequestInit): Promise<T> {
   // Declare a JSON content-type ONLY when there is a body. Fastify rejects a bodyless request
   // that claims `application/json` with `FST_ERR_CTP_EMPTY_JSON_BODY` (400), which silently
   // broke every DELETE on this page — unmapping a field, removing a category mapping, deleting

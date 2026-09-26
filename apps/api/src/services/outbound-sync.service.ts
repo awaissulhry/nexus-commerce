@@ -56,6 +56,7 @@ import {
 import { ebayListingLanguage } from './gateway/channels.js';
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
+import { amazonDiscountedPrice } from './amazon/discounted-price.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -356,9 +357,8 @@ export async function buildAmazonListingPatch(
     // Listings-Items JSON schema (`discounted_price[].schedule[]{ start_at, end_at, value_with_tax }`, all three
     // REQUIRED; measured on IT/UK/DE, MX.1 phase 0(c)) — NOT the feed's `sale_price` with `start_at:[{value}]`. A sale
     // without both dates is never emitted: Amazon would reject the schedule entry.
-    if (payload.salePrice != null && payload.salePriceStart && payload.salePriceEnd) {
-      offer.discounted_price = [{ schedule: [{ start_at: String(payload.salePriceStart), end_at: String(payload.salePriceEnd), value_with_tax: Number(payload.salePrice) }] }];
-    }
+    const sale = amazonDiscountedPrice(payload.salePrice != null ? Number(payload.salePrice) : null, payload.salePriceStart, payload.salePriceEnd);
+    if (sale) offer.discounted_price = sale;
     attrs.purchasable_offer = [offer];
   }
   // B2 — FBA stock is owned by Amazon. Pushing a merchant fulfillment_availability

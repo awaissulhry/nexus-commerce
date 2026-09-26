@@ -20,10 +20,12 @@ const args = JSON.parse(process.argv[2] ?? '{}') as { scenario: string; n?: numb
 
 // ── the database guard, before any import that builds a pool ──
 const url = process.env.DATABASE_URL ?? ''
-if (url && !/@127\.0\.0\.1:55439\/nexus_attributes_test$/.test(url)) throw new Error(`refusing: DATABASE_URL is not the private copy`)
+// 55439 = the dev container's copy; 55481 = the P7/P8 lane's throwaway copy of it (trust auth, 2026-09-26).
+if (url && !/@127\.0\.0\.1:(55439|55481)\/nexus_attributes_test$/.test(url)) throw new Error(`refusing: DATABASE_URL is not the private copy`)
 
 // ── count every statement any pg client sends (the Prisma adapter and raw SQL alike) ──
 let statements = 0
+let dbMs = 0
 const byText = new Map<string, number>()
 const origQuery = pg.Client.prototype.query
 pg.Client.prototype.query = function (this: unknown, ...a: unknown[]) {
@@ -31,7 +33,13 @@ pg.Client.prototype.query = function (this: unknown, ...a: unknown[]) {
   const first = a[0] as { text?: string } | string | undefined
   const text = (typeof first === 'string' ? first : first?.text ?? '').replace(/\s+/g, ' ').replace(/\$\d+/g, '$').slice(0, 140)
   byText.set(text, (byText.get(text) ?? 0) + 1)
-  return (origQuery as (...x: unknown[]) => unknown).apply(this, a)
+  const result = (origQuery as (...x: unknown[]) => unknown).apply(this, a)
+  // Wall time spent waiting on the database (statements can overlap, so this is an upper bound of DB time).
+  if (result && typeof (result as Promise<unknown>).then === 'function') {
+    const t0 = performance.now()
+    ;(result as Promise<unknown>).then(() => { dbMs += performance.now() - t0 }, () => { dbMs += performance.now() - t0 })
+  }
+  return result
 } as typeof pg.Client.prototype.query
 
 const { default: prisma } = await import(`${API}/db.ts`)
@@ -96,9 +104,10 @@ await withWorkspace({ workspaceId: 'nexus_legacy_workspace', actorUserId: null, 
     for (const r of roots) {
       const t0 = performance.now()
       const s0 = statements
+      const d0 = dbMs
       const rowsWritten = await reconcileFamilyReadiness(r.id)
       each.push(Math.round(performance.now() - t0))
-      out[`family ${r.id}`] = { ms: each.at(-1), statements: statements - s0, rows: rowsWritten }
+      out[`family ${r.id}`] = { ms: each.at(-1), dbMs: Math.round(dbMs - d0), statements: statements - s0, rows: rowsWritten }
     }
   } else if (args.scenario === 'drain') {
     const { drainPendingReadiness, countPendingReadinessFamilies } = await import(`${API}/services/pim/readiness-index.service.ts`)

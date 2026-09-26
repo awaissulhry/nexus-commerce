@@ -1,6 +1,8 @@
 import { marketLanguages, type MarketLanguageRow } from './market-languages.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import type { StudioSheet } from './studio-sheet.service.js'
+import type { SheetColumn } from './sheet-columns.service.js'
+import { columnRequiredHere } from '@nexus/shared/master-sheet'
 /**
  * R-LX-9 (on LX.R's P1-5) — `notComputed` is a FIFTH scope state, not a flavour
  * of `absent`. `absent` means "nothing is set up for this scope"; `notComputed`
@@ -97,6 +99,13 @@ export interface MissingReadinessField {
    * reader says so ("not recorded yet") instead of listing a guess.
    */
   requiredEmpty?: true
+  /**
+   * P7 (docs/attributes/PLAN.md §4.6, §10.8) — WHO requires this field here, on a `requiredEmpty` entry: a channel
+   * coordinate's label (`"Amazon · IT"`, its category schema or a mapping rule) and/or `"Family: <label>"` (the
+   * product family's required flag). The same disjuncts `completenessFor` counts, so the list is never empty on an
+   * entry the count includes. Absent on a row written before P7 = not recorded, never "nobody".
+   */
+  requiredBy?: string[]
 }
 
 /** The fallback reason for a required field no validator named (e.g. rule-required, conditional). */
@@ -107,22 +116,59 @@ export const REQUIRED_EMPTY_REASON = 'Required and empty'
  * every required-and-empty field FLAGGED. An issue already on that field is flagged in place (one field,
  * one entry); a required-empty field no validator named gets one entry of its own. Pure.
  */
-export function readinessMissingEntries(row: Pick<StudioSheet['rows'][number], 'id' | 'readiness' | 'completeness'>): MissingReadinessField[] {
+export function readinessMissingEntries(row: Pick<StudioSheet['rows'][number], 'id' | 'readiness' | 'completeness'>, sourcesOf?: (field: string) => string[]): MissingReadinessField[] {
   const empty = new Map((row.completeness?.required?.missing ?? []).map(m => [m.key, m.label]))
   const entries: MissingReadinessField[] = row.readiness.issues.map(issue => ({ productId: row.id, field: issue.key,
     label: issue.label, reason: issue.message, ...(issue.kind ? { kind: issue.kind } : {}) }))
+  const requiredBy = (field: string) => {
+    const sources = sourcesOf?.(field) ?? []
+    return sources.length ? { requiredBy: sources } : {}
+  }
   const flagged = new Set<string>()
   for (const entry of entries) {
     if (!empty.has(entry.field) || flagged.has(entry.field)) continue
     entry.requiredEmpty = true
+    Object.assign(entry, requiredBy(entry.field))
     flagged.add(entry.field)
   }
   for (const [field, label] of empty) {
     if (flagged.has(field)) continue
-    entries.push({ productId: row.id, field, label, reason: REQUIRED_EMPTY_REASON, requiredEmpty: true })
+    entries.push({ productId: row.id, field, label, reason: REQUIRED_EMPTY_REASON, requiredEmpty: true, ...requiredBy(field) })
     flagged.add(field)
   }
   return entries
+}
+
+/**
+ * P7 (docs/attributes/PLAN.md §4.6) — the sources behind ONE required field on ONE sheet row: the same three
+ * disjuncts `completenessFor` (sheet-rows.service.ts) ORs into `required`, named instead of collapsed.
+ *
+ *   · the channel resolver marked the cell required (`mapped.requiredByRule`: the category schema, one of Amazon's
+ *     conditional rules, or a mapping rule) → this scope's coordinate label;
+ *   · the family requires it everywhere (the `'Master'` requirement) → `"Family: <label>"`;
+ *   · a coordinate in `requiredBy` requires it on this row → that coordinate's label.
+ *
+ * Pure. `coordinateLabel` is null on the Master scope, where nothing is resolved through a channel.
+ */
+export function requirementSources(
+  column: SheetColumn | undefined,
+  row: { productType: string | null; familyId?: string | null; values?: Record<string, { mapped?: { requiredByRule?: boolean } | null } | undefined> },
+  coordinateLabel: string | null,
+  familyLabel: (familyId: string) => string | undefined,
+): string[] {
+  if (!column) return []
+  const out: string[] = []
+  const add = (source: string) => { if (!out.includes(source)) out.push(source) }
+  const values = row.values as Record<string, unknown> | undefined
+  if (coordinateLabel && row.values?.[column.key]?.mapped?.requiredByRule === true) add(coordinateLabel)
+  // `'Master'` is the family's rule when the column carries family rules, and the shared record's own rule otherwise.
+  if (columnRequiredHere(column, 'Master', row.productType, row.familyId, values)) {
+    add(column.familyRules ? `Family: ${familyLabel(row.familyId ?? '') ?? 'unnamed family'}` : 'Shared product')
+  }
+  for (const label of column.requiredBy) {
+    if (label !== 'Master' && columnRequiredHere(column, label, row.productType, row.familyId, values)) add(label)
+  }
+  return out
 }
 export interface ReadinessCoordinate { channel: string | null; market: string | null; accountId: string | null; aliasId: string | null }
 export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinate {

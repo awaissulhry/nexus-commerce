@@ -112,6 +112,9 @@ import { SlotListEditorExample } from './SlotListEditorExample'
 import { MetafieldValueExample } from './MetafieldValueExample'
 import { RecordListExample } from './RecordListExample'
 import { ChangeReviewExample } from './ChangeReviewExample'
+import { FileRowExample } from './FileRowExample'
+import { JobProgressExample } from './JobProgressExample'
+import { DownloadExample } from './DownloadExample'
 import { OrderedListExample } from './OrderedListExample'
 import { AsyncListboxExample } from './AsyncListboxExample'
 import { MediaGalleryExample } from './MediaGalleryExample'
@@ -1006,6 +1009,9 @@ export function TokenCatalog() {
         <WorkspaceSubheaderExample />
         <RecordListExample />
         <ChangeReviewExample />
+        <FileRowExample />
+        <JobProgressExample />
+        <DownloadExample />
         <OrderedListExample />
         <AsyncListboxExample />
         <MediaGalleryExample />

@@ -306,7 +306,7 @@ export function useSaveReporter(): SaveReporter {
 function useSaveMachine(scopeKey: string): SaveCtxValue {
   const [, redraw] = useState(0)
   const [manualMessage, setManualMessage] = useState<string | null>(null)
-  const store = useRef<ReturnType<typeof createWorkspaceSaveStore>>()
+  const store = useRef<ReturnType<typeof createWorkspaceSaveStore> | undefined>(undefined)
   if (!store.current) store.current = createWorkspaceSaveStore(() => redraw(n => n + 1))
   return { ...store.current.forScope(scopeKey), manualMessage, setManualMessage,
     publication: { preparePublication: store.current.preparePublication, publicationBlocker: store.current.publicationBlocker,

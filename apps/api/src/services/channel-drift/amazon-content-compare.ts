@@ -18,6 +18,10 @@ import type { DriftField } from '../channel-drift.service.js'
 
 export const AMAZON_CONTENT_SOURCE = 'amazon-content'
 export const CONTENT_ROOTS = ['item_name', 'product_description', 'bullet_point', 'generic_keyword'] as const
+/** CHMAP M7 — each content root's master content field: the one pairing the flat-file read-back and the content payload share. */
+export const CONTENT_MASTER_FIELD: Readonly<Record<(typeof CONTENT_ROOTS)[number], string>> = {
+  item_name: 'title', product_description: 'description', bullet_point: 'bulletPoints', generic_keyword: 'keywords',
+}
 /** Structure, not content: owned by the variation resolver / the parent link (A-39 "out of scope"). */
 export const STRUCTURE_ROOTS: ReadonlySet<string> = new Set(['child_parent_sku_relationship', 'variation_theme', 'parentage_level'])
 /** Price is 3.5a's (list_price is the studio's RRP line) — out of A-39: the content read never compares these roots. */

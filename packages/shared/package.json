@@ -149,6 +149,14 @@
     "./content-language": {
       "types": "./dist/content-language.d.ts",
       "import": "./dist/content-language.js"
+    },
+    "./channel-mapping": {
+      "types": "./dist/channel-mapping.d.ts",
+      "default": "./dist/channel-mapping.js"
+    },
+    "./attribute-placement-proposal": {
+      "types": "./dist/attribute-placement-proposal.d.ts",
+      "default": "./dist/attribute-placement-proposal.js"
     }
   },
   "scripts": {

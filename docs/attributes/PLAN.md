@@ -3,7 +3,8 @@
 **Status: 🟢 APPROVED by the Owner 2026-09-26** ("Go ahead, I'll go with your recommendations").
 Decision 1 = **A** (keep the JSON value stores + GIN index). Decision 2 = **A** (readiness catches up after a big save).
 Progress is in §10 at the end of this file.
-Written 2026-09-26. Worktree `/private/tmp/nexus-attributes`, branch `feat/attributes`, based on `origin/main` `4f2e860b8`.
+Written 2026-09-26. P0–P6: branch `feat/attributes` (merged as PR #18, `71888bd6d`, deployed 2026-09-26 — §10.7).
+P7/P8: worktree `/private/tmp/nexus-attributes-p7`, branch `feat/attributes-p7-p8`, based on `origin/main` `71888bd6d`.
 Lane: the attribute system — schema, shared types, API logic. The product-sheet UI and import/export belong to other
 sessions (§7).
 
@@ -274,6 +275,7 @@ Every step: tests on a DB copy whose name contains `test`, `tsc` for the API and
 | P1 | **Shared contract** in `packages/shared/attributes`: shapes, `optionMode`, requirement, value types, flag codes, zod. The API uses it. | One vocabulary. The web copies can switch over (sheet session). |
 | P2 | **Speed:** the set-based writer, readiness out of the save above the threshold, and the bulk endpoints reading `ReadinessIndex`. | The P0 targets are met. The statement count is flat from 10 to 10,000 products. Every existing bulk-edit test passes. |
 | P3 | **Dictionary:** `semanticKey`, the concept catalogue, starter seeding, bulk dictionary endpoints, and family loading without N+1. | A new business gets a working dictionary. RLS tests pass. |
+| P3b | **Attribute scope** (approved 2026-09-26; §10.9): a small shared core, channel fields on their channel, what you see follows the channels you CONNECTED. Placement is a label, values stay. | An eBay-only business sees the core with eBay badges and no Amazon readiness rows; nothing is deleted and every move can be undone. |
 | P4 | **Channel rules:** saved compiled specs, eBay bulk aspects, Shopify choices and taxonomy values, Etsy/Shopify conformance, and a refresh job for all 4 channels. | For each channel, what the adapter declares equals what the channel's schema has. A cold server gives the full column set. |
 | P5 | **Links and value maps:** concept links, the auto-match ladder, and `onMiss: 'flag'` by default on strict lists. | On GALE-JACKET, brand, colour and size link on all 4 channels with no manual rules. A planted miss shows a flag. |
 | P6 | **The open dropdown (API):** the options endpoint, "save as option", one save rule on every write path, and flags with fix actions. | The same off-list value gets the same answer on the grid, bulk save, readiness and dispatch. |
@@ -297,6 +299,10 @@ The order is chosen so that speed (P2) comes early. It depends only on P1.
 
 **Shared border (API logic that feeds the sheet):** `sheet-columns.service.ts`, `studio-sheet.service.ts`. I change
 these only through the shared contract, and I tell the sheet session before each change.
+
+**P3b borders (§10.9):** S4 changes `sheet-columns.service.ts` (shared border) — tell the sheet session first. S2 shrinks
+the readiness totals — tell the listings-readiness session. S7 changes the assortment copy — agree with its owner first.
+The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings screens) are the product-sheet session's.
 
 **I do not touch:**
 - Product-sheet UI: `apps/web/**/_studio/sheet/**`, both `design-system/**` trees, `services/saved-views/**`, `docs/product-sheet-views/`.
@@ -326,14 +332,15 @@ these only through the shared contract, and I tell the sheet session before each
 |---|---|---|
 | P0 | ✅ done 2026-09-26 | §10.1. The eBay bulk-aspects check moves to P4 (the step that needs it). |
 | P1 | ✅ done 2026-09-26 | `packages/shared/attributes.ts` (+ 26 tests, 2 planted mistakes caught); API channel types are its aliases; eBay `aspectMode` converted through `optionModeFrom`. API `tsc` clean; 136 channel tests pass. |
-| P2 | ✅ built 2026-09-26 (not pushed) | §10.2 |
-| P3 | ✅ built 2026-09-26 (not pushed; apply on the Owner's business waits for his word) | §10.3 |
-| P4 | ✅ built 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
-| P5 | ✅ built 2026-09-26 (not pushed) | §10.5 |
-| P6 | ✅ API built 2026-09-26 (not pushed); the screens are the product-sheet session's (§11) | §10.6 |
-| Ship | PR #18 opened 2026-09-26; the Owner turned auto-merge on. First CI run failed the migration upgrade check: `prisma/baseline.sql` (a fresh database's schema) was not regenerated with the two migrations — fixed with `generate-baseline.mjs` (+4 columns, +2 indexes), checked locally on a throwaway server first | https://github.com/awaissulhry/nexus-commerce/pull/18 |
-| P7 | ⬜ not started — touches readiness/sheet files shared with the product-sheet session | — |
-| P8 | ⬜ not started — same, plus the resolvers every surface reads | — |
+| P2 | ✅ live 2026-09-26 | §10.2 |
+| P3 | ✅ live 2026-09-26; concepts adopted on Xavia Racing 2026-09-26 (about 16:40 UTC) on the Owner's word (§10.7) | §10.3 |
+| P4 | ✅ live 2026-09-26, 2 items open (eBay bulk aspects, walker migration) | §10.4 |
+| P5 | ✅ live 2026-09-26 | §10.5 |
+| P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
+| Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
+| P3b | 🟡 S0–S3 merged; S4, S5 (API) built 2026-09-26; S5's production apply waits for the Owner's word, per business | §10.9 |
+| P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
+| P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
 **Rebased on `main` c5597f776 (2026-09-26, before shipping):** main had merged PR #4 (Prisma 7; background work moved
 to separate worker and scheduler processes). The readiness worker is now registered in `runtime/worker.ts` and the
@@ -549,9 +556,333 @@ left as it is and reported as a follow-up.
   2 updated in `paste-validity.vitest.test.ts`; 6 planted mistakes caught. Attribute, family and save tests: 15 files,
   111 tests pass.
 
+### 10.7 Deployed state (checked 2026-09-26, after PR #18)
+
+- **Code.** PR #18 merged to `main` as `71888bd6d` (squash). CI took 3 runs: run 1 failed the migration upgrade check
+  (`prisma/baseline.sql` not regenerated), run 2 the profiles-ON ratchet (6 new test files did database work outside a
+  business). Both were fixed before the merge.
+- **Production (Railway, environment `production`), all three services online:**
+
+  | Service | Live since (UTC) |
+  |---|---|
+  | API | 2026-09-26 13:33 — migrations `20260926a_attr_readiness_pending` and `20260926b_attr_concepts` applied (deploy log) |
+  | worker | 2026-09-26 13:53 |
+  | scheduler | 2026-09-26 14:00 — log: "schema-refresh cron: scheduled (0 4 * * *)" |
+
+  `main` has no newer commit, so all three run `71888bd6`. The GitHub "Deploy API" job for `71888bd6` shows
+  `cancelled`: its first attempt died on "Failed to stream build logs" (Railway kept building), and the re-run shipped
+  the worker and the scheduler but hit the job's 25-minute limit. Railway is the source of truth for what runs, not
+  that job's status.
+- **The two behaviour changes are live:** the schema-refresh job runs daily at 04:00 UTC unless
+  `NEXUS_ENABLE_SCHEMA_REFRESH_CRON=0`; a value off a channel's closed list is saved and flagged (only a
+  business-strict list refuses).
+- **Concept adoption on the Owner's business — NOT applied.** `POST /api/attributes/concepts/apply` with
+  `dryRun: true`, run on production 2026-09-26 on Xavia Racing (`nexus_legacy_workspace`), through the signed-in web
+  app (read-only):
+
+  | | Expected (copy of local data, §10.3) | Live |
+  |---|---:|---:|
+  | adopt (link an existing attribute) | 22 | **21** |
+  | create | 1 (`occasion`) | **2** (`size_system`, `occasion`) |
+  | blocked | 0 | 0 |
+  | master (already a master field) | 12 | 12 |
+
+  **The difference is one concept, `size_system`.** The local copy has a business attribute with the code
+  `size_system` (created locally 2026-09-11); production has none, so the live plan creates it. The other 21 links are
+  the same. Because the result differs, nothing was written; the Owner decides.
+- **Applied 2026-09-26 on the Owner's word** ("go for step A", with the recommendation "apply it as it is"). After the
+  API went live on build `9ad36523` (16:36 UTC), a fresh dry run gave the same plan (21 adopt, 2 create, 0 blocked, the
+  same 21 pairs); then `dryRun: false` returned `applied: true`. Read back: a new dry run has nothing left to do
+  (23 linked, 0 adopt / create / blocked); Xavia Racing has 243 attributes (241 + `size_system`, a select
+  with 7 options, and `occasion`, text); neither new attribute is in a family yet; Motovento is untouched (0 linked).
+  Three of the four rows the attribute-scope study disputes are now linked (`certification` ← `ceCertification`,
+  `lining` ← `lining_description`, `theme` ← `theme`); the P3b S5 review can unlink them (a link only sets
+  `semanticKey`).
+
+### 10.8 P7 and P8 — first pass (2026-09-26, branch `feat/attributes-p7-p8`)
+
+**What the code does today (read before building; two read-only helpers, then checked by hand):**
+
+- **Amazon's conditional rules already reach the channel sheet and the index.** `resolveBatch` runs
+  `evaluateSchemaRequirements` (Ajv); its `requiredFields` set `cell.required`, the studio sheet turns that into
+  `requiredByRule`, and `completenessFor` counts it. So the channel rows of `ReadinessIndex` include conditional
+  requirements whenever the mapping runs. What was missing is a way to FILTER on the index (built below).
+- **"Required here" is still decided in about 10 places.** Outside the index: `family-completeness` and
+  `channel-readiness` (the two bulk endpoints; family flags plus a hard-coded fallback list), `master-completeness`
+  (the field registry) and `listing-preflight` (flat-file lane; a second conditional evaluator).
+- 🔴 **For the Owner / the sheet session:** `columnRequiredHere` (`packages/shared/master-sheet.ts:92`) — when a
+  category's facts exist, a family "required on Amazon" does NOT count if Amazon's category says optional. That may
+  be intended; it is shared with the sheet UI, so it is not changed here.
+- The reason "required by a condition" is known inside `resolveBatch` (`cell.requirementReasons`), but the studio
+  sheet (shared border, `studio-sheet.service.ts`) drops it when it builds `mapped`. So `requiredBy` names
+  `"Amazon · IT"` for the schema, a condition and a mapping rule alike. Naming the condition apart needs one field in
+  that shared file: tell the sheet session first.
+- **Readers of values:** the channel sheet, publish, preview, dispatch, validation and the Amazon/eBay legacy sync
+  already read `resolveBatch`. Still separate: the Shopify legacy sync builder (payload-only — its worker comment says
+  it is never sent; the real push is the outbound queue, so it is a delete candidate, not a shadow target), the
+  Shopify outbound/content sync (reads the overrides directly), the eBay flat-file row and push (`buildFlatRow`,
+  flat-file lane), the Amazon flat-file rows (flat-file lane) and `pim-global.routes` (5 core fields).
+  `resolver-shadow.ts` compares `resolveAttributes` with raw columns and is OFF whenever the content resolver is v2
+  (the default), so it cannot be the P8 shadow; a new one keyed to `resolveBatch` is needed.
+
+**Built (5 commits, each with tests on the lane's private copy and planted mistakes that the tests catch):**
+
+1. **A cheaper rebuild (P7).** Measured first: the mapping phase (`resolveBatch`) was half of a family's rebuild,
+   and inside it `resolveChannelField` rebuilt the flat value map, the key list and the language keys of ALL the
+   product's attributes for EVERY field (about 160 fields × 300 attributes, 3 times, per product and destination).
+   Now `resolveBatch` builds them once per product (`resolvedAttrsView`) and shares them. Best of 4 rounds, 28
+   destinations of one clone family: mapping 1,010 ms → 563 ms; whole sheet build 1,936 ms → 1,598 ms. Same output:
+   80 mapping/readiness/resolver test files pass; the pre-P7 code is kept in the new test as the reference; 3 planted
+   mistakes caught (one only after adding a pending-edit test that did not exist).
+   The machine was loaded (load average 6–12, other sessions), so single timings varied by 2×; best-of-N is used.
+   Statements per family are unchanged (986). **Next levers, measured:** the family's products and translations are
+   read again for each of about 24 channel destinations (a per-rebuild memo would remove most of the 986); an Etsy or
+   Shopify validation schema is rebuilt and recompiled once per family (about 60 ms).
+2. **Who requires a missing field (P7).** Every required-and-empty entry of `ReadinessIndex.missing[]` now carries
+   `requiredBy`: the channel scope's label (`"Amazon · IT"`), `"Family: <label>"`, `"Shared product"` (the shared
+   record's own rule), or each coordinate that requires the field on that row — the same three facts
+   `completenessFor` ORs into "required" (`requirementSources`, `readiness-model.ts`). Additive JSON; a row written
+   earlier has none (= not recorded). Test: every flagged entry names at least one source, with a family and a
+   channel positive control; 3 planted mistakes caught.
+3. **One indexed query (P7):** `GET /api/products/readiness/missing-required?channel=EBAY&market=DE` (+ `language`,
+   `accountId`, `field`, `requiredBy`, `take`, `after`; omit channel and market for the shared product). It reads
+   the index only. The reply also says how many products were checked there and how many are pending a rebuild.
+   Logic in `readiness-query.service.ts` (the route-prisma ratchet is unchanged). 5 planted mistakes caught.
+   Measured on the copy with 142,392 index rows (4,188 products rebuilt; best of 5, a page of 200): eBay DE 34 ms
+   (any field, one field or one source); the shared product in one language 25 ms; the shared product across all 9
+   languages 274–299 ms — so a screen should pass the language it shows. The `(channel, market, language, state)`
+   index serves it; no new index was needed.
+4. **`resolveFieldValue` deleted (P8).** No production caller; its planned loader was never written.
+5. **A master `attr_*` write needs no market when the dictionary defines it (P8, PLAN §4.5).** The Master contract
+   of a save takes attribute columns from the family dictionary and saved attributes and loads no channel spec, so
+   the market only names coordinates. Checked on the copy: 5 families × 11 markets, 0 differences in the attribute
+   columns' facts. Now a family or saved attribute is saved without `marketplaceContexts`, with the same rules
+   (business-strict list, shape); an attribute the dictionary does not define for the product, and every channel
+   write, still need the scope, and the refusal says why. A product listed nowhere gets a market-free contract.
+   The old code fails 7 of the 8 new tests; 2 planted mistakes caught.
+
+**Not done in this pass (next):**
+
+- **The bulk readiness endpoints onto the index** (`POST /products/channel-readiness/bulk`,
+  `POST /products/family-completeness/bulk`). They answer per channel (no market) from family flags or a hard-coded
+  list; the index answers per channel × market from the schema, the conditions and the family. Switching changes
+  the numbers on the products page (the readiness lens and the completeness column), so it goes shadow-first and
+  needs the Owner's word and the products/sheet session.
+- **The reader switches (P8):** a shadow harness keyed to `resolveBatch`, then the Shopify outbound/content sync
+  first; delete the payload-only Shopify legacy builder; the flat-file readers move only with their owners.
+- **The condition source** (see above; needs one field in the shared studio-sheet file).
+
+### 10.9 P3b — attribute scope (planned 2026-09-26)
+
+**Source.** The attribute-scope study (read-only session), worktree `/private/tmp/nexus-attribute-scope`, folder
+`docs/studies/attribute-scope/` (branch `study/attribute-scope`, not committed): `README.md` (the study), `PLAN.md`
+(🟢 approved by the Owner 2026-09-26), `HANDOFF.md`, `appendix-a-classification.md` + `classification.tsv` (all 242
+attributes, one row each), `appendix-b-channels-and-industry.md`. This section carries what the build needs, so it does
+not depend on those files being committed.
+
+**The problem, in short.** The Shared view shows the whole family dictionary: 241 attributes on Xavia Racing (Jackets
+family 179). Only 54 are core facts; 74 belong to one channel (69 Amazon, 4 eBay, 1 Shopify); 114 are unused or
+duplicates. A one-off script on 2026-09-07 turned every field of 31 cached Amazon/eBay schemas into a shared attribute,
+and the copy to another business spread it: Motovento (eBay + Etsy only) has 197. The Shared view never asks which
+channels a business connected, and readiness writes "no account" rows for every switched-on market.
+
+**The Owner's decisions.** D1 = A: `placement` is a label (`shared` | `channel` + which channels); values stay where
+they are. D2: this session builds it as P3b; the screens go to the product-sheet session. The name is `placement`
+because `CustomAttribute.scope` already means per-variant.
+
+**The rules (target).** (1) Placement is a label, not a data move. (2) One channel footprint per business = active,
+connected accounts (oauth or env) and their markets; an expired token still counts, so columns never vanish; readiness,
+sheet coordinates, "required by" and suggestions all read it. (3) Core attributes link to concepts (`semanticKey`, P3).
+(4) Channel fields come from the channel's own schema; they need no shared row. (5) Nothing is lost: archive instead of
+delete, merge with a preview, a required attribute is never hidden, every change is audited and can be undone.
+
+**Steps (this session: S0–S5, S7, S9 and the API half of S6).** Every step: `tsc`, tests on a database named `*test*`,
+a planted mistake the test must catch, two-business isolation tests where a table changes, and for a schema change
+`generate-baseline.mjs` + the migration upgrade check on a throwaway server. No push or deploy without the Owner's word.
+
+| # | What | Main files | Done when |
+|---|---|---|---|
+| S0 | **Baseline.** A read-only production measure script (Shared columns per family, stored keys, readiness rows by state, connections) and fixtures from the real `workspaceService.create`: F1 eBay-only, F2 Amazon-only, F3 no channel, F4 Motovento-shaped (a real copy of the 242). | new `apps/api/scripts/attribute-scope-measure.mts`, `test-support/attribute-scope-fixtures.ts` | Tests pin TODAY's behaviour on F1–F4; each later step flips one. |
+| S1 | **Channel footprint** helper + `GET /api/channel-footprint`. One rule. | new `services/channel-footprint.service.ts` (reuses `listManagedConnections`; Amazon markets from `Marketplace.isParticipating`) | Unit table; two-business isolation; the same answer as the web scope bar (`_studio/scopes.ts`). |
+| S2 | **Readiness reads the footprint.** No more "No active account" rows; the Shared rows per language stay (they hold the catalogue sort keys). Connect/disconnect → the existing pending rebuild. | `readiness-index.service.ts`, `scope-readiness.service.ts` | F1 has no Amazon rows; F3 has Shared rows only; the Shared row count is unchanged. Tell the listings-readiness session. |
+| S3 | **Schema + API.** Migration `…_attr_placement`: `CustomAttribute.placement` (default `shared`), `placementChannels`, `archivedAt`. A placement change also moves "required" to those channels. Delete → "archive instead" when values or links exist. Audit before/after. | `schema.prisma`, `packages/database/workspaces/*.json`, `attribute-dictionary.service.ts`, `attributes.routes.ts` | Drift / ownership / policy checks pass. Publish parity: the channel payloads on F4 are identical before and after a flip. |
+| S4 | **Shared follows placement.** Shared shows `placement = shared`, not archived. Channel-placed, archived and channel-only keys no longer leak back as "Additional saved attributes"; real old keys (e.g. `waterproofRating`) stay. A product with no family shows the business's core. Cache keys get the dictionary version and the footprint. | `family-sheet-schema.ts`, `sheet-columns.service.ts` (shared border), `studio-columns.ts`, `products-sheet.routes.ts`; the same key filter in `bulk-edit.service.ts`, `sheet-rows.service.ts`, `mapping/formula-reference-values.ts` — NOT in the export | F2's leak gone; an old key still shown; an edit shows at once; the cold column load is no slower (191 ms today). |
+| S5 | **Cleanup of the 242, reviewed.** A proposal made from the study's table (codes and classes only). Approved group by group (Core / Amazon / eBay / Shopify / Duplicates / Not relevant) or "approve the rest"; fingerprint, one transaction, undo. The API here; the screen is the product-sheet session's. | new `packages/shared/attribute-placement-proposal.ts`, new `pim/attribute-placement-correction.ts` (the `information-dictionary-correction.ts` pattern) | A stale preview is refused; a partial approval works; undo restores exactly. Production apply only on the Owner's word, per business. |
+| S6 (API) | **"Used by" + dormant.** Each Shared column names the connected channels that use it and where it is required; dormant = used by no connected channel → `defaultVisible = false`. | new `pim/attribute-usage.service.ts` | F1 shows only eBay users; hidden columns can be shown again (the UI is the sheet session's). |
+| S7 | **The copy keeps the decisions.** Placement and `semanticKey` travel; archived rows stay behind; a concept clash with the receiver's starter list is a `concept_clash` choice in the preview, never skipped. | `assortment/copy-source.service.ts`, `copy-preview.service.ts`, `copy-run.service.ts` (agree with the assortment owner) | Created + conflicts = offered; F4 through the real copy. |
+| S9 | **Merge** (fill the survivor where empty, archive the other, list its references; no mapping rewrite in v1). **Suggestions** when a channel is connected or its rules change. "Move an eBay aspect to Shared" = link only in v1. | `schema-change-impact.service.ts` + small new services | Suggestions appear for F1 after its eBay category adds an aspect. |
+
+Order: S0 → S1 → S2 (no more fake Amazon rows) → S3 → S4 → S5 (the Shared view is fixed) → S6, S7, S9.
+
+**The hand-off facts, re-checked on `main` `9ad36523b` (2026-09-26, after PR #23):**
+
+1. Starter seeding creates the 23 concept attributes but attaches no family (`workspace.service.ts:151-156`). Shared is
+   always family mode, so the starter attributes do not reach it → S4 ("a product with no family shows the core").
+2. The saved-bag leak is real (`sheet-columns.service.ts:1335`: every bag key that is not a registry or family field
+   returns as "Additional saved attributes"). 🔴 **It meets P8's no-market master write:** the save's Master contract
+   (`bulk-edit.service.ts`, with or without a market) includes these saved fields, so S4's filter must be applied
+   there too, or a channel-placed attribute stays writable on Shared through its saved value.
+3. `CustomAttribute.scope` = per-variant; the new field is `placement`. `semanticKey` exists (P3).
+4. Four rows where the study and the concept list disagree, for the Owner in the S5 review: `ceCertification`
+   (study: duplicate; concepts: adopted by `certification`), `collar_style` (duplicate; adopted by `neckline`),
+   `lining_description` (channel-specific; adopted by `lining`), `theme` (channel-specific; a concept).
+5. The assortment copy copies neither `semanticKey` nor any new field (`copy-run.service.ts:183-188`), and
+   `createMany({ skipDuplicates: true })` skips a clashing code silently → S7.
+6. Readiness still writes "No active account" rows (`readiness-index.service.ts:266`) → S2.
+7. The column caches carry no dictionary version (3 server caches + the browser's `max-age=300`) → S4.
+8. Production applies (S5) need the Owner's word, per business.
+
+**S0's live read — done 2026-09-26, read-only, through the signed-in web app (`GET /api/attributes`,
+`/api/families`, `/api/accounts`; no database login needed):**
+
+| Business | Attributes | vs the study's 242 | In no family | Linked to a concept | Families (attributes · products) | Connected accounts |
+|---|---:|---|---:|---:|---|---|
+| Xavia Racing | 241 | the 242 minus `shopify_product_type`; nothing new | 4 (`additional_features`, `armorType`, `exact_material`, `specific_material`) | 0 | Jackets 179 · 8, Suits 89 · 1, Accessories 69 · 2, Rainwear 68 · 1, Gloves 54 · 2, Apparel 8, General product 6, Protective apparel 4, Trousers 2, Coats 0 (· 0 products each) | 4: Amazon, Amazon Ads, eBay, Shopify (oauth) |
+| Motovento | 197 | a subset of the 242 (45 missing); nothing new | 0 | 0 | Jackets 179 · 21, Apparel 8, General product 6, Protective apparel 4 (· 0) | 2: eBay, Etsy (oauth) |
+
+This closes the study's gap about the live list. Still to measure in S0 (needs the measure script, read-only): stored
+keys per attribute and readiness rows by state.
+
+**S0 built (2026-09-26, branch `feat/attributes-p3b-s0`):**
+
+- `test-support/attribute-scope-dictionary.json` — the study's 242 attributes (code, label, type, class only).
+- `test-support/attribute-scope-fixtures.ts` — F1 eBay only, F2 Amazon only, F3 no channel, F4 Motovento-shaped
+  (the 242 in a Jackets family, created like the copy does), each through the real `workspaceService.create`.
+  A test account needs its own account id: the active-account unique index is not per business.
+- `pim/attribute-scope-baseline.vitest.test.ts` pins today (5 tests, profiles off and on; 4 planted mistakes caught):
+  B1 every business has the same 19 switched-on markets, whatever it connected (S1/S2 flip it); B2 a product with no
+  family sees none of the dictionary on Shared, not even the starter set (S4); B3 an Amazon-only bag key comes back as
+  "Additional saved attributes" (S4); B4 a Motovento-shaped family shows all 242 on Shared (S3/S5); B5 an eBay-only
+  business gets Amazon readiness rows marked "No active account" (S2). Each later step changes its assertion in the
+  same commit.
+- `apps/api/scripts/attribute-scope-measure.mts` — per business: dictionary, families, shared-bag keys (products per
+  key, dictionary or not), readiness rows by channel and state (with the "No active account" count), accounts and
+  markets. One transaction, `SET TRANSACTION READ ONLY` (checked), rolled back; counts and codes only. Run on the
+  private copy. **A production run needs a login that sees every business; this session cannot read one** (reading
+  `apps/api/.env` is refused), so the stored-key and readiness counts for production wait for the Owner's run:
+  `DATABASE_URL=<owner login> node --import tsx apps/api/scripts/attribute-scope-measure.mts`.
+
+**S1 built (2026-09-26, branch `feat/attributes-p3b-s1`):** `services/channel-footprint.service.ts` +
+`GET /api/channel-footprint` (reads with `listings.view`; the rule is the pure `footprintFrom`).
+
+- A channel is in the footprint when it has at least one ACTIVE account managed by oauth or env; an expired token
+  still counts. Its markets are its switched-on `Marketplace` rows; an Amazon market leaves only when Amazon said
+  `NOT_PARTICIPATING` (never checked, suspended, unknown and access-denied stay). A channel with switched-on markets
+  and no active account is `notConnected`; an account of a channel with no market (Amazon Ads) is ignored.
+- **The same answer as the web scope bar** (`_studio/studio-data.ts` + `scopes.ts:128`, its rule kept in the test as
+  the reference) on 5 shapes, including Xavia Racing's and Motovento's, **except two planned differences**: a channel
+  whose accounts are all disconnected (the bar shows it; the plan hides a removed channel), and an Amazon market Amazon
+  reports as not participating. Production today has neither (read 2026-09-26: Xavia Racing's 11 Amazon markets are
+  all `PARTICIPATING`; its eBay has an active account beside the revoked ones), so both answers agree there now.
+- Tests: `services/channel-footprint.vitest.test.ts` (21, profiles off and on): the unit table, the bar comparison,
+  the F1–F4 fixtures on PostgreSQL (each exactly its own channels; only switched-on markets), two businesses kept apart,
+  and the route's permission. 5 planted mistakes caught. RBAC coverage: 0 unmapped routes.
+- **For the product-sheet session:** the scope bar can read `GET /api/channel-footprint` instead of combining
+  `/api/marketplaces/grouped` with `/api/connections?all=true` (which needs `settings.integrations.manage`). That
+  switch is theirs; it brings the two planned differences with it.
+
+**S2 built (2026-09-26, branch `feat/attributes-p3b-s2`): readiness follows the footprint.**
+
+- `readinessChannelDestinations(footprint, markets)` (pure) — one channel destination per footprint channel × market ×
+  active account × market language. A market with no active account gets no row: **no more "No active account for
+  this destination" rows.** The Shared destinations are unchanged (one per language of every switched-on market; they
+  hold the catalogue sort keys).
+- `reconcileReadinessFootprint()` runs each minute in each business, before the pending drain (`readiness-pending.job.ts`;
+  a failed check is logged and retried, it never fails the drain): rows of a channel coordinate outside the footprint
+  are deleted (a disconnect; in production, the old no-account rows once, right after the deploy), and a footprint
+  coordinate with no row marks every family's Shared rows pending, so the drain rebuilds them. It reads the same
+  destinations function as the rebuild, so it never asks for a row a rebuild cannot write (no loop). A business with no
+  rows yet is left to the nightly reconcile.
+- Tests: B5 flipped in `attribute-scope-baseline` (F1 eBay rows only; F3 Shared rows only; the Shared rows identical);
+  `readiness-footprint.vitest.test.ts` (4): an old no-account row deleted in its own business only, connect → pending
+  → drain → rows, disconnect → rows deleted, a settled check does nothing. Profiles off and on; 3 planted mistakes
+  caught; readiness/mapping area 102 files pass (profiles ON: only the 7 known baseline files); real-PostgreSQL runner
+  32 suites; 51/51 static gates.
+- **Told the listings-readiness session** (its memory file, 2026-09-26): its rule "a listing with no index row is Not
+  checked" now covers listings on a channel with no active account (before, an `absent` row); totals counted from index
+  rows shrink.
+
+**S3 built (2026-09-26, branch `feat/attributes-p3b-s3`): placement, archive instead of delete, undo.**
+
+- Migration `20260926n_attr_placement` (additive): `CustomAttribute.placement` (`'shared'` by default),
+  `placementChannels`, `archivedAt`. `baseline.sql` regenerated; drift, ownership, policy parity, expand/contract and
+  the migration upgrade check on a throwaway server pass; database tests 72.
+- `services/pim/attribute-placement.service.ts`:
+  - `setAttributePlacement` — a label (D1 = A): no value moves. A move to channels restricts an "everywhere" family
+    requirement to those channels; a family that requires the attribute on a channel outside them blocks the move
+    (409, naming each family and channel — a required attribute is never hidden). Moving back to Shared changes no
+    requirement. A no-op writes nothing.
+  - `undoPlacementChange(auditId)` — restores the audit row's `before`, only while the attribute still equals its
+    `after` (otherwise 409: undo the later change first).
+  - `archiveAttribute` / `restoreAttribute` — archive refuses a required attribute.
+  - `deleteAttribute` — refuses an attribute with stored values (products or translations) or family links: 409
+    "Archive it instead" with the counts. Deletes an unused one.
+  - Every change writes an `AuditLog` row (`attribute.placement` / `.archive` / `.restore` / `.delete`) with before
+    and after, IN the same transaction (the undo reads it).
+- Routes (`pim.manage`, the existing `/api/attributes` rule): `PATCH /attributes/:id/placement`
+  `{ placement, channels }`, `POST /attributes/:id/archive`, `POST /attributes/:id/restore`,
+  `POST /attributes/placement-changes/:auditId/undo`; `DELETE /attributes/:id` now answers 409 for a used attribute.
+- Tests: `attribute-placement.vitest.test.ts` (14, profiles off and on; 4 planted mistakes caught), including
+  **publish parity on F4**: the eBay values resolved for the product and the Shared view's columns are identical before
+  and after moving three Amazon-only attributes to Amazon. (The Shared-view half flips on purpose in S4.)
+- Full API suite on the private copy: profiles OFF, only the 4 local-only files fail; profiles ON, only the files in
+  `profiles-on-baseline.ci.json` with their counts, plus the same local-only files.
+
+**S4 built (2026-09-26, branch `feat/attributes-p3b-s4`): the Shared view follows placement, at once.**
+
+- `familySheetFields` shows `placement = 'shared'`, not archived. A channel-placed attribute a family still requires
+  stays (marked "required by <channel>"): a channel scope shows no family requirement, so hiding it would hide a
+  requirement.
+- A product with no family shows the business's **core** (`coreSheetFields`): the concept-linked (`semanticKey`)
+  Shared attributes — the starter set for a new business, the 23 adopted concepts for Xavia Racing.
+- `sharedSavedFields` drops the saved keys that do not belong on Shared: a dictionary attribute placed on a channel or
+  archived, and a key the dictionary does not have that is an Amazon attribute of the business's cached schemas (an
+  Amazon-scope save of a field with no listing store writes the shared bag). A real old key stays. The column builder
+  applies it only when a Shared view asks (`savedFieldsFor: 'shared'`: the studio sheet, the master sheet rows, the
+  save's Master contract, formula references); **the export does not ask and keeps every key**. No value is touched.
+- The column caches carry `dictionaryVersion()` (count + latest `updatedAt` of the five dictionary tables):
+  `getSheetColumns`, `getStudioColumns` and `GET /products/sheet/columns` (whose browser header was
+  `max-age=300`, now `no-cache`). An edit, a move or an archive shows on the next read. The footprint is not in the keys
+  yet: nothing in the column build reads it until the scope bar does (the sheet session's switch).
+- Measured on the private copy (best of 5): the Shared family build cold 26 ms (23 before), the Amazon IT channel scope
+  cold 59 ms (57); warm reads +2–4 ms (the version read). The plan's bound was 191 ms cold.
+- Tests: B2 and B3 flipped in `attribute-scope-baseline` (no family → the starter core; the Amazon-only bag key gone,
+  `waterproofRating` kept); the S3 parity test now expects exactly the moved optional attributes to leave Shared (the
+  required one stays; undo brings them back at once); `attribute-scope-shared.vitest.test.ts` (archive / restore / a
+  label edit show at once; a channel-placed attribute is neither shown nor writable on Shared, its value kept, the
+  export still lists it). Profiles off and on; 8 planted mistakes caught. Three test mocks that run the real column
+  builder gained the version read, and the hand-written cache key in `sheet-columns-cache` gained its two new parts.
+  Full API suite: profiles OFF only the 4 local-only files; ON only the baseline files. 51/51 static gates.
+- **Told the product-sheet session first** (its memory file): what Shared now shows, and that
+  `sheet-columns.service.ts` / `studio-sheet.service.ts` changed by a few lines each.
+
+**S5 built — API (2026-09-26, branch `feat/attributes-p3b-s5`): the reviewed cleanup of the shared set.**
+
+- `@nexus/shared/attribute-placement-proposal` — the study's 242 attributes as data, codes and groups only: 54 core,
+  69 Amazon, 4 eBay (`item_specific_quantity`, `item_specific_unit`, `packageType`, `type`), 1 Shopify
+  (`shopify_product_type`), 36 duplicate, 78 not relevant (the study says "about 37 / 77": its split is a judgement in
+  prose; here a same fact or "derive from" = duplicate, the rest = not relevant; both archive). The four disputed rows
+  are listed apart.
+- `GET /api/attributes/placement-proposal` — the proposal read against the business's dictionary: each row's current
+  state, the proposed action (core → Shared, a channel group → placed on that channel, duplicate / not relevant →
+  archived) and `blocked` (with the reason) where a family requirement forbids it; attributes the proposal does not
+  know are listed and left alone; a fingerprint of every state read.
+- `POST /api/attributes/placement-proposal/apply` `{ fingerprint, groups | 'all', includeDisputed? }` — refused (409)
+  when the dictionary changed after the preview; applies only the approved groups, never a disputed row unless named;
+  one transaction built from the S3 moves, each audited with the batch id.
+  `POST /api/attributes/placement-proposal/:batchId/undo` — restores the whole batch, only while every row still equals
+  what the batch made.
+- Tests: `attribute-placement-correction.vitest.test.ts` (6, profiles off and on; 4 planted mistakes caught): the
+  counts, the preview (disputed apart, a required row blocked), a stale preview refused with nothing changed, one
+  group changing only its own rows and undone exactly, "approve the rest" leaving only the core and the undecided
+  disputed rows on Shared and undone exactly, and two businesses kept apart.
+- **Not applied to any business.** The Owner decides per business: the groups, and each disputed row (the study's view
+  or the concept list's). The review screen (`settings/pim/attributes/placement/`) is the product-sheet session's; until
+  it exists the preview can be read and approved from this report.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
-The API below is built on `feat/attributes` (not pushed). Nothing in `apps/web` or the design system was touched.
+The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
 
 | What the screen needs | API | Notes |
 |---|---|---|
@@ -561,6 +892,12 @@ The API below is built on `feat/attributes` (not pushed). Nothing in `apps/web` 
 | "Save ‘X’ as a new option" | `POST /api/attributes/:attrId/options` or `POST /api/attributes/bulk` | Now allowed on text attributes too (suggestions). |
 | "Map ‘Nero’ → Black for eBay IT" (fix once, fix all) | `PUT /api/pim/value-maps` `{ channel, marketplace, attribute, fromValue, toValue }` | Applies to every product whose automatic link reads the value maps. |
 | "Match my values automatically" | `POST /api/pim/value-maps/auto-match` `{ channel, marketplace, productType, dryRun }` | Returns matched + `unmatched` (the list to map by hand). |
+| Say who requires a missing field ("Required by Amazon · IT", "Required by Family: Jackets") | `ReadinessIndex.missing[].requiredBy` — relayed as-is by `GET /api/products/:id/readiness` (`matrix[].missing`) | On `requiredEmpty` entries. Absent on a row rebuilt before P7 = not recorded. The condition source is not separate yet (§10.8). |
+| Filter "missing a required field at eBay DE" | `GET /api/products/readiness/missing-required?channel=EBAY&market=DE[&field][&requiredBy][&language][&accountId][&take][&after]` | `checkedProducts` / `pendingProducts` say what was not checked or is being rebuilt; show "checking…", never "none missing", for those. |
+| Save a dictionary attribute on the Shared scope with no market chosen | `PATCH /api/products/bulk` without `marketplaceContexts` | Works for family and saved attributes. An Amazon-only attribute still needs the scope. |
+| Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
+| Move an attribute to a channel, archive, restore, undo (P3b S3; settings screen S8) | `PATCH /api/attributes/:id/placement`, `POST …/archive`, `POST …/restore`, `POST /api/attributes/placement-changes/:auditId/undo` | 409 answers carry the reason (and `details`); `DELETE /api/attributes/:id` now says "Archive it instead" for a used attribute. |
+| The cleanup review screen (P3b S5) | `GET /api/attributes/placement-proposal` → `{ revision, fingerprint, disputed[], groups[{ group, rows, changes, blocked }], notInProposal }`; `POST …/apply { fingerprint, groups, includeDisputed }` → `{ batchId }`; `POST …/:batchId/undo` | Show the disputed rows first; a 409 on apply means "load again". |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 

@@ -241,7 +241,7 @@ function ExportDemo() {
   )
 }
 
-const DEMOS: Record<DemoKey, { title: string; blurb: string; modules: string[]; render: () => JSX.Element }> = {
+const DEMOS: Record<DemoKey, { title: string; blurb: string; modules: string[]; render: () => React.JSX.Element }> = {
   filtering: {
     title: 'Filtering', modules: ['SetFilterModule', 'MultiFilterModule', 'AdvancedFilterModule', 'GroupFilterModule'],
     blurb: 'These are alternatives, not layers: switching the advanced filter on removes every column filter. Flip between them below.',

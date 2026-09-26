@@ -13,7 +13,7 @@ The Owner's note, if any: $ARGUMENTS
 checks `ci-ok` and `db-security` must pass. Nobody can bypass it. Auto-merge merges the pull request by itself
 when both checks are green. A merge to `main` is a release:
 - **API:** `.github/workflows/deploy-api.yml` runs when the change touches its `paths` (apps/api, packages/database,
-  packages/shared, packages/events, package*.json, railway.toml). It runs CI again, then ships to Railway, and
+  packages/shared, packages/events, package*.json). It runs CI again, then ships to Railway, and
   the release applies new migrations to production.
 - **Web:** Vercel builds when `@nexus/web` or one of its dependencies changed (`turbo-ignore`). Then
   `prod-smoke.yml` checks production.
