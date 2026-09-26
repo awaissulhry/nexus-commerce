@@ -35,6 +35,9 @@ const nextConfig = {
     if (!stub) return []
     return [{ source: '/api/:path*', destination: `${stub}/api/:path*` }]
   },
+  // CI smoke build only (docs/ci-plan.md §3): the `checks` job already type-checks the app, so the
+  // smoke job's build skips that step. Unset in prod and on Vercel, where next build still type-checks.
+  typescript: { ignoreBuildErrors: process.env.NEXUS_CI_SKIP_BUILD_TYPECHECK === '1' },
   // This prevents Turbopack from breaking the Prisma connection
   serverExternalPackages: ["@prisma/client", "pg", "@nexus/database"],
   // PERF — client-side Router Cache. Next 15 defaults staleTimes.dynamic to 0,

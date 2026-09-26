@@ -25,7 +25,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
@@ -34,7 +34,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 const pkgRoot = join(here, '..')
 const repoRoot = join(pkgRoot, '..', '..')
 
-const localUrl = readFileSync(join(repoRoot, 'apps/api/.env'), 'utf8').match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim()
+// CI names its disposable server in NEXUS_TEST_LOCAL_PG_URL (docs/ci-plan.md §2.3); a developer machine
+// falls back to apps/api/.env. A missing file is "no local database", not a crash at load.
+const envFile = join(repoRoot, 'apps/api/.env')
+const localUrl = process.env.NEXUS_TEST_LOCAL_PG_URL?.trim()
+  || (existsSync(envFile) ? readFileSync(envFile, 'utf8').match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim() : undefined)
 const host = localUrl ? new URL(localUrl).hostname : ''
 const isLoopback = host === '127.0.0.1' || host === 'localhost'
 const canRun = Boolean(localUrl) && isLoopback
