@@ -82,13 +82,18 @@ function envSeed(key: ChannelKey): { clientId: string; clientSecret: string; red
   }
 }
 
+/** The environment eBay's env keys belong to: eBay issues a separate sandbox keyset, and EBAY_ENVIRONMENT says which one the env holds. */
+function ebayEnvKeysEnvironment(): Environment {
+  return (process.env.EBAY_ENVIRONMENT ?? '').toUpperCase() === 'SANDBOX' ? 'sandbox' : 'production'
+}
+
 /** Create a ChannelApp row from env for every channel that has env credentials and no row yet. */
 export async function seedChannelApps(): Promise<void> {
   const keys: ChannelKey[] = ['EBAY', 'AMAZON_SP', 'AMAZON_ADS', 'SHOPIFY', 'ETSY']
   for (const key of keys) {
     const seed = envSeed(key)
     if (!seed) continue
-    const environment: Environment = key === 'EBAY' && (process.env.EBAY_ENVIRONMENT ?? '').toUpperCase() === 'SANDBOX' ? 'sandbox' : 'production'
+    const environment: Environment = key === 'EBAY' ? ebayEnvKeysEnvironment() : 'production'
     const existing = await prisma.channelApp.findUnique({ where: { channelKey_environment: { channelKey: key, environment } } })
     if (existing) continue
     const { blob } = await encryptCredentials({ clientSecret: seed.clientSecret })
@@ -149,7 +154,10 @@ export async function getChannelApp(key: ChannelKey, environment: Environment = 
       signingKeyCheckedAt: row.signingKeyCheckedAt ?? null,
     }
   } else {
-    const seed = envSeed(key)
+    // P1.8 re-review — eBay sandbox with no sandbox row must NOT fall back to the env keys when they are the
+    // PRODUCTION keyset: a sandbox token request would send the production client id and secret to eBay's
+    // sandbox. Amazon's SP-API sandbox and the Ads test host take the production app, so they keep the seed.
+    const seed = key === 'EBAY' && environment === 'sandbox' && ebayEnvKeysEnvironment() !== 'sandbox' ? null : envSeed(key)
     if (!seed) throw new ChannelAppConfigurationError(key, environment)
     value = { channelKey: key, environment, ...seed, signingKey: null, signingKeyId: null, signingKeyExpiresAt: null, signingKeyCheckedAt: null }
   }

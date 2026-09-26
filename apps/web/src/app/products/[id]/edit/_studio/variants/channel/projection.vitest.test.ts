@@ -393,7 +393,7 @@ describe('planPin — §4.3\'s one click, and what it refuses', () => {
   })
 })
 
-const ITEM_ID = '257584954808'
+const ITEM_ID = '938554736087'
 
 /** Read from the sheet: 2 colours × 10 sizes, Italian values, in the order the axes are stored. */
 const COLOURS = ['Nero', 'Giallo'] as const
@@ -506,17 +506,17 @@ function projectionFixture(): ProjectionPage {
       creatable: false,
       heldReason: 'Splitting into more than one listing is not available yet — the listing alias layer is still being deployed.',
     },
-    /* The coordinate HAS a live listing (ItemID 257584954808 on every row), so §4.4.4's lock banner
+    /* The coordinate HAS a live listing (ItemID 938554736087 on every row), so §4.4.4's lock banner
        is on its real arm here, not on a synthetic one. */
     locked: {
-      reason: 'Item 257584954808 is live with Colore and Taglia. Adding or removing a specific relists it; reordering and adding values do not.',
+      reason: 'Item 938554736087 is live with Colore and Taglia. Adding or removing a specific relists it; reordering and adding values do not.',
       lockedAxisKeys: ['Colore', 'Taglia'],
       /* VT.2c — VT.1b's unified lock serves these three on every coordinate (`variationLockFor`).
          eBay: a SET change ends and relists the item, while a REORDER is a revise — which is why
          `orderChangeAllowed` is `true` on the same coordinate whose axes are both locked. */
       setChangeIs: 'relist' as const,
       orderChangeAllowed: true,
-      externalId: '257584954808',
+      externalId: '938554736087',
     },
     /* VP.2's read does NOT carry a parent row (REQUEST A6) — the fixture matches the wire rather
        than the proposal, so the surface's derived-parent path is the one this exercises. */

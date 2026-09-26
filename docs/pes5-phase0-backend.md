@@ -47,9 +47,9 @@ would be schema on a corpse; it also drags `VariantChannelListing_variantId_chan
 `ChannelListing` carrying its own real eBay ItemID.
 
 ```
-GALE-JACKET-ALT1   EBAY:IT  ACTIVE  256566101420
-GALE-JACKET-ALT2   EBAY:IT  ACTIVE  256566102729
-GALE-JACKET-ALT3   EBAY:IT  ACTIVE  256566103703
+GALE-JACKET-ALT1   EBAY:IT  ACTIVE  949285812839
+GALE-JACKET-ALT2   EBAY:IT  ACTIVE  910932382515
+GALE-JACKET-ALT3   EBAY:IT  ACTIVE  950640873955
 AIREON-ALT1/2/3    EBAY:IT  DRAFT   2576291381{22,252,421}
 xavia-knee-slider-ALT1..ALT5                    … 22 total
 ```
@@ -473,7 +473,7 @@ authorized 409 rehearsal against the live contract; the rule is now the pure, ex
 
 ```jsonc
 { "id": null, "label": "Primary", "position": 0, "status": "ACTIVE",
-  "externalListingId": "257584954808", "listingStatus": "ACTIVE", "isPublished": false,
+  "externalListingId": "938554736087", "listingStatus": "ACTIVE", "isPublished": false,
   "readiness": { "percent": 100|null, "state": "…", "errors": 0,
                  "warnings": 42, "rowsMissingRequired": 0 },
   "rowIds": ["…"] }
@@ -487,7 +487,7 @@ itself is **unchanged** (`PATCH /api/products/bulk` with `expectedVersion`, 409 
 
 ```jsonc
 { "id": "…", "label": "Bundle listing", "position": 2, "status": "ACTIVE",
-  "externalListingId": "256566102729", "listingStatus": "ACTIVE", "isPublished": true,
+  "externalListingId": "910932382515", "listingStatus": "ACTIVE", "isPublished": true,
   "readiness": { "percent": 71, "state": "missing", "errors": 2, "warnings": 3,
                  "rowsMissingRequired": 4 },
   "rowIds": ["…"] }

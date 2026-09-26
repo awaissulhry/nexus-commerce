@@ -31,6 +31,8 @@ export function summarizeReadinessIndex(rows: ReadinessIndex[], c: ReadinessCoor
     mappingRules: c.channel ? Math.max(0, ...rows.map(r => r.mappingRules ?? 0)) : null,
     missing: rows.flatMap(r => r.missing as unknown as MissingReadinessField[]),
     computedAt: rows.length ? new Date(Math.min(...rows.map(r => r.computedAt.getTime()))).toISOString() : null,
+    // P2 — any pending row makes the whole verdict provisional; the earliest mark says since when.
+    ...(rows.some(r => r.pendingSince) ? { pendingSince: new Date(Math.min(...rows.filter(r => r.pendingSince).map(r => r.pendingSince!.getTime()))).toISOString() } : {}),
     // VT.4b — the provenance VT.1b's producer stamps, read back. The FIRST non-null across this coordinate's
     // rows: a coordinate groups the parent with its children, and a child has no projection, so it is NULL by
     // design. `null` therefore means "no row here carried a provenance" = NOT COMPUTED, never `derived`.
@@ -69,7 +71,7 @@ export async function getProductReadiness(input: { productId: string; market: st
     Object.fromEntries([...new Set(group.map(row => row.productId))].map(productId => {
       const one = summarizeReadinessIndex(group.filter(row => row.productId === productId), c, language, label)
       // A-45 — the product's own required counts and age, so its completeness card can say "18 of 22" and "computed 6 h ago".
-      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}), required: one.required, computedAt: one.computedAt }]
+      return [productId, { state: one.state, pct: one.pct, ...(one.note ? { note: one.note } : {}), required: one.required, computedAt: one.computedAt, ...(one.pendingSince ? { pendingSince: one.pendingSince } : {}) }]
     }))
   const matrix = [...groups.values()].map(group => ({
     ...summarizeReadinessIndex(group, group[0], group[0].language, group[0].label),

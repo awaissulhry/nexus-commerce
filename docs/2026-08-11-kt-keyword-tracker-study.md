@@ -130,9 +130,9 @@ data today. The Keyword Tracker does not read it at all.
 ```
 "chaqueta moto hombre" [ES] · market volume 3,082 · market rank #3 · 3 of our ASINs
   ASIN         our impr   imprShare   clicks   clickShare   purchases
-  B0BMSH19GY        251      0.36%         1       0.08%            0
-  B0BMSWM15B          2      0.00%         1       0.08%            0
-  B0D8SFVSGP          2      0.00%         1       0.08%            0
+  B0FXFA789A        251      0.36%         1       0.08%            0
+  B0FXE444C9          2      0.00%         1       0.08%            0
+  B0FXD2AFD9          2      0.00%         1       0.08%            0
 ```
 
 Two things fall straight out of that table:

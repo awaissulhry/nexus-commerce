@@ -365,7 +365,7 @@ describe('loadSharedMembershipRows', () => {
 describe('round-trip integrity — snapshot overlay (the "reverts after save" fix)', () => {
   const baseMembership = {
     sku: 'GALE-BLACK-M',
-    itemId: '256566101420',
+    itemId: '949285812839',
     marketplace: 'IT',
     price: 105,
     lastQtyPushed: 6,
@@ -411,12 +411,12 @@ describe('round-trip integrity — snapshot overlay (the "reverts after save" fi
       childBaseRow: { sku: 'GALE-BLACK-M', _productId: 'prod-1' },
       parentProductId: 'parent-1',
     })
-    expect(row.it_item_id).toBe('256566101420')
+    expect(row.it_item_id).toBe('949285812839')
     expect(row.it_qty).toBe(6)          // fan-out truth
     expect(row.it_price).toBe(105)      // membership price operative
     expect(row.parentage).toBe('child')
     expect(row.sku).toBe('GALE-BLACK-M')
-    expect(row._rowId).toBe('shared::256566101420::GALE-BLACK-M')
+    expect(row._rowId).toBe('shared::949285812839::GALE-BLACK-M')
     expect(row._shared).toBe(true)
   })
 

@@ -35,6 +35,34 @@ test('the real palette: controls hold, the baseline exits 0, every pair is measu
   assert.ok(out.total.pairs >= 88, 'at least the 09-22 review set')
 })
 
+test('Tag tones measure the actual component foreground/background in both themes at 7:1', () => {
+  const { out } = run([])
+  for (const mode of ['light', 'dark']) {
+    const rows = out.rows.filter(row => row.mode === mode && row.group.startsWith('tag:'))
+    assert.deepEqual(rows.map(row => row.group).sort(), ['tag:danger', 'tag:info', 'tag:neutral', 'tag:success', 'tag:warning'])
+    for (const row of rows) assert.ok(row.ratio >= 7 && !row.belowAAA, `${mode} ${row.group}: ${row.ratio}`)
+  }
+})
+
+test('a Tag use-site regression fails even when its unused semantic text token still passes', () => {
+  const source = readFileSync(join(ROOT, 'apps/web/src/design-system/styles/primitives.css'), 'utf8')
+  const anchor = '.nds-tag.danger { color: var(--nds-danger-text);'
+  assert.equal(source.split(anchor).length, 2)
+  const path = join(dir, 'tag-regression.css')
+  writeFileSync(path, source.replace(anchor, '.nds-tag.danger { color: var(--nds-danger-strong);'))
+  const { code, out } = run(['--primitives', path, '--max-failures', '0'])
+  assert.equal(code, 1)
+  assert.ok(out.failing.some(row => row.group === 'tag:danger' && row.mode === 'light' && row.belowAAA))
+  assert.ok(out.rows.some(row => row.group === 'status' && row.fg === '--nds-danger-text' && row.mode === 'light' && !row.belowAAA))
+})
+
+test('relative and absolute Factory token paths both measure Factory component CSS', () => {
+  const relative = 'apps/factory/src/design-system/styles/tokens.css'
+  for (const path of [relative, join(ROOT, relative)]) {
+    assert.equal(run(['--tokens', path]).out.primitives, join(ROOT, 'apps/factory/src/design-system/styles/primitives.css'))
+  }
+})
+
 test('the ratchet holds at today’s counts and fails when a count grows', () => {
   const base = run([]).out.total
   assert.equal(run(['--max-failures', String(base.belowAAA), '--max-aa-failures', String(base.belowAA)]).code, 0)

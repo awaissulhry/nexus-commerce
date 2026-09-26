@@ -10,15 +10,31 @@
  */
 
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${getBackendUrl()}${path}`, {
+/**
+ * `command` names the key slot of a verb the API deduplicates by Idempotency-Key, and the request
+ * the operator is told about when the key is refused. A retry after a lost response reuses the key.
+ */
+async function post<T>(path: string, body: unknown, command?: { slot: string; what: string }): Promise<T> {
+  const url = `${getBackendUrl()}${path}`
+  const init: RequestInit = {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  })
-  const parsed = await res.json().catch(() => null)
+  }
+  let res: Response
+  let parsed: any
+  if (command) {
+    const sent = await sendCommand<any>(commandKeyFor(command.slot), url, init)
+    if (sent.conflict) throw new Error(commandConflictMessage(sent.conflict, command.what))
+    res = sent.response
+    parsed = sent.body
+  } else {
+    res = await fetch(url, init)
+    parsed = await res.json().catch(() => null)
+  }
   // The server's own words, never a rewrite — a family verb fails for reasons an operator can act
   // on ("GALE-JACKET is itself a child — pick a top-level parent") and paraphrasing loses them.
   if (!res.ok) throw new Error(parsed?.error?.message || parsed?.error || `HTTP ${res.status}`)
@@ -142,7 +158,8 @@ export const familyOps: FamilyOps = {
   },
 
   attach: (parentId, productIds, axisValues) =>
-    post<AttachResult>('/api/pim/attach-to-parent', { parentId, productIds, ...(axisValues ? { axisValues } : {}) }),
+    post<AttachResult>('/api/pim/attach-to-parent', { parentId, productIds, ...(axisValues ? { axisValues } : {}) },
+      { slot: `pim-attach:${parentId}`, what: 'attach request' }),
 
   // 🔴 /api/amazon, not /api/pim. See the header — there is no PIM-namespaced unlink.
   unlink: (productIds, expectedParentId) => post<UnlinkResult>('/api/amazon/pim/unlink-child', { productIds, expectedParentId }),
@@ -164,5 +181,5 @@ export const familyOps: FamilyOps = {
       productId,
       ...(variationTheme ? { variationTheme } : {}),
       ...(variationAxes?.length ? { variationAxes } : {}),
-    }),
+    }, { slot: `pim-promote:${productId}`, what: 'promote request' }),
 }

@@ -1,17 +1,90 @@
 # Channel connections — FINAL PLAN
 
+## Latest checkpoint — 2026-09-25 11:38 UTC
+
+**Package A code/recovery APPROVED, fully gated and locally rehearsed. No package or
+recovery ref has been pushed by this session; nothing new is deployed or enabled.**
+Final documentation signoff/publication remain pending. The Owner has approved reviewed,
+gated, rehearsed deployment with every new switch OFF. The existing CI eBay consent-page
+GET probes still need the separate narrow exception already requested; no yes received.
+
+Published main is `2459bf52fe85e1ffe0b5f0c510994e019cb3eed4` (refetched11:37Z; docs after
+bc39). Public readiness re-read before that fetch reports healthy serving **bc39f98d**.
+Release source is **`3be0a62e1344626db7f8adf4e49351880cae6725`**; recovery branch
+`recovery/cx-20260925` is **`34c376113380f4c803d4f91190f94c06126c56a2`**. Metadata commits
+may follow the reviewed source. Recovery preserves published main and the exact release
+DB tree; application differences are C11f6a/b/c only. Its PCO fixture correction has an
+independent APPROVE; no assertion, timeout, ratchet or hook was weakened.
+
+Clean source full hook: DB33, **API12220/359 existing skips**, **web4887/13**, both builds,
+security127, RBAC2728/zero unmapped, **realPG328 in25 suites/zero skips**; profiles977 files,
+41 known-failing/217 tests, none new or worse. Clean recovery full hook: **API12129/340**,
+web4887/13, DB33/security127/builds, **realPG309 in23 suites/zero skips**; profiles971 files,
+same41/217 unchanged baseline. Contrast at these heads: web92/factory106 pairs, zero below7:1.
+Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
+`package-a-recovery-gate-34c376113.log`; archived sublogs under their helpers' build/evidence
+`package-a-3be0a62e1/` and `recovery-34c376113/`.
+
+HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
+recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
+migration history/checksums and role/object invariants. Jobs initialized with processing
+held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
+Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the source-equivalent
+pre-checkout pass are preserved but are not substituted for the clean3be gate.
+
+Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
+No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
+shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
+with positive DB-source match. Refresh before publication; no newer switch verification is
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
+findings; healthy readiness is not a blanket operational verdict.
+
+Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
+eBay orders68fcc9f36 APPROVED. Etsy ingest c621418e and SKU identity da1de249 APPROVED;
+pooled line foundation61cbe88bc is under review and terminal writer integration remains open.
+Its offset-ceiling history limit remains an explicit hold, not unrestricted completeness.
+Package C: listing issues16945532a and Tag contrast e738e4531 APPROVED; privacy census
+6e6687952 APPROVED, candidate records in verification; cancellation parity b77db1bd3 APPROVED,
+terminal follow-up b382fb7ba required fixes (recovery65bda8b72 committed, atomic-state fix in
+progress). Contract follow-up330395766 and teardown87406ac23 await independent review.
+The latter proves/fixes a setup-client shutdown race consistent with the original57P01;
+it does not explain recoveryf9's separate PGlite socket loss. Remaining engineering,
+activation preparations and Phase5 audit remain open under the structured plan.
+
+
+### Historical overview before the CFI main update
+
 Written 2026-09-19. This is the original plan and historical implementation record.
-For current scope, Owner corrections, release state and unresolved acceptance criteria, read
-`PROGRESS.md` §0 and `2026-09-22-HANDOVER.md`. Most core code is built; the full plan is not
-yet complete or production-verified. Etsy is already connected in another business profile
-(Owner correction, 2026-09-22). Older dated status entries below are historical.
+Current execution is governed by [the structured plan](2026-09-25-STRUCTURED-PLAN.md) and
+[COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) "Latest state". The full plan remains open.
+Package A is merged/reviewed locally at `77c787559`; its exact-head normal full hook passed exit 0.
+Recovery `recovery/cx-20260925` at `a5efa0dd9` has source APPROVE and a passed full hook.
+Source77/recoverya5 HTTP rehearsal passed at 2026-09-25 00:12:13Z; jobs passed at 00:15:11Z.
+Expanded guard proof passes 29/29 tests and 39/39 assertion-killed/restored mutations, with zero
+unresolved survivors. The final docs/tools commit hook and exact-build rehearsals remain pending.
+Use `CX_RELEASE_SHA=<final-release-sha>` for both scripts;
+defaults pin source77. No package or recovery ref is pushed/deployed. Source/tool/docs reviews
+APPROVE; counts, tested/pushed SHA distinctions and commands are in [the release record](RELEASE-C9-C11F6C.md).
+Published/serving main is `a22f2fc3` (public healthy200, 2026-09-24T23:49:30.532Z).
+The Owner approved reviewed, gated, rehearsed package pushes/deployments with new switches OFF;
+activation and the other Phase 4 actions still require separate explicit approval. The existing
+deploy workflow's eBay consent-page GET probes also need one narrow Owner yes before main push;
+finish preparation first and retain the workflow unchanged.
+Etsy S1 hold-on-paid/deduct-on-shipment and H1 from activation are settled. Active scope is
+Amazon, eBay and Etsy; preserve connected Shopify; P8/new channels remain deferred.
+All older dated status entries and the original phases below are historical, not current blockers.
 
 This is the one plan for how Nexus talks to its sales channels, in both directions:
 
 - **Outgoing:** every call Nexus makes to a channel — publish a product, change content, send images, send stock, send prices, end or close a listing, manage ads.
 - **Incoming:** everything a channel tells Nexus — orders, stock and listing changes, account changes, errors, rejections, warnings, and failures of our own calls.
 
-Channels in scope now: **Amazon SP-API, Amazon Ads, eBay, Shopify, Etsy.** WooCommerce is out (your decision, 2026-08-29). New channels come last (section 6, phase P8).
+Original channel scope: **Amazon SP-API, Amazon Ads, eBay, Shopify, Etsy.** Current scope is narrowed above; WooCommerce is out and P8 remains deferred.
 
 > Note on the file name: macOS does not tell `plan.md` and `PLAN.md` apart. A file called `plan.md` would overwrite the existing `PLAN.md`. So this file is `FINAL-PLAN.md`.
 
@@ -32,7 +105,7 @@ Evidence tags used below:
 | **PROD?** | Only a production read can answer it (env values, live data). |
 | **NOT CHECKED** | Nobody looked yet. |
 
-## The three phases
+## The original three phases — historical planning snapshot
 
 | Phase | State | What it means for you |
 |---|---|---|
@@ -456,6 +529,38 @@ Done when: a rotation runs end to end (on a test app or in the real window), the
 
 ---
 
+### 2026-09-23 implementation amendments (acceptance remains open)
+
+- Application-wide eBay notices with unresolved ownership use an encrypted,
+  system-only quarantine. They must not place another business's payload in the
+  ordinary legacy profile. Signature failures retain bounded metadata/digest only;
+  verified unresolved bodies remain recoverable. Explicit owner adoption is atomic
+  and preserves first ownership/proof. Operational visibility, key maintenance and
+  archive support remain required before activation; the archive-never-delete rule
+  is unchanged.
+- Revocation must fence both same-row reconsent and a newer grant on a different
+  connection for the same immutable eBay seller. Per-row grantVersion plus a shared
+  seller lock/fresh committed reads provide that fence. A current active sibling
+  keeps the old receipt unresolved; it is never silently retargeted. Username-only
+  identity cannot authorize a grant, even when profile mode is off.
+- D8 initially archives completed receipts in place, preserving payload, identity and
+  proof; unfinished/retry/DLQ work is excluded. Database DELETE/TRUNCATE guards also
+  protect quarantine. This bounds each pass but does not reclaim storage or settle
+  fiscal/erasure policy. Automatic policy-based archival must be included explicitly
+  in the next deployment approval and production verification.
+- Quarantine encryption maintenance uses a separate restricted operator role and a
+  two-column CAS with mandatory atomic audit. Tenant cron is not elevated; sealed
+  binding/digest checks remain separate from account adoption. Global inventory and
+  cold recovery proof are still required. Same-resource KMS material rotation does
+  not require rewriting stored envelopes; key-resource migration does.
+- Rollback artifacts must carry every applied migration folder, even before new
+  processing is enabled; the startup applied-but-missing gate rejects old images
+  that omit them. A protocol-aware rollback build must be tested before deployment.
+- These amendments are local implementation, not deployment or live proof. Sources,
+  tradeoffs, failures, race tests and review evidence are in
+  [CX-REMAINING](build/CX-REMAINING.md), C11d3/C11d4. Channel activation and destructive
+  cleanup retain their approval/observation requirements.
+
 ## 7. The quality bar ("AAA") — every call must pass this
 
 ### 7.1 Every outgoing call
@@ -676,6 +781,12 @@ Sources: the 08-29 research (R1 Amazon, R2 eBay, R3 Shopify, R4 Etsy, R8 Nango, 
 ## 2026-09-22 continuation amendments
 
 [COMPLETION-MATRIX](COMPLETION-MATRIX.md) is the current acceptance audit.
+The Owner subsequently approved deployment. Final code `439d9e3d3` is on main and
+serving; both GitHub workflows and Railway completed successfully. Production checks
+at 2026-09-22 21:58 UTC verified the migration, exclusive Motovento Etsy routing and
+connection preservation. Release evidence: `build/RELEASE-2026-09-22-EVIDENCE.json` (kept locally; not in the public repo).
+This closes the reviewed safety release, not the remaining implementation/activation
+requirements in the matrix.
 [CX-COMPLETION](build/CX-COMPLETION.md) records C1–C8, official contracts, failure
 reproductions, tests, mutations and independent reviews. Old BUILT labels below
 remain historical. Material amendments: unverified replay is never executable;
@@ -696,15 +807,15 @@ Actual queue/rotation proof and durable eBay domain processing remain mandatory.
 
 1. **Read this whole file first.** Then read the rows of the package you work on.
 2. **Re-check the evidence.** Every CODE fact here was measured on 2026-09-19. Other sessions change the code every day. Before you change anything, check that each path:line you rely on is still true.
-3. **Current continuation authorization:** local investigation, implementation, tests, independent review and named slice commits are approved. Deployment, production writes, live channel calls and each P7 drop retain explicit approval boundaries. Earlier per-edit approval instructions are superseded by the 2026-09-22 mandate.
-4. **Do only the package.** Anything next to it needs its own yes.
-5. **Other sessions share this tree.** Run `git status` first. Never revert or reformat a file you did not change. The shared-stock work lives in `.claude/worktrees/shared-stock` — do not touch it. The Presence programme owns listing verbs (pause, end, relist): see section 10.
+3. **Current authorization (2026-09-25):** local implementation, tests, independent review, named slice commits and each fully gated/rehearsed package push/deployment to main with new switches OFF are approved. Separate explicit approval remains required for activation, live vendor calls/probes, operator grants, KMS/rewrap/key retirement, credential/env changes, deletions, prisma migrate resolve, Finances cutover and P7 drops. Follow the structured plan in order.
+4. **Follow the structured plan in order.** Package A, Package B, then Package C; prepare Phase 4 actions for approval and run the Phase 5 audit. Keep unrelated work separate.
+5. **Isolated worktrees only.** Work in `/private/tmp/nexus-channel-connections-20260922` and the authorized helpers. `/Users/awais/nexus-commerce` belongs to another session: status/read-only reference only; never edit, stash, stage, run scripts there or push its history. Always cd explicitly. Preserve untracked cx-production-*.mts. Presence/PES.3 owns the studio pane and listing verbs; do not edit _studio/.
 6. **Safe testing:**
    - Run API tests from `apps/api`, never from the repo root (from the root, `DATABASE_URL` points at the production database). Print the database host first.
-   - `grep` in this shell skips ignored files. Use `/usr/bin/grep` for any "exists / does not exist" claim.
+   - Use `rg` first; account for ignored build records. Never overlap Prisma generation/builds with tests sharing the client.
    - No live channel write and no production database write without the Owner's explicit yes. Prove writes with dry runs first.
 7. **UI work** uses the Nexus design system (`apps/web/src/design-system`, see `AGENTS.md`).
-8. **Commits:** named slice commits are authorized by the continuation. Push once per reviewed, approved deployment package from the isolated tree; never use `--no-verify` or stage with `add -A`.
+8. **Commits:** stage files by name and commit per slice. Push once per reviewed, gated, rehearsed package from the clean helper worktree; preserve hooks, recheck remote main and re-merge/re-gate if it moved.
 9. **Finish every package with:** tests green, a production proof (or a clear "could not measure" with the reason), a build record at `docs/channel-connections/build/<ID>.md`, and its row updated in 14.2.
 
 ### 14.2 Progress

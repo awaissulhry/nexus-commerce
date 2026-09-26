@@ -2234,7 +2234,7 @@ not to channels. **Sole owner: PES.3** — the channel sheet is theirs
 
 ```
 ┌──┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐ 48   y=0 — no AppTopBar (#182)
-│  │ ‹ Products  XAVIA GALE Giacca Da Moto…   GALE-JACKET  B0F7J163XJ  ●Active  Parent   Autosave ✓  ⋯  [Publish ▾]│
+│  │ ‹ Products  XAVIA GALE Giacca Da Moto…   GALE-JACKET  B0FXD0620C  ●Active  Parent   Autosave ✓  ⋯  [Publish ▾]│
 │▦ ├───────────────────────────────────────────────────────────────────────────────────────────────────────┤ 40
 │  │ Scope [Master 71%][Amazon 71%][eBay —][Shopify][WooCommerce][Etsy]   Sheet Images Analytics&Ads Activity   [DE ▾][de ▾]│
 │▤ ├───────────────────────────────────────────────────────────────────────────────────────────────────────┤ 40

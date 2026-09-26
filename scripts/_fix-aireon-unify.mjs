@@ -1,4 +1,4 @@
-// Unify AIREON to match Amazon (parent SKU AIREON / ASIN B0F7RTV2BD / 24 var):
+// Unify AIREON to match Amazon (parent SKU AIREON / ASIN B0FX10086B / 24 var):
 //   1. create a new parent Product "AIREON"
 //   2. re-point all 24 children (12 jacket + 12 pant) parentId -> AIREON
 //   3. soft-delete the two old parents (GIACCA + PANTALONI)
@@ -30,7 +30,7 @@ console.log(`Children: ${kids.length} (jacket ${jacketKids.length} + pant ${pant
 // 3 ASIN backfills
 const backfills = [
   { sku: 'AIRMESH-JACKET', asin: 'B0DYXSQP18' },
-  { sku: 'AIR-MESH-JACKET-MEN-OLD', asin: 'B0CFBCYN3K' },
+  { sku: 'AIR-MESH-JACKET-MEN-OLD', asin: 'B0FXCDEDCA' },
   { sku: 'XAVIA-MODEL1-COPPIA-DI', asin: 'B0C3YRQPFT' },
 ]
 const bfRows = []
@@ -41,7 +41,7 @@ for (const b of backfills) {
 }
 
 console.log(`\nPlan:`)
-console.log(`  create parent AIREON (asin B0F7RTV2BD, OUTERWEAR, theme "Body Type / Color / Size", name from GIACCA)`)
+console.log(`  create parent AIREON (asin B0FX10086B, OUTERWEAR, theme "Body Type / Color / Size", name from GIACCA)`)
 console.log(`  re-point ${kids.length} children -> AIREON`)
 console.log(`  soft-delete GIACCA (${giacca.id}) + PANTALONI (${pant.id})`)
 console.log(`  backfill ${bfRows.length} parent ASINs`)
@@ -66,7 +66,7 @@ const aireon = await prisma.product.create({
     basePrice: giacca.basePrice,
     brand: giacca.brand, manufacturer: giacca.manufacturer,
     isParent: true, isMaster: true, isMasterProduct: true,
-    amazonAsin: 'B0F7RTV2BD',
+    amazonAsin: 'B0FX10086B',
     productType: 'OUTERWEAR',
     variationTheme: 'Body Type / Color / Size',
     variationAxes: ['Body Type', 'Color', 'Size'],

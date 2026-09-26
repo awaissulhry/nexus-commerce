@@ -5,7 +5,7 @@ import { ebaySpecFromCache } from './channel-specs/ebay.js'
 import { readCatalogWorkbook, writeCatalogWorkbook } from './catalog-workbook.js'
 
 const parents = ['GALE-JACKET', 'IT-GALE-JACKET', 'GALE-JACKET-ALT1', 'GALE-JACKET-ALT2', 'GALE-JACKET-ALT3']
-const ids = ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']
+const ids = ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']
 const sizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
 const variants = ['BLACK', 'YELLOW'].flatMap(color => sizes.map(size => `GALE-JACKET-${color}-MEN-${size}`))
 const headers = ['SKU', 'Action', 'Parent/Child', 'Parent SKU', 'Item ID', 'Listing ID', 'Title', 'Category ID', 'Shared-SKU (Trading API)', 'Weight', 'Wt Unit', 'Price (€)', 'Qty', 'Materiale (Material) ○', 'Caratteristiche (Features)', 'Stagione (Season)', 'Image 1', 'Image 2', 'Description']
@@ -58,6 +58,13 @@ describe('legacy eBay workbook import identities and values', () => {
     expect(result.rows.filter(r => r.field === 'price')).toHaveLength(100)
     expect(result.exclusions.filter(r => r.field === 'Price (€)')).toHaveLength(5)
     expect(result.exclusions.filter(r => r.field === 'Qty')).toHaveLength(105)
+  })
+  it('names a custom specific without the header\'s marks or its "(English name)"', () => {
+    const input = fixture(), col = headers.length + 1
+    input.sheet.getCell(1, col).value = 'Colore esterno (Outer colour) ⚠'
+    input.sheet.getCell(2, col).value = 'Nero'
+    const result = parse(input)
+    expect(result.rows.find(r => r.row === 2 && r.field.startsWith('itemSpecifics.'))?.field).toBe('itemSpecifics.Colore esterno')
   })
   it.each(['wrong item', 'wrong parent', 'wrong listing', 'missing target', 'ambiguous account'])('refuses %s without falling back to the primary listing', kind => {
     const input = fixture()

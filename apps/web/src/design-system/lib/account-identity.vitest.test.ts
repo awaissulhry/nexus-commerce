@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { accountDisplayName, channelDisplayName } from './account-identity'
 
 describe('account identity display', () => {
-  it.each(['A1VRHKTGYO1JNU', '123456789012', 'Account 123456789012', 'cmothu9bo0000nz01asw6wx8j'])('hides legacy opaque label %s', (label) => {
+  it.each(['AFXSELLER8BC38', '123456789012', 'Account 123456789012', 'cmothu9bo0000nz01asw6wx8j'])('hides legacy opaque label %s', (label) => {
     expect(accountDisplayName({ channel: 'AMAZON', label })).toBe('Amazon Seller account')
   })
   it('keeps real names', () => {

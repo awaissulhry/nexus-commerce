@@ -116,7 +116,7 @@ shipped for them:
   live strips and post-publish read-backs work.
 - Per-SKU image overrides don't exist on Trading listings — warned + skipped.
 
-Verified live 2026-07-19: MOSS-ALT1 (257628770752) went from 1 gallery pic /
+Verified live 2026-07-19: MOSS-ALT1 (940129320775) went from 1 gallery pic /
 no sets to gallery 3 + Colore Grigio 6 · Verde 4 · Nero 6.
 
 ### Copy images from another listing
@@ -128,7 +128,7 @@ target's axis/values (`copyFromListing.pure.ts`, vitest-covered): Default →
 Default, per-value sets by name; source values missing on the target are
 toasted as skipped; the result lands as UNSAVED buckets — review, swap the
 odd image, Save (or Save & Publish). Verified live: GALE-JACKET →
-GALE-JACKET-ALT1 (256566101420), 16 images, published in one click.
+GALE-JACKET-ALT1 (949285812839), 16 images, published in one click.
 
 ## Variation order on LIVE listings without a publish — 2026-07-20
 

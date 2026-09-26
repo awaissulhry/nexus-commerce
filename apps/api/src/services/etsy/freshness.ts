@@ -61,17 +61,27 @@ export interface EtsyFreshnessCensus {
   neverSynced: number
   /** The oldest `lastSyncedAt` among rows that have one, as an ISO string. */
   oldestAt: string | null
+  /** Why rows are stale, by the refresh's last stamp (F1/F3/F4): no account, missing at Etsy, read failed. */
+  noAccount: number
+  missingAtEtsy: number
+  failed: number
 }
 
 /** A census of how well the six-hour rule is being kept. Pure: the caller does the reading. */
 export function etsyFreshnessCensus(
-  rows: ReadonlyArray<{ lastSyncedAt: Date | null }>,
+  rows: ReadonlyArray<{ lastSyncedAt: Date | null; lastSyncStatus?: string | null }>,
   now: number = Date.now(),
 ): EtsyFreshnessCensus {
   let stale = 0
   let neverSynced = 0
   let oldest: number | null = null
+  let noAccount = 0
+  let missingAtEtsy = 0
+  let failed = 0
   for (const row of rows) {
+    if (row.lastSyncStatus === 'NO_ACCOUNT') noAccount++
+    if (row.lastSyncStatus === 'MISSING') missingAtEtsy++
+    if (row.lastSyncStatus === 'FAILED') failed++
     if (etsyContentIsStale(row.lastSyncedAt, now)) stale++
     if (!row.lastSyncedAt) neverSynced++
     else {
@@ -79,5 +89,5 @@ export function etsyFreshnessCensus(
       if (!Number.isNaN(at) && (oldest === null || at < oldest)) oldest = at
     }
   }
-  return { total: rows.length, stale, neverSynced, oldestAt: oldest === null ? null : new Date(oldest).toISOString() }
+  return { total: rows.length, stale, neverSynced, oldestAt: oldest === null ? null : new Date(oldest).toISOString(), noAccount, missingAtEtsy, failed }
 }

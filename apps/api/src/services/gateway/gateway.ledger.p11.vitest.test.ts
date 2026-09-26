@@ -27,8 +27,8 @@ describe('P1.1 — the ledger row, read back from the table', () => {
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
     ;(await import('./rate.js')).__rateTest.useMemory()
     gateway = await import('./gateway.js')
-    await database.db.query(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "isActive", "authStatus", "displayName", "updatedAt")
-      VALUES ($1, 'shop-live', 'SHOPIFY', true, 'connected', 'Shop', CURRENT_TIMESTAMP), ($1, 'shop-stale', 'SHOPIFY', true, 'needs_reauth', 'Old shop', CURRENT_TIMESTAMP)`, [LEGACY])
+    await database.db.query(`INSERT INTO "ChannelConnection" ("workspaceId", id, "channelType", "externalAccountId", "isActive", "authStatus", "displayName", "updatedAt")
+      VALUES ($1, 'shop-live', 'SHOPIFY', 'fixture-shop-live', true, 'connected', 'Shop', CURRENT_TIMESTAMP), ($1, 'shop-stale', 'SHOPIFY', 'fixture-shop-stale', true, 'needs_reauth', 'Old shop', CURRENT_TIMESTAMP)`, [LEGACY])
   }, 120_000)
   afterAll(async () => {
     vi.unstubAllGlobals()

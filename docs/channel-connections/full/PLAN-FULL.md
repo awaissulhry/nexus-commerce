@@ -3875,7 +3875,7 @@ both themes.**
 - **eBay has no seller identity.** `ebay-auth.service.ts:451` writes the literal
   `"eBay seller (verified)"` because the OAuth scope in use returns no name. MAP.4 must add the
   identity scope, or it cannot reject a duplicate account by sign-in name.
-- **Amazon's label is its merchant id.** `displayName` holds `A1VRHKTGYO1JNU`. Both are surfaced as
+- **Amazon's label is its merchant id.** `displayName` holds `AFXSELLER8BC38`. Both are surfaced as
   `labelIsPlaceholder`, which is the concrete case for MAP.2's `accountLabel`.
 
 ---
@@ -17319,8 +17319,8 @@ I traced it end to end. A duplicate copy has **no child products of its own** �
 
 ```
 GALE-JACKET-ALT1 (master, 0 children)
-  → its ChannelListing.externalListingId = item 256566101420
-    → SharedListingMembership(itemId=256566101420, sku=GALE-JACKET-BLACK-MEN-XL)
+  → its ChannelListing.externalListingId = item 949285812839
+    → SharedListingMembership(itemId=949285812839, sku=GALE-JACKET-BLACK-MEN-XL)
       → productId = the product GALE-JACKET-BLACK-MEN-XL
         → parentId = GALE-JACKET   ← the canonical master
 ```

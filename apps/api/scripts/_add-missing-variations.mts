@@ -27,7 +27,7 @@ for (const p of pool) {
   qtyByProduct.set(p.id, Math.max(0, agg._sum.available ?? 0))
 }
 
-for (const itemId of ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']) {
+for (const itemId of ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']) {
   const mem = await prisma.sharedListingMembership.findMany({ where: { marketplace: 'IT', itemId }, select: { sku: true, price: true } })
   const have = new Set(mem.map((m) => m.sku))
   const price = Number(mem.find((m) => m.price != null)?.price ?? 105)
@@ -47,7 +47,7 @@ for (const itemId of ['257584954808', '256564203510', '256566101420', '256566102
 const app = Fastify({ logger: false })
 await app.register(routes)
 await app.ready()
-for (const itemId of ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']) {
+for (const itemId of ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']) {
   const v = await app.inject({ method: 'GET', url: `/ebay/flat-file/verify-item?itemId=${itemId}&marketplace=IT` })
   const d = v.json() as any
   console.log(`verify ${itemId}: variants=${d.ebayVariantCount} matched=${d.matched}/${d.memberships} missing=${(d.missingOnEbay ?? []).length}`)

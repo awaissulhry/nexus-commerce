@@ -10,9 +10,17 @@ const accountId = 'cmothu9bo0000nz01asw6wx8j'
 const plan = {
   action, workspaceId,
   ...(action === 'amazon-finances' ? {
-    accountId, marketplaceId: 'APJ6JRA9NG5V4', limitation: 'Four legacy rows in this window have no account attribution and are excluded; this cannot establish full money reconciliation.',
+    accountId, marketplaceId: 'APJ6JRA9NG5V4',
+    limitation: 'Orders held without an account link (four legacy rows in this window on 2026-09-20) are reported as unattributed, apart from unmatched, and stay out of cents parity until attributed. Parity measures; it is not a reconciliation or a cutover approval.',
     windowStart: '2026-09-20T00:00:00Z', windowEnd: '2026-09-21T00:00:00Z', dryRun: true,
     calls: ['GET finances/2024-06-19/transactions; at most 50 pages, same window/account on each'],
+    output: {
+      identity: 'txWouldCreate, txWouldDuplicateV0 and duplicateTransactions: provider identity and same-order/type overlap risk, as before.',
+      census: 'Counts by transactionType, transactionStatus, type/status pair and breakdown path; mapping outcomes mapped/counted/refused, with refusals and invariant failures (sums, currency, precision, unknown breakdown) by name; statusChangesWithinRun. No amounts and no identifiers.',
+      parity: 'Per currency and column (amount, grossRevenue, netRevenue, amazonFee, fbaFee, otherFees) for orders matched in this account: equal/different/v0Only/newOnly counts and absolute deltas in exact hundredths. DEFERRED transactions are excluded and counted.',
+      attribution: 'unmatchedTransactions (order not held), unattributedTransactions/unattributedOrders (held, no account link), otherAccountTransactions (held, linked to another account).',
+      writes: 'No finance writes: no FinancialTransaction or Order row. Not zero writes: every Amazon page read through the channel gateway records its ordinary call-ledger/audit, rate-limit and OAuth bookkeeping (see sideEffects). The Finances 2024 writer is not reachable from this path.',
+    },
   } : {
     calls: ['GET commerce/notification/v1/topic', 'GET commerce/notification/v1/destination', 'GET commerce/notification/v1/subscription'],
     maxPagesPerCollection: 20, maximumCollectionPages: 60, oauthAndRetries: 'Canonical app-token requests and bounded gateway retries also apply', subscriptionCoverage: 'APPLICATION token only; USER subscriptions need a separate account-scoped read',

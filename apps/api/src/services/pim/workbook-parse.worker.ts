@@ -79,7 +79,7 @@ async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: n
   const manifest = book.getWorksheet('Nexus workbook')
   if (manifest?.getCell('B2').text === '3' || manifest?.getCell('C2').text) {
     const baseline = await ask<EditingWorkbookBaseline>({ need: 'baseline', exportId: manifest.getCell('C2').text })
-    const parsed = readCatalogWorkbook(book, baseline)
+    const parsed = readCatalogWorkbook(book, baseline, { changesOnly: options.changesOnly })
     if (!parsed) throw new Error('Keep the Nexus workbook manifest intact. Download a new editing workbook.')
     return { kind: 'editing', parsed, expandedBytes }
   }

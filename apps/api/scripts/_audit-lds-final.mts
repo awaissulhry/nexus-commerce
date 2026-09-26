@@ -1,8 +1,8 @@
 const { default: prisma } = await import('../src/db.js')
 
-// ═══ A: itemId 257584954808 — claimed by DE ChannelListing AND IT shared listing? ═══
+// ═══ A: itemId 938554736087 — claimed by DE ChannelListing AND IT shared listing? ═══
 console.log('╔══ A: cross-market itemId collision check ══╗')
-for (const iid of ['257584954808', '257608449467']) {
+for (const iid of ['938554736087', '922402495702']) {
   const cl = await prisma.channelListing.findMany({
     where: { channel: 'EBAY', externalListingId: iid },
     select: { marketplace: true, region: true, listingStatus: true, offerActive: true, updatedAt: true, product: { select: { sku: true } } },

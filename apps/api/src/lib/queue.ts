@@ -151,6 +151,19 @@ export const readCacheQueue: Queue = new Queue('read-cache', {
   },
 })
 
+// P2 (docs/attributes/PLAN.md §4.7) — readiness rebuilt AFTER a bulk edit. One job per family root, deduplicated by
+// jobId "readiness:<rootId>". The durable truth is `ReadinessIndex.pendingSince`; the `readiness-pending` drain cron
+// rebuilds anything this queue missed (workers off, Redis down, a lost job).
+export const readinessQueue: Queue = new Queue('readiness', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 // PIM search read-engine indexer queue. Parallel sibling to readCacheQueue
 // (NOT folded into it) so a Typesense outage can never back up or fail the
 // load-bearing ProductReadCache rebuild. Same jobId-dedupe + 2s debounce
@@ -360,6 +373,7 @@ export async function closeQueue() {
     await outboundSyncQueue.close()
     await channelSyncQueue.close()
     await readCacheQueue.close()
+    await readinessQueue.close()
     await searchIndexQueue.close()
     await bulkJobQueue.close()
     await adsSyncQueue.close()

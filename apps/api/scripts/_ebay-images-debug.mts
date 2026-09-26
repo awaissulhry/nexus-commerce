@@ -7,7 +7,7 @@ const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-t
 
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
-const itemId = '257629891728' // VENTRA primary (has per-colour images)
+const itemId = '983802912991' // VENTRA primary (has per-colour images)
 
 const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">

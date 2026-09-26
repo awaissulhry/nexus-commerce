@@ -3,9 +3,9 @@ vi.mock('../../db.js', () => ({ default: { customAttribute: { findMany: async ()
   { id: 'features', code: 'features', label: 'Features', type: 'text', validation: { shape: 'list' }, options: [], group: { code: 'specifications', label: 'Specifications' } },
   { id: 'numbers', code: 'numbers', label: 'Numbers', type: 'number', validation: { shape: 'list' }, options: [], group: { code: 'specifications', label: 'Specifications' } },
 ] } } }))
-vi.mock('../family-hierarchy.service.js', () => ({ familyHierarchyService: { resolveEffectiveAttributes: async () => [
+vi.mock('../family-hierarchy.service.js', async () => ({ familyHierarchyService: (await import('../../test-support/family-service-mock.js')).familyServiceMock(async () => [
   { attributeId: 'features', required: false, sortOrder: 1 }, { attributeId: 'numbers', required: false, sortOrder: 2 },
-] } }))
+]) }))
 import { familySheetFields } from './family-sheet-schema.js'
 import { buildSheetColumns } from './sheet-columns.service.js'
 import { coerceForShape } from './sheet-values.js'

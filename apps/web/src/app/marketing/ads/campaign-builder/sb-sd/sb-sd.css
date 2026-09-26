@@ -36,7 +36,7 @@
 .h10-sbsd-hint { font-size: 12.5px; color: var(--nds-grey-600); }
 
 /* Payload preview */
-.h10-sbsd-pre { margin: 12px 0 0; background: var(--nds-grey-900); color: var(--nds-grey-150); border-radius: var(--nds-radius-lg); padding: 16px 18px; font-size: 12px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; }
+.h10-sbsd-pre { margin: 12px 0 0; background: var(--nds-grey-900); color: var(--nds-grey-150); border-radius: var(--nds-radius-lg); padding: 16px 18px; font-size: 12px; line-height: 1.55; font-family: var(--nds-font-mono); overflow-x: auto; }
 
 .h10-sbsd-result { font-size: 13px; font-weight: 600; border-radius: var(--nds-radius-md); padding: 12px 14px; }
 .h10-sbsd-result.ok { color: #1d6f42; background: #eef8f2; border: 1px solid #cfe8da; }
@@ -89,7 +89,7 @@
    #d9822b and is 6.31:1 on --nds-warning-text. All that is left here is the 2px
    optical nudge that aligns a 15px box with the first line of a two-line label. */
 .h10-sbsd-search { max-width: 520px; }
-.h10-sbsd-asins { max-width: 520px; min-height: 92px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.h10-sbsd-asins { max-width: 520px; min-height: 92px; font-family: var(--nds-font-mono); font-size: 12.5px; }
 .h10-sbsd-fld { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-width: 520px; }
 .h10-sbsd-fld.wide { max-width: none; }
 .h10-sbsd-flabel { font-size: 12.5px; font-weight: 600; color: var(--nds-grey-900); }

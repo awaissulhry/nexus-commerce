@@ -28,7 +28,18 @@ export interface CronRunOptions {
   triggeredBy?: 'cron' | 'manual'
 }
 
-export type CronHandlerResult = string | { summary: string } | void | undefined
+/**
+ * How a run that did not throw ended. SUCCESS unless the handler says otherwise: a run can finish without
+ * proving what it exists to prove (P1.8's contract run: PARTIAL — some required checks unproven;
+ * NOT_CONFIGURED — nothing could run). Neither is a pass, and the dashboards draw only SUCCESS green.
+ * A throw stays FAILED.
+ */
+export type CronCompletedStatus = 'SUCCESS' | 'PARTIAL' | 'NOT_CONFIGURED'
+/** Every status a run that did not throw can end with — each one is proof the job RAN (overdue-cron alert). */
+export const CRON_COMPLETED_STATUSES: readonly CronCompletedStatus[] = ['SUCCESS', 'PARTIAL', 'NOT_CONFIGURED']
+const COMPLETED_STATUSES: ReadonlySet<string> = new Set<string>(CRON_COMPLETED_STATUSES)
+
+export type CronHandlerResult = string | { summary: string; cronStatus?: CronCompletedStatus } | void | undefined
 
 /**
  * Wrap a cron handler. Inserts a CronRun row in RUNNING state, then
@@ -88,18 +99,20 @@ async function runCronRunInner<T extends CronHandlerResult>(
         : result && typeof result === 'object' && 'summary' in result
           ? result.summary
           : null
+    const requested = result && typeof result === 'object' && 'cronStatus' in result ? result.cronStatus : undefined
+    const status: CronCompletedStatus = requested && COMPLETED_STATUSES.has(requested) ? requested : 'SUCCESS'
     if (runId) {
       try {
         await prisma.cronRun.update({
           where: { id: runId },
           data: {
-            status: 'SUCCESS',
+            status,
             finishedAt: new Date(),
             outputSummary: summary,
           },
         })
       } catch (err) {
-        logger.warn('[cron-observability] failed to mark SUCCESS', {
+        logger.warn(`[cron-observability] failed to mark ${status}`, {
           jobName,
           runId,
           err: err instanceof Error ? err.message : String(err),
@@ -117,6 +130,7 @@ async function runCronRunInner<T extends CronHandlerResult>(
       durationMs: Date.now() - startMs,
       attributes: {
         'cron.jobName': jobName,
+        'cron.status': status,
         'cron.summary': typeof summary === 'string' ? summary : null,
       },
     })

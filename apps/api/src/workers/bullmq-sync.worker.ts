@@ -14,7 +14,7 @@ import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
-import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData } from '../services/outbound-sync.service.js'
+import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData, startAfterAnswer } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { calculateTargetPrice } from '../services/repricer.service.js'
 import { productEventService } from '../services/product-event.service.js'
@@ -386,6 +386,8 @@ async function processOutboundSyncJobInner(job: Job) {
           },
         },
       })
+      // CX (review 2026-09-26) — report-only follow-up (the eBay price read-back) only once the row is written.
+      startAfterAnswer(syncResult)
 
       logger.info(completion.syncStatus === 'SKIPPED' ? 'Sync skipped; nothing sent' : '✅ Sync completed successfully', {
         queueId,

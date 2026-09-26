@@ -160,10 +160,12 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
   routeSdkThroughGateway(client, { connectionId: id ?? null })
   return client
 }
-/** Used by synchronous SDK factories; no process-wide seller or token state. */
-export function amazonSpClient(): any {
+/** Used by synchronous SDK factories; no process-wide seller or token state.
+ *  An explicit account pins the client from its first call (CX A0): a caller that stamps
+ *  or locks by an account must read through that same account, not the resolver's default. */
+export function amazonSpClient(accountId?: string): any {
   const scope = workspaceContext()
-  let pinnedAccountId: string | undefined
+  let pinnedAccountId: string | undefined = accountId
   return new Proxy({}, { get(_target, method) {
     if (method === 'then') return undefined
     return async (...args: any[]) => {

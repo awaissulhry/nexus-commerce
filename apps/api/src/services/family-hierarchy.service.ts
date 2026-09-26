@@ -103,6 +103,32 @@ export class FamilyHierarchyService {
     return mergeFamilyAttributes(chain)
   }
 
+  /**
+   * P3 (docs/attributes/PLAN.md §4.1) — the effective attribute sets of MANY families with one query per hierarchy
+   * LEVEL (at most MAX_DEPTH), not one per family per ancestor. Same chain rules as `walkFamilyChain` (leaf → root,
+   * cycle and depth errors) and the same merge, so each entry equals `resolveEffectiveAttributes(id)`.
+   * Throws for an id that does not exist, as the single form does.
+   */
+  async resolveEffectiveAttributesMany(familyIds: readonly string[]): Promise<Map<string, EffectiveFamilyAttribute[]>> {
+    const nodes = new Map<string, FamilyChainNode>()
+    let wanted = [...new Set(familyIds)]
+    for (let level = 0; wanted.length && level <= MAX_DEPTH; level++) {
+      const found = await this.client.productFamily.findMany({
+        where: { id: { in: wanted } },
+        select: { id: true, parentFamilyId: true, familyAttributes: { select: { attributeId: true, required: true, channels: true, sortOrder: true } } },
+      })
+      for (const family of found) nodes.set(family.id, family)
+      wanted = [...new Set(found.map(f => f.parentFamilyId).filter((id): id is string => !!id && !nodes.has(id)))]
+    }
+    const result = new Map<string, EffectiveFamilyAttribute[]>()
+    for (const familyId of new Set(familyIds)) {
+      const chain = chainFromNodes(familyId, nodes)
+      if (chain.length === 0) throw new Error(`FamilyHierarchyService: family ${familyId} not found`)
+      result.set(familyId, mergeFamilyAttributes(chain))
+    }
+    return result
+  }
+
   /** Walks parentFamilyId from leaf → root. chain[0] is `familyId`,
    *  chain[chain.length-1] is the topmost ancestor. Bounded by
    *  MAX_DEPTH and protected against cycles. */
@@ -150,6 +176,25 @@ export class FamilyHierarchyService {
 
     return chain
   }
+}
+
+/** The walk `walkFamilyChain` does, over nodes already loaded. Same cycle and depth errors, same stop on a missing node. */
+export function chainFromNodes(familyId: string, nodes: ReadonlyMap<string, FamilyChainNode>): FamilyChainNode[] {
+  const chain: FamilyChainNode[] = []
+  const visited = new Set<string>()
+  let currentId: string | null = familyId
+  let depth = 0
+  while (currentId && depth < MAX_DEPTH) {
+    if (visited.has(currentId)) throw new Error(`FamilyHierarchyService: cycle detected at family ${currentId}`)
+    visited.add(currentId)
+    const family = nodes.get(currentId)
+    if (!family) break
+    chain.push(family)
+    currentId = family.parentFamilyId
+    depth++
+  }
+  if (depth >= MAX_DEPTH && currentId) throw new Error(`FamilyHierarchyService: hierarchy depth exceeded ${MAX_DEPTH} starting from ${familyId}`)
+  return chain
 }
 
 /**

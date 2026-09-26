@@ -27,6 +27,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { CRON_COMPLETED_STATUSES } from '../utils/cron-observability.js'
 import { sendEmail } from './email/transport.js'
 
 type Operator = 'gt' | 'gte' | 'lt' | 'lte'
@@ -149,14 +150,21 @@ export function detectOverdueCrons(rows: CronSuccessRow[], now: number): string[
   return overdue
 }
 
-async function metricOverdueCrons(_ctx: MetricContext): Promise<number> {
-  // 14d of successful runs is enough to infer cadence for daily/weekly crons
+/** The crons overdue now. Exported for its test: which rows count as "it ran" is the whole question. */
+export async function overdueCronJobs(now: number = Date.now()): Promise<string[]> {
+  // 14d of completed runs is enough to infer cadence for daily/weekly crons
   // while bounding the row count. Select only what detectOverdueCrons needs.
+  // P1.8 — a run that finished PARTIAL or NOT_CONFIGURED still RAN on schedule: counting SUCCESS alone made
+  // such a job look silent. FAILED / RUNNING prove nothing about cadence.
   const rows = await prisma.cronRun.findMany({
-    where: { status: 'SUCCESS', startedAt: { gte: new Date(Date.now() - 14 * 24 * HOUR) } },
+    where: { status: { in: [...CRON_COMPLETED_STATUSES] }, startedAt: { gte: new Date(now - 14 * 24 * HOUR) } },
     select: { jobName: true, startedAt: true },
   })
-  return detectOverdueCrons(rows, Date.now()).length
+  return detectOverdueCrons(rows, now)
+}
+
+async function metricOverdueCrons(_ctx: MetricContext): Promise<number> {
+  return (await overdueCronJobs()).length
 }
 
 const METRIC_FNS: Record<string, (ctx: MetricContext) => Promise<number>> = {

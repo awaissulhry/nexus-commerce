@@ -6,7 +6,7 @@ import { MediaStrip } from './MediaStrip'
 describe('Mixed media rendering', () => {
   it('uses explicit playback, alternative video sources, captions and escaped transcripts', () => {
     const html = renderToStaticMarkup(h(MediaPreview, { type: 'VIDEO', url: 'https://cdn.example/movie.mp4', label: 'Jacket demonstration', sources: [{ url: 'https://cdn.example/movie.webm', mimeType: 'video/webm' }, { url: 'https://cdn.example/movie.mp4', mimeType: 'video/mp4' }], captions: [{ url: 'https://cdn.example/it.vtt', label: 'Italiano', language: 'it', default: true }], transcript: '<script>content</script>' }))
-    expect(html).toContain('controls=""'); expect(html).toContain('playsinline=""'); expect(html).not.toContain('autoplay')
+    expect(html).toContain('controls=""'); expect(html).toMatch(/playsinline=""/i); expect(html).not.toMatch(/autoplay/i)
     expect(html).toContain('type="video/webm"'); expect(html).toContain('srcLang="it"'); expect(html).toContain('&lt;script&gt;content&lt;/script&gt;')
   })
   it('retains safe external-video and unknown-file links without loading an iframe', () => {

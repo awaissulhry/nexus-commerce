@@ -147,7 +147,7 @@ function fixtureCells(row: PreviewRowInput, coord: MatrixCoordinate, pool: numbe
   }
   return {
     listingId: `${row.id}:${coord.key}`, version: 1 + (h % 4),
-    listing: serves('listing') ? { state: listingState, externalId: parent ? (coord.channel === 'AMAZON' ? 'B0F7J163XJ' : coord.channel === 'EBAY' ? '257584954808' : null) : null, detail: parent ? '1 listing' : listingState === 'listed' && coord.channel === 'AMAZON' && h % 6 === 0 ? 'not buyable' : null, published: listingState === 'listed' } : null,
+    listing: serves('listing') ? { state: listingState, externalId: parent ? (coord.channel === 'AMAZON' ? 'B0FXD0620C' : coord.channel === 'EBAY' ? '938554736087' : null) : null, detail: parent ? '1 listing' : listingState === 'listed' && coord.channel === 'AMAZON' && h % 6 === 0 ? 'not buyable' : null, published: listingState === 'listed' } : null,
     fulfilment: serves('fulfilment') ? { method, source: h % 4 === 0 ? 'derived' : 'set', guard: coord.channel === 'AMAZON' ? (fbaRow ? 'FBA' : h % 19 === 0 ? 'FBA' : 'FBM') : 'FBM', reported: coord.channel === 'AMAZON' && h % 23 === 0 ? 'MFN' : null } : null,
     sync,
     queue: serves('syncState') ? (sync?.kind === 'PAUSED' ? { state: 'paused', at: null, reason: null, syncType: null, via: sync.via } : sync?.kind === 'FBA_EXCLUDED' ? { state: 'never', at: null, reason: null, syncType: null, via: null } : { state: pick(h >>> 5, QUEUE), at: new Date(Date.UTC(2026, 8, 13, 5, (h % 50), 0)).toISOString(), reason: pick(h >>> 5, QUEUE) === 'failed' ? 'eBay: 25002 — the item is not active on this site' : pick(h >>> 5, QUEUE) === 'dead' ? 'MAX_RETRIES_EXCEEDED after 3 attempts' : null, syncType: 'QUANTITY_UPDATE', via: null }) : null,

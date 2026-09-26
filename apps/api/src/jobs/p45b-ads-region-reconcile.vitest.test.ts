@@ -280,6 +280,6 @@ describe('reconcileAdsRegions (P4.5b)', () => {
   it('is scheduled, not registry-only (P4.2d)', () => {
     const job = read('jobs/p45b-ads-region-reconcile.job.ts')
     expect(job).toContain("import cron from '../lib/cron/clustered.js'")
-    expect(read('index.ts')).toContain('startAdsRegionReconcileCron();')
+    expect(read('runtime/scheduler.ts')).toContain('startAdsRegionReconcileCron();')
   })
 })

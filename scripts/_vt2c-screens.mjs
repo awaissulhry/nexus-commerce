@@ -2,7 +2,7 @@
  * VT.2c — the three screen readings this lane owes, in ONE signed-in pass.
  *
  * (a) `GALE-JACKET` · eBay·IT · the mapping dock, section 1 measured against spec §4.4 line by line.
- *     READ-ONLY: item 257584954808 is LIVE. The before/after row geometry is recovered IN THE BROWSER
+ *     READ-ONLY: item 938554736087 is LIVE. The before/after row geometry is recovered IN THE BROWSER
  *     (VP.4's own `.nds-vp-dock-*` rules are still in the stylesheet, so the pre-swap row can be
  *     rendered beside the new one and measured) — never by reverting a shared file (AAA bar #11,
  *     `reference_recover_the_arm_you_cannot_observe`).

@@ -9,7 +9,7 @@
 
 | Channel | Status | Notes |
 | --- | --- | --- |
-| **Amazon SP-API** | ✅ OK | LWA refresh works. Seller `A1VRHKTGYO1JNU` registered in **18 marketplaces** including Amazon.it (`APJ6JRA9NG5V4`), .de, .es, .fr, .co.uk + 8 others + 5 "Non-Amazon" (off-Amazon channels). Backfill ready. |
+| **Amazon SP-API** | ✅ OK | LWA refresh works. Seller `AFXSELLER8BC38` registered in **18 marketplaces** including Amazon.it (`APJ6JRA9NG5V4`), .de, .es, .fr, .co.uk + 8 others + 5 "Non-Amazon" (off-Amazon channels). Backfill ready. |
 | **eBay OAuth** | ❌ **HTTP 401 invalid_client** | `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET` in .env do not authenticate against eBay's token endpoint. Either creds rotated or env mismatch (production vs sandbox). **Needs operator fix before eBay backfill.** |
 | **Shopify** | ⚠ Not configured | No env vars, no ChannelConnection rows. Memory says Shopify is in scope — gap to fill if Xavia has a live store. |
 

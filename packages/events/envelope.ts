@@ -14,9 +14,9 @@
 //                 consumers migrate independently. That is the whole point of
 //                 API-first: nobody is forced to redeploy in lockstep.
 //   subject       The aggregate this event is ABOUT (productId, orderId, …).
-//                 It doubles as the partition key: ordering is guaranteed per
-//                 subject, which is exactly the guarantee stock arithmetic
-//                 needs and nothing more. Derived by the catalogue's `subject`
+//                 It doubles as the partition key. Parallel relay/consumer
+//                 execution may reorder events; consumers use current state or
+//                 aggregate revisions. Derived by the catalogue's `subject`
 //                 extractor, never hand-passed at a call site.
 //   accountId     Tenant scope. Null means platform-wide. Consumers filter on
 //                 this before anything else — a cross-tenant leak through the

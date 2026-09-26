@@ -440,7 +440,7 @@ Ranked as in the audit. The A7 F-numbers map onto these S-numbers.
 ### What production showed (A0)
 Read-only checks on 2026-08-28/29. Web: nexus-commerce-three.vercel.app; API: Railway.
 - Channels page: [A0]
-  - Amazon "Env-managed" (seller A1VRHKTGYO1JNU).
+  - Amazon "Env-managed" (seller AFXSELLER8BC38).
   - eBay "Connected" (xaviaracing, token expires in 1h 12m, last sync 47m ago).
   - Shopify/Woo/Etsy "Coming soon" with a disabled "Connector deferred" button.
 - AccountsPanel: Amazon 1 (env, "Healthy · no name from the channel"); eBay 2: xaviaracing (primary) and motovento. [A0]

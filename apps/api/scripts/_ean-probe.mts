@@ -5,7 +5,7 @@ const { callTradingApi, siteIdForMarket, escapeXml } = await import('../src/serv
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
 const res = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
-<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>256566101420</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>949285812839</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
 const m = res.raw.match(/<VariationProductListingDetails>[\s\S]*?<\/VariationProductListingDetails>/)
 console.log('sample VariationProductListingDetails:', m ? m[0].slice(0, 200) : 'NONE FOUND')
 await prisma.$disconnect(); process.exit(0)

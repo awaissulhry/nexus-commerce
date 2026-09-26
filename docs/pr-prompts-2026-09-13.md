@@ -62,7 +62,7 @@ have day-one work; stagger the starts by a few minutes so the first claims land 
    the terminal). Local web `:3000` hits whatever `NEXT_PUBLIC_API_URL` says — read the API origin in the network
    panel before any interaction that writes; assume production until proven otherwise. Fixtures: the XAVIA family
    only (GALE-JACKET `cmokmy3a40078pm0p1fvnu523`, MISANO, AIREON, XRI01) and disposable DRAFT rows under it; GALE's
-   eBay·IT item 257584954808 and ASIN B0F7J163XJ are LIVE. **Channel-reaching writes: NONE in this programme** —
+   eBay·IT item 938554736087 and ASIN B0FXD0620C are LIVE. **Channel-reaching writes: NONE in this programme** —
    every Wave 0–3 verb is local-reach and `verify` is a READ. Announce a fixture write in the ledger BEFORE it; restore
    by value, not by row; prove a rehearsal's write is reversible before it (AuditLog is append-only).
 5. **Never `git checkout --`, `git stash`, `git reset`, `git restore`, `git add -A`, `--amend`** on the shared tree —

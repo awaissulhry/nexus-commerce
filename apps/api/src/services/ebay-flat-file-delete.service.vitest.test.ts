@@ -643,7 +643,7 @@ describe('per-target isolation', () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // remove-channel-listing — NEVER end a listing that still belongs to someone
-// else. A DE row was found carrying the LIVE IT ItemID 257584954808; deleting
+// else. A DE row was found carrying the LIVE IT ItemID 938554736087; deleting
 // it would have ended the live IT GALE listing (21 IT rows + 20 ACTIVE IT
 // memberships hang off that ItemID).
 // ═══════════════════════════════════════════════════════════════════════════
@@ -681,15 +681,15 @@ describe('remove-channel-listing — delist safety guards', () => {
 
   it('does NOT end an ItemID still referenced by another market row — reports it instead', async () => {
     const prisma = basePrisma({
-      rowsToDelete: [{ externalListingId: '257584954808' }],   // the DE row…
-      survivingListings: [{ externalListingId: '257584954808' }], // …still live in IT
+      rowsToDelete: [{ externalListingId: '938554736087' }],   // the DE row…
+      survivingListings: [{ externalListingId: '938554736087' }], // …still live in IT
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
       { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
     expect(res.delisted).toBe(false)
-    expect(res.delistSkippedShared).toEqual(['257584954808'])
+    expect(res.delistSkippedShared).toEqual(['938554736087'])
   })
 
   it('does NOT end an ItemID still held by ACTIVE pool memberships', async () => {

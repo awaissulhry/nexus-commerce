@@ -256,7 +256,7 @@ export function channelDisplayName(channel: string): string {
  * Derived from the published ID, never from the DECLARED axes. `family-projection.service.ts` documents why the
  * axis LOCK cannot be derived from the declared set (it equals the current set by construction, so every
  * coordinate would read as locked). WHETHER the coordinate is live is a different question, and the external id
- * is real evidence for it: `GALE-JACKET` holds B0F7J163XJ on Amazon-IT and item 257584954808 on eBay-IT, while
+ * is real evidence for it: `GALE-JACKET` holds B0FXD0620C on Amazon-IT and item 938554736087 on eBay-IT, while
  * its eBay-DE, Shopify and Etsy rows are DRAFT with no id at all.
  */
 export function isLiveCoordinate(listing: VariationListingFacts | null): boolean {
@@ -413,7 +413,7 @@ export function ebayAxisSet(
  *
  * Measured on the local catalogue before the change (`apps/api/scripts/_vt1-ebay-precedence.mts`, 38 eBay parent
  * listing rows): the PUSH's declared axes are identical on **38 of 38** rows; the family-axes READ changes on
- * exactly **1** - GALE-JACKET eBay-IT (ACTIVE, item 257584954808) read `["Color","Size"]` from the listing column
+ * exactly **1** - GALE-JACKET eBay-IT (ACTIVE, item 938554736087) read `["Color","Size"]` from the listing column
  * while the push sent `["Colore","Taglia"]`, and after this change the read agrees with what ships.
  *
  * Returns `null` (not `[]`) when nothing is declared, because both callers distinguish "no declared axes, discover

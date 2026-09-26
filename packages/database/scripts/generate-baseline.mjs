@@ -18,7 +18,7 @@
  * production included, keep applying the history exactly as before.
  *
  * 🟠 ONE PASS, and an earlier version of this file wrongly had two.
- * `prisma migrate diff --from-url <db> --to-schema-datamodel` reports 420 `ALTER COLUMN
+ * `prisma migrate diff --from-url <db> --to-schema` reports 420 `ALTER COLUMN
  * "workspaceId" SET DEFAULT NULLIF(current_setting(...))` statements against a database that
  * ALREADY HAS them: Postgres stores the expression normalised, with `::text` casts, and Prisma does
  * not recognise it as its own. Reading that residual as "phase one omitted these" was wrong — a
@@ -52,7 +52,7 @@ const HEADER = `-- GENERATED — do not hand-edit.
 
 const sql = execFileSync(
   'npx',
-  ['prisma', 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'],
+  ['prisma', 'migrate', 'diff', '--from-empty', '--to-schema', 'prisma/schema.prisma', '--script'],
   { cwd: pkgRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
 )
 

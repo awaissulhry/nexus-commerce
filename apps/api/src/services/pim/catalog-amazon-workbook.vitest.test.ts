@@ -333,10 +333,10 @@ describe('CFI review fixes (2026-09-25)', () => {
     clean(parsed, result)
   })
   it('2 — two file SKUs on one Nexus listing: every row of both refused, no rows, one clear sentence', async () => {
-    const parsed = await template(keys, [['85-A8DQ-UNYF', 'partial_update', 'COAT', 'Giacca', 'ASIN', 'B0BSXLDDSL'], ['MISANO-S', 'partial_update', 'COAT', 'Giacca', 'ASIN', 'B0BSXLDDSL']])
+    const parsed = await template(keys, [['85-A8DQ-UNYF', 'partial_update', 'COAT', 'Giacca', 'ASIN', 'B0FXC60C5F'], ['MISANO-S', 'partial_update', 'COAT', 'Giacca', 'ASIN', 'B0FXC60C5F']])
     const result = mapAmazonWorkbook(parsed, specs, { ...base, identities: new Map([['85-A8DQ-UNYF', { sku: 'MISANO-S', via: 'asin' as const }], ['MISANO-S', { sku: 'MISANO-S', via: 'sku' as const }]]) })
     expect(result.rows).toEqual([])
-    expect(result.issues.map(i => i.message)).toEqual(Array(2).fill(expect.stringContaining('two seller SKUs (85-A8DQ-UNYF, MISANO-S; ASIN B0BSXLDDSL)')))
+    expect(result.issues.map(i => i.message)).toEqual(Array(2).fill(expect.stringContaining('two seller SKUs (85-A8DQ-UNYF, MISANO-S; ASIN B0FXC60C5F)')))
     expect(result.ledger.every(e => e.outcome === 'refused')).toBe(true)
     clean(parsed, result)
   })

@@ -303,6 +303,10 @@ CREATE TABLE "CustomAttribute" (
     "localizable" BOOLEAN NOT NULL DEFAULT false,
     "scope" TEXT NOT NULL DEFAULT 'global',
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "semanticKey" TEXT,
+    "placement" TEXT NOT NULL DEFAULT 'shared',
+    "placementChannels" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -318,6 +322,8 @@ CREATE TABLE "AttributeOption" (
     "label" TEXT NOT NULL,
     "metadata" JSONB,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "synonyms" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "archivedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -2341,6 +2347,24 @@ CREATE TABLE "PasswordResetToken" (
 );
 
 -- CreateTable
+CREATE TABLE "CommandReceipt" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "scope" TEXT NOT NULL,
+    "keyHash" TEXT NOT NULL,
+    "requestHash" TEXT NOT NULL,
+    "actorUserId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "httpStatus" INTEGER,
+    "response" JSONB,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CommandReceipt_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "WebhookEvent" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -2360,6 +2384,12 @@ CREATE TABLE "WebhookEvent" (
     "attempts" INTEGER NOT NULL DEFAULT 0,
     "deliveries" INTEGER NOT NULL DEFAULT 0,
     "nextAttemptAt" TIMESTAMP(3),
+    "leaseToken" TEXT,
+    "leaseUntil" TIMESTAMP(3),
+    "processingToken" TEXT,
+    "processingUntil" TIMESTAMP(3),
+    "rawBody" BYTEA,
+    "verificationHeaders" JSONB,
     "signatureOk" BOOLEAN,
     "verifiedBy" TEXT,
     "payloadDigest" TEXT,
@@ -2368,6 +2398,64 @@ CREATE TABLE "WebhookEvent" (
     "archiveUri" TEXT,
 
     CONSTRAINT "WebhookEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EbayNoticeQuarantine" (
+    "id" TEXT NOT NULL,
+    "environment" TEXT NOT NULL,
+    "signatureOk" BOOLEAN NOT NULL DEFAULT false,
+    "externalId" TEXT NOT NULL,
+    "topic" TEXT NOT NULL,
+    "subjectHash" TEXT,
+    "firstOwnerWorkspaceId" TEXT,
+    "payloadEnc" TEXT,
+    "payloadKeyId" TEXT,
+    "payloadDigest" TEXT NOT NULL,
+    "verificationKeyId" TEXT,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastReceivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deliveries" INTEGER NOT NULL DEFAULT 1,
+    "reason" TEXT NOT NULL,
+    "resolvedWorkspaceId" TEXT,
+    "resolvedReceiptId" TEXT,
+    "resolvedAt" TIMESTAMP(3),
+    "reviewAttempts" INTEGER NOT NULL DEFAULT 0,
+    "reviewNextAt" TIMESTAMP(3),
+    "reviewedAt" TIMESTAMP(3),
+    "reviewOutcome" TEXT,
+
+    CONSTRAINT "EbayNoticeQuarantine_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ErasureRequest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "quarantineId" TEXT,
+    "evidenceOrderId" TEXT,
+    "channel" TEXT NOT NULL DEFAULT 'EBAY',
+    "environment" TEXT NOT NULL,
+    "matchBasis" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "decidedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ErasureRequest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EbayQuarantineMaintenanceAudit" (
+    "operationId" UUID NOT NULL,
+    "quarantineId" TEXT NOT NULL,
+    "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sessionUser" TEXT NOT NULL,
+    "oldKeyId" TEXT NOT NULL,
+    "newKeyId" TEXT NOT NULL,
+    "oldCipherDigest" TEXT NOT NULL,
+    "newCipherDigest" TEXT NOT NULL,
+
+    CONSTRAINT "EbayQuarantineMaintenanceAudit_pkey" PRIMARY KEY ("operationId","quarantineId")
 );
 
 -- CreateTable
@@ -3020,6 +3108,7 @@ CREATE TABLE "ChannelConnection" (
     "consecutiveFailures" INTEGER NOT NULL DEFAULT 0,
     "refreshLeaseUntil" TIMESTAMP(3),
     "refreshLeaseOwner" TEXT,
+    "grantVersion" INTEGER NOT NULL DEFAULT 0,
     "identity" JSONB,
     "apiVersion" TEXT,
 
@@ -8155,6 +8244,71 @@ CREATE TABLE "AmazonTemplateVault" (
 );
 
 -- CreateTable
+CREATE TABLE "ChannelMappingSet" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "formKind" TEXT NOT NULL,
+    "formKey" TEXT NOT NULL,
+    "version" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "templateIdentifier" TEXT,
+    "templateVersion" TEXT,
+    "language" TEXT,
+    "layout" JSONB,
+    "keyFingerprint" TEXT NOT NULL,
+    "basedOnId" TEXT,
+    "source" TEXT NOT NULL,
+    "notes" TEXT,
+    "createdBy" TEXT,
+    "activatedAt" TIMESTAMP(3),
+    "activatedBy" TEXT,
+    "retiredAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ChannelMappingSet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelMappingField" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "setId" TEXT NOT NULL,
+    "channelKey" TEXT NOT NULL,
+    "columnKey" TEXT,
+    "label" TEXT,
+    "aliases" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "productTypes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "requirement" TEXT,
+    "templateRequirement" TEXT,
+    "targetKind" TEXT NOT NULL,
+    "targetKey" TEXT,
+    "transform" JSONB NOT NULL DEFAULT '[]',
+    "direction" TEXT NOT NULL DEFAULT 'both',
+    "state" TEXT NOT NULL,
+    "reason" TEXT,
+    "decidedBy" TEXT NOT NULL DEFAULT 'rule',
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "ChannelMappingField_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ChannelMappingUse" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "setId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "reference" TEXT,
+    "detail" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ChannelMappingUse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonFamilyWorkbook" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9269,6 +9423,48 @@ CREATE TABLE "StockPoolLink" (
 );
 
 -- CreateTable
+CREATE TABLE "EtsyReceiptIngest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "activatedAt" TIMESTAMP(3) NOT NULL DEFAULT date_trunc('second'::text, clock_timestamp()),
+    "cursorUpdatedAt" TIMESTAMP(3),
+    "cursorReceiptId" TEXT,
+    "scanUpdatedAt" TIMESTAMP(3),
+    "scanCreatedThrough" TIMESTAMP(3),
+    "scanExpectedCount" INTEGER,
+    "scanOffset" INTEGER NOT NULL DEFAULT 0,
+    "leaseToken" TEXT,
+    "leaseUntil" TIMESTAMP(3),
+    "lastPollStartedAt" TIMESTAMP(3),
+    "lastPollSucceededAt" TIMESTAMP(3),
+    "lastPollStatus" TEXT,
+    "lastPollError" TEXT,
+    "backlog" BOOLEAN NOT NULL DEFAULT false,
+    "lastPollCounts" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "EtsyReceiptIngest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EtsyReceiptRefusal" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "receiptId" TEXT NOT NULL,
+    "receiptVersion" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "path" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EtsyReceiptRefusal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "StockPoolTask" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9340,6 +9536,7 @@ CREATE TABLE "ReadinessIndex" (
     "sortTitle" TEXT,
     "sortDescription" TEXT,
     "computedAt" TIMESTAMP(3) NOT NULL,
+    "pendingSince" TIMESTAMP(3),
 
     CONSTRAINT "ReadinessIndex_pkey" PRIMARY KEY ("id")
 );
@@ -9465,6 +9662,9 @@ CREATE INDEX "CustomAttribute_workspaceId_idx" ON "CustomAttribute"("workspaceId
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CustomAttribute_workspace_code_key" ON "CustomAttribute"("workspaceId", "code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CustomAttribute_workspace_semanticKey_key" ON "CustomAttribute"("workspaceId", "semanticKey");
 
 -- CreateIndex
 CREATE INDEX "AttributeOption_attributeId_idx" ON "AttributeOption"("attributeId");
@@ -10508,10 +10708,19 @@ CREATE INDEX "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId");
 CREATE INDEX "PasswordResetToken_expiresAt_idx" ON "PasswordResetToken"("expiresAt");
 
 -- CreateIndex
+CREATE INDEX "CommandReceipt_workspaceId_expiresAt_idx" ON "CommandReceipt"("workspaceId", "expiresAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CommandReceipt_workspaceId_scope_keyHash_key" ON "CommandReceipt"("workspaceId", "scope", "keyHash");
+
+-- CreateIndex
 CREATE INDEX "WebhookEvent_isProcessed_idx" ON "WebhookEvent"("isProcessed");
 
 -- CreateIndex
 CREATE INDEX "WebhookEvent_channel_idx" ON "WebhookEvent"("channel");
+
+-- CreateIndex
+CREATE INDEX "WebhookEvent_channel_externalId_idx" ON "WebhookEvent"("channel", "externalId");
 
 -- CreateIndex
 CREATE INDEX "WebhookEvent_channel_providerTimestamp_idx" ON "WebhookEvent"("channel", "providerTimestamp");
@@ -10527,6 +10736,36 @@ CREATE INDEX "WebhookEvent_workspaceId_idx" ON "WebhookEvent"("workspaceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "WebhookEvent_channel_externalId_key" ON "WebhookEvent"("workspaceId", "channel", "externalId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EbayNoticeQuarantine_resolvedReceiptId_key" ON "EbayNoticeQuarantine"("resolvedReceiptId");
+
+-- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_subjectHash_receivedAt_idx" ON "EbayNoticeQuarantine"("subjectHash", "receivedAt");
+
+-- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_firstOwnerWorkspaceId_resolvedAt_idx" ON "EbayNoticeQuarantine"("firstOwnerWorkspaceId", "resolvedAt");
+
+-- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_topic_reviewedAt_reviewNextAt_idx" ON "EbayNoticeQuarantine"("topic", "reviewedAt", "reviewNextAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EbayNoticeQuarantine_environment_signatureOk_externalId_key" ON "EbayNoticeQuarantine"("environment", "signatureOk", "externalId");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_workspaceId_status_createdAt_idx" ON "ErasureRequest"("workspaceId", "status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_evidenceOrderId_idx" ON "ErasureRequest"("evidenceOrderId");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_quarantineId_status_idx" ON "ErasureRequest"("quarantineId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ErasureRequest_workspace_quarantine_key" ON "ErasureRequest"("workspaceId", "quarantineId");
+
+-- CreateIndex
+CREATE INDEX "EbayQuarantineMaintenanceAudit_quarantineId_recordedAt_idx" ON "EbayQuarantineMaintenanceAudit"("quarantineId", "recordedAt");
 
 -- CreateIndex
 CREATE INDEX "ChannelLiveImage_productId_channel_idx" ON "ChannelLiveImage"("productId", "channel");
@@ -13721,6 +13960,33 @@ CREATE INDEX "AmazonTemplateVault_workspaceId_idx" ON "AmazonTemplateVault"("wor
 CREATE UNIQUE INDEX "AmazonTemplateVault_workspace_templateIdentifier_key" ON "AmazonTemplateVault"("workspaceId", "templateIdentifier");
 
 -- CreateIndex
+CREATE INDEX "ChannelMappingSet_workspaceId_idx" ON "ChannelMappingSet"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingSet_channel_marketplace_formKind_formKey_stat_idx" ON "ChannelMappingSet"("channel", "marketplace", "formKind", "formKey", "status");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingSet_templateIdentifier_idx" ON "ChannelMappingSet"("templateIdentifier");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelMappingSet_workspaceId_channel_marketplace_formKind__key" ON "ChannelMappingSet"("workspaceId", "channel", "marketplace", "formKind", "formKey", "version");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingField_setId_idx" ON "ChannelMappingField"("setId");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingField_workspaceId_idx" ON "ChannelMappingField"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelMappingField_workspaceId_setId_channelKey_key" ON "ChannelMappingField"("workspaceId", "setId", "channelKey");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingUse_setId_createdAt_idx" ON "ChannelMappingUse"("setId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ChannelMappingUse_workspaceId_idx" ON "ChannelMappingUse"("workspaceId");
+
+-- CreateIndex
 CREATE INDEX "AmazonFamilyWorkbook_marketplace_idx" ON "AmazonFamilyWorkbook"("marketplace");
 
 -- CreateIndex
@@ -14222,6 +14488,21 @@ CREATE INDEX "StockPoolLink_productId_idx" ON "StockPoolLink"("productId");
 CREATE INDEX "StockPoolLink_workspaceId_idx" ON "StockPoolLink"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "EtsyReceiptIngest_workspaceId_idx" ON "EtsyReceiptIngest"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EtsyReceiptIngest_connectionId_key" ON "EtsyReceiptIngest"("workspaceId", "connectionId");
+
+-- CreateIndex
+CREATE INDEX "EtsyReceiptRefusal_connectionId_createdAt_idx" ON "EtsyReceiptRefusal"("connectionId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "EtsyReceiptRefusal_workspaceId_idx" ON "EtsyReceiptRefusal"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EtsyReceiptRefusal_version_code_key" ON "EtsyReceiptRefusal"("workspaceId", "connectionId", "receiptId", "receiptVersion", "code");
+
+-- CreateIndex
 CREATE INDEX "StockPoolTask_workspaceId_claimedAt_createdAt_idx" ON "StockPoolTask"("workspaceId", "claimedAt", "createdAt");
 
 -- CreateIndex
@@ -14256,6 +14537,9 @@ CREATE INDEX "ReadinessIndex_productId_idx" ON "ReadinessIndex"("productId");
 
 -- CreateIndex
 CREATE INDEX "ReadinessIndex_workspaceId_idx" ON "ReadinessIndex"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ReadinessIndex_workspaceId_pendingSince_idx" ON "ReadinessIndex"("workspaceId", "pendingSince");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");
@@ -14535,6 +14819,15 @@ ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedByUserId_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "UserProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EbayNoticeQuarantine" ADD CONSTRAINT "EbayNoticeQuarantine_resolvedReceiptId_fkey" FOREIGN KEY ("resolvedReceiptId") REFERENCES "WebhookEvent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ErasureRequest" ADD CONSTRAINT "ErasureRequest_quarantineId_fkey" FOREIGN KEY ("quarantineId") REFERENCES "EbayNoticeQuarantine"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ErasureRequest" ADD CONSTRAINT "ErasureRequest_evidenceOrderId_fkey" FOREIGN KEY ("evidenceOrderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChannelLiveImage" ADD CONSTRAINT "ChannelLiveImage_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -15146,6 +15439,12 @@ ALTER TABLE "SharedListingMembership" ADD CONSTRAINT "SharedListingMembership_ch
 ALTER TABLE "SyncChannelPolicy" ADD CONSTRAINT "SyncChannelPolicy_channelConnectionId_fkey" FOREIGN KEY ("channelConnectionId") REFERENCES "ChannelConnection"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ChannelMappingField" ADD CONSTRAINT "ChannelMappingField_setId_fkey" FOREIGN KEY ("setId") REFERENCES "ChannelMappingSet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ChannelMappingUse" ADD CONSTRAINT "ChannelMappingUse_setId_fkey" FOREIGN KEY ("setId") REFERENCES "ChannelMappingSet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "SavedReportVersion" ADD CONSTRAINT "SavedReportVersion_savedReportId_fkey" FOREIGN KEY ("savedReportId") REFERENCES "SavedReport"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -15255,6 +15554,12 @@ ALTER TABLE "StockPoolLink" ADD CONSTRAINT "StockPoolLink_catalogLinkId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "StockPoolLink" ADD CONSTRAINT "StockPoolLink_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EtsyReceiptIngest" ADD CONSTRAINT "EtsyReceiptIngest_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EtsyReceiptRefusal" ADD CONSTRAINT "EtsyReceiptRefusal_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "StockPoolTask" ADD CONSTRAINT "StockPoolTask_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -76,7 +76,7 @@ export function ContactMeasurements({ contactId, measurements, canManage, onChan
               </div>
               {entries.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "4px 14px", fontSize: 12.5 }}>
-                  {entries.map((e) => (<div key={e.key} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px dotted var(--nds-border-subtle)", padding: "2px 0" }}><span style={{ color: "var(--nds-text-3)" }}>{e.key}</span><span style={{ fontWeight: 600, fontFamily: "ui-monospace, monospace" }}>{e.value}</span></div>))}
+                  {entries.map((e) => (<div key={e.key} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px dotted var(--nds-border-subtle)", padding: "2px 0" }}><span style={{ color: "var(--nds-text-3)" }}>{e.key}</span><span style={{ fontWeight: 600, fontFamily: "var(--nds-font-mono)" }}>{e.value}</span></div>))}
                 </div>
               )}
               {p.fitNotes && <div style={{ fontSize: 12, color: "var(--nds-text-2)", marginTop: 6, fontStyle: "italic" }}>{p.fitNotes}</div>}
@@ -107,7 +107,7 @@ export function ContactMeasurements({ contactId, measurements, canManage, onChan
                 {rows.map((r, i) => (
                   <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 110px 28px", gap: 6, alignItems: "center" }}>
                     <input value={r.key} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} placeholder="Chest, Waist, Sleeve…" style={inp} />
-                    <input value={r.value} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} placeholder="cm" style={{ ...inp, fontFamily: "ui-monospace, monospace" }} />
+                    <input value={r.value} onChange={(e) => setRows((xs) => xs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} placeholder="cm" style={{ ...inp, fontFamily: "var(--nds-font-mono)" }} />
                     <button type="button" onClick={() => setRows((xs) => xs.filter((_, j) => j !== i))} style={{ border: "1px solid var(--nds-border)", borderRadius: 7, background: "var(--nds-surface)", cursor: "pointer", height: 30, display: "grid", placeItems: "center", color: "var(--nds-text-3)" }}><X size={13} /></button>
                   </div>
                 ))}

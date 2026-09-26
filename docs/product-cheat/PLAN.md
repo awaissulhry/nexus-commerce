@@ -6303,8 +6303,8 @@ and requires the body).
 
 | Door | Result |
 |---|---|
-| **Amazon SP-API** (account `cmothu9bo…`, OAuth, `connected`) | `getListingsItem` `GALE-JACKET-BLACK-MEN-S` on Amazon·IT → **ASIN `B0BMS5B768` = the stored ASIN**, status `DISCOVERABLE` |
-| **eBay Trading** (account `cmr4aaqb…`, OAuth, `connected`) | `GetItem 256564203510` with the account's user token → **`Success`**, the same ItemID back, `Active`, 473-byte body |
+| **Amazon SP-API** (account `cmothu9bo…`, OAuth, `connected`) | `getListingsItem` `GALE-JACKET-BLACK-MEN-S` on Amazon·IT → **ASIN `B0FX06FC3A` = the stored ASIN**, status `DISCOVERABLE` |
+| **eBay Trading** (account `cmr4aaqb…`, OAuth, `connected`) | `GetItem 913270132587` with the account's user token → **`Success`**, the same ItemID back, `Active`, 473-byte body |
 
 🟠 **First run could not measure** (stated): both calls stopped with *"No ChannelSpec registered"* — the probe had not loaded
 the connector registry the API loads at boot (`index.ts:192`). Added; the second run is the result. No listing was written.
@@ -6359,7 +6359,7 @@ passes Amazon's own check. The write answers `ACCEPTED` with no issues, and with
 
 ## Step 3.4 — CLOSED (2026-09-23, R-35). The first live write and read-back — the claim the programme rests on — holds.
 
-**Amazon·IT, `GALE-JACKET-BLACK-MEN-S` (ASIN `B0BMS5B768`, product type `COAT`), `generic_keyword` (backend search
+**Amazon·IT, `GALE-JACKET-BLACK-MEN-S` (ASIN `B0FX06FC3A`, product type `COAT`), `generic_keyword` (backend search
 terms, not shown to buyers).** Tool `docs/product-cheat/tools/live-write-probe.mts`; every step's record in `records/`.
 
 | Step (UTC) | Result |
@@ -6530,12 +6530,12 @@ the table only); the package's tests pass (17/17).
 ### Step 1.3 / A-37 — the read (2026-09-23 14:19–14:21 UTC by the records' own timestamps; first written "~16:20 UTC", which was local time) and the PREDICTIONS written before the live runs (R-37)
 
 **Read (`tools/unpublish-probe.mts --read`, record `records/step-1.3-read-…json`):** eBay's out-of-stock control is **ON**, for
-the account and for item `256564203510` — so quantity 0 hides the item and keeps its ItemID (off, it would END the item,
+the account and for item `913270132587` — so quantity 0 hides the item and keeps its ItemID (off, it would END the item,
 and this test would not run). eBay's variation `Quantity` is the lifetime total: remaining = Quantity − sold (the code's own
 rule, `ebay-trading-api.service.ts:540`); BLACK-MEN-S already has 0 remaining, so the test uses **BLACK-MEN-M (13 − 3 = 10)**.
 🔴 Amazon's first candidate (GALE BLACK-MEN-S) holds an **FBA offer beside the merchant one** (`AMAZON_EU` + `DEFAULT`) —
 merchant quantity 0 would not stop it selling, and FBA is never touched; the probe now requires a MERCHANT-ONLY SKU on
-Amazon's own read: **`xracingbxn48`** (ASIN `B0BTCBPVTS`, `DEFAULT` quantity 2, `BUYABLE`).
+Amazon's own read: **`xracingbxn48`** (ASIN `B0FX4B2941`, `DEFAULT` quantity 2, `BUYABLE`).
 
 **Predictions:**
 - **eBay** — `ReviseInventoryStatus` BLACK-MEN-M → 0: `Success`; read back: 0 remaining, the item still `Active`, the same
@@ -6548,8 +6548,8 @@ Each listing is unbuyable for about a minute; each run always attempts its resto
 
 | Channel | Result (records `records/step-1.3-*-test-…json`) |
 |---|---|
-| **eBay** item `256564203510`, variation `GALE-JACKET-BLACK-MEN-M` | `ReviseInventoryStatus` → 0: `Success`; read back **0 remaining, item `Active`** (read by the same ItemID). Restore → `Success`, **10 remaining**. Re-read a minute later: 13 − 3 = **10**, `Active` ✅ |
-| **Amazon** `xracingbxn48` (ASIN `B0BTCBPVTS`, merchant-only) | `fulfillment_availability DEFAULT` → 0: `ACCEPTED`, 0 issues; read back **quantity 0 in 15 s, same ASIN, offer present** (`BUYABLE` had not updated — Amazon's summary lags, as predicted). Restore → 2: `ACCEPTED`, read back 2. Re-read a minute later: **2, `BUYABLE`** ✅ |
+| **eBay** item `913270132587`, variation `GALE-JACKET-BLACK-MEN-M` | `ReviseInventoryStatus` → 0: `Success`; read back **0 remaining, item `Active`** (read by the same ItemID). Restore → `Success`, **10 remaining**. Re-read a minute later: 13 − 3 = **10**, `Active` ✅ |
+| **Amazon** `xracingbxn48` (ASIN `B0FX4B2941`, merchant-only) | `fulfillment_availability DEFAULT` → 0: `ACCEPTED`, 0 issues; read back **quantity 0 in 15 s, same ASIN, offer present** (`BUYABLE` had not updated — Amazon's summary lags, as predicted). Restore → 2: `ACCEPTED`, read back 2. Re-read a minute later: **2, `BUYABLE`** ✅ |
 
 Every prediction held. 🔴 **Stated plainly — found AFTER the Amazon run:** the SCT.6 service header records that an Amazon EU
 merchant quantity is **one shared number per SKU across the EU markets** (*"proved 2026-07-26 twice"*). So the quantity-0 test
@@ -6618,7 +6618,7 @@ Tool: `docs/product-cheat/tools/sct6-close-probe.mts` — `--read` · `--preview
 `replace` with the verbatim snapshot), through the same client singleton and its write-account guard. **No listing, product
 or queue row is written**; side effects: the API gateway's call log and a token refresh.
 
-- **Read.** `xracingbxn48` on Amazon·IT: ASIN `B0BTCBPVTS`, merchant-only (`DEFAULT` only), ONE `purchasable_offer` instance
+- **Read.** `xracingbxn48` on Amazon·IT: ASIN `B0FX4B2941`, merchant-only (`DEFAULT` only), ONE `purchasable_offer` instance
   for `APJ6JRA9NG5V4` (EUR); the Nexus row has `offerClosedAt` null and is not FBA. The Amazon SKU equals the product SKU
   (SCT.6 patches `product.sku`). Every other Amazon market it is listed on is read too, for the "siblings untouched" check.
 - **Preview.** Amazon's `VALIDATION_PREVIEW` accepts both the delete (by selectors) and the replay (the verbatim snapshot).
@@ -6637,7 +6637,7 @@ Records: `records/step-1.3-sct6-before-2026-09-23T20-33-36-328Z.json` (read), `�
 
 | Step (UTC) | Result |
 |---|---|
-| 20:33:36 `--read` | Amazon·IT: ASIN `B0BTCBPVTS`, `DEFAULT` only, quantity 2, ONE offer instance (EUR, `audience: ALL`, `our_price` 399.95, a `discounted_price` whose schedule ended 2023-05-30, `map_price` 330, an `end_at` of 2023-05-30). Nexus row: not closed, FBM. Amazon SKU = product SKU. All six safety checks true |
+| 20:33:36 `--read` | Amazon·IT: ASIN `B0FX4B2941`, `DEFAULT` only, quantity 2, ONE offer instance (EUR, `audience: ALL`, `our_price` 399.95, a `discounted_price` whose schedule ended 2023-05-30, `map_price` 330, an `end_at` of 2023-05-30). Nexus row: not closed, FBM. Amazon SKU = product SKU. All six safety checks true |
 | 20:34:12 `--preview` | Amazon's `VALIDATION_PREVIEW` accepted **both** the close (selector `{marketplace_id, currency, audience}`) and the verbatim replay |
 | 20:34:54 `--test` | Fresh read = the saved one. **Close → `ACCEPTED`**; read after 15 s: **no `purchasable_offer`**, same ASIN and SKU, `DEFAULT` 2 unchanged (the summary still said `BUYABLE` — it lags, as in A-37). **Replay → `ACCEPTED`**; read after 15 s: the offer **deep-equals the snapshot**, quantity 2. Germany: offer and quantity identical before and after |
 | 20:36:24 `--read --record` | IT offer equal, quantity equal, `BUYABLE`+`DISCOVERABLE`; DE equal |
@@ -6931,7 +6931,7 @@ Records: `records/step-1.3-ebay-single-read-2026-09-23T22-46-26-067Z.json`, `…
 
 - 🔴 **The live test COULD NOT RUN — there is no target, measured.** Production holds **31** live eBay ItemIDs, all eBay·IT
   (read only, `BEGIN READ ONLY`): 26 parentless non-AIREON ItemIDs — every one read by `GetItem` has variations (8–40); one
-  ItemID linked only to child products (`257584954808`) — 20 GALE variation SKUs; 4 AIREON (R-27, not touched; families).
+  ItemID linked only to child products (`938554736087`) — 20 GALE variation SKUs; 4 AIREON (R-27, not touched; families).
   **No single-SKU eBay item exists**, so the adapter's single-item path (ItemID + quantity 0) cannot be proven live today. It
   stays gated by its unit arms only; it is reached only if a single-SKU item is ever listed. Nothing was sent.
 - The account's out-of-stock preference: `true` (as on 2026-09-23 14:19).
@@ -7047,7 +7047,7 @@ Built by sub-agent S5; re-run by this lane (12 drift files, 66 tests; every stud
 a shell → not compared with its reason). **Cost when** — ≤ 31 `GetItem` a night today (< 1% of the 5,000 pool). **Gate** — 21 new
 arms; **14 mutations, 13 red** — 🟠 one equivalent mutant (M8a: the real eBay spec already puts the title cell on the row through
 the overlay), replaced by M8c on a real value → red. **Rollback** — revert; `NEXUS_ENABLE_CONTENT_DRIFT=0` holds both passes.
-⬜ Not covered: the child-only ItemID `257584954808` (no owner listing, so never read); the dry-run script counts Amazon only.
+⬜ Not covered: the child-only ItemID `938554736087` (no owner listing, so never read); the dry-run script counts Amazon only.
 
 ## A-41 — The studio eBay publication has been REFUSED for every family since 2026-09-21. FOR YOUR RULING. Nothing built.
 

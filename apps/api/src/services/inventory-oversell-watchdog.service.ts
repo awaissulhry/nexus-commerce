@@ -157,13 +157,14 @@ export interface OversellAssessment {
  */
 export async function evaluateOversellRisk(
   productId: string,
-  poolAvailable: number,
+  poolAvailable?: number,
 ): Promise<OversellAssessment | null> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { sku: true, fulfillmentMethod: true },
+    select: { sku: true, fulfillmentMethod: true, totalStock: true },
   })
   if (!product) return null
+  poolAvailable ??= product.totalStock
 
   // Same fbaBucket definition the cascade uses, so the watchdog and the push
   // path cannot disagree about which listings are FBA.
@@ -228,8 +229,8 @@ export async function evaluateOversellRisk(
  * idempotent using data the outbox already stores — no new table, and exact
  * rather than a time-window guess.
  */
-async function alreadyReported(causationId: string): Promise<boolean> {
-  const existing = await prisma.eventOutbox.findFirst({
+async function alreadyReported(db: Pick<typeof prisma, 'eventOutbox'>, causationId: string): Promise<boolean> {
+  const existing = await db.eventOutbox.findFirst({
     where: { type: 'inventory.oversell_risk_detected', causationId },
     select: { id: true },
   })
@@ -244,16 +245,25 @@ export async function handleStockChanged(envelope: EventEnvelope): Promise<void>
   // bulk imports without missing a transition.
   if (payload.change >= 0) return
 
-  const assessment = await evaluateOversellRisk(payload.productId, payload.poolTotal)
+  // Delivery can be reordered. The event wakes the check; current database
+  // stock, not a stale event snapshot, determines whether there is risk now.
+  const assessment = await evaluateOversellRisk(payload.productId)
   if (!assessment) return
-  if (await alreadyReported(envelope.id)) return
 
   // Durable: an oversell is a fact worth keeping, not a refresh hint. The
   // subscriber helper runs this inside the incoming event's correlation, so
   // causationId links it back to the stock change that caused it.
-  await publishEvent(prisma, 'inventory.oversell_risk_detected', assessment, {
-    accountId: envelope.accountId,
+  // Check and publish under one lock per causing event: delivery is at-least-once, and
+  // two deliveries of the same stock change checking at once would both publish.
+  const published = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`oversell:${envelope.id}`}, 0))`
+    if (await alreadyReported(tx, envelope.id)) return false
+    await publishEvent(tx, 'inventory.oversell_risk_detected', assessment, {
+      accountId: envelope.accountId, causationId: envelope.id, correlationId: envelope.correlationId,
+    })
+    return true
   })
+  if (!published) return
 
   logger.warn('oversell watchdog: a channel is publishing more than the pool holds', {
     productId: assessment.productId,

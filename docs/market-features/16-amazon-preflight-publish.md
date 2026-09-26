@@ -346,7 +346,7 @@ always from the server's own field.
 ### 6.6 Mockup
 
 ```
-ALIAS BAND ① · Amazon·IT · ACTIVE · B0F7J163XJ · ▓▓▓▓▓▓▓░░ 71%  ⇧ 2 d ago · rehearsed   [⋯]
+ALIAS BAND ① · Amazon·IT · ACTIVE · B0FXD0620C · ▓▓▓▓▓▓▓░░ 71%  ⇧ 2 d ago · rehearsed   [⋯]
                                                                         └─ Publish this listing…
 ┌─ Publish · Amazon · IT · ① Primary ───────────────────────── 720px ─┐
 │ ①──②──③──④   1 Preflight  2 What is sent  3 Mode  4 Result          │

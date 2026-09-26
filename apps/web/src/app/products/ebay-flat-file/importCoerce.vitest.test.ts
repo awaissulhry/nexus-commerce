@@ -94,12 +94,12 @@ describe('coerceEbayImportRows', () => {
   it('maxLength warns without truncating; junk dropped; readonly untouched', () => {
     const long = 'X'.repeat(95)
     const { rows, issues } = coerceEbayImportRows(
-      [{ title: long, sku: '[object Object]', it_item_id: '257584954808' }],
+      [{ title: long, sku: '[object Object]', it_item_id: '938554736087' }],
       COLS,
     )
     expect(rows[0].title).toBe(long)
     expect(rows[0].sku).toBe('')
-    expect(rows[0].it_item_id).toBe('257584954808')
+    expect(rows[0].it_item_id).toBe('938554736087')
     expect(issues.map((i) => [i.columnId, i.level])).toEqual([
       ['title', 'warn'],
       ['sku', 'warn'],

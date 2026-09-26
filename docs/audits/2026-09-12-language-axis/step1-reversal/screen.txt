@@ -101,7 +101,7 @@ http://localhost:3000/products/cmokmy0lr0009pm0p9yxk7ho0/edit
   - button "Back to products":
   - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
   - generic: GALE-JACKET-BLACK-MEN-XS
-  - generic: B0DJ4926YX
+  - generic: B0FX8ACE1B
   - link "Datasheet (opens in new tab)":
     - /url: /products/cmokmy0lr0009pm0p9yxk7ho0/datasheet
     - text: Datasheet
@@ -130,9 +130,9 @@ http://localhost:3000/products/cmokmy0lr0009pm0p9yxk7ho0/edit
     - /url: /products/cmokmy3a40078pm0p1fvnu523/edit
     - text: Go to parent
   - generic: "Amazon ASIN:"
-  - generic: B0F7J163XJ
+  - generic: B0FXD0620C
   - generic: "eBay:"
-  - generic: "257584954808"
+  - generic: "938554736087"
   - link "3XL / Nero":
     - /url: /products/cmokmy0jf0003pm0ppnu1b2yy/edit
   - link "4XL / Nero":

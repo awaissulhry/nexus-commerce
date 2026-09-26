@@ -55,6 +55,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListingHealthGrid from './_shared/ListingHealthGrid'
 import InFlightSyncBar from './_shared/InFlightSyncBar'
+import { CronStatusPill, cronKpiTone, incompleteCronCount } from './_shared/cronStatus'
 
 const POLL_MS = 30_000
 
@@ -206,11 +207,14 @@ export interface AlertsRollup {
 }
 
 interface CircuitState {
-  state: 'closed' | 'open' | 'half-open'
+  /** Worst state any process holds; 'unknown' when the rest are closed but a process is not reporting. */
+  state: 'closed' | 'open' | 'half-open' | 'unknown'
   failureCount: number
   openedAt: string | null
   lastError: string | null
   keyCount: number
+  complete?: boolean
+  unknown?: Array<{ owner: string; reason: string }>
 }
 
 interface CircuitBreakersPayload {
@@ -288,6 +292,16 @@ export default function SyncLogsHubClient({
   const [knownCrons, setKnownCrons] = useState<Set<string>>(new Set())
   const { toast } = useToast()
   const { t } = useTranslations()
+
+  // Circuits live in each process (API, worker, scheduler); after a reset, show what they now report.
+  const reloadCircuits = useCallback(async () => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/dashboard/circuit-breakers`, { cache: 'no-store' })
+      if (res.ok) setCircuits(await res.json())
+    } catch {
+      // keep the last answer; the next refresh retries
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -381,8 +395,8 @@ export default function SyncLogsHubClient({
   const cronJobs = crons?.latest ?? []
   const cronHealthy = cronJobs.filter((j) => j.status === 'SUCCESS').length
   const cronUnhealthy = cronJobs.filter((j) => j.status === 'FAILED').length
-  const cronRunning = cronJobs.filter((j) => j.status === 'RUNNING').length
   const cronStale = crons?.staleRunning.length ?? 0
+  const cronIncomplete = incompleteCronCount(cronJobs)
 
   const apiStats = apiCalls?.stats
   const apiErrorRatePct = apiStats ? apiStats.errorRate * 100 : 0
@@ -553,15 +567,11 @@ export default function SyncLogsHubClient({
                   ? t('syncLogs.hub.kpi.cron.stuck', { n: cronStale })
                   : cronUnhealthy > 0
                     ? t('syncLogs.hub.kpi.cron.failed', { n: cronUnhealthy })
-                    : t('syncLogs.hub.kpi.cron.healthy', { n: cronHealthy })
+                    : cronIncomplete > 0
+                      ? t('syncLogs.hub.kpi.cron.incomplete', { n: cronIncomplete })
+                      : t('syncLogs.hub.kpi.cron.healthy', { n: cronHealthy })
               }
-              tone={
-                cronStale > 0 || cronUnhealthy > 0
-                  ? 'bad'
-                  : cronRunning > 0
-                    ? 'warn'
-                    : 'good'
-              }
+              tone={cronKpiTone(cronJobs, cronStale)}
             />
           </section>
 
@@ -573,17 +583,13 @@ export default function SyncLogsHubClient({
               onReset={async (channel) => {
                 setResettingCircuit(channel)
                 try {
-                  const res = await fetch(
+                  // No optimistic "closed": the worker and the scheduler apply a reset on their next
+                  // heartbeat, so the row shows what every process reports afterwards.
+                  await fetch(
                     `${getBackendUrl()}/api/dashboard/circuit-breakers/${channel}/reset`,
                     { method: 'POST' },
                   )
-                  if (res.ok) {
-                    // Optimistic update
-                    setCircuits((prev) => prev ? {
-                      ...prev,
-                      [channel]: { ...prev[channel as keyof CircuitBreakersPayload], state: 'closed', failureCount: 0, openedAt: null, lastError: null },
-                    } : prev)
-                  }
+                  await reloadCircuits()
                 } finally {
                   setResettingCircuit(null)
                 }
@@ -772,23 +778,12 @@ export default function SyncLogsHubClient({
                       key={j.jobName}
                       className="px-3 py-2 flex items-center gap-3"
                     >
-                      <span
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          j.status === 'SUCCESS'
-                            ? 'bg-emerald-500'
-                            : j.status === 'FAILED'
-                              ? 'bg-rose-500'
-                              : j.status === 'RUNNING'
-                                ? 'bg-blue-500 animate-pulse'
-                                : 'bg-slate-300'
-                        }`}
-                        aria-hidden
-                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-base font-mono text-slate-900 dark:text-slate-100 truncate">
                             {j.jobName}
                           </span>
+                          <CronStatusPill status={j.status} />
                           {j.triggeredBy === 'manual' && (
                             <Badge variant="info" size="sm">
                               {t('syncLogs.hub.cron.manual')}
@@ -807,8 +802,10 @@ export default function SyncLogsHubClient({
                             </>
                           )}
                         </div>
-                        {j.outputSummary && j.status === 'SUCCESS' && (
-                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono">
+                        {/* PARTIAL / NOT_CONFIGURED (P1.8 contract run) completed without proving everything:
+                            a warning pill above, and their summary says what is missing — whole, on hover. */}
+                        {j.outputSummary && (j.status === 'SUCCESS' || j.status === 'PARTIAL' || j.status === 'NOT_CONFIGURED') && (
+                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono" title={j.outputSummary}>
                             {j.outputSummary}
                           </div>
                         )}
@@ -1193,6 +1190,8 @@ function CircuitBreakerRow({
           const isOpen = s.state === 'open'
           const isHalf = s.state === 'half-open'
           const isClosed = s.state === 'closed'
+          const isUnknown = s.state === 'unknown'
+          const notReporting = (s.unknown ?? []).map((u) => u.owner).join(', ')
 
           return (
             <div
@@ -1200,7 +1199,7 @@ function CircuitBreakerRow({
               className={cn(
                 'rounded-lg border px-3 py-2 flex items-start justify-between gap-2',
                 isOpen && 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30',
-                isHalf && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
+                (isHalf || isUnknown) && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
                 isClosed && 'border-default dark:border-slate-700 bg-white dark:bg-slate-900',
               )}
             >
@@ -1209,22 +1208,27 @@ function CircuitBreakerRow({
                   <span className={cn(
                     'w-2 h-2 rounded-full flex-shrink-0',
                     isOpen && 'bg-amber-500',
-                    isHalf && 'bg-amber-400',
+                    (isHalf || isUnknown) && 'bg-amber-400',
                     isClosed && 'bg-emerald-500',
                   )} />
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{ch}</span>
                   <span className={cn(
                     'text-[10px] font-medium',
                     isOpen && 'text-amber-700 dark:text-amber-400',
-                    isHalf && 'text-amber-600 dark:text-amber-400',
+                    (isHalf || isUnknown) && 'text-amber-600 dark:text-amber-400',
                     isClosed && 'text-emerald-600 dark:text-emerald-400',
                   )}>
                     {s.state.toUpperCase()}
                   </span>
                 </div>
-                {isClosed ? (
-                  <div className="text-[10px] text-tertiary dark:text-slate-500">
-                    {s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
+                {isClosed || isUnknown ? (
+                  <div
+                    className="text-[10px] text-tertiary dark:text-slate-500"
+                    title={isUnknown ? (s.unknown ?? []).map((u) => u.reason).join('\n') : undefined}
+                  >
+                    {isUnknown
+                      ? `Not reporting: ${notReporting}`
+                      : s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
                   </div>
                 ) : (
                   <>
@@ -1239,7 +1243,7 @@ function CircuitBreakerRow({
                   </>
                 )}
               </div>
-              {!isClosed && (
+              {(isOpen || isHalf) && (
                 <button
                   type="button"
                   title={`Force reset ${ch} circuit`}

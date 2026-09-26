@@ -10,7 +10,7 @@ import { periodWindow, SQP_LOOKBACK } from '../src/services/advertising/sqp.serv
 import { requestSqpReports, collectSqpReports } from '../src/services/advertising/sqp-async.service.js'
 
 const MKT = process.env.CYCLE_MKT || 'IT'
-const ASINS = (process.env.CYCLE_ASINS || 'B0BMSWM15B,B0BMS6ZZ4H').split(',')
+const ASINS = (process.env.CYCLE_ASINS || 'B0FXE444C9,B0FX4F79EF').split(',')
 const win = periodWindow('WEEK', new Date(), SQP_LOOKBACK)
 const wk = win.start.toISOString().slice(0, 10)
 

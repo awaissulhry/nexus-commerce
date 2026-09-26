@@ -28,6 +28,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { policyMigrationBody } from './policy-migration-body.mjs'
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const workspacesDir = join(pkgRoot, 'workspaces')
@@ -76,7 +77,8 @@ for (const file of onDisk) {
     continue
   }
   const body = readFileSync(join(workspacesDir, file), 'utf8')
-  const sql = readFileSync(migrationPath, 'utf8')
+  // A transaction wrapper is structural; the shared tail still matches exact bytes.
+  const sql = policyMigrationBody(readFileSync(migrationPath, 'utf8'))
   compared++
   if (!sql.endsWith(body)) {
     // Say WHERE they part, so the fix is not a hunt through two long SQL files.

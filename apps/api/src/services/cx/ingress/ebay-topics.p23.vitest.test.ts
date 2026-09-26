@@ -16,7 +16,7 @@ const { EBAY_DESIRED_TOPICS, ebayNotificationConfig, subscribeEbayTopic } = awai
 
 const orderPayload = (topic: string | null, orderId = '12-34567-89012') => ({
   ...(topic ? { metadata: { topic } } : {}),
-  notification: { data: { orderId } },
+  notification: { data: { order: { orderId } } },
 })
 
 const envBefore = { ...process.env }
@@ -44,6 +44,11 @@ describe('routing an eBay notification', () => {
     const decision = ebayTopicAction('SOME_TOPIC_WE_HAVE_NEVER_SEEN', orderPayload('SOME_TOPIC_WE_HAVE_NEVER_SEEN'))
     expect(decision.action).toBe('order_created')
     expect(decision.via).toBe('payload_shape')
+  })
+
+  it('never reads a flat data.orderId: eBay nests the order (notification.data.order.orderId)', () => {
+    expect(ebayTopicAction('SOME_TOPIC_WE_HAVE_NEVER_SEEN', { notification: { data: { orderId: '12-34567-89012' } } })).toEqual({ action: null, via: 'none' })
+    expect(ebayTopicAction(null, { notification: { orderId: '12-34567-89012' } })).toEqual({ action: null, via: 'none' })
   })
 
   it('does nothing for an unknown topic with nothing in it', () => {

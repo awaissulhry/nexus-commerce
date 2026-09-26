@@ -6,9 +6,9 @@ const { getItemQuantities, callTradingApi, buildGetItemQuantitiesXml } = await i
 const { ebayAuthService } = await import('../src/services/ebay-auth.service.js')
 
 const ITEMS = [
-  { itemId: '257608449467', mp: 'EBAY_IT', label: 'WATERPROOF (8→16 pattern)' },
-  { itemId: '257630525745', mp: 'EBAY_IT', label: 'knee-slider (43→86 pattern)' },
-  { itemId: '257629891728', mp: 'EBAY_IT', label: 'VENTRA (0↔5 pattern)' },
+  { itemId: '922402495702', mp: 'EBAY_IT', label: 'WATERPROOF (8→16 pattern)' },
+  { itemId: '980585376327', mp: 'EBAY_IT', label: 'knee-slider (43→86 pattern)' },
+  { itemId: '983802912991', mp: 'EBAY_IT', label: 'VENTRA (0↔5 pattern)' },
 ]
 
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })

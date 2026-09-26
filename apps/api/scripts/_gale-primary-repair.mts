@@ -44,7 +44,7 @@ const { callTradingApi, siteIdForMarket } = await import('../src/services/ebay-t
 const conn = await prisma.channelConnection.findFirst({ where: { channelType: 'EBAY', isActive: true }, select: { id: true } })
 const token = await ebayAuthService.getValidToken(conn!.id)
 const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
-<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>257584954808</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>938554736087</ItemID></GetItemRequest>`, { oauthToken: token, siteId: siteIdForMarket('IT') })
 const blocks = [...got.raw.matchAll(/<Variation>([\s\S]*?)<\/Variation>/g)].map((m) => m[1])
 let total = 0
 const liveSkus: string[] = []
