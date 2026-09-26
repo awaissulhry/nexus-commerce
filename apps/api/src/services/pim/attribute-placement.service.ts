@@ -22,6 +22,8 @@ export class PlacementError extends Error {
 }
 
 export interface Actor { userId?: string | null; ip?: string | null }
+/** P3b S5 — extra audit metadata, e.g. the proposal batch a change belongs to (its undo finds the rows by it). */
+export interface AuditExtra { metadata?: Record<string, unknown> }
 
 /** What a placement change reads and writes; also the shape of an audit row's `before` / `after`. */
 export interface PlacementState {
@@ -83,7 +85,7 @@ async function writeState(id: string, from: PlacementState, to: PlacementState, 
     userId: actor.userId ?? null, ip: actor.ip ?? null, ...(metadata ? { metadata } : {}) } })
 }
 
-export async function setAttributePlacement(id: string, input: { placement?: unknown; channels?: unknown }, actor: Actor = {}) {
+export async function setAttributePlacement(id: string, input: { placement?: unknown; channels?: unknown }, actor: Actor = {}, extra: AuditExtra = {}) {
   const next = parsePlacement(input)
   return inDatabaseTransaction(prisma, async () => {
     const { state: before, archivedAt, code } = await stateOf(id)
@@ -95,7 +97,7 @@ export async function setAttributePlacement(id: string, input: { placement?: unk
     }
     const after: PlacementState = { ...next, requirements }
     if (sameState(before, after)) return { changed: false as const, before, after, auditId: null }
-    const audit = await writeState(id, before, after, 'attribute.placement', actor)
+    const audit = await writeState(id, before, after, 'attribute.placement', actor, extra.metadata as Prisma.InputJsonValue | undefined)
     return { changed: true as const, before, after, auditId: audit.id }
   })
 }
@@ -128,7 +130,7 @@ export async function attributeUsage(code: string, id: string) {
   return { products: Number(products?.n ?? 0), translations: Number(translations?.n ?? 0), families }
 }
 
-export async function archiveAttribute(id: string, actor: Actor = {}) {
+export async function archiveAttribute(id: string, actor: Actor = {}, extra: AuditExtra = {}) {
   return inDatabaseTransaction(prisma, async () => {
     const { state, archivedAt, code } = await stateOf(id)
     if (archivedAt) return { changed: false as const, archivedAt }
@@ -137,17 +139,17 @@ export async function archiveAttribute(id: string, actor: Actor = {}) {
     }
     const now = new Date()
     await prisma.customAttribute.update({ where: { id }, data: { archivedAt: now } })
-    await prisma.auditLog.create({ data: { entityType: 'CustomAttribute', entityId: id, action: 'attribute.archive', before: { archivedAt: null }, after: { archivedAt: now.toISOString() }, userId: actor.userId ?? null, ip: actor.ip ?? null } })
+    await prisma.auditLog.create({ data: { entityType: 'CustomAttribute', entityId: id, action: 'attribute.archive', before: { archivedAt: null }, after: { archivedAt: now.toISOString() }, userId: actor.userId ?? null, ip: actor.ip ?? null, ...(extra.metadata ? { metadata: extra.metadata as Prisma.InputJsonValue } : {}) } })
     return { changed: true as const, archivedAt: now }
   })
 }
 
-export async function restoreAttribute(id: string, actor: Actor = {}) {
+export async function restoreAttribute(id: string, actor: Actor = {}, extra: AuditExtra = {}) {
   return inDatabaseTransaction(prisma, async () => {
     const { archivedAt } = await stateOf(id)
     if (!archivedAt) return { changed: false as const }
     await prisma.customAttribute.update({ where: { id }, data: { archivedAt: null } })
-    await prisma.auditLog.create({ data: { entityType: 'CustomAttribute', entityId: id, action: 'attribute.restore', before: { archivedAt: archivedAt.toISOString() }, after: { archivedAt: null }, userId: actor.userId ?? null, ip: actor.ip ?? null } })
+    await prisma.auditLog.create({ data: { entityType: 'CustomAttribute', entityId: id, action: 'attribute.restore', before: { archivedAt: archivedAt.toISOString() }, after: { archivedAt: null }, userId: actor.userId ?? null, ip: actor.ip ?? null, ...(extra.metadata ? { metadata: extra.metadata as Prisma.InputJsonValue } : {}) } })
     return { changed: true as const }
   })
 }
