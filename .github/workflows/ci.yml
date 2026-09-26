@@ -15,12 +15,12 @@
 
 name: CI
 
+# No `push: main` trigger: Deploy API calls this workflow (`verify`) on the exact release commit, and
+# the nightly workflow runs it on main (docs/ci-plan.md §2.4–2.5). Two copies per push were waste.
 on:
   pull_request:
   workflow_call:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 # A newer push to the same PR cancels the older run. Runs on main are never cancelled: each commit
 # keeps its own verdict.
