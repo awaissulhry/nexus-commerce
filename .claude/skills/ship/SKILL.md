@@ -142,11 +142,14 @@ sleep 30; gh pr view <number> --json state,mergeStateStatus,mergeCommit
   It runs CI again, then ships.
 - **Web deploy** (if the web changed): `gh run list --workflow prod-smoke.yml -L 3` shows the production smoke
   after Vercel's production build.
-- Clean up only after the pull request shows MERGED:
+- Clean up only after the pull request shows MERGED. Delete the remote branch through the API: a
+  `git push --delete` from the shared checkout runs that checkout's own pre-push hook, which may fail on other
+  sessions' work.
 
   ```bash
   git worktree remove /private/tmp/nexus-<slug>
-  git push origin --delete <type>/<slug>
+  git branch -D <type>/<slug>
+  gh api -X DELETE repos/awaissulhry/nexus-commerce/git/refs/heads/<type>/<slug>
   ```
 
 ## 9. Report to the Owner
