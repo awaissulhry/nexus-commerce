@@ -162,26 +162,25 @@ export async function acquireEbayPublishToken(
     return { ok: true, waitedMs: 0 }
   }
 
-  const tokensNeeded = 1 - bucket.tokens
-  const waitMs = Math.ceil((tokensNeeded / RATE_TOKENS_PER_SECOND) * 1000)
-  if (waitMs > maxWaitMs) {
-    return {
-      ok: false,
-      waitedMs: 0,
-      error: `eBay publish rate-limited (would need ${waitMs}ms wait, cap ${maxWaitMs}ms)`,
+  // Wait for the next whole token and check again after EVERY wait. A timer can fire a millisecond early
+  // against Date.now(), which leaves 0.998 of a token: a single wait-then-check refused callers that had
+  // waited correctly (2026-09-26, the Shopify shadow-report test on CI). The cap bounds the TOTAL wait.
+  for (;;) {
+    const tokensNeeded = 1 - bucket.tokens
+    const waitMs = Math.ceil((tokensNeeded / RATE_TOKENS_PER_SECOND) * 1000)
+    if (Date.now() - start + waitMs > maxWaitMs) {
+      return {
+        ok: false,
+        waitedMs: Date.now() - start,
+        error: `eBay publish rate-limited (would need ${waitMs}ms wait, cap ${maxWaitMs}ms)`,
+      }
     }
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, waitMs))
-  refillBucket(bucket)
-  if (bucket.tokens >= 1) {
-    bucket.tokens -= 1
-    return { ok: true, waitedMs: Date.now() - start }
-  }
-  return {
-    ok: false,
-    waitedMs: Date.now() - start,
-    error: 'eBay publish rate limiter could not acquire token after waiting',
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+    refillBucket(bucket)
+    if (bucket.tokens >= 1) {
+      bucket.tokens -= 1
+      return { ok: true, waitedMs: Date.now() - start }
+    }
   }
 }
 
