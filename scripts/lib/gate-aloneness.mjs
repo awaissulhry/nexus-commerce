@@ -134,9 +134,12 @@ export function gateProcessWitness(pattern = 'node scripts/') {
      (`man pgrep`), and every caller of this function is itself a `node scripts/…` process — so without
      `-a` the witness could never count its own caller: it read 0 from inside the wrapper and the wrapper
      refused on every run since 09-13 ("pgrep cannot see this process"). `-a` includes the ancestors. */
+  /* 🔴 Count lines that START with a pid (2026-09-26, first Linux CI run). On Linux (procps) `-a` means
+     `--list-full` — each line is "<pid> <command line>", not a bare pid — so the old /^\d+$/ counted 0 and
+     the witness read blind on every Linux machine. macOS prints bare pids. Both start with one. */
   try {
     const out = execFileSync('pgrep', ['-af', pattern], { encoding: 'utf8' })
-    return out.split('\n').filter((l) => /^\d+$/.test(l.trim())).length
+    return out.split('\n').filter((l) => /^\d+(\s|$)/.test(l.trim())).length
   } catch (error) {
     /* pgrep exits 1 with no output when nothing matches — which, from inside a `node scripts/…`
        process, would itself be the finding. Anything else (a usage error) is `null`: not measured. */

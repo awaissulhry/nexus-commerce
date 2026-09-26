@@ -1,31 +1,21 @@
 import { PGlite } from '@electric-sql/pglite'
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
 import { workspacePrisma } from '@nexus/database/workspace-router'
-import { workspacePolicySql } from '../../../../packages/database/scripts/workspace-policies.mjs'
 import { Pool } from 'pg'
-import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { existsSync, readFileSync } from 'node:fs'
+import { applyFormulaSchema, PGLITE_SNAPSHOT_ENV } from './formula-schema.js'
 import { fixExtendedQueryReady } from './pglite-protocol.js'
 
 /** Disposable real PostgreSQL + the generated production Prisma client. No catalog connection. */
 export async function formulaDatabase(options: { maxConnections?: number; port?: number } = {}) {
-  const root = fileURLToPath(new URL('../../../../', import.meta.url))
-  const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--config', `${root}/packages/database/prisma.config.ts`, '--from-empty', '--to-schema', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
-  const db = await PGlite.create()
-  fixExtendedQueryReady(db)
-  await db.exec(sql)
-  // LX.F P3-22 — the deployed databases carry columns `schema.prisma` does not.
-  // `ChannelListing.variationExcluded` is DELIBERATELY absent from the schema
-  // (`family-projection.service.ts:385-398`: "a database ahead of the schema is
-  // inert; a schema ahead of a database is an outage") and is read/written there
-  // through narrow raw SQL. Without it this disposable database is BEHIND every
-  // deployed one, and 12 LX integration assertions could not execute at all —
-  // the arm that would have failed was the one never run. Keep this tied to that
-  // service: if it stops using the column, delete this line with it.
-  await db.exec('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false')
-  await db.exec(`INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
-    VALUES ('nexus_legacy_workspace', 'Test business', 'active', true, 'test-bootstrap', 'test-bootstrap', CURRENT_TIMESTAMP)`)
-  await db.exec(workspacePolicySql())
+  // A copy of the run's snapshot (pglite-snapshot.global.ts) when there is one: 0.34 s instead of
+  // 2.3 s per file, measured 2026-09-26. Still ONE fresh database per test file — only the build is
+  // shared. NEXUS_TEST_NO_TEMPLATE=1 builds it here instead, as before.
+  const snapshot = process.env.NEXUS_TEST_NO_TEMPLATE === '1' ? undefined : process.env[PGLITE_SNAPSHOT_ENV]
+  const fromSnapshot = Boolean(snapshot && existsSync(snapshot))
+  const db = fromSnapshot ? await PGlite.create({ loadDataDir: new Blob([readFileSync(snapshot!)]) }) : await PGlite.create()
+  fixExtendedQueryReady(db) // the pg driver talks to it through the socket bridge below
+  if (!fromSnapshot) await applyFormulaSchema(db)
   const server = new PGLiteSocketServer({ db, host: '127.0.0.1', port: options.port ?? 0, maxConnections: options.maxConnections ?? 1 })
   let port = 0
   server.addEventListener('listening', (event: any) => { port = event.detail.port })

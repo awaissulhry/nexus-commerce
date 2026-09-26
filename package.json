@@ -24,6 +24,7 @@
     "tokens:check:factory": "tsx apps/factory/src/design-system/tools/generate-tokens-css.ts --check",
     "grid:conformance": "node scripts/check-grid-chrome.mjs",
     "gates:browser": "node scripts/run-browser-gates.mjs --all",
+    "gates:full": "bash scripts/gates-full.sh",
     "grid:parity": "node scripts/check-workspace-parity.mjs",
     "layout:v2": "node scripts/check-layout-v2.mjs",
     "grid:modules": "node scripts/check-grid-modules.mjs",
@@ -32,6 +33,7 @@
     "editor:open": "node scripts/check-editor-open.mjs"
   },
   "devDependencies": {
+    "lint-staged": "^16.4.0",
     "patch-package": "^8.0.1",
     "turbo": "^2.0.0"
   },

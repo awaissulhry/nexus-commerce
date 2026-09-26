@@ -1,0 +1,630 @@
+#!/bin/bash
+#
+# The FULL local gate — until 2026-09-26 this was .githooks/pre-push. Run it by hand:
+#
+#   npm run gates:full
+#
+# CI now runs these checks on every pull request (docs/ci-plan.md §2.3), and the pre-push hook only
+# type-checks. This script keeps what CI cannot run: the browser gates and the suites that read this
+# machine's developer catalogue (nexus_development).
+#
+# Stages:
+#   1a. Schema-migration drift gate (table-level) — catches Prisma
+#       models with no CREATE TABLE in any migration.
+#   1b. Schema-migration drift gate (column-level) — catches schema
+#       fields with no matching ADD COLUMN. Closes TECH_DEBT #37
+#       (the bug class that took prod down 30 min on 2026-05-05).
+#   2.  apps/web build (next build).
+#   3.  apps/api build (tsc).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+# ── Stale build-dir sweep (2026-08-27) ───────────────────────────────────────────
+# The per-push build dir created further down is cleaned by `trap … EXIT`, and a trap NEVER
+# fires on SIGKILL or a kernel panic. Two panics on 2026-08-27 plus assorted killed pushes
+# had left 35 orphaned `.next-push-*` dirs — 5.75 GB — going back to 08-12, next to stray
+# `.next-check-*` / `.next-diag-*` from ad-hoc verification runs. Disk was not the real cost:
+# it is the same class of bug as the unbounded dev cache that panicked this machine, i.e.
+# cleanup that only happens on a graceful exit.
+#
+# `-mmin +120` is the concurrency guard and it is LOAD-BEARING: sibling sessions push into
+# this same working tree, and a build that is still running keeps a fresh mtime on its dir.
+# Only dirs untouched for two hours are swept, so this can never delete a live push's output.
+# Additive only — it removes no gate and changes no exit code. `|| true` because `set -e` is
+# on and "nothing to sweep" is the normal, healthy case.
+find apps/web apps/factory -maxdepth 1 -type d \
+  \( -name '.next-push-*' -o -name '.next-check-*' -o -name '.next-diag-*' -o -name '.next-gate-*' \) \
+  -mmin +120 -exec rm -rf {} + 2>/dev/null || true
+
+echo "→ Checking schema/migration drift (table-level)..."
+node packages/database/scripts/check-schema-drift.mjs || {
+  echo "❌ Table-level drift check FAILED — see message above"
+  exit 1
+}
+
+echo "→ Checking schema/migration drift (column-level)..."
+node packages/database/scripts/check-column-drift.mjs || {
+  echo "❌ Column-level drift check FAILED — see message above"
+  exit 1
+}
+
+# PLAN Step 0.1 / amendment A-2 — the applied-but-missing gate's OWN test.
+#
+# The gate itself (check-applied-but-missing.mjs) cannot run here: detecting a migration that is
+# on the database with no folder in the repo means querying that database, and a push hook would
+# need a production credential on every developer's machine — the variable PLAN Step 0.3 exists
+# to remove. The gate therefore runs at deploy, inside migrate-direct.mjs.
+#
+# What runs HERE is its test suite, so the gate cannot rot between deploys. The decision is a pure
+# function and every branch is covered without a database; the four DB-backed arms use a throwaway
+# schema on the LOCAL dev Postgres and skip cleanly when it is absent. Proven able to fail:
+# blanking the drift set turns 3 of the 10 arms red.
+echo "→ Running @nexus/database gate tests..."
+npm run test --workspace=@nexus/database --silent > /tmp/database-tests.log 2>&1 || {
+  echo "❌ @nexus/database tests FAILED"
+  tail -40 /tmp/database-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/database-tests.log | tail -1 || true
+echo "✓ @nexus/database gate tests passed"
+
+# 2026-09-16 — row-level security has TWO builders: the generator the test database
+# applies, and the migrations every deployed database applies. Both checks below exist
+# because each of these went wrong TWICE in one day and was caught only by counting by
+# hand. Mutation-tested: each goes red on its exact mistake (see the script headers).
+echo "→ Checking every model is classified for row-level security..."
+node packages/database/scripts/check-model-ownership.mjs || {
+  echo "❌ model-ownership check FAILED — an unclassified model gets no GRANT and no policy"
+  exit 1
+}
+
+echo "→ Checking shared policy files match their migrations..."
+node packages/database/scripts/check-policy-migration-parity.mjs || {
+  echo "❌ policy ⇄ migration parity FAILED — tests and production would enforce different rules"
+  exit 1
+}
+
+# W5.40 — i18n catalog parity + t()-ref check. Hard-fail since W5.42
+# cleared the 25 inherited bugs (organize.*, replenishment.automation.*,
+# stock.recallDetail.*, stock.serials.*). Race-losses like W5.34/W5.38
+# now fail the push instead of leaving operators on the wrong locale.
+echo "→ Checking i18n catalog parity..."
+node scripts/check-i18n-catalog.mjs || {
+  echo "❌ i18n catalog check FAILED — see message above"
+  exit 1
+}
+
+# W5.47 — link-target regression check. Catches dead Link/breadcrumb
+# hrefs (after a route gets renamed or removed) before the operator
+# clicks into a 404. Hard-fail; tree is currently clean (310 link
+# targets resolve as of 2026-05-09).
+echo "→ Checking link targets..."
+node scripts/check-link-targets.mjs || {
+  echo "❌ Link-target check FAILED — see message above"
+  exit 1
+}
+
+# P3 — UI legibility guard (UI_REBUILD_STRATEGY.md). Fails the push if
+# raw text-slate-400 / faint slate-100/200 borders are reintroduced
+# outside dark: variants + the exempt flat-file/design dirs. Keeps the
+# app-wide token sweep from regressing back into thin/faint UI.
+echo "→ Checking UI token guard (P3)..."
+node scripts/p3-token-sweep.mjs --check || {
+  echo "❌ UI token guard FAILED — see message above"
+  exit 1
+}
+
+# Wave 1 (2026-07-04) — DS-conformance ratchet: no NEW native selects/date
+# inputs/inline fontSize/inline hexes anywhere; per-section baselines only
+# go down as waves land. Also: ebay.css colours ⊆ the Amazon ads palette.
+echo "→ Checking DS-conformance ratchet (Wave 1)..."
+node scripts/ds-conformance-guard.mjs --check || {
+  echo "❌ DS-conformance ratchet FAILED — see message above"
+  exit 1
+}
+
+# A platform alias written in the wrong FORM is invalid at computed-value time, so the browser
+# applies the property's initial value and discards the declaration — no error, anywhere.
+# Measured on prod 2026-08-25: 6 panels on /marketing/ads/trust with no surface and no border,
+# and 6 elements on /settings/security with black ones. The correct form depends on the shell
+# (`.h10-shell` pins the text/surface/border tier to CHANNELS; every other scope, and the whole
+# status/brand tier, is WHOLE COLOURS), so a blanket sweep is as dangerous as the bug — one was
+# shipped in deef67686 and reverted in the next commit. This checks BOTH directions.
+# The DS SUPPLIES 206 --nds-* tokens and its own sheets are 100% tokenized (token-guard enforces
+# it). The app CONSUMES ~10% — 10,343 raw hex against 1,170 token references, with
+# rules-automation.css (3,674) and ads.css (2,144) the heaviest. token-guard does not reach app
+# CSS, so those could grow while a conversion ran: converting into a bucket still filling. Frozen
+# per file; conversions lower them, a push may never raise one. A file with no baseline entry is
+# held at ZERO — new CSS has no legacy to inherit.
+node scripts/check-css-hex-ratchet.mjs --check || {
+  echo "❌ raw-hex ratchet FAILED — see message above (rule + why: scripts/check-css-hex-ratchet.mjs header)"
+  exit 1
+}
+
+# Everything NEW must use the design system. The parts of the platform not yet converted
+# (app/products, app/fulfillment, …) are being left until those pages are rebuilt — a deliberate
+# decision. What must not happen meanwhile is the pile GROWING: a file may keep the raw controls
+# it has and may not gain one, and a file with no baseline entry is held at ZERO. Anything the DS
+# genuinely does not cover gets ADDED to the DS and filed in .claude/DS-GAPS.md — 89 of the 98
+# gaps filed during the sweep were closed that way, not worked around.
+# A custom property whose value is `var(X)` resolves in the scope where it is DECLARED. So a
+# :root alias of a token that .dark overrides keeps its LIGHT value inside .dark, and no amount
+# of overriding X reaches it. Three status pills measured 1.50, 2.09 and 2.21 in the browser
+# while a static resolver called them passing.
+# The ads console pins its own ground light, so it must pin every token .dark flips — or the text
+# flips and the ground does not (--nds-text measured 1.11:1 that way). A pin can also go STALE:
+# one pinned --nds-text-3 through the ramp and silently dragged it back below the 3:1 icon floor
+# after the role diverged. This checks both: every flipping token pinned, every pin still equal to
+# the DS light value.
+node scripts/check-shell-pin-fresh.mjs --check || {
+  echo "❌ shell-pin guard FAILED — see message above (rule + why: scripts/check-shell-pin-fresh.mjs header)"
+  exit 1
+}
+
+node scripts/check-dark-alias-scope.mjs --check || {
+  echo "❌ dark-alias scope guard FAILED — see message above (rule + why: scripts/check-dark-alias-scope.mjs header)"
+  exit 1
+}
+
+node scripts/check-raw-primitives-ratchet.mjs --check || {
+  echo "❌ raw-primitive ratchet FAILED — see message above (rule + why: scripts/check-raw-primitives-ratchet.mjs header)"
+  exit 1
+}
+
+node scripts/check-alias-form.mjs --check || {
+  echo "❌ alias-form guard FAILED — see message above (rule + why: scripts/check-alias-form.mjs header)"
+  exit 1
+}
+
+# apps/factory carries a COPY of the design system, not an import. A file identical in
+# both apps must stay identical — a DS fix that lands in one app is not applied to the
+# platform, and nothing else in this hook can see that.
+node scripts/check-ds-fork-drift.mjs --check || {
+  echo "❌ DS fork-drift ratchet FAILED — see message above (rule + why: scripts/check-ds-fork-drift.mjs header)"
+  exit 1
+}
+
+# Every border-radius that names no DS scale step. Frozen, not banned: the scale starts at 6px
+# with nothing between 8 and 10, so small elements genuinely have nowhere to land. This stops the
+# number growing while the scale question is open.
+node scripts/check-css-radius-ratchet.mjs --check || {
+  echo "❌ radius ratchet FAILED — see message above (rule + why: scripts/check-css-radius-ratchet.mjs header)"
+  exit 1
+}
+
+# 2026-09-02 (hub #575) — DS stylesheets must PARSE. A `*` immediately before a `/` inside a
+# comment ends that comment early, the rest of the block becomes declarations, and the whole route
+# comes back as a Turbopack error page (#262). No other gate reads CSS structure: tsc does not read
+# CSS, and the token/ratchet guards scan for names inside text that already parses. Comments are NOT
+# stripped here, deliberately — an unbalanced one is the defect.
+echo "→ Checking DS stylesheets parse (GDS §8.7)..."
+node scripts/check-css-parse.mjs || {
+  echo "❌ CSS parse FAILED — a stylesheet that does not parse takes the route DOWN rather than degrading it"
+  exit 1
+}
+
+# 2026-08-25 — DS-shadow ratchet. A page rule ending in a bare input/select/button/textarea
+# inside a descendant chain BEATS the design-system primitive (.h10-aig-field input is (0,2,1)
+# against .nds-field > input's (0,1,1)), so a converted control renders as design-system markup
+# and page-stylesheet pixels. 391 of them across 28 sheets when this was measured, which is why
+# it freezes rather than bans. The two fixes are NOT the same fix — see the script header.
+node scripts/check-css-ds-shadow-ratchet.mjs --check || {
+  echo "❌ DS-shadow ratchet FAILED — see message above (rule + why: scripts/check-css-ds-shadow-ratchet.mjs header)"
+  exit 1
+}
+
+# TECH_DEBT #62 (2026-08-06) — tokens.css is generated from
+# tokens/css-vars.ts; a hand-edit to the output silently dies on the next
+# regen (the rail vars lived that way for five weeks). Fail the push when
+# the two drift. Added in the SAME commit that ported the rail vars into
+# css-vars.ts — this check is only safe once the generator owns them.
+# U13 — a control that refuses must be able to say why. A `title` on a
+# `disabled` element is UNREACHABLE (Chrome fires no pointer events on a
+# disabled form control), so the reason is written where nobody can read it.
+# Measured on prod 2026-08-19: 28 rule toggles + mode notches refusing in
+# total silence. Ratchet over rules-automation; the remedy is `aria-disabled`
+# + a held class + a handler that answers the click.
+echo "→ Checking silent-disabled ratchet (U13)..."
+node scripts/check-silent-disabled.mjs || {
+  echo "❌ silent-disabled check FAILED - see message above"
+  exit 1
+}
+
+# D2c (2026-08-20) — button-vocabulary ratchet. Reported as "the buttons are
+# inconsistent": one dialog shipped with FOUR button idioms and every gate was
+# green, because none of them can see that two buttons an inch apart are
+# different objects. Counts EXCESS idioms per component (Σ idioms−1) so a file
+# that already mixes two cannot quietly grow to five. AST, not grep.
+echo "→ Checking button-vocabulary ratchet (D2c)..."
+node scripts/check-button-vocabulary.mjs || {
+  echo "❌ button-vocabulary check FAILED - see message above"
+  exit 1
+}
+
+# 2026-08-20 — help-cursor ratchet, baseline ZERO. The operator ruled the
+# question-mark cursor out everywhere: hovering an info/eye icon must keep the
+# default cursor, and the tooltip alone carries the explanation. 55 occurrences
+# were swept the day this shipped; a literal reintroduction fails the push.
+echo "→ Checking help-cursor ratchet..."
+node scripts/check-help-cursor.mjs || {
+  echo "❌ help-cursor check FAILED - see message above"
+  exit 1
+}
+
+# MAP.3 (2026-08-19) — connection-resolver ratchet. A site that resolves a
+# ChannelConnection without being told which account it means is how a push lands
+# in the wrong store once a second account exists. The count may only go DOWN;
+# raising AMBIENT_BASELINE is a visible diff someone has to justify. Structural
+# (TypeScript AST), not a grep — a regex here counts comments and misses shorthand.
+echo "→ Checking connection-resolver ratchet (MAP.3)..."
+( cd apps/api && npx tsx scripts/map0-connection-resolution-audit.mts --ratchet >/dev/null ) || {
+  ( cd apps/api && npx tsx scripts/map0-connection-resolution-audit.mts --ratchet | tail -8 )
+  echo "❌ connection-resolver ratchet FAILED — see message above"
+  exit 1
+}
+
+# P1.2 (docs/channel-connections/FINAL-PLAN.md) — channel-gateway ratchet. Every send to
+# eBay / Amazon / Shopify / Ads / Etsy goes through services/gateway/gateway.ts (account check,
+# publish mode, rate bucket, error class, call ledger). The count of sends outside it may only go
+# DOWN; a send that is not a channel API call carries `// gateway-exempt: <reason>`.
+echo "→ Checking channel-gateway ratchet (P1.2)..."
+( cd apps/api && npx tsx scripts/channel-gateway-ratchet.mts --check >/dev/null 2>&1 ) || {
+  ( cd apps/api && npx tsx scripts/channel-gateway-ratchet.mts --check 2>&1 | tail -6 )
+  echo "❌ channel-gateway ratchet FAILED — see message above"
+  exit 1
+}
+
+# P2.1 (docs/channel-connections/build/P2.1.md) — the inbound ledger's two standing rules.
+# 1) Nothing DELETES an inbound event (Decision D8: archive, never delete) — the ledger is the
+#    only record that a notification ever arrived.
+# 2) Every event type a receiver writes has a replay handler, or is named unreplayable with a
+#    reason. The registry and the receivers are two lists of the same topics, and they had
+#    already drifted once: `refunds/create` was written and `refund/create` was listed, so no
+#    refund was replayable and nothing said so.
+echo "→ Checking the inbound ledger's rules (P2.1)..."
+node scripts/check-inbound-ledger.mjs >/dev/null 2>&1 || {
+  node scripts/check-inbound-ledger.mjs 2>&1 | tail -8
+  echo "❌ inbound-ledger guard FAILED — see message above (rule + why: scripts/check-inbound-ledger.mjs header)"
+  exit 1
+}
+
+echo "→ Checking tokens.css is in sync with css-vars.ts..."
+npm run tokens:check --silent || {
+  echo "❌ tokens.css drift — edit tokens/css-vars.ts and run 'npm run tokens:gen'; never hand-edit tokens.css"
+  exit 1
+}
+
+# 2026-09-02 (hub #684/#708, DS.1-b) — the SAME check for the factory fork, which had none.
+# `npm run tokens:check` is web-only: root package.json pointed both token scripts at
+# apps/web, and neither app had one of its own, so factory's generated tokens.css has never had a
+# drift gate. `check-ds-fork-drift` is blind to stylesheets, so nothing else covered it either.
+echo "→ Checking factory tokens.css is in sync with its css-vars.ts..."
+npm run tokens:check:factory --silent || {
+  echo "❌ factory tokens.css drift — edit apps/factory/.../tokens/css-vars.ts and run 'npm run tokens:gen:factory'"
+  exit 1
+}
+
+# 2026-09-02 (hub #708, DS.1-b) — every var(--nds-…) without a fallback must name a token DEFINED
+# IN THE APP THAT CONSUMES IT. An undefined custom property is invalid at computed-value time: the
+# property silently takes its inherited or initial value, so the surface renders WRONG rather than
+# broken and nothing else in this file can see it. Replaces the unwired, fork-blind
+# `check-css-token-definitions.mjs`, whose repo-wide definition set called a web-only token
+# "defined" for factory and whose repo-wide walk reported guards' own self-test fixtures as defects.
+echo "→ Checking every consumed --nds-* token resolves in its own app..."
+node scripts/check-token-resolution.mjs --check || {
+  echo "❌ token-resolution FAILED — see above (rule + why: scripts/check-token-resolution.mjs header)"
+  exit 1
+}
+
+# 2026-09-02 (hub #583) — the light pin must cover every token `.dark` actually CHANGES.
+# `shared-shell.css` pins ~95 tokens back to light on `body:has(.h10-shell)` so a console page
+# ignores the OS theme, and that list was maintained by hand: its own header says "adding a `.dark`
+# override means adding its pin HERE too". An instruction in a comment is not a mechanism — a dark
+# value minted for `--nds-chrome-bg` escaped it, and the diff found four more, three of them the
+# provenance inks. Runs AFTER tokens:check so parity is measured against freshly generated CSS.
+echo "→ Checking dark/pin parity (GDS §8.8)..."
+node scripts/check-dark-pin-parity.mjs || {
+  echo "❌ dark-pin parity FAILED — a light-pinned page would render these tokens with their dark values"
+  exit 1
+}
+
+# 2026-08-24 — the DS's OWN two guards. Both shipped with the system (Phase 7 /
+# the API-consistency pass) and both sat unwired, so the design system's internal
+# conformance was the one thing every push did NOT measure while the app-level
+# ratchets above were enforced. They were red when wired: 55 token violations and
+# 4 barrel gaps. Cleared in the same commit that added these lines — the check is
+# only honest once the tree passes it.
+#
+#   token-guard — no raw hex, no numbered primitive ramps in component CSS, no raw
+#                 Tailwind palette in DS .tsx. The last clause is why the DS no
+#                 longer depends on the consuming app's Tailwind build at all.
+#   api-guard   — every public type a component exports is reachable from its
+#                 area barrel, so a consumer can name what it is handed.
+echo "→ Checking DS token conformance..."
+node apps/web/src/design-system/tools/token-guard.mjs || {
+  echo "❌ DS token-guard FAILED — see message above"
+  exit 1
+}
+
+# AG.4 — the AG Grid import boundary. The engine is the migration's seam: one file imports the
+# React binding, so swapping or reverting the engine is one change. That was a comment until now,
+# and a second importer appeared within hours of it being written.
+echo "→ Checking AG Grid import boundary..."
+node scripts/check-ag-grid-import-boundary.mjs || {
+  echo "❌ AG Grid import boundary FAILED — see message above"
+  exit 1
+}
+
+# GDS (2026-08-29) — three gates for the grid design system (docs/2026-08-28-grid-design-system-gds.md §8).
+#   option identity — an inline object/arrow on <NexusGrid> re-runs AG's column model every render.
+#   grid-kit ratchet — the rebuild backlog may only shrink: no retiring kit gains an importer.
+#   DS-GAPS append-only — the ledger only grows.
+echo "→ Checking grid option identity (GDS §8.5)..."
+node scripts/check-grid-option-identity.mjs || {
+  echo "❌ grid option identity FAILED — see message above"
+  exit 1
+}
+echo "→ Checking grid-kit ratchet (GDS §8.7)..."
+node scripts/check-grid-kit-ratchet.mjs --check || {
+  echo "❌ grid-kit ratchet FAILED — see message above"
+  exit 1
+}
+# AG module gate — a feature whose module is not registered in design-system/grid/modules.ts does
+# not work and says NOTHING in production (AG reports it through ValidationModule, which is
+# dev-only). Two shipped this way before this gate existed: every text cell silently uneditable,
+# and api.getCellValue silently returning undefined. `--self-test` proves it catches both.
+echo "→ Checking AG module gate (GDS §8)..."
+node scripts/check-grid-modules.mjs || {
+  echo "❌ AG module gate FAILED — see message above"
+  exit 1
+}
+# EV.1 — the event contract. Every published event type is declared in
+# packages/events/catalog.ts, Redis stream commands stay inside the driver, and
+# no TENTH in-process event bus appears (the nine that predate the broker are a
+# fixed, shrinking baseline). AST-based; reads the catalogue from source, so it
+# can never pass against a stale build of the contract it enforces.
+echo "→ Checking event contract (EV.1)..."
+node scripts/check-event-contract.mjs || {
+  echo "❌ event contract FAILED — see message above"
+  exit 1
+}
+# PH.3 — the product graph contract. Every field in the SDL has a stated auth
+# decision, no stale registry entries, and the schema stays read-only (the
+# /graphql route carries ONE route permission, the READ one).
+echo "→ Checking graph contract (PH.3)..."
+node scripts/check-graph-contract.mjs || {
+  echo "❌ graph contract FAILED — see message above"
+  exit 1
+}
+# PH.4a — business logic leaves the HTTP layer. A route file may keep the DB
+# calls it has, may not gain one; a NEW route file is held at ZERO. The
+# baseline lives in scripts/route-prisma-baseline.json and only falls — every
+# rebuilt page and every de-layered handler ratchets it down.
+echo "→ Checking route de-layering ratchet (PH.4a)..."
+node scripts/check-route-prisma-ratchet.mjs --check || {
+  echo "❌ route-prisma ratchet FAILED — see message above"
+  exit 1
+}
+# PH.4b — bounded-context boundaries. Advertising privately owns 80 models;
+# nothing outside the context may touch them, or extraction becomes a
+# cross-service database read.
+echo "→ Checking context boundary (PH.4b)..."
+node scripts/check-context-boundary.mjs --check || {
+  echo "❌ context boundary FAILED — see message above"
+  exit 1
+}
+# AE.1 (2026-09-16) — every StockLevel write takes the product stock lock first. Without it,
+# simultaneous sales lose updates (measured: 20 sales on 20 units left 19). Only the files in
+# scripts/stock-writer-lock.json may write stock, with exact counts. Mutation-tested (11 arms). Since
+# 2026-09-19 it also checks the shared-stock doors in packages/database/workspaces/*.sql (6 arms).
+echo "→ Checking stock writers take the stock lock (AE.1)..."
+node scripts/check-stock-writer-lock.mjs --check || {
+  echo "❌ stock-writer lock FAILED — see message above (rule + why: scripts/check-stock-writer-lock.mjs header)"
+  exit 1
+}
+# Shared stock (2026-09-19) — every listing number comes from ONE ledger (loadSyncLedgers), which knows
+# which products sell from another business's pool. A hand-made ledger would push this business's own
+# (often empty) stock over the pool number. Mutation-tested (3 arms).
+echo "→ Checking every Sync Control ledger comes from loadSyncLedgers (shared stock)..."
+node scripts/check-sync-ledger-source.mjs || {
+  echo "❌ sync-ledger source FAILED — see message above (rule + why: scripts/check-sync-ledger-source.mjs header)"
+  exit 1
+}
+# P4.4a (2026-09-21) — which currency a market prices in is Marketplace.currency,
+# read through ONE accessor. It was re-implemented in eight places (two functions
+# with the same name in two files), all agreeing on EUR/GBP and disagreeing on the
+# rest — so a price pushed to Amazon Poland, Sweden or Turkey carried EUR, and
+# Amazon reports that as a success. The gate carries its own detector controls.
+echo "→ Checking market currency comes from one accessor (P4.4a)..."
+node apps/api/scripts/check-market-currency.mjs || {
+  echo "❌ market-currency FAILED — see message above (rule + why: apps/api/scripts/check-market-currency.mjs header)"
+  exit 1
+}
+# EV.4 — every scheduled job goes through the cluster-safe cron wrapper.
+# node-cron is per-process: a direct import means that job runs once per
+# replica, which is how 117 crons become 234.
+echo "→ Checking clustered cron (EV.4)..."
+node scripts/check-cron-clustered.mjs || {
+  echo "❌ clustered cron FAILED — see message above"
+  exit 1
+}
+# 2026-09-02 (hub #507/#575) — nothing may put a `__`-prefixed object on window/globalThis in a
+# CLIENT bundle without a decision. The grid lab shipped a live AG `GridApi` on `window.__gdsSheet`
+# to anyone who opened /design/grid-lab on a deployed build (#500), and the factory's SSE manager
+# shipped a live EventSource the same way. Ratcheted at 0: both are now behind NODE_ENV.
+echo "→ Checking client-bundle global exposure..."
+node scripts/check-global-exposure.mjs || {
+  echo "❌ global-exposure FAILED — a __-prefixed global in a production bundle ships a live handle to any visitor"
+  exit 1
+}
+
+# PLAN Step 4.0 / 4.2 / 4.3 #5 (R-45, R-49, R-65, 2026-09-24) — contrast at 7:1 on the palette the studio actually paints: every
+# colour derived from design-system/styles/tokens.css at run time (both themes), the primary button's label on its rest AND hover
+# fill included. The AAA sweep (A-51) took both counts to ZERO; this holds them there, for web AND factory's own palette.
+echo "→ Checking 7:1 contrast on the design-system tokens (web + factory, 0 / 0)..."
+{ node --test scripts/check-nds-contrast.test.mjs >/dev/null \
+  && node scripts/check-nds-contrast.mjs --max-failures 0 --max-aa-failures 0 \
+  && node scripts/check-nds-contrast.mjs --tokens apps/factory/src/design-system/styles/tokens.css --max-failures 0 --max-aa-failures 0; } || {
+  echo "❌ contrast gate FAILED — a text pair is below 7:1 (run: node scripts/check-nds-contrast.mjs [--tokens apps/factory/src/design-system/styles/tokens.css])"
+  exit 1
+}
+
+# R-45 / R-50 / R-61 (A-43, A-48, 2026-09-24) — the three browser gates are back (removed 09-16, 7bd90cb11). Path-scoped (only when the
+# pushed commits touch a file a gate's reading depends on — each gate's own STAMP_FILES), OWN servers on free ports and the LOCAL
+# database, a RATCHET against scripts/browser-gates-baseline.json, and NOT MEASURED always fails. A UI push that runs editor-open costs
+# ~20–26 min (measured); any other push ~1 s.
+echo "→ Browser gates (grid chrome, open-gesture, control census — R-45, R-50, R-61)..."
+node --test scripts/run-browser-gates.test.mjs scripts/lib/gate-write-guard.test.mjs scripts/lib/gate-aloneness.test.mjs >/dev/null || {
+  echo "❌ browser-gate runner tests FAILED — run: node --test scripts/run-browser-gates.test.mjs"
+  exit 1
+}
+node scripts/run-browser-gates.mjs --pre-push || {
+  echo "❌ browser gates FAILED — see the summary above (rules: scripts/run-browser-gates.mjs header). Re-run by hand: npm run gates:browser"
+  exit 1
+}
+
+echo "→ Checking DS-GAPS append-only (GDS §8.6)..."
+node scripts/check-ds-gaps-append-only.mjs --check || {
+  echo "❌ DS-GAPS append-only FAILED — see message above"
+  exit 1
+}
+
+echo "→ Checking DS barrel/API consistency..."
+node apps/web/src/design-system/tools/api-guard.mjs || {
+  echo "❌ DS api-guard FAILED — see message above"
+  exit 1
+}
+
+# AG.3 — apps/web unit tests. This workspace had 89 `*.vitest.test.ts` files, no vitest config
+# and no `test` script, so not one of them had ever run: they were written, reviewed and committed
+# as if they were gates while asserting nothing. All 89 pass (1017 tests) as of 2026-08-28.
+#
+# Placed BEFORE the builds deliberately — the suite is pure-logic and finishes in about a second,
+# so a broken assertion fails here instead of after a multi-minute `next build`.
+echo "→ Running apps/web unit tests..."
+npm run test --workspace=@nexus/web --silent > /tmp/web-tests.log 2>&1 || {
+  echo "❌ apps/web tests FAILED"
+  tail -40 /tmp/web-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/web-tests.log | tail -1 || true
+echo "✓ apps/web tests passed"
+
+# PLAN amendment A-8 (2026-09-22) — the apps/api suite. Until today the hook ran only
+# `test:security` for this workspace, which is `vitest run src/lib/auth src/routes/auth-routes…`
+# — AUTH ONLY. The other 833 `*.vitest.test.ts` files plus 72 under `__tests__/` never ran on a
+# push, so SEVEN rows of the plan's gate ledger that read "Test suite" were guarding nothing.
+#
+# That is the same defect this file already records for apps/web at the block above: tests
+# "written, reviewed and committed as if they were gates while asserting nothing". It had simply
+# never been checked for apps/api. Two examples found when the suite was first run end to end:
+# five VALIDATION_PREVIEW arms had stopped exercising their subject and four of them still passed,
+# and one credentials arm was asserting env variables that P6.1 moved into a database table.
+#
+# Cost: ~50 s (measured; 882 files, 11,142 tests). The two full Next.js builds below dwarf it.
+#
+# 🔴 It runs `test:hook`, not `test`, and the difference is `--disableConsoleIntercept`.
+# Every test passes on either — 11,012 passed in every one of ~15 runs — but the plain `vitest run`
+# EXIT CODE is not reliable: the run intermittently ends with
+#   `EnvironmentTeardownError: [vitest-worker]: Closing rpc while "onUserConsoleLog" was pending`
+# which vitest counts as an unhandled error and exits 1 although nothing failed. Measured here:
+#
+#   vitest run                       exit 1 in 2 of 4 runs
+#   vitest run --silent              exit 1 in 2 of 3 runs   (--silent hides the DISPLAY, not the RPC)
+#   vitest run --pool=threads        exit 1 in 2 of 8 runs   (faster, but does NOT fix it)
+#   vitest run --disableConsoleIntercept   exit 1 in 0 of 8 runs
+#
+# The last one is the only option that addresses the named mechanism rather than correlating with
+# it: `onUserConsoleLog` IS the console-forwarding RPC, and this flag stops intercepting console
+# output instead of shipping it to the reporter. The cost is that a log line is no longer attributed
+# to its test file — which is why the interactive `test` script is left alone, and only the hook,
+# which passes `--silent` anyway, gives that up.
+#
+# A flaky exit code cannot be a gate: a push that fails one time in two teaches people to bypass it.
+#
+# Placed BEFORE the builds for the same reason as apps/web: a broken assertion should fail here
+# rather than after several minutes of `next build`.
+echo "→ Running apps/api unit tests..."
+npm run test:hook --workspace=@nexus/api --silent > /tmp/api-tests.log 2>&1 || {
+  echo "❌ apps/api tests FAILED"
+  tail -40 /tmp/api-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/api-tests.log | tail -1 || true
+echo "✓ apps/api tests passed"
+
+echo "→ Building apps/web..."
+# Build into a dir unique to THIS push. Concurrent pushes previously shared `.next` and
+# deleted each other's output mid-build; the failure looked like a code error (ENOENT on a
+# manifest the build had just written) and cost three pushes on 2026-08-06 alone. A per-PID
+# dir is also fresh by construction, so the old `rm -rf .next` is redundant.
+WEB_BUILD_DIR=".next-push-$$"
+trap 'rm -rf "$(git rev-parse --show-toplevel)/apps/web/$WEB_BUILD_DIR"' EXIT
+(cd apps/web && NEXT_DIST_DIR="$WEB_BUILD_DIR" npx next build > /tmp/web-build.log 2>&1) || {
+  echo "❌ apps/web build FAILED"
+  tail -30 /tmp/web-build.log
+  exit 1
+}
+echo "✓ apps/web build passed"
+
+echo "→ Building apps/api..."
+npm run build --workspace=@nexus/api > /tmp/api-build.log 2>&1 || {
+  echo "❌ apps/api build FAILED"
+  tail -30 /tmp/api-build.log
+  exit 1
+}
+echo "✓ apps/api build passed"
+
+# Security workstream S2 — deny-by-default coverage. Boots the API
+# (registration only; app.ready() never opens a DB connection) and fails
+# the push if ANY route lacks a permission mapping in the manifest. This
+# is what makes deny-by-default a proven invariant: a new endpoint is
+# invisible until it's mapped in permissions-manifest.ts.
+echo "→ Checking RBAC deny-by-default coverage (S2)..."
+npx tsx apps/api/src/scripts/check-rbac-coverage.ts > /tmp/rbac-coverage.log 2>&1 || {
+  echo "❌ RBAC coverage FAILED — a route has no permission mapping"
+  tail -40 /tmp/rbac-coverage.log
+  exit 1
+}
+grep -E "RBAC coverage:" /tmp/rbac-coverage.log || true
+echo "✓ RBAC coverage: every route maps to a permission"
+
+# Security workstream S5 — the auth/RBAC test suite (password hashing,
+# sessions, CSRF, lockout, field filter, permission matrix, guardrails,
+# MFA). Fast + DB-free; runs on every push.
+echo "→ Running security test suite (S5)..."
+npm run test:security --workspace=@nexus/api > /tmp/sec-tests.log 2>&1 || {
+  echo "❌ Security tests FAILED"
+  tail -40 /tmp/sec-tests.log
+  exit 1
+}
+grep -E "Tests +[0-9]+ passed" /tmp/sec-tests.log | tail -1 || true
+echo "✓ Security tests passed"
+
+# AE.1 (2026-09-16) + AE.3 (2026-09-17, R-AE-16) — two suites need a MULTI-connection PostgreSQL (the
+# normal test database queues every transaction): the stock race test (a race cannot happen on one
+# connection, so it would pass regardless) and the end-to-end shared-product copy (the transfer engine's
+# apply needs a second connection). The runner starts one throwaway container, runs both files one after
+# another, and fails if either file skipped, failed, or passed a different number of tests. It prints a
+# named SKIP (exit 0) only when Docker or a PostgreSQL 17 image is absent. ~10-40s.
+echo "→ Running the real-PostgreSQL tests on a throwaway container (AE.1 stock race, AE.3 copy)..."
+node scripts/run-real-postgres-tests.mjs || {
+  echo "❌ real-PostgreSQL tests FAILED — see message above"
+  exit 1
+}
+
+# 2026-09-16 — business profiles ON. Production will run with NEXUS_WORKSPACES_ENABLED=1, but the
+# default suite runs with it OFF (vitest.setup.ts), because every test predating that day assumed
+# it. Measured with profiles ON: 42 files / 218 tests fail, recorded in
+# apps/api/scripts/profiles-on-baseline.json. This fails the push on ANY new profiles-ON failure,
+# any baselined file getting worse, or a fixed file left in the list — so the list only shrinks.
+# Runs here and not in CI: CI has no developer catalogue, so its numbers would differ. ~30s.
+echo "→ Checking the API suite with business profiles ON (ratchet)..."
+node apps/api/scripts/profiles-on-ratchet.mjs > /tmp/profiles-on-ratchet.log 2>&1 || {
+  echo "❌ profiles-ON ratchet FAILED — see below"
+  tail -40 /tmp/profiles-on-ratchet.log
+  exit 1
+}
+grep -E "profiles-ON ratchet:|Improved" /tmp/profiles-on-ratchet.log || true
+
+echo "✅ All workspaces build cleanly — pushing"

@@ -1,127 +1,321 @@
-# Closes TECH_DEBT.md #0 — schema-migration drift CI gate.
+# Required PR checks — docs/ci-plan.md §2.3 (Tier C).
 #
-# The pre-push hook (.githooks/pre-push) already runs these checks
-# locally, but it's local-only by design — fresh clones, teammates
-# who haven't run `git config core.hooksPath .githooks`, and any
-# squash-merge from a branch that bypassed the hook don't catch
-# drift before it lands on main.
+# Target: under 10 minutes of wall time, with EVERY security check on every run:
+#   checks       static gates, typecheck of affected workspaces, the whole web suite, small workspaces
+#   api (1..3)   the WHOLE API suite in three shards, business profiles OFF then ON
+#   postgres     real PostgreSQL 17: runtime-role isolation, the 11 real-PG race suites, RBAC
+#                deny-by-default coverage, database package tests, the migration upgrade check
+#   smoke (1..2) Playwright @smoke against `next start` + the API in production mode on a restricted
+#                database login, seeded disposable database, production hosts fenced off
+#   db-security  the profiles-ON ratchet over all API shards (fixed name, so a branch rule can require it)
+#   ci-ok        one required status for the whole run
 #
-# This workflow is the "CI is the long-term answer" referenced in
-# the pre-push hook header comment. Mirrors the local checks so the
-# enforcement edge moves from "did each developer install the hook?"
-# to "did this commit pass GitHub Actions?".
-#
-# What runs here:
-#   1. Table-level drift  — Prisma model with no CREATE TABLE
-#   2. Column-level drift — Prisma field with no ADD COLUMN
-#   3. i18n catalog parity — en.json ↔ it.json keys + t() refs
-#   4. prisma validate — schema syntactic / semantic validity
-#   5. apps/api typecheck + build (cheap, no DB needed)
-#
-# What does NOT run yet (deferred):
-#   - apps/web full next build — needs env vars (GROWTHBOOK_*,
-#     SENTRY_DSN, etc.); add when the secrets are configured.
-#   - Real Postgres shadow-DB drift via `prisma migrate diff
-#     --exit-code` — needs a service container; the table+column
-#     scripts catch the same class of bug without a DB.
+# Nothing here is path-filtered except typecheck (turbo --affected) and the small-workspace tests.
+# Selecting "security" tests by file name misses real ones, so the API suite always runs whole.
 
 name: CI
 
+# No `push: main` trigger: Deploy API calls this workflow (`verify`) on the exact release commit, and
+# the nightly workflow runs it on main (docs/ci-plan.md §2.4–2.5). Two copies per push were waste.
 on:
-  workflow_call:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_call:
+  workflow_dispatch:
 
-# Cancel in-progress runs when a new commit is pushed to the same
-# branch — saves CI minutes on rapid pushes.
+# A newer push to the same PR cancels the older run. Runs on main are never cancelled: each commit
+# keeps its own verdict.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  NEXUS_DISABLE_BACKGROUND_JOBS: '1'
+  ENABLE_QUEUE_WORKERS: '0'
 
 jobs:
-  drift-and-build:
-    name: Schema drift + i18n parity + API build
+  checks:
+    name: Static gates, typecheck, web and workspace tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: ./.github/actions/setup
+      - name: Base commit
+        run: node scripts/ci/base-commit.mjs >> "$GITHUB_ENV"
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+
+      - name: Static gates (all ~50, every failure reported)
+        run: node scripts/ci/run-static-gates.mjs
+
+      - name: Typecheck affected workspaces
+        run: npx turbo run typecheck --affected --cache=local:rw,remote:r -- --incremental false
+
+      - name: Web tests (whole suite — proxy, workspace paths and permission gates included)
+        env:
+          # The operators' zone and the developer machines'. Some date tests assert a Rome-local day
+          # (adsScope 'dates are read from LOCAL parts'); on a UTC runner their control cannot hold.
+          TZ: Europe/Rome
+        run: npm run test --workspace=@nexus/web
+
+      - name: Factory, shared and events tests (affected)
+        run: npx turbo run test --affected --filter=@nexus/factory --filter=@nexus/shared --filter=@nexus/events
+
+  api:
+    name: API tests (${{ matrix.shard }}/3, profiles OFF + ON)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
     env:
-      # Disposable PostgreSQL tests provide their own sockets. The guard still
-      # requires an explicit local target; CI has no developer catalogue.
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
-      REDIS_URL: redis://127.0.0.1:6379
-      NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
-      NEXUS_DISABLE_BACKGROUND_JOBS: '1'
-      ENABLE_QUEUE_WORKERS: '0'
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Disposable database (bootstrap + market catalogue; durability off)
+        run: |
+          psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
+          npx tsx scripts/ci/prepare-test-database.mts --url "$DATABASE_URL"
 
-      - name: Setup Node 22
-        uses: actions/setup-node@v4
+      - name: Profiles OFF
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+          NEXUS_TEST_REDIS_URL: redis://127.0.0.1:6379
+        run: |
+          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/off.json"
+          node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/off.json"
+
+      - name: Profiles ON (judged by the ratchet in db-security)
+        env:
+          NEXUS_WORKSPACES_ENABLED: '1'
+          # Same as the ratchet's own run: a dead Redis port, so no test reaches a real queue.
+          REDIS_URL: redis://127.0.0.1:1
+        run: |
+          set +e
+          node scripts/ci/api-test-plan.mjs --shard ${{ matrix.shard }}/3 --run -- --reporter=dot --reporter=json --outputFile.json="$RUNNER_TEMP/on.json"
+          echo "profiles-ON pass exited $? — known failures are judged against profiles-on-baseline.ci.json"
+          set -e
+          test -s "$RUNNER_TEMP/on.json" || { echo "✗ no profiles-ON report — could not measure"; exit 1; }
+          node scripts/ci/api-test-plan.mjs --check-skips "$RUNNER_TEMP/on.json"
+
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
+          name: profiles-on-${{ matrix.shard }}
+          path: ${{ runner.temp }}/on.json
+          retention-days: 7
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+  postgres:
+    name: PostgreSQL 17 — isolation, races, RBAC, migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      NEXUS_TEST_LOCAL_PG_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      REDIS_URL: redis://127.0.0.1:1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: ./.github/actions/setup
+      - name: Base commit
+        run: node scripts/ci/base-commit.mjs >> "$GITHUB_ENV"
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+      - name: Durability off; image for the runtime-role test
+        run: |
+          psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
+          docker pull -q postgres:17-alpine
 
-      - name: Schema-migration drift (table-level)
-        run: node packages/database/scripts/check-schema-drift.mjs
+      - name: RBAC deny-by-default coverage
+        run: npx tsx apps/api/src/scripts/check-rbac-coverage.ts
 
-      - name: Schema-migration drift (column-level)
-        run: node packages/database/scripts/check-column-drift.mjs
+      - name: Migrations — the PR's, applied as production applies them, equal a fresh database
+        run: node scripts/ci/check-migration-upgrade.mjs --server postgresql://postgres@127.0.0.1:5432
 
-      - name: i18n catalog parity + t() refs
-        run: node scripts/check-i18n-catalog.mjs
+      - name: Database package — baseline, applied-but-missing and the other database scripts
+        run: npm run test --workspace=@nexus/database
 
-      - name: Prisma schema validate
-        run: npx prisma validate --schema=packages/database/prisma/schema.prisma
-
-      - name: apps/api build (tsc)
-        run: npm run build --workspace=@nexus/api
-
-      - name: Migration credential selection
-        run: npm test --workspace=@nexus/database -- scripts/migration-connection.vitest.test.ts scripts/workspace-singletons.vitest.test.ts
-
-      - name: Prepare disposable tenant-role database
-        run: docker pull postgres:17-alpine
-
-      - name: Runtime login isolation on PostgreSQL 17
-        run: npm test --workspace=@nexus/database -- scripts/runtime-role-postgres.vitest.test.ts
-
-      - name: Concurrent domain operations through restricted database logins
+      - name: Real multi-connection PostgreSQL suites (races, doors, restricted logins)
         run: node scripts/run-real-postgres-tests.mjs --required
 
-      - name: Tenant model ownership and SQL parity
+  smoke:
+    name: Smoke (${{ matrix.shard }}/2) — production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: nexus_smoke_test
+        ports: ['5432:5432']
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      ADMIN_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_smoke_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Fence production off (the web app falls back to the production API when a variable is missing)
         run: |
-          node packages/database/scripts/check-model-ownership.mjs
-          node packages/database/scripts/check-policy-migration-parity.mjs
+          echo "0.0.0.0 nexusapi-production-b7bb.up.railway.app api.xavia.it app.xavia.it" | sudo tee -a /etc/hosts
+          echo "SMOKE_SEED=$RUNNER_TEMP/smoke.json" >> "$GITHUB_ENV"
 
-      - name: Event contracts and authorized GraphQL fields
+      - name: Database, seed and restricted app login
         run: |
-          node scripts/check-event-contract.mjs
-          node scripts/check-graph-contract.mjs
+          psql postgresql://postgres@127.0.0.1:5432/postgres -qc "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" -c "ALTER SYSTEM SET full_page_writes = off" -c "SELECT pg_reload_conf()"
+          npx tsx scripts/ci/prepare-test-database.mts --url "$ADMIN_DATABASE_URL"
+          npx tsx scripts/ci/seed-smoke.mts --url "$ADMIN_DATABASE_URL" --out "$SMOKE_SEED"
+          node -e 'const s = require(process.env.SMOKE_SEED); console.log("::add-mask::" + new URL(s.appDatabaseUrl).password); console.log("::add-mask::" + s.password)'
 
-      - name: Authentication and durable event regressions
-        run: npm test --workspace=@nexus/api -- src/lib/auth src/routes/auth-routes.vitest.test.ts src/lib/events src/lib/cron src/workers/event-relay-roles.vitest.test.ts src/services/workspace.vitest.test.ts src/services/connection-dependents.vitest.test.ts src/test-support/pglite-protocol.vitest.test.ts
+      - name: Start the API (NODE_ENV=production, restricted login, profiles ON, RBAC enforced)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          cd apps/api
+          NODE_ENV=production PORT=8080 NEXUS_API_HOST=127.0.0.1 DATABASE_URL="$APP_DATABASE_URL" DIRECT_DATABASE_URL="$APP_DATABASE_URL" \
+          REDIS_URL=redis://127.0.0.1:6379 NEXUS_WORKSPACES_ENABLED=1 NEXUS_RBAC_MODE=enforce NEXUS_AMAZON_ENV_TOKEN=off \
+            nohup node --import tsx src/index.ts > "$RUNNER_TEMP/api.log" 2>&1 &
 
-      - name: Web proxy security regressions
-        run: npm test --workspace=@nexus/web -- src/proxy.vitest.test.ts src/lib/workspaces/api-proxy.vitest.test.ts
+      - name: Build the web app (production; type step skipped — the checks job type-checks)
+        # `next build` directly, not `npm run build`: its prebuild re-runs tsc on @nexus/shared, which
+        # rewrote packages/shared/dist while the API (started above) was importing it — measured on #8:
+        # "does not provide an export named 'informationRestriction'". The setup step built shared already.
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_WORKSPACES_ENABLED: '1'
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXUS_CI_SKIP_BUILD_TYPECHECK: '1'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npx next build
 
-      - name: Product grid resolver, write contracts and disposable PostgreSQL regressions
-        run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim src/services/__tests__/pim src/routes/products-bulk src/routes/cell-formula
+      - name: Start the web app (next start)
+        run: |
+          APP_DATABASE_URL=$(node -p 'require(process.env.SMOKE_SEED).appDatabaseUrl')
+          for _ in $(seq 1 90); do curl -sf http://127.0.0.1:8080/api/health/ready >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/api/health/ready || { echo "✗ API did not become ready"; tail -50 "$RUNNER_TEMP/api.log"; exit 1; }
+          cd apps/web
+          NODE_ENV=production DATABASE_URL="$APP_DATABASE_URL" NEXUS_API_PROXY_TARGET=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1 \
+            nohup npx next start -p 3000 -H localhost > "$RUNNER_TEMP/web.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/login && break; sleep 1; done
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "✗ web did not start"; tail -50 "$RUNNER_TEMP/web.log"; exit 1; }
 
-      - name: Product grid editor regressions
-        run: npm run test --workspace=@nexus/web -- src/design-system/grid 'src/app/products/[id]/edit' src/app/products/_sheet --exclude '**/live-channel-scope.vitest.test.ts'
+      - name: Playwright browser
+        id: browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+        if: steps.browsers.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: steps.browsers.outputs.cache-hit == 'true'
+
+      - name: '@smoke journeys'
+        working-directory: apps/web
+        env:
+          SMOKE_BASE_URL: http://localhost:3000
+          SMOKE_STORAGE_STATE: ${{ runner.temp }}/smoke-state.json
+          SMOKE_OUTPUT_DIR: ${{ runner.temp }}/smoke-results
+          SMOKE_REPORT_DIR: ${{ runner.temp }}/smoke-report
+        run: npx playwright test -c smoke/playwright.config.ts --shard=${{ matrix.shard }}/2
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/smoke-report
+            ${{ runner.temp }}/smoke-results
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/web.log
+          retention-days: 7
+
+  db-security:
+    name: db-security
+    needs: [api, postgres]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: API shards and PostgreSQL job must have passed
+        run: |
+          echo "api: ${{ needs.api.result }} · postgres: ${{ needs.postgres.result }}"
+          test "${{ needs.api.result }}" = success && test "${{ needs.postgres.result }}" = success
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: profiles-on-*
+          path: ${{ runner.temp }}/on
+      - name: Profiles-ON ratchet over every shard
+        run: |
+          reports=$(find "$RUNNER_TEMP/on" -name on.json | sort | paste -sd, -)
+          test "$(echo "$reports" | tr ',' '\n' | grep -c .)" = 3 || { echo "✗ expected 3 shard reports, got: $reports"; exit 1; }
+          node apps/api/scripts/profiles-on-ratchet.mjs --report="$reports" --baseline=apps/api/scripts/profiles-on-baseline.ci.json
+
+  ci-ok:
+    name: ci-ok
+    needs: [checks, api, postgres, smoke, db-security]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.NEEDS)
+            for (const [job, v] of Object.entries(needs)) console.log((v.result === "success" ? "✓ " : "✗ ") + job + ": " + v.result)
+            process.exit(Object.values(needs).every(v => v.result === "success") ? 0 : 1)'

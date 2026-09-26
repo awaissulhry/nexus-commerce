@@ -41,9 +41,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The whole CI (ci.yml) on the exact commit being released. Before 2026-09-26 main deployed without
+  # waiting for any check. docs/ci-plan.md §2.4.
   verify:
     name: Verify the exact release commit
     uses: ./.github/workflows/ci.yml
+    secrets: inherit
 
   deploy:
     needs: verify
@@ -69,17 +72,10 @@ jobs:
             exit 1
           }
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
+      - uses: ./.github/actions/setup
 
-      - name: Install root + workspaces
-        run: npm ci
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
+      - name: Install Railway CLI (pinned)
+        run: npm install -g @railway/cli@5.30.1
 
       - name: Check eBay accepts every consent scope
         # 2026-09-16 — eBay refuses the WHOLE Connect request when one scope is outside the
@@ -104,15 +100,8 @@ jobs:
           fi
           EBAY_CLIENT_ID=$(cut -f1 <<< "$ebay") EBAY_RUNAME=$(cut -f2 <<< "$ebay") npx tsx scripts/check-ebay-consent-scopes.mts
 
-      - name: Generate Prisma client
-        working-directory: packages/database
-        run: npx prisma generate
-
-      - name: Build API before changing production schema
-        run: npm run build --workspace=@nexus/api
-
-      - name: Verify catalog CSV import size and dialect boundaries
-        run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim/catalog-csv-limits.vitest.test.ts src/services/pim/catalog-csv-dialect.vitest.test.ts
+      # No API build or test here: `verify` ran the whole CI on this exact commit (the whole API suite
+      # includes the catalog CSV limits), and Railway builds from source before the container starts.
 
       - name: Trigger Railway deploy
         env:
@@ -132,7 +121,7 @@ jobs:
         run: |
           set -e
           expected="${GITHUB_SHA:0:8}"
-          for i in $(seq 1 36); do
+          for _ in $(seq 1 36); do
             body=$(curl --max-time 10 -fsS "https://nexusapi-production-b7bb.up.railway.app/api/health/ready") || body='{}'
             if jq -e --arg build "$expected" '.status == "healthy" and .build == $build' <<< "$body" >/dev/null; then
               echo "✓ Railway is serving $expected"

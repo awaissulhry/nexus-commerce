@@ -11,7 +11,7 @@
  * if the resolved host is not loopback. Both facts are asserted, not assumed.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import pg from 'pg'
@@ -70,7 +70,11 @@ describe('classifyMigrations — the decision, every branch', () => {
 
 // ── DB-backed arms ────────────────────────────────────────────────
 const repoRoot = join(__dirname, '..', '..', '..')
-const localUrl = readFileSync(join(repoRoot, 'apps/api/.env'), 'utf8').match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim()
+// CI names its disposable server in NEXUS_TEST_LOCAL_PG_URL (docs/ci-plan.md §2.3); a developer machine
+// falls back to apps/api/.env. A missing file is "no local database", not a crash at load.
+const envFile = join(repoRoot, 'apps/api/.env')
+const localUrl = process.env.NEXUS_TEST_LOCAL_PG_URL?.trim()
+  || (existsSync(envFile) ? readFileSync(envFile, 'utf8').match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim() : undefined)
 const host = localUrl ? new URL(localUrl).hostname : ''
 const isLoopback = host === '127.0.0.1' || host === 'localhost'
 const canRun = Boolean(localUrl) && isLoopback
