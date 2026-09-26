@@ -41,6 +41,12 @@ export interface LaunchEntityResult {
   label: string
   verdict: LaunchVerdict
   deltas: FieldDelta[]
+  /**
+   * S2 — the fields where both sides were read: we hold an intended value and Amazon reported one. A drift row
+   * may be closed only for a field in this list. VERIFIED alone cannot say it, because a field Amazon left out is
+   * skipped rather than called a mismatch. Empty when Amazon returned no entity (NOT_PUSHED, MISSING_ON_AMAZON).
+   */
+  compared: string[]
 }
 
 export interface LaunchVerificationSummary {
@@ -82,11 +88,12 @@ export function verifyEntity(pair: EntityPair, nullIsMeaningful: readonly string
     entityType: pair.entityType, localId: pair.localId,
     externalId: pair.externalId, label: pair.label,
   }
-  if (!pair.externalId) return { ...base, verdict: 'NOT_PUSHED', deltas: [] }
-  if (pair.observed === undefined) return { ...base, verdict: 'MISSING_ON_AMAZON', deltas: [] }
+  if (!pair.externalId) return { ...base, verdict: 'NOT_PUSHED', deltas: [], compared: [] }
+  if (pair.observed === undefined) return { ...base, verdict: 'MISSING_ON_AMAZON', deltas: [], compared: [] }
 
   const nullMeans = new Set(nullIsMeaningful)
   const deltas: FieldDelta[] = []
+  const compared: string[] = []
   for (const [field, rawIntended] of Object.entries(pair.intended)) {
     const intended = normaliseForCompare(rawIntended)
     if (intended == null) continue // we never specified it — nothing to hold Amazon to
@@ -95,12 +102,14 @@ export function verifyEntity(pair: EntityPair, nullIsMeaningful: readonly string
     const observed = normaliseForCompare(rawObserved)
     if (observed == null) {
       if (!nullMeans.has(field) || rawObserved === undefined) continue
+      compared.push(field)
       deltas.push({ field, intended, observed: null })
       continue
     }
+    compared.push(field)
     if (intended !== observed) deltas.push({ field, intended, observed })
   }
-  return { ...base, verdict: deltas.length ? 'MISMATCH' : 'VERIFIED', deltas }
+  return { ...base, verdict: deltas.length ? 'MISMATCH' : 'VERIFIED', deltas, compared }
 }
 
 export function summarise(results: LaunchEntityResult[]): LaunchVerificationSummary {

@@ -167,8 +167,33 @@ export function diffFields(
   fields: readonly string[],
   opts: { nullIsMeaningful?: readonly string[] } = {},
 ): FieldDrift[] {
+  return compareFields(ours, theirs, fields, opts).diffs
+}
+
+/**
+ * S2 — the fields diffFields actually compared: both sides were read under the same skips. A drift row may be
+ * closed only for one of these. Closing every row whose field did not differ also closed rows for fields Amazon
+ * left out of the response, and for fields this comparison never looks at.
+ */
+export function comparedFields(
+  ours: Record<string, unknown>,
+  theirs: Record<string, unknown>,
+  fields: readonly string[],
+  opts: { nullIsMeaningful?: readonly string[] } = {},
+): string[] {
+  return compareFields(ours, theirs, fields, opts).compared
+}
+
+/** One pass for both answers, so the fields compared and the differences found can never disagree. */
+function compareFields(
+  ours: Record<string, unknown>,
+  theirs: Record<string, unknown>,
+  fields: readonly string[],
+  opts: { nullIsMeaningful?: readonly string[] },
+): { compared: string[]; diffs: FieldDrift[] } {
   const nullIsMeaningful = new Set(opts.nullIsMeaningful ?? [])
-  const out: FieldDrift[] = []
+  const compared: string[] = []
+  const diffs: FieldDrift[] = []
   for (const f of fields) {
     if (!(f in theirs)) continue
     const raw = theirs[f]
@@ -178,12 +203,14 @@ export function diffFields(
     if (t == null) {
       // Amazon reported this field and it holds nothing.
       if (!nullIsMeaningful.has(f) || raw === undefined) continue
-      out.push({ field: f, ours: o, theirs: null })
+      compared.push(f)
+      diffs.push({ field: f, ours: o, theirs: null })
       continue
     }
-    if (o !== t) out.push({ field: f, ours: o, theirs: t })
+    compared.push(f)
+    if (o !== t) diffs.push({ field: f, ours: o, theirs: t })
   }
-  return out
+  return { compared, diffs }
 }
 
 /**

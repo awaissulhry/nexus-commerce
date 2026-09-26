@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  classifyDrift, describeDrift, isOurs, normaliseForCompare, diffFields,
+  classifyDrift, describeDrift, isOurs, normaliseForCompare, diffFields, comparedFields,
   WRITE_LAG_GRACE_MS, holdBackPendingFields } from './drift.js'
 
 const NOW = new Date('2026-07-28T12:00:00Z')
@@ -136,6 +136,41 @@ describe('AX-VT.2 — "Amazon has nothing where we have something" is real drift
 
   it('leaves the default behaviour untouched when no opt-in is passed', () => {
     expect(diffFields({ portfolioId: '111' }, { portfolioId: null }, ['portfolioId'])).toEqual([])
+  })
+})
+
+/**
+ * S2 (2026-09-26) — the settings sync may close a drift row only for a field it compared. It used to close every
+ * open CAMPAIGN row whose field was not drifting in this read, including fields it never looks at (name, state,
+ * existence — the structural reconcile's rows) and fields Amazon left out of the response.
+ */
+describe('S2 — comparedFields: the fields a read can vouch for', () => {
+  const FIELDS = ['status', 'dailyBudget', 'biddingStrategy', 'portfolioId', 'targetingType'] as const
+  const ours = { status: 'ENABLED', dailyBudget: 20, biddingStrategy: 'MANUAL', portfolioId: '111' }
+
+  it('lists the fields both sides hold, agreeing or not, and nothing Amazon left out', () => {
+    expect(comparedFields(ours, { status: 'enabled', dailyBudget: 25, portfolioId: '111' }, FIELDS)).toEqual(['status', 'dailyBudget', 'portfolioId'])
+  })
+
+  it('leaves out a field we do not hold, even when Amazon reports it', () => {
+    expect(comparedFields(ours, { targetingType: 'MANUAL' }, FIELDS)).toEqual([])
+  })
+
+  it('never lists a field outside the compared set', () => {
+    expect(comparedFields({ ...ours, name: 'A' }, { name: 'A', status: 'ENABLED' }, FIELDS)).toEqual(['status'])
+  })
+
+  it('counts an explicit null only for an opted-in field, and undefined never', () => {
+    expect(comparedFields(ours, { portfolioId: null, dailyBudget: null }, FIELDS, { nullIsMeaningful: ['portfolioId'] })).toEqual(['portfolioId'])
+    expect(comparedFields(ours, { portfolioId: null }, FIELDS)).toEqual([])
+    expect(comparedFields(ours, { portfolioId: undefined }, FIELDS, { nullIsMeaningful: ['portfolioId'] })).toEqual([])
+  })
+
+  it('agrees with diffFields: every difference is among the compared fields', () => {
+    const theirs = { status: 'PAUSED', dailyBudget: 20, biddingStrategy: 'AUTO_FOR_SALES', portfolioId: null }
+    const compared = comparedFields(ours, theirs, FIELDS, { nullIsMeaningful: ['portfolioId'] })
+    expect(compared).toEqual(['status', 'dailyBudget', 'biddingStrategy', 'portfolioId'])
+    for (const d of diffFields(ours, theirs, FIELDS, { nullIsMeaningful: ['portfolioId'] })) expect(compared).toContain(d.field)
   })
 })
 
