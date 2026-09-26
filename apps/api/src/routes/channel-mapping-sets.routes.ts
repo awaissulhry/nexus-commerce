@@ -88,7 +88,7 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
       const out = await exportEbayWorkbook({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [] })
       reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
-      reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows.length, gaps: out.gaps.length, blankColumns: out.blankByDesign.size, mapping: out.set.label })))
+      reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows.length, gaps: out.gaps.filter(g => g.required).length, blankColumns: out.blankByDesign.size, mapping: out.set.label })))
       return reply.send(out.bytes)
     }
     if (set.channel !== 'AMAZON' || set.formKind !== 'AMAZON_TEMPLATE') throw new MappingError('Old Amazon flat files are read only; export with a current template version.', 409)
@@ -96,7 +96,7 @@ const channelMappingSetRoutes: FastifyPluginAsync = async (fastify) => {
     const out = await exportAmazonTemplate({ marketplace: set.marketplace, setId: set.id, skus: request.body?.skus ?? [], includePrices: request.body?.includePrices ?? true, recordAction: 'partial_update' })
     reply.header('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
     reply.header('Content-Disposition', `attachment; filename="${out.filename.replace(/"/g, '')}"`)
-    reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows, gaps: out.gaps.length, blankColumns: out.blankByDesign.length, mapping: out.set.label })))
+    reply.header('X-Nexus-Export-Summary', encodeURIComponent(JSON.stringify({ rows: out.rows, gaps: out.gaps.filter(g => g.required).length, blankColumns: out.blankByDesign.length, mapping: out.set.label })))
     return reply.send(out.bytes)
   }))
 }

@@ -40,8 +40,8 @@ export interface AmazonExportResult {
   rows: Record<string, string>[]
   /** Column → why the version leaves it blank. */
   blankByDesign: Map<string, string>
-  /** Mapped columns Nexus holds no value for, per listing. */
-  gaps: { sellerSku: string; header: string; reason: string }[]
+  /** Mapped columns Nexus holds no value for, per listing (`required` = the channel requires the column). */
+  gaps: { sellerSku: string; header: string; reason: string; required: boolean }[]
   /** Cells left blank on purpose for ONE row: `${sellerSku}\u0000${header}` → why (the column is not an attribute of its product type). */
   blankForRow: Map<string, string>
 }
@@ -170,7 +170,7 @@ export function buildAmazonTemplateRows(template: AmazonTemplateParse, fields: r
         default: blank(decision.reason ?? `Column carries ${decision.targetKind}; not written into a file.`); continue
       }
       if (text === null || text === '') {
-        if (decision.targetKind !== 'recordAction') gaps.push({ sellerSku: record.sellerSku, header, reason: 'Nexus holds no value for this mapped column' })
+        if (decision.targetKind !== 'recordAction') gaps.push({ sellerSku: record.sellerSku, header, reason: 'Nexus holds no value for this mapped column', required: decision.requirement === 'required' })
         continue
       }
       out[header] = text

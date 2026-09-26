@@ -21,7 +21,7 @@ export interface EbayExportRecord {
 export interface EbayExportResult {
   rows: Record<string, string>[]
   blankByDesign: Map<string, string>
-  gaps: { sku: string; header: string; reason: string }[]
+  gaps: { sku: string; header: string; reason: string; required: boolean }[]
   /** Cells left blank on purpose for ONE row: `${parentSku}\u0000${sku}\u0000${header}` → why. */
   blankForRow: Map<string, string>
 }
@@ -82,7 +82,7 @@ export function buildEbayWorkbookRows(headers: readonly string[], fields: readon
         default: blank(decision.reason ?? `Column is ${decision.state}.`); continue
       }
       if (decision.state !== 'mapped' && !['identity', 'relationship', 'identifier'].includes(decision.targetKind)) { blank(decision.reason ?? `Column is ${decision.state}.`); continue }
-      if (value === null || value === '') { gaps.push({ sku: record.sku, header, reason: 'Nexus holds no value for this mapped column' }); continue }
+      if (value === null || value === '') { gaps.push({ sku: record.sku, header, reason: 'Nexus holds no value for this mapped column', required: decision.requirement === 'required' }); continue }
       out[header] = value
     }
     return out

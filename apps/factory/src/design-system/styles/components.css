@@ -2668,6 +2668,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   gap: 6px;
   flex: none;
 }
+/* Stacked: the body takes its own full-width line under the label (`order` keeps the actions on the
+   label's line, before it). The overlay still covers both lines, so the whole row stays one target. */
+.nds-prow.is-stacked { flex-wrap: wrap; row-gap: var(--nds-space-4); }
+.nds-prow.is-stacked .nds-prow-body { order: 1; flex: 1 0 100%; flex-wrap: wrap; }
 
 /* Shell-anchored secondary navigation uses the shared drawer behavior. */
 .nds-drawer.from-left { left: 0; right: auto; animation-name: nds-slidein-left; }

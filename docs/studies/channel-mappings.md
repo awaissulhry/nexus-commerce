@@ -1,6 +1,6 @@
 # Channel mappings — study and proposal (`feat/channel-mappings`)
 
-**Status: 🟡 STUDY ONLY. No code is changed. Waiting for the Owner's approval (§10).**
+**Status: 🟢 APPROVED 2026-09-26 ("Yes, go ahead. I'll go with your recommendations": D1 A, D2 A). Build in progress — see §11.**
 Written 2026-09-26. Worktree `/private/tmp/nexus-channel-mappings`, branch `feat/channel-mappings`, based on
 `feat/attributes` = `origin/main` `4f2e860b8`.
 
@@ -647,3 +647,39 @@ Every step:
 Also open, from CFI: should eBay `⚠` custom specifics (for example `team name = Giacca`) be kept or dropped
 (`docs/channel-file-import/lane-requests.md:23-24`)? This study suggests dropping the three Amazon workaround names and
 modelling "piece of a set" as a real concept (§7.1).
+
+## 11. Progress
+
+Branch `feat/channel-mappings` (worktree `/private/tmp/nexus-channel-mappings`), local only: private DB copy
+`nexus_chmap_test`. Nothing is pushed. Commits: `62b342908` (M1+M2), `9ec472113` (M3+M5), `ef1aa31df` (M4 check 4).
+The web screen (M6) is committed with this progress note.
+
+### 11.1 Steps
+
+| # | Step | State | Evidence |
+|---|---|---|---|
+| M0 | Measure | 🟡 local only | Local copy (a restore of dev): 2,627 push rules in `Marketplace.schemaMapping` (Amazon IT 531, DE 527, ES/FR/UK 474, NL 67; eBay IT 80), 0 `FieldValueMap` rows, 1 stored template, 12 `CategoryChannelMapping` rows. **Production was not measured:** the safety check refused production reads. Export baseline (CFI, 2026-09-24): today's native export matched 566 of 1,858 GALE IT cells. |
+| M1 | Tables | ✅ | `ChannelMappingSet` / `ChannelMappingField` / `ChannelMappingUse`, additive migration `20260926m_channel_mapping_sets`, RLS + reference guard, one ACTIVE per form (partial unique index; a second ACTIVE is refused — tested). Business B sees none of A's versions (tested). |
+| M2 | Import reads the versions | ✅ | Both readers follow the version: the Owner's ignore/map/unmapped wins, a column the version does not know is refused. Every import records the version it used. The old flat-file key table and the eBay column lists are data (`channel-mapping/defaults.ts`). **Parity:** 67 of 67 Amazon files in the corpus read identically with the rules' version (0 different); a planted Owner decision moved exactly its column in every file. **Full corpus proof, twice:** 89 files, 0 not clean, control caught; parse/ledger identical to CFI proof 3 except the one intended change (330 new "GTIN exemption" rows). |
+| M3 | Export from the same store (E-1) | ✅ API | Amazon `.xlsm` into the stored template and our eBay workbook, through the version. Always a partial update; stock never written. **Real files through the database:** 26 of 33 upload-ready Amazon files equal cell for cell; MOSS DE too once its parent link is confirmed (2,049/2,049); the other 6 are local-environment limits (5 IT files: the job's shipping-template check needs a live Amazon read; X-RACING: no APPAREL schema cached). **eBay:** 0 different and 0 missing on all 14 comparable workbooks; the only extras are values Nexus holds beyond that file. |
+| M4 | Push reads the versions | 🟡 check done, switch not started | Check 4 (offline): the push's own serializer fed with what Nexus holds equals the file on every mapped cell for GALE IT/DE/FR/ES and REGAL FR (planted change caught). **Found:** the push refuses 40 of 41 AIREON DE products — two closure types per product ("Nested repeated values in closure"). The switch (the push honouring the Owner's decisions) edits the publish lane's files and changes what channels receive: **needs your word (§11.3).** |
+| M5 | Golden tests | ✅ | 9 anonymised golden files (two independent leak scans clean, each with a positive control) + trimmed public schemas. The golden test pins the ledger, the decisions and a strict cell-by-cell round trip: 0 differences on all 9. Runs with no database, in CI. 5 of 5 planted export faults caught. |
+| M6 | The screen | ✅ | `/channels/mapping` → "File mappings": versions per form, counters, filters, compare, decide (map / ignore / managed / unmapped, and direction), activate/retire/new version, recent uses, **export a file** (ACTIVE versions; always a partial update) and **upload a template**. Real-browser check twice (light, dark, 390 px, keyboard, real 400/409s): exported GALE IT `.xlsm` 21 rows; a DE export refused for a missing template, then uploaded inline and exported. Web tsc 0; 72 tests; 21 UI/DS guards 0. Not shown yet: value coverage and sample values per column (no API for them). |
+| M7 | Clean-up | ⏳ | Waits for M4. Most remaining key lists sit in other lanes' files (§11.2). |
+
+### 11.2 What the build found (not fixed here: other lanes' files)
+
+- **The push cannot send two values nested inside one attribute** (`schema-requirements.ts`, `attributesFromCells`): AIREON's two closure types stop 40 of 41 products (DE; FR/ES/IT carry the same shape).
+- **eBay spec labels for Best Offer are the wrong way round** (`channel-specs/ebay.ts:123-124`, the attributes lane): floor = auto-decline, ceiling = auto-accept.
+- **The flat-file page's sale price path** (`flat-file.service.ts:1044-1052`) is `sale_price`; the templates and CFI use `discounted_price`.
+- **Main has moved** (PR #4 merged: Prisma 7, three-process API). Before a PR, this branch must be rebased and the migration, baseline and client regenerated with Prisma 7.
+- **Two tests fail on this copy with and without this branch** (`variation-quality`, `variation-rule-view`): they read `nexus_development` data. Environmental.
+
+### 11.3 Your decision (one)
+
+**Let the push follow the mapping versions (M4 switch)?** It makes the product-sheet push skip columns you ignored, and
+it moves the flat-file feed's second key list and the eBay feed's English aspect names onto the versions.
+- **A (recommended): yes, after the publish lane releases its files** — I compare every payload before and after,
+  offline, per market, and change nothing that Amazon or eBay receives unless you approve the difference list.
+- **B: not now** — imports and exports use the versions; the push keeps today's rules.
+

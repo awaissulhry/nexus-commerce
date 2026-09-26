@@ -22,7 +22,7 @@
  */
 
 import { useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, Copy, ExternalLink, FunctionSquare, RefreshCw, Wand2, X } from 'lucide-react'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
@@ -49,13 +49,14 @@ import { productWorkspaceHref } from '@/app/_shared/product-workspace-href'
 import { HistoryDrawer } from './_shared/HistoryDrawer'
 import { CloneMappingDrawer } from './_shared/CloneMappingDrawer'
 import { VariationsGroup } from './_shared/VariationsGroup'
+import { MappingViews } from './files/MappingViews'
 
 type PreviewFilter = 'all' | 'errors' | 'empty' | 'hasValue'
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'owned'
 
 const ALL_PRIORITIES: FieldPriority[] = ['required', 'requiredIfRelevant', 'bestPractice', 'optional']
 
-function MappingWorkspace() {
+function MappingWorkspace({ viewTabs }: { viewTabs: ReactNode }) {
   const { toast } = useToast()
   const search = useSearchParams()
   const requestedChannel = search.get('channel')?.toUpperCase() ?? null
@@ -422,6 +423,7 @@ function MappingWorkspace() {
   if (fatal) {
     return (
       <div style={{ padding: 24 }}>
+        {viewTabs}
         <Banner tone="danger" title="The mapping engine could not load" action={<Button size="sm" onClick={() => setTemplateReload(value => value + 1)}>Retry</Button>}>{fatal}</Banner>
       </div>
     )
@@ -496,6 +498,7 @@ function MappingWorkspace() {
           </>
         }
       />
+      {viewTabs}
 
       <div className={styles.shell}>
         {/* ── rail ── */}
@@ -857,7 +860,8 @@ function ErrorsDrawer({
 export function MappingClient() {
   return (
     <ToastProvider>
-      <MappingWorkspace />
+      {/* CHMAP — Push rules (this workspace) | File mappings (`files/`), switched by `?view=`. */}
+      <MappingViews renderRules={viewTabs => <MappingWorkspace viewTabs={viewTabs} />} />
     </ToastProvider>
   )
 }
