@@ -13,7 +13,7 @@
  * Every family runs in its own database transaction that is THROWN AWAY (the helper allows 60 s). Nothing is sent:
  * every socket except the local database is refused, `fetch` is refused, schemas are read from the cache only.
  * Local database whose name contains "test" only. Prints SKUs and roots, never seller, item or policy IDs.
- *   cd apps/api && npx tsx scripts/chmap-push-diff.mts [--channel AMAZON|EBAY] [--market IT] [--limit 20] [--fulfillment FBM] [--no-gallery] [--json out.json]
+ *   cd apps/api && npx tsx scripts/chmap-push-diff.mts [--channel AMAZON|EBAY] [--market IT] [--limit 20] [--fulfillment FBM] [--no-gallery] [--base <rev>] [--json out.json]
  */
 import net from 'node:net'
 import { execFileSync } from 'node:child_process'
@@ -52,13 +52,14 @@ if (!LOCAL.has(url.hostname) || !/test/i.test(url.pathname)) throw new Error('re
 const PIM = fileURLToPath(new URL('../src/services/pim/', import.meta.url))
 const git = (...args: string[]) => execFileSync('git', args, { cwd: PIM, encoding: 'utf8' }).trim()
 const introduced = git('log', '-1', '--format=%H', '-S', 'pushExclusionsCache', '--', 'studio-publication-amazon.ts')
-const BASE = introduced ? `${introduced}~1` : 'HEAD'
+// --base <rev>: compare against any commit (e.g. origin/main for a later change); default = the builders before M4.
+const BASE = process.argv.includes('--base') ? process.argv[process.argv.indexOf('--base') + 1] : introduced ? `${introduced}~1` : 'HEAD'
 const baseFiles = { amazon: `${PIM}.chmap-base-amazon.ts`, ebay: `${PIM}.chmap-base-ebay.ts` }
 const cleanup = () => { for (const f of Object.values(baseFiles)) if (existsSync(f)) rmSync(f) }
 process.on('exit', cleanup)
 writeFileSync(baseFiles.amazon, git('show', `${BASE}:./studio-publication-amazon.ts`))
 writeFileSync(baseFiles.ebay, git('show', `${BASE}:./studio-publication-ebay.ts`))
-for (const f of Object.values(baseFiles)) if (/pushExclusions/.test(readFileSync(f, 'utf8'))) throw new Error('The base builder already follows the mapping versions')
+if (!process.argv.includes('--base')) for (const f of Object.values(baseFiles)) if (/pushExclusions/.test(readFileSync(f, 'utf8'))) throw new Error('The base builder already follows the mapping versions')
 
 const { default: prisma } = await import('../src/db.js')
 const { inDatabaseTransaction } = await import('../src/lib/database-context.js')

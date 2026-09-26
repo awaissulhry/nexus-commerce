@@ -24,6 +24,7 @@ import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
+import { languageTag } from './market-languages.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -80,6 +81,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
   const exclusionsFor = pushExclusionsCache()
+  // CHMAP M7 (B2) — the row builder's own maps know five markets and fall back to Italy; give it this market's own.
+  const market = { marketplaceId, languageTag: facts.languages[0] ? languageTag(facts.languages[0], scope.marketplace) : '' }
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
@@ -126,7 +129,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
       for (const slot of amazonImageSlots) delete row[slot.attribute]
     }
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
-    const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, hints)
+    const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, market.languageTag ? { ...hints, market } : hints)
     const spec = await loadAmazonSpec(scope.marketplace, String(row.product_type), scope.accountId)
     // CHMAP M4 — fields the Owner chose not to send in the ACTIVE mapping version are left out (an omission is never a clear).
     const excluded = await exclusionsFor('AMAZON', scope.marketplace, String(row.product_type))

@@ -41,6 +41,7 @@ import {
   getTaskStatus,
   type EbayFlatRow,
 } from '../services/ebay-feed.service.js';
+import { amazonListingBullets } from '../services/amazon/listing-bullets.js';
 import {
   startEbayPullPreviewJob,
   getEbayPullPreviewJobStatus,
@@ -3823,7 +3824,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
       const rows = amazonListings.map((l) => {
         const attrs = (l.platformAttributes ?? {}) as Record<string, unknown>;
-        const bulletPoints = (attrs.bullet_points ?? attrs.bulletPoints ?? []) as string[];
+        const bulletPoints = amazonListingBullets(l);
         const imageUrls = (attrs.main_product_image_locator ?? attrs.imageUrls ?? []) as string[];
 
         return {
