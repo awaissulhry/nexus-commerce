@@ -80,7 +80,7 @@ import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, matrixColId, parseMat
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
 import { MatrixBanner } from './MatrixBanner'
-import { MatrixSelectionBar } from './MatrixSelectionBar'
+import { MatrixSelectionVerbs } from './MatrixSelectionVerbs'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
 import { useVerbRun } from './verbs/useVerbRun'
@@ -538,13 +538,16 @@ export function MatrixSurface({ productId }: { productId: string }) {
             views={views} presets={presets} activePresetId={activePresetId} onApplyPreset={applyPreset}
             onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
+            /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
+            selectionActions={<MatrixSelectionVerbs verbs={verbSpecs} scopeLabel={selectionLabel} busy={run.busy} onVerb={onSelectionVerb} />}
+            onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }
         footer={
           !busy && !error && (
             <>
-              <MatrixSelectionBar rows={selectedRows} verbs={verbSpecs} scopeLabel={selectionLabel} busy={run.busy} onVerb={onSelectionVerb} onClear={() => getGridApi()?.deselectAll()} />
-              <GridSheetStatus rows={visibleRows.length} selected={selectedRows.length} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
+              {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
+              <GridSheetStatus rows={visibleRows.length} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
                 <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
                 {euGroups.map((g) => (
                   <span key={g.key} className="nds-cell-muted" title={MATRIX_COPY.sharedEu(g.sharedInventoryWith!)}>Amazon EU: quantity is shared by {g.sharedInventoryWith!.length} markets</span>

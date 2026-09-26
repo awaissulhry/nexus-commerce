@@ -3,7 +3,7 @@
 /** Variants uses the Information SheetToolbar with its own row counts and domain chips.
  * Saved views are absent for the fixed column set; Import uses the shared CSV workflow.
  */
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 
 import type { MenuItemDef } from '@/design-system/components'
 
@@ -34,6 +34,9 @@ export interface ProjectionToolbarProps {
   onExport(): void
   exportDisabled: boolean
   overflow: MenuItemDef[]
+  /** The verbs for the selected rows — shown in the toolbar while rows are selected, as on the sheet. */
+  selectionActions?: ReactNode
+  onClearSelection?(): void
 }
 
 export const ProjectionToolbar = memo(function ProjectionToolbar(p: ProjectionToolbarProps) {
@@ -46,6 +49,8 @@ export const ProjectionToolbar = memo(function ProjectionToolbar(p: ProjectionTo
       visible={p.visible}
       total={total}
       selected={p.selected}
+      selectionActions={p.selectionActions}
+      onClearSelection={p.onClearSelection}
       descriptor={p.counts ? includedDescriptor(p.counts.included) : undefined}
       search={p.search}
       onSearch={p.onSearch}

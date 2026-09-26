@@ -2,7 +2,7 @@
 
 import { useVariantTransfer } from '../../import/VariantTransfer'
 import { useVariantRowMenu } from '../useVariantRowMenu'
-import { FamilySelectionBar } from '../../sheet/master/FamilySelectionBar'
+import { FamilySelectionVerbs } from '../../sheet/master/FamilySelectionBar'
 import { SheetLoadError } from '../../sheet/SheetLoadError'
 
 /** Channel projection of the family, using the shared Information read, controls and writers. */
@@ -277,12 +277,15 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
             exportDisabled={!page}
             onReload={state.reload}
             overflow={overflow}
+            /* Selection in the TOOLBAR, as on the sheet (Owner, 2026-09-26): the same verbs, their reasons and confirm. */
+            selectionActions={page ? <FamilySelectionVerbs rows={selectedRows.map(row => projectionActionRow(row, page))} actions={rowActions.actions} onDone={state.reload} /> : null}
+            onClearSelection={clearSelection}
           />
         }
         footer={
           <>
-          {page && <FamilySelectionBar rows={selectedRows.map(row => projectionActionRow(row, page))} actions={rowActions.actions} onClear={clearSelection} onDone={state.reload} />}
-          <GridSheetStatus rows={rows.length} selected={selectedRows.length} saving={state.saving}>
+          {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
+          <GridSheetStatus rows={rows.length} saving={state.saving}>
             {counts && <span className="nds-vp-foot">{counts.total} variants · {counts.included} included</span>}
           </GridSheetStatus>
           </>

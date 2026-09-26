@@ -59,7 +59,7 @@ import { useVariantTransfer } from '../../import/VariantTransfer'
 import { SheetToolbar } from '../../sheet/SheetToolbar'
 import { familyActions } from '../../sheet/master/familyActions'
 import { familyOps } from '../../sheet/master/familyOps'
-import { FamilySelectionBar } from '../../sheet/master/FamilySelectionBar'
+import { FamilySelectionVerbs } from '../../sheet/master/FamilySelectionBar'
 import { useFamilyVerbs } from '../../sheet/master/FamilyBar'
 import { useFamilyProductPicker } from '../../sheet/master/FamilyProductPicker'
 import { useFamily } from '../../sheet/master/useFamily'
@@ -550,6 +550,11 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
             visible={visibleRows.length}
             total={total}
             selected={selected}
+            /* Selection in the TOOLBAR, as on the sheet (Owner, 2026-09-26: "go with your recommendation"): while rows
+               are selected the bar reads "Selected N rows" and the family verbs + Clear take the search field's place.
+               The same `FamilySelectionVerbs` the sheet shows — one definition of the verbs, their reasons and confirm. */
+            selectionActions={<FamilySelectionVerbs rows={selectedRows} actions={famActions} onDone={onFamilyChanged} />}
+            onClearSelection={() => getGridApi()?.deselectAll()}
             /* §3.2's count, verbatim: `21 rows · 1 parent · 20 variants`. */
             descriptor={!loading && !error ? <span className="nds-cell-muted"> · {parent ? '1 parent' : 'no parent'} · {variants} {variants === 1 ? 'variant' : 'variants'}</span> : null}
             search={search}
@@ -588,8 +593,8 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
               {rowPress.problem && <div className="nds-grid-footstrip" role="alert"><span className="nds-cell-stock-out">{rowPress.problem}</span></div>}
               {rowPress.confirmElement}
               {familyVerbs.dialogs}
-              <FamilySelectionBar rows={selectedRows} actions={famActions} onClear={() => getGridApi()?.deselectAll()} onDone={onFamilyChanged} />
-              <GridSheetStatus rows={visibleRows.length} selected={selected} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
+              {/* The selection is counted ONCE, on the toolbar ("Selected N rows"), not again here. */}
+              <GridSheetStatus rows={visibleRows.length} pending={pending} refused={refused} saving={writer.busy} lastSavedAt={lastSavedAt}>
                 <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
                 {conflicts.length > 0 && (
                   <Button size="sm" variant="link" onClick={reload}>
