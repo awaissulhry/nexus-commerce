@@ -100,6 +100,8 @@ export function workspacePolicySql() {
   // Shared stock (plan 2026-09-19) — the lending permission, product links, work queue and pool doors.
   // Byte-for-byte the tail of 20260919a.
   sql.push(readFileSync(new URL('../workspaces/stock-pool.sql', import.meta.url), 'utf8'))
+  sql.push(readFileSync(new URL('../workspaces/order-stock-locks.sql', import.meta.url), 'utf8'))
+  sql.push(readFileSync(new URL('../workspaces/order-stock-restore.sql', import.meta.url), 'utf8'))
   // Shared stock step 3 — end times never outlive their mode. Byte-for-byte the tail of 20260919b.
   sql.push(readFileSync(new URL('../workspaces/listing-end-times.sql', import.meta.url), 'utf8'))
   // Shared stock step 6 (AE.4) — live product sync: capture, the change queue, the worker's door.
@@ -107,5 +109,6 @@ export function workspacePolicySql() {
   sql.push(readFileSync(new URL('../workspaces/assortment-sync.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/ebay-quarantine.sql', import.meta.url), 'utf8'))
   sql.push(readFileSync(new URL('../workspaces/inbound-history.sql', import.meta.url), 'utf8'))
+  sql.push(readFileSync(new URL('../workspaces/ebay-erasure-review.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

@@ -42,6 +42,10 @@
     "nexus_pool_put_back": {
       "writes": 2,
       "why": "Shared stock door 5 (put back): locks the lender product, then raises quantity on the level, or creates it."
+    },
+    "nexus_pool_lender_release": {
+      "writes": 1,
+      "why": "The lender's stock-page release of a pool hold its borrower's cancellation kept (the borrower's order is cancelled or refunded): locks the lender product, then lowers reserved on the one level."
     }
   }
 }

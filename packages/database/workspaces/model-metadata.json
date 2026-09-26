@@ -2109,6 +2109,12 @@
       "name": "EbayNoticeQuarantine",
       "fields": [
         {
+          "name": "erasureRequests",
+          "kind": "object",
+          "type": "ErasureRequest",
+          "relationFromFields": []
+        },
+        {
           "name": "resolvedReceipt",
           "kind": "object",
           "type": "WebhookEvent",
@@ -2116,6 +2122,29 @@
             "resolvedReceiptId"
           ],
           "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "ErasureRequest",
+      "fields": [
+        {
+          "name": "quarantine",
+          "kind": "object",
+          "type": "EbayNoticeQuarantine",
+          "relationFromFields": [
+            "quarantineId"
+          ],
+          "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "evidenceOrder",
+          "kind": "object",
+          "type": "Order",
+          "relationFromFields": [
+            "evidenceOrderId"
+          ],
+          "relationOnDelete": "SetNull"
         }
       ]
     },
@@ -2176,6 +2205,12 @@
     {
       "name": "Order",
       "fields": [
+        {
+          "name": "erasureRequests",
+          "kind": "object",
+          "type": "ErasureRequest",
+          "relationFromFields": []
+        },
         {
           "name": "customer",
           "kind": "object",
@@ -2612,6 +2647,18 @@
           "name": "ebayCampaigns",
           "kind": "object",
           "type": "EbayCampaign",
+          "relationFromFields": []
+        },
+        {
+          "name": "etsyReceiptIngest",
+          "kind": "object",
+          "type": "EtsyReceiptIngest",
+          "relationFromFields": []
+        },
+        {
+          "name": "etsyReceiptRefusals",
+          "kind": "object",
+          "type": "EtsyReceiptRefusal",
           "relationFromFields": []
         }
       ]
@@ -7053,6 +7100,34 @@
           "type": "Product",
           "relationFromFields": [
             "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EtsyReceiptIngest",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "EtsyReceiptRefusal",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
           ],
           "relationOnDelete": "Cascade"
         }

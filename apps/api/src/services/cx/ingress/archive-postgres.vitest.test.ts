@@ -163,7 +163,8 @@ describe.skipIf(!concurrentDatabaseUrl())('inbound archive and replay races in P
     await database.pool.query(`INSERT INTO "EbayNoticeQuarantine" (id,environment,"externalId",topic,"payloadDigest",reason)
       VALUES ($1,'production',$1,'unclassified',$2,'signature_mismatch')`, [id, '0'.repeat(64)])
     if (operation === 'deletion') await expect(database.pool.query('DELETE FROM "EbayNoticeQuarantine" WHERE id=$1', [id])).rejects.toMatchObject({ code: '42501' })
-    else await expect(database.pool.query('TRUNCATE "EbayNoticeQuarantine"')).rejects.toMatchObject({ code: '42501' })
+    // Reach the history trigger despite referencing review records; the exact message excludes their independent guard.
+    else await expect(database.pool.query('TRUNCATE "EbayNoticeQuarantine" CASCADE')).rejects.toMatchObject({ code: '42501', message: 'Inbound delivery history must be archived, never deleted or truncated' })
     expect((await database.pool.query('SELECT count(*)::int AS n FROM "EbayNoticeQuarantine" WHERE id=$1', [id])).rows[0].n).toBe(1)
   })
 })

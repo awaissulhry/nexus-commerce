@@ -1,3 +1,6 @@
+BEGIN;
+SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='60s';
 -- Unassigned provider data is application-scoped, never a default business's payload.
 ALTER TABLE "EbayNoticeQuarantine" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "EbayNoticeQuarantine" FORCE ROW LEVEL SECURITY;
@@ -264,3 +267,4 @@ END $$;
 DROP TRIGGER IF EXISTS nexus_ebay_quarantine ON public."EbayNoticeQuarantine";
 CREATE TRIGGER nexus_ebay_quarantine BEFORE INSERT OR UPDATE ON public."EbayNoticeQuarantine"
   FOR EACH ROW EXECUTE FUNCTION public.nexus_ebay_quarantine_guard();
+COMMIT;
