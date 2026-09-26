@@ -768,7 +768,15 @@ Amazon seller id in 25 files, eBay account ids in 7, and real eBay item ids or A
 audit records, backups, one test). These ids are also visible on the marketplaces themselves (storefront and listing
 links), so the risk is low, but the repository is public.
 
-### 11.6 Your decisions (two)
+**B1–B4 fixed** (`915ce7322`, answered 1A below): B1's old shape fails Amazon's cached IT COAT, DE COAT and IT PANTS
+schemas (`purchasable_offer` forbids extra keys, so the whole offer — the price too — was invalid); the new shape passes. A
+sale without both dates is left out, as the Listings PATCH already did. B2 turned out wider than the flat-file page (which
+serves five markets only): the product-sheet push reuses the same row builder, which fell back to Italy's marketplace id
+as well; the push now passes the market's own id and language tag. Offline push compare against main: 0 differences
+(Amazon IT, eBay IT 23 families; S0/S1/switch off). 6 of 6 planted faults caught. Not changed: the flat-file column's
+`sale_price` field path (it shapes the grid and the template mapping), the pre-fill's image read.
+
+### 11.6 Your decisions (two) — answered 2026-09-26: 1A, 2A ("Do it all for me")
 
 **1. Fix the four bugs B1–B4?**
 - **A (recommended): yes**, one by one, each proven offline before and after, and shown to you before it ships.
