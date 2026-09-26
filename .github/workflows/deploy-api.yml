@@ -29,7 +29,6 @@ on:
       - 'packages/events/**'
       - 'package.json'
       - 'package-lock.json'
-      - 'railway.toml'
       - '.github/workflows/deploy-api.yml'
       - '.github/workflows/ci.yml'
   workflow_dispatch:

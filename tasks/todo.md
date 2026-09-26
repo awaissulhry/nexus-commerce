@@ -74,9 +74,9 @@ production completion is tracked separately. See [plan.md](plan.md).
   status, circuit breakers and reset) must read shared state after the split.
 - [ ] Follow-up: `CategoryTreeService` never takes its lock (pre-existing; see plan.md).
 - [ ] Follow-up: one-off scripts using `new PrismaClient()` need the adapter (Prisma 7).
-- [ ] **Before 2026-12-01:** Railway stops reading `railway.toml` then. Move the API's
-  pre-deploy migration, start command and health check into Railway (service settings or
-  `.railway/railway.ts`), or deploys lose the migration step.
+- [x] **Before 2026-12-01:** Railway stops reading `railway.toml` then. Done 2026-09-26: the
+  API's pre-deploy migration, start command and health check are Railway service settings,
+  and the file is removed.
 
 ## G. Final evidence and rollout
 - [ ] Focused suites, relevant builds, migration guards, real PG gates pass locally.
