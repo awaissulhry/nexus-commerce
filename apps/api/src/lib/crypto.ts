@@ -247,10 +247,24 @@ export interface KmsClientLike {
 
 let kmsClient: KmsClientLike | null = null
 
-/** Lazily build the KMS client: region from env, default credential chain. */
+/**
+ * Lazily build the KMS client: region from env, default credential chain.
+ *
+ * Bounded (same as the Package A release): the SDK default has no timeout at all.
+ * connectionTimeout and socketTimeout abort the request (in @smithy/node-http-handler
+ * 4.x a bare requestTimeout only logs a warning). Two attempts bound a silent KMS to
+ * about 2 × 3 s before the env-key fallback on write or a closed read on decrypt.
+ */
+const KMS_MAX_ATTEMPTS = 2
+const KMS_CONNECTION_TIMEOUT_MS = 2_000
+const KMS_SOCKET_TIMEOUT_MS = 3_000
 function getKms(): KmsClientLike {
   if (!kmsClient) {
-    kmsClient = new KMSClient({ region: process.env.AWS_REGION ?? 'eu-west-1' })
+    kmsClient = new KMSClient({
+      region: process.env.AWS_REGION ?? 'eu-west-1',
+      maxAttempts: KMS_MAX_ATTEMPTS,
+      requestHandler: { connectionTimeout: KMS_CONNECTION_TIMEOUT_MS, socketTimeout: KMS_SOCKET_TIMEOUT_MS },
+    })
   }
   return kmsClient
 }
