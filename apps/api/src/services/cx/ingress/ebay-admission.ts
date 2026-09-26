@@ -143,7 +143,8 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
   const notice: Notice = { environment, rawBody, payload, signatureOk: verification.ok, keyId: verification.kid,
     externalId: identity?.notificationId ?? `sha256:${payloadDigest}`, topic: identity?.topic ?? 'unclassified',
     userId: routeable ? identity!.userId : null, subjectHash: routeable ? subjectHash(environment, identity!.userId!) : null, payloadDigest,
-    reason: !verification.ok ? verification.reason : !identity ? 'envelope_invalid' : !routeable ? 'subject_or_topic_unresolved' : null }
+    reason: !verification.ok ? verification.reason : !identity ? 'envelope_invalid'
+      : identity.topic === 'MARKETPLACE_ACCOUNT_DELETION' ? 'account_deletion_review_required' : !routeable ? 'subject_or_topic_unresolved' : null }
   let cipher: Awaited<ReturnType<typeof seal>> | undefined
   let workspaceId = await legacyIngress(async () => {
     const prior = await prisma.ebayNoticeQuarantine.findUnique({ where: quarantineWhere(notice), select: { resolvedWorkspaceId: true } })
@@ -201,6 +202,8 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
         payloadEnc: cipher?.blob ?? null, payloadKeyId: cipher?.keyId ?? null, payloadDigest, verificationKeyId: notice.keyId, reason }, select: { id: true } })
       return { outcome: { kind: notice.signatureOk ? 'quarantined' : 'rejected', quarantineId: row.id, reason } } as { outcome: EbayAdmissionOutcome }
     }, txOptions))
+    // Returning means the notice is durable. Nothing may run between this commit and eBay's
+    // 2xx: a deletion notice is reviewed later by the retry worker from its stored first body.
     if ('outcome' in result) return result.outcome
     if ('retryWorkspace' in result) workspaceId = result.retryWorkspace
     if ('needCipher' in result) cipher = await legacyIngress(() => seal(notice, input.header))

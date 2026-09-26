@@ -121,6 +121,19 @@ describe('durable inbound claim ownership', () => {
     expect(await inWorkspace(() => claims.finishInboundClaim(second!, true, undefined, expiredAt))).toBe(false)
   })
 
+  // Ingress ruling (2026-09-26): a deferral is the claim's finish path too, fenced by the token.
+  it('a stale claim holder cannot defer the row it lost; the current holder can', async () => {
+    const pending = await event()
+    const first = await inWorkspace(() => claims.claimInbound(pending.id, NOW))
+    const expiredAt = new Date((await row(pending.id)).processingUntil!.getTime() + 1)
+    const second = await inWorkspace(() => claims.claimInbound(pending.id, expiredAt))
+    expect(second).toMatchObject({ attempt: 2 })
+    expect(await inWorkspace(() => claims.deferInboundClaim(first!, 'stale hold', 60_000, expiredAt))).toBe(false)
+    expect(await row(pending.id)).toMatchObject({ status: 'pending', attempts: 2, processingToken: second!.token })
+    expect(await inWorkspace(() => claims.deferInboundClaim(second!, 'auth hold', 60_000, expiredAt))).toBe(true)
+    expect(await row(pending.id)).toMatchObject({ status: 'failed', attempts: 1, processingToken: null, lastError: 'auth hold' })
+  })
+
   it('schedules a failed claim without counting completion as another attempt', async () => {
     const pending = await event()
     const claim = await inWorkspace(() => claims.claimInbound(pending.id, NOW))
@@ -134,6 +147,27 @@ describe('durable inbound claim ownership', () => {
     expect(failed.nextAttemptAt!.getTime()).toBeGreaterThan(NOW.getTime())
     expect(await inWorkspace(() => claims.claimInbound(pending.id, NOW))).toBeNull()
     expect(await inWorkspace(() => claims.claimInbound(pending.id, failed.nextAttemptAt!))).toMatchObject({ attempt: 2 })
+  })
+
+  // A handler that must wait for its owner (a sign-in hold) throws InboundDeferred: the claim gives
+  // the attempt back and makes the row due after the hold — never a failure that burns the budget.
+  it('gives a deferred attempt back and reschedules it after the hold; a plain failure still spends it', async () => {
+    const deferred = await event({ attempts: 2 })
+    const claim = await inWorkspace(() => claims.claimInbound(deferred.id))
+    expect(claim).toMatchObject({ attempt: 3 })
+    await expect(inWorkspace(() => claims.runWithInboundClaim(claim!, async () => { throw new ledger.InboundDeferred('auth hold: sign in again', 30 * 60_000) })))
+      .rejects.toBeInstanceOf(ledger.InboundDeferred)
+    const held = await row(deferred.id)
+    expect(held).toMatchObject({ status: 'failed', attempts: 2, isProcessed: false, processingToken: null, processingUntil: null, lastError: 'auth hold: sign in again' })
+    const now = await inWorkspace(() => claims.inboundDatabaseNow())
+    expect(held.nextAttemptAt!.getTime()).toBeGreaterThan(now.getTime() + 25 * 60_000)
+    expect(await inWorkspace(() => claims.claimInbound(deferred.id))).toBeNull()
+    expect(await inWorkspace(() => claims.claimInbound(deferred.id, held.nextAttemptAt!))).toMatchObject({ attempt: 3 })
+    // Control: an ordinary failure spends its attempt.
+    const failing = await event({ attempts: 2 })
+    const other = await inWorkspace(() => claims.claimInbound(failing.id))
+    await expect(inWorkspace(() => claims.runWithInboundClaim(other!, async () => { throw new Error('provider unavailable') }))).rejects.toThrow('provider unavailable')
+    expect(await row(failing.id)).toMatchObject({ status: 'failed', attempts: 3 })
   })
 
   it.each([

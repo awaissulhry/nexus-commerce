@@ -5,6 +5,7 @@ import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
 import { assertEbayWriteAllowed, ebayHostOf } from "../ebay-publish-gate.service.js";
 import { ebayTransport } from "../gateway/ebay.js";
+import { ebayFixedPriceOfferOf } from "../ebay-price-readback.service.js";
 
 // P1.2 — this service sends with the APP token (no seller account), so its calls go through the channel
 // gateway as app-level calls. P1.6 candidate (FINAL-PLAN): the app-token eBay service is retired there.
@@ -350,8 +351,11 @@ export class EbayService {
         throw new Error(`No eBay offers found for SKU "${sku}"`);
       }
 
-      // Use the first offer (typically one offer per SKU)
-      const offer = offersData.offers[0];
+      // CX — the ONE fixed-price offer of this market, never "the first": getOffers lists an auction offer beside it.
+      const offer = ebayFixedPriceOfferOf(offersData.offers, EBAY_MARKETPLACE_ID) as (typeof offersData.offers)[number] | null;
+      if (!offer) {
+        throw new Error(`No single fixed-price eBay offer for SKU "${sku}" on ${EBAY_MARKETPLACE_ID}. Nothing was priced.`);
+      }
       const offerId = offer.offerId;
 
       // Step 2: Update the offer with the new price
@@ -795,10 +799,11 @@ export class EbayService {
           return (await offersResponse.json()) as any;
         },
       );
-      const offer = (offersData as any).offers?.[0];
+      // CX — the ONE fixed-price offer of this market, never "the first": getOffers lists an auction offer beside it.
+      const offer = ebayFixedPriceOfferOf((offersData as any).offers, EBAY_MARKETPLACE_ID);
 
       if (!offer) {
-        throw new Error(`No active offer found for SKU: ${variantSku}`);
+        throw new Error(`No single fixed-price eBay offer for SKU ${variantSku} on ${EBAY_MARKETPLACE_ID}. Nothing was priced.`);
       }
 
       // Update the offer price

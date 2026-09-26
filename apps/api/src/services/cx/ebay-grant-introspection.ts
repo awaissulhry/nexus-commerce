@@ -13,7 +13,7 @@ export class EbayGrantInspectionError extends Error {
 }
 
 /** RFC9110 §10.2.3: seconds or HTTP-date. Prefer the provider's Date for clock skew. */
-function retryAfterMs(headers: Headers): number | undefined {
+export function retryAfterMs(headers: Headers): number | undefined {
   const value = headers.get('retry-after')?.trim()
   if (!value || value.length > 128) return undefined
   const httpDate = (text: string | null) => {

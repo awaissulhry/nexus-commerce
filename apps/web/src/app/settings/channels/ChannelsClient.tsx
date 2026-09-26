@@ -141,7 +141,7 @@ export function ChannelsClient() {
         {tab === 'ingress' && <IngressTab key={activeProfile?.id ?? 'legacy'} accounts={accounts.data?.accounts ?? []} accountsLoading={accounts.loading} accountsError={accounts.error}
           workspaceId={activeProfile?.id} workspaceName={activeProfile?.name} />}
         {tab === 'diagnostics' && (
-          <DiagnosticsTab accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />
+          <DiagnosticsTab key={activeProfile?.id ?? 'legacy'} workspaceId={activeProfile?.id} accounts={accounts.data?.accounts.filter(account => account.isActive !== false) ?? []} loading={accounts.loading} onChanged={bump} />
         )}
       </section>
       {pending && <ConnectAccountDialog channel={pending.channel} options={pending.options} accountLabel={pending.accountLabel}

@@ -33,6 +33,7 @@ import { logger } from '../utils/logger.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import {
   reserveOpenOrder,
+  unitsPerProduct,
   consumeOpenOrder,
   releaseOpenOrder,
   resolveLocationByCode,
@@ -169,12 +170,16 @@ export async function createMCFShipment(
 
   const reservations: string[] = []
   try {
-    for (const it of itemsToShip) {
+    const lines = itemsToShip.map((it) => {
       const p = productBySku.get(it.sku)
       if (!p) throw new Error(`createMCFShipment: unknown SKU ${it.sku}`)
+      return { productId: p.id, quantity: it.quantity }
+    })
+    // R10 — one hold per product, for the units of all its lines.
+    for (const it of unitsPerProduct(lines)) {
       const r = await reserveOpenOrder({
         orderId,
-        productId: p.id,
+        productId: it.productId,
         locationId: fbaLocationId,
         quantity: it.quantity,
         actor: 'amazon-mcf:create',

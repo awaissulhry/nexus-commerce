@@ -2073,6 +2073,7 @@
   "syncLogs.hub.kpi.cron.stuck": "{n} bloccati",
   "syncLogs.hub.kpi.cron.failed": "{n} falliti",
   "syncLogs.hub.kpi.cron.healthy": "{n} ok",
+  "syncLogs.hub.kpi.cron.incomplete": "{n} parziali o non configurati",
   "syncLogs.hub.kpi.latency.p99": "p99 {n}ms",
   "syncLogs.hub.section.channels": "Canali",
   "syncLogs.hub.section.crons": "Cron job",

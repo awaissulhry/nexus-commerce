@@ -1,0 +1,144 @@
+{
+  "//": "Verbatim examples from amzn/selling-partner-api-models models/finances-api-model/finances_2024-06-19.json (main, fetched 2026-09-23, sha256 54e8d2d5094c00a52f8a812f5ce5d87aaed0e4c4193fc0d3ea2314bada50ee8f). Not edited: the model's own example is internally inconsistent (transactionStatus 'Released', breakdowns as an object) and the sandbox transaction has no transactionId or status.",
+  "transactionDefinitionExample": {
+    "sellingPartnerMetadata": {
+      "sellingPartnerId": "XXXXXXXXXXXXXX",
+      "accountType": "PAYABLE",
+      "marketplaceId": "ATVPDKIKX0DER"
+    },
+    "relatedIdentifiers": [
+      {
+        "relatedIdentifierName": "ORDER_ID",
+        "relatedIdentifierValue": "8129762527551"
+      }
+    ],
+    "transactionType": "Shipment",
+    "transactionId": "b1qD0oAliFkLiqRyGbmeT0DoS2Z2kHzi7TZ92z-vARI",
+    "transactionStatus": "Released",
+    "description": "Order Payment",
+    "postedDate": "2020-07-14T03:35:13.214Z",
+    "totalAmount": {
+      "currencyAmount": 10,
+      "currencyCode": "USD"
+    },
+    "marketplaceDetails": {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "marketplaceName": "Amazon.com"
+    },
+    "items": [
+      {
+        "description": "Item title",
+        "totalAmount": {
+          "currencyAmount": 10,
+          "currencyCode": "USD"
+        },
+        "relatedIdentifiers": [
+          {
+            "itemRelatedIdentifierName": "ORDER_ADJUSTMENT_ITEM_ID",
+            "itemRelatedIdentifierValue": "81297625-121-27551"
+          }
+        ],
+        "breakdowns": [
+          {
+            "breakdownType": "Product Charges",
+            "breakdownAmount": {
+              "currencyAmount": 10,
+              "currencyCode": "USD"
+            },
+            "breakdowns": [
+              {
+                "breakdownType": "Principle",
+                "breakdownAmount": {
+                  "currencyAmount": 10,
+                  "currencyCode": "USD"
+                },
+                "breakdowns": []
+              }
+            ]
+          }
+        ],
+        "contexts": [
+          {
+            "contextType": "ProductContext",
+            "asin": "B07FGXZQZ1",
+            "sku": "sku-12",
+            "quantityShipped": 1,
+            "fulfillmentNetwork": "MFN"
+          }
+        ]
+      }
+    ],
+    "breakdowns": {
+      "breakdowns": [
+        {
+          "breakdownType": "Sales",
+          "breakdownAmount": {
+            "currencyAmount": 10,
+            "currencyCode": "USD"
+          },
+          "breakdowns": [
+            {
+              "breakdownType": "Product Charges",
+              "breakdownAmount": {
+                "currencyAmount": 10,
+                "currencyCode": "USD"
+              },
+              "breakdowns": []
+            }
+          ]
+        }
+      ]
+    },
+    "contexts": [
+      {
+        "contextType": "AmazonPayContext",
+        "storeName": "Store 1",
+        "orderType": "Order Type",
+        "channel": "MFN"
+      }
+    ]
+  },
+  "sandboxListTransactions200": {
+    "payload": {
+      "nextToken": "Next token value",
+      "transactions": [
+        {
+          "sellingPartnerMetadata": {
+            "sellingPartnerId": "A3TH9S8BH6GOGM",
+            "accountType": "PAYABLE",
+            "marketplaceId": "ATIV93840DER"
+          },
+          "relatedIdentifiers": [
+            {
+              "relatedIdentifierName": "FINANCIAL_EVENT_GROUP_ID",
+              "relatedIdentifierValue": "4MVaHcsAfaYAlwlaPWrXJxrfUiKfYZ2ooWtY7528FUA"
+            },
+            {
+              "relatedIdentifierName": "ORDER_ID",
+              "relatedIdentifierValue": "8129762527551"
+            }
+          ],
+          "transactionType": "Shipment",
+          "postedDate": "2020-07-14T03:35:13.214Z",
+          "totalAmount": {
+            "currencyAmount": 10,
+            "currencyCode": "USD"
+          }
+        }
+      ]
+    }
+  },
+  "statusEnumDescription": "The status of the transaction.\n\n**Possible values:**\n\n* `DEFERRED`: the transaction is currently deferred.\n* `RELEASED`: the transaction is currently released.\n* `DEFERRED_RELEASED`: the transaction was deferred in the past, but is now released. The status of a deferred transaction is updated to `DEFERRED_RELEASED` when the transaction is released.",
+  "relatedIdentifierNames": [
+    "ORDER_ID",
+    "SHIPMENT_ID",
+    "FINANCIAL_EVENT_GROUP_ID",
+    "REFUND_ID",
+    "INVOICE_ID",
+    "DISBURSEMENT_ID",
+    "TRANSFER_ID",
+    "DEFERRED_TRANSACTION_ID",
+    "RELEASE_TRANSACTION_ID",
+    "SETTLEMENT_ID"
+  ]
+}

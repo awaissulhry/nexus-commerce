@@ -65,11 +65,14 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('No live request is allowed in admission tests') }))
     database = await concurrentDatabase({ maxConnections: 10 })
     // Exercise the deployed migration, including its policies, over the previous schema.
+    // The current review table references retained quarantine; rebuild it after replaying the historical table.
+    await database.pool.query('DROP TABLE "ErasureRequest"')
     await database.pool.query('DROP TABLE "EbayNoticeQuarantine"')
     await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260923c_cx_ebay_quarantine/migration.sql', import.meta.url), 'utf8'))
     await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260923e_cx_inbound_archive/migration.sql', import.meta.url), 'utf8'))
     // Reinstall the current guard/policies after replaying the historical table migration.
     await database.pool.query(readFileSync(new URL('../../../../../../packages/database/workspaces/ebay-quarantine.sql', import.meta.url), 'utf8'))
+    await database.pool.query(readFileSync(new URL('../../../../../../packages/database/prisma/migrations/20260926t_cx_ebay_erasure_review/migration.sql', import.meta.url), 'utf8'))
     await database.pool.query('INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,\'Admission other business\',\'test\',$1,now())', [OTHER])
     await database.pool.query('INSERT INTO "Role" (id,key,name,permissions,"updatedAt") VALUES (\'admission-owner-role\',\'OWNER\',\'Owner\',ARRAY[]::text[],now()) ON CONFLICT (key) DO NOTHING')
     const role = (await database.pool.query('SELECT id FROM "Role" WHERE key=\'OWNER\'')).rows[0].id

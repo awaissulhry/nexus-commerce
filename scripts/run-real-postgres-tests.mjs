@@ -21,6 +21,10 @@
  *     re-reads of shipped orders, an oversold line taken once stock arrives, surplus holds, the reconcile, races.
  *   · `stock-pool-orders.vitest.test.ts` (shared stock step 4) — orders through the doors: the real eBay
  *     ingest, holds / take out / give back, cancellations, the returns route, the guard and the repair job.
+ *   · `stock-model-postgres.vitest.test.ts` (stock model 2026-09-26) — one stock model across channels: a
+ *     shipped order whose stock work died healed by the next poll and the reconcile, per-product totals,
+ *     hold identity across own ↔ shared stock switches, one shortfall class, and a poll, a reconcile, a
+ *     cancellation and a stock-page release racing on one order.
  *   · `assortment/sync.vitest.test.ts` (shared stock step 6, AE.4) — live product sync: the capture
  *     trigger, the worker through the real transfer engine, overrides and "Follow again", images, SKU
  *     holds, new variations, retries, no chains, and the delay measured with the real LISTEN/NOTIFY.
@@ -62,11 +66,14 @@ const API = `${ROOT}/apps/api`
 const args = process.argv.slice(2)
 const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
+  { name: 'saved listing issues (account and profile isolation, live keyset pages)', file: 'src/services/cx/listing-issues-postgres.vitest.test.ts', expect: 7 },
   { name: 'inbound receipt identity (simultaneous delivery and profile isolation)', file: 'src/services/cx/ingress/receipt-postgres.vitest.test.ts', expect: 8 },
   { name: 'retained inbound history (archive/replay races and database deletion guards)', file: 'src/services/cx/ingress/archive-postgres.vitest.test.ts', expect: 14 },
   { name: 'durable eBay receipt claims and atomic domain commit', file: 'src/services/cx/ingress/ebay-claims-postgres.vitest.test.ts', expect: 15 },
   { name: 'fenced manual eBay replay (clock skew, claims and concurrent operators)', file: 'src/services/cx/ingress/ebay-replay-postgres.vitest.test.ts', expect: 7 },
   { name: 'private eBay admission and recovery (ownership, quarantine, handoff and transfer races)', file: 'src/services/cx/ingress/ebay-admission-postgres.vitest.test.ts', expect: 32 },
+  { name: 'eBay deletion review after acknowledgement (worker claims, first payload, RLS, atomic notices, races)', file: 'src/services/cx/ingress/ebay-erasure-review-postgres.vitest.test.ts', expect: 119 },
+  { name: 'eBay deletion quarantine and read-only operator census (authority, retention, migration)', file: 'src/services/cx/ingress/ebay-deletion-quarantine-postgres.vitest.test.ts', expect: 11 },
   { name: 'private quarantine maintenance and inventory (roles, CAS, audit, snapshots and handoff races)', file: 'src/services/cx/ingress/ebay-quarantine-maintenance-postgres.vitest.test.ts', expect: 33 },
   { name: 'cold quarantine verification (closed snapshots, private body door, concurrent changes and CLI)', file: 'src/services/cx/ingress/ebay-quarantine-verification-postgres.vitest.test.ts', expect: 12 },
   { name: 'operator quarantine rewrap (audited CAS, closed transactions across KMS, contention and CLI)', file: 'src/services/cx/ingress/ebay-quarantine-rewrap-postgres.vitest.test.ts', expect: 7 },
@@ -76,22 +83,31 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'eBay seller grant fence (cross-record reconnects and fresh committed reads)', file: 'src/services/cx/ebay-identity-postgres.vitest.test.ts', expect: 10 },
   { name: 'credential maintenance races (rotation, backfill, rollback and shared-account isolation)', file: 'src/services/cx/credential-writers-postgres.vitest.test.ts', expect: 12 },
   { name: 'transactional eBay revocation and unresolved owner warnings', file: 'src/services/cx/revocation-postgres.vitest.test.ts', expect: 25 },
-  { name: 'durable webhook claims and retention', file: 'src/services/cx/ingress/claims.vitest.test.ts', expect: 20 },
+  { name: 'durable webhook claims and retention', file: 'src/services/cx/ingress/claims.vitest.test.ts', expect: 22 },
   { name: 'one owner per inbound row type (eBay leases × processing claims, retention archive)', file: 'src/services/cx/ingress/inbound-ownership-postgres.vitest.test.ts', expect: 13 },
   { name: 'redelivery identity and bounded inbound retention (binding, reconnects, payload expiry by UPDATE)', file: 'src/services/cx/ingress/inbound-redelivery-retention-postgres.vitest.test.ts', expect: 7 },
   { name: 'transactional event producers and duplicate consumers', file: 'src/services/event-durability.vitest.test.ts', expect: 5 },
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
+  { name: 'Etsy receipt ingest (one writer: S1 per-product holds, whole-receipt take, partial notice, R5 dispositions, H1 activation, webhook defer/refusals, fair polling, lease, freshness)', file: 'src/services/etsy/etsy-order-ingest-postgres.vitest.test.ts', expect: 58 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
+  { name: 'Amazon Finances dry run and order attribution on the base schema (A2, A5; A3/A4 held)', file: 'src/services/amazon-finances-base-postgres.vitest.test.ts', expect: 9 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
-  { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 20 },
+  { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 21 },
+  { name: 'one stock model across channels (crash heal, multi-line totals, cancellation after shipment, races)', file: 'src/services/stock-model-postgres.vitest.test.ts', expect: 48 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
   { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
   { name: 'shared stock end to end (switches, worker, cascade)', file: 'src/services/stock-pool/stock-pool-e2e.vitest.test.ts', expect: 9 },
   { name: 'listing end times (Sync Control, the job, the database rule)', file: 'src/services/listing-end-times.vitest.test.ts', expect: 25 },
   { name: 'shared stock orders (sales, holds, cancellations, returns, repair, stock pages)', file: 'src/services/stock-pool/stock-pool-orders.vitest.test.ts', expect: 24 },
+  { name: 'transactional eBay order writer (atomic lines and stock, shortfalls, races, locks, attribution)', file: 'src/services/ebay-order-writer-postgres.vitest.test.ts', expect: 32 },
+  { name: 'eBay mixed own and pool stock (global Product locks, durable cancellation retries)', file: 'src/services/ebay-order-pool-postgres.vitest.test.ts', expect: 12 },
+  { name: 'dormant eBay ORDER_CONFIRMATION execution (one read, own account, atomic receipt)', file: 'src/services/cx/ingress/ebay-order-processing-postgres.vitest.test.ts', expect: 13 },
+  { name: 'order cancellation gives back what the order took at ingest, never shipped units (eBay, Amazon FBM/FBA, Shopify; markers, races, re-run, owner notice)', file: 'src/services/order-cancellation/order-cancellation-postgres.vitest.test.ts', expect: 17 },
   { name: 'live product sync (AE.4: capture, worker, overrides, images, SKU, variations, listener)', file: 'src/services/assortment/sync.vitest.test.ts', expect: 14 },
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 11 },
+  { name: 'eBay price read-back dedupe (JSON-path key, classes, 24 h, per business)', file: 'src/services/ebay-price-readback-postgres.vitest.test.ts', expect: 4 },
+  { name: 'master-price currency refusal (own transaction, caller rollback and commit)', file: 'src/services/master-price-currency-postgres.vitest.test.ts', expect: 3 },
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']

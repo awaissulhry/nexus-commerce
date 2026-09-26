@@ -8,7 +8,7 @@ import { claimEbayInbound, commitEbayInbound, finishEbayInbound, type EbayInboun
 import { raiseEbayFailureNotificationInTx } from './ebay-failure-notification.js'
 import { EbayNoticeInvalid, parseEbayRevocationNotice } from './ebay-revocation-notice.js'
 import { MAX_INBOUND_ATTEMPTS } from './ledger.js'
-import { ebayInboundProcessingEnabled, ebayInboundProcessingReady, heldEbayInboundWhere } from './ebay-processing-policy.js'
+import { ebayInboundProcessingEnabled, ebayInboundProcessingReady, ebayOrderNoticesEnabled, heldEbayInboundWhere } from './ebay-processing-policy.js'
 
 export { ebayInboundProcessingEnabled, ebayInboundProcessingReady } from './ebay-processing-policy.js'
 
@@ -18,6 +18,8 @@ export async function dueEbayInboundEvents(limit = 4) {
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`
   return prisma.webhookEvent.findMany({ where: {
     channel: 'EBAY', signatureOk: true, verifiedBy: 'ebay_ecdsa', archivedAt: null,
+    // A held order notice must not occupy one of the four slots and starve revocations.
+    ...(ebayOrderNoticesEnabled() ? {} : { NOT: { eventType: 'ORDER_CONFIRMATION' } }),
     OR: [{ status: { in: ['pending', 'failed'] }, nextAttemptAt: { not: null, lte: clock.now },
       OR: [{ leaseToken: null }, { leaseUntil: { lte: clock.now } }],
     }, heldEbayInboundWhere()],
@@ -25,15 +27,27 @@ export async function dueEbayInboundEvents(limit = 4) {
 }
 
 export type EbayProcessingOutcome =
-  | { kind: 'held'; reason: 'processing_disabled' | 'canonical_service_required' }
+  | { kind: 'held'; reason: 'processing_disabled' | 'canonical_service_required' | 'order_notices_disabled' }
   | { kind: 'not_claimed' | 'done' | 'retry' | 'deferred' | 'dead_letter' }
 
 /** The worker and operator route use this one stored-receipt protocol. */
 export async function processEbayInbound(id: string): Promise<EbayProcessingOutcome> {
   if (!ebayInboundProcessingEnabled()) return { kind: 'held', reason: 'processing_disabled' }
   if (!tokenServiceEnabled()) return { kind: 'held', reason: 'canonical_service_required' }
+  // Like the processing hold: decided before any claim, so no attempt is spent and nothing dead-letters.
+  if (!ebayOrderNoticesEnabled()) {
+    const stored = await prisma.webhookEvent.findFirst({ where: { id, channel: 'EBAY' }, select: { eventType: true } })
+    if (stored?.eventType === 'ORDER_CONFIRMATION') return { kind: 'held', reason: 'order_notices_disabled' }
+  }
   const claim = await claimEbayInbound(id, raiseEbayFailureNotificationInTx)
   if (!claim) return { kind: 'not_claimed' }
+  // Dispatch on the STORED event type. Loaded lazily so the revocation path's modules are unchanged.
+  if (claim.eventType === 'ORDER_CONFIRMATION') {
+    if (ebayOrderNoticesEnabled()) return (await import('./ebay-order-processing.js')).processEbayOrderClaim(claim)
+    // Switched off after the check above: give the attempt back and keep it held, never dead-letter it.
+    const saved = await finishEbayInbound(claim, { kind: 'defer', code: 'PROCESSING_HELD', reason: 'eBay order notices are held by server configuration.' })
+    return saved ? { kind: 'held', reason: 'order_notices_disabled' } : { kind: 'not_claimed' }
+  }
   try {
     const notice = parseEbayRevocationNotice(claim.payload)
     if (claim.eventType !== notice.topic || !claim.connectionId) throw new EbayNoticeInvalid('envelope_invalid')

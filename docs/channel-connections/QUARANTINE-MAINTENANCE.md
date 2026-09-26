@@ -1,4 +1,4 @@
-# eBay quarantine inventory and encryption maintenance
+# eBay quarantine inventory, deletion census and encryption maintenance
 
 ## Latest checkpoint — 2026-09-25 11:38 UTC
 
@@ -71,7 +71,7 @@ grant no operator login access.
 
 | Role | Allows | Needed by |
 |---|---|---|
-| `nexus_ebay_quarantine_maintenance` | metadata inventory, digest manifest, audited rewrap CAS | inventory, verify, rewrap |
+| `nexus_ebay_quarantine_maintenance` | metadata inventory, deletion census, digest manifest, audited rewrap CAS | inventory, deletion census, verify, rewrap |
 | `nexus_ebay_quarantine_custodian` | reading retained **ciphertext** (5 bodies per call, 3 MiB each) | verify, rewrap |
 
 Ciphertext is not plaintext, but anyone who also holds `NEXUS_CREDENTIAL_ENC_KEY`
@@ -136,6 +136,44 @@ latency claim follows from the local tests.
 Never interpret a partial scan, failed permission check or an empty response after
 an error as a complete zero. A legitimate complete empty snapshot is possible.
 Every report keeps `recovery: not_checked` and `retirementReady: false`.
+
+## Deletion review census (metadata only)
+
+Implemented locally in the privacy lane; not deployed or run against production.
+Requires additive migration `20260926s_cx_ebay_privacy_census` and an already approved
+dedicated login with the maintenance role. It uses the same
+`CX_QUARANTINE_MAINTENANCE_DATABASE_URL` mechanism as inventory, with no dotenv or
+application `DATABASE_URL` fallback. No custodian permission, decryption key or KMS
+access is needed. From `apps/api`, after building:
+
+```sh
+node dist/scripts/cx-ebay-deletion-census.js
+```
+
+No arguments or write mode are accepted. The report contains only aggregate
+counts and the oldest receipt time for production and sandbox, from one READ ONLY,
+REPEATABLE READ snapshot. `asOf` is the transaction start. It counts verified
+`MARKETPLACE_ACCOUNT_DELETION` quarantine rows, including historical generic
+`subject_or_topic_unresolved` reasons. New verified deletion notices use
+`account_deletion_review_required`; old immutable reasons are not rewritten.
+Other stored reasons share a fixed aggregate bucket, so arbitrary text cannot leak
+through the report. Rejected signatures and unclassified envelopes are excluded.
+
+`unresolved` means no receipt-routing handoff; it is **not** an erasure state.
+The fixed `disposition: review_required_no_erasure` describes this boundary.
+The census neither matches subjects to workspaces nor creates review requests,
+notices or erasure actions. The [privacy review](EBAY-PRIVACY-REVIEW.md) runs in
+the retry worker after eBay is acknowledged and stays OFF by default. With it ON,
+the retention job deletes a deletion notice 30 days after its review finished once
+no business still has an open request for it; expired notices leave this census.
+A cold verify or rewrap run that overlaps an expiry reports `state_changed`; rerun
+it. Anonymising or deleting business data still awaits the fiscal-retention decision.
+
+The SQL statement timeout is 10 seconds and client query timeout 15 seconds.
+Exit 0 means the aggregate snapshot completed, never that erasure completed.
+Exit 1 returns a static `authority_denied`, `census_failed` or `census_unavailable`
+error, with no successful empty/partial census. No production latency claim follows
+from the local tests.
 
 ## Cold verify (read-only; uses KMS)
 

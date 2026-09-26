@@ -1,0 +1,10 @@
+.cx-listing-issues { display: grid; gap: var(--nds-space-12); min-width: 0; }
+.cx-listing-issues p { margin: 0; overflow-wrap: anywhere; }
+.cx-listing-issues-meta { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.cx-listing-issues-list { display: grid; gap: var(--nds-space-16); margin: 0; padding: 0; list-style: none; }
+.cx-listing-issues-list > li { display: grid; gap: var(--nds-space-8); padding-block: var(--nds-space-12); border-top: 1px solid var(--nds-border); min-width: 0; }
+.cx-listing-issues-labels { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); overflow-wrap: anywhere; }
+.cx-listing-issues-labels strong { min-width: 0; overflow-wrap: anywhere; }
+.cx-listing-issues-message { white-space: pre-wrap; }
+/* The channel's own issue code: kept for searching the vendor's help, secondary to the plain source label. */
+.cx-listing-issues-code { color: var(--nds-text-muted); }

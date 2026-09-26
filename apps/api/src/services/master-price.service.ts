@@ -27,6 +27,13 @@
  *     a marketplace-specific override)
  *     Always: masterPrice := newMasterPrice (snapshot)
  *
+ * Currency (CX review 2026-09-26 — refuse, don't convert):
+ *   The master is a number in the master currency (NEXUS_MASTER_CURRENCY, EUR). A listing whose market
+ *   sells in another currency — or whose currency is not configured — is NOT sent a master price: its
+ *   price stays, its masterPrice snapshot moves, nothing is queued, and the refusal is recorded (result,
+ *   audit metadata, and a MASTER_PRICE_CURRENCY_REFUSED sync-health conflict once the transaction is ours
+ *   and committed). It used to send the EUR number to a GBP market as pounds.
+ *
  * Outbound push:
  *   When a listing's `price` actually changes, we enqueue an OutboundSyncQueue row
  *   with syncType='PRICE_UPDATE' and a 5-minute holdUntil grace window (matches
@@ -63,6 +70,8 @@ import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { masterCurrency } from './fx-rate.service.js'
+import { marketCurrency, type MarketCurrencyRow } from './pim/market-currency.js'
 
 // IS.2b — reduced from 5 min to 30s. Price changes from the edit page
 // should reach channels within ~1 minute. The route layer debounces
@@ -100,6 +109,8 @@ export interface MasterPriceUpdateResult {
   snapshottedListingIds: string[]
   /** OutboundSyncQueue row IDs enqueued for marketplace push. */
   queuedSyncIds: string[]
+  /** Listings NOT sent the master price because their market's currency is not the master currency (null = not configured). */
+  currencyRefused: Array<{ listingId: string; channel: string; marketplace: string; currency: string | null; masterCurrency: string }>
   /** AuditLog row id. */
   auditLogId: string | null
 }
@@ -195,6 +206,7 @@ export class MasterPriceService {
           cascadedListingIds: [],
           snapshottedListingIds: [],
           queuedSyncIds: [],
+          currencyRefused: [],
           auditLogId: null,
         }
       }
@@ -226,6 +238,14 @@ export class MasterPriceService {
       // so the result tells the caller exactly what propagated.
       const cascadedListingIds: string[] = []
       const snapshottedListingIds: string[] = []
+      const currencyRefused: MasterPriceUpdateResult['currencyRefused'] = []
+      const master = masterCurrency()
+      let currencyRows: MarketCurrencyRow[] | null = null
+      /** The listing market's configured currency, or null (not configured → never the master currency). */
+      const currencyOf = async (listing: ChannelListingForCascade): Promise<string | null> => {
+        currencyRows ??= await tx.marketplace.findMany({ select: { channel: true, code: true, currency: true } }) as MarketCurrencyRow[]
+        try { return marketCurrency(listing.channel, listing.marketplace, currencyRows) } catch { return null }
+      }
       const queueRowsToCreate: Prisma.OutboundSyncQueueCreateManyInput[] = []
       const holdUntil =
         ctx.applyGrace === false
@@ -241,8 +261,13 @@ export class MasterPriceService {
         )
         const oldListingPrice =
           listing.price != null ? Number(listing.price) : null
+        // Refuse, don't convert: only a listing that sells in the master currency is sent the master number.
+        const listingCurrency = newListingPrice != null && newListingPrice !== oldListingPrice ? await currencyOf(listing) : master
+        if (listingCurrency !== master) {
+          currencyRefused.push({ listingId: listing.id, channel: listing.channel, marketplace: listing.marketplace, currency: listingCurrency, masterCurrency: master })
+        }
 
-        if (newListingPrice != null && newListingPrice !== oldListingPrice) {
+        if (newListingPrice != null && newListingPrice !== oldListingPrice && listingCurrency === master) {
           // Real cascade: update both snapshot + computed price + flag for sync.
           await tx.channelListing.update({
             where: { id: listing.id },
@@ -333,6 +358,7 @@ export class MasterPriceService {
             cascadedListingIds,
             snapshottedListingIds,
             queuedSyncIds,
+            currencyRefusedListingIds: currencyRefused.map((r) => r.listingId),
             graceMs: holdUntil
               ? holdUntil.getTime() - Date.now()
               : 0,
@@ -349,6 +375,7 @@ export class MasterPriceService {
         cascadedListingIds,
         snapshottedListingIds,
         queuedSyncIds,
+        currencyRefused,
         auditLogId: audit.id,
       }
     }
@@ -391,6 +418,28 @@ export class MasterPriceService {
             jobId: queueId,
           },
         )
+      }
+    }
+
+    // Refusals are recorded once the transaction is ours and committed (inside a caller's transaction they
+    // live in the result and the audit row, which commit or roll back with it). Best effort: never undoes the edit.
+    if (result.currencyRefused.length > 0) {
+      logger.warn('MasterPriceService.update: master price not sent to a different-currency market', { productId, refused: result.currencyRefused })
+      if (!ctx.tx) {
+        const { syncHealthService } = await import('./sync-health.service.js')
+        for (const refusal of result.currencyRefused) {
+          const where = `${refusal.channel} ${refusal.marketplace}`
+          await syncHealthService.logConflict({
+            channel: refusal.channel,
+            conflictType: 'MASTER_PRICE_CURRENCY_REFUSED',
+            message: refusal.currency
+              ? `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: that market sells in ${refusal.currency}. Set this listing's own ${refusal.currency} price. Nothing was queued.`
+              : `The master price ${refusal.masterCurrency} ${result.newBasePrice.toFixed(2)} was not sent to ${where}: no currency is configured for that market. Nothing was queued.`,
+            productId,
+            localData: { masterPrice: result.newBasePrice, masterCurrency: refusal.masterCurrency },
+            remoteData: { listingId: refusal.listingId, marketplace: refusal.marketplace, marketCurrency: refusal.currency },
+          }).catch(() => { /* observability best-effort — the refusal already holds */ })
+        }
       }
     }
 

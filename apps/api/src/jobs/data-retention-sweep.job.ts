@@ -11,18 +11,22 @@
  *
  * Default-on; opt out via NEXUS_ENABLE_RETENTION_SWEEP=0.
  *
+ * eBay deletion notices no business still needs expire in a separate platform tick on the
+ * same schedule (fixed period, not a business policy; see ebay-erasure-review.ts).
+ *
  * Conservative: anything we don't have an entry for is left alone.
  * If the user wants a new data-type swept, add it to the
  * SWEEP_TABLES map AND set a policy value via the UI.
  */
 
-import cron from '../lib/cron/clustered.js'
+import cron, { schedulePlatform } from '../lib/cron/clustered.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { archiveCompletedInbound, scrubExpiredInbound } from '../services/cx/ingress/archive.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
+let noticeExpiryTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
 let lastSummary: SweepSummary | null = null
 
@@ -182,6 +186,19 @@ export function startRetentionSweepCron(): void {
       })
     })
   })
+  // eBay deletion notices no business still needs expire on a fixed period (not a business
+  // policy). They belong to no business, so one platform tick runs it. Dormant unless the
+  // privacy review switch is exactly 1 (the expiry itself checks it again).
+  noticeExpiryTask = schedulePlatform(schedule, async () => {
+    if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0' || process.env.NEXUS_ENABLE_EBAY_PRIVACY_REVIEW !== '1') return
+    await recordCronRun('ebay-deletion-notice-expiry', async () => {
+      const { expireEbayDeletionNotices } = await import('../services/cx/ingress/ebay-erasure-review.js')
+      const result = await expireEbayDeletionNotices()
+      return result.kind === 'held' ? 'held' : `expired=${result.expired} limitReached=${result.limitReached}`
+    }).catch((err) => {
+      logger.error('ebay-deletion-notice-expiry: failure', { error: err instanceof Error ? err.message : String(err) })
+    })
+  })
   logger.info('retention-sweep cron: scheduled', { schedule })
 }
 
@@ -189,6 +206,10 @@ export function stopRetentionSweepCron(): void {
   if (scheduledTask) {
     scheduledTask.stop()
     scheduledTask = null
+  }
+  if (noticeExpiryTask) {
+    noticeExpiryTask.stop()
+    noticeExpiryTask = null
   }
 }
 

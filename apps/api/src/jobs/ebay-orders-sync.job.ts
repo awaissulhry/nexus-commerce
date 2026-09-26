@@ -30,6 +30,7 @@ import { ebayOrdersService } from '../services/ebay-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
+import { retryBlockedEbayLines } from '../services/ebay-order-writer.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -140,6 +141,17 @@ async function runOrdersPoll(): Promise<void> {
       }
     }
 
+    // R6 — a line recorded stock_blocked is retried from the database, however old its order: eBay's
+    // 7-day window above no longer returns an older order, and the owner's notice promises this run.
+    let retried = { orders: 0, resolved: 0, stillBlocked: 0, failed: 0 }
+    try {
+      retried = await retryBlockedEbayLines({ actor: 'ebay-orders-sync' })
+      if (retried.orders) logger.info('ebay-orders cron: blocked lines retried', retried)
+    } catch (err) {
+      firstError ??= err instanceof Error ? err.message : String(err)
+      logger.error('ebay-orders cron: blocked-line retry failed', { error: err instanceof Error ? err.message : String(err) })
+    }
+
     logger.info('ebay-orders cron: tick complete', totals)
     // AS.3 — surface the first failure reason in the CronRun summary. The
     // getValidToken defect failed every tick for 7+ days as a bare
@@ -153,7 +165,7 @@ async function runOrdersPoll(): Promise<void> {
       return arg ? `${arg.trim()} [${flat.slice(0, 100)}…]` : flat.slice(0, 240)
     }
     const errNote = firstError ? ` err="${compactError(firstError)}"` : ''
-    return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated}${errNote}`
+    return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated} blockedRetried=${retried.resolved}/${retried.resolved + retried.stillBlocked}${errNote}`
   }).catch((err) => {
     logger.error('ebay-orders cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ fetch: vi.fn(), account: vi.fn(), order: vi.fn(), find: vi.fn(), create: vi.fn() }))
-vi.mock('../db.js', () => ({ default: { order: { findFirst: m.order }, financialTransaction: { findFirst: m.find, create: m.create } } }))
+// CX A2: the dry run now also READS v0's rows for cents parity (findMany); no assertion changed.
+vi.mock('../db.js', () => ({ default: { order: { findFirst: m.order }, financialTransaction: { findFirst: m.find, findMany: vi.fn(async () => []), create: m.create } } }))
 vi.mock('./gateway/amazon-sdk.js', () => ({ amazonSellerFetch: m.fetch }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonAccessToken: vi.fn(), amazonAccount: m.account }))
 const { syncFinancialTransactions, financialsDryRunRefusal, readTransactionsPage, probeFinancialTransactionsEnvelope } = await import('./amazon-financial-events.service.js')

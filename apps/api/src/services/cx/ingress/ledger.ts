@@ -315,6 +315,20 @@ export async function completeInbound(id: string | null, ok: boolean, error?: st
 }
 
 /**
+ * Thrown by a handler whose event must wait WITHOUT spending an attempt (an account that must be
+ * signed in again, say): C5's rule for sign-in holds, applied to inbound. The claim that runs the
+ * handler (`runWithInboundClaim`) reschedules the row after `delayMs` and gives the attempt back;
+ * callers report it as deferred, never as a failure. Retrying cannot fix an account that needs its
+ * owner, and burning the attempts on it would dead-letter real orders while the owner reconnects.
+ */
+export class InboundDeferred extends Error {
+  constructor(message: string, readonly delayMs: number) {
+    super(message)
+    this.name = 'InboundDeferred'
+  }
+}
+
+/**
  * Move an event to dead letters now, without spending the remaining attempts.
  *
  * For failures that retrying cannot fix — an event type nothing knows how to replay,

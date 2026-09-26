@@ -26,6 +26,7 @@ import { listAppSecrets, setAppSecretExpiry } from '../services/cx/app-secret-ex
 import { accountCallsById } from '../services/cx/account-calls.service.js'
 import { channelHealth, callsForTrace, DEFAULT_WINDOW_HOURS } from '../services/cx/channel-health.service.js'
 import cxQuarantineRoutes from './cx-quarantine.routes.js'
+import cxListingIssuesRoutes from './cx-listing-issues.routes.js'
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 const MAX_AHEAD_DAYS = 400
@@ -49,6 +50,7 @@ export function parseExpiryDate(value: unknown, now: number = Date.now()): { dat
 
 export default async function cxConnectionsRoutes(app: FastifyInstance): Promise<void> {
   await app.register(cxQuarantineRoutes)
+  await app.register(cxListingIssuesRoutes)
   const actorOf = (request: unknown) => ({ kind: 'operator' as const, userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null })
 
   app.get('/cx/channels', async () => ({

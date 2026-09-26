@@ -2417,8 +2417,28 @@ CREATE TABLE "EbayNoticeQuarantine" (
     "resolvedWorkspaceId" TEXT,
     "resolvedReceiptId" TEXT,
     "resolvedAt" TIMESTAMP(3),
+    "reviewAttempts" INTEGER NOT NULL DEFAULT 0,
+    "reviewNextAt" TIMESTAMP(3),
+    "reviewedAt" TIMESTAMP(3),
+    "reviewOutcome" TEXT,
 
     CONSTRAINT "EbayNoticeQuarantine_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ErasureRequest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "quarantineId" TEXT,
+    "evidenceOrderId" TEXT,
+    "channel" TEXT NOT NULL DEFAULT 'EBAY',
+    "environment" TEXT NOT NULL,
+    "matchBasis" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'REVIEW_REQUIRED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "decidedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ErasureRequest_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -9398,6 +9418,48 @@ CREATE TABLE "StockPoolLink" (
 );
 
 -- CreateTable
+CREATE TABLE "EtsyReceiptIngest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "activatedAt" TIMESTAMP(3) NOT NULL DEFAULT date_trunc('second'::text, clock_timestamp()),
+    "cursorUpdatedAt" TIMESTAMP(3),
+    "cursorReceiptId" TEXT,
+    "scanUpdatedAt" TIMESTAMP(3),
+    "scanCreatedThrough" TIMESTAMP(3),
+    "scanExpectedCount" INTEGER,
+    "scanOffset" INTEGER NOT NULL DEFAULT 0,
+    "leaseToken" TEXT,
+    "leaseUntil" TIMESTAMP(3),
+    "lastPollStartedAt" TIMESTAMP(3),
+    "lastPollSucceededAt" TIMESTAMP(3),
+    "lastPollStatus" TEXT,
+    "lastPollError" TEXT,
+    "backlog" BOOLEAN NOT NULL DEFAULT false,
+    "lastPollCounts" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "EtsyReceiptIngest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EtsyReceiptRefusal" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "receiptId" TEXT NOT NULL,
+    "receiptVersion" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "path" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EtsyReceiptRefusal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "StockPoolTask" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -10680,7 +10742,22 @@ CREATE INDEX "EbayNoticeQuarantine_subjectHash_receivedAt_idx" ON "EbayNoticeQua
 CREATE INDEX "EbayNoticeQuarantine_firstOwnerWorkspaceId_resolvedAt_idx" ON "EbayNoticeQuarantine"("firstOwnerWorkspaceId", "resolvedAt");
 
 -- CreateIndex
+CREATE INDEX "EbayNoticeQuarantine_topic_reviewedAt_reviewNextAt_idx" ON "EbayNoticeQuarantine"("topic", "reviewedAt", "reviewNextAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "EbayNoticeQuarantine_environment_signatureOk_externalId_key" ON "EbayNoticeQuarantine"("environment", "signatureOk", "externalId");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_workspaceId_status_createdAt_idx" ON "ErasureRequest"("workspaceId", "status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_evidenceOrderId_idx" ON "ErasureRequest"("evidenceOrderId");
+
+-- CreateIndex
+CREATE INDEX "ErasureRequest_quarantineId_status_idx" ON "ErasureRequest"("quarantineId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ErasureRequest_workspace_quarantine_key" ON "ErasureRequest"("workspaceId", "quarantineId");
 
 -- CreateIndex
 CREATE INDEX "EbayQuarantineMaintenanceAudit_quarantineId_recordedAt_idx" ON "EbayQuarantineMaintenanceAudit"("quarantineId", "recordedAt");
@@ -14406,6 +14483,21 @@ CREATE INDEX "StockPoolLink_productId_idx" ON "StockPoolLink"("productId");
 CREATE INDEX "StockPoolLink_workspaceId_idx" ON "StockPoolLink"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "EtsyReceiptIngest_workspaceId_idx" ON "EtsyReceiptIngest"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EtsyReceiptIngest_connectionId_key" ON "EtsyReceiptIngest"("workspaceId", "connectionId");
+
+-- CreateIndex
+CREATE INDEX "EtsyReceiptRefusal_connectionId_createdAt_idx" ON "EtsyReceiptRefusal"("connectionId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "EtsyReceiptRefusal_workspaceId_idx" ON "EtsyReceiptRefusal"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EtsyReceiptRefusal_version_code_key" ON "EtsyReceiptRefusal"("workspaceId", "connectionId", "receiptId", "receiptVersion", "code");
+
+-- CreateIndex
 CREATE INDEX "StockPoolTask_workspaceId_claimedAt_createdAt_idx" ON "StockPoolTask"("workspaceId", "claimedAt", "createdAt");
 
 -- CreateIndex
@@ -14725,6 +14817,12 @@ ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey"
 
 -- AddForeignKey
 ALTER TABLE "EbayNoticeQuarantine" ADD CONSTRAINT "EbayNoticeQuarantine_resolvedReceiptId_fkey" FOREIGN KEY ("resolvedReceiptId") REFERENCES "WebhookEvent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ErasureRequest" ADD CONSTRAINT "ErasureRequest_quarantineId_fkey" FOREIGN KEY ("quarantineId") REFERENCES "EbayNoticeQuarantine"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ErasureRequest" ADD CONSTRAINT "ErasureRequest_evidenceOrderId_fkey" FOREIGN KEY ("evidenceOrderId") REFERENCES "Order"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChannelLiveImage" ADD CONSTRAINT "ChannelLiveImage_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -15451,6 +15549,12 @@ ALTER TABLE "StockPoolLink" ADD CONSTRAINT "StockPoolLink_catalogLinkId_fkey" FO
 
 -- AddForeignKey
 ALTER TABLE "StockPoolLink" ADD CONSTRAINT "StockPoolLink_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EtsyReceiptIngest" ADD CONSTRAINT "EtsyReceiptIngest_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EtsyReceiptRefusal" ADD CONSTRAINT "EtsyReceiptRefusal_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "StockPoolTask" ADD CONSTRAINT "StockPoolTask_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;

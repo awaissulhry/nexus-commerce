@@ -17,6 +17,14 @@ const h = vi.hoisted(() => ({
   connections: [{ id: 'etsy-1' }] as Array<{ id: string }>,
   readerThrows: null as Error | null,
   getThrows: null as Error | null,
+  /** Per state: throw for that state only (F4). */
+  getThrowsFor: null as string | null,
+  /** Every page of this state is full (F2 — the page cap). */
+  endless: null as string | null,
+  updateManys: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>,
+  updateManyCount: 0,
+  /** The database clock, deliberately far from the process clock (F5). */
+  dbNow: new Date('2031-01-02T03:04:05.000Z'),
 }))
 
 vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: vi.fn(async () => h.connections) }))
@@ -25,7 +33,9 @@ vi.mock('../db.js', () => ({
     channelListing: {
       findMany: vi.fn(async () => h.listings),
       update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => { h.updates.push(args); return {} }),
+      updateMany: vi.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => { h.updateManys.push(args); return { count: h.updateManyCount } }),
     },
+    $queryRaw: vi.fn(async () => [{ now: h.dbNow }]),
   },
 }))
 vi.mock('../services/etsy/read-client.js', () => ({
@@ -37,7 +47,9 @@ vi.mock('../services/etsy/read-client.js', () => ({
         h.gets.push(path)
         if (h.getThrows) throw h.getThrows
         const state = /state=([a-z_]+)/.exec(path)?.[1] ?? ''
+        if (h.getThrowsFor === state) throw new Error('Etsy could not read this resource (HTTP 503).')
         const offset = Number(/offset=(\d+)/.exec(path)?.[1] ?? '0')
+        if (h.endless === state) return { results: Array.from({ length: 100 }, (_, i) => ({ listing_id: 90_000 + offset + i, state })) }
         return offset === 0 ? (h.answers.get(state) ?? { results: [] }) : { results: [] }
       }),
     }
@@ -53,6 +65,7 @@ import {
 
 beforeEach(() => {
   h.gets = []; h.updates = []; h.answers = new Map(); h.readerThrows = null; h.getThrows = null
+  h.getThrowsFor = null; h.endless = null; h.updateManys = []; h.updateManyCount = 0
   h.listings = [{ id: 'cl-1', listingStatus: 'ACTIVE' }]
   h.connections = [{ id: 'etsy-1' }]
 })
@@ -143,6 +156,87 @@ describe('P4.6f — the sweep', () => {
     const summary = await vi.mocked(recordCronRun).mock.results[0].value as { summary: string }
     expect(summary.summary).toContain('6 error(s)')
     expect(summary.summary).toContain('0 freshened')
+  })
+})
+
+describe('CX F1–F5 — freshness that does not hide why a listing is stale', () => {
+  const stamps = (status: string) => h.updateManys.filter((u) => u.data.lastSyncStatus === status)
+
+  it('F1 — listings of a missing or inactive account are stamped NO_ACCOUNT, and only the active accounts are spared', async () => {
+    h.updateManyCount = 3
+    h.connections = [{ id: 'etsy-1' }, { id: 'etsy-2' }]
+    const report = await refreshEtsyContent()
+    expect(stamps('NO_ACCOUNT')).toEqual([{
+      where: { channel: 'ETSY', OR: [{ channelConnectionId: null }, { channelConnectionId: { notIn: ['etsy-1', 'etsy-2'] } }] },
+      data: { lastSyncStatus: 'NO_ACCOUNT' },
+    }])
+    expect(report.unreachable).toBe(3)
+  })
+
+  it('F2 — a state cut by the page cap is reported (never a quiet end), and no listing is called missing', async () => {
+    h.endless = 'active'
+    h.listings = []
+    const report = await refreshEtsyContent({ maxPages: 3 })
+    expect(report.truncated).toEqual([{ accountId: 'etsy-1', state: 'active' }])
+    expect(h.gets.filter((p) => p.includes('state=active'))).toHaveLength(3)
+    expect(stamps('MISSING')).toEqual([])
+  })
+
+  it('F2 — the run summary names the cut', async () => {
+    h.endless = 'active'
+    h.listings = []
+    const { recordCronRun } = await import('../utils/cron-observability.js')
+    vi.mocked(recordCronRun).mockImplementationOnce(async (_n: string, fn: () => Promise<unknown>) => await fn() as never)
+    const report = await refreshEtsyContent({ maxPages: 2 })
+    expect(report.truncated).toHaveLength(1)
+  })
+
+  it('F3 — after a COMPLETE read, a Nexus listing Etsy returned in no state is stamped MISSING (its date untouched)', async () => {
+    h.answers.set('active', { results: [{ listing_id: 700, state: 'active' }] })
+    h.updateManyCount = 1
+    const report = await refreshEtsyContent()
+    expect(stamps('MISSING')).toEqual([{
+      where: { channel: 'ETSY', channelConnectionId: 'etsy-1', id: { notIn: ['cl-1'] } },
+      data: { lastSyncStatus: 'MISSING' },
+    }])
+    expect(report.missingAtEtsy).toBe(1)
+    expect(stamps('FAILED')).toEqual([])
+  })
+
+  it('F4 — one state failing stamps the account\'s other listings FAILED, never MISSING, date untouched', async () => {
+    h.answers.set('active', { results: [{ listing_id: 700, state: 'active' }] })
+    h.getThrowsFor = 'expired'
+    h.updateManyCount = 2
+    const report = await refreshEtsyContent()
+    expect(stamps('FAILED')).toEqual([{
+      where: { channel: 'ETSY', channelConnectionId: 'etsy-1', id: { notIn: ['cl-1'] } },
+      data: { lastSyncStatus: 'FAILED' },
+    }])
+    expect(report.failedStamped).toBe(2)
+    expect(stamps('MISSING')).toEqual([])
+    // The listing that WAS read is still freshened.
+    expect(h.updates.map((u) => u.data.lastSyncStatus)).toEqual(['SUCCESS'])
+  })
+
+  it('F4 — an account that cannot be read at all stamps all its listings FAILED', async () => {
+    h.readerThrows = new Error('The Etsy account has no verified shop identity.')
+    await refreshEtsyContent()
+    expect(stamps('FAILED')).toEqual([{ where: { channel: 'ETSY', channelConnectionId: 'etsy-1', id: { notIn: [] } }, data: { lastSyncStatus: 'FAILED' } }])
+  })
+
+  it('F5 — the freshness stamp is the DATABASE clock, not the process clock', async () => {
+    h.answers.set('active', { results: [{ listing_id: 700, state: 'active' }] })
+    await refreshEtsyContent()
+    expect(h.updates[0].data.lastSyncedAt).toEqual(h.dbNow)
+  })
+
+  it('the census counts each reason', async () => {
+    const { etsyFreshnessCensus } = await import('../services/etsy/freshness.js')
+    const census = etsyFreshnessCensus([
+      { lastSyncedAt: null, lastSyncStatus: 'NO_ACCOUNT' }, { lastSyncedAt: null, lastSyncStatus: 'MISSING' },
+      { lastSyncedAt: null, lastSyncStatus: 'FAILED' }, { lastSyncedAt: new Date(0), lastSyncStatus: 'SUCCESS' },
+    ], 10)
+    expect(census).toMatchObject({ total: 4, noAccount: 1, missingAtEtsy: 1, failed: 1 })
   })
 })
 

@@ -83,6 +83,18 @@ export const CHANNEL_ALERT_KINDS = [
   'channel-data-stale',
   'channel-authorization-revoked',
   'channel-notification-unresolved',
+  'channel-privacy-review',
+  'channel-order-stock-shortfall',
+  'channel-order-stock-blocked',
+  'channel-order-ingest-failed',
+  'channel-order-attribution-unverified',
+  // Stock model R4/R3 (2026-09-26): shipped units stay deducted after a cancellation; a partial
+  // shipment keeps the hold. Both need a person to look at the parcel, never an automatic fix.
+  'channel-order-cancelled-after-shipment',
+  'channel-order-partly-shipped',
+  'channel-order-stock-unlinked',
+  // R5 (2026-09-26): an eBay order recorded although parts of it could not be read.
+  'channel-order-unreadable',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]
@@ -152,9 +164,10 @@ export async function raiseChannelAlert(alert: ChannelAlert): Promise<RaiseResul
 export async function raiseChannelAlertInTx(
   tx: Pick<Prisma.TransactionClient, 'notification' | 'workspaceMembership'>,
   alert: ChannelAlert,
-  options: { occurrenceId?: string; actorUserId?: string | null } = {},
+  options: { occurrenceId?: string; actorUserId?: string | null; workspaceId?: string } = {},
 ): Promise<RaiseResult> {
-  const context = requireWorkspace()
+  // A transaction's own profile may be passed explicitly: scheduled work can run without a request context.
+  const context = options.workspaceId ? { workspaceId: options.workspaceId, actorUserId: null } : requireWorkspace()
   const { workspaceId } = context
   const actorUserId = options.actorUserId === undefined ? context.actorUserId : options.actorUserId
   const recipients = await alertRecipientsInTx(tx, workspaceId, actorUserId)

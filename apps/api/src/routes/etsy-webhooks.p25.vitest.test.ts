@@ -19,7 +19,8 @@ let claimDue = true
 let receiptPause: Promise<void> | undefined
 let receiptEntered: (() => void) | undefined
 
-vi.mock('../services/cx/ingress/ledger.js', () => ({
+vi.mock('../services/cx/ingress/ledger.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/cx/ingress/ledger.js')>()),
   inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
   recordInbound: async (rec: any) => {
     recorded.push(rec)

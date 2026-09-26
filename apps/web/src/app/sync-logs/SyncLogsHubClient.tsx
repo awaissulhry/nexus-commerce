@@ -55,6 +55,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListingHealthGrid from './_shared/ListingHealthGrid'
 import InFlightSyncBar from './_shared/InFlightSyncBar'
+import { CronStatusPill, cronKpiTone, incompleteCronCount } from './_shared/cronStatus'
 
 const POLL_MS = 30_000
 
@@ -381,8 +382,8 @@ export default function SyncLogsHubClient({
   const cronJobs = crons?.latest ?? []
   const cronHealthy = cronJobs.filter((j) => j.status === 'SUCCESS').length
   const cronUnhealthy = cronJobs.filter((j) => j.status === 'FAILED').length
-  const cronRunning = cronJobs.filter((j) => j.status === 'RUNNING').length
   const cronStale = crons?.staleRunning.length ?? 0
+  const cronIncomplete = incompleteCronCount(cronJobs)
 
   const apiStats = apiCalls?.stats
   const apiErrorRatePct = apiStats ? apiStats.errorRate * 100 : 0
@@ -553,15 +554,11 @@ export default function SyncLogsHubClient({
                   ? t('syncLogs.hub.kpi.cron.stuck', { n: cronStale })
                   : cronUnhealthy > 0
                     ? t('syncLogs.hub.kpi.cron.failed', { n: cronUnhealthy })
-                    : t('syncLogs.hub.kpi.cron.healthy', { n: cronHealthy })
+                    : cronIncomplete > 0
+                      ? t('syncLogs.hub.kpi.cron.incomplete', { n: cronIncomplete })
+                      : t('syncLogs.hub.kpi.cron.healthy', { n: cronHealthy })
               }
-              tone={
-                cronStale > 0 || cronUnhealthy > 0
-                  ? 'bad'
-                  : cronRunning > 0
-                    ? 'warn'
-                    : 'good'
-              }
+              tone={cronKpiTone(cronJobs, cronStale)}
             />
           </section>
 
@@ -772,23 +769,12 @@ export default function SyncLogsHubClient({
                       key={j.jobName}
                       className="px-3 py-2 flex items-center gap-3"
                     >
-                      <span
-                        className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          j.status === 'SUCCESS'
-                            ? 'bg-emerald-500'
-                            : j.status === 'FAILED'
-                              ? 'bg-rose-500'
-                              : j.status === 'RUNNING'
-                                ? 'bg-blue-500 animate-pulse'
-                                : 'bg-slate-300'
-                        }`}
-                        aria-hidden
-                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-base font-mono text-slate-900 dark:text-slate-100 truncate">
                             {j.jobName}
                           </span>
+                          <CronStatusPill status={j.status} />
                           {j.triggeredBy === 'manual' && (
                             <Badge variant="info" size="sm">
                               {t('syncLogs.hub.cron.manual')}
@@ -807,8 +793,10 @@ export default function SyncLogsHubClient({
                             </>
                           )}
                         </div>
-                        {j.outputSummary && j.status === 'SUCCESS' && (
-                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono">
+                        {/* PARTIAL / NOT_CONFIGURED (P1.8 contract run) completed without proving everything:
+                            a warning pill above, and their summary says what is missing — whole, on hover. */}
+                        {j.outputSummary && (j.status === 'SUCCESS' || j.status === 'PARTIAL' || j.status === 'NOT_CONFIGURED') && (
+                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono" title={j.outputSummary}>
                             {j.outputSummary}
                           </div>
                         )}

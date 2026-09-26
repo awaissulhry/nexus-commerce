@@ -40,6 +40,8 @@ export type InboundReceiptHandler = (id: string) => Promise<import('./ebay-proce
 const RECEIPT_REGISTRY: Record<string, Record<string, () => Promise<InboundReceiptHandler>>> = {
   EBAY: {
     'AUTHORIZATION_REVOCATION': async () => (await import('./ebay-processing.js')).processEbayInbound,
+    // ORDER_CONFIRMATION is deliberately absent until activation: its executor stays unreachable
+    // from manual replay, and the worker holds it unless NEXUS_ENABLE_EBAY_ORDER_NOTICES=1.
   },
 }
 

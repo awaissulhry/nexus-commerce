@@ -139,7 +139,7 @@ export async function renewEbayInboundClaim(claim: EbayInboundClaim): Promise<bo
 
 export type EbayInboundFailure =
   | { kind: 'retry' | 'dead_letter'; reason: string; retryAfterMs?: number }
-  | { kind: 'defer'; code: 'AUTH_REQUIRED' | 'RATE_LIMITED'; reason: string; retryAfterMs?: number }
+  | { kind: 'defer'; code: 'AUTH_REQUIRED' | 'RATE_LIMITED' | 'PROCESSING_HELD'; reason: string; retryAfterMs?: number }
 
 /** A failure cannot release another worker's claim, or consume its retry budget. */
 export async function finishEbayInbound(claim: EbayInboundClaim, outcome: EbayInboundFailure, onDeadLetter?: EbayDeadLetterEffect): Promise<boolean> {

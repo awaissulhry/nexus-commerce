@@ -6246,6 +6246,47 @@
       }
     ]
   },
+  "EtsyReceiptIngest": {
+    "scalar": {
+      "connectionId": "workspace_connectionId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EtsyReceiptRefusal": {
+    "scalar": {},
+    "compound": {
+      "connectionId_receiptId_receiptVersion_code": [
+        "connectionId",
+        "receiptId",
+        "receiptVersion",
+        "code"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "CommandReceipt": {
     "scalar": {},
     "compound": {
@@ -6255,6 +6296,36 @@
       ]
     },
     "relations": []
+  },
+  "ErasureRequest": {
+    "scalar": {},
+    "compound": {
+      "workspace_quarantine": [
+        "quarantineId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "evidenceOrder",
+        "model": "Order",
+        "from": [
+          "evidenceOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "quarantine",
+        "model": "EbayNoticeQuarantine",
+        "from": [
+          "quarantineId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   },
   "ChannelMappingSet": {
     "scalar": {},

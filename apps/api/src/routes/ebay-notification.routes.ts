@@ -284,6 +284,10 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
   })
 
   // Durable acceptance is separate from claim-aware background processing.
+  // eBay marks an endpoint down after 24 h without a 2xx. receiveEbayNotice returns as soon as
+  // this delivery's storage transaction commits and runs nothing after it (a deletion notice is
+  // reviewed later by the retry worker), so every error below happened BEFORE storage and a
+  // non-2xx correctly asks eBay to redeliver. A stored notice always gets 200.
   app.post('/webhooks/ebay-notification', { bodyLimit: 1_048_576 }, async (req, reply) => {
     const rawBody = (req as RawBodyRequest).rawBody
     if (!rawBody) return reply.status(400).send({ error: 'Raw body unavailable.' })

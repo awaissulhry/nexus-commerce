@@ -27,7 +27,9 @@ import {
   reserveOpenOrder,
   consumeOpenOrder,
   resolveLocationByCode,
+  unitsPerProduct,
 } from "../services/stock-level.service.js";
+import { applyShopifyFulfilments, withRecordedFulfilments } from "../services/shopify/order-fulfilments.js";
 import { resolveByShopifyId } from "../services/shopify-locations.service.js";
 // applyStockMovement now lives behind the ChannelStockEvent service
 // (CS.2 — drift threshold + auto-apply / review-needed gating).
@@ -303,10 +305,12 @@ export async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Pro
  * Process order create webhook
  */
 // S.2.5 — map Shopify financial/fulfillment state to our OrderStatus enum.
-function mapShopifyOrderStatus(financial?: string, fulfillment?: string | null): 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
+// Re-review (2026-09-26): a partly fulfilled order is PARTIALLY_SHIPPED (was PROCESSING), as the
+// fulfilment webhook sets it: its fulfilled units are taken, the rest stays held.
+function mapShopifyOrderStatus(financial?: string, fulfillment?: string | null): 'PENDING' | 'PROCESSING' | 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'CANCELLED' | 'DELIVERED' {
   if (financial === 'voided' || financial === 'refunded') return 'CANCELLED';
   if (fulfillment === 'fulfilled') return 'SHIPPED';
-  if (fulfillment === 'partial') return 'PROCESSING';
+  if (fulfillment === 'partial') return 'PARTIALLY_SHIPPED';
   if (financial === 'paid' || financial === 'authorized') return 'PROCESSING';
   return 'PENDING';
 }
@@ -352,6 +356,9 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
         customerEmail: order.email ?? '',
         shippingAddress: order.shipping_address ?? {},
         purchaseDate,
+        // R4 — an order created already fulfilled shipped: record when, so a later cancellation or
+        // refund gives nothing back (review B4: this path set SHIPPED without a shipped time).
+        ...(status === 'SHIPPED' || status === 'DELIVERED' || status === 'PARTIALLY_SHIPPED' ? { shippedAt: order.updated_at ? new Date(order.updated_at) : new Date() } : {}),
         shopifyMetadata: order as object,
       },
     });
@@ -404,8 +411,8 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
     if (!itMainId) {
       logger.error('[ShopifyWebhooks] IT-MAIN missing — cannot reserve Shopify stock', { shopifyOrderId });
     } else {
-      for (const it of createdItems) {
-        if (!it.productId || it.quantity <= 0) continue;
+      // R10 — one hold per product, for the units of all its lines.
+      for (const { lines, ...it } of unitsPerProduct(createdItems)) {
         try {
           await reserveOpenOrder({
             orderId: dbOrder.id,
@@ -417,7 +424,7 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           logger.warn('[ShopifyWebhooks] reserve failed', {
-            shopifyOrderId, productId: it.productId, sku: it.sku, error: msg,
+            shopifyOrderId, productId: it.productId, sku: lines.map((line) => line.sku).join(','), error: msg,
           });
         }
       }
@@ -451,6 +458,15 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise
         });
       }
     })();
+
+    // Created partly fulfilled: its fulfilled units are taken, the rest stays held.
+    if (status === 'PARTIALLY_SHIPPED') {
+      try {
+        await applyShopifyFulfilments(dbOrder.id, { actor: 'shopify-webhooks:order-create' });
+      } catch (err) {
+        logger.warn('[ShopifyWebhooks] partial fulfilment at create failed', { shopifyOrderId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
     // If Shopify already says fulfilled at create time (unusual but
     // possible on bulk imports), consume immediately.
@@ -531,7 +547,7 @@ export async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise
           channelOrderId: shopifyOrderId,
         }),
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, shopifyMetadata: true },
     });
     if (!dbOrder) {
       // Webhook arrived before order/create finished or was missed.
@@ -573,9 +589,18 @@ export async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise
         cancelledAt: newlyCancelled
           ? new Date(order.cancelled_at ?? order.updated_at ?? Date.now())
           : undefined,
-        shopifyMetadata: order as object,
+        shopifyMetadata: withRecordedFulfilments(dbOrder.shopifyMetadata, order) as object,
       },
     });
+
+    // Partly fulfilled: the fulfilled units are taken, the rest stays held (idempotent per fulfilment).
+    if (newStatus === 'PARTIALLY_SHIPPED') {
+      try {
+        await applyShopifyFulfilments(dbOrder.id, { actor: 'shopify-webhooks:order-update' });
+      } catch (err) {
+        logger.warn('[ShopifyWebhooks] partial fulfilment on update failed', { shopifyOrderId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
     if (newlyShipped) {
       try {
@@ -870,32 +895,9 @@ export async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): P
       return;
     }
 
-    const newlyShipped = dbOrder.status !== 'SHIPPED';
-    await prisma.order.update({
-      where: { id: dbOrder.id },
-      data: {
-        status: 'SHIPPED',
-        shippedAt: new Date(),
-      },
-    });
-
-    if (newlyShipped) {
-      try {
-        const consumed = await consumeOpenOrder({
-          orderId: dbOrder.id,
-          actor: 'shopify-webhooks:fulfillment-create',
-        });
-        if (consumed > 0) {
-          logger.info('[ShopifyWebhooks] fulfillment consumed reservations', {
-            shopifyOrderId, consumed,
-          });
-        }
-      } catch (err) {
-        logger.warn('[ShopifyWebhooks] consume on fulfillment failed', {
-          shopifyOrderId, error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+    // Re-review (2026-09-26): before, the FIRST fulfilment, even a partial one, set the order SHIPPED and
+    // took every hold, so a refund after it had nothing left to give back. Now it takes only its units.
+    await applyShopifyFulfilments(dbOrder.id, { fulfilment: fulfillment, actor: 'shopify-webhooks:fulfillment-create' });
 
     logger.info('[ShopifyWebhooks] fulfillment-create processed', { shopifyOrderId });
   } catch (error) {

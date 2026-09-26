@@ -4,6 +4,9 @@ import { tokenServiceEnabled } from '../token.service.js'
 /** Deploy everywhere with processing off; retire old workers before activation. */
 export const ebayInboundProcessingEnabled = () => process.env.NEXUS_ENABLE_EBAY_INBOUND_PROCESSING === '1'
 export const ebayInboundProcessingReady = () => ebayInboundProcessingEnabled() && tokenServiceEnabled()
+/** Order notices need their own explicit switch on top of processing (default OFF): until activation
+ *  a stored ORDER_CONFIRMATION is held, never claimed, never dead-lettered. */
+export const ebayOrderNoticesEnabled = () => process.env.NEXUS_ENABLE_EBAY_ORDER_NOTICES === '1'
 
 /** Only pristine receipts admitted by this protocol can be activated automatically. */
 export function heldEbayInboundWhere(): Prisma.WebhookEventWhereInput {
