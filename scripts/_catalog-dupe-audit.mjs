@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(here, '..', '.env') })
 const prisma = new PrismaClient()
 
 // the 14 real Amazon families (parent SKU -> ASIN), operator-provided
-const AMZ_ASINS = new Set(['B0CFBCYN3K','B0CBZLLLSB','B0C3YRQPFT','B0BVQNHWVW','B0BVQN24WC','B0BTCCGCRJ','B0C9ZPDPDK','B0FMD1HRM9','B0F7RTV2BD','B0F7J163XJ','B0DYXSQP18','B0D8RWMGTD','B0CR629FDY','B0CR631CTC'])
+const AMZ_ASINS = new Set(['B0FXCDEDCA','B0FXCC827B','B0C3YRQPFT','B0FX749EA8','B0FX023BCD','B0FX521367','B0FXBC7417','B0FX908898','B0FX10086B','B0FXD0620C','B0DYXSQP18','B0FX8A5E82','B0FX5D1762','B0FX8D94BC'])
 
 const all = await prisma.product.findMany({
   select: { id:true, sku:true, name:true, status:true, deletedAt:true, isParent:true, isMaster:true, parentId:true, amazonAsin:true,

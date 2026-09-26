@@ -3,10 +3,10 @@ import { connectionLabel } from './connection-label.js'
 
 describe('human-facing connection names', () => {
   it('prefers the operator name consistently', () => {
-    expect(connectionLabel({ channelType: 'AMAZON', accountLabel: ' XAVIA RACING ', displayName: 'A1VRHKTGYO1JNU' }))
+    expect(connectionLabel({ channelType: 'AMAZON', accountLabel: ' XAVIA RACING ', displayName: 'AFXSELLER8BC38' }))
       .toEqual({ label: 'XAVIA RACING', labelSource: 'accountLabel', labelIsPlaceholder: false })
   })
-  it.each(['A1VRHKTGYO1JNU', '123456789012', 'Account 123456789012', 'cmothu9bo0000nz01asw6wx8j', '0e31caaf-9a00-454d-b5dd-1d4459fc3cf8'])('does not turn %s into a name', (id) => {
+  it.each(['AFXSELLER8BC38', '123456789012', 'Account 123456789012', 'cmothu9bo0000nz01asw6wx8j', '0e31caaf-9a00-454d-b5dd-1d4459fc3cf8'])('does not turn %s into a name', (id) => {
     expect(connectionLabel({ channelType: 'AMAZON', accountLabel: id, displayName: id, id }).label).toBe('Amazon Seller account')
   })
   it('skips an opaque display name when a real sign-in name exists', () => {

@@ -16,12 +16,12 @@ const child = (sku: string, parentSku: string, itemId: string) => ({
 /** 3-listing GALE-shaped file: identical child SKUs across all blocks. */
 function galeRows(shared: unknown = 'TRUE'): Record<string, unknown>[] {
   return [
-    parent('GALE-JACKET', '257584954808', shared),
-    child('GALE-BLACK-M', 'GALE-JACKET', '257584954808'),
-    child('GALE-BLACK-L', 'GALE-JACKET', '257584954808'),
-    parent('GALE-ALT1', '256566101420', shared),
-    child('GALE-BLACK-M', 'GALE-ALT1', '256566101420'),
-    child('GALE-BLACK-L', 'GALE-ALT1', '256566101420'),
+    parent('GALE-JACKET', '938554736087', shared),
+    child('GALE-BLACK-M', 'GALE-JACKET', '938554736087'),
+    child('GALE-BLACK-L', 'GALE-JACKET', '938554736087'),
+    parent('GALE-ALT1', '949285812839', shared),
+    child('GALE-BLACK-M', 'GALE-ALT1', '949285812839'),
+    child('GALE-BLACK-L', 'GALE-ALT1', '949285812839'),
     parent('GALE-NEW', '', shared),
     child('GALE-BLACK-M', 'GALE-NEW', ''),
   ]
@@ -35,7 +35,7 @@ describe('detectImportBlocks', () => {
       ['GALE-ALT1', 'adopt'],
       ['GALE-NEW', 'create'],
     ])
-    expect(a.blocks[0].itemId).toBe('257584954808')
+    expect(a.blocks[0].itemId).toBe('938554736087')
     expect(a.blocks[0].childSkus).toEqual(['GALE-BLACK-M', 'GALE-BLACK-L'])
     expect(a.flat).toBe(false)
   })
@@ -78,7 +78,7 @@ describe('detectImportBlocks', () => {
   })
 
   it('orphan children (parent not in file) form a labeled block', () => {
-    const a = detectImportBlocks([child('GALE-BLACK-XL', 'GALE-JACKET', '257584954808')])
+    const a = detectImportBlocks([child('GALE-BLACK-XL', 'GALE-JACKET', '938554736087')])
     expect(a.blocks).toHaveLength(1)
     expect(a.blocks[0].key).toBe('GALE-JACKET')
     expect(a.blocks[0].issues.some((i) => i.message.includes('not in this file'))).toBe(true)

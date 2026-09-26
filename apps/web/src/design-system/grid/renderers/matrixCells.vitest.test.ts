@@ -61,7 +61,7 @@ type Deep = { [K in keyof MatrixCells]?: MatrixCells[K] extends object | null ? 
 function cells(over: Deep = {}): MatrixCells {
   const base: MatrixCells = {
     listingId: 'L1', version: 3,
-    listing: { state: 'listed', externalId: 'B0F7J163XJ', detail: null, published: true },
+    listing: { state: 'listed', externalId: 'B0FXD0620C', detail: null, published: true },
     fulfilment: { method: 'FBM', source: 'set', guard: 'FBM', reported: null },
     sync: { kind: 'FOLLOW', via: null, mode: 'FOLLOW', intended: 403, held: 403, buffer: 0, poolAvailable: 403, routedLocations: ['IT-MAIN'], fbaAtAmazon: null, oversold: false },
     queue: { state: 'sent', at: '2026-09-13T05:00:00.000Z', reason: null, syncType: 'QUANTITY_UPDATE', via: null },
@@ -337,7 +337,7 @@ describe('matrixCellTooltip — Appendix A through MATRIX_COPY, plus the blocked
   })
   it('Sync: the word, the lane and the server’s reason; Listing: the hint, the id, the detail', () => {
     expect(matrixCellTooltip('syncState', STATE_FIXTURES['queue-failed'].c, COORD)).toBe('Failed · Quantity queue · eBay: 25002 — the item is not active on this site')
-    expect(matrixCellTooltip('listing', cells({ listing: { detail: 'not buyable' } }), COORD)).toBe(`${projectionMeta('listed').hint} · B0F7J163XJ · not buyable`)
+    expect(matrixCellTooltip('listing', cells({ listing: { detail: 'not buyable' } }), COORD)).toBe(`${projectionMeta('listed').hint} · B0FXD0620C · not buyable`)
   })
   it('a blocked reason is appended for a held cell; nothing is invented for an absent one', () => {
     const parent = cells({ writable: { syncQty: false }, writeBlockedReason: { syncQty: 'Set on the variants — the parent has no listing of its own' } })
@@ -449,7 +449,7 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(h).toContain('nds-projcell')
     expect(h).toContain('>Suppressed<')
     expect(h).toContain(`data-tone="${readinessMeta('errors', 'row').tone}"`)
-    expect(h).toContain('B0F7J163XJ')
+    expect(h).toContain('B0FXD0620C')
     expect(h).not.toContain('type="checkbox"')
     expect(html('listing', STATE_FIXTURES.excluded.c)).toContain('muted')
     expect(html('listing', cells({ listing: null }))).toBe('')

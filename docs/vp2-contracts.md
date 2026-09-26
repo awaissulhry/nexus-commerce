@@ -283,7 +283,7 @@ VP.4 asked for five fields §4's surface cannot render without, and found one ro
   `sharedAxisValues.Colore = "Nero"` on all 20 children while the MASTER sheet, at the same minute, reports
   `color: null` on the same children. **`sharedAxisValues` is the family's axis TUPLE — what tells one variant
   from its siblings — and nothing inherits it.** A reset labelled "restore Nero" would have emptied a `Colore`
-  specific on live item 257584954808.
+  specific on live item 938554736087.
   Measured answer, now served: `inheritedValue: null` on every normal row — **a reset EMPTIES the cell**, which
   is precisely why the control must not offer it as a restore. Derived from the master sheet's cell for the
   same column, because clearing a channel override uncovers the master-derived base
@@ -294,8 +294,8 @@ VP.4 asked for five fields §4's surface cannot render without, and found one ro
   A cell whose value is `mapped` is deliberately left unanswered: a mapping rule sits between master and the
   channel, so the master value is not where a reset lands, and offering it would be a confident wrong answer.
 - **A6 `parent`** — `{ id, sku, name, image, externalId, listings, state, reason }`. The external id is the
-  **parent listing's own**, never inferred from what the children carry. Measured: eBay·IT `257584954808`,
-  Amazon·IT `B0F7J163XJ`, `listings: 1`, `state: 'listed'`.
+  **parent listing's own**, never inferred from what the children carry. Measured: eBay·IT `938554736087`,
+  Amazon·IT `B0FXD0620C`, `listings: 1`, `state: 'listed'`.
 
 **Two more, from the same review.**
 

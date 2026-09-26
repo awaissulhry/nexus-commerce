@@ -152,13 +152,13 @@ describe('stale-grid guard — reconciled listings never regrow ghost SKUs', () 
   it('file-SKU row against a reconciled listing (different live SKUs) → skipped, visible', async () => {
     const { upsertSharedMembershipsFromRows } = await import('./ebay-shared-membership-upsert.service.js')
     const { upserts, db } = mkDb([
-      { itemId: '256566101420', sku: 'T1_Ne_S' },
-      { itemId: '256566101420', sku: 'T1_Ne_M' },
+      { itemId: '949285812839', sku: 'T1_Ne_S' },
+      { itemId: '949285812839', sku: 'T1_Ne_M' },
     ])
     const res = await upsertSharedMembershipsFromRows(
       [
         { sku: 'P1', parentage: 'parent', shared_sku_listing: true },
-        { sku: 'GALE-JACKET-BLACK-MEN-S', parentage: 'child', parent_sku: 'P1', it_item_id: '256566101420', it_price: '105' },
+        { sku: 'GALE-JACKET-BLACK-MEN-S', parentage: 'child', parent_sku: 'P1', it_item_id: '949285812839', it_price: '105' },
       ],
       'it',
       db as never,
@@ -170,11 +170,11 @@ describe('stale-grid guard — reconciled listings never regrow ghost SKUs', () 
 
   it('synthesized _shared row (live SKU) passes; fresh listing (no memberships) passes', async () => {
     const { upsertSharedMembershipsFromRows } = await import('./ebay-shared-membership-upsert.service.js')
-    const { upserts, db } = mkDb([{ itemId: '256566101420', sku: 'T1_Ne_S' }])
+    const { upserts, db } = mkDb([{ itemId: '949285812839', sku: 'T1_Ne_S' }])
     const res = await upsertSharedMembershipsFromRows(
       [
         // live-SKU synthesized row on a reconciled listing → updates fine
-        { sku: 'T1_Ne_S', parentage: 'child', parent_sku: 'GALE-ALT1', it_item_id: '256566101420', it_price: '106', _shared: true },
+        { sku: 'T1_Ne_S', parentage: 'child', parent_sku: 'GALE-ALT1', it_item_id: '949285812839', it_price: '106', _shared: true },
         // brand-new listing (no memberships yet) → first adopt creates fine
         { sku: 'FRESH-SKU', parentage: 'child', parent_sku: 'GALE-ALT1', it_item_id: '999999', it_price: '50', _shared: true },
       ],

@@ -41,11 +41,11 @@ if (!APPLY) {
 
   // the live IT GALE listing must still be intact
   const gale = await prisma.channelListing.count({
-    where: { channel: 'EBAY', externalListingId: '257584954808' },
+    where: { channel: 'EBAY', externalListingId: '938554736087' },
   })
   const galeMembers = await prisma.sharedListingMembership.count({
-    where: { itemId: '257584954808', status: 'ACTIVE' },
+    where: { itemId: '938554736087', status: 'ACTIVE' },
   })
-  console.log(`live IT GALE 257584954808 → listing rows: ${gale}, ACTIVE memberships: ${galeMembers} (expected 20)`)
+  console.log(`live IT GALE 938554736087 → listing rows: ${gale}, ACTIVE memberships: ${galeMembers} (expected 20)`)
 }
 await prisma.$disconnect()

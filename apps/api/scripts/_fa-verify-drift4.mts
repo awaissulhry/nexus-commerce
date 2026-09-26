@@ -3,7 +3,7 @@ const { resolveMembershipIntended } = await import('../src/services/sync-control
 const { loadChannelPolicies, policyFor } = await import('../src/services/sync-control-policy.service.js')
 const policies = await loadChannelPolicies()
 
-const items = ['257584954808', '257611257473']
+const items = ['938554736087', '978166641275']
 const mems = await prisma.sharedListingMembership.findMany({
   where: { itemId: { in: items }, status: 'ACTIVE' },
   select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },

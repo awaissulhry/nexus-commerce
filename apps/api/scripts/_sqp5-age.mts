@@ -14,7 +14,7 @@ const items = await prisma.keywordWatchlistTerm.findMany({ where: { watchlistId:
 const watch = new Set(items.map((i) => i.term.trim().toLowerCase()))
 
 // For each week: age, and the terms/rows the SAME core ASINs carried.
-const CORE = ['B0BMSH19GY', 'B0BMSWM15B', 'B0BMSJWW7L', 'B0BMS6ZZ4H', 'B0D8S567P5', 'B0DJ4926YX']
+const CORE = ['B0FXFA789A', 'B0FXE444C9', 'B0FX71011D', 'B0FX4F79EF', 'B0FX3098BE', 'B0FX8ACE1B']
 const rows = await prisma.searchQueryPerformance.findMany({
   where: { marketplace: m, reportPeriod: 'WEEK', asin: { in: CORE } },
   select: { startDate: true, asin: true, searchQuery: true, ingestedAt: true },

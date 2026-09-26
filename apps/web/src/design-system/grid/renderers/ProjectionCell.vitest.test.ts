@@ -84,12 +84,12 @@ describe('ProjectionCell · the hold, and who may set it', () => {
   })
 
   it('never renders a tick, or a hold, on the parent row', () => {
-    const out = html(params(null, { detail: 'B0F7J163XJ', note: 'Parent ASIN' }))
+    const out = html(params(null, { detail: 'B0FXD0620C', note: 'Parent ASIN' }))
     expect(out).not.toContain('type="checkbox"')
     expect(out).not.toContain('held')
     expect(out).not.toContain('aria-disabled')
     // The canvas's order: the mono id leads, the note takes the right edge.
-    expect(out.indexOf('B0F7J163XJ')).toBeLessThan(out.indexOf('Parent ASIN'))
+    expect(out.indexOf('B0FXD0620C')).toBeLessThan(out.indexOf('Parent ASIN'))
     expect(out).toContain('nds-projcell-detail')
     expect(out).toContain('nds-projcell-note')
   })

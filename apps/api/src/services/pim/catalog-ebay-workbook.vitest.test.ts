@@ -5,7 +5,7 @@ import { ebaySpecFromCache } from './channel-specs/ebay.js'
 import { readCatalogWorkbook, writeCatalogWorkbook } from './catalog-workbook.js'
 
 const parents = ['GALE-JACKET', 'IT-GALE-JACKET', 'GALE-JACKET-ALT1', 'GALE-JACKET-ALT2', 'GALE-JACKET-ALT3']
-const ids = ['257584954808', '256564203510', '256566101420', '256566102729', '256566103703']
+const ids = ['938554736087', '913270132587', '949285812839', '910932382515', '950640873955']
 const sizes = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
 const variants = ['BLACK', 'YELLOW'].flatMap(color => sizes.map(size => `GALE-JACKET-${color}-MEN-${size}`))
 const headers = ['SKU', 'Action', 'Parent/Child', 'Parent SKU', 'Item ID', 'Listing ID', 'Title', 'Category ID', 'Shared-SKU (Trading API)', 'Weight', 'Wt Unit', 'Price (€)', 'Qty', 'Materiale (Material) ○', 'Caratteristiche (Features)', 'Stagione (Season)', 'Image 1', 'Image 2', 'Description']

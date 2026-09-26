@@ -766,7 +766,7 @@ export async function getKeywordTracker(q: KeywordTrackerQuery) {
    * KT.5 — do we advertise on this term, and does the feed cover the ASINs that do?
    *
    * The attribution hazard, measured: `giacca moto 4 stagioni` renders 1.67% attributed to
-   * B0BMSJWW7L, which is in NONE of the 12 ad groups bidding that term — those hold 30 ASINs and SQP
+   * B0FX71011D, which is in NONE of the 12 ad groups bidding that term — those hold 30 ASINs and SQP
    * covers 0 of them. 7 such rows across the four markets; 24 rows at 0% ad coverage.
    */
   const adGroupsByTerm = new Map<string, Set<string>>()

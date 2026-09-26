@@ -141,10 +141,10 @@ describe('createSharedListing', () => {
     // already exists on eBay — creating again would double-list the items.
     const db = mockDb(null)
     const addFn = vi.fn(async () => ({ itemId: 'NEW' }))
-    const liveParent = { ...parent, it_item_id: '257584954808' }
+    const liveParent = { ...parent, it_item_id: '938554736087' }
     const res = await createSharedListing(liveParent, variants, { ...ctx0, db, addFixedPriceItemFn: addFn })
     expect(res.status).toBe('SKIPPED_EXISTS')
-    expect(res.itemId).toBe('257584954808')
+    expect(res.itemId).toBe('938554736087')
     expect(res.message).toContain('Save the sheet')
     expect(addFn).not.toHaveBeenCalled()
     expect(db.created).toHaveLength(0)
@@ -153,10 +153,10 @@ describe('createSharedListing', () => {
   it('adopt belt: variant-level ItemID also blocks re-listing', async () => {
     const db = mockDb(null)
     const addFn = vi.fn(async () => ({ itemId: 'NEW' }))
-    const liveVariants = [{ ...variants[0], ebay_item_id: '256564203510' }, variants[1]]
+    const liveVariants = [{ ...variants[0], ebay_item_id: '913270132587' }, variants[1]]
     const res = await createSharedListing(parent, liveVariants, { ...ctx0, db, addFixedPriceItemFn: addFn })
     expect(res.status).toBe('SKIPPED_EXISTS')
-    expect(res.itemId).toBe('256564203510')
+    expect(res.itemId).toBe('913270132587')
     expect(addFn).not.toHaveBeenCalled()
   })
 

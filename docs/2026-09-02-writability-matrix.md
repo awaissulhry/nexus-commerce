@@ -151,7 +151,7 @@ marketplace:'IT'}}` → 200 `updated: 1`; `overrideData.color === "SC1-VERIFY"`,
 merge write cannot express *absent*; key verified gone, cell re-read `null` at `layer "default"`.
 
 **W3, in full.** Target chosen for `isPublished: false` per #513. Before: listing `cmp26amb1002prx01nhabgy85`
-v15, `listingStatus DISCOVERABLE`, ASIN `B0DJ4926YX`, title 131 chars. `PATCH {field:"amazon_title",
+v15, `listingStatus DISCOVERABLE`, ASIN `B0FX8ACE1B`, title 131 chars. `PATCH {field:"amazon_title",
 value:<original + " [SC1]">, marketplaceContext:{AMAZON, DE}}` → 200 `updated: 1`;
 `ChannelListing.title` verified ending `"[SC1]"`. **Then the sheet's `item_name` cell for that row on
 Amazon·DE still read the master value at `layer: "master"`** — the change the cell routed is not the

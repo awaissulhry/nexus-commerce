@@ -6,7 +6,7 @@ import prisma from '/Users/awais/nexus-commerce/apps/api/src/db.js'
 const routes = (await import('/Users/awais/nexus-commerce/apps/api/src/routes/ebay-ads.routes.js')).default
 const app = Fastify()
 await app.register(routes, { prefix: '/api' })
-const ITEM = '256566107046' // Coppia Di Slider Ginocchia (unmatched, no SKUs)
+const ITEM = '927461577758' // Coppia Di Slider Ginocchia (unmatched, no SKUs)
 const started = new Date()
 let prodId = ''
 try {
@@ -30,7 +30,7 @@ try {
   console.log('ECO ROW:', eco?.dataStatus, 'cogs:', eco?.cogsCents, 'BE:', eco?.breakEvenAdRatePct?.toString(), 'price:', eco?.priceCents)
 
   // guard: cost on an unmatched listing must 400
-  const g = await app.inject({ method: 'POST', url: '/api/ebay-ads/products/cost', payload: { itemId: '256566111017', marketplace: 'IT', costEur: 5 } })
+  const g = await app.inject({ method: 'POST', url: '/api/ebay-ads/products/cost', payload: { itemId: '991093607845', marketplace: 'IT', costEur: 5 } })
   console.log('GUARD unmatched-cost:', g.statusCode === 400 ? 'PASS' : `FAIL ${g.statusCode}`, JSON.stringify(g.json()))
 } finally {
   const um = await app.inject({ method: 'POST', url: '/api/ebay-ads/products/match', payload: { itemId: ITEM, marketplace: 'IT', productId: null } })

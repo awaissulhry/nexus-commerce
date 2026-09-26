@@ -164,8 +164,8 @@ describe('last error — shown only while the status says something is wrong', (
 
 describe('identity line', () => {
   it('never renders a legacy seller ID or the raw provider identity', () => {
-    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'A1VRHKTGYO1JNU', identity: { userId: 'A1VRHKTGYO1JNU' } }))).toBe('Amazon Seller account')
-    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'XAVIA RACING', identity: { userId: 'A1VRHKTGYO1JNU' } }))).toBe('XAVIA RACING')
+    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'AFXSELLER8BC38', identity: { userId: 'AFXSELLER8BC38' } }))).toBe('Amazon Seller account')
+    expect(identityLine(connection({ channel: 'AMAZON', sellerName: 'XAVIA RACING', identity: { userId: 'AFXSELLER8BC38' } }))).toBe('XAVIA RACING')
   })
   it('seller, then store, then what kind of nobody', () => {
     expect(identityLine(connection())).toBe('xaviaracing')

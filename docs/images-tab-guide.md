@@ -36,7 +36,7 @@ If a cell isn't explicitly overridden, it **inherits** from the parent scope. Th
 ```
 ┌─ Product header ────────────────────────────────────────────────────┐
 │ XAVIA GALE Giacca Da Moto…       [Matrix] [Datasheet] [Save] [...]  │
-│ GALE-JACKET · B0F7J163XJ         18 variants                        │
+│ GALE-JACKET · B0FXD0620C         18 variants                        │
 │ Master Data │ Images │ Matrix │ Analytics │ Ads │ Amazon │ …        │
 └─────────────────────────────────────────────────────────────────────┘
 ┌─ Images tab ──────────────────────────────────┬─ Readiness sidebar ─┐
@@ -154,7 +154,7 @@ This is where most of the work happens. One row per **variant group value** (def
 ┌─ Amazon ─ [All] [IT] [DE] [FR] [ES] [UK]                    Group by [Color ▾]
 │
 │ ┌─ Live on Amazon IT (refreshed 2h ago) ───────────────── ⌃ collapse ─┐
-│ │ B0F7J163XJ  [img][img][img]…                                       │
+│ │ B0FXD0620C  [img][img][img]…                                       │
 │ │ Refresh                                                            │
 │ └────────────────────────────────────────────────────────────────────┘
 │

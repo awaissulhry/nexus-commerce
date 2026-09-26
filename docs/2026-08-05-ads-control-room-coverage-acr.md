@@ -239,7 +239,7 @@ Each phase separately gated; nothing starts without operator approval. Verificat
     **Why not option (c), adding the column to the existing nightly campaigns report:** it would put a new column on the request that feeds core campaign metrics, and that pipeline has already caused one seven-day silent data loss (the IT ingest drop). Trading a broken side-feed for risk to the working main feed is a bad trade, and the original author's isolation instinct was right — it was the 10-minute deadline that was wrong, not the isolation. Option (c) stays available later, once ToS-IS has proven the column returns data.
     **If 45 minutes still is not enough**, the failure is now a logged 504 carrying the report id and `waitedMinutes` (ACR.0.6) rather than a number in a summary nobody reads — so the next iteration is evidence-driven. Option (b), moving ToS-IS onto the split create/poll/ingest pipeline, remains the structurally correct end state.
   - **SQP — CONFIRMED AND FIXED: the parser had never met a real payload.** 9,232 rows across 4 markets carried `impressionsTotal` = 53,187,081 and `purchasesTotal` = 3,404 with **every one of our own counts at 0**. The parser read `imp.brandCount ?? imp.asinCount ?? imp.brand` — none of those strings appears anywhere else in the codebase — and `sqp.vitest.test.ts` asserted against an **invented fixture** using the same invented names, so a green suite proved the parser self-consistent, never correct. Totals worked purely by luck: `totalQueryImpressionCount` is real and happened to be in the totals list.
-    **A live capture settled it** (`_acr02-sqp-shape.mts`, IT / B0BMSH19GY / week of 2026-07-19, 100 rows). Amazon's real ASIN-level keys are `asinImpressionCount`, `asinClickCount`, `asinCartAddCount`, `asinPurchaseCount`, each with an `…Share` sibling. Row 0: `asinImpressionCount = 230`, `totalQueryImpressionCount = 20110`.
+    **A live capture settled it** (`_acr02-sqp-shape.mts`, IT / B0FXFA789A / week of 2026-07-19, 100 rows). Amazon's real ASIN-level keys are `asinImpressionCount`, `asinClickCount`, `asinCartAddCount`, `asinPurchaseCount`, each with an `…Share` sibling. Row 0: `asinImpressionCount = 230`, `totalQueryImpressionCount = 20110`.
     **Verified end-to-end** (`_acr02-verify-parser.mts` — the real parser over the real bytes): **100 of 100 rows now carry our impressions, was 0 of 9,232**; the cross-check matches the raw JSON exactly; and our computed share agrees with Amazon's own `asinImpressionShare` to two decimals. **Note: Amazon reports share as a PERCENT (1.14), we store 0..1 computed from counts — never store theirs raw.** The regression test now uses the captured payload verbatim, the only fixture in that file whose shape is evidence.
     ***Two harness bugs worth remembering, both mine:*** `dataEndTime` must be a **Saturday** for `reportPeriod=WEEK`, and the lookback must be **2** — one week back is not published yet and Amazon answers with a generic "client error". Production's own `periodWindow()` gets both right; hand-rolling dates is what got them wrong.
     **First real coverage numbers, as a byproduct:** on the head terms we hold **0.6–1.5% impression share** — `giacca moto estiva uomo` 686 of 110,506 (0.62%), `giacca moto uomo` 625 of 41,103 (1.52%). That is the coverage baseline this whole program needs, and it has been readable all along.
@@ -435,7 +435,7 @@ Verified on the 10:30 tick: placement writes carry **`mode=live`**, not `local` 
 | `giubbotto moto uomo estivo` | 6 | 120,660 | 0.35% |
 | `giubbino moto` | 6 | 19,842 | 0.84% |
 
-> **🔴 SUPERSEDED by ACR.2.4 (the variation experiment), below.** All ten of those ASINs are children of ONE Amazon parent (`B0F7J163XJ`, the GALE jacket). Part 3.1's own rule — *true variations of one parent collapse to one tile* — makes this **one tile credited across ten children over a week**, not ten tiles. The paragraph that follows reads the count as multi-product presence; it is not. Read ACR.2.4 before acting on it.
+> **🔴 SUPERSEDED by ACR.2.4 (the variation experiment), below.** All ten of those ASINs are children of ONE Amazon parent (`B0FXD0620C`, the GALE jacket). Part 3.1's own rule — *true variations of one parent collapse to one tile* — makes this **one tile credited across ten children over a week**, not ten tiles. The paragraph that follows reads the count as multi-product presence; it is not. Read ACR.2.4 before acting on it.
 
 **So multi-product SERP presence is not the missing capability — it is the status quo.** Amazon's per-ASIN dedupe (Part 3) is already letting 3–10 of our products share a page. What is missing is *share*: on the biggest term we hold 0.19% of a million impressions with ten products on the page. **This reframes Stage 3 — the engine's job is not to get more of our ASINs onto the page, it is to make each appearance command more of it.** That is a bid and rank problem, not a structural one.
 
@@ -555,7 +555,7 @@ Vitals live: 11/11 writable · €24.38/day · 30d €741.97 → €912.33 (ACOS
 
 ### 🔴 ACR.2.7 — CORRECTION: the scoreboard understated every multi-ASIN share by the number of our ASINs on the term
 
-**SQP market columns are QUERY-level totals duplicated identically on every ASIN row.** Verified 2026-08-05: `giacca moto estiva uomo` week 2026-07-19 holds 10 rows, each reading `impressionsTotal = 110,506`, `distinct_totals = 1`. My scoreboard SUMMED them — multiplying the market by our ASIN count and **understating share exactly where coverage is strongest**. Brand columns are per-ASIN counts and were correctly summed; the ground-truth cross-checks (686 for B0BMSH19GY; `accessori moto` 183k in Part 2) all confirm.
+**SQP market columns are QUERY-level totals duplicated identically on every ASIN row.** Verified 2026-08-05: `giacca moto estiva uomo` week 2026-07-19 holds 10 rows, each reading `impressionsTotal = 110,506`, `distinct_totals = 1`. My scoreboard SUMMED them — multiplying the market by our ASIN count and **understating share exactly where coverage is strongest**. Brand columns are per-ASIN counts and were correctly summed; the ground-truth cross-checks (686 for B0FXFA789A; `accessori moto` 183k in Part 2) all confirm.
 
 **Corrected numbers (IT, week 2026-07-19) — these supersede ACR.2.1's:**
 
@@ -680,7 +680,7 @@ So the column ships reading **"—" with the reason stated on the page**, never 
 
 **The question: do two child ASINs of one parent ever co-occupy a SERP — does AIREON's unified parent cost coverage?** Two facts settle what can and cannot be concluded today.
 
-**1. Every measured ASIN in SQP is a child of ONE Amazon parent.** All 10 ASINs carrying impressions share `parentAsin = B0F7J163XJ` — they are sizes and colours of the single GALE jacket listing (`GALE-JACKET-BLACK-MEN-XL`, `…-YELLOW-MEN-M`, …). Checked against Amazon's `parentAsin`, not our internal `Product.parentId`, because our hierarchy need not match Amazon's variation family.
+**1. Every measured ASIN in SQP is a child of ONE Amazon parent.** All 10 ASINs carrying impressions share `parentAsin = B0FXD0620C` — they are sizes and colours of the single GALE jacket listing (`GALE-JACKET-BLACK-MEN-XL`, `…-YELLOW-MEN-M`, …). Checked against Amazon's `parentAsin`, not our internal `Product.parentId`, because our hierarchy need not match Amazon's variation family.
 
 **This overturns ACR.2.1's headline.** That entry read "on `giacca moto estiva uomo`, **ten** of our ASINs already appear on the SERP" and concluded *"multi-product SERP presence is not the missing capability — it is the status quo"*. But Part 3.1 of this very plan states the rule: **"True variations of one parent collapse to one tile."** By our own adopted model of Amazon, those ten ASINs are **one tile**, credited to whichever child was featured across a week of searches — not ten tiles. Ten rows in a weekly per-ASIN report is not ten slots on a page.
 
@@ -717,12 +717,12 @@ AIREON's launch timeline, then "wait for 2026-08-09" — while asking *"why is A
 actual requirement was **any second family on the same SERP**, and AIREON was only ever one
 candidate. One query settles it (`_acr24-live-families.mts`): which portfolios took impressions
 INSIDE 2026-07-19 → 07-25, what they advertised, and whether those roll up to a different Amazon
-parent than GALE's `B0F7J163XJ`. Two answers, both live that week, both unmeasured:
+parent than GALE's `B0FXD0620C`. Two answers, both live that week, both unmeasured:
 
 | family | parent | advertised ASINs | that week |
 |---|---|---|---|
-| XAVIA MISANO | `B0C9ZPDPDK` | 9 | €11.86 · 11,473 impr |
-| XAVIA MOSS | `B0D8RWMGTD` | 12 | €8.80 · 13,194 impr |
+| XAVIA MISANO | `B0FXBC7417` | 9 | €11.86 · 11,473 impr |
+| XAVIA MOSS | `B0FX8A5E82` | 12 | €8.80 · 13,194 impr |
 
 Backfilled both (21 reports, zero failures): **MISANO 4 ASINs / 35 rows / 265 impressions**,
 **MOSS 4 ASINs / 32 rows / 292 impressions**. The within-term control went from **0 discriminating

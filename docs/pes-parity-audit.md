@@ -592,7 +592,7 @@ checked feasibility rather than assuming, and the answer is **no safe target exi
   `isPublished: true`, with real ItemIDs.** Not one is inert.
 - Widening to every non-ACTIVE eBay·IT listing finds 20 DRAFT rows — but **every one still carries a
   real eBay ItemID and `isPublished: true`**. The closest fit, `xavia-knee-slider` (DRAFT, 8
-  children, ItemID 256550369887), is still a listing eBay knows about. "DRAFT" here is our local
+  children, ItemID 910792398942), is still a listing eBay knows about. "DRAFT" here is our local
   status, not eBay's absence.
 - The bulk write itself does not enqueue an outbound push (no `OutboundSyncQueue` enqueue in that
   route) — but **prod's crons are running**, and a pinned test value would sit on a real listing

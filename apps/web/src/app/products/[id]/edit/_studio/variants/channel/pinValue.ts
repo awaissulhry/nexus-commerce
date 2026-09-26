@@ -27,7 +27,7 @@
  * "Nero"` on all 20 children while the MASTER sheet reports `color = null` and `axisValues = {}` on
  * the same children. All 40 axis cells are `pinned` for that reason — there is nothing to inherit.
  * A one-click reset labelled "restore Nero" would therefore have DELETED the specific from a live
- * eBay listing (item 257584954808) while telling the operator it was restoring a value. The reset
+ * eBay listing (item 938554736087) while telling the operator it was restoring a value. The reset
  * now waits for `cell.inheritedValue` — the server's own statement of where it would land — and says
  * why on the control until that arrives.
  */
@@ -101,7 +101,7 @@ export function planPin(req: PinRequest): PinPlan {
   if (intent === 'reset' && !inheritedValue) {
     /* 🔴 `null` is the server ANSWERING: a reset empties this cell. Measured on eBay·IT — every
        normal row answers null, so a reset would clear a Colore specific from live item
-       257584954808. That is a real verb, not an error, but it is not "restore" and must not be
+       938554736087. That is a real verb, not an error, but it is not "restore" and must not be
        offered under a label that says so. */
     return {
       intent,

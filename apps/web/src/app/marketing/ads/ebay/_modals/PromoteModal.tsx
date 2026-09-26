@@ -97,7 +97,7 @@ export function PromoteModal(props: {
           <label>eBay item IDs — space/comma/newline separated</label>
           {/* Three rows' worth: the DS textarea floors at 168px, which is right for a
               dedicated paste modal and far too tall for one optional field among four. */}
-          <Textarea style={{ minHeight: 74 }} value={manualIds} onChange={(e) => setManualIds(e.target.value)} placeholder="256568121061 256566107046 …" />
+          <Textarea style={{ minHeight: 74 }} value={manualIds} onChange={(e) => setManualIds(e.target.value)} placeholder="256568121061 927461577758 …" />
         </div>
       )}
       <div>

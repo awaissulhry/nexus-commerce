@@ -190,7 +190,7 @@ describe('Presence W0 honest offer consequences and refusal shape', () => {
   })
   it('unavailable means level none; a channel-id row cannot ask for confirmation', async () => {
     const d = deps('EBAY')
-    d.aliases = [{ id: null, externalListingId: '257584954808' }] as ChannelActionDeps['aliases']
+    d.aliases = [{ id: null, externalListingId: '938554736087' }] as ChannelActionDeps['aliases']
     const impact = await offerToggle(d).preflight!([row])
     expect(impact.level).toBe('none')
     expect(impact.unavailable).toBe('Refused on 1 rows whose listing holds a channel id on EBAY. This verb only writes a Nexus record, and this studio has no verb that can carry it to EBAY.')
@@ -225,7 +225,7 @@ describe('Presence W0 honest offer consequences and refusal shape', () => {
   it('the held run and preflight expose the same sentence without transport', async () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     try {
-      const d = deps('EBAY'); d.aliases = [{ id: null, externalListingId: '257584954808' }] as ChannelActionDeps['aliases']
+      const d = deps('EBAY'); d.aliases = [{ id: null, externalListingId: '938554736087' }] as ChannelActionDeps['aliases']
       const action = offerToggle(d)
       const impact = await action.preflight!([row])
       expect(await action.run([row])).toEqual({ ok: false, message: impact.unavailable })
