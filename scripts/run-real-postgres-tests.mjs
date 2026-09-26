@@ -17,6 +17,8 @@
  *   · `listing-end-times.vitest.test.ts` (shared stock step 3) — "Fixed number until …" and "Paused
  *     until …" end to end: the Sync Control route and Excel import, the end-time job, the real writer and
  *     cascade, and the database triggers that clear an end time with its mode.
+ *   · `order-stock-once-postgres.vitest.test.ts` (hotfix 2026-09-26) — an order line's stock is taken once:
+ *     re-reads of shipped orders, an oversold line taken once stock arrives, surplus holds, the reconcile, races.
  *   · `stock-pool-orders.vitest.test.ts` (shared stock step 4) — orders through the doors: the real eBay
  *     ingest, holds / take out / give back, cancellations, the returns route, the guard and the repair job.
  *   · `assortment/sync.vitest.test.ts` (shared stock step 6, AE.4) — live product sync: the capture
@@ -65,6 +67,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Etsy shop routing (backfill, ownership and identity namespaces)', file: 'src/services/etsy/ingress-routing-postgres.vitest.test.ts', expect: 5 },
   { name: 'guarded connection delete (fresh counts and FK race)', file: 'src/services/connection-delete-concurrency.vitest.test.ts', expect: 2 },
   { name: 'stock race test (AE.1)', file: 'src/services/stock-concurrency.vitest.test.ts', expect: 10 },
+  { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 20 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
   { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
   { name: 'shared stock end to end (switches, worker, cascade)', file: 'src/services/stock-pool/stock-pool-e2e.vitest.test.ts', expect: 9 },

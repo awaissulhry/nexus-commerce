@@ -41,6 +41,12 @@ import { recascadeProduct } from './stock-movement.service.js'
 
 const amazonService = new AmazonService()
 
+// An FBM order already in one of these before a read had its stock given back, or its stock belongs to
+// the returns flow: a re-read must not hold stock again. SHIPPED/DELIVERED are deliberately absent — a
+// re-read is how a line that could not be held at ingest (oversold) is taken once stock is there, and
+// the hold/consume guards in stock-level.service keep every re-read to what the line still owes.
+const FBM_NO_HOLD_ON_REREAD = new Set(['CANCELLED', 'REFUNDED', 'RETURNED'])
+
 /** Map Amazon's status strings to our `OrderStatus` enum (extended in O.1). */
 type MappedOrderStatus =
   | 'PENDING'
@@ -901,7 +907,10 @@ export class AmazonOrdersService {
     // S.2: FBM stock lifecycle. FBA never touched here. Cancellations
     // are handled by the existing handleOrderCancelled cascade above
     // (which now also releases open reservations — see order-cancellation).
-    if (fulfillmentMethod === 'FBM') {
+    // Never for a cancelled order, nor a re-read of one already cancelled, refunded or returned. A
+    // re-read of a shipped order still runs: reserveOpenOrder holds only what the line still owes
+    // (nothing once taken — before, every re-read held the units again and the reconcile took them).
+    if (fulfillmentMethod === 'FBM' && order.status !== 'CANCELLED' && !FBM_NO_HOLD_ON_REREAD.has(existing?.status ?? '')) {
       await this.applyFbmStockLifecycle({
         orderId: order.id,
         rawAmazonOrderId: raw.AmazonOrderId,
@@ -913,9 +922,10 @@ export class AmazonOrdersService {
   }
 
   /**
-   * S.2 — FBM reserve-then-consume lifecycle. Always tries to reserve
-   * (idempotent: skipped if a reservation already exists for this
-   * orderId+productId). If the order has just transitioned to SHIPPED,
+   * S.2 — FBM reserve-then-consume lifecycle. Tries to reserve on every
+   * read that reaches it (idempotent: an open reservation for this
+   * orderId+productId is reused, units already consumed are never held
+   * again). If the order has just transitioned to SHIPPED,
    * consume every open reservation for the order.
    *
    * Insufficient-stock errors are logged + counted but never throw —
