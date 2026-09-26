@@ -1,5 +1,14 @@
 # Channel connections — structured plan to finish, ship and prove (2026-09-25)
 
+> **Status 2026-09-26 — this plan is closed as a working plan.** Phase 1 (Package A) and Phases 2–3
+> (as one release, B+C) are **done**: merged by pull request and deployed (PR #15 `c5597f776`,
+> PR #32 `93215463f`), after the FBM hotfix (PR #14) and the architecture PR #4. The 2026-09-26
+> approach review changed the method: no direct pushes to `main`, two releases instead of three
+> packages, several lane designs changed or dropped ([summary](2026-09-26-APPROACH-REVIEW.md)).
+> Phase 4 (switch-on and live proof) has **not started**; it runs one switch at a time on the Owner's
+> yes. Phase 5 step 6 (documentation consistency) was done on 2026-09-26. Current status:
+> [COMPLETION-MATRIX](COMPLETION-MATRIX.md). The text below is the plan as written on 2026-09-25.
+
 Owner instruction (2026-09-25): "do it all ASAP according to the structured plan and push it all to
 `main`, and then, when everything's done, make sure that it's AAA quality and there are no
 inconsistencies at all."
@@ -38,6 +47,11 @@ or P7 drops. Each of those still needs its own explicit Owner yes (Phase 4).
 
 ## Phase 1 — Package A: C9–C11f6c (ready; ship first)
 
+**Done — superseded method.** Shipped as PR #15 (merged 2026-09-26 12:26 UTC, deployed), after
+merging PR #4 and adapting to its inbound claims. Steps 6–8 below (direct push to `main`, push-time
+consent-probe exception) were replaced by a pull request merged on the Owner's word. Recovery branch:
+`recovery/cx-20260925`.
+
 1. Merge the newest `origin/main` into the release branch (published history only). Resolve
    `database-context.ts` carefully (both sides changed it); read both diffs first.
 2. Database gates: policy parity, model ownership, schema + column drift, `@nexus/database` tests.
@@ -57,11 +71,18 @@ or P7 drops. Each of those still needs its own explicit Owner yes (Phase 4).
    `--no-verify`). If main moved meanwhile: stop, re-merge, re-gate.
 7. Verify production: Railway deployment SUCCESS (Railway MCP read), `/api/health` + `/ready` 200 with
    the release build, a protected diagnostic GET 401, (read-only, if permitted) `_prisma_migrations`
-   has `20260923a..h_cx_*` finished, Etsy shop 57783036 → Motovento, Shopify connected. Record evidence.
+   has `20260923a..h_cx_*` finished, the Etsy shop routes to its owning business, Shopify connected.
+   Record evidence (locally; the repository is public).
 8. If the release fails after migrating: `gh workflow run deploy-api.yml --ref recovery/cx-20260925`,
    freeze pushes, never downgrade the database (RELEASE doc §Recovery).
 
 ## Phase 2 — Package B: the five lanes
+
+**Done as part of release B+C (PR #32, merged 2026-09-26 18:28 UTC, deployed).** The lanes were
+reworked first: the Amazon stock history reader, the overlap planner, `OrderLineHold`, Etsy pooled
+line consumption and the Amazon/Shopify restore retry were dropped for one stock model; the eBay
+price lane became one market per row; Amazon Finances shipped A0/A1/A2/A5 only (A3/A4 held on
+`fix/cx-amazon-finances`). Recovery branch: `recovery/cx-bc-20260926`.
 
 1. Independent re-reviews in parallel (reviewer agents, read-only): ebay-order-writer fix round + E3;
    etsy R1/R2 + E3–E6 (first full review); amazon-finances fix round; ebay-price-readback final fixes.
@@ -86,13 +107,19 @@ or P7 drops. Each of those still needs its own explicit Owner yes (Phase 4).
    final database tree); rehearsal with the Package-A build as the serving base; push; verify.
 5. Switches that must remain OFF after Package B: `NEXUS_ENABLE_EBAY_INBOUND_PROCESSING`,
    `NEXUS_ENABLE_EBAY_ORDER_NOTICES`, `NEXUS_ENABLE_ETSY_ORDER_INGEST`,
-   `NEXUS_ENABLE_ETSY_RECEIPTS_POLL_CRON`, `NEXUS_AMAZON_FINANCES_2024_WRITER`,
-   `NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP`; contract run unchanged. Production-facing in B (state them
+   `NEXUS_ENABLE_ETSY_RECEIPTS_POLL_CRON`, `NEXUS_AMAZON_FINANCES_2024_WRITER` (no reader on `main`:
+   the writer did not ship), `NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP`; contract run unchanged. B+C also
+   added `NEXUS_ENABLE_EBAY_PRIVACY_REVIEW` (OFF). Production-facing in B (state them
    in the release doc): eBay polling writer + exact cancellation restore for ALL channels, Amazon
    order stamping + v0 finance writer changes, eBay price step market/currency + read-back, contract
    run statuses, Etsy read-error wording + listing freshness stamps.
 
 ## Phase 3 — remaining engineering (Package C, same discipline)
+
+**Done as part of release B+C (PR #32)**, except: the eBay privacy destructive step (Owner chose
+option A on 2026-09-26: remove personal data now, keep what tax law needs — recorded, not built) and
+the P1.8 eBay notification reads. Amazon/Shopify cancellation retry parity was dropped (under the
+stock model those channels take no stock at ingest). `stock_blocked` is retried automatically (R6).
 
 - P3.3 listing-issues API (own route) + Diagnostics card (design system only; browser-verified 390/1280,
   light/dark, keyboard); the studio pane itself belongs to PES.3 — hand over, do not edit `_studio/`.
@@ -108,6 +135,10 @@ or P7 drops. Each of those still needs its own explicit Owner yes (Phase 4).
 
 ## Phase 4 — activation and live proof (each needs its own Owner yes; prepare exact actions)
 
+**Not started (2026-09-26).** Prepared locally as a switch-on plan (kept out of the public
+repository); KMS is already on in production (2026-09-26). The Etsy step now follows the Etsy hold
+ruling (hold on arrival).
+
 Operator grant + KMS verify/rewrap (QUARANTINE-MAINTENANCE procedure); eBay inbound processing +
 topic setup; eBay order notices; Etsy portal endpoints + signing secret + ingest/poll switches (T0 is
 set on first enable); Amazon Finances amended dry run → census → attribution backfill → boundary flip;
@@ -115,6 +146,10 @@ contract run accounts + sandbox data; eBay verification token fix; LWA expiry da
 rotation; exact-ten deletion; P7 drops after a green week each.
 
 ## Phase 5 — AAA quality and zero-inconsistency audit (after every push, and at the end)
+
+**Step 6 done 2026-09-26** (this documentation sweep; switch table in COMPLETION-MATRIX). Steps 1–4
+were met per release in its PR checks; step 5 (production) is recorded per release in
+COMPLETION-MATRIX; the final audit repeats after the switch-on phase.
 
 "AAA" means these measurable thresholds (COMPLETION-MATRIX quality table), never a blanket claim:
 1. Gates: full normal hook green; realPG exact counts, zero skips; profiles-ON ratchet not worse;
@@ -135,6 +170,9 @@ rotation; exact-ten deletion; P7 drops after a green week each.
 7. Report honestly what is proven, what is only local, and what waits for Owner approval.
 
 ## Working rules (unchanged)
+
+2026-09-26 change: releases go by pull request and the Owner decides each merge; "one push per
+package" below now means one PR per release.
 
 Isolated worktrees only; stage files by name; commit per slice; one push per reviewed, gated package;
 never overlap Prisma generation/build with tests using that client; real PostgreSQL for locks/races/RLS;
