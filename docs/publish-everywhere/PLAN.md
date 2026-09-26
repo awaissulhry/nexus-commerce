@@ -164,3 +164,13 @@ the Etsy scope is set after the P5.0 read-only count · read-only production rea
 **The KMS block hits every live read and proof run from this Mac** (P1, P3.0, P3.8, P4.7–4.8, P5.0, P5.7). Two ways out — the Owner decides:
 (a) run the tools ON the production server (it already holds the key): merge the tool changes, deploy, then run them there with
 `railway ssh`; no new key anywhere; or (b) give this Mac decrypt rights on the key (fast, but this laptop could then open every channel login).
+
+## 11. Proposed addition — "Read live" (Owner requirement relayed by VTR, 2026-09-26 ~23:40; NOT yet confirmed in this session)
+
+Owner (VTR session): *"I also want the ability to read whatever is currently live on the channel."* Spec: VTR `docs/variation-theme/LIVE-READ.md`.
+Proposal: one reader per channel, one shape, used by both the publish review and the Information sheet. This lane would own the readers +
+a read-only route; VTR owns the sheet side. eBay Inventory (P3.1), Shopify (P4.2) and Etsy (P5.1) readers are already in this plan and
+will be written in that shape. **New for this lane (needs the Owner's word here):** the Amazon and eBay Trading readers in the same shape,
+and the route. Files (none held today): `apps/api/src/services/live-read/{index,types,amazon,ebay-trading,ebay-inventory,shopify,etsy}.ts`,
+`packages/shared/src/live-read.ts`, `apps/api/src/routes/live-read.routes.ts`. Shape changes sent to VTR: a `revision` + server-only raw
+documents; addressable errors (item / SKU / field); `content` keyed by the review's field ids; `state` needs the expected SKUs; stock = available.
