@@ -25,6 +25,7 @@ const value = (v: unknown): LiveValue => v == null || v === '' || (Array.isArray
 const unread = (reason: string): LiveValue => ({ state: 'unread', reason })
 const obj = (v: unknown): Json => v && typeof v === 'object' && !Array.isArray(v) ? v as Json : {}
 const texts = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const chunks = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size))
 /** What a content send is compiled from. Available quantity is left out: stock moves by itself and is echoed fresh at send. */
 const contentOf = (item: Json) => { const { availability: _availability, ...rest } = item; return rest }
@@ -33,26 +34,27 @@ export async function readEbayInventoryListing(destination: EbayInventoryDestina
   const { expectedSkus, itemId: _itemId, parentSku, ...where } = destination
   const errors: LiveReadError[] = []
   let groupKey: string | null = parentSku
-  let group = await reads.group(parentSku).catch(error => ({ status: 0, body: null, error }))
+  let group: { status: number; body: Json | null; error?: string } = await reads.group(parentSku).catch(error => ({ status: 0, body: null, error: message(error) }))
   if (group.status === 404) {
     const answers = await reads.items(expectedSkus.slice(0, 25)).catch(() => [])
     const keys = [...new Set(answers.flatMap(a => texts(obj(a.inventoryItem).groupIds)))]
     groupKey = keys.length === 1 ? keys[0] : null
-    if (groupKey) group = await reads.group(groupKey).catch(error => ({ status: 0, body: null, error }))
+    if (groupKey) group = await reads.group(groupKey).catch(error => ({ status: 0, body: null, error: message(error) }))
     else errors.push({ scope: 'item', reason: keys.length ? `The items belong to ${keys.length} eBay groups; the group cannot be chosen.` : 'eBay knows no group for these SKUs.' })
   }
   const groupBody = group.status === 200 ? group.body : null
-  if (!groupBody && groupKey) errors.push({ scope: 'item', reason: `The eBay group could not be read (${group.status || 'no answer'}).` })
+  if (!groupBody && groupKey) errors.push({ scope: 'item', reason: group.error ? `The eBay group could not be read: ${group.error}.` : `The eBay group could not be read (${group.status}).` })
   const groupReason = errors.find(e => e.scope === 'item')?.reason ?? ''
 
   const skus = [...new Set([...texts(groupBody?.variantSKUs), ...expectedSkus])]
   const items: Record<string, Json> = {}
   for (const batch of chunks(skus, 25)) {
-    const answers = await reads.items(batch).catch(() => null)
+    let failure: string | null = null
+    const answers = await reads.items(batch).catch(error => { failure = message(error); return null })
     for (const sku of batch) {
       const answer = answers?.find(a => a.sku === sku)
       if (answer?.statusCode === 200 && answer.inventoryItem) items[sku] = answer.inventoryItem
-      else if (!answer || answer.statusCode !== 404) errors.push({ scope: 'sku', sku, reason: `The eBay item could not be read (${answer?.statusCode ?? 'no answer'}).` })
+      else if (!answer || answer.statusCode !== 404) errors.push({ scope: 'sku', sku, reason: failure ? `The eBay item could not be read: ${failure}.` : `The eBay item could not be read (${answer?.statusCode ?? 'eBay gave no answer for this SKU'}).` })
     }
   }
 
