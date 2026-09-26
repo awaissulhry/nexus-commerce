@@ -267,8 +267,9 @@ export async function releaseReservation(
  *  dropped in a second: two concurrent calls both passed the check and took the stock twice
  *  (measured), and a crash between the two left `reserved` inflated for good.
  *
- *  `capToOrder` (consumeOpenOrder): a hold of an order is taken only while the order still owes that
- *  many units of the product; otherwise it is released instead, and the returned row says which. */
+ *  `capToOrder` (consumeOpenOrder): of a hold of an order, only what the order still owes of the
+ *  product is taken; the rest is released (all of it when nothing is owed — the returned row then
+ *  has `releasedAt`, not `consumedAt`). */
 export async function consumeReservation(
   reservationId: string,
   opts: { actor?: string; capToOrder?: boolean } = {},
@@ -292,27 +293,60 @@ export async function consumeReservation(
     if (r.consumedAt) {
       return { consumed: r, committed: [] } // idempotent
     }
-    // A hold beyond what the order still owes was made by a re-read of an order whose units had
-    // already left: taking it would take them again. Give it back instead, under this same lock so
-    // a consume racing on the same order is counted.
+    // A hold beyond what the order still owes (a re-read of an order whose units had already left,
+    // or a line lowered after its hold): taking all of it would take units the order does not owe.
+    // Take only what is still owed and give the rest back — all of it when nothing is owed. Under
+    // this same lock, so a consume racing on the same order is counted.
+    let take = r.quantity
     if (opts.capToOrder && r.orderId) {
       const due = await owedToOrder(tx, r.orderId, r.stockLevel.productId)
       if (r.quantity > due.owed) {
-        const owed = Math.max(0, due.owed)
+        take = Math.max(0, due.owed)
+        const surplus = r.quantity - take
+        const reason = `surplus hold: the order still owes ${take} of this product, the hold is ${r.quantity}`
         logger.warn('stock: surplus order hold released, not consumed', {
-          reservationId, orderId: r.orderId, productId: r.stockLevel.productId, quantity: r.quantity, ordered: due.ordered, taken: due.taken, owed,
+          reservationId, orderId: r.orderId, productId: r.stockLevel.productId, quantity: r.quantity, ordered: due.ordered, taken: due.taken, owed: take, released: surplus,
         })
-        const released = await releaseReservation(reservationId, {
-          actor: opts.actor, reason: `surplus hold: the order still owes ${owed} of this product, the hold is ${r.quantity}`, tx,
+        if (take === 0) {
+          const released = await releaseReservation(reservationId, { actor: opts.actor, reason, tx })
+          return { consumed: released, committed: [] }
+        }
+        // Split, on this one reservation (one audit trail): the surplus is given back here — no stock
+        // leaves, and `reserved` drops by the whole hold in the one settle below — and `take` is consumed.
+        const isHard = (r.kind ?? 'HARD') === 'HARD'
+        await tx.stockMovement.create({
+          data: {
+            productId: r.stockLevel.productId,
+            variationId: r.stockLevel.variationId,
+            locationId: r.stockLevel.locationId,
+            change: 0,
+            balanceAfter: r.stockLevel.quantity,
+            quantityBefore: r.stockLevel.quantity,
+            reason: 'RESERVATION_RELEASED',
+            referenceType: 'StockReservation',
+            referenceId: reservationId,
+            orderId: r.orderId,
+            reservationId,
+            notes: `${reason}: ${surplus} given back, ${take} taken`,
+            actor: opts.actor ?? null,
+          },
         })
-        return { consumed: released, committed: [] }
+        await publishEvent(tx, 'inventory.reservation_released', {
+          productId: r.stockLevel.productId,
+          reservationId,
+          quantity: surplus,
+          kind: isHard ? 'HARD' : 'SOFT',
+          availableAfter: r.stockLevel.quantity - (isHard ? Math.max(0, r.stockLevel.reserved - surplus) : r.stockLevel.reserved),
+          reason,
+        })
       }
     }
 
     // Settle `reserved` BEFORE the stock leaves, so the cascade inside the movement below
     // computes available from the final state (quantity − 3 and reserved − 3 together)
     // instead of publishing a quantity 3 too low. RV.1 — only HARD reservations ever
-    // added to `reserved`.
+    // added to `reserved`. The WHOLE hold leaves `reserved` (a split's surplus included);
+    // only `take` leaves `quantity`.
     if ((r.kind ?? 'HARD') === 'HARD') {
       const newReserved = Math.max(0, r.stockLevel.reserved - r.quantity)
       await tx.stockLevel.update({
@@ -336,7 +370,7 @@ export async function consumeReservation(
       productId: r.stockLevel.productId,
       variationId: r.stockLevel.variationId ?? undefined,
       locationId: r.stockLevel.locationId,
-      quantity: r.quantity,
+      quantity: take,
       reason: 'RESERVATION_CONSUMED',
       referenceType: 'StockReservation',
       referenceId: reservationId,
@@ -347,9 +381,10 @@ export async function consumeReservation(
       tx,
     })
 
+    // A split hold keeps only what it took: "taken" is read from consumed holds' quantities.
     const consumed = await tx.stockReservation.update({
       where: { id: reservationId },
-      data: { consumedAt: new Date() },
+      data: { consumedAt: new Date(), quantity: take },
     })
 
     // The stock leaving was already published as inventory.stock_changed by
@@ -358,7 +393,7 @@ export async function consumeReservation(
     await publishEvent(tx, 'inventory.reservation_consumed', {
       productId: r.stockLevel.productId,
       reservationId,
-      quantity: r.quantity,
+      quantity: take,
       kind: (r.kind ?? 'HARD') === 'SOFT' ? 'SOFT' : 'HARD',
       orderId: r.orderId ?? null,
     })
@@ -533,7 +568,7 @@ async function owedToOrder(tx: Prisma.TransactionClient, orderId: string, produc
  * the order transitions to SHIPPED. Decrements both reserved and
  * quantity for each reservation. Idempotent — already-consumed and
  * already-released reservations are skipped. Never takes more of a
- * product than the order still owes: a surplus hold is released
+ * product than the order still owes: a hold's surplus is released
  * (consumeReservation `capToOrder`).
  *
  * Returns the count of reservations consumed.

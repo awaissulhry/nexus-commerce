@@ -375,6 +375,86 @@ describe.skipIf(!concurrentDatabaseUrl())(`an order line's stock is taken once (
     expect((await holds(order.id)).map(({ quantity, state }) => ({ quantity, state }))).toEqual([{ quantity: 2, state: 'consumed' }])
   })
 
+  /** The hold's own trail: its movements (by reason) and its reservation events (by type), with quantities. */
+  const trail = async (reservationId: string) => ({
+    movements: await q(`SELECT reason::text AS reason, change FROM "StockMovement" WHERE "reservationId"=$1 ORDER BY reason::text`, [reservationId]),
+    events: await q(`SELECT type, (payload->>'quantity')::int AS quantity, (payload->>'availableAfter')::int AS "availableAfter"
+      FROM "EventOutbox" WHERE payload->>'reservationId'=$1 ORDER BY type`, [reservationId]),
+  })
+  /** A hold of `held` on a level of 10, split: `took` consumed, the rest given back. */
+  const splitTrail = (held: number, took: number) => ({
+    movements: [{ reason: 'RESERVATION_CONSUMED', change: -took }, { reason: 'RESERVATION_CREATED', change: 0 }, { reason: 'RESERVATION_RELEASED', change: 0 }],
+    events: [
+      { type: 'inventory.reservation_consumed', quantity: took, availableAfter: null },
+      { type: 'inventory.reservation_released', quantity: held - took, availableAfter: 10 - took },
+      { type: 'inventory.reserved', quantity: held, availableAfter: 10 - held },
+    ],
+  })
+
+  it('13. Amazon FBM — a line lowered after its hold (2 → 1), then shipped: 1 is taken and the other 1 given back', async () => {
+    const p = await seedProduct()
+    const amazonId = `AMZ-${randomUUID()}`
+    const order = await amazonRead(amazonId, 'unshipped', [{ sku: p.sku, quantity: 2 }])
+    expect(await level(p.productId)).toEqual({ quantity: 10, reserved: 2, available: 8 })
+    const warn = vi.spyOn(logger, 'warn')
+    try {
+      await amazonRead(amazonId, 'shipped', [{ sku: p.sku, quantity: 1 }])
+      expect(await level(p.productId)).toEqual({ quantity: 9, reserved: 0, available: 9 })
+      const [hold, ...more] = await holds(order.id)
+      expect(more).toEqual([])
+      expect(hold).toMatchObject({ quantity: 1, state: 'consumed' })
+      expect(await trail(hold.id)).toEqual(splitTrail(2, 1))
+      expect(await q(`SELECT notes FROM "StockMovement" WHERE "reservationId"=$1 AND reason='RESERVATION_RELEASED'`, [hold.id]))
+        .toEqual([{ notes: expect.stringContaining('surplus') }])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('surplus'), expect.objectContaining({ reservationId: hold.id, owed: 1, released: 1 }))
+    } finally {
+      warn.mockRestore()
+    }
+    await amazonRead(amazonId, 'shipped', [{ sku: p.sku, quantity: 1 }])
+    await reconcile()
+    expect(await level(p.productId)).toEqual({ quantity: 9, reserved: 0, available: 9 })
+    expect(await taken(order.id)).toBe(1)
+  })
+
+  it('14. MCF — an items override of 2 on an order line of 1: on COMPLETE 1 is taken and the other 1 given back', async () => {
+    const p = await seedProduct(fbaId)
+    const order = await seedOrder([{ ...p, quantity: 1 }])
+    const adapter = {
+      createFulfillmentOrder: async () => ({ amazonFulfillmentOrderId: `FO-${randomUUID()}`, raw: {} }),
+      getFulfillmentOrder: async () => ({ status: 'COMPLETE', raw: {} }),
+      cancelFulfillmentOrder: async () => ({ raw: {} }),
+    }
+    const shipment = await inBusiness(() => mcf.createMCFShipment(adapter, { orderId: order, items: [{ sku: p.sku, quantity: 2 }] }))
+    expect(await level(p.productId, fbaId)).toEqual({ quantity: 10, reserved: 2, available: 8 })
+    await inBusiness(() => mcf.syncMCFStatus(adapter, shipment.amazonFulfillmentOrderId))
+    expect(await level(p.productId, fbaId)).toEqual({ quantity: 9, reserved: 0, available: 9 })
+    const [hold] = await holds(order)
+    expect(hold).toMatchObject({ quantity: 1, state: 'consumed' })
+    expect(await trail(hold.id)).toEqual(splitTrail(2, 1))
+    await reconcile()
+    expect(await level(p.productId, fbaId)).toEqual({ quantity: 9, reserved: 0, available: 9 })
+    expect(await taken(order)).toBe(1)
+  })
+
+  it('15. the reconcile splits a hold bigger than what a partly taken line still owes (line 3, 1 taken, hold 3: 2 taken, 1 given back)', async () => {
+    const p = await seedProduct()
+    const order = await seedOrder([{ ...p, quantity: 3 }])
+    await reserve(order, p.productId, 1)
+    expect(await consume(order)).toBe(1)
+    const big = await seedOpenHold(p.stockLevelId, order, 3)
+    await q(`UPDATE "Order" SET status='SHIPPED' WHERE id=$1`, [order])
+    expect(await level(p.productId)).toEqual({ quantity: 9, reserved: 3, available: 6 })
+    await reconcile()
+    expect(await level(p.productId)).toEqual({ quantity: 7, reserved: 0, available: 7 })
+    expect(await taken(order)).toBe(3)
+    expect((await holds(order)).find((h) => h.id === big)).toMatchObject({ quantity: 2, state: 'consumed' })
+    expect((await trail(big)).movements).toEqual([{ reason: 'RESERVATION_CONSUMED', change: -2 }, { reason: 'RESERVATION_RELEASED', change: 0 }])
+    expect((await trail(big)).events).toEqual([
+      { type: 'inventory.reservation_consumed', quantity: 2, availableAfter: null },
+      { type: 'inventory.reservation_released', quantity: 1, availableAfter: 7 }, // 9 on hand, 2 still held
+    ])
+  })
+
   it('9. Shopify — the normal flow takes the line once, and a re-delivered orders/create after fulfilment holds nothing more', async () => {
     const p = await seedProduct()
     const shopifyId = String(Date.now()) + String(Math.floor(Math.random() * 1000))
