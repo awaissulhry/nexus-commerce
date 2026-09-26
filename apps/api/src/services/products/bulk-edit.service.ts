@@ -677,6 +677,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       const markets = capMarket || registryMarketplace
         ? [capMarket ?? registryMarketplace!]
         : [...new Set(mkRows.map((r) => r.marketplace).filter(Boolean))]
+      // P8 (docs/attributes/PLAN.md §10.8) — a product listed nowhere still gets its Master contract. The family
+      // schema below takes its attribute columns from the business dictionary (family + saved fields) and loads no
+      // channel spec, so the market only names coordinates; `GLOBAL` with `allowUnknownMarket` names none of a
+      // marketplace's own.
+      const marketFree = markets.length === 0
       const familyIds = [...new Set(ptRows.map(r => r.familyId ?? r.parent?.familyId).filter((v): v is string => !!v))]
       // Studio exposes saved fields across the entire parent/variation group. Build that same
       // schema for a child edit, including fields currently stored only on its parent or sibling.
@@ -703,8 +708,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             if (store) channelStoreByKey.set(col.key, store as ChannelStoreFact)
           }
         }
-        for (const mk of markets) {
-          const set = await getSheetColumns({ market: mk, productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), includeEmptyChannels: true })
+        for (const mk of marketFree ? ['GLOBAL'] : markets) {
+          const set = await getSheetColumns({ market: mk, ...(marketFree ? { allowUnknownMarket: true } : {}), productTypes, familyIds, savedFields: (await import('../pim/family-sheet-schema.js')).savedAttributeFields(schemaFamilyRows.map(r => r.categoryAttributes)), includeEmptyChannels: true })
           const { columnApplies } = await import('@nexus/shared/master-sheet')
           for (const product of ptRows) {
             const row = new Map<string, import('../pim/sheet-columns.service.js').SheetColumn>()
@@ -865,15 +870,20 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // differ from the market whose schema the columns were built against,
       // and silently writing against a different schema is worse than
       // refusing. The caller sends the scope it is showing.
-      if (!registryMarketplace) {
+      //
+      // P8 (docs/attributes/PLAN.md §4.5, §10.8) — a MASTER write of an attribute in the business dictionary (the
+      // product's family attributes and its saved attributes) needs no market: the Master contract built above holds
+      // its definition, whatever the market. Only an attribute the dictionary does not define (an Amazon-only
+      // attribute, defined by one market's cached schema) and every channel write still need the scope.
+      const contractKey = c.field.replace(/^attr_/, '')
+      if (!registryMarketplace && (c.target === 'channel' || !masterRowContract.get(c.id)?.has(contractKey))) {
         errors.push({
           id: c.id,
           field: c.field,
-          error: 'No marketplace context — the attribute registry is per marketplace, so this write needs the scope it was made in (marketplaceContexts).',
+          error: 'No marketplace context — this attribute is not in the business dictionary for this product, and a channel attribute is defined per marketplace, so this write needs the scope it was made in (marketplaceContexts).',
         })
         continue
       }
-      const contractKey = c.field.replace(/^attr_/, '')
       if (c.target === 'channel' && effectiveContexts.length !== 1) {
         errors.push({ id: c.id, field: c.field, error: 'Edit category attributes in one channel, marketplace and listing at a time; each has its own requirements.' })
         continue
