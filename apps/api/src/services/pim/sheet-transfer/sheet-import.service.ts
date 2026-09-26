@@ -117,7 +117,7 @@ export async function startSheetImport(input: StartSheetImport): Promise<SheetIm
   const parsed = await readEditorTransfer(input.buffer, input.filename, input.productId, input.userId, input.log, input.decisions ?? {}, { changesOnly: true })
   input.log?.('sheet-import.read', { ms: Math.round(performance.now() - started), rows: parsed.rows.length, issues: parsed.issues.length })
   const kinds = parsed.kinds ?? []
-  const format: SheetImportFormat = kinds.includes('amazon') ? 'amazon' : kinds.includes('ebay') ? 'ebay'
+  const format: SheetImportFormat = kinds.includes('amazon') ? 'amazon' : kinds.includes('ebay') ? 'ebay' : kinds.includes('shopify') ? 'shopify'
     : kinds.length && kinds.every(k => k === 'editing') ? 'nexus' : kinds.includes('wide') || kinds.includes('editing') ? 'nexus-legacy' : 'csv'
   // The file decides the scope: the products and listings it names, inside this product's family.
   const scoped = parsed.boundary ? { boundary: parsed.boundary, rows: parsed.rows, outside: [] as TransferIssue[] } : await scopeFromRows(input.productId, parsed.rows)

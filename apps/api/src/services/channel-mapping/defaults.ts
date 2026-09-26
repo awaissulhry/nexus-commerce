@@ -141,6 +141,14 @@ export type ShopifyCsvRole =
   | 'ignored' // a column Nexus does not carry
 export interface ShopifyCsvColumn { header: string; aliases: readonly string[]; role: ShopifyCsvRole; level: 'product' | 'variant' | 'image'; field?: string; reason?: string }
 
+/**
+ * NCF — measured 2026-09-26: Nexus's Shopify `weight` field cannot take a value through a transfer. Its spec checks the
+ * unit against `g, kg, oz, lb` (`channel-specs/store.ts`) while Shopify's own rule for the same field demands `GRAMS,
+ * KILOGRAMS, OUNCES, POUNDS` (`nativeFieldValueError`), so every value fails one of the two. Until that is settled the
+ * weight columns are left to Shopify.
+ */
+const WEIGHT = 'Weight is not carried by a file yet: Nexus’s Shopify weight field checks two unit vocabularies that disagree (g/kg/oz/lb and GRAMS/KILOGRAMS/…). Shopify keeps its weight; edit it in the Shopify tab.'
+
 export const SHOPIFY_CSV_COLUMNS = {
   columns: [
     { header: 'Handle', aliases: ['URL handle'], role: 'handle', level: 'product' },
@@ -161,7 +169,7 @@ export const SHOPIFY_CSV_COLUMNS = {
     { header: 'Option3 Value', aliases: ['Option3 value'], role: 'option', level: 'variant' },
     { header: 'Option3 Linked To', aliases: ['Option3 linked to'], role: 'option', level: 'product' },
     { header: 'Variant SKU', aliases: ['SKU'], role: 'sku', level: 'variant' },
-    { header: 'Variant Grams', aliases: ['Weight value (grams)'], role: 'field', level: 'variant', field: 'weight' },
+    { header: 'Variant Grams', aliases: ['Weight value (grams)'], role: 'ignored', level: 'variant', reason: WEIGHT },
     { header: 'Variant Inventory Tracker', aliases: ['Inventory tracker'], role: 'stock', level: 'variant' },
     { header: 'Variant Inventory Qty', aliases: ['Inventory quantity'], role: 'stock', level: 'variant' },
     { header: 'Variant Inventory Policy', aliases: ['Continue selling when out of stock'], role: 'field', level: 'variant', field: 'inventoryPolicy' },
@@ -182,7 +190,7 @@ export const SHOPIFY_CSV_COLUMNS = {
     { header: 'SEO Title', aliases: ['SEO title'], role: 'field', level: 'product', field: 'seo_title' },
     { header: 'SEO Description', aliases: ['SEO description'], role: 'field', level: 'product', field: 'seo_description' },
     { header: 'Variant Image', aliases: ['Variant image URL'], role: 'media', level: 'variant' },
-    { header: 'Variant Weight Unit', aliases: ['Weight unit for display'], role: 'field', level: 'variant', field: 'weight' },
+    { header: 'Variant Weight Unit', aliases: ['Weight unit for display'], role: 'ignored', level: 'variant', reason: WEIGHT },
     { header: 'Variant Tax Code', aliases: ['Tax code'], role: 'ignored', level: 'variant', reason: 'Shopify tax codes are not carried by Nexus; Shopify keeps its own.' },
     { header: 'Cost per item', aliases: [], role: 'cost', level: 'variant' },
     { header: 'Status', aliases: [], role: 'lifecycle', level: 'product' },
@@ -193,8 +201,6 @@ export const SHOPIFY_CSV_COLUMNS = {
     { pattern: '^Google Shopping / ', level: 'product', reason: 'Google Shopping app columns are not carried by Nexus; Shopify keeps them.' },
     { pattern: '^(Included|Price|Compare-at price|Compare At Price) / ', level: 'variant', reason: 'Market prices and market inclusion are managed in Shopify Markets, not by Nexus.' },
   ] as readonly { pattern: string; level: ShopifyCsvColumn['level']; reason: string }[],
-  /** The measured weight units (`Variant Weight Unit`) and their size in grams: `Variant Grams` is always grams. */
-  gramsPerUnit: { g: 1, kg: 1000, lb: 453.59237, oz: 28.349523125 } as Readonly<Record<string, number>>,
   /** The headers that make a CSV Shopify's product file (any spelling in the list). */
   identity: { handle: ['Handle', 'URL handle'], title: ['Title'], variant: ['Variant SKU', 'SKU', 'Option1 Name', 'Option1 name'],
     product: ['Body (HTML)', 'Description', 'Variant Price', 'Price', 'Vendor'] },

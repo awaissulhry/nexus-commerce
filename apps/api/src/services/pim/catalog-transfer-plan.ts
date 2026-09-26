@@ -17,6 +17,8 @@ import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver, type ReferenceResolver } from './reference-values.service.js'
 import { validateSaleWindow } from './sale-window.js'
+import { storedCompareAt } from './compare-at-price.js'
+import { SHOPIFY_CSV_IDENTITY, shopifyCsvIdentityError } from './catalog-shopify-csv.js'
 
 // Inventory, pricing and publication have their own transactional owners. An attribute import
 // must not bypass their ledgers, rules or outbound queues by writing their backing columns.
@@ -61,6 +63,8 @@ export interface TransferContext {
 export interface TransferPriceWrite {
   price?: number
   sale?: { value: number | null; start: string | null; end: string | null }
+  /** NCF D2 A — Shopify's compare-at price from its own product file (`compare-at-price.ts`). */
+  compareAt?: number
   /** The listing's own price the review showed (A-17 `expectedPrice`): a number = pinned, `null` = following the master. */
   expectedPrice: number | null
   /**
@@ -597,8 +601,20 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             if (previous !== row.value) { platform.sellerSku = row.value; target.patch.platformAttributes = working.platformAttributes = platform }
             continue
           }
+          // NCF — Shopify's own identity of this product as last read from its product file (handle, status, option names,
+          // variants): what the product-CSV export writes back unchanged, and how the next import finds the product.
+          if (row.entity === 'Listings' && row.field === SHOPIFY_CSV_IDENTITY && fromChannelFile(row)) {
+            const problem = first.channel !== 'SHOPIFY' ? 'Only a Shopify listing carries a Shopify product identity' : row.action !== 'SET' ? 'A channel file records the Shopify product identity; it cannot clear it' : shopifyCsvIdentityError(row.value)
+            if (problem) { error(row, problem); continue }
+            const platform = { ...jsonRecord(working.platformAttributes) }
+            const previous = platform[SHOPIFY_CSV_IDENTITY] ?? null
+            const changed = cell(row, { state: previous === null ? 'inherited' : 'stored', value: previous }, row.value, 'stored')
+            target.cells.push(changed)
+            if (changed.verdict === 'changed') { platform[SHOPIFY_CSV_IDENTITY] = clone(row.value); target.patch.platformAttributes = working.platformAttributes = platform }
+            continue
+          }
           // CFI-6 (Q2) — the channel's own selling price and sale, recorded through the one price door without a push.
-          if (row.entity === 'Overrides' && (row.field === 'price' || row.field === 'sale') && fromChannelFile(row)) {
+          if (row.entity === 'Overrides' && (row.field === 'price' || row.field === 'sale' || row.field === 'compareAt') && fromChannelFile(row)) {
             if (row.action !== 'SET') { error(row, 'A channel file records a price or a sale; it cannot clear or inherit one'); continue }
             const listingId = before ? String(before.id) : null
             const own = listingOwnPrice(before)
@@ -612,6 +628,15 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
               if (changed.verdict === 'changed' && pending()) { error(row, waiting); continue }
               target.cells.push(changed)
               if (changed.verdict === 'changed') target.priceWrite = { ...target.priceWrite, price: round2(amount), expectedPrice: own.value, expectedSale: reviewedSale }
+            } else if (row.field === 'compareAt') {
+              // NCF D2 A — Shopify's struck-through price, through the same door (record-only).
+              if (first.channel !== 'SHOPIFY') { error(row, 'Only a Shopify listing has a compare-at price'); continue }
+              const amount = typeof row.value === 'number' ? row.value : typeof row.value === 'string' && row.value.trim() ? Number(row.value) : Number.NaN
+              if (!Number.isFinite(amount) || amount < 0) { error(row, 'A compare-at price is a number of zero or more'); continue }
+              const changed = cell(row, storedCompareAt(before?.platformAttributes), round2(amount), 'stored')
+              if (changed.verdict === 'changed' && pending()) { error(row, waiting); continue }
+              target.cells.push(changed)
+              if (changed.verdict === 'changed') target.priceWrite = { ...target.priceWrite, compareAt: round2(amount), expectedPrice: own.value, expectedSale: reviewedSale }
             } else {
               const sale = jsonRecord(row.value)
               const amount = sale.value === null || sale.value === undefined || sale.value === '' ? null : Number(sale.value)

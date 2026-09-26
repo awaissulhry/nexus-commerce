@@ -80,9 +80,7 @@ export function buildShopifyDraftFields(headers: readonly string[]): Row[] {
       case 'ignored': rows.push(row({ targetKind: 'none', state: 'ignored', reason: c.reason ?? 'Not carried by Nexus.' })); break
       case 'field': {
         const field = c.field!
-        const transform: MappingTransform[] = field === 'weight' ? (c.header === 'Variant Weight Unit' ? [{ op: 'measure', part: 'unit' }] : [{ op: 'measure', part: 'value' }, { op: 'number' }]) : TRANSFORMS[field] ?? [{ op: 'copy' }]
-        rows.push(row({ targetKind: 'channelField', targetKey: field, state: 'mapped', transform, requirement: field === 'title' ? 'required' : null,
-          ...(field === 'weight' ? { reason: c.header === 'Variant Weight Unit' ? 'The unit Shopify shows the weight in.' : '`Variant Grams` is always grams; Nexus keeps the weight in the unit Shopify shows.' } : {}) }))
+        rows.push(row({ targetKind: 'channelField', targetKey: field, state: 'mapped', transform: TRANSFORMS[field] ?? [{ op: 'copy' }], requirement: field === 'title' ? 'required' : null }))
         break
       }
     }
