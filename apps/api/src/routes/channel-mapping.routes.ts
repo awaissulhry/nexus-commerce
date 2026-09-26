@@ -31,6 +31,7 @@ import { resolveChannelConnectionId } from '../services/connection-resolver.serv
 // VT.1b — the Variations rule route (VX §11.1). The read model and the ONE blast-radius simulation.
 import { draftVariationRule, getVariationRuleView, simulateVariationRule } from '../services/pim/variation-rule-view.service.js'
 import type { StoredVariationRule } from '../services/pim/variation-rule-store.js'
+import channelMappingSetRoutes from './channel-mapping-sets.routes.js'
 
 /** One place to turn a service throw into the right status. */
 function fail(reply: any, err: unknown) {
@@ -41,6 +42,8 @@ function fail(reply: any, err: unknown) {
 
 const channelMappingRoutes: FastifyPluginAsync = async (fastify) => {
   const actor = (request: any): string | null => request.user?.id ?? request.authUser?.id ?? null
+  // CHMAP — the file-mapping versions (Amazon templates, our eBay workbook) live beside the push mapping.
+  await fastify.register(channelMappingSetRoutes)
   fastify.post<{ Params: { channel: string; code: string }; Body: { restoreRevisionId?: string; category?: string | null; changes?: MappingChange[]; expectedToken: string; presentationChange?: { id: string; rule: PresentationRule | null }; expression?: ExpressionChange; categoryChange?: CategoryChange; clone?: { channel: string; market: string; token: string; addTranslate?: boolean } } }>(
     '/pim/channel-mapping/:channel/:code/impact', async (request, reply) => {
       try {

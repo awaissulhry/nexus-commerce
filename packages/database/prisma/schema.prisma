@@ -17612,6 +17612,99 @@ model AmazonTemplateVault {
   @@index([workspaceId])
 }
 
+/// CHMAP (`docs/studies/channel-mappings.md` §8) — ONE versioned mapping of a channel file FORM for one
+/// marketplace: an Amazon template (its product types) or our eBay workbook. An ACTIVE version never changes:
+/// an edit makes a new DRAFT (`basedOnId`), and activating it retires the ACTIVE one before it. At most one
+/// ACTIVE version per form (partial unique index in the migration). Import, export and push read it.
+model ChannelMappingSet {
+  // Business ownership comes from verified database context.
+  workspaceId        String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                 String    @id @default(cuid())
+  channel            String // AMAZON | EBAY
+  marketplace        String // IT | DE | FR | ES | UK …
+  formKind           String // AMAZON_TEMPLATE | AMAZON_FLAT_FILE | EBAY_WORKBOOK
+  formKey            String // Amazon: the template's product types joined by '+' (COAT+PANTS); eBay: the workbook layout
+  version            Int
+  status             String    @default("DRAFT") // DRAFT | ACTIVE | RETIRED
+  /// Amazon's own template id (the `AmazonTemplateVault` key); null for our own workbooks.
+  templateIdentifier String?
+  /// Amazon's `Version` setting (`2026.0713`).
+  templateVersion    String?
+  /// The file's content language (`it_IT`).
+  language           String?
+  /// { sheet, labelRow, keyRow, dataRow } — where the form keeps its rows.
+  layout             Json?
+  /// sha256 of the ordered channel keys: a re-downloaded copy of the same form matches.
+  keyFingerprint     String
+  basedOnId          String?
+  source             String // FILE | COPY | EDIT
+  notes              String?
+  createdBy          String?
+  activatedAt        DateTime?
+  activatedBy        String?
+  retiredAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  fields ChannelMappingField[]
+  uses   ChannelMappingUse[]
+
+  @@unique([workspaceId, channel, marketplace, formKind, formKey, version], name: "form_version")
+  @@index([workspaceId])
+  @@index([channel, marketplace, formKind, formKey, status])
+  @@index([templateIdentifier])
+}
+
+/// CHMAP — one channel column of a mapping version and the decision for it.
+model ChannelMappingField {
+  // Business ownership comes from verified database context.
+  workspaceId         String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String            @id @default(cuid())
+  setId               String
+  set                 ChannelMappingSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  /// Amazon: the key without its marketplace qualifier; eBay: the column name without its marks.
+  channelKey          String
+  /// The verbatim header in the file (`item_name[marketplace_id=…][language_tag=it_IT]#1.value`).
+  columnKey           String?
+  /// The channel's own label, in the market language.
+  label               String?
+  /// Other spellings of the same column (eBay's English-first headers).
+  aliases             String[]          @default([])
+  /// The form's product types this decision applies to; empty = all of them.
+  productTypes        String[]          @default([])
+  requirement         String? // required | requiredIfRelevant | bestPractice | optional (the channel schema)
+  templateRequirement String? // the template's own word (`Obbligatorio`)
+  targetKind          String // see `packages/shared/channel-mapping.ts`
+  targetKey           String?
+  transform           Json              @default("[]")
+  direction           String            @default("both") // in | out | both
+  state               String // mapped | ignored | managed | unmapped
+  reason              String?
+  decidedBy           String            @default("rule") // rule | owner
+  sortOrder           Int               @default(0)
+
+  @@unique([workspaceId, setId, channelKey], name: "set_channelKey")
+  @@index([setId])
+  @@index([workspaceId])
+}
+
+/// CHMAP — which mapping version an import, export or push used.
+model ChannelMappingUse {
+  // Business ownership comes from verified database context.
+  workspaceId String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String            @id @default(cuid())
+  setId       String
+  set         ChannelMappingSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  action      String // IMPORT | EXPORT | PUSH
+  /// A job id or a file name.
+  reference   String?
+  detail      Json?
+  createdAt   DateTime          @default(now())
+
+  @@index([setId, createdAt])
+  @@index([workspaceId])
+}
+
 // FFT.5a — the operator's own FILLED Amazon workbook, captured per
 // (familyKey, marketplace). It becomes THE Export-for-Amazon base for that
 // family on that market; the blank category template above stays the

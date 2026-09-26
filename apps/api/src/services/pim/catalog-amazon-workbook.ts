@@ -8,6 +8,8 @@ import type { SourceExclusion } from './catalog-source-mapping.js'
 import { checkWorkbookSize } from './catalog-source-file.js'
 import { TRANSFER_MAX_FILE_BYTES, TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
 import { MARKETPLACE_ID_TO_CODE } from '../../utils/marketplace-code.js'
+import { amazonChannelKey } from '@nexus/shared/channel-mapping'
+import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
 
 /**
  * CFI (R-CFI-1, `docs/channel-file-import/BUILD.md`) — the Owner's native Amazon template, read AS IS.
@@ -27,6 +29,8 @@ export interface AmazonIdentityLink { fileSku: string; proposedSku: string; reas
 export interface AmazonWorkbookResult {
   rows: TransferRow[]; issues: TransferIssue[]; exclusions: SourceExclusion[]
   links: AmazonIdentityLink[]; ledger: AmazonLedgerEntry[]; warnings: string[]
+  /** CHMAP — the mapping version the file was read with (`docs/studies/channel-mappings.md` §8). */
+  mapping?: { setId: string; version: number; status: string; label: string; created: boolean }
 }
 /** How a file SKU was matched to a Nexus listing (D4): the product SKU and WHICH listing of it (alias). */
 export interface AmazonIdentity { sku: string; via: 'sku' | 'seller-sku' | 'asin' | 'link'; aliasKey?: string }
@@ -60,9 +64,11 @@ export interface AmazonDestination {
   scopeSkus?: Set<string>
   /** Drawer: rows carry the reviewed listing version (`requireEditorVersions`). */
   withVersions?: boolean
+  /** CHMAP — the mapping version's decisions. Absent = the rules alone (pure callers and old tests). */
+  mapping?: ReaderMapping
 }
 
-type Placement =
+export type Placement =
   | { kind: 'identity' } | { kind: 'type' } | { kind: 'action' } | { kind: 'relationship' }
   | { kind: 'id-type' } | { kind: 'id-value' } | { kind: 'identifier' }
   | { kind: 'price' } | { kind: 'sale'; part: 'value' | 'start' | 'end' } | { kind: 'currency' }
@@ -71,6 +77,8 @@ type Placement =
   | { kind: 'duplicate'; of: string } | { kind: 'not-in-type'; attribute: string; legacy: boolean }
   | { kind: 'unplaced'; path: string[]; legacy: boolean }
   | { kind: 'field'; field: ChannelFieldSpec; locale: string; path: string[]; slots: number[]; languageTagged: boolean }
+  // CHMAP — a mapping version's decision that differs from the rule.
+  | { kind: 'mapping-ignored'; reason: string } | { kind: 'mapping-unmapped'; reason: string }
 
 const pathOf = (header: string) => header.replace(/\[[^\]]*\]/g, '').replace(/#\d+/g, '').split('.')
 const slotOf = (header: string) => [...header.matchAll(/#(\d+)/g)].map(m => Number(m[1]))
@@ -124,8 +132,8 @@ function sourceValue(parsed: AmazonTemplateParse, header: string, value: string,
   return value
 }
 
-/** Where one file column goes, decided once per product type. */
-function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelSpec, destination: AmazonDestination, primaryLanguage: string, marketLanguages: string[]): Placement {
+/** Where one file column goes, decided once per product type. CHMAP: also the RULE a mapping draft records. */
+export function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelSpec, destination: AmazonDestination, primaryLanguage: string, marketLanguages: string[]): Placement {
   if (header.includes(DUPLICATE_MARK)) return { kind: 'duplicate', of: header.slice(0, header.indexOf(DUPLICATE_MARK)) }
   const legacy = parsed.meta.grammar === 'legacy' ? legacyAttributePath(header) : null
   const key = legacy ?? header
@@ -150,9 +158,6 @@ function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelS
     if (root === 'purchasable_offer' && path[1]) return { kind: 'pricing-rule', what: path[1].replace(/_/g, ' ') }
     return { kind: 'managed' }
   }
-  // An untagged text column (every old flat-file column, some current ones) is written in the
-  // file's own content language, not automatically in the market's primary language.
-  const language = qualifier(key, 'language_tag') ?? parsed.meta.contentLanguageTag
   const rootSchema = (spec.validationSchema?.properties as Record<string, any> | undefined)?.[root]
   const fields = spec.fields.filter(f => f.attribute === root)
   if (!fields.length && !rootSchema) return { kind: 'not-in-type', attribute: root, legacy: !!legacy }
@@ -164,6 +169,13 @@ function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelS
   const field = candidates[0]
   // `list_price` (RRP) is a saved listing fact, not a selling price (studio-publication-amazon.ts:134).
   if (field.attribute !== 'list_price' && managedChannelField({ fieldKey: field.key, channelStore: field.channelStore })) return { kind: 'managed' }
+  return fieldPlacement(parsed, key, field, path, primaryLanguage, marketLanguages)
+}
+
+/** A column that carries `field`: its language decides the locale it is stored under (or refuses it). */
+function fieldPlacement(parsed: AmazonTemplateParse, key: string, field: ChannelFieldSpec, path: string[], primaryLanguage: string, marketLanguages: string[]): Placement {
+  // An untagged text column is written in the file's own content language, not automatically the market's.
+  const language = qualifier(key, 'language_tag') ?? parsed.meta.contentLanguageTag
   let locale = ''
   if (language) {
     const lang = normalizeLanguage(language)
@@ -176,6 +188,27 @@ function placeHeader(parsed: AmazonTemplateParse, header: string, spec: ChannelS
     } else if (isText(field) && marketLanguages.length > 1) locale = lang
   }
   return { kind: 'field', field, locale, path, slots: slotOf(key), languageTagged: !!qualifier(key, 'language_tag') }
+}
+
+/**
+ * CHMAP — the mapping version decides. Rule-made rows follow the rule (they were written by it); the Owner's
+ * decisions win over it: an ignored column is excluded with the Owner's reason, an unmapped one is refused, and a
+ * column the Owner mapped to another field of the product type is read into that field.
+ */
+function decidePlacement(rule: Placement, parsed: AmazonTemplateParse, header: string, spec: ChannelSpec, mapping: ReaderMapping | undefined, primaryLanguage: string, marketLanguages: string[]): Placement {
+  if (!mapping) return rule
+  const decision = mapping.byKey.get(amazonChannelKey(header))
+  if (!decision) return { kind: 'mapping-unmapped', reason: unmappedReason(mapping, header, 'the column is not in this version') }
+  if (decision.state === 'unmapped') return rule.kind === 'unplaced' || decision.decidedBy === 'owner' ? { kind: 'mapping-unmapped', reason: unmappedReason(mapping, header, decision.reason) } : rule
+  if (decision.decidedBy !== 'owner') return rule
+  if (decision.state === 'ignored' || decision.state === 'managed') return { kind: 'mapping-ignored', reason: ignoredReason(mapping, decision.reason) }
+  if (decision.targetKind === 'channelField' && decision.targetKey && !(rule.kind === 'field' && rule.field.key === decision.targetKey)) {
+    const field = spec.fields.find(f => f.key === decision.targetKey)
+    if (!field) return { kind: 'not-in-type', attribute: decision.targetKey, legacy: false }
+    const key = parsed.meta.grammar === 'legacy' ? legacyAttributePath(header) ?? header : header
+    return fieldPlacement(parsed, key, field, pathOf(key), primaryLanguage, marketLanguages)
+  }
+  return rule
 }
 
 /**
@@ -204,7 +237,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
   const placementFor = (category: string, spec: ChannelSpec, header: string) => {
     let byHeader = placements.get(category)
     if (!byHeader) placements.set(category, byHeader = new Map())
-    if (!byHeader.has(header)) byHeader.set(header, placeHeader(parsed, header, spec, destination, primaryLanguage, marketLanguages))
+    if (!byHeader.has(header)) byHeader.set(header, decidePlacement(placeHeader(parsed, header, spec, destination, primaryLanguage, marketLanguages), parsed, header, spec, destination.mapping, primaryLanguage, marketLanguages))
     return byHeader.get(header)!
   }
   const fileSkuRows = new Map<string, number[]>()
@@ -380,6 +413,8 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
         case 'managed': { const reason = `Managed commercial field: use the dedicated pricing or inventory workflow (file value ${raw}).`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'foreign-market': { const reason = `This column is for Amazon ${place.market}; import it with the ${place.market} file.`; exclude(header, reason); log(header, 'excluded', { reason }); continue }
         case 'foreign-language': { issue(header, `This text is in ${place.language}, which Amazon ${destination.marketplace} does not carry in Nexus (${marketLanguages.join(', ')})`); log(header, 'refused', { reason: 'language not carried by the market' }); continue }
+        case 'mapping-ignored': { exclude(header, place.reason); log(header, 'excluded', { reason: place.reason }); continue }
+        case 'mapping-unmapped': { issue(header, place.reason); log(header, 'refused', { reason: place.reason }); continue }
         case 'not-in-type': {
           const reason = place.legacy
             ? `Old flat-file column ${header}: Amazon's current ${category} schema has no ${place.attribute} (${destination.marketplace}), so neither Amazon's current listing nor Nexus keeps it (file value ${raw}).`
@@ -626,7 +661,8 @@ export async function resolveAmazonCatalogWorkbook(parsed: AmazonTemplateParse, 
   }
   const { loadAmazonSpec } = await import('./channel-specs/index.js')
   const specs = new Map<string, ChannelSpec>()
-  for (const category of amazonProductTypes(parsed)) {
+  // CHMAP — also the template's own product types, so its mapping version can decide every column it carries.
+  for (const category of new Set([...amazonProductTypes(parsed), ...(parsed.meta.templateProductTypes ?? [])])) {
     try { specs.set(category, await loadAmazonSpec(marketplace, category, accountId)) }
     catch { /* an unavailable schema refuses that product type's rows with "Refresh the … schema" */ }
   }
@@ -712,11 +748,26 @@ export async function resolveAmazonCatalogWorkbook(parsed: AmazonTemplateParse, 
   }
   const { marketLanguages } = await import('./market-languages.js')
   const languages = marketLanguages('AMAZON', marketplace, [{ channel: 'AMAZON', code: marketplace, language: market.language, languages: market.languages ?? [] }])
-  return mapAmazonWorkbook(parsed, specs, {
+  const primaryLanguage = normalizeLanguage(languages[0] ?? market.language)
+  // CHMAP M2 — the mapping version decides each column; the file is read with it and the use is recorded.
+  const { amazonImportMapping } = await import('../channel-mapping/amazon-import.js')
+  const { recordUse } = await import('../channel-mapping/store.js')
+  let chmap: Awaited<ReturnType<typeof amazonImportMapping>> | null = null
+  let mappingProblem = ''
+  try { chmap = await amazonImportMapping(parsed, specs, { marketplace, primaryLanguage, marketLanguages: [...new Set([primaryLanguage, ...languages.map(normalizeLanguage)])] }) }
+  catch (error) { mappingProblem = error instanceof Error ? error.message : String(error) }
+  const result = mapAmazonWorkbook(parsed, specs, {
     accountId, marketplace, language: languages[0] ?? market.language, languages, currency: market.currency ?? undefined,
     identities, proposals, identityProblems, existingProducts: new Set(bySku.keys()), listings: listingFacts,
     mode: opts.mode, familyCode: family?.code ?? null, confirmDeletes: opts.confirmDeletes === true || Array.isArray(opts.confirmDeletes) ? opts.confirmDeletes : false, scopeSkus, withVersions: !!opts.productId,
+    ...(chmap ? { mapping: chmap.mapping } : {}),
   })
+  if (chmap) {
+    result.mapping = chmap.info
+    result.warnings.unshift(`Read with the mapping ${chmap.info.label}.`, ...chmap.warnings)
+    await recordUse(chmap.info.setId, 'IMPORT', parsed.meta.sheet, { rows: result.rows.length, excluded: result.exclusions.length, refused: result.issues.length, templateVersion: parsed.meta.templateVersion ?? null })
+  } else result.warnings.unshift(`The mapping versions could not be read (${mappingProblem}); this file was read with the built-in rules only, and no Owner decision was applied.`)
+  return result
 }
 
 /** A whole-file stop that still accounts for every cell (the ledger stays complete). */
