@@ -5,6 +5,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { permissionForRoute } from '../lib/auth/permissions-manifest.js'
+import { withWorkspace } from '../lib/workspace-context.js'
 
 const state = vi.hoisted(() => ({ db: null as any }))
 vi.mock('@nexus/database', async () => {
@@ -13,19 +14,26 @@ vi.mock('@nexus/database', async () => {
   return { default: state.db.client }
 })
 
+// Profiles ON (production): every request and store call runs inside a business, as the global workspace preHandler does.
+const PROFILES_ON = process.env.NEXUS_WORKSPACES_ENABLED === '1'
+const scope = { workspaceId: 'CHMAP-A', actorUserId: null, membershipId: null, roleKeys: [] }
+const inBusiness = <T>(work: () => Promise<T>) => (PROFILES_ON ? withWorkspace(scope, work) : work())
+
 describe('CHMAP — /api/pim/channel-mapping-sets', () => {
   let app: FastifyInstance
   let setId = ''
   beforeAll(async () => {
     const { default: routes } = await import('./channel-mapping-sets.routes.js')
     app = Fastify()
+    app.addHook('preHandler', (_request, _reply, done) => { if (PROFILES_ON) withWorkspace(scope, done); else done() })
     await app.register(routes, { prefix: '/api' })
     await app.ready()
     const { ensureSetForForm } = await import('../services/channel-mapping/store.js')
     const row = (channelKey: string, extra: object = {}) => ({ channelKey, columnKey: channelKey, label: null, aliases: [], productTypes: [], requirement: 'optional' as const, templateRequirement: null,
       targetKind: 'channelField' as const, targetKey: channelKey, transform: [], direction: 'both' as const, state: 'mapped' as const, reason: null, decidedBy: 'rule' as const, sortOrder: 0, ...extra })
-    const { set } = await ensureSetForForm({ channel: 'EBAY', marketplace: 'IT', formKind: 'EBAY_WORKBOOK', formKey: '177104', templateIdentifier: null, templateVersion: null, language: null,
-      layout: { sheet: 'ebay_it', labelRow: null, keyRow: 1, dataRow: 2 }, keyFingerprint: 'fp' }, () => [row('SKU', { targetKind: 'identity', targetKey: null, requirement: 'required' }), row('aspect:Marca', { requirement: 'required', state: 'unmapped', targetKind: 'none', targetKey: null }), row('specific:team name', { targetKind: 'itemSpecific', targetKey: 'itemSpecifics.team name' })])
+    if (PROFILES_ON) await state.db.db.query(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, $1, 'active', 'test', $1, CURRENT_TIMESTAMP)`, [scope.workspaceId])
+    const { set } = await inBusiness(() => ensureSetForForm({ channel: 'EBAY', marketplace: 'IT', formKind: 'EBAY_WORKBOOK', formKey: '177104', templateIdentifier: null, templateVersion: null, language: null,
+      layout: { sheet: 'ebay_it', labelRow: null, keyRow: 1, dataRow: 2 }, keyFingerprint: 'fp' }, () => [row('SKU', { targetKind: 'identity', targetKey: null, requirement: 'required' }), row('aspect:Marca', { requirement: 'required', state: 'unmapped', targetKind: 'none', targetKey: null }), row('specific:team name', { targetKind: 'itemSpecific', targetKey: 'itemSpecifics.team name' })]))
     setId = set.id
   }, 120_000)
   afterAll(async () => { await app?.close(); await state.db?.close() }, 30_000)
