@@ -32,6 +32,7 @@ import { pooledNow, PoolHoldError, PooledProductError } from './stock-pool/pool-
 import { consumePoolHolds, holdForOrder, releasePoolHolds } from './stock-pool/order-routing.js'
 // EV.2 — reservation facts, published inside each reservation's own transaction.
 import { publishEvent } from '../lib/events/publish.js'
+import { logger } from '../utils/logger.js'
 
 const PENDING_ORDER_TTL_MS = 24 * 60 * 60 * 1000 // 24h
 // S.2 — open marketplace orders sit in reserved state from ingestion
@@ -184,9 +185,11 @@ async function reserveStockInTx(tx: Prisma.TransactionClient, args: ReserveStock
 /** Release a reservation without consuming. Decrements StockLevel.reserved. */
 export async function releaseReservation(
   reservationId: string,
-  opts: { actor?: string; reason?: string } = {},
+  opts: { actor?: string; reason?: string; tx?: Prisma.TransactionClient } = {},
 ) {
-  return await prisma.$transaction(async (tx) => {
+  // In the caller's transaction when it passes one (a capped consume gives back a surplus hold under
+  // the lock it already holds); otherwise in its own.
+  const settle = async (tx: Prisma.TransactionClient) => {
     const target = await tx.stockReservation.findUnique({
       where: { id: reservationId },
       select: { stockLevel: { select: { productId: true } } },
@@ -252,7 +255,8 @@ export async function releaseReservation(
     })
 
     return updated
-  })
+  }
+  return opts.tx ? await settle(opts.tx) : await prisma.$transaction(settle)
 }
 
 /** Consume a reservation (order shipped). Decrements both reserved and
@@ -261,10 +265,13 @@ export async function releaseReservation(
  *  AE.1 — ONE transaction under the product stock lock. Before AE.1 the "already consumed"
  *  check ran outside any transaction and the stock left in one transaction while `reserved`
  *  dropped in a second: two concurrent calls both passed the check and took the stock twice
- *  (measured), and a crash between the two left `reserved` inflated for good. */
+ *  (measured), and a crash between the two left `reserved` inflated for good.
+ *
+ *  `capToOrder` (consumeOpenOrder): a hold of an order is taken only while the order still owes that
+ *  many units of the product; otherwise it is released instead, and the returned row says which. */
 export async function consumeReservation(
   reservationId: string,
-  opts: { actor?: string } = {},
+  opts: { actor?: string; capToOrder?: boolean } = {},
 ) {
   const outcome = await prisma.$transaction(async (tx) => {
     const target = await tx.stockReservation.findUnique({
@@ -284,6 +291,22 @@ export async function consumeReservation(
     }
     if (r.consumedAt) {
       return { consumed: r, committed: [] } // idempotent
+    }
+    // A hold beyond what the order still owes was made by a re-read of an order whose units had
+    // already left: taking it would take them again. Give it back instead, under this same lock so
+    // a consume racing on the same order is counted.
+    if (opts.capToOrder && r.orderId) {
+      const due = await owedToOrder(tx, r.orderId, r.stockLevel.productId)
+      if (r.quantity > due.owed) {
+        const owed = Math.max(0, due.owed)
+        logger.warn('stock: surplus order hold released, not consumed', {
+          reservationId, orderId: r.orderId, productId: r.stockLevel.productId, quantity: r.quantity, ordered: due.ordered, taken: due.taken, owed,
+        })
+        const released = await releaseReservation(reservationId, {
+          actor: opts.actor, reason: `surplus hold: the order still owes ${owed} of this product, the hold is ${r.quantity}`, tx,
+        })
+        return { consumed: released, committed: [] }
+      }
     }
 
     // Settle `reserved` BEFORE the stock leaves, so the cascade inside the movement below
@@ -419,7 +442,9 @@ export async function transferStock(args: TransferStockArgs) {
  * S.2 — Reserve stock for an open marketplace order.
  *
  * Idempotent: if a non-released, non-consumed reservation already exists
- * for (orderId, productId), this returns it unchanged. Used by
+ * for (orderId, productId), this returns it unchanged. Units already
+ * consumed for (orderId, productId) are never held again: it holds only
+ * `quantity` minus those, and nothing once none remain. Used by
  * channel order ingestion (Amazon FBM today; Shopify in S.2.5; eBay
  * migrating later) to hold stock from the moment the order is
  * recognised through to shipment, without altering Product.totalStock.
@@ -454,25 +479,30 @@ export async function reserveOpenOrder(args: {
     // Checked outside it, a webhook and a poll for one order both found nothing and both
     // reserved (measured: two reservations for one order).
     await lockProductStock(tx, [args.productId])
+    const line = { orderId: args.orderId, stockLevel: { productId: args.productId, variationId: args.variationId ?? null } }
     const existing = await tx.stockReservation.findFirst({
-      where: {
-        orderId: args.orderId,
-        releasedAt: null,
-        consumedAt: null,
-        stockLevel: {
-          productId: args.productId,
-          variationId: args.variationId ?? null,
-        },
-      },
+      where: { ...line, releasedAt: null, consumedAt: null },
       select: { id: true, quantity: true },
     })
     if (existing) return existing
+
+    // "Held" is not only "held now": a re-read of an order that already shipped found no OPEN hold,
+    // held its units again, and the reconcile took them a second time. Units this line already took
+    // are never held again: hold only what is still owed; nothing once all of it is taken (the hold
+    // that took the last of it is returned). Same lock, so a consume in flight is counted.
+    const took = await tx.stockReservation.findMany({
+      where: { ...line, consumedAt: { not: null } },
+      select: { id: true, quantity: true },
+      orderBy: [{ consumedAt: 'desc' }, { id: 'desc' }],
+    })
+    const owed = args.quantity - took.reduce((sum, r) => sum + r.quantity, 0)
+    if (took.length > 0 && owed <= 0) return took[0]
 
     return await reserveStockInTx(tx, {
       productId: args.productId,
       variationId: args.variationId,
       locationId: args.locationId,
-      quantity: args.quantity,
+      quantity: owed,
       orderId: args.orderId,
       reason: 'OPEN_ORDER',
       ttlMs: OPEN_ORDER_TTL_MS,
@@ -482,10 +512,29 @@ export async function reserveOpenOrder(args: {
 }
 
 /**
+ * What an order still owes of a product: its lines' units minus what its own holds already took.
+ * OrderItem carries no variation, so both sides are counted per product. With no line for the
+ * product (an unlinked SKU, a hold for an item not on the order) the ordered quantity is unknown:
+ * the first hold may be taken, and none after one was — a later one is the re-read pattern.
+ */
+async function owedToOrder(tx: Prisma.TransactionClient, orderId: string, productId: string) {
+  const lines = await tx.orderItem.aggregate({ where: { orderId, productId }, _sum: { quantity: true }, _count: { _all: true } })
+  const took = await tx.stockReservation.aggregate({
+    where: { orderId, consumedAt: { not: null }, stockLevel: { productId } },
+    _sum: { quantity: true },
+  })
+  const taken = took._sum.quantity ?? 0
+  const ordered = lines._count._all > 0 ? (lines._sum.quantity ?? 0) : null
+  return { ordered, taken, owed: ordered === null ? (taken > 0 ? 0 : Infinity) : ordered - taken }
+}
+
+/**
  * S.2 — Consume every open reservation tied to an order. Called when
  * the order transitions to SHIPPED. Decrements both reserved and
  * quantity for each reservation. Idempotent — already-consumed and
- * already-released reservations are skipped.
+ * already-released reservations are skipped. Never takes more of a
+ * product than the order still owes: a surplus hold is released
+ * (consumeReservation `capToOrder`).
  *
  * Returns the count of reservations consumed.
  */
@@ -504,8 +553,8 @@ export async function consumeOpenOrder(args: {
   let consumed = 0
   for (const r of open) {
     try {
-      await consumeReservation(r.id, { actor: args.actor })
-      consumed++
+      const settled = await consumeReservation(r.id, { actor: args.actor, capToOrder: true })
+      if (settled.consumedAt) consumed++
     } catch {
       // continue — best-effort. A consume failure (e.g. concurrent
       // release) doesn't block the remainder.

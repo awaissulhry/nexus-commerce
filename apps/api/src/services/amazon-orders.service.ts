@@ -41,6 +41,10 @@ import { recascadeProduct } from './stock-movement.service.js'
 
 const amazonService = new AmazonService()
 
+// An FBM order already in one of these before a read has had its stock settled (taken or given back):
+// re-reading it must not hold stock again.
+const FBM_STOCK_SETTLED = new Set(['SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED', 'RETURNED'])
+
 /** Map Amazon's status strings to our `OrderStatus` enum (extended in O.1). */
 type MappedOrderStatus =
   | 'PENDING'
@@ -901,7 +905,10 @@ export class AmazonOrdersService {
     // S.2: FBM stock lifecycle. FBA never touched here. Cancellations
     // are handled by the existing handleOrderCancelled cascade above
     // (which now also releases open reservations — see order-cancellation).
-    if (fulfillmentMethod === 'FBM') {
+    // Only a read that can still owe stock runs it: never for a cancelled order, and never for a
+    // re-read of one already settled — every poll re-read shipped orders and held them again. The
+    // first read as SHIPPED (new, or from PROCESSING) still reserves, then consumes.
+    if (fulfillmentMethod === 'FBM' && order.status !== 'CANCELLED' && !FBM_STOCK_SETTLED.has(existing?.status ?? '')) {
       await this.applyFbmStockLifecycle({
         orderId: order.id,
         rawAmazonOrderId: raw.AmazonOrderId,
@@ -913,9 +920,10 @@ export class AmazonOrdersService {
   }
 
   /**
-   * S.2 — FBM reserve-then-consume lifecycle. Always tries to reserve
-   * (idempotent: skipped if a reservation already exists for this
-   * orderId+productId). If the order has just transitioned to SHIPPED,
+   * S.2 — FBM reserve-then-consume lifecycle. Tries to reserve on every
+   * read that reaches it (idempotent: an open reservation for this
+   * orderId+productId is reused, units already consumed are never held
+   * again). If the order has just transitioned to SHIPPED,
    * consume every open reservation for the order.
    *
    * Insufficient-stock errors are logged + counted but never throw —
