@@ -29,6 +29,9 @@ production completion is tracked separately. See [plan.md](plan.md).
   configs and ordered cutover/rollback.
 - [x] Remove fail-open cron behavior from split deployment; preserve scoped lease
   execution and document durable-scheduler migration boundaries. Test competing runners.
+- [x] Every process loads the same in-process registries (channel specs, automation
+  actions); background processes require the queue lane; the API ends event streams
+  when it shuts down.
 
 ## D. Inbox (after B for new schema)
 - [x] Add atomic claims, fencing and lease recovery; preserve verification,
@@ -67,6 +70,10 @@ production completion is tracked separately. See [plan.md](plan.md).
   media authority, secrets and Factory ownership (plan.md dispositions 15–22).
 - [ ] Follow-up: the web builds some Idempotency-Keys from content
   (`pim-attach:<parent>:<ids>`). Send one key per user intent instead.
+- [ ] Follow-up: status endpoints that read process memory (cron status, sync-worker
+  status, circuit breakers and reset) must read shared state after the split.
+- [ ] Follow-up: `CategoryTreeService` never takes its lock (pre-existing; see plan.md).
+- [ ] Follow-up: one-off scripts using `new PrismaClient()` need the adapter (Prisma 7).
 
 ## G. Final evidence and rollout
 - [ ] Focused suites, relevant builds, migration guards, real PG gates pass locally.

@@ -120,6 +120,21 @@ committed branch found and fixed these defects before anything shipped:
 | Inbox | The retry sweep claimed a whole batch with the sweep's start time; later events could receive an already-expired lease and run twice. | Each claim reads the database clock. |
 | Stockout | A concurrent open made the insert fail inside the transaction, aborting it. | `ON CONFLICT DO NOTHING` (skipDuplicates) keeps the transaction usable. |
 | Tests | Two job suites were never run against the slice and failed. | Updated to the claim-based flow; skipped claims no longer count as successes. |
+| Process split | The worker never loaded the channel specs: every OAuth token refresh there ("No ChannelSpec registered") would fail, so outbound sync, ads and SQS order fetches stop after cutover. | `runtime/registrations.ts`, loaded by all three processes, registers channel specs and automation actions; a test holds each entry point to it. |
+| Process split | Bulk-ops automation actions were registered only in the scheduler, review actions only in the API: rules firing elsewhere recorded "Unknown action type". | Same shared registrations. |
+| Process split | The scheduler enqueues work but the notes left `ENABLE_QUEUE_WORKERS` off there, so every enqueue was skipped and the latency watchdog reported a false degradation hourly. | Both background processes refuse to start without it; notes say all three services. |
+| Shutdown | An open SSE stream held `app.close()` until the 30-second deadline, which then exited without closing Redis or the database. | Streams end in `preClose` (`lib/sse.ts`); a real-socket test and its control prove it. |
+| Rollout | The web on Vercel enforces the runtime login too, and deploys on merge. | The notes require Vercel's `DATABASE_URL` switched before the merge. |
 
-Deliberately not in this change: aligning web and Factory to React 19 (a separate
-cross-app migration) and changing the web's content-built idempotency keys.
+Deliberately not in this change, each a follow-up with its own review:
+- aligning web and Factory to React 19 (a cross-app migration);
+- per-intent idempotency keys in the web (today some are built from content);
+- operator status endpoints (cron status, sync-worker status, circuit breakers and their
+  reset) read the API process's memory; after the split they must read shared state
+  (the database's cron runs or Redis) to describe the worker and scheduler;
+- `CategoryTreeService` never takes its transaction and lock: its `'$transaction' in db`
+  check is false through the business-scoping proxy (already so under Prisma 6). Fixing
+  it switches on write paths that have never run in production;
+- about 300 one-off scripts under `scripts/` and `apps/api/scripts/` call
+  `new PrismaClient()` without the adapter Prisma 7 requires. None is wired into any
+  tool; each needs `@nexus/database`'s client before it is reused.

@@ -19,7 +19,9 @@ This cutover has not been executed.
    TRIGGER privileges are needed. Preserve existing narrowly authorized SECURITY
    DEFINER functions and their migration-owner ownership.
 2. Set the application's `DATABASE_URL` to this login, in every API/worker/web
-   environment that accesses commerce PostgreSQL. Keep the pooled endpoint for
+   environment that accesses commerce PostgreSQL — Vercel's Production included,
+   **before** the merge: the web deploys from `main` too, and its pool refuses an
+   owner login in production. Keep the pooled endpoint for
    runtime traffic. Provision a password using the deployment secret manager, not
    SQL checked into the repository or a command visible in logs.
 3. Set `MIGRATION_DATABASE_URL` to an administrative credential for that **same
@@ -43,8 +45,10 @@ Create the worker and scheduler services from the same repository/build as the A
 Set their Config File Path to `/railway.worker.toml` and `/railway.scheduler.toml`
 respectively. They use `/health/ready`; only the API service runs schema migrations.
 Provide the required integration variables, restricted `DATABASE_URL`, and Redis
-connection. Set `ENABLE_QUEUE_WORKERS=1` on API and worker (the API is a producer
-only); clear `NEXUS_DISABLE_BACKGROUND_JOBS` on both background services.
+connection. Set `ENABLE_QUEUE_WORKERS=1` on all three services: the worker consumes
+the queues, the API and the scheduler produce into them (with it off, every enqueue
+is skipped and work waits for the 60-second drains). Both background services refuse
+to start without it. Clear `NEXUS_DISABLE_BACKGROUND_JOBS` on both background services.
 
 Configure GitHub `RAILWAY_WORKER_SERVICE` and `RAILWAY_SCHEDULER_SERVICE` before
 enabling deployment. The workflow refuses an API-only rollout without these IDs.
@@ -63,8 +67,11 @@ to isolate API CPU or prevent concurrent tick ownership.
 
 API writes no longer start inline cross-business pool/assortment drains; workers
 discover the durable rows. Assortment LISTEN wakes promptly; stock-pool idle polling
-can take up to ten seconds. Shutdown stops new work and waits for current tasks with
-a 30-second outer bound; interrupted durable work remains recoverable.
+can take up to ten seconds. Shutdown stops new work within a 30-second outer bound.
+It waits for queue jobs, pollers and clustered cron ticks; interval timers
+(`runProfileTimer`, plain `setInterval` jobs) are interrupted, which is safe because
+every job is idempotent and its durable state is retried. The API ends open
+event streams first, so browsers reconnect to another replica.
 
 ## Release behavior
 
