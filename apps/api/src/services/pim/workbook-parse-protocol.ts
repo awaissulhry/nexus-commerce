@@ -9,6 +9,7 @@
  * `TransferRow`, `TransferIssue` and `EbayWorkbookTable` are plain data and survive it.
  */
 import type { EbayWorkbookTable } from './catalog-ebay-workbook.js'
+import type { ShopifyCsvTable } from './catalog-shopify-csv.js'
 import type { AmazonTemplateParse } from '../amazon/template-workbook.js'
 import type { SourceExclusion } from './catalog-source-mapping.js'
 import type { TransferIssue, TransferRow } from '@nexus/shared/catalog-transfer'
@@ -26,6 +27,8 @@ export type PartOutcome =
    * finishes these files. Plain data; the host maps it with Prisma (`resolveAmazonCatalogWorkbook`).
    */
   | { kind: 'amazon'; parsed: AmazonTemplateParse; expandedBytes: number }
+  /** NCF — Shopify's own product CSV, as a plain table; the host resolves its products and variants with Prisma. */
+  | { kind: 'shopify'; table: ShopifyCsvTable; expandedBytes: number }
 
 /**
  * Per-part reading options the host passes through: the catalog page's "Blank cells" choice, and its chosen

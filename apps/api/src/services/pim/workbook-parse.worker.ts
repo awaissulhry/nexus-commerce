@@ -26,7 +26,8 @@ import { readCatalogWorkbook, type EditingWorkbookBaseline } from './catalog-wor
 import { readTransferFile, readTransferWorkbook, TRANSFER_MAX_FILE_BYTES } from './catalog-transfer-file.js'
 import { readEbayWorkbook } from './catalog-ebay-workbook.js'
 import { detectAmazonTemplate } from '../amazon/template-workbook.js'
-import { sniffWorkbook, amazonAttributeSheetDoor } from './channel-file-sniff.js'
+import { sniffWorkbook, sniffCsv, amazonAttributeSheetDoor, shopifyInventoryDoor } from './channel-file-sniff.js'
+import { readShopifyCsv } from './catalog-shopify-csv.js'
 import type { HostMessage, WorkerMessage, PartOutcome, PartOptions } from './workbook-parse-protocol.js'
 
 const port = parentPort
@@ -49,6 +50,13 @@ async function readPart(bytes: Uint8Array, filename: string, batchBudgetBytes: n
   const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) {
     throw new Error(`${filename}: each workbook must be non-empty and at most 10 MB`)
+  }
+  // NCF — a CSV says what it is from its header record: Shopify's product export is read as Shopify's file, its
+  // inventory export is refused (stock is never imported from a file), and every other CSV reads exactly as before.
+  if (/\.csv$/i.test(filename)) {
+    const csv = sniffCsv(buffer)
+    if (csv.kind === 'shopify-product-csv') return { kind: 'shopify', table: readShopifyCsv(buffer), expandedBytes: 0 }
+    if (csv.kind === 'shopify-inventory-csv') throw new Error(shopifyInventoryDoor(filename))
   }
   // CFI-1 — `.xlsm` is Amazon's own template format; it is a workbook like `.xlsx`, never a CSV.
   if (!/\.xls[xm]$/i.test(filename)) return { kind: 'transfer', parsed: await readTransferFile(buffer, filename, { blankPolicy: options.blankPolicy }), expandedBytes: 0 }

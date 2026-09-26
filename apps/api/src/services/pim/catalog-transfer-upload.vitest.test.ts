@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ExcelJS from 'exceljs'
 import { ooxmlWorkbook, amazonTemplateSheets, ATTRIBUTE_SHEET_HEADERS, EBAY_HEADERS } from './catalog-transfer-test/channel-file-fixtures.js'
+import { csvOf, SHOPIFY_INVENTORY_HEADERS, shopifySampleCsv } from './catalog-transfer-test/shopify-csv-fixtures.js'
 
 const calls = vi.hoisted(() => ({ sessions: 0, reads: [] as { filename: string; options: unknown }[], amazon: [] as { parsed: any; options: any }[], ebay: [] as { table: any; options: any }[], drawerEbay: [] as { table: any; productId: string; options: any }[] }))
 vi.mock('./workbook-parse.js', async importOriginal => {
@@ -71,6 +72,19 @@ describe('the catalog page reads every workbook on the parse worker, by what it 
     const parsed = await readCatalogTransferUpload(Buffer.from('entity,sku,channel,accountId,marketplace,aliasKey,locale,field,action,format,value,version\nProducts,GALE-JACKET,,,,,,name,SET,text,Gale,\n'), 'rows.csv', { market: 'IT', mode: 'update' })
     expect(calls.sessions).toBe(0)
     expect(parsed.rows).toHaveLength(1)
+  })
+
+  it('NCF — reads Shopify’s product CSV on the parse worker, by its header, whatever File type was chosen', async () => {
+    await expect(readCatalogTransferUpload(shopifySampleCsv(), 'products_export_1.csv', { format: 'catalog', market: '', mode: 'update' }))
+      .rejects.toThrow('products_export_1.csv is Shopify’s product CSV (3 products, 7 rows)')
+    expect(calls.sessions).toBe(1)
+    expect(calls.reads.map(r => r.filename)).toEqual(['products_export_1.csv'])
+  })
+
+  it('NCF — refuses Shopify’s inventory CSV with the stock sentence, without a worker', async () => {
+    await expect(readCatalogTransferUpload(csvOf(SHOPIFY_INVENTORY_HEADERS, [{ Handle: 'a', SKU: 'b', Location: 'Shop' }]), 'inventory_export_1.csv', { market: 'IT', mode: 'update' }))
+      .rejects.toThrow('inventory_export_1.csv is Shopify’s inventory CSV (quantities by location). Nexus never imports stock from a file')
+    expect(calls.sessions).toBe(0)
   })
 
   it('sends the Amazon attribute sheet to "Map a source file"', async () => {

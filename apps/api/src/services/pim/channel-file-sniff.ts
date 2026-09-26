@@ -21,12 +21,22 @@
  *   nexus-workbook          the Nexus manifest sheet, or only Products / Listings / Overrides (+ helper sheets)
  *   other                   anything else, including a file that is not OOXML at all
  *
+ * NCF (`docs/studies/native-channel-files.md` §3) — `sniffCsv` does the same for a CSV, from its HEADER RECORD only
+ * (read in the file's own dialect, `readCsvDialect`):
+ *   shopify-product-csv     Shopify's product export: Handle (or URL handle) + Title + a variant column + a product column
+ *   shopify-inventory-csv   Shopify's inventory export (quantities by location): refused — stock is never imported
+ *   nexus-csv               the Nexus attribute CSV (sku, field, action)
+ *
  * Strict OOXML (`conformance="strict"`, purl.oclc.org namespaces — GALE IT.xlsx is one) needs nothing special: its
  * elements are unprefixed like the transitional ones. It is reported, because a namespace-bound reader breaks on it.
  */
 import JSZip from 'jszip'
+import { parse } from 'csv-parse/sync'
+import { readCsvDialect } from './catalog-csv-dialect.js'
+import { SHOPIFY_CSV_COLUMNS } from '../channel-mapping/defaults.js'
 
-export type ChannelFileKind = 'amazon-template' | 'amazon-attribute-sheet' | 'ebay-workbook' | 'nexus-workbook' | 'other'
+export type ChannelFileKind = 'amazon-template' | 'amazon-attribute-sheet' | 'ebay-workbook' | 'nexus-workbook'
+  | 'shopify-product-csv' | 'shopify-inventory-csv' | 'nexus-csv' | 'other'
 
 export interface WorkbookSniff {
   kind: ChannelFileKind
@@ -154,6 +164,9 @@ const LABELS: Record<ChannelFileKind, (sheet?: string) => string> = {
   'ebay-workbook': sheet => `an eBay workbook (sheet "${sheet}")`,
   'amazon-attribute-sheet': sheet => `an Amazon attribute sheet (sheet "${sheet}": Seller SKU, Product Type, Operation), not an Amazon template`,
   'nexus-workbook': () => 'a Nexus workbook',
+  'shopify-product-csv': () => 'Shopify’s product CSV (Products → Export)',
+  'shopify-inventory-csv': () => 'Shopify’s inventory CSV (quantities by location)',
+  'nexus-csv': () => 'a Nexus attribute CSV',
   other: () => 'not a recognised channel or Nexus workbook',
 }
 
@@ -220,6 +233,34 @@ export async function sniffWorkbook(bytes: Uint8Array): Promise<WorkbookSniff> {
   const attributes = heads.find(h => holds(h.rows[0], ATTRIBUTE_SHEET_HEADERS))
   if (attributes) return found('amazon-attribute-sheet', attributes.name)
   return found('other')
+}
+
+/** What a CSV is, from its header record alone. `headers` are trimmed, without a byte-order mark. */
+export interface CsvSniff { kind: 'shopify-product-csv' | 'shopify-inventory-csv' | 'nexus-csv' | 'other'; delimiter: string; headers: string[]; label: string }
+
+export function sniffCsv(bytes: Uint8Array): CsvSniff {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const { body, delimiter } = readCsvDialect(buffer)
+  let headers: string[] = []
+  try {
+    // Only the header record: a 200-column header sits well inside 512 KB, and a quoted cell may hold any separator.
+    headers = ((parse(body.subarray(0, 512 * 1024).toString('utf8'), { bom: true, delimiter, relax_column_count: true, relax_quotes: true, skip_empty_lines: true, to: 1 }) as string[][])[0] ?? [])
+      .map(h => h.replace(/^\uFEFF/, '').trim())
+  } catch { /* not a readable CSV header: "other" */ }
+  const set = new Set(headers)
+  const has = (names: readonly string[]) => names.some(n => set.has(n))
+  const id = SHOPIFY_CSV_COLUMNS.identity
+  const found = (kind: CsvSniff['kind']): CsvSniff => ({ kind, delimiter, headers, label: LABELS[kind]() })
+  if (has(id.handle) && has(id.title) && has(id.variant) && has(id.product)) return found('shopify-product-csv')
+  // The inventory export carries Handle + SKU + its location columns, and none of the product file's own columns.
+  if (set.has('Handle') && set.has('SKU') && has(SHOPIFY_CSV_COLUMNS.inventoryHeaders) && !has(id.product)) return found('shopify-inventory-csv')
+  if (['sku', 'field', 'action'].every(h => set.has(h))) return found('nexus-csv')
+  return found('other')
+}
+
+/** NCF — the sentence for Shopify's inventory export: stock has its own ledger and is never read from a file. */
+export function shopifyInventoryDoor(filename: string) {
+  return `${filename} is Shopify’s inventory CSV (quantities by location). Nexus never imports stock from a file: the stock ledger owns it. To import product information, export Products (Shopify admin → Products → Export) and import that file.`
 }
 
 /** The sentence every non-Amazon door answers an Amazon template with (records/2026-09-24-results.md §3, d6). */
