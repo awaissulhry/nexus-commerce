@@ -121,7 +121,7 @@ export default function PublicQuotePage({ params }: { params: Promise<{ token: s
     }
   };
 
-  const wrap: React.CSSProperties = { minHeight: "100dvh", background: "#f4f6f9", display: "grid", placeItems: "start center", padding: "40px 16px", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: "#1c2530" };
+  const wrap: React.CSSProperties = { minHeight: "100dvh", background: "#f4f6f9", display: "grid", placeItems: "start center", padding: "40px 16px", fontFamily: "var(--nds-font-sans)", color: "#1c2530" };
   const card: React.CSSProperties = { width: 560, maxWidth: "100%", background: "#fff", border: "1px solid #e6e9ee", borderRadius: 14, padding: 28, boxShadow: "0 6px 22px rgb(20 28 38 / 0.08)" };
 
   // EPQ.5 — the deposit payment block (post-acceptance; Stripe + bank fallback)

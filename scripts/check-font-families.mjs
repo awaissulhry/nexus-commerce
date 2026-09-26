@@ -45,8 +45,18 @@ export const EXCEPTIONS = {
   'apps/web/src/components/brand-kit/BrandKitReferencePanel.tsx': 'previews the brand kit\'s OWN fonts, chosen by the operator',
   'apps/web/src/app/marketing/templates/_lib/image-templates.ts': 'Cloudinary text-overlay specs for generated images',
   'apps/web/src/app/marketing/content/_components/LocaleOverlayManager.tsx': 'Cloudinary text-overlay specs for generated images',
-  'apps/web/src/app/marketing/reviews/requests/test/preview/page.tsx': 'the review email\'s HTML, previewed in an iframe where the app\'s fonts do not load',
   'apps/factory/src/app/(app)/inbox/_components/MessageBubble.tsx': 'a received email rendered in a sandboxed iframe (CSP blocks font loading): system UI stack, no Arial',
+  'apps/factory/src/lib/financials/render-invoice.ts': 'a PDF drawn by the PDF library with its built-in Helvetica',
+  'apps/factory/src/lib/quotes/render-pdf.ts': 'a PDF drawn by the PDF library with its built-in Helvetica',
+  'apps/factory/src/lib/shipping/': 'shipping labels and manifests drawn by the PDF library with its built-in Helvetica',
+  'apps/web/src/design-system/tokens/css-vars.ts': 'generates the --nds-font-* definitions',
+  'apps/factory/src/design-system/tokens/css-vars.ts': 'Factory copy of the --nds-font-* generator',
+  'apps/factory/src/design-system/tokens/index.d.ts': 'generated type declarations of the font tokens',
+  'apps/factory/src/design-system/tokens/typography.d.ts': 'generated type declarations of the font tokens',
+  'apps/web/src/design-system/catalog/MediaGalleryExample.tsx': 'text inside a synthetic SVG image, where web fonts cannot load',
+  'apps/factory/src/design-system/catalog/MediaGalleryExample.tsx': 'Factory copy of the synthetic SVG image',
+  'apps/web/src/design-system/grid/renderers/bandWidth.ts': 'canvas measurement: a plain family only when --nds-font-mono is absent (canvas cannot read var())',
+  'apps/factory/src/design-system/grid/renderers/bandWidth.ts': 'Factory copy of the canvas measurement',
 }
 
 /* A value is the DS's when it STARTS with a DS token — `var(--nds-font-mono, ui-monospace…)` and `var(--font-mono), …` name
@@ -72,14 +82,28 @@ export function findings(text, file) {
       if (family !== m[1]) push(m.index, family, 'css-font')
     }
   } else {
+    // Comments are prose, not declarations (same length, so line numbers stay true).
+    text = text.replace(/\/\*[\s\S]*?\*\//g, c => c.replace(/[^\n]/g, ' ')).replace(/(^|[^:'"`\w])\/\/[^\n]*/g, (c, lead) => lead + ' '.repeat(c.length - lead.length))
     for (const m of text.matchAll(/fontFamily\s*[:=]\s*(['"`])([^'"`]*)\1/g)) push(m.index, m[2], 'js')
     for (const m of text.matchAll(/fontFamily\s*=\s*\{\s*(['"`])([^'"`]*)\1\s*\}/g)) push(m.index, m[2], 'js')
     for (const m of text.matchAll(/\.style\.fontFamily\s*=\s*(['"`])([^'"`]*)\1/g)) push(m.index, m[2], 'js')
     for (const m of text.matchAll(/font-family\s*:\s*([^;"'`}]+)/g)) push(m.index, m[1], 'inline-css')
+    /* A font LIST kept in a string and used through a variable (`const mono = "ui-monospace, …"; fontFamily: mono`) —
+       the after-sweep found 143 catalog elements rendered this way that the rules above could not see. A string is a
+       font list when it names a font family or a generic one and is nothing else (a comma list of names). */
+    if (LAYOUTS.includes(file)) return dedupe(out)
+    for (const m of text.matchAll(/(['"`])((?:\s*(?:'[^'\n]*'|"[^"\n]*"|[\w -]+)\s*,)*\s*(?:ui-monospace|monospace|sans-serif|serif|system-ui|-apple-system|BlinkMacSystemFont|Arial|Helvetica|Menlo|SFMono-Regular|Consolas|'?Segoe UI'?)\s*(?:,\s*(?:'[^'\n]*'|"[^"\n]*"|[\w -]+)\s*)*)\1/g)) {
+      if (/[<>{}();=]/.test(m[2])) continue
+      push(m.index, m[2], 'js-stack')
+    }
   }
-  // Two regexes can read the same attribute; report each place once.
+  return dedupe(out)
+}
+
+/** Two rules can read the same place; report each place once. */
+function dedupe(list) {
   const seen = new Set()
-  return out.filter(f => { const k = `${f.line}:${f.value}`; if (seen.has(k)) return false; seen.add(k); return true })
+  return list.filter(f => { const k = `${f.line}:${f.value}`; if (seen.has(k)) return false; seen.add(k); return true })
 }
 
 function files(dir) {
@@ -115,6 +139,7 @@ function selfTest() {
     ['a.tsx', '<text fontFamily="Arial, sans-serif">a</text>'],
     ['a.tsx', "style={{ fontFamily: 'monospace' }}"],
     ['a.tsx', "ghost.style.fontFamily = 'system-ui, sans-serif'"],
+    ['a.tsx', "const mono = \"ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace\""],
   ]
   const good = [
     ['a.css', '.x { font-family: var(--nds-font-mono); }'],
@@ -123,6 +148,7 @@ function selfTest() {
     ['a.css', "@font-face { font-family: 'Inter'; src: url(x.woff2); }"],
     ['a.tsx', "style={{ fontFamily: 'var(--font-mono)' }}"],
     ['a.tsx', 'style={{ fontFamily: tokens.fontFamily.mono }}'],
+    ['a.tsx', "const note = 'Pick a serif or a sans-serif face in the brand kit.'"],
   ]
   let failed = 0
   for (const [f, t] of bad) if (findings(t, f).length !== 1) { failed++; console.error(`✗ self-test: missed ${JSON.stringify(t)}`) }

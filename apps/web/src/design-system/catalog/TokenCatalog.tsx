@@ -129,7 +129,7 @@ const ramps: Array<[string, Record<string, string>]> = [
   ['Cyan', palette.cyan],
 ]
 
-const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace"
+const mono = 'var(--nds-font-mono)'
 
 /**
  * A catalog specimen of a grid cell. `ProjectionCell` takes AG's own `ICellRendererParams`, which
