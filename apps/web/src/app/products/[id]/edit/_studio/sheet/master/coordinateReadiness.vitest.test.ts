@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coordinateReadinessColumns } from './useMasterSheetAdapter'
+import { coordinateReadinessColumns } from '../progressColumns'
 
 /**
  * LX.FIN (R-LX-22, design §8 LX.15) — the master sheet's per-coordinate readiness COLUMN SET.

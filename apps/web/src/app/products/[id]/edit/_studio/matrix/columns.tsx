@@ -27,6 +27,7 @@ import { matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, t
 import { buildMasterColumns } from '../sheet/master/columns'
 import type { SheetColumn, StudioRow } from '../sheet/master/types'
 import { VariantIdentity as SharedVariantIdentity } from '../variants/VariantIdentity'
+import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
@@ -81,7 +82,7 @@ function MatrixIdentity(p: ICellRendererParams<StudioRow> & Partial<IdentityPara
       image={d.imageUrl} inherited={d.imageInherited}
       axes={(p.axesRef?.current ?? []).map((axis) => d.axisValues?.[axis.key] ?? '—')}
       suspect={(d as StudioRow & { axisValuesSuspect?: Array<{ reason: string }> }).axisValuesSuspect}
-      pct={d.completeness.overall.pct} menuItems={p.rowMenuRef?.current(d)}
+      menuItems={p.rowMenuRef?.current(d)}
     />
   )
 }
@@ -224,7 +225,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
   }
 
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
-    { groupId: 'grp-product', headerName: 'Product', children: [identity] },
+    /* The "Shared product" progress column sits beside the Product cell, as on the sheet (2026-09-27). */
+    { groupId: 'grp-product', headerName: 'Product', children: [identity, sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
     { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, { ...status, headerName: 'Status', width: 104, minWidth: 104 }] },
   ]
 

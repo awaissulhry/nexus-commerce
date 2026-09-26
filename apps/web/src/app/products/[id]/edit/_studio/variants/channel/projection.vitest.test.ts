@@ -14,9 +14,10 @@ import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import type { ProjectionChild, ProjectionPage, ProjectionParent } from './types'
-import { projectionColumns, type ProjectionCellHost } from './projectionColumns'
-import { axisRank, chipRowIds, matchesSearch, projectionCounts, projectionRows, projectionReadinessPill } from './rows'
+import type { ProjectionChild, ProjectionPage } from './types'
+import { coordinateReadingFor, projectionColumns, type ProjectionCellHost } from './projectionColumns'
+import type { CoordinateReadinessColumn } from '../../sheet/progressColumns'
+import { axisRank, chipRowIds, matchesSearch, projectionCounts, projectionRows } from './rows'
 import { parseProjection } from './source'
 import { planPin } from './pinValue'
 import {
@@ -25,50 +26,50 @@ import {
 } from './copy'
 import type { ProjectionVocabulary } from './types'
 
-describe('channel projection required-field progress', () => {
-  it('renders the required ratio in the actual identity column, bar and accessible label', () => {
+describe('channel projection progress column (2026-09-27)', () => {
+  const reading = (productId: string): CoordinateReadinessColumn => ({
+    colId: 'ready:EBAY:IT:it', label: 'eBay · IT', language: 'it', computedAt: null, channel: 'EBAY', market: 'IT', accountId: null, aliasId: null,
+    byProduct: { [productId]: { state: 'ready', pct: 100, required: { filled: 3, total: 3 }, optional: { filled: 1, total: 2 }, computedAt: null } },
+    missingByProduct: {}, optionalByProduct: { [productId]: [{ field: 'colour', label: 'Colour' }] },
+  })
+  const hostFor = (page: ProjectionPage, readiness: CoordinateReadinessColumn | null): ProjectionCellHost => ({ get: () => ({ page, pending: new Set(), pinning: new Set(),
+    rowMenu: () => [], onValueChange: () => {}, onIncludedChange: () => {}, onPinToggle: () => {}, readiness, locale: 'it' }) })
+
+  it('the Product cell draws no bar; the progress column beside it reads this coordinate from the index', () => {
     const page = projectionFixture()
-    const child = { ...page.children[0], completeness: { pct: 26, filled: 64, total: 247 },
-      readiness: { requiredPct: 100, state: 'live' } }
-    const host: ProjectionCellHost = { get: () => ({ page, pending: new Set(), pinning: new Set(),
-      rowMenu: () => [], onValueChange: () => {}, onIncludedChange: () => {}, onPinToggle: () => {} }) }
-    const group = projectionColumns(host, page)[0]
-    if (!('children' in group)) throw new Error('Product identity group is missing')
-    const column = group.children[0]
-    if (!('cellRenderer' in column)) throw new Error('Product identity renderer is missing')
-    const html = renderToStaticMarkup(createElement(column.cellRenderer, {
-      ...column.cellRendererParams, data: { rowId: child.id, kind: 'variant', parent: null, child },
-    }))
-    expect(html).toContain('>100%</span>')
-    expect(html).toContain('style="width:100%"')
-    expect(html).toContain(`aria-label="${child.sku} — 100% of required channel fields filled · Listed"`)
-    expect(html).not.toContain('26%')
+    const child = { ...page.children[0], readiness: { requiredPct: 100, state: 'live' } }
+    const group = projectionColumns(hostFor(page, reading(child.id)), page)[0]
+    if (!('children' in group)) throw new Error('Product group is missing')
+    const [identity, progress] = group.children
+    if (!('cellRenderer' in identity) || !('valueGetter' in progress)) throw new Error('Product group columns are missing')
+    const html = renderToStaticMarkup(createElement(identity.cellRenderer, { ...identity.cellRendererParams, data: { rowId: child.id, kind: 'variant', parent: null, child } }))
+    expect(html).not.toContain('nds-readypill')
+    expect(html).not.toContain('nds-progress')
+    expect(progress.colId).toBe('progress:scope')
+    expect(progress.headerName).toBe(page.coordinate.label)
+    const getter = progress.valueGetter as (p: { data: unknown }) => { pct: number | null; requiredEmpty: unknown[]; optionalEmpty: unknown[] | null } | null
+    // 3 of 3 required + 1 of 2 optional = 4 of 5 → 80 %, one optional field empty.
+    expect(getter({ data: { rowId: child.id, kind: 'variant', parent: null, child } })).toMatchObject({ pct: 80, requiredEmpty: [], optionalEmpty: [{ field: 'colour', label: 'Colour' }] })
   })
 
-  it('uses the measured required ratio for both parent and child, preserving listing state', () => {
+  it('a row with no index reading is NOT COMPUTED (null), never 0 %', () => {
     const page = projectionFixture()
-    const parent: ProjectionParent = { id: 'parent', sku: 'GALE-JACKET', name: null, image: null,
-      listings: 1, listing: { state: 'listed', externalId: 'PARENT-ASIN' } }
-    for (const row of [parent, page.children[0]]) {
-      expect(projectionReadinessPill({ ...row, completeness: { pct: 26, filled: 64, total: 247 },
-        readiness: { requiredPct: 100, state: 'errors' } })).toEqual({
-        pct: 100, state: 'errors', tip: `${row.sku} — 100% of required channel fields filled · Errors`,
-      })
-    }
+    const group = projectionColumns(hostFor(page, null), page)[0]
+    if (!('children' in group)) throw new Error('Product group is missing')
+    const getter = (group.children[1] as { valueGetter: (p: { data: unknown }) => unknown }).valueGetter
+    expect(getter({ data: { rowId: page.children[0].id, kind: 'variant', parent: null, child: page.children[0] } })).toBeNull()
   })
 
-  it('retains partial and zero scores without borrowing overall coverage', () => {
-    for (const pct of [97, 0]) expect(projectionReadinessPill({ ...projectionFixture().children[0],
-      completeness: { pct: 100, filled: 247, total: 247 }, readiness: { requiredPct: pct, state: 'missing' },
-    }).pct).toBe(pct)
-  })
-
-  it('relays the server reason for an unscorable contract, with no overall fallback', () => {
-    const child = { ...projectionFixture().children[0], completeness: { pct: 100, filled: 4, total: 4 } }
-    expect(projectionReadinessPill({ ...child, readiness: { requiredPct: null, state: 'errors', note: 'Category metadata is incomplete: OUTERWEAR' } })).toEqual({
-      pct: null, state: 'errors', tip: `${child.sku} — Category metadata is incomplete: OUTERWEAR`,
-    })
-    expect(projectionReadinessPill({ ...child, readiness: null }).pct).toBeNull()
+  it('coordinateReadingFor picks this coordinate — channel, market, account, and the primary alias as null', () => {
+    const columns = [
+      { ...reading('p'), channel: 'EBAY', market: 'IT', accountId: 'acc1', aliasId: null },
+      { ...reading('p'), channel: 'EBAY', market: 'IT', accountId: 'acc2', aliasId: null },
+      { ...reading('p'), channel: 'EBAY', market: 'IT', accountId: 'acc1', aliasId: 'al2' },
+    ]
+    expect(coordinateReadingFor(columns, { channel: 'EBAY', market: 'IT', accountId: 'acc1', aliasKey: '' })).toBe(columns[0])
+    expect(coordinateReadingFor(columns, { channel: 'EBAY', market: 'IT', accountId: 'acc1', aliasKey: 'primary' })).toBe(columns[0])
+    expect(coordinateReadingFor(columns, { channel: 'EBAY', market: 'IT', accountId: 'acc1', aliasKey: 'al2' })).toBe(columns[2])
+    expect(coordinateReadingFor(columns, { channel: 'AMAZON', market: 'IT', accountId: 'acc1', aliasKey: '' })).toBeNull()
   })
 })
 

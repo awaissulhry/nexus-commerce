@@ -77,6 +77,7 @@ import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChips } from './chips'
 import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
+import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
 import { MatrixBanner } from './MatrixBanner'
@@ -401,7 +402,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const applyVisible = useCallback((keys: readonly string[]) => {
     const api = getGridApi()
     if (!api) return
-    const want = new Set([IDENTITY_COL, ...keys])
+    /* The progress column is kept like the Product cell: every saved view and preset predates it, and a view that
+       could not have listed it must not hide it (the sheet's structural-column rule, views.ts). */
+    const want = new Set([IDENTITY_COL, SCOPE_PROGRESS_COLUMN, ...keys])
     api.applyColumnState({ state: allColIds.map((colId) => ({ colId, hide: !want.has(colId) })) })
   }, [getGridApi, allColIds])
   const applyPreset = useCallback((preset: GridViewPreset) => { applyVisible(preset.columns); setActivePresetId(preset.id); views.markActive(null) }, [applyVisible]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -437,6 +440,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => {
     const out: PreferencesColumnSpec[] = [
       { key: IDENTITY_COL, label: 'Product', locked: true, group: 'Product' },
+      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Product' },
       { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared' },
       { key: STOCK_COL, label: 'Stock', group: 'Shared' },
       { key: STATUS_COL, label: 'Status', group: 'Shared' },

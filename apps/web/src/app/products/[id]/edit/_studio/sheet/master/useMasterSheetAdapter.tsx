@@ -21,11 +21,10 @@ import { Button, InfoTip, Pill } from '@/design-system/primitives';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
 import { FormulaBulkDialog } from '../FormulaBulkDialog';
 import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
-import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions, type ScopeReadinessState } from '@/design-system/grid';
+import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
-import type { DetailEntry } from './readinessDetail';
-import { SCOPE_PROGRESS_COLUMN, coordinateProgressValue, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
+import { SCOPE_PROGRESS_COLUMN, SHARED_PROGRESS_TIP, coordinateProgressValue, coordinateReadinessColumns, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
 import { useStudioScope, useSaveReporter, useStudioRecord, useScopeReadiness, useViewChips, viewChipHasCell } from '../../contracts';
 import { type RecordWriteRequest, type RecordWriteResult, type SheetRow as DrawerSheetRow } from '../../drawer';
 import { AiDraftReview, useAiDraftLayer } from '../../ai';
@@ -54,82 +53,8 @@ import { useLanguageChips } from '../useLanguageChips';
 import { useSheetColumns } from '../useSheetColumns';
 import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
 import type { SheetExportMode } from '../sheetExport';
-/**
- * LX.FIN (R-LX-22) — the master sheet's per-coordinate readiness COLUMN SET, derived from the
- * readiness index and nothing else. Pure, exported and tested node-only (apps/web vitest has no DOM).
- *
- * 🔴 What this replaces, and why the replacement is not a refactor. Until now the per-coordinate
- * columns were built from `sheet.coordinates` + `row.readinessByCoordinate`, in the ROW vocabulary,
- * and measured on 2026-09-13 the live studio payload carries NEITHER key: the branch only ever ran on
- * the retired `adaptLegacySheet` 404 fallback. LX.15 says these columns are "either fed from
- * `ReadinessIndex` or deleted — not left dead"; R-LX-22 rules that they are fed, in the SCOPE
- * vocabulary (`readinessMeta(state, 'scope')`), because a coordinate's readiness is a scope fact.
- * No converter between the two vocabularies exists or is needed (PES.0 hub ruling #3): the index is
- * keyed `(productId, coordinateKey, language)`, so a per-row cell is a LOOKUP, not a mapping.
- *
- * One column per CHANNEL coordinate the index has rows for **in the pressed language** — the shared
- * coordinate is excluded because the sheet's own `ready:scope` column already answers for it, in the
- * row vocabulary. A product with no row for a coordinate is absent from `byProduct` and its cell says
- * `Not computed`, never a score (R-LX-9).
- */
-export interface CoordinateReadinessColumn {
-  colId: string
-  label: string
-  language: string
-  computedAt: string | null
-  byProduct: Readonly<Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null }>>
-  /** A-45 — each product's OWN entries (issues + flagged required-empty fields), for its completeness card. */
-  missingByProduct: Readonly<Record<string, DetailEntry[]>>
-  /** Progress columns (2026-09-26) — each product's EMPTY optional fields, when its optional side is recorded. */
-  optionalByProduct: Readonly<Record<string, Array<{ field: string; label: string }>>>
-  channel: string | null
-  market: string | null
-  accountId: string | null
-  aliasId: string | null
-}
-
-export function coordinateReadinessColumns(
-  matrix: ReadonlyArray<{ channel: string | null; market: string | null; accountId: string | null; aliasId: string | null; coordinateKey: string; language: string; label: string; computedAt: string | null; byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string; required?: { filled: number; total: number }; optional?: { filled: number; total: number } | null; computedAt?: string | null }>; missing?: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }>; optionalMissing?: ReadonlyArray<{ productId: string; field: string; label: string }> }> | undefined,
-  language: string | null | undefined,
-): CoordinateReadinessColumn[] {
-  if (!matrix?.length || !language) return []
-  const wanted = language.toLowerCase()
-  return matrix
-    .filter(entry => !!entry.channel && entry.language?.toLowerCase() === wanted)
-    .map(entry => ({
-      colId: `ready:${[entry.channel, entry.market, entry.accountId, entry.aliasId].filter(Boolean).join(':')}:${entry.language}`,
-      label: entry.label,
-      language: entry.language,
-      computedAt: entry.computedAt,
-      byProduct: entry.byProduct ?? {},
-      missingByProduct: groupMissingByProduct(entry.missing),
-      optionalByProduct: groupOptionalByProduct(entry.optionalMissing),
-      channel: entry.channel,
-      market: entry.market,
-      accountId: entry.accountId,
-      aliasId: entry.aliasId,
-    }))
-}
-
-/** Progress columns — a coordinate's empty optional fields split by product, like `missing[]` below. */
-function groupOptionalByProduct(missing: ReadonlyArray<{ productId: string; field: string; label: string }> | undefined): Record<string, Array<{ field: string; label: string }>> {
-  const out: Record<string, Array<{ field: string; label: string }>> = {}
-  for (const m of missing ?? []) (out[m.productId] ??= []).push({ field: m.field, label: m.label })
-  return out
-}
-
-/** A-45 — a coordinate's `missing[]` split by product, so a row's card never shows a sibling's fields. */
-function groupMissingByProduct(missing: ReadonlyArray<{ productId: string; field: string; label: string; reason: string; kind?: string; requiredEmpty?: true }> | undefined): Record<string, DetailEntry[]> {
-  const out: Record<string, DetailEntry[]> = {}
-  for (const m of missing ?? []) {
-    ;(out[m.productId] ??= []).push({ field: m.field, label: m.label, reason: m.reason, ...(m.kind ? { kind: m.kind } : {}), ...(m.requiredEmpty ? { requiredEmpty: true as const } : {}) })
-  }
-  return out
-}
-
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 const progressKeyOf = (readyColId: string) => `progress:${readyColId.slice('ready:'.length)}`;
-const SHARED_PROGRESS_TIP = 'Progress of the shared product: filled ÷ every field that applies here, required and optional. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Hover or click a bar to see what is missing. Completeness, not publish readiness.';
 const marketProgressTip = (label: string, language: string, computedAt: string | null) =>
     `Progress on ${label} in ${language}: filled ÷ every field ${label} applies, required and optional, from the readiness index${computedAt ? ` (computed ${new Date(computedAt).toLocaleString()})` : ''}. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`;
 

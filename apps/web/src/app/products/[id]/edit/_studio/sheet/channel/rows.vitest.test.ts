@@ -13,7 +13,7 @@ import * as rowsModule from './rows'
    (reference_test_scoping_and_hidden_assertions). `readiness.ts` is plain TS. */
 import { readyPillTone } from '@/design-system/grid/renderers/readiness'
 import {
-  rowReadinessPill,
+  rowProgressUnscorable,
   affordanceOf,
   isCellEditable,
   isOperatorEdit,
@@ -352,55 +352,31 @@ describe('filtered rows keep the affected listing visible', () => {
   })
 })
 
-// Q-LX6-1: a missing contract cannot inherit 100% from four structural columns.
-it('keeps every row unscorable when the server alias percentage is null', () => {
+// Q-LX6-1: a missing contract cannot inherit 100% from four structural columns. The progress column (2026-09-26) keeps
+// the rule the readiness pill had: an unscorable listing withholds the percentage and says why.
+it('keeps every row unscorable when the server alias percentage is null, and names why', () => {
   const child = row(null, 'GALE-BLACK-M', 'variant')
   child.completeness.overall = { filled: 4, total: 4, pct: 100 }
   child.completeness.required = { filled: 4, total: 4, missing: [] }
   child.readiness = { state: 'errors', issues: [{ key: 'productType', label: 'Channel requirements', severity: 'error', message: 'OUTERWEAR requirements on Amazon · BE are unavailable.' }] }
   const unscorable = alias(null, 0)
   unscorable.readiness.percent = null
-  expect(rowReadinessPill(child, unscorable)).toEqual({ pct: null, state: 'errors', tip: 'GALE-BLACK-M — OUTERWEAR requirements on Amazon · BE are unavailable.' })
-  expect(rowReadinessPill(child, alias(null, 0)).pct).toBe(100)
+  expect(rowProgressUnscorable(child, unscorable)).toBe('OUTERWEAR requirements on Amazon · BE are unavailable.')
+  expect(rowProgressUnscorable(child, alias(null, 0))).toBeNull()
 })
 
-describe('channel progress measures required fields for each variant', () => {
-  it('reports 100% for the production GALE shape: 31/31 required, 64/247 overall', () => {
-    const child = row(null, 'GALE-JACKET-BLACK-MEN-3XL', 'variant')
-    child.completeness.overall = { filled: 64, total: 247, pct: 26 }
-    child.completeness.required = { filled: 31, total: 31, missing: [] }
-    child.readiness.state = 'live'
-    expect(rowReadinessPill(child, alias(null, 0))).toEqual({
-      pct: 100, state: 'live',
-      tip: 'GALE-JACKET-BLACK-MEN-3XL — 31 of 31 required channel fields filled · Listed',
-    })
-  })
-
-  it('uses the refreshed row count, independent of optional coverage and the alias average', () => {
+describe('rowProgressUnscorable — when a channel row cannot be scored', () => {
+  it('is scorable with required fields and a reported listing percentage, even at 0', () => {
     const child = row('a1', 'GALE-BLACK-M', 'variant')
-    child.completeness.overall = { filled: 64, total: 247, pct: 26 }
-    child.completeness.required = { filled: 30, total: 31, missing: [{ key: 'brand', label: 'Brand' }] }
-    const listing = alias('a1', 1)
-    expect(rowReadinessPill(child, listing).pct).toBe(97)
-    const saved = { ...child, completeness: { ...child.completeness, required: { filled: 31, total: 31, missing: [] } } }
-    expect(rowReadinessPill(saved, listing).pct).toBe(100)
-    child.completeness.required.filled = 0
-    expect(rowReadinessPill(child, listing).pct).toBe(0)
+    child.completeness.required = { filled: 0, total: 31, missing: [] }
+    expect(rowProgressUnscorable(child, alias('a1', 1))).toBeNull()
   })
 
-  it('preserves an error state when required fields are filled but validation fails', () => {
-    const child = row(null, 'GALE-BLACK-M', 'variant')
-    child.completeness.required = { filled: 31, total: 31, missing: [] }
-    child.readiness.state = 'errors'
-    expect(rowReadinessPill(child, alias(null, 0))).toMatchObject({ pct: 100, state: 'errors' })
-  })
-
-  it('does not borrow a score from the alias when the row has no required fields', () => {
+  it('does not borrow a score when the row has no required fields, or when the listing is unknown', () => {
     const child = row(null, 'GALE-BLACK-M', 'variant')
     child.completeness.overall = { filled: 4, total: 4, pct: 100 }
-    expect(rowReadinessPill(child, alias(null, 0))).toMatchObject({
-      pct: null, tip: 'GALE-BLACK-M — No required attributes are defined for this row.',
-    })
-    expect(rowReadinessPill(child, undefined).pct).toBeNull()
+    expect(rowProgressUnscorable(child, alias(null, 0))).toBe('No required attributes are defined for this row.')
+    child.completeness.required = { filled: 4, total: 31, missing: [] }
+    expect(rowProgressUnscorable(child, undefined)).toBe('Readiness cannot be scored until this coordinate’s requirements are available.')
   })
 })

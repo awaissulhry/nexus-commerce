@@ -33,6 +33,7 @@ import {
 import type { MenuItemDef } from '@/design-system/components'
 
 import { buildMasterColumns } from '../../sheet/master/columns'
+import { sharedProgressColumn } from '../../sheet/progressColumns'
 import type { CellSaveTracker } from '@/design-system/grid'
 import type { SheetColumn, StudioRow } from '../../sheet/master/types'
 
@@ -104,7 +105,7 @@ function VariantIdentity(p: ICellRendererParams<StudioRow> & Partial<IdentityPar
   return <SharedVariantIdentity sku={d.sku} isParent={d.isParent} parentId={d.parentId} childCount={d.childCount}
     image={d.imageUrl} inherited={d.imageInherited} axes={(p.axesRef?.current ?? []).map(axis => d.axisValues?.[axis.key] ?? '—')}
     suspect={(d as StudioRow & { axisValuesSuspect?: Array<{ reason: string }> }).axisValuesSuspect}
-    pct={d.completeness.overall.pct} menuItems={p.rowMenuRef?.current(d)} />
+    menuItems={p.rowMenuRef?.current(d)} />
 }
 
 /* ── the projection cell ──────────────────────────────────────────────────────────────────── */
@@ -266,7 +267,8 @@ export function buildVariantColumns(opts: BuildVariantColumnsOptions): (ColDef<S
    * carries the same finding). Nothing here needs it — every column is `suppressMovable`.
    */
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
-    { groupId: 'grp-product', headerName: 'Product', children: [identity] },
+    /* The "Shared product" progress column sits beside the Product cell, as on the sheet (2026-09-27). */
+    { groupId: 'grp-product', headerName: 'Product', children: [identity, sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
   ]
   if (axisColumns.length > 0) groups.push({ groupId: 'grp-axes', headerName: 'Axes', children: axisColumns })
   if (projectionColumns.length > 0) groups.push({ groupId: 'grp-projections', headerName: 'Channel projections', children: projectionColumns })

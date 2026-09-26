@@ -16,7 +16,8 @@ import {
   columnStateToPrefs, gridGeometry, gridSelection, prefsToColumnState, useGridLifetime, type GridApi,
 } from '@/design-system/grid'
 
-import { useRegisterViewChip, useStudioProduct, useStudioScope, useViewChips, type ViewChip } from '../../contracts'
+import { useRegisterViewChip, useScopeReadiness, useStudioProduct, useStudioScope, useViewChips, type ViewChip } from '../../contracts'
+import { SCOPE_PROGRESS_COLUMN, coordinateReadinessColumns } from '../../sheet/progressColumns'
 import { MappingBand } from './MappingBand'
 import { MappingDock } from './MappingDock'
 import { ProjectionPreflight } from './ProjectionPreflight'
@@ -25,7 +26,7 @@ import { CHIP_LABELS } from './copy'
 import { commitPin, planPin } from './pinValue'
 import { liveSource } from './source'
 import { chipCells, chipRowIds, matchesSearch, projectionCounts, projectionRows, projectionActionRow, type ProjectionRow } from './rows'
-import { columnSignature, projectionColumns, type ProjectionCellContext, type ProjectionCellHost } from './projectionColumns'
+import { columnSignature, projectionColumns, type ProjectionCellContext, type ProjectionCellHost, coordinateReadingFor } from './projectionColumns'
 import { useProjection } from './useProjection'
 import type { ProjectionPage, ProjectionSource } from './types'
 
@@ -194,8 +195,14 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
    * forbids. So the live values go in a ref that render keeps current, the host is `useMemo(…, [])`,
    * and `columnSignature` decides when the columns genuinely differ.
    */
+  /* The progress column (2026-09-27): this coordinate's readiness-index reading, from the read the scope chips already
+     make — the same numbers as the Information sheet's market column. */
+  const readinessQuery = useScopeReadiness()
+  const readinessMatrix = readinessQuery.status === 'ready' ? readinessQuery.matrix : undefined
+  const readiness = useMemo(() => (page ? coordinateReadingFor(coordinateReadinessColumns(readinessMatrix, currentScope.locale), page.coordinate) : null),
+    [page, readinessMatrix, currentScope.locale])
   const live = useRef<ProjectionCellContext | null>(null)
-  live.current = page ? { page, pending: state.pending, pinning, rowMenu: rowActions.menu, onValueChange, onIncludedChange: state.setIncluded, onPinToggle } : null
+  live.current = page ? { page, pending: state.pending, pinning, rowMenu: rowActions.menu, onValueChange, onIncludedChange: state.setIncluded, onPinToggle, readiness, locale: currentScope.locale ?? null } : null
   const host = useMemo<ProjectionCellHost>(() => ({ get: () => live.current! }), [])
 
   const signature = columnSignature(page)
@@ -224,7 +231,7 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
 
   // These renderers also show facts that are not their scalar cell value: inclusion, source,
   // completeness and pending writes. Repaint after those facts change without rebuilding columns.
-  useEffect(() => { getApi()?.refreshCells({ force: true }) }, [getApi, gridApi, page, state.pending, pinning])
+  useEffect(() => { getApi()?.refreshCells({ force: true }) }, [getApi, gridApi, page, state.pending, pinning, readiness])
 
   /* The ONE Customise dialog — the DS `PreferencesModal`, the same component the sheets open, never
      a page-local fork (reference_customize_dialog_is_ds_preferences_modal). This page has a fixed
@@ -386,6 +393,7 @@ function preferenceColumns(page: ProjectionPage): PreferencesColumnSpec[] {
   const mapped = [...page.mapping].filter(m => m.target !== null).sort((a, b) => a.order - b.order)
   return [
     { key: '__identity', label: 'Product', locked: true },
+    { key: SCOPE_PROGRESS_COLUMN, label: `${page.coordinate.label} (progress)` },
     { key: '__included', label: 'Included' },
     ...mapped.map(m => ({ key: `axis:${m.axisKey}`, label: m.target ?? m.axisLabel })),
     { key: '__listing', label: 'Listing' },

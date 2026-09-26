@@ -70,6 +70,7 @@ import type { StudioRow } from '../../sheet/master/types'
 
 import { axisSummary, combinationCoverage, orderByAxisValues, type AxisSummary } from './coverage'
 import { axisColumnsFor, buildVariantColumns, identityLine, IDENTITY_COL } from './columns'
+import { SCOPE_PROGRESS_COLUMN } from '../../sheet/progressColumns'
 import { excludedSomewhere, mergeAxisValues } from './projections'
 import { liveSource } from '../channel/source'
 import { FamilyBand } from './FamilyBand'
@@ -451,6 +452,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(
     () => [
       { key: IDENTITY_COL, label: 'Product', locked: true, group: 'Product' },
+      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Product' },
       ...axisColumns.map((column, i) => ({ key: column.key, label: axes[i]?.label ?? column.label, group: 'Axes' })),
       ...projections.channels.map(c => ({ key: `proj:${c.key}`, label: c.label, group: 'Channel projections' })),
     ],
