@@ -149,6 +149,10 @@
     "./content-language": {
       "types": "./dist/content-language.d.ts",
       "import": "./dist/content-language.js"
+    },
+    "./channel-mapping": {
+      "types": "./dist/channel-mapping.d.ts",
+      "default": "./dist/channel-mapping.js"
     }
   },
   "scripts": {

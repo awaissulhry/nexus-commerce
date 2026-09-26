@@ -6234,6 +6234,51 @@
       "fields": []
     },
     {
+      "name": "ChannelMappingSet",
+      "fields": [
+        {
+          "name": "fields",
+          "kind": "object",
+          "type": "ChannelMappingField",
+          "relationFromFields": []
+        },
+        {
+          "name": "uses",
+          "kind": "object",
+          "type": "ChannelMappingUse",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "ChannelMappingField",
+      "fields": [
+        {
+          "name": "set",
+          "kind": "object",
+          "type": "ChannelMappingSet",
+          "relationFromFields": [
+            "setId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ChannelMappingUse",
+      "fields": [
+        {
+          "name": "set",
+          "kind": "object",
+          "type": "ChannelMappingSet",
+          "relationFromFields": [
+            "setId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
       "name": "AmazonFamilyWorkbook",
       "fields": []
     },

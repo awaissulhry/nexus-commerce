@@ -17,6 +17,7 @@ import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
+import { foldName, pushExclusionsCache } from '../channel-mapping/push.js'
 export { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
 
 export interface EbayPublication {
@@ -120,6 +121,7 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   const identities: Array<{ productId: string; sku: string }> = []
   const galleries = new Map<string, string[]>()
   let settings: Record<string, any> = {}
+  const exclusionsFor = pushExclusionsCache()
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     if (listing?.fulfillmentMethod === 'FBA') throw new Error('This eBay listing uses Amazon fulfillment. Its fulfillment publication workflow is required.')
@@ -136,6 +138,13 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
       if (!cell || cell.value === undefined || !field.channelStore) continue
       if (field.channelStore.kind === 'platformAttributes') setPath(effective.platformAttributes, field.channelStore.path, cell.value)
       else effective[field.channelStore.column] = cell.value
+    }
+    // CHMAP M4 — item specifics the Owner chose not to send in the ACTIVE mapping version (a live listing keeps eBay's value).
+    const excluded = await exclusionsFor('EBAY', scope.marketplace, category)
+    if (excluded.fieldKeys.size || excluded.specifics.size) {
+      const names = new Set([...excluded.specifics, ...spec.fields.filter(f => excluded.fieldKeys.has(f.key) && f.channelStore?.kind === 'platformAttributes' && f.channelStore.path[0] === 'itemSpecifics')
+        .map(f => foldName((f.channelStore as { path: string[] }).path[1]))])
+      effective.platformAttributes.itemSpecifics = Object.fromEntries(Object.entries(object(effective.platformAttributes.itemSpecifics)).filter(([name]) => !names.has(foldName(name))))
     }
     const pa = effective.platformAttributes
     // These saved fields require transport support; silently omitting them would publish a different product.

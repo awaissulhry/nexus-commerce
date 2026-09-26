@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn() }))
+const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn(), sets: vi.fn(async (): Promise<unknown[]> => []), mapFields: vi.fn(async (): Promise<unknown[]> => []) }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
 // Shared stock — publication reads the product's ledger (loadSyncLedgers): nothing is pooled here.
-vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, $queryRaw: async () => [] } }))
+// CHMAP M4: the builders read the ACTIVE mapping version; none here, so the push is exactly today's.
+vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) }, $queryRaw: async () => [] } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {
@@ -299,6 +300,87 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('add a product image')
   facts.listings[0].offers = []
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
+})
+
+const mappingRow = (channelKey: string, targetKind: string, targetKey: string, extra: Record<string, unknown> = {}) => ({ id: channelKey, setId: 'set-1', channelKey, columnKey: channelKey, label: null, aliases: [], productTypes: [],
+  requirement: 'optional', templateRequirement: null, targetKind, targetKey, transform: [], direction: 'both', state: 'mapped', reason: null, decidedBy: 'rule', sortOrder: 0, ...extra })
+
+it('CHMAP M4: a field the Owner ignored in the ACTIVE mapping version is left out of the Amazon payload, never cleared', async () => {
+  m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    team_name: { type: 'array', items: { properties: { value: { type: 'string' } } } }, color: { type: 'array', items: { properties: { value: { type: 'string' } } } },
+  } } }))
+  const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+    listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { team_name: { value: 'Giacca', errors: [] }, color: { value: 'Nero', errors: [] } } }],
+      catalogue: { schema: { present: true }, fields: [{ fieldKey: 'team_name' }, { fieldKey: 'color' }] } }] }
+  // Control: no ACTIVE version — both are sent, as today.
+  const today = JSON.stringify((await prepareAmazonPublication(facts)).feed.messages[0])
+  expect(today).toContain('team_name'); expect(today).toContain('Nero')
+  // The Owner ignored the team_name column: the field is not sent, and no delete is prepared for it.
+  m.sets.mockResolvedValue([{ id: 'set-1', version: 2, formKey: 'COAT+PANTS', marketplace: 'IT' }])
+  m.mapFields.mockResolvedValue([mappingRow('team_name#1.value', 'channelField', 'team_name', { state: 'ignored', decidedBy: 'owner', reason: 'Amazon workaround' }), mappingRow('color#1.value', 'channelField', 'color')])
+  const message = (await prepareAmazonPublication(facts)).feed.messages[0]
+  expect(JSON.stringify(message)).not.toContain('team_name')
+  expect(JSON.stringify(message)).toContain('Nero')
+  expect((message as any).patches?.some((p: any) => p.op === 'delete') ?? false).toBe(false)
+  // A saved listing fact the price builder serializes (RRP) follows the same decision.
+  m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    team_name: { type: 'array', items: { properties: { value: { type: 'string' } } } }, color: { type: 'array', items: { properties: { value: { type: 'string' } } } },
+    list_price: { type: 'array', selectors: ['marketplace_id', 'currency'], items: { properties: { value_with_tax: { type: 'number' }, currency: { const: 'EUR' }, marketplace_id: { const: 'MARKET' } } } },
+  } } }))
+  facts.resolved[0].products[0].cells.list_price = { value: 128.1, errors: [] }
+  facts.resolved[0].catalogue.fields.push({ fieldKey: 'list_price', sourceOwner: { label: 'Pricing' } })
+  m.mapFields.mockResolvedValue([mappingRow('list_price#1.value_with_tax', 'channelField', 'list_price', { state: 'managed', decidedBy: 'owner', reason: 'prices are managed elsewhere' })])
+  expect(JSON.stringify((await prepareAmazonPublication(facts)).feed.messages[0])).not.toContain('128.1')
+  m.mapFields.mockResolvedValue([])
+  expect(JSON.stringify((await prepareAmazonPublication(facts)).feed.messages[0])).toContain('128.1')
+  // A version on another market or product type changes nothing here.
+  m.sets.mockResolvedValue([{ id: 'set-1', version: 2, formKey: 'PANTS', marketplace: 'IT' }])
+  expect(JSON.stringify((await prepareAmazonPublication(facts)).feed.messages[0])).toContain('team_name')
+  m.sets.mockResolvedValue([]); m.mapFields.mockResolvedValue([])
+})
+
+it('CHMAP M4: Amazon takes an attribute whole — one ignored part keeps the whole attribute; every ignored column of it leaves it out', async () => {
+  const text = { type: 'array', items: { type: 'object', properties: { value: { type: 'string' } } } }
+  m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    sleeve: { type: 'array', selectors: ['marketplace_id'], items: { type: 'object', properties: { marketplace_id: { const: 'MARKET' }, type: text, length_description: text } } },
+    team_name: text,
+  } } }))
+  const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: {},
+    listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: 'FBM' }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: { sleeve__type: { value: 'Raglan', errors: [] }, sleeve__length_description: { value: 'Manica lunga', errors: [] }, team_name: { value: 'Giacca', errors: [] } } }],
+      catalogue: { schema: { present: true }, fields: [{ fieldKey: 'sleeve__type' }, { fieldKey: 'sleeve__length_description' }, { fieldKey: 'team_name' }] } }] }
+  const send = async () => (await prepareAmazonPublication(facts)).feed.messages[0] as any
+  const today = await send()
+  expect(JSON.stringify(today.attributes.sleeve)).toContain('Raglan'); expect(JSON.stringify(today.attributes.sleeve)).toContain('Manica lunga')
+  m.sets.mockResolvedValue([{ id: 'set-1', version: 2, formKey: 'COAT', marketplace: 'IT' }])
+  // One part ignored, the other still sent: a replace of `sleeve` without that part would clear it on Amazon, so the payload is today's.
+  m.mapFields.mockResolvedValue([mappingRow('sleeve#1.type#1.value', 'channelField', 'sleeve__type'),
+    mappingRow('sleeve#1.length_description#1.value', 'channelField', 'sleeve__length_description', { state: 'ignored', decidedBy: 'owner', reason: 'not ours' })])
+  expect(await send()).toEqual(today)
+  // Every column of the version that carries `sleeve` ignored (it has no column for the other part): no `sleeve`, no delete.
+  m.mapFields.mockResolvedValue([mappingRow('sleeve#1.type#1.value', 'channelField', 'sleeve__type', { state: 'ignored', decidedBy: 'owner', reason: 'not ours' })])
+  const without = await send()
+  expect(JSON.stringify(without)).not.toContain('sleeve'); expect(JSON.stringify(without)).toContain('Giacca')
+  // The content resolver's own attributes follow the same decision.
+  m.mapFields.mockResolvedValue([mappingRow('item_name#1.value', 'channelField', 'item_name', { state: 'ignored', decidedBy: 'owner', reason: 'titles are written on Amazon' })])
+  expect(JSON.stringify(await send())).not.toContain('Saved localized title')
+  // A cleared field makes the message a PATCH, and the content goes as patches: the ignored title is not among them.
+  const cells = facts.resolved[0].products[0].cells
+  const kept = { ...cells }
+  Object.assign(cells, { sleeve__type: { value: null, provenance: 'override', errors: [] }, sleeve__length_description: { value: null, provenance: 'override', errors: [] } })
+  const patch = await send()
+  expect(patch.operationType).toBe('PATCH'); expect(patch.patches).toContainEqual(expect.objectContaining({ op: 'delete', path: '/attributes/sleeve' }))
+  expect(JSON.stringify(patch)).toContain('Giacca'); expect(JSON.stringify(patch)).not.toContain('Saved localized title')
+  Object.assign(cells, kept)
+  m.mapFields.mockResolvedValue([mappingRow('sleeve#1.type#1.value', 'channelField', 'sleeve__type', { state: 'ignored', decidedBy: 'owner', reason: 'not ours' })])
+  // A field the push leaves out cannot stop the publish with its own errors.
+  facts.resolved[0].products[0].cells.sleeve__type = { value: 'Raglan', errors: ['Not an Amazon value'] }
+  await expect(send()).resolves.toEqual(without)
+  m.sets.mockResolvedValue([]); m.mapFields.mockResolvedValue([])
+  await expect(send()).rejects.toThrow('Mapping validation failed')
 })
 
 it('checks Amazon variation collisions against saved channel sizes instead of stale shared sizes', async () => {

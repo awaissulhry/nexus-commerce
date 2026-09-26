@@ -291,3 +291,7 @@ PresenceMark axis=intent|fact|both (default both) separates adjacent columns; co
 ## Field publication review — 2026-09-25
 
 `ChangeReview` composes labelled native checkboxes and `KeyValue` comparisons, with a visible status and reason per field. Ineligible rows keep their evidence readable and cannot appear selected. Narrow screens stack the values; all styling uses semantic tokens. Catalog specimen: `ChangeReviewExample`. Mirrored between Web and Factory.
+
+## PressableRow stacked — 2026-09-26
+
+`PressableRow stacked` puts `children` on their own full-width line under the label; `leading`, the label and `actions` keep the first line, and the whole row stays one keyboard and pointer target. Use it when a row's details are wider than its label: side by side, a wide body squeezed the label to its padding and the label's words overflowed onto the body (measured on the File mappings version list, `/channels/mapping?view=files`). Off by default, so existing rows are unchanged. Specimen: the stacked row under "Gallery navigation" in `MediaGalleryExample`. Mirrored between Web and Factory.

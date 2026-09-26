@@ -71,11 +71,22 @@ export interface PressableRowProps {
   children?: ReactNode
   /** Interactive controls. Rendered above the overlay; their clicks never reach the row. */
   actions?: ReactNode
+  /**
+   * Put `children` on their own line UNDER the label, the full width of the row; `leading`, the label
+   * and `actions` keep the first line.
+   *
+   * For a row whose details are wider than its label — a version with its dates and counters. Side by
+   * side, the label is `flex: 1 1 0` and the body is sized by its content, so a wide body squeezes the
+   * label to nothing and the label's words overflow onto the body (measured on the File mappings
+   * version list, 340 px rail: the label box collapsed to its padding). Off by default: every existing
+   * row keeps its one-line layout.
+   */
+  stacked?: boolean
   className?: string
 }
 
 export function PressableRow({
-  label, leading, onClick, active, expanded, current, disabled = false, description, children, actions, className,
+  label, leading, onClick, active, expanded, current, disabled = false, description, children, actions, stacked = false, className,
 }: PressableRowProps) {
   const descId = useId()
 
@@ -95,7 +106,7 @@ export function PressableRow({
   return (
     <div
       className={['nds-prow', active ? 'is-active' : '', current ? 'is-current' : '',
-        disabled ? 'is-disabled' : '', className].filter(Boolean).join(' ')}
+        disabled ? 'is-disabled' : '', stacked ? 'is-stacked' : '', className].filter(Boolean).join(' ')}
     >
       {leading != null && <div className="nds-prow-leading" aria-hidden>{leading}</div>}
       <button

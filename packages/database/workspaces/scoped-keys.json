@@ -6255,5 +6255,55 @@
       ]
     },
     "relations": []
+  },
+  "ChannelMappingSet": {
+    "scalar": {},
+    "compound": {
+      "form_version": [
+        "channel",
+        "marketplace",
+        "formKind",
+        "formKey",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "ChannelMappingField": {
+    "scalar": {},
+    "compound": {
+      "set_channelKey": [
+        "setId",
+        "channelKey"
+      ]
+    },
+    "relations": [
+      {
+        "field": "set",
+        "model": "ChannelMappingSet",
+        "from": [
+          "setId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelMappingUse": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "set",
+        "model": "ChannelMappingSet",
+        "from": [
+          "setId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

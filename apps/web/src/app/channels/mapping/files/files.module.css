@@ -1,0 +1,94 @@
+/**
+ * CHMAP — File mappings view: LAYOUT and domain text only. Every control is a design-system component
+ * styled by the DS; nothing here restyles one. `--nds-*` semantic tokens only (the platform aliases
+ * are RGB channels and would be silently dropped here — see mapping.module.css).
+ *
+ * Text colours used, all ≥ 7:1 on --nds-surface in both themes (DESIGN.md table):
+ *   --nds-text · --nds-text-2 · --nds-danger-text (9.7:1 light, 8.8:1 dark, measured from tokens-global.css).
+ */
+
+.viewTabs { margin: 0 0 var(--nds-space-16); }
+
+/* ── two panes: versions | the selected version ─────────────────────────────────────────────────── */
+
+.shell {
+  display: grid;
+  /* 340 px at most: at 1440 px the detail then holds the six 150 px counters on one row. */
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+}
+
+.listPane { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.listFilters { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.listFilter { flex: 1 1 140px; min-width: 0; }
+.groups { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.versionRows { display: flex; flex-direction: column; gap: var(--nds-space-6); }
+
+.versionLabel { display: inline-flex; align-items: center; gap: var(--nds-space-8); white-space: nowrap; }
+.versionBody { display: grid; gap: var(--nds-space-3); min-width: 0; }
+.versionLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-2) var(--nds-space-8); }
+
+.detailPane { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.backLink { display: none; }
+
+/* ── the version header ──────────────────────────────────────────────────────────────────────────── */
+
+.detailHead { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.title {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-12);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.notes { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.compare { width: min(100%, 240px); }
+
+.dangerFigure { color: var(--nds-danger-text); }
+
+/* ── filters over the columns ────────────────────────────────────────────────────────────────────── */
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-12); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
+.search { flex: 1 1 220px; max-width: 360px; min-width: 0; }
+.filterNote { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+
+/* ── cells ───────────────────────────────────────────────────────────────────────────────────────── */
+
+.stack { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.cellText { color: var(--nds-text); overflow-wrap: anywhere; }
+.cellSub { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); overflow-wrap: anywhere; }
+.key {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+/* ── drawers ─────────────────────────────────────────────────────────────────────────────────────── */
+
+.drawerBody { display: flex; flex-direction: column; gap: var(--nds-space-14); }
+.choices { display: flex; flex-direction: column; gap: var(--nds-space-6); border: 0; margin: 0; padding: 0; min-width: 0; }
+.choicesLegend { padding: 0; margin: 0 0 var(--nds-space-4); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.section { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.sectionTitle { margin: 0; font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.plain { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.tableScroll { max-width: 100%; overflow-x: auto; }
+.keyList { margin: 0; padding: 0 0 0 var(--nds-space-16); display: grid; gap: var(--nds-space-3); }
+
+@media (max-width: 1000px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .shell[data-detail='open'] .listPane { display: none; }
+  .backLink { display: block; }
+}

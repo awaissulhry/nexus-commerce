@@ -33,6 +33,10 @@ export function MediaGalleryExample() {
     <h3>Gallery navigation</h3>
     <PressableRow label="Common photos" leading={<Thumbnail src={image('Cover')} alt="" hoverPreview={false} />} current={selected} onClick={() => setSelected(true)} description="3 common photos. The first is the default cover.">3</PressableRow>
     <p>The leading thumbnail is decorative; the labelled row remains one keyboard action.</p>
+    <PressableRow stacked label="v3 · Draft" current={false} onClick={() => setSelected(false)} description="Stacked row: details under the label.">
+      <span>Template 2026.0713 · Created 26 Sept 2026</span><span>224 mapped · 108 ignored · 12 managed · 0 unmapped</span>
+    </PressableRow>
+    <p>A stacked row puts wide details on their own line under the label, so a narrow list never squeezes the label.</p>
     <Button size="sm" onClick={event => setAnchor(event.currentTarget)}>Open anchored editor</Button>
     <Modal open={!!anchor} anchor={anchor} title="Anchored editor" onClose={() => setAnchor(null)}><p>Anchored to its cell on desktop, centered on narrow screens. Focus and Escape follow the shared modal boundary.</p><MediaGallery compact positionControls label="Example media cell gallery" items={ids.map(id => ({id,src:image(id),label:id}))} onChange={setIds} onPreview={setPreview} /></Modal>
     <h3>Media gallery</h3><p>Synthetic images. Drag or use the labelled move controls; removing an item only changes this example.</p>

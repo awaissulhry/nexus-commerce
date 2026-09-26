@@ -21,6 +21,7 @@ import type { ResolvedCell } from './mapping/resolve-batch.service.js'
 import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../channel-mapping/push.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -75,6 +76,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     if (!projection.theme || errors.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
+  const exclusionsFor = pushExclusionsCache()
   for (const product of products) {
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
@@ -123,6 +125,9 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
     const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, hints)
     const spec = await loadAmazonSpec(scope.marketplace, String(row.product_type), scope.accountId)
+    // CHMAP M4 — fields the Owner chose not to send in the ACTIVE mapping version are left out (an omission is never a clear).
+    const excluded = await exclusionsFor('AMAZON', scope.marketplace, String(row.product_type))
+    const excludedRoots = amazonExcludedRoots(excluded)
     const base = JSON.parse(legacy)
     const cells = data.cells as Record<string, ResolvedCell>
     const values = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, cell.value]))
@@ -142,7 +147,8 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     delete owned.variation_theme // the shared variation resolver is authoritative
     Object.assign(base.messages[0].attributes, owned)
     const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
-    const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], products: [{ ...data, cells: mappedCells }] }, spec)
+    const catalogue = resolved[0].catalogue && excludedRoots.size ? { ...resolved[0].catalogue, fields: resolved[0].catalogue.fields.filter(f => !excludedRoots.has(amazonRootOf(f.fieldKey))) } : resolved[0].catalogue
+    const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
     // The content resolver owns every supported language, including reviewed pins.
@@ -155,6 +161,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
       const contentKeys = new Set(['item_name', 'product_description', 'bullet_point', 'generic_keyword'].map(k => `/attributes/${k}`))
       message.patches = [...(message.patches ?? []).filter((p: any) => !contentKeys.has(p.path)),
         ...Object.entries(content).map(([key, value]) => ({ op: 'replace', path: `/attributes/${key}`, value }))]
+    }
+    for (const root of excludedRoots) {
+      if (message.attributes) delete message.attributes[root]
+      if (message.patches) message.patches = message.patches.filter((p: any) => p.path !== `/attributes/${root}`)
     }
     feed.header = envelope.header
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
