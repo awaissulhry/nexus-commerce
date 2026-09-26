@@ -3,7 +3,7 @@
  * attribute. No database import, so the business-creation transaction (`workspace.service.ts`) can use it.
  */
 import { randomUUID } from 'node:crypto'
-import { customAttributeConcepts, type AttributeConcept, type ConceptGroup } from '@nexus/shared/attribute-concepts'
+import { conceptOptionCode, customAttributeConcepts, type AttributeConcept, type ConceptGroup } from '@nexus/shared/attribute-concepts'
 
 /** The group a concept's attribute is created in, by group code. Existing groups with the code are reused. */
 export const GROUP_LABELS: Record<ConceptGroup, string> = {
@@ -24,7 +24,7 @@ export function attributeDefinitionFor(concept: AttributeConcept): { type: strin
 export function optionsFor(concept: AttributeConcept): Array<{ code: string; label: string; synonyms: string[]; sortOrder: number }> {
   if (concept.kind !== 'select' || !concept.valueSynonyms) return []
   return Object.entries(concept.valueSynonyms).map(([code, spellings], sortOrder) => ({
-    code: code.toLowerCase().replace(/[^a-z0-9_]+/g, '_'), label: spellings[0] ?? code, synonyms: spellings.slice(1), sortOrder,
+    code: conceptOptionCode(code), label: spellings[0] ?? code, synonyms: spellings.slice(1), sortOrder,
   }))
 }
 

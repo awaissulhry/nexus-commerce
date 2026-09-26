@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ATTRIBUTE_CONCEPTS, conceptByKey, conceptFieldToken, conceptForChannelField, conceptValueCode, customAttributeConcepts, matchConceptValue,
+  ATTRIBUTE_CONCEPTS, conceptByKey, conceptFieldToken, conceptForChannelField, conceptOptionCode, conceptValueCode, customAttributeConcepts, matchConceptValue,
 } from './attribute-concepts'
 import type { AttributeChannel } from './attributes'
 
@@ -48,6 +48,30 @@ describe('catalogue integrity — the rules in the file header', () => {
     }
   })
 
+  // The options a concept seeds (`applyConceptOptions`) take their labels from `valueLabels` and their codes from
+  // `conceptOptionCode`; both must agree with the matching list, or a seeded option would not match its own spellings.
+  it('labels only known values, each label being one of that value’s spellings', () => {
+    const wrong: string[] = []
+    for (const concept of ATTRIBUTE_CONCEPTS) {
+      for (const [code, byLanguage] of Object.entries(concept.valueLabels ?? {})) {
+        const spellings = concept.valueSynonyms?.[code]
+        if (!spellings) { wrong.push(`${concept.key}.${code}: no such value`); continue }
+        for (const [language, text] of Object.entries(byLanguage)) {
+          if (!spellings.includes(text)) wrong.push(`${concept.key}.${code}.${language}: "${text}"`)
+        }
+      }
+    }
+    expect(wrong).toEqual([])
+  })
+
+  it('gives every value of a concept its own option code', () => {
+    for (const concept of ATTRIBUTE_CONCEPTS) {
+      const codes = Object.keys(concept.valueSynonyms ?? {}).map(conceptOptionCode)
+      expect({ concept: concept.key, codes: new Set(codes).size }).toEqual({ concept: concept.key, codes: codes.length })
+    }
+    expect(['XS', '3XL', 'one_size', 'black'].map(conceptOptionCode)).toEqual(['xs', '3xl', 'one_size', 'black'])
+  })
+
   it('creates custom attributes only for concepts no master field already holds', () => {
     const custom = customAttributeConcepts()
     expect(custom.every(c => !c.masterField)).toBe(true)
@@ -73,6 +97,11 @@ describe('lookups', () => {
     expect(conceptForChannelField('EBAY', 'aspect_123', 'Colore')?.key).toBe('color')
     // A binding on one channel is not a binding on another.
     expect(conceptForChannelField('AMAZON', 'aspect_Colore')).toBeUndefined()
+  })
+
+  it('knows the production spellings added 2026-09-26 (Arancia, XXS)', () => {
+    expect(conceptValueCode(conceptByKey('color')!, 'Arancia')).toBe('orange')
+    expect(conceptValueCode(conceptByKey('size')!, 'xxs')).toBe('XXS')
   })
 
   it('maps value spellings to the canonical code, case- and accent-insensitive', () => {

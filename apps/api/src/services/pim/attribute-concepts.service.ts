@@ -7,6 +7,7 @@
  *   · `conceptDictionaryPlan` — for an EXISTING business: which of its attributes already are a concept (link), which
  *     concept it lacks (create), and what cannot be done and why. Reads only.
  *   · `applyConceptDictionary` — writes that plan in one transaction. Dry run unless told otherwise.
+ *   · `applyConceptOptions` — adds a concept's value list (colour, size) as options of the attribute linked to it.
  *
  * It never changes an attribute's code, type, options or values, and never deletes. Adopting an existing attribute
  * only sets its `semanticKey`.
@@ -14,7 +15,8 @@
 import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
-import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION, type ConceptGroup } from '@nexus/shared/attribute-concepts'
+import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION, conceptByKey, conceptFieldToken, conceptOptionCode, type ConceptGroup, type ValueLabels, type ValueLanguage } from '@nexus/shared/attribute-concepts'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { GROUP_LABELS, GROUP_ORDER, attributeDefinitionFor, optionsFor } from './attribute-concepts-rows.js'
 export { attributeDefinitionFor, starterDictionaryRows, type StarterDictionary } from './attribute-concepts-rows.js'
 
@@ -89,3 +91,76 @@ export async function applyConceptDictionary(options: { dryRun?: boolean } = {})
     return { ...plan, applied: true }
   })
 }
+
+// ── Concept options (2026-09-26, the Owner's "option A": this lane seeds colour and size) ──────────────────────────
+
+/** The concepts whose value lists become business options. Colour and size first (the variation axes). */
+export const SEEDED_OPTION_CONCEPTS = ['color', 'size'] as const
+
+export type ConceptOptionEntry =
+  | { concept: string; action: 'no-attribute' }
+  | { concept: string; action: 'present' | 'matched'; attributeCode: string; code: string; existingCode: string }
+  | { concept: string; action: 'create'; attributeId: string; attributeCode: string; code: string; label: string; synonyms: string[]; sortOrder: number; labels?: ValueLabels }
+
+export interface ConceptOptionsPlan {
+  revision: string
+  entries: ConceptOptionEntry[]
+  counts: Record<ConceptOptionEntry['action'], number>
+}
+
+export class ConceptOptionsError extends Error {}
+
+/**
+ * The options each concept's value list would add to the business attribute linked to it (`semanticKey`, not
+ * archived). Reads only. An existing option is never changed: one with the value's code is `present`, one whose code,
+ * label or synonym is a spelling of the value is `matched` (no second option is made). The rest are `create`:
+ * code = `conceptOptionCode`, label = the primary content language's text, `metadata.labels` = every language.
+ */
+export async function conceptOptionsPlan(conceptKeys: readonly string[] = SEEDED_OPTION_CONCEPTS): Promise<ConceptOptionsPlan> {
+  const language = (PRIMARY_CONTENT_LOCALE.split('-')[0] as ValueLanguage)
+  const entries: ConceptOptionEntry[] = []
+  for (const key of conceptKeys) {
+    const concept = conceptByKey(key)
+    if (!concept?.valueSynonyms || concept.masterField) throw new ConceptOptionsError(`"${key}" is not a concept with a value list.`)
+    const attribute = await prisma.customAttribute.findFirst({ where: { semanticKey: key, archivedAt: null },
+      select: { id: true, code: true, options: { select: { code: true, label: true, synonyms: true, sortOrder: true } } } })
+    if (!attribute) { entries.push({ concept: key, action: 'no-attribute' }); continue }
+    const byToken = new Map<string, string>()
+    for (const option of attribute.options) for (const text of [option.code, option.label, ...option.synonyms]) {
+      const token = conceptFieldToken(text)
+      if (token && !byToken.has(token)) byToken.set(token, option.code)
+    }
+    const existingCodes = new Set(attribute.options.map(option => option.code))
+    let next = Math.max(-1, ...attribute.options.map(option => option.sortOrder)) + 1
+    for (const [valueCode, spellings] of Object.entries(concept.valueSynonyms)) {
+      const code = conceptOptionCode(valueCode)
+      const at = { concept: key, attributeCode: attribute.code, code }
+      if (existingCodes.has(code)) { entries.push({ ...at, action: 'present', existingCode: code }); continue }
+      const match = [valueCode, ...spellings].map(text => byToken.get(conceptFieldToken(text))).find(Boolean)
+      if (match) { entries.push({ ...at, action: 'matched', existingCode: match }); continue }
+      const labels = concept.valueLabels?.[valueCode]
+      const label = labels?.[language] ?? spellings[0] ?? valueCode
+      entries.push({ ...at, action: 'create', attributeId: attribute.id, label, sortOrder: next++,
+        synonyms: [...new Set([...spellings, ...(labels ? Object.values(labels) : [])])].filter(text => text !== label),
+        ...(labels ? { labels } : {}) })
+    }
+  }
+  const counts = { 'no-attribute': 0, present: 0, matched: 0, create: 0 }
+  for (const entry of entries) counts[entry.action]++
+  return { revision: CONCEPTS_REVISION, entries, counts }
+}
+
+/** Write `conceptOptionsPlan` in one transaction (the plan is re-read inside it). Dry run unless told otherwise. */
+export async function applyConceptOptions(options: { concepts?: readonly string[]; dryRun?: boolean } = {}): Promise<ConceptOptionsPlan & { applied: boolean }> {
+  const concepts = options.concepts?.length ? options.concepts : SEEDED_OPTION_CONCEPTS
+  if (options.dryRun ?? true) return { ...(await conceptOptionsPlan(concepts)), applied: false }
+  return inDatabaseTransaction(prisma, async () => {
+    const plan = await conceptOptionsPlan(concepts)
+    const rows = plan.entries.filter((e): e is Extract<ConceptOptionEntry, { action: 'create' }> => e.action === 'create')
+      .map(e => ({ id: randomUUID(), attributeId: e.attributeId, code: e.code, label: e.label, synonyms: e.synonyms, sortOrder: e.sortOrder,
+        ...(e.labels ? { metadata: { labels: e.labels } } : {}) }))
+    if (rows.length) await prisma.attributeOption.createMany({ data: rows })
+    return { ...plan, applied: true }
+  })
+}
+

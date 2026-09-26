@@ -19,7 +19,7 @@
  */
 import type { AttributeChannel, AttributeLeafKind, AttributeShape } from './attributes'
 
-export const CONCEPTS_REVISION = '2026-09-26.1'
+export const CONCEPTS_REVISION = '2026-09-26.2'
 
 export type ConceptGroup = 'content' | 'identity' | 'identifiers' | 'variation' | 'specifications' | 'dimensions' | 'compliance'
 
@@ -43,6 +43,21 @@ export interface AttributeConcept {
   bindings: Partial<Record<AttributeChannel, string[]>>
   /** Canonical value code → its spellings (English first, then IT, DE, FR, ES). Matching only. */
   valueSynonyms?: Record<string, string[]>
+  /**
+   * A value's label in each language, where the words differ (`black` → Nero, Schwarz…). The options a concept seeds
+   * take their `label` and `metadata.labels` from here; a value without an entry is written the same in every language
+   * (`XS`). Every text here is also one of the value's `valueSynonyms` (pinned by the tests).
+   */
+  valueLabels?: Record<string, ValueLabels>
+}
+
+export type ValueLanguage = 'en' | 'it' | 'de' | 'fr' | 'es'
+export type ValueLabels = Readonly<Record<ValueLanguage, string>>
+const labels = (en: string, it: string, de: string, fr: string, es: string): ValueLabels => ({ en, it, de, fr, es })
+
+/** The option code a concept value is stored under (`XS` → `xs`, `one_size` → `one_size`). Codes never change. */
+export function conceptOptionCode(valueCode: string): string {
+  return valueCode.toLowerCase().replace(/[^a-z0-9_]+/g, '_')
 }
 
 /** English, Italian, German, French, Spanish — in that order, repeats removed (`Marca` is IT and ES). */
@@ -85,17 +100,27 @@ export const ATTRIBUTE_CONCEPTS: readonly AttributeConcept[] = [
       black: EU('Black', 'Nero', 'Schwarz', 'Noir', 'Negro'), white: EU('White', 'Bianco', 'Weiß', 'Blanc', 'Blanco'),
       grey: ['Grey', 'Gray', 'Grigio', 'Grau', 'Gris'], red: EU('Red', 'Rosso', 'Rot', 'Rouge', 'Rojo'),
       blue: EU('Blue', 'Blu', 'Blau', 'Bleu', 'Azul'), green: EU('Green', 'Verde', 'Grün', 'Vert', 'Verde'),
-      yellow: EU('Yellow', 'Giallo', 'Gelb', 'Jaune', 'Amarillo'), orange: EU('Orange', 'Arancione', 'Orange', 'Orange', 'Naranja'),
+      yellow: EU('Yellow', 'Giallo', 'Gelb', 'Jaune', 'Amarillo'), orange: [...EU('Orange', 'Arancione', 'Orange', 'Orange', 'Naranja'), 'Arancia'],
       brown: EU('Brown', 'Marrone', 'Braun', 'Marron', 'Marrón'), pink: EU('Pink', 'Rosa', 'Rosa', 'Rose', 'Rosa'),
       purple: EU('Purple', 'Viola', 'Lila', 'Violet', 'Morado'), beige: EU('Beige', 'Beige', 'Beige', 'Beige', 'Beige'),
       multicolour: ['Multicolour', 'Multicolor', 'Multicolore', 'Mehrfarbig', 'Multicolore', 'Multicolor'],
+    },
+    valueLabels: {
+      black: labels('Black', 'Nero', 'Schwarz', 'Noir', 'Negro'), white: labels('White', 'Bianco', 'Weiß', 'Blanc', 'Blanco'),
+      grey: labels('Grey', 'Grigio', 'Grau', 'Gris', 'Gris'), red: labels('Red', 'Rosso', 'Rot', 'Rouge', 'Rojo'),
+      blue: labels('Blue', 'Blu', 'Blau', 'Bleu', 'Azul'), green: labels('Green', 'Verde', 'Grün', 'Vert', 'Verde'),
+      yellow: labels('Yellow', 'Giallo', 'Gelb', 'Jaune', 'Amarillo'), orange: labels('Orange', 'Arancione', 'Orange', 'Orange', 'Naranja'),
+      brown: labels('Brown', 'Marrone', 'Braun', 'Marron', 'Marrón'), pink: labels('Pink', 'Rosa', 'Rosa', 'Rose', 'Rosa'),
+      purple: labels('Purple', 'Viola', 'Lila', 'Violet', 'Morado'), beige: labels('Beige', 'Beige', 'Beige', 'Beige', 'Beige'),
+      multicolour: labels('Multicolour', 'Multicolore', 'Mehrfarbig', 'Multicolore', 'Multicolor'),
     } },
   { key: 'size', label: 'Size', group: 'variation', shape: 'scalar', kind: 'text', scope: 'per_variant', localizable: false,
     bindings: { AMAZON: ['size', 'apparel_size__size'], EBAY: ['Size', 'Taglia', 'Größe', 'Taille', 'Talla'], SHOPIFY: ['shopify.size'], ETSY: ['size'] },
     valueSynonyms: {
-      XS: ['XS'], S: ['S'], M: ['M'], L: ['L'], XL: ['XL'], XXL: ['XXL', '2XL'], '3XL': ['3XL', 'XXXL'], '4XL': ['4XL', 'XXXXL'], '5XL': ['5XL'],
+      XXS: ['XXS'], XS: ['XS'], S: ['S'], M: ['M'], L: ['L'], XL: ['XL'], XXL: ['XXL', '2XL'], '3XL': ['3XL', 'XXXL'], '4XL': ['4XL', 'XXXXL'], '5XL': ['5XL'],
       one_size: EU('One Size', 'Taglia unica', 'Einheitsgröße', 'Taille unique', 'Talla única'),
-    } },
+    },
+    valueLabels: { one_size: labels('One Size', 'Taglia unica', 'Einheitsgröße', 'Taille unique', 'Talla única') } },
   { key: 'size_system', label: 'Size system', group: 'variation', shape: 'scalar', kind: 'select', scope: 'global', localizable: false,
     bindings: { AMAZON: ['apparel_size__size_system'] },
     valueSynonyms: {
