@@ -28,6 +28,9 @@ import { diffChannelSpecs, READINESS_CHANGES } from './channel-specs/spec-diff.j
 import { productsInChannelCategory } from './schema-change-impact.service.js'
 import { reconcileFamilyReadiness } from './readiness-index.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+/** Production runs with business profiles on: every database call here runs inside a business, as real callers do. */
+const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
 afterAll(async () => { await state.db?.close() })
 
@@ -36,7 +39,7 @@ const aspect = (name: string, extra: Partial<EbayCachedAspect> = {}): EbayCached
 const spec = (aspects: EbayCachedAspect[]) => ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects })
 
 describe('diffChannelSpecs', () => {
-  it('names each change: requirement flips, removed strict options, a field arriving required, a field removed', () => {
+  it('names each change: requirement flips, removed strict options, a field arriving required, a field removed', () => scoped(async () => {
     const before = spec([aspect('Brand', { required: true }), aspect('Color', { options: ['Black', 'Red'], enumMode: 'strict' }), aspect('Style')])
     const after = spec([aspect('Brand'), aspect('Color', { options: ['Black'], enumMode: 'strict' }), aspect('Material', { required: true })])
     const changes = diffChannelSpecs(before, after)
@@ -48,18 +51,18 @@ describe('diffChannelSpecs', () => {
       { changeType: 'FIELD_REMOVED', fieldId: 'style', oldValue: { requirement: 'optional' } },
     ]))
     expect(changes).toHaveLength(5)
-  })
+  }))
 
-  it('reports nothing for the same rules, and an open list losing a suggestion is not a readiness change', () => {
+  it('reports nothing for the same rules, and an open list losing a suggestion is not a readiness change', () => scoped(async () => {
     const rules = [aspect('Brand', { required: true }), aspect('Features', { options: ['Waterproof', 'Reflective'], enumMode: 'open' })]
     expect(diffChannelSpecs(spec(rules), spec(rules))).toEqual([])
     const fewer = [aspect('Brand', { required: true }), aspect('Features', { options: ['Waterproof'], enumMode: 'open' })]
     expect(diffChannelSpecs(spec(rules), spec(fewer)).filter(c => READINESS_CHANGES.has(c.changeType))).toEqual([])
-  })
+  }))
 })
 
 describe('a rule change reaches exactly the products it touches', () => {
-  beforeAll(async () => {
+  beforeAll(() => scoped(async () => {
     await prisma.channelConnection.create({ data: { id: 'sci-ebay', channelType: 'EBAY', isActive: true } as any })
     await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
     const family = async (root: string, categoryId: string | null) => {
@@ -74,15 +77,15 @@ describe('a rule change reaches exactly the products it touches', () => {
     await family('sci-jacket', '177104')   // in the changed category
     await family('sci-glove', '177109')    // same channel and market, another category
     await family('sci-unlisted', null)     // no listing, no mapping: no eBay category at all
-  }, 120_000)
+  }), 120_000)
 
-  it('finds the products pinned to the category, and not the others', async () => {
+  it('finds the products pinned to the category, and not the others', () => scoped(async () => {
     const impact = await productsInChannelCategory({ channel: 'EBAY', marketplace: 'IT', category: '177104' })
     expect(impact.productIds.sort()).toEqual(['sci-jacket', 'sci-jacket-kid'])
     expect(impact.rootIds).toEqual(['sci-jacket'])
-  })
+  }))
 
-  it('a new eBay rule version logs its changes, records the affected products and marks only that family pending', async () => {
+  it('a new eBay rule version logs its changes, records the affected products and marks only that family pending', () => scoped(async () => {
     const service = new CategorySchemaService(prisma as never, { isConfigured: async () => false } as never)
     state.aspects = [{ name: 'Marca', englishName: 'Brand', values: [], mode: 'FREE_TEXT', required: false, usage: 'OPTIONAL', cardinality: 'SINGLE', variantEligible: false, dataType: 'STRING' }]
     await service.refreshSchema({ channel: 'EBAY', marketplace: 'IT', productType: '177104' })
@@ -99,5 +102,5 @@ describe('a rule change reaches exactly the products it touches', () => {
     expect(pending.length).toBeGreaterThan(0)
     expect(new Set(pending.map(p => p.productId))).toEqual(new Set(['sci-jacket', 'sci-jacket-kid']))
     expect(pending.every(p => p.channel === 'EBAY' && p.market === 'IT')).toBe(true)
-  })
+  }))
 })

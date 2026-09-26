@@ -14,10 +14,13 @@ vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, search
 import prisma from '../db.js'
 import { familyCompletenessService } from './family-completeness.service.js'
 import { channelReadinessService } from './channel-readiness.service.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
+/** Production runs with business profiles on: every database call here runs inside a business, as real callers do. */
+const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
 afterAll(async () => { await state.db?.close() })
 
-beforeAll(async () => {
+beforeAll(() => scoped(async () => {
   const group = await prisma.attributeGroup.create({ data: { code: 'fcm-specs', label: 'Specs' } })
   const attr = (code: string, localizable = false) => prisma.customAttribute.create({ data: { code, label: code, groupId: group.id, type: 'text', localizable } })
   const [brand, color, care, ce] = await Promise.all([attr('fcm_brand'), attr('fcm_color'), attr('fcm_care', true), attr('fcm_ce')])
@@ -33,9 +36,9 @@ beforeAll(async () => {
   await product('fcm-half', jackets.id, { fcm_brand: 'Xavia', fcm_color: '' })
   await product('fcm-apparel-only', apparel.id, { fcm_brand: '   ', fcm_color: ['Nero'] })
   await product('fcm-none', null, { fcm_brand: 'Xavia' })
-}, 60_000)
+}), 60_000)
 
-it('equals compute() for every product, including a missing one and one without a family', async () => {
+it('equals compute() for every product, including a missing one and one without a family', () => scoped(async () => {
   const ids = ['fcm-full', 'fcm-half', 'fcm-apparel-only', 'fcm-none', 'fcm-missing']
   const many = await familyCompletenessService.computeMany(ids)
   for (const id of ids) {
@@ -48,9 +51,9 @@ it('equals compute() for every product, including a missing one and one without 
   expect(many.get('fcm-apparel-only')).toMatchObject({ filled: 1, totalRequired: 2 })
   expect(many.get('fcm-none')).toMatchObject({ familyId: null, score: -1 })
   expect(many.get('fcm-missing')).toEqual({ error: 'FamilyCompletenessService: product fcm-missing not found' })
-})
+}))
 
-it('channel readiness: computeMany() equals compute() for the family path, the fallback path and a missing product', async () => {
+it('channel readiness: computeMany() equals compute() for the family path, the fallback path and a missing product', () => scoped(async () => {
   await prisma.product.create({ data: { id: 'fcm-fallback', sku: 'FCM-FALLBACK', name: 'fallback', basePrice: 12, brand: 'Xavia', gtin: '8000000000001' } })
   const ids = ['fcm-full', 'fcm-half', 'fcm-none', 'fcm-fallback', 'fcm-missing']
   const many = await channelReadinessService.computeMany(ids)
@@ -63,4 +66,4 @@ it('channel readiness: computeMany() equals compute() for the family path, the f
   expect((many.get('fcm-half') as { channels: Array<{ missing: Array<{ label: string }> }> }).channels[0].missing.map(m => m.label).sort()).toEqual(['fcm_care', 'fcm_color'])
   expect(many.get('fcm-fallback')).toMatchObject({ familyDriven: false })
   expect(many.get('fcm-missing')).toEqual({ error: 'ChannelReadinessService: product fcm-missing not found' })
-})
+}))

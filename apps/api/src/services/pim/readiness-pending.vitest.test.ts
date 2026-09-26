@@ -33,6 +33,9 @@ import {
 } from './readiness-index.service.js'
 import { applyProductBulkEdits } from '../products/bulk-edit.service.js'
 import { getProductReadiness } from './scope-readiness.service.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+/** Production runs with business profiles on: every database call here runs inside a business, as real callers do. */
+const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
 const FAMILIES = ['rp-a', 'rp-b', 'rp-c']
 const child = (root: string) => `${root}-child`
@@ -45,7 +48,7 @@ async function familyRows(roots = FAMILIES) {
   return prisma.readinessIndex.findMany({ where: { product: { OR: [{ id: { in: roots } }, { parentId: { in: roots } }] } }, orderBy: { id: 'asc' } })
 }
 
-beforeAll(async () => {
+beforeAll(() => scoped(async () => {
   await prisma.channelConnection.create({ data: { id: 'rp-ebay', channelType: 'EBAY', isActive: true } as any })
   await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
   for (const root of FAMILIES) {
@@ -55,21 +58,21 @@ beforeAll(async () => {
       await prisma.channelListing.create({ data: { productId, channel: 'EBAY', channelMarket: 'EBAY_IT' as any, marketplace: 'IT', region: 'EU', channelConnectionId: 'rp-ebay', price: 10 } })
     }
   }
-}, 60_000)
+}), 60_000)
 
-beforeEach(async () => {
+beforeEach(() => scoped(async () => {
   for (const root of FAMILIES) await reconcileFamilyReadiness(root)
   state.sheets.length = 0
   queue.addJobSafely.mockClear()
-}, 60_000)
+}), 60_000)
 
 afterAll(async () => { await state.db?.close() })
 
-it('keeps the inline limit small enough that a single-cell edit behaves exactly as before', () => {
+it('keeps the inline limit small enough that a single-cell edit behaves exactly as before', () => scoped(async () => {
   expect(INLINE_READINESS_MAX_FAMILIES).toBe(2)
-})
+}))
 
-it('rebuilds readiness INSIDE the save when the edit touches few families (today’s behaviour)', async () => {
+it('rebuilds readiness INSIDE the save when the edit touches few families (today’s behaviour)', () => scoped(async () => {
   const before = await familyRows(['rp-a'])
   expect(before.length).toBeGreaterThan(0)
   const result = await applyProductBulkEdits({ changes: [{ id: child('rp-a'), field: 'manufacturer', value: 'Inline Co', target: 'master' }] }, context)
@@ -80,9 +83,9 @@ it('rebuilds readiness INSIDE the save when the edit touches few families (today
   const after = await familyRows(['rp-a'])
   expect(after.every(row => row.computedAt.getTime() >= Math.max(...before.map(b => b.computedAt.getTime())))).toBe(true)
   expect(queue.addJobSafely).not.toHaveBeenCalled()
-}, 60_000)
+}), 60_000)
 
-it('commits a big edit WITHOUT building a sheet, marks the families pending with the values, and enqueues one job each', async () => {
+it('commits a big edit WITHOUT building a sheet, marks the families pending with the values, and enqueues one job each', () => scoped(async () => {
   const rowsBefore = (await familyRows()).length
   const result = await applyProductBulkEdits({ changes: FAMILIES.map(root => ({ id: child(root), field: 'manufacturer', value: 'Pending Co', target: 'master' })) }, context)
   expect(result).toMatchObject({ success: true, updated: 3, readinessPendingFamilies: 3 })
@@ -106,9 +109,9 @@ it('commits a big edit WITHOUT building a sheet, marks the families pending with
   expect((await familyRows()).length).toBe(rowsBefore)
   const afterDrain = await getProductReadiness({ productId: 'rp-a', market: 'IT' })
   expect(afterDrain.scopes.some(scope => 'pendingSince' in scope)).toBe(false)
-}, 120_000)
+}), 120_000)
 
-it('rebuilds only the channel coordinate when a listing-only edit is drained', async () => {
+it('rebuilds only the channel coordinate when a listing-only edit is drained', () => scoped(async () => {
   // The scope `applyProductBulkEdits` passes for a listing-only edit (`readinessScope`, bulk-edit.service.ts).
   const scope = { channel: 'EBAY', market: 'IT', accountId: 'rp-ebay' }
   const produced = await inDatabaseTransaction(prisma as never, () => produceReadinessForProducts(FAMILIES.map(child), scope))
@@ -124,9 +127,9 @@ it('rebuilds only the channel coordinate when a listing-only edit is drained', a
   expect(await pendingRows()).toBe(0)
   expect(state.sheets.length).toBeGreaterThan(0)
   expect(state.sheets.every(sheet => sheet.channel === 'EBAY' && sheet.market === 'IT' && sheet.accountId === 'rp-ebay')).toBe(true)
-}, 120_000)
+}), 120_000)
 
-it('rolls the pending marks back with the transaction that set them', async () => {
+it('rolls the pending marks back with the transaction that set them', () => scoped(async () => {
   await expect(inDatabaseTransaction(prisma as never, async () => {
     const produced = await produceReadinessForProducts(FAMILIES.map(child))
     expect(produced).toEqual({ inline: 0, pending: 3 })
@@ -134,9 +137,9 @@ it('rolls the pending marks back with the transaction that set them', async () =
     throw new Error('the write failed after marking')
   })).rejects.toThrow('the write failed after marking')
   expect(await pendingRows()).toBe(0)
-}, 60_000)
+}), 60_000)
 
-it('never leaves a mark the drain cannot clear (a product deleted after it was marked)', async () => {
+it('never leaves a mark the drain cannot clear (a product deleted after it was marked)', () => scoped(async () => {
   await inDatabaseTransaction(prisma as never, () => produceReadinessForProducts(FAMILIES.map(child)))
   expect(await pendingRows()).toBeGreaterThan(0)
   await prisma.product.update({ where: { id: child('rp-c') }, data: { deletedAt: new Date() } })
@@ -147,4 +150,4 @@ it('never leaves a mark the drain cannot clear (a product deleted after it was m
   } finally {
     await prisma.product.update({ where: { id: child('rp-c') }, data: { deletedAt: null } })
   }
-}, 120_000)
+}), 120_000)

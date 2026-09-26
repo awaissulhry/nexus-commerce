@@ -21,6 +21,9 @@ import prisma from '../../db.js'
 import { masterDefaultRule } from './mapping/master-default-rule.js'
 import { conceptSources } from './mapping/field-catalogue.service.js'
 import { autoMatchValueMaps } from './value-map-auto.service.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
+/** Production runs with business profiles on: every database call here runs inside a business, as real callers do. */
+const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 
 afterAll(async () => { await state.db?.close() })
 
@@ -29,36 +32,36 @@ describe('masterDefaultRule with concept links', () => {
   const concepts = (channel: 'AMAZON' | 'EBAY' | 'SHOPIFY') => ({ channel, sourceFor: conceptSources([{ code: 'color', semanticKey: 'color' }, { code: 'target_gender', semanticKey: 'target_gender' }]) })
   const f = (key: string, extra: Record<string, unknown> = {}) => ({ key, masterKey: undefined, channelStore: undefined, defaultRule: undefined, shopifyField: undefined, readOnlyReason: undefined, ...extra }) as never
 
-  it('keeps an existing link exactly: same source, no concept note', () => {
+  it('keeps an existing link exactly: same source, no concept note', () => scoped(async () => {
     expect(masterDefaultRule(f('brand'), masterKeys, concepts('EBAY'))).toEqual({ source: 'brand', notes: 'Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.' })
     expect(masterDefaultRule(f('brand'), masterKeys)).toEqual(masterDefaultRule(f('brand'), masterKeys, concepts('EBAY')))
-  })
+  }))
 
-  it('links a field the channel names as a concept’s, and says which concept', () => {
+  it('links a field the channel names as a concept’s, and says which concept', () => scoped(async () => {
     const rule = masterDefaultRule(f('colore'), masterKeys, concepts('EBAY'))
     expect(rule).toMatchObject({ source: 'color', notes: expect.stringContaining('"color" concept') })
     expect(masterDefaultRule(f('department'), masterKeys, concepts('AMAZON'))).toMatchObject({ source: 'target_gender' })
     // Without the business's links there is nothing to link to.
     expect(masterDefaultRule(f('colore'), masterKeys)).toBeNull()
-  })
+  }))
 
-  it('reads the value maps when the channel list is strict — for a concept link and a direct link alike', () => {
+  it('reads the value maps when the channel list is strict — for a concept link and a direct link alike', () => scoped(async () => {
     expect(masterDefaultRule(f('colore', { mode: 'strict', options: ['Black'] }), masterKeys, concepts('EBAY'))).toMatchObject({ transforms: [{ type: 'valueMap', attribute: 'color' }] })
     expect(masterDefaultRule(f('color', { mode: 'strict', options: ['Black'] }), masterKeys, concepts('EBAY'))).toMatchObject({ source: 'color', transforms: [{ type: 'valueMap', attribute: 'color' }] })
     expect(masterDefaultRule(f('color', { mode: 'open', options: ['Black'] }), masterKeys, concepts('EBAY'))).not.toHaveProperty('transforms')
-  })
+  }))
 
-  it('never links a measure or a non-text Shopify field by concept', () => {
+  it('never links a measure or a non-text Shopify field by concept', () => scoped(async () => {
     expect(masterDefaultRule(f('item_weight', { shape: 'measure' }), masterKeys, concepts('AMAZON'))).toBeNull()
     const reference = { id: 'x', definition: { type: 'list.metaobject_reference' }, type: 'list.metaobject_reference', source: 'shopify.color-pattern' }
     expect(masterDefaultRule(f('mf_color', { shopifyField: reference }), masterKeys, concepts('SHOPIFY'))).toBeNull()
     const text = { id: 'y', definition: { type: 'single_line_text_field' }, type: 'single_line_text_field', source: 'shopify.color-pattern' }
     expect(masterDefaultRule(f('mf_color', { shopifyField: text }), masterKeys, concepts('SHOPIFY'))).toMatchObject({ source: 'color' })
-  })
+  }))
 })
 
 describe('autoMatchValueMaps on a cached eBay category', () => {
-  beforeAll(async () => {
+  beforeAll(() => scoped(async () => {
     await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'IT', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
     await prisma.categorySchema.create({ data: { channel: 'EBAY', marketplace: 'IT', productType: '177104', schemaVersion: 'v1', expiresAt: new Date(Date.now() + 86_400_000),
       schemaDefinition: { conditions: [], aspects: [
@@ -72,9 +75,9 @@ describe('autoMatchValueMaps on a cached eBay category', () => {
       ['vma-5', { variations: { Colore: 'Rosso' } }], ['vma-6', { color: 'RED' }],
     ]
     for (const [id, categoryAttributes] of values) await prisma.product.create({ data: { id, sku: id.toUpperCase(), name: id, basePrice: 1, categoryAttributes: categoryAttributes as never } })
-  }, 60_000)
+  }), 60_000)
 
-  it('matches exact-ignoring-case and synonyms, returns what it cannot match, and writes nothing on a dry run', async () => {
+  it('matches exact-ignoring-case and synonyms, returns what it cannot match, and writes nothing on a dry run', () => scoped(async () => {
     const result = await autoMatchValueMaps({ channel: 'EBAY', marketplace: 'IT', productType: '177104' })
     expect(result.applied).toBe(false)
     const field = result.fields.find(f => f.attribute === 'color')!
@@ -90,9 +93,9 @@ describe('autoMatchValueMaps on a cached eBay category', () => {
     ])
     expect(field.unmatched).toEqual(['Chartreuse'])
     expect(await prisma.fieldValueMap.count()).toBe(0)
-  })
+  }))
 
-  it('applies: one row per matched value, marked as automatic, and a second run finds them mapped', async () => {
+  it('applies: one row per matched value, marked as automatic, and a second run finds them mapped', () => scoped(async () => {
     const applied = await autoMatchValueMaps({ channel: 'EBAY', marketplace: 'IT', productType: '177104', dryRun: false })
     expect(applied).toMatchObject({ applied: true, written: 4 })
     const rows = await prisma.fieldValueMap.findMany({ select: { attribute: true, fromValue: true, toValue: true, confidence: true, reviewedAt: true } })
@@ -102,5 +105,5 @@ describe('autoMatchValueMaps on a cached eBay category', () => {
     const again = await autoMatchValueMaps({ channel: 'EBAY', marketplace: 'IT', productType: '177104', dryRun: false })
     expect(again.written).toBe(0)
     expect(again.fields.find(f => f.attribute === 'color')).toMatchObject({ alreadyMapped: 4, matched: [], unmatched: ['Chartreuse'] })
-  })
+  }))
 })
