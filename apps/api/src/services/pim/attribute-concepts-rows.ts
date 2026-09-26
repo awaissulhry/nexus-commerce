@@ -3,7 +3,8 @@
  * attribute. No database import, so the business-creation transaction (`workspace.service.ts`) can use it.
  */
 import { randomUUID } from 'node:crypto'
-import { conceptOptionCode, customAttributeConcepts, type AttributeConcept, type ConceptGroup } from '@nexus/shared/attribute-concepts'
+import { conceptOptionCode, customAttributeConcepts, type AttributeConcept, type ConceptGroup, type ValueLabels, type ValueLanguage } from '@nexus/shared/attribute-concepts'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 
 /** The group a concept's attribute is created in, by group code. Existing groups with the code are reused. */
 export const GROUP_LABELS: Record<ConceptGroup, string> = {
@@ -20,18 +21,52 @@ export function attributeDefinitionFor(concept: AttributeConcept): { type: strin
   return { type, validation: concept.shape === 'list' ? { shape: 'list' } : null }
 }
 
-/** Options a concept brings: only for a closed-list (`select`) concept; the rest stay open text until P6. */
-export function optionsFor(concept: AttributeConcept): Array<{ code: string; label: string; synonyms: string[]; sortOrder: number }> {
-  if (concept.kind !== 'select' || !concept.valueSynonyms) return []
-  return Object.entries(concept.valueSynonyms).map(([code, spellings], sortOrder) => ({
-    code: conceptOptionCode(code), label: spellings[0] ?? code, synonyms: spellings.slice(1), sortOrder,
-  }))
+/**
+ * Open-text concepts whose value list still becomes the attribute's options (suggestions; the list stays open): the
+ * variation axes. The Owner's "option A", 2026-09-26 — this lane owns them; the variation-theme lane links to them.
+ */
+export const SEEDED_OPTION_CONCEPTS = ['color', 'size'] as const
+
+export interface ConceptOptionRow { code: string; label: string; synonyms: string[]; sortOrder: number; metadata?: { labels: ValueLabels } }
+
+/** The primary content language as a concept label language (`it-IT` → `it`); English when the concepts have none. */
+export function conceptLabelLanguage(locale: string = PRIMARY_CONTENT_LOCALE): ValueLanguage {
+  const language = locale.split('-')[0]
+  return (['en', 'it', 'de', 'fr', 'es'] as string[]).includes(language) ? language as ValueLanguage : 'en'
+}
+
+/**
+ * One seeded option of a concept value: code = `conceptOptionCode`, label = the value's text in `language` (else its
+ * first spelling), `metadata.labels` = every language (where the concept has them), synonyms = every other spelling.
+ */
+export function seededOption(concept: AttributeConcept, valueCode: string, sortOrder: number, language: ValueLanguage = conceptLabelLanguage()): ConceptOptionRow {
+  const spellings = concept.valueSynonyms?.[valueCode] ?? []
+  const labels = concept.valueLabels?.[valueCode]
+  const label = labels?.[language] ?? spellings[0] ?? valueCode
+  return { code: conceptOptionCode(valueCode), label, sortOrder,
+    synonyms: [...new Set([...spellings, ...(labels ? Object.values(labels) : [])])].filter(text => text !== label),
+    ...(labels ? { metadata: { labels } } : {}) }
+}
+
+/**
+ * Options a concept brings when its attribute is created: a closed-list (`select`) concept's values (English label, as
+ * since P3), and the seeded open-text concepts' values (`SEEDED_OPTION_CONCEPTS`, labelled in the primary content
+ * language). Other open-text concepts get none; their dropdown comes from the channels (P6).
+ */
+export function optionsFor(concept: AttributeConcept, language: ValueLanguage = conceptLabelLanguage()): ConceptOptionRow[] {
+  if (!concept.valueSynonyms) return []
+  const values = Object.entries(concept.valueSynonyms)
+  if (concept.kind === 'select') {
+    return values.map(([code, spellings], sortOrder) => ({ code: conceptOptionCode(code), label: spellings[0] ?? code, synonyms: spellings.slice(1), sortOrder }))
+  }
+  if (!(SEEDED_OPTION_CONCEPTS as readonly string[]).includes(concept.key)) return []
+  return values.map(([code], sortOrder) => seededOption(concept, code, sortOrder, language))
 }
 
 export interface StarterDictionary {
   groups: Array<{ id: string; code: string; label: string; sortOrder: number }>
   attributes: Array<{ id: string; code: string; label: string; groupId: string; type: string; validation: Record<string, unknown> | null; localizable: boolean; scope: string; sortOrder: number; semanticKey: string }>
-  options: Array<{ id: string; attributeId: string; code: string; label: string; synonyms: string[]; sortOrder: number }>
+  options: Array<{ id: string; attributeId: string } & ConceptOptionRow>
 }
 
 /** The dictionary a new business starts with. Pure: ids are generated here so one `createMany` per table suffices. */

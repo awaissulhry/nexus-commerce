@@ -19,7 +19,7 @@ import prisma from '../../db.js'
 import { customAttributeConcepts } from '@nexus/shared/attribute-concepts'
 import { createWorkspaceService } from '../workspace.service.js'
 import { withWorkspace, type WorkspaceContext } from '../../lib/workspace-context.js'
-import { applyConceptDictionary, conceptDictionaryPlan, starterDictionaryRows } from './attribute-concepts.service.js'
+import { applyConceptDictionary, conceptDictionaryPlan, conceptOptionsPlan, starterDictionaryRows } from './attribute-concepts.service.js'
 import { upsertAttributes } from './attribute-dictionary.service.js'
 
 const businesses: Record<'a' | 'b' | 'legacy', WorkspaceContext> = {} as never
@@ -37,7 +37,7 @@ beforeAll(async () => {
 afterAll(async () => { await state.db?.close() }, 30_000)
 
 describe('starter dictionary', () => {
-  it('builds one linked attribute per custom concept, and options only for closed-list concepts', () => {
+  it('builds one linked attribute per custom concept, options for closed-list concepts and for colour and size', () => {
     let n = 0
     const rows = starterDictionaryRows(() => `id-${n++}`)
     expect(rows.attributes.map(a => a.code).sort()).toEqual(customAttributeConcepts().map(c => c.key).sort())
@@ -47,8 +47,14 @@ describe('starter dictionary', () => {
     expect(gender.type).toBe('select')
     expect(rows.options.filter(o => o.attributeId === gender.id).map(o => o.code)).toEqual(['men', 'women', 'unisex'])
     expect(rows.options.find(o => o.code === 'women')).toMatchObject({ label: 'Women', synonyms: expect.arrayContaining(['Donna', 'Damen']) })
-    // Open-text concepts get no options (their dropdown comes from the channels, P6).
-    expect(rows.options.some(o => o.attributeId === rows.attributes.find(a => a.code === 'color')!.id)).toBe(false)
+    // Colour and size (open text) get their concept value list, labelled in the primary content language (the same
+    // options `concepts/options` backfilled on the existing businesses, 2026-09-26); other open-text concepts get none
+    // (their dropdown comes from the channels, P6).
+    const optionsOf = (code: string) => rows.options.filter(o => o.attributeId === rows.attributes.find(a => a.code === code)!.id)
+    expect(optionsOf('color').map(o => o.code)).toEqual(['black', 'white', 'grey', 'red', 'blue', 'green', 'yellow', 'orange', 'brown', 'pink', 'purple', 'beige', 'multicolour'])
+    expect(optionsOf('color')[0]).toMatchObject({ label: 'Nero', sortOrder: 0, metadata: { labels: { en: 'Black', it: 'Nero', de: 'Schwarz' } } })
+    expect(optionsOf('size').map(o => o.code)).toEqual(['xxs', 'xs', 's', 'm', 'l', 'xl', 'xxl', '3xl', '4xl', '5xl', 'one_size'])
+    expect(optionsOf('material')).toEqual([])
     expect(rows.attributes.find(a => a.code === 'material')).toMatchObject({ type: 'text', validation: { shape: 'list' } })
   })
 
@@ -58,6 +64,8 @@ describe('starter dictionary', () => {
     expect(attributes.every(a => a.semanticKey === a.code)).toBe(true)
     const plan = await inBusiness('a', conceptDictionaryPlan)
     expect(plan.counts).toMatchObject({ adopt: 0, create: 0, blocked: 0, linked: customAttributeConcepts().length })
+    // The starter and the backfill make the same options: the backfill finds every one present.
+    expect((await inBusiness('a', () => conceptOptionsPlan())).counts).toMatchObject({ create: 0, matched: 0, present: 24 })
   })
 })
 
@@ -94,11 +102,14 @@ describe('an existing business adopts the concepts', () => {
       await prisma.attributeOption.deleteMany({})
       await prisma.customAttribute.deleteMany({})
       const group = await prisma.attributeGroup.create({ data: { code: 'attributes', label: 'Specifications' } })
-      const make = (code: string, semanticKey: string | null = null, type = 'text') => prisma.customAttribute.create({ data: { code, label: code, groupId: group.id, type, semanticKey } })
+      const make = (code: string, semanticKey: string | null = null, type = 'text', archivedAt: Date | null = null) =>
+        prisma.customAttribute.create({ data: { code, label: code, groupId: group.id, type, semanticKey, archivedAt } })
       await make('color')                 // same code as the concept → adopt
       await make('fit_type')              // an adopt code of `fit` → adopt
       await make('size', 'size')          // already linked
       await make('material', 'features')  // code of one concept, linked to another → `material` is blocked
+      await make('seasons', null, 'text', new Date())  // ARCHIVED adopt code of `season` → never adopted; `season` is created
+      await make('neckline', null, 'text', new Date()) // ARCHIVED, the concept's own code → blocked: restore it
     })
   }, 60_000)
 
@@ -112,6 +123,8 @@ describe('an existing business adopts the concepts', () => {
     expect(byConcept.get('material')).toMatchObject({ action: 'blocked', reason: expect.stringContaining('"features"') })
     expect(byConcept.get('brand')).toMatchObject({ action: 'master', masterField: 'brand' })
     expect(byConcept.get('pattern')).toMatchObject({ action: 'create', code: 'pattern' })
+    expect(byConcept.get('season')).toMatchObject({ action: 'create', code: 'season' })
+    expect(byConcept.get('neckline')).toMatchObject({ action: 'blocked', reason: expect.stringContaining('is archived. Restore it') })
     const dry = await inBusiness('legacy', () => applyConceptDictionary())
     expect(dry.applied).toBe(false)
     expect(await inBusiness('legacy', () => prisma.customAttribute.findFirstOrThrow({ where: { code: 'color' } }))).toMatchObject({ semanticKey: null })
@@ -128,7 +141,9 @@ describe('an existing business adopts the concepts', () => {
     expect(rows.find(r => r.code === 'target_gender')!.options.map(o => o.code)).toEqual(expect.arrayContaining(['men', 'women', 'unisex']))
     expect(rows.length).toBe(before + applied.counts.create)
     const again = await inBusiness('legacy', () => applyConceptDictionary({ dryRun: false }))
-    expect(again.counts).toMatchObject({ adopt: 0, create: 0, blocked: 1 })
+    expect(again.counts).toMatchObject({ adopt: 0, create: 0, blocked: 2 })
+    // The archived attributes stayed as they were: not linked, still archived.
+    expect(rows.filter(r => r.code === 'seasons' || r.code === 'neckline').map(r => r.semanticKey)).toEqual([null, null])
     expect(await inBusiness('legacy', () => prisma.customAttribute.count())).toBe(rows.length)
   })
 })

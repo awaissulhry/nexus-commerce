@@ -15,10 +15,9 @@
 import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { inDatabaseTransaction } from '../../lib/database-context.js'
-import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION, conceptByKey, conceptFieldToken, conceptOptionCode, type ConceptGroup, type ValueLabels, type ValueLanguage } from '@nexus/shared/attribute-concepts'
-import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
-import { GROUP_LABELS, GROUP_ORDER, attributeDefinitionFor, optionsFor } from './attribute-concepts-rows.js'
-export { attributeDefinitionFor, starterDictionaryRows, type StarterDictionary } from './attribute-concepts-rows.js'
+import { ATTRIBUTE_CONCEPTS, CONCEPTS_REVISION, conceptByKey, conceptFieldToken, conceptOptionCode, type ConceptGroup, type ValueLabels } from '@nexus/shared/attribute-concepts'
+import { GROUP_LABELS, GROUP_ORDER, SEEDED_OPTION_CONCEPTS, attributeDefinitionFor, conceptLabelLanguage, optionsFor, seededOption } from './attribute-concepts-rows.js'
+export { attributeDefinitionFor, starterDictionaryRows, SEEDED_OPTION_CONCEPTS, type StarterDictionary } from './attribute-concepts-rows.js'
 
 export type ConceptPlanEntry =
   | { concept: string; action: 'master'; masterField: string }
@@ -33,9 +32,13 @@ export interface ConceptPlan {
   counts: Record<ConceptPlanEntry['action'], number>
 }
 
-/** What `applyConceptDictionary` would do for the current business. Reads only. */
+/**
+ * What `applyConceptDictionary` would do for the current business. Reads only. An ARCHIVED attribute is never adopted
+ * (linking a concept to a hidden attribute would hide the concept); one already linked stays `linked`, and one holding
+ * the concept's own code blocks the create with the way out (restore it).
+ */
 export async function conceptDictionaryPlan(): Promise<ConceptPlan> {
-  const attributes = await prisma.customAttribute.findMany({ select: { id: true, code: true, semanticKey: true } })
+  const attributes = await prisma.customAttribute.findMany({ select: { id: true, code: true, semanticKey: true, archivedAt: true } })
   const byCode = new Map(attributes.map(a => [a.code, a]))
   const bySemantic = new Map(attributes.filter(a => a.semanticKey).map(a => [a.semanticKey!, a]))
   const claimed = new Set<string>()
@@ -45,9 +48,13 @@ export async function conceptDictionaryPlan(): Promise<ConceptPlan> {
     const linked = bySemantic.get(concept.key)
     if (linked) { claimed.add(linked.id); entries.push({ concept: concept.key, action: 'linked', attributeId: linked.id, code: linked.code }); continue }
     const candidate = [concept.key, ...(concept.adoptCodes ?? [])].map(code => byCode.get(code))
-      .find(a => a && !a.semanticKey && !claimed.has(a.id))
+      .find(a => a && !a.semanticKey && !a.archivedAt && !claimed.has(a.id))
     if (candidate) { claimed.add(candidate.id); entries.push({ concept: concept.key, action: 'adopt', attributeId: candidate.id, code: candidate.code }); continue }
     const taken = byCode.get(concept.key)
+    if (taken?.archivedAt && !taken.semanticKey) {
+      entries.push({ concept: concept.key, action: 'blocked', reason: `The attribute "${concept.key}" is archived. Restore it to link it to "${concept.key}", or link another attribute by hand.` })
+      continue
+    }
     if (taken) {
       entries.push({ concept: concept.key, action: 'blocked', reason: `The code "${concept.key}" is already used by an attribute linked to "${taken.semanticKey}". Link another attribute to "${concept.key}" by hand, or rename one of them.` })
       continue
@@ -94,9 +101,6 @@ export async function applyConceptDictionary(options: { dryRun?: boolean } = {})
 
 // ── Concept options (2026-09-26, the Owner's "option A": this lane seeds colour and size) ──────────────────────────
 
-/** The concepts whose value lists become business options. Colour and size first (the variation axes). */
-export const SEEDED_OPTION_CONCEPTS = ['color', 'size'] as const
-
 export type ConceptOptionEntry =
   | { concept: string; action: 'no-attribute' }
   | { concept: string; action: 'present' | 'matched'; attributeCode: string; code: string; existingCode: string }
@@ -117,7 +121,7 @@ export class ConceptOptionsError extends Error {}
  * code = `conceptOptionCode`, label = the primary content language's text, `metadata.labels` = every language.
  */
 export async function conceptOptionsPlan(conceptKeys: readonly string[] = SEEDED_OPTION_CONCEPTS): Promise<ConceptOptionsPlan> {
-  const language = (PRIMARY_CONTENT_LOCALE.split('-')[0] as ValueLanguage)
+  const language = conceptLabelLanguage()
   const entries: ConceptOptionEntry[] = []
   for (const key of conceptKeys) {
     const concept = conceptByKey(key)
@@ -138,11 +142,10 @@ export async function conceptOptionsPlan(conceptKeys: readonly string[] = SEEDED
       if (existingCodes.has(code)) { entries.push({ ...at, action: 'present', existingCode: code }); continue }
       const match = [valueCode, ...spellings].map(text => byToken.get(conceptFieldToken(text))).find(Boolean)
       if (match) { entries.push({ ...at, action: 'matched', existingCode: match }); continue }
-      const labels = concept.valueLabels?.[valueCode]
-      const label = labels?.[language] ?? spellings[0] ?? valueCode
-      entries.push({ ...at, action: 'create', attributeId: attribute.id, label, sortOrder: next++,
-        synonyms: [...new Set([...spellings, ...(labels ? Object.values(labels) : [])])].filter(text => text !== label),
-        ...(labels ? { labels } : {}) })
+      // The same option a new business's starter dictionary makes (`seededOption`), appended after the existing ones.
+      const option = seededOption(concept, valueCode, next++, language)
+      entries.push({ ...at, action: 'create', attributeId: attribute.id, label: option.label, synonyms: option.synonyms,
+        sortOrder: option.sortOrder, ...(option.metadata ? { labels: option.metadata.labels } : {}) })
     }
   }
   const counts = { 'no-attribute': 0, present: 0, matched: 0, create: 0 }
