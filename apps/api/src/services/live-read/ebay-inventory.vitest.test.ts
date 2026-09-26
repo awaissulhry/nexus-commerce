@@ -69,6 +69,16 @@ describe('readEbayInventoryListing', () => {
     expect(read.content.title).toEqual({ state: 'value', value: 'Jacket' })
   })
 
+  it('a read that throws names its real cause — for the group and for each SKU — never just "no answer"', async () => {
+    const r = reads()
+    r.group = vi.fn(async () => { throw new Error('NEXUS_CREDENTIAL_ENC_KEY is missing or malformed') })
+    r.items = vi.fn(async () => { throw new Error('token refresh failed') })
+    const read = await readEbayInventoryListing(destination, r, now)
+    expect(read.errors).toContainEqual({ scope: 'item', reason: 'The eBay group could not be read: NEXUS_CREDENTIAL_ENC_KEY is missing or malformed.' })
+    expect(read.errors).toContainEqual({ scope: 'sku', sku: 'FAM-RED-M', reason: 'The eBay item could not be read: token refresh failed.' })
+    expect(read.content.title).toEqual({ state: 'unread', reason: 'The eBay group could not be read: NEXUS_CREDENTIAL_ENC_KEY is missing or malformed.' })
+  })
+
   it('marks a Nexus SKU the group lacks as missing and a group SKU Nexus lacks as extra', async () => {
     const read = await readEbayInventoryListing({ ...destination, expectedSkus: ['FAM-RED-M', 'FAM-BLUE-M'] }, reads(), now)
     expect(read.variations!.variants.map(v => [v.sku, v.state])).toEqual([['FAM-RED-M', 'live'], ['FAM-RED-L', 'extra'], ['FAM-BLUE-M', 'missing']])
