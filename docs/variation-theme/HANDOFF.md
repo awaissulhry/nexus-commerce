@@ -70,3 +70,19 @@ the main checkout with `nexus_development`; the test picks a product by one row 
 - Never use the browser's saved logins. Use a throwaway local user, and delete it after use.
 - Old servers :8093 (API) and :3003 (web) run from the PSIE worktree on `nexus_psie_test`. Stop them by PID. Never `pkill -f`.
 - No artifacts. Summaries go in these `.md` files. Report to the Owner in simple, short English (ELI5 / STE).
+
+## Coordination (Owner, 2026-09-26 ~20:45: "keep it all coordinated" — this VTR session coordinates)
+
+| Lane | Session (ListAgents name) | Holds / does | Next checkpoint |
+|---|---|---|---|
+| VTR (this) | `nexus-commerce-12` | step 0 = PR #45 (open, no auto-merge); step 1 read-only (writer inventory, before-picture) | CI result on #45; the Owner's merge word; attributes answers Q1–Q6 |
+| Publish everywhere (PE) | `nexus-commerce-de` — worktree `/private/tmp/nexus-publish-everywhere`, branch `feat/publish-everywhere` from 93215463f | claim row written; holds `docs/publish-everywhere/**` only; research + plan (P1, P3, P4, P5); agreed: no VTR-held file before #45 merges, no second value-order store | its plan; before any live send / switch / push it messages VTR |
+| Attributes | `nexus-commerce-d7` (transcript e588a50c, started 16:29 local; found by process start time) | P3b S6 = PR #44 open; P8 reader switches; ANSWERED Q1–Q6 (accepted); builds the axis-attribute guard; owns the `resolve-batch:338` fix | code is stable (confirmed); guard = PR #46 (step 1 adds its axis-code field to `familyAxisLabels()`); :338 fix STARTED ~21:10 (measure first, it sends VTR the numbers before any change) |
+| Sheet views | `nexus-commerce-60` | PRs #16 #17 #20 #21 #35 #42; #35 changes `completenessFor` in `sheet-rows.service.ts` (not VTR's :53) | none needed |
+
+Messages sent 2026-09-26: coordination rules to `nexus-commerce-de` (acknowledged); Q1–Q6 to `nexus-commerce-60` (answered: it is SHEET-VIEWS) and then to `nexus-commerce-d7`. Replies arrive in the VTR session.
+
+**Category field split (agreed ~21:20):** attributes lane (`nexus-commerce-d7`) = one channel → category-field map (AMAZON
+`productType`, EBAY `categoryId`, ETSY `taxonomy_id`, SHOPIFY `category`) in `resolve-batch.service.ts:338` + `studio-sheet.service.ts:1341`,
+after the Owner's word (it changes what Etsy/Shopify receive) — **Owner chose A (~21:30): fix both parts, send the mapped category**; building. VTR step 4 = the category source label + the Shopify category picker
+(renderer with sheet-views `nexus-commerce-60`). Publish lane told to plan on the one map, no own fallback.
