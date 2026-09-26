@@ -59,6 +59,7 @@ import { relabelListingToPoolSkus } from '../services/ebay-variation-relabel.ser
 import { addVariationsToListing } from '../services/ebay-variation-add.service.js';
 import { applyVariationOrderForFamily } from '../services/ebay-variation-order-apply.service.js';
 import { MARKETS, type Market, toMarketplaceId, toChannelMarket, buildFlatRow, packSharedFields, applyEbayFlatFileSnapshot, buildBestOfferTerms, resolveQuantityLimitPerBuyer, resolvePerMarketContent } from '../services/ebay-variation-push.service.js';
+import { flatFileListingAttributes } from '../services/ebay-flat-file-attributes.js';
 import { renderListingDescriptionSafe, stampDescriptionPushSafe } from '../services/ebay-description-theme.service.js';
 import { getEbayPublishMode, ebayWriteRefusal, ebayHostOf } from '../services/ebay-publish-gate.service.js';
 import { decideEbayPushMode } from '../services/ebay-push-mode.js';
@@ -1027,8 +1028,10 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           // markets keep their platformAttributes VERBATIM; only genuinely
           // new listings (no existing attributes) seed from the active market.
           const existingAttrs = (existing?.platformAttributes ?? null) as Record<string, unknown> | null;
+          // VTR step 0b — the row wins on its own fields; every other key on the listing (offer ids, variation setup,
+          // publish receipts) survives the save.
           const marketPlatformAttributes = isActiveMp
-            ? sharedPacked.platformAttributes
+            ? flatFileListingAttributes(existingAttrs, sharedPacked.platformAttributes as Record<string, unknown>)
             : (existingAttrs && Object.keys(existingAttrs).length > 0
                 ? existingAttrs
                 : sharedPacked.platformAttributes);
@@ -1173,7 +1176,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           const region = activeMp === 'UK' ? 'GB' : activeMp;
           const existing = await prisma.channelListing.findFirst({
             where: { productId, channel: 'EBAY', region },
-            select: { id: true, title: true, description: true },
+            select: { id: true, title: true, description: true, platformAttributes: true },
           });
           if (existing) {
             await prisma.channelListing.update({
@@ -1181,7 +1184,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               data: {
                 title: sharedPacked.title,
                 description: sharedPacked.description,
-                platformAttributes: sharedPacked.platformAttributes,
+                platformAttributes: flatFileListingAttributes(existing.platformAttributes, sharedPacked.platformAttributes as Record<string, unknown>) as Prisma.InputJsonValue,
                 updatedAt: new Date(),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 flatFileSnapshot: flatFileSnapshot as any,
