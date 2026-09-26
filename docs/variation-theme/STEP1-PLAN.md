@@ -75,3 +75,35 @@ see `LIVE-READ.md`.
   `Grigio | Uomo`, `Grigio Scuro-Giallo-Nero | Donna/Uomo`, `Grigio-Rosso-Nero | Donna/Uomo`, `Crema e Vino | Giacca/Pantaloni`,
   `Nero Neo | Giacca/Pantaloni`. The backfill will not split them; the Owner decides (keep as colour values, or a second axis).
 
+## Owner decisions for 1b (2026-09-26 ~21:00 UTC: "Go ahead, I'll go with your recommendation")
+
+- **Attributes lane option A:** that lane creates the colour/size options from its concept lists (concept codes; Italian text in
+  labels), plus `Arancia` (orange synonym) and `XXS`; step 1b only LINKS.
+- **Mixed colour values stay colour values** (12: `Nero | Donna`, … `Nero Neo | Pantaloni`) — business options of the colour
+  attribute, codes from the text (e.g. `nero_donna`); not concept values.
+- **Families with a theme text and no axes get their axes from the theme text**, where every part maps to a dictionary attribute —
+  shown to the Owner first. Production (read only, ~21:00 UTC), all 5 map cleanly and every variant already stores those values:
+
+| Family | Theme text | Axes it becomes (theme order) | Variants |
+|---|---|---|---|
+| 1J-EYE5-Y0TW | Color / Size | color, size | 5 |
+| 3K-HP05-BH9I | Size / Color | size, color | 15 |
+| GALE-JACKET | Colore,Taglia | color, size | 20 |
+| UD-LVLM-1H8T | Color / Size | color, size | 10 |
+| xracing | Fit Type / Size Name / Color Name | fit_type, size, color | 49 |
+
+## 1b proofs (2026-09-26 ~21:20 UTC)
+
+- **Parity on a private copy (the channel-safety proof):** seed the concept options (what option A creates) → snapshot every family
+  destination (sheet values per variant, variation theme cell, readiness, eBay builder aspects) → backfill WRITE → snapshot again.
+  First run: 25 destinations differed — sizes changed spelling (`3XL`→`XXXL`, `XXL`→`2XL`) because a code match took the default
+  label. Fixed (names first; a bare code only takes the default label) and carried into PR #56. **Second run on a fresh copy: 36
+  destinations identical, 10 differ ONLY for the 4 theme-text families (they gain values because they gain axes — Owner-approved),
+  0 unexpected.** The copy's GALE-JACKET is refused by the writer (its XXS variant holds junk `[object Object]` and a legacy `XS`) —
+  correct; production's GALE is clean.
+- **Production report with the Owner's rule (theme text → axes), read only:** 33 families, 321 variants, 0 duplicates, 0 store
+  conflicts, 0 empty slots, 0 unmapped axes; 48 distinct values not yet in the dictionary (most arrive with option A; the rest —
+  mixed colours, fit types, numeric sizes — become business options).
+- **Production write plan:** after 1b merges and deploys, run the backfill on the server (like the publish lane's proof tools): dry
+  run → the Owner reads the exact list → write on his word → the report again (expect 0 changes on a second run).
+
