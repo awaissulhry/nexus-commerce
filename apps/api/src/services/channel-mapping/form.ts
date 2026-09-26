@@ -42,5 +42,25 @@ export function ebayFormOf(input: { marketplace: string; sheet: string; categori
   }
 }
 
+/**
+ * NCF (`docs/studies/native-channel-files.md` §3) — the form of Shopify's product CSV for ONE store: marketplace
+ * `GLOBAL`, form key = the store's account (its metafield columns are its own), and the normalised column keys
+ * (classic and current header names key alike, `shopify-draft.ts`).
+ */
+export function shopifyFormOf(input: { accountId: string; channelKeys: readonly string[] }): MappingForm {
+  return {
+    channel: 'SHOPIFY',
+    marketplace: 'GLOBAL',
+    formKind: 'SHOPIFY_PRODUCT_CSV',
+    formKey: input.accountId,
+    templateIdentifier: null,
+    templateVersion: null,
+    language: null,
+    layout: { sheet: 'CSV', labelRow: null, keyRow: 1, dataRow: 2 },
+    keyFingerprint: keyFingerprint(input.channelKeys),
+  }
+}
+
+const CHANNEL_NAME: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify' }
 export const formLabel = (form: Pick<MappingForm, 'channel' | 'marketplace' | 'formKey'>, version?: number, status?: string) =>
-  `${form.channel === 'AMAZON' ? 'Amazon' : 'eBay'} ${form.marketplace} · ${form.formKey}${version ? ` · v${version}` : ''}${status ? ` (${status.toLowerCase()})` : ''}`
+  `${CHANNEL_NAME[form.channel] ?? form.channel} ${form.channel === 'SHOPIFY' ? '· product CSV' : `${form.marketplace} · ${form.formKey}`}${version ? ` · v${version}` : ''}${status ? ` (${status.toLowerCase()})` : ''}`

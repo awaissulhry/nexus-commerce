@@ -16,20 +16,22 @@ import type { ActionFinding, ActionReview } from '@/design-system/grid'
 
 /* ── words ──────────────────────────────────────────────────────────────────────────────────────── */
 
-export const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay' }
+export const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify' }
 export const channelLabel = (channel: string) => CHANNEL_LABEL[channel] ?? channel
 
 const FORM_KIND_WORD: Record<MappingFormKind, (formKey: string) => string> = {
   AMAZON_TEMPLATE: key => `${productTypesWord(key)} template`,
   AMAZON_FLAT_FILE: key => `${productTypesWord(key)} flat file (old format)`,
   EBAY_WORKBOOK: key => `category ${key} workbook`,
+  // NCF — one store's product CSV; the form key is the store account, named by the screen, not here.
+  SHOPIFY_PRODUCT_CSV: () => 'product CSV',
 }
 const productTypesWord = (formKey: string) => formKey.split('+').filter(Boolean).join(' + ') || formKey
 
-/** "Amazon IT · COAT + PANTS template" — one channel file form in one market. */
+/** "Amazon IT · COAT + PANTS template" — one channel file form in one market. Shopify has no market: "Shopify · product CSV". */
 export function formLabel(s: Pick<MappingSetSummary, 'channel' | 'marketplace' | 'formKind' | 'formKey'>): string {
   const kind = FORM_KIND_WORD[s.formKind]?.(s.formKey) ?? `${s.formKind} ${s.formKey}`
-  return `${channelLabel(s.channel)} ${s.marketplace} · ${kind}`
+  return `${channelLabel(s.channel)}${s.marketplace === 'GLOBAL' ? '' : ` ${s.marketplace}`} · ${kind}`
 }
 
 export const STATUS_WORD = { ACTIVE: 'Active', DRAFT: 'Draft', RETIRED: 'Retired' } as const

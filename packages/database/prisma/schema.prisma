@@ -17670,10 +17670,10 @@ model ChannelMappingSet {
   // Business ownership comes from verified database context.
   workspaceId        String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id                 String    @id @default(cuid())
-  channel            String // AMAZON | EBAY
-  marketplace        String // IT | DE | FR | ES | UK …
-  formKind           String // AMAZON_TEMPLATE | AMAZON_FLAT_FILE | EBAY_WORKBOOK
-  formKey            String // Amazon: the template's product types joined by '+' (COAT+PANTS); eBay: the workbook layout
+  channel            String // AMAZON | EBAY | SHOPIFY
+  marketplace        String // IT | DE | FR | ES | UK … (Shopify: GLOBAL)
+  formKind           String // AMAZON_TEMPLATE | AMAZON_FLAT_FILE | EBAY_WORKBOOK | SHOPIFY_PRODUCT_CSV
+  formKey            String // Amazon: the template's product types joined by '+' (COAT+PANTS); eBay: the workbook layout; Shopify: the store account
   version            Int
   status             String    @default("DRAFT") // DRAFT | ACTIVE | RETIRED
   /// Amazon's own template id (the `AmazonTemplateVault` key); null for our own workbooks.
