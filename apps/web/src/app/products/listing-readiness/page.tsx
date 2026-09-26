@@ -1,5 +1,7 @@
 'use client'
-import Link from 'next/link'
+// The business-aware Link (2026-09-27): editorHref and '/products/next' are bare paths; this keeps them inside the
+// current business (`/w/<id>/…`) instead of landing on the profile chooser.
+import Link from '@/lib/workspaces/Link'
 import { useEffect, useMemo, useState } from 'react'
 import type { ListingReadinessPage, ListingReadinessRow } from '@nexus/shared/listing-readiness'
 import { PageHeader } from '@/design-system/patterns/PageHeader'
