@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const category = vi.hoisted(() => ({ id: 'CAT-1' }))
 const productFindMany = vi.fn()
 const channelListingFindMany = vi.fn()
 const getStudioColumns = vi.fn()
@@ -32,7 +33,7 @@ vi.mock('../../db.js', () => ({
 }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: (...a: unknown[]) => getStudioColumns(...a) }))
 vi.mock('./product-category-context.js', () => ({ productCategoryContext: async () => ({ connectionId: 'account', categories: ['CAT-1'],
-  defaults: { p_solo: { channelCategoryId: 'CAT-1', source: 'mapping' } } }) }))
+  defaults: { p_solo: { channelCategoryId: category.id, source: 'mapping' } } }) }))
 vi.mock('./mapping/index.js', () => ({ resolveChannelValues: async () => ({ byProduct: {}, categoryByProduct: {}, missingProductIds: [], meta: {} }) }))
 
 import { getStudioSheet } from './studio-sheet.service.js'
@@ -47,6 +48,7 @@ const column = (key: string) => ({ key, writeField: key, label: key, group: 'Cla
   scope: 'global', requiredBy: [], editable: true, defaultVisible: true })
 
 beforeEach(() => {
+  category.id = 'CAT-1'
   for (const m of [productFindMany, channelListingFindMany, getStudioColumns]) m.mockReset()
   productFindMany.mockResolvedValue([{ id: 'p_solo', sku: 'SOLO', isParent: false, parentId: null, productType: null,
     name: 'Giacca', description: null, variationAxes: [], variantAttributes: {}, categoryAttributes: {}, translations: [] }])
@@ -85,5 +87,15 @@ describe('the mapped category fill', () => {
       columns: CATEGORY_KEYS.map(column), schemaMissing: [`${channel}:*`] })
     const { issues } = (await read(channel, market)).rows[0].readiness
     expect(issues.filter(issue => issue.label === 'Channel requirements').map(issue => issue.key)).toEqual([own])
+  })
+
+  // Etsy's category column is a number (an integer in Etsy's schema): an all-digit mapped id is filled as a number.
+  it('fills Etsy’s number category column with a number', async () => {
+    category.id = '177104'
+    channelListingFindMany.mockResolvedValue([{ id: 'l1', productId: 'p_solo', channel: 'ETSY', marketplace: 'GLOBAL', channelConnectionId: 'account',
+      platformAttributes: {}, translations: [], aliasKey: null }])
+    getStudioColumns.mockResolvedValue({ coordinates: [{ channel: 'ETSY', marketplace: 'GLOBAL', label: 'Etsy · GLOBAL', inMarket: true, languages: ['it'] }],
+      columns: [{ ...column('taxonomy_id'), kind: 'number' }] })
+    expect((await read('ETSY', 'GLOBAL')).rows[0].values.taxonomy_id).toMatchObject({ value: 177104, source: 'master' })
   })
 })

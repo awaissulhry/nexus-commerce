@@ -304,15 +304,17 @@ describe('the mapped category fills only the channel category field', () => {
     field('taxonomy_id', { kind: 'number', rule: null, validation: { minimum: 1, multipleOf: 1 },
       sourceOwner: { kind: 'listing', label: 'Etsy category selection', path: 'listing.platformAttributes.taxonomy_id' } }),
   ] })
+  // Etsy's `taxonomy_id` is a number field (an integer in Etsy's schema): the mapped id arrives as text and is filled
+  // as a number. The other channels' category fields are text and keep the id as text.
   it.each([
-    ['AMAZON', 'productType', 'IT'],
-    ['EBAY', 'categoryId', 'IT'],
-    ['SHOPIFY', 'category', 'GLOBAL'],
-    ['ETSY', 'taxonomy_id', 'GLOBAL'],
-  ])('%s fills %s and leaves the other channels’ category keys empty', async (channel, own, marketplace) => {
+    ['AMAZON', 'productType', 'IT', '177104'],
+    ['EBAY', 'categoryId', 'IT', '177104'],
+    ['SHOPIFY', 'category', 'GLOBAL', '177104'],
+    ['ETSY', 'taxonomy_id', 'GLOBAL', 177104],
+  ])('%s fills %s and leaves the other channels’ category keys empty', async (channel, own, marketplace, value) => {
     categoryFields()
     const { cells } = (await resolveBatch({ channel, marketplace, productIds: ['p'] })).products[0]
-    expect(cells[own]).toMatchObject({ value: '177104', provenance: 'default', errors: [] })
+    expect(cells[own]).toMatchObject({ value, provenance: 'default', errors: [] })
     for (const other of ['productType', 'categoryId', 'category', 'taxonomy_id'].filter(key => key !== own)) {
       expect(cells[other]).toMatchObject({ value: null, status: 'unmapped' })
     }
@@ -323,15 +325,14 @@ describe('the mapped category fills only the channel category field', () => {
     expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id)
       .toMatchObject({ value: 2001, provenance: 'override' })
   })
-  // Etsy's `taxonomy_id` is a number field. The mapped id arrives as text; validation reads it as a number (so a
-  // numeric id passes and a non-numeric one is flagged), but the cell keeps the text — validation never rewrites it.
-  it('validates Etsy’s mapped taxonomy_id as a number without rewriting the text', async () => {
+  // Only an all-digit id becomes a number; anything else stays as it came, so validation names it.
+  it('flags an Etsy mapped taxonomy_id that is not a valid id, keeping what came', async () => {
     categoryFields()
     db.categoryId.value = 'not-a-number'
-    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id.errors)
-      .toEqual([expect.stringMatching(/number/i)])
+    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id)
+      .toMatchObject({ value: 'not-a-number', errors: [expect.stringMatching(/number/i)] })
     db.categoryId.value = '0'
-    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id.errors)
-      .toEqual([expect.stringMatching(/at least 1|minimum|greater/i)])
+    expect((await resolveBatch({ channel: 'ETSY', marketplace: 'GLOBAL', productIds: ['p'] })).products[0].cells.taxonomy_id)
+      .toMatchObject({ value: 0, errors: [expect.stringMatching(/at least 1|minimum|greater/i)] })
   })
 })

@@ -45,7 +45,7 @@ import {
   resolveChannelField, resolvedAttrsView, isPresent, linkForCoordinate, type FieldLinkGroupLike,
 } from '../resolve-channel-field.js'
 import { getFieldCatalogue, type CatalogueField, type FieldCatalogue } from './field-catalogue.service.js'
-import { categoryForListing, channelCategoryField, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
+import { categoryFieldValue, categoryForListing, channelCategoryField, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
 
 export interface ResolvedCell {
   content?: import('../content-resolver.js').ResolvedContent
@@ -337,7 +337,7 @@ export async function resolveBatch(input: {
             ? 'variation' : undefined
       // The mapped category fills the channel's own category field (one map for every channel).
       const effectiveStored = isBlankValue(stored) && field.fieldKey === channelCategoryField(channel)
-        ? categories[p.id]?.channelCategoryId : stored === undefined ? systemValue : stored
+        ? categoryFieldValue(field.kind, categories[p.id]?.channelCategoryId) : stored === undefined ? systemValue : stored
       // A deliberately cleared override is still an override; it must not revive Master.
       const hasStored = effectiveStored !== undefined
       const directRaw = channel === 'EBAY' ? normalizeEbayListingValue(field.sheetKey ?? field.fieldKey, effectiveStored) : effectiveStored
