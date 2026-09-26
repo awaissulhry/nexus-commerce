@@ -1,36 +1,245 @@
 # Channel connections — progress and handover
 
-Updated **2026-09-22**. Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
+## Latest checkpoint — 2026-09-25 11:38 UTC
+
+**Package A code/recovery APPROVED, fully gated and locally rehearsed. No package or
+recovery ref has been pushed by this session; nothing new is deployed or enabled.**
+Final documentation signoff/publication remain pending. The Owner has approved reviewed,
+gated, rehearsed deployment with every new switch OFF. The existing CI eBay consent-page
+GET probes still need the separate narrow exception already requested; no yes received.
+
+Published main is `2459bf52fe85e1ffe0b5f0c510994e019cb3eed4` (refetched11:37Z; docs after
+bc39). Public readiness re-read before that fetch reports healthy serving **bc39f98d**.
+Release source is **`3be0a62e1344626db7f8adf4e49351880cae6725`**; recovery branch
+`recovery/cx-20260925` is **`34c376113380f4c803d4f91190f94c06126c56a2`**. Metadata commits
+may follow the reviewed source. Recovery preserves published main and the exact release
+DB tree; application differences are C11f6a/b/c only. Its PCO fixture correction has an
+independent APPROVE; no assertion, timeout, ratchet or hook was weakened.
+
+Clean source full hook: DB33, **API12220/359 existing skips**, **web4887/13**, both builds,
+security127, RBAC2728/zero unmapped, **realPG328 in25 suites/zero skips**; profiles977 files,
+41 known-failing/217 tests, none new or worse. Clean recovery full hook: **API12129/340**,
+web4887/13, DB33/security127/builds, **realPG309 in23 suites/zero skips**; profiles971 files,
+same41/217 unchanged baseline. Contrast at these heads: web92/factory106 pairs, zero below7:1.
+Logs: release `package-a-gate-3be0a62e1-clean.log`, recovery
+`package-a-recovery-gate-34c376113.log`; archived sublogs under their helpers' build/evidence
+`package-a-3be0a62e1/` and `recovery-34c376113/`.
+
+HTTP rehearsal passed **10:52:36Z**; background-jobs rehearsal **11:06:55Z**. Base **bc39**
+bootstrap→release adds exactly eight CX migrations to the base history; old base refuses;
+recovery34→release3be→recovery34 each returns ready200 with its exact build, unchanged
+migration history/checksums and role/object invariants. Jobs initialized with processing
+held. Current rehearsal folders contain these heads; earlier4e/77 proof is archived.
+Both code/recovery reviews APPROVE. A first PCO-fixture gate failure and the source-equivalent
+pre-checkout pass are preserved but are not substituted for the clean3be gate.
+
+Latest private read-only census: **08:54:05Z**, `production-census-20260925-085405.json` (kept locally; not in the public repo):
+zero unresolved migration failures (historical rolled-back rows only); every eBay listing is
+on the IT market (some follow the master price); the active eBay sellers have default
+warehouses; no v0 finance duplicates; some finance rows/orders and recent Amazon orders are
+unattributed (measured; figures kept in the local evidence); exact Etsy shop57783036 active Motovento route; the Shopify connection is active.
+No non-IT master-price exception is triggered by this snapshot. Refresh before Package B
+shipping. Last private switch evidence remains01:00:45Z: all six new switches unset/OFF,
+with positive DB-source match. Refresh before publication; no newer switch verification is
+claimed. Public health at06:54:44Z reported quantity mismatches and existing critical Ads
+findings; healthy readiness is not a blanket operational verdict.
+
+Package B remains unintegrated: contract a6b5fefaa, price3fa33094f, Finances3f493f5ff and
+eBay orders68fcc9f36 APPROVED. Etsy ingest c621418e and SKU identity da1de249 APPROVED;
+pooled line foundation61cbe88bc is under review and terminal writer integration remains open.
+Its offset-ceiling history limit remains an explicit hold, not unrestricted completeness.
+Package C: listing issues16945532a and Tag contrast e738e4531 APPROVED; privacy census
+6e6687952 APPROVED, candidate records in verification; cancellation parity b77db1bd3 APPROVED,
+terminal follow-up b382fb7ba required fixes (recovery65bda8b72 committed, atomic-state fix in
+progress). Contract follow-up330395766 and teardown87406ac23 await independent review.
+The latter proves/fixes a setup-client shutdown race consistent with the original57P01;
+it does not explain recoveryf9's separate PGlite socket loss. Remaining engineering,
+activation preparations and Phase5 audit remain open under the structured plan.
+
+
+Last fully verified release (2026-09-22): `0f89aa53-ce89-4518-91b6-76a5c2d68507`, **SUCCESS**,
+commit `439d9e3d34ed79a09d76981da08de5d2ca0190e2`. Both GitHub jobs and the deployment
+smoke test are **SUCCESS**. Final public/database verification repeated at **21:58 UTC**.
+Sanitized release evidence: `build/RELEASE-2026-09-22-EVIDENCE.json` (kept locally; not in the public repo). This supersedes
+older pending-deployment notes; the full channel plan remains open.
+
+Updated **2026-09-25** (production evidence uses UTC). Active scope: **Amazon, eBay and Etsy**. **Shopify is now connected**
 (Owner report); this does not restart **P8, which remains deferred**.
 
 **Most core P0–P6 implementation is built and deployed; the whole plan is not complete.**
 Package labels are not proof of every acceptance criterion. Finances cutover, full eBay event
 coverage, live validation, Owner setup, and cleanup must be reconciled against current evidence.
-The latest isolated connections package is built and tested but not yet deployed.
+The C1–C8 release is deployed. Package A and the five later lanes remain local. The Owner
+approved reviewed, gated, rehearsed package deployments with every new switch OFF on 2026-09-25.
 
-✅ **The handover's deploy warning is closed.** `6cfcb143` (commit `090db711`) reached
+**Historical deploy warning (not Package A):** `6cfcb143` (commit `090db711`) reached
 **SUCCESS** at 13:21 UTC — **15 minutes**, not the ~40 the handover feared; the earlier figure was
 read against the wrong clock. `/api/health` reports the serving build as its commit's first 8
 characters, which is the cheapest way to tell *deployed* from *built*.
 
 ## 0. Cold start — read this much and you can work
 
-### Approved production release — 2026-09-22
+### Historical checkpoint — source77/recoverya5 before published main moved
 
-The Owner approved “Deploy it all and push to production.” C1–C8 were pushed normally
-as `65782117a` and Railway deployment `a257e041-a61c-4614-a8c9-6c2516622832` reached
-SUCCESS. At21:20Z both public health routes served65782117 and protected diagnostics
-returned401. The exact Etsy migration checksum/finish and exclusive Motovento shop
-routing passed, with all18 connections/scopes/state/presence preserved, including
-Shopify. Automatic eBay setup and Amazon rotation are observed OFF at startup.
+Follow [the structured plan](2026-09-25-STRUCTURED-PLAN.md), Phase 1 before Phase 2.
+The Owner approves each reviewed, fully gated and rehearsed package pushed to `main`
+and deployed with every new switch OFF. Activation, live vendor calls/probes, operator
+grants, KMS/rewrap/key retirement, credentials/environment changes, deletions,
+`prisma migrate resolve`, Finances cutover and P7 drops still need separate explicit approval.
 
-GitHub's clean compiler exhausted its default2GiB heap. The independently reviewed,
-compiler-only4GiB repair `c54406b47` passed normal hooks and was pushed. Both GitHub
-clean builds now pass; final CI/image rollout is still in progress. No type/test
-requirement was weakened. Vendor probes, channel activation, exact-ten deletion and
-P7 drops remain separately gated. The full plan is still open.
+- **Published/serving baseline:** fetched main `a22f2fc361488c3620d6c8110344e8200c46ebb2`;
+  public health HTTP 200/healthy/build `a22f2fc3` at **2026-09-24T23:49:30.532Z**.
+  Quantity mismatches and critical Ads integrity alerts remain. This public read
+  does not refresh private business, migration, runtime or switch evidence.
+  A 2026-09-25 Railway CLI read (MCP unavailable) confirms base deployment
+  `674bf97f-fd44-438d-b662-7348a810ccba` SUCCESS at the same GitHub SHA; remote main
+  was rechecked unchanged at 2026-09-25 00:15Z. This is baseline evidence, not Package A deployment proof.
+- **Package A, implemented locally:** C9–C11f6c merged cleanly with that main at
+  `77c787559d95dc394df358a9fea7b10179b6d5a0`. Independent whole-package source review
+  APPROVE. The exact-head normal full hook **passed, exit 0**: 33 database; 4,850 web /
+  13 existing skips; 11,883 API / 359 existing skips; both builds; 127 security; RBAC
+  2,727 routes / zero unmapped; 328 realPG tests in 25 suites / zero skips, NOSUPERUSER.
+  Profiles-ON: 961 files, 41 known failing files / 217 tests, none new or worse.
+  AAA contrast gate: 106 pairs, zero below 7:1. Package A is **not pushed or deployed**.
+  Logs and limits of this proof are in [the release record](RELEASE-C9-C11F6C.md).
+- **Recovery:** `recovery/cx-20260925` at `a5efa0dd9`, from `38c99a7af` + the same
+  published main + the release database tree + the two prescribed test-support files.
+  Exact `packages/database` diff and independent source review pass. Recovery normal full hook
+  **passed, exit 0**: 33 database; 11,792 API / 340 existing skips; 4,850 web / 13 existing
+  skips; both builds; 127 security; RBAC 2,727 / zero unmapped; 309 realPG / 23 suites /
+  zero skips; profiles-ON 955 files / 41 known failing files / 217 tests, none worse.
+  Earlier recovery branches are historical only.
+- **Source rehearsal passed:** HTTP at **2026-09-25 00:12:13Z**, jobs at **00:15:11Z**,
+  for source `77c787559` / recovery `a5efa0dd9`, PostgreSQL 17.11, NOSUPERUSER owner.
+  History grows by exactly eight CX migrations; `a22` refuses those exact eight;
+  recovery → release → recovery returns 200 with exact builds, unchanged full history,
+  checksums, roles/attributes/objects and pinned definers. Each jobs boot stays alive
+  45 seconds, initializes once and reports `ebayProcessingEnabled:false`.
+- **Final commit checks remain:** docs/tools follow the source head; application/database/
+  hook/workflow trees are unchanged. Source/tool/docs reviews APPROVE. The rehearsal guard
+  fix `44604ff9d` is reviewed. Expanded proof passes 29/29 synthetic tests and 39/39
+  assertion-killed mutations (13 original + 26 additional), with zero unresolved survivors.
+  Runtime guard scripts are restored byte-for-byte to `44604ff9d`.
+  The final release commit's normal hook and both exact-build rehearsals are pending.
+  Set `CX_RELEASE_SHA=<final-release-sha>` for both rehearsal scripts; defaults pin source77.
+  No package or recovery ref has been pushed. See the release record for the reviewed
+  sequence that publishes the separately gated recovery SHA from the clean final release tree.
+- **Separate scope confirmation before main push:** the existing `deploy-api.yml` workflow
+  runs `apps/api/scripts/check-ebay-consent-scopes.mts`, which GETs `auth.ebay.com` consent
+  pages for base/fake/full scopes, without sign-in, token exchange or writes. These are
+  live vendor probes, excluded from the deployment approval. Finish package preparation,
+  then obtain one narrow Owner yes for this automatic deploy gate. Do not skip or weaken it.
+- **Package B, local and unmerged:** contract coverage `a6b5fefaa` is approved;
+  eBay price read-back `915b0b4fa`, Amazon Finances `509d8af99`, eBay order writer
+  `9e4380c12`, and Etsy receipts `cf032a270` still need independent re-review.
+  Integrate in that order after Package A production verification and the required census.
+- **Production census:** the Bash permission rule for `build/tools/prod-census.mjs` (kept locally; not in the public repo)
+  is saved. The script stopped before querying because the isolated root `.env` URL
+  has no username/password. The Owner has been asked for an existing approved credential
+  source path; no credentials or environment variables were changed. Do not repeat the
+  permission request or infer empty results. If any non-IT eBay listing follows the
+  master price, ask the Owner before shipping the per-market currency change.
+- **Etsy decisions are settled:** S1 hold on paid / deduct on shipment; H1 from activation.
+  C11f6b cold verify and C11f6c audited rewrap are implemented locally; no operator grant,
+  live KMS use, rewrap or key retirement has occurred. Phase 3 engineering and Phase 4
+  activation actions remain open; Phase 5 has not passed.
 
-### Active continuation audit — 2026-09-22, after 17:00 UTC
+### Historical local continuation — 2026-09-23
+
+C9–C11d4 are committed locally through62d745662: atomic receipt identity, durable
+claims, grant generations/maintenance fences, current-refresh inspection, atomic
+revocation/owner warnings, private admission and a seller fence across reconnects.
+C11d5 now wires stored-ID processing into the receiver, worker and manual routes.
+Its final local proof:233 realPG/19files/zero skips,176 focused regressions,9 killed
+mutations, typecheck, ratchet and independent review. See
+[CX-REMAINING](build/CX-REMAINING.md), including retained failures and amendments.
+All new slices remain unpushed/undeployed. Processing defaults OFF. Quarantine
+recovery/key maintenance/archive and transactional order/erasure work remain open,
+along with Etsy/Finances/contract/UI/operational acceptance in the completion matrix.
+Live-read probe approval and Etsy stock/history policy answers are pending.
+
+A fresh read at12:52Z found published main and public health build **0a563d6d**
+(healthy200), the PES/main merge. Before any future release, integrate that published
+main in the isolated tree and retest. Do not import unpublished shared-tree history.
+This narrow read does not replace the dated439d9e3d business/flag/deployment proof.
+Published main is now merged locally with reviewed bootstrap parity/atomicity repairs
+(23 database tests,6 killed mutations; see I1 in CX-REMAINING). C11d6 now replaces
+the dynamic webhook delete with bounded in-place archival and database deletion
+guards (14 realPG archive cases,24 admission compatibility cases,78 regressions).
+C11d6 is committed as539b95c2c, with247 realPG/zero skips and91 final regressions.
+C11d7 now also fixes the old-worker hazard locally: admission/adoption remain
+unscheduled; compatible ready workers activate and claim atomically. Nine rollout
+realPG cases and five killed mutations pass. Activation still requires old workers
+and in-flight sweeps retired; rollback after activation must be protocol-aware.
+C11d7 is committed asf8f87e8af. The full hook then exposed eight old test fixtures
+violating deployed active-account uniqueness. Their distinct synthetic identities
+are corrected in reviewedc65db206b (79 focused tests). Full package gate passes:
+11504API,4603web,256realPG/zero skips,both builds,127security,2725RBAC/0unmapped;
+profiles ratchet41known failing/217tests,none new/worse. See I2 for skips/evidence.
+U1 migrates the changed retention card to shared DS controls; real-browser proof,
+final typecheck/build and independent review pass (fad6d5f60). U2 fixes Ingress202/queued
+feedback and keyboard focus locally:28 tests,2 killed mutations, actual-browser response
+proof, independent review and final build pass. Quarantine recovery/key
+maintenance remain. C11e1 now adds reviewed owner-only metadata/adoption APIs locally:
+32 admission/recovery realPG plus9 rollout cases,44 route regressions and6 killed
+mutations (committed c2eb15a99). C11e2 adds the recovery UI and fixes parent profile
+races locally:54 regressions,6 killed mutations, actual-ChannelsClient browser proof
+and independent review. Full package gates pass (11518API,4640web,264realPG/zero
+skips,both builds,127security,2727RBAC/0unmapped; ratchet unchanged). Key maintenance and remaining
+channel handlers/operational proof remain. At16:27Z main/health still0a563d6d; five
+quantity mismatches and existing critical Ads integrity remain. No production write.
+C11e2 is committed41393b908. C11f1 maintenance containment is reviewed/tested locally:
+11528 fullAPI,74 focused regressions,12 realPG and6 killed mutations. It refuses
+changed/fallback targets, excludes foreign shared credentials, includes inactive
+inventory and reports failure truthfully. Strict pinned/cold crypto and global
+quarantine maintenance remain; nothing new has been pushed or deployed.
+C11f1 is committed9bb761f16. C11f2 adds reviewed pinned/cold/lossless crypto and fixes
+DEK buffer races locally (89 focused tests in both profiles modes,44 realPG,7 killed
+mutations). Full API passes11543 tests/296skips; typecheck and independent review
+pass. C11f2 is committed396469275. C11f3 adds reviewed private quarantine binding/
+digest/key validation that preserves unsupported bodies without weakening adoption
+(111 final regressions,32 realPG,6 mutations), committede67d8c85e. C11f4 now implements
+private database CAS and atomic audit:7mutations,11569API,4640web,bothbuilds,
+127security,291realPG/zero skips,profiles ratchet unchanged; independently reviewed.
+Global inventory/operator entry point remain next. Deployment also needs a tested
+protocol-aware rollback artifact carrying all new migration folders: old0a refuses
+startup after these migrations (applied-but-missing gate), even with processing held.
+Public18:08Z remains0a563d6d/healthy; read-only18:14Z confirms production PG17.11 and
+required owner role attributes, with new migrations/maintenance roles absent.
+C11f4 is committed16a6e7e48. C11f5 adds the restricted global metadata inventory/CLI
+(63regressions,65realPG,9mutations,reviewed); API build/typecheck and fullAPI11594/329
+pass. First fullAPI overlapped Prisma generation and failed on a partially written
+engine; retained asfailed and rerun sequentially. Never overlap builds/generation
+with tests sharing that generated client.
+Cold verify/rewrap entry point and rehearsed rollback artifact remain next. Unmodified
+c65 fallback would restore known safety defects; nearere67+finalhistory is a candidate
+only. See QUARANTINE-MAINTENANCE.md for honest inventory/retirement boundaries.
+C11f5 is committed38c99a7af. C11f6a adds reviewed cooperative crypto cancellation
+and static private error reporting:125focused,11608fullAPI/329skips,45realPG/zero
+skips,8mutations,typecheck/APIbuild pass. Operator coldverify/rewrap is still next;
+keep database snapshots/locks closed across KMS work and reconcile uncertain writes.
+
+
+### Historical approved production release — 2026-09-22
+
+Final code commit **439d9e3d3 is pushed to main and serving**. Native Railway deployment
+`ab46bc3c-3490-4b5f-8ea8-238e6c39f6f0` reached SUCCESS before the same-commit CLI deployment replaced it. At 21:54Z, health/readiness returned
+200 for `439d9e3d` and protected diagnostics returned 401. The Etsy migration checksum
+and finished state match; shop `57783036` routes exclusively to Motovento. All 18
+pre-existing connections retain compared ownership/state/scopes/credential presence;
+Shopify stays connected and non-Etsy aliases are unchanged.
+
+The Owner approved deployment, including the additive routing migration. Necessary
+build/verification repairs set a compiler-only 4GiB heap and adapt test workers to
+available CPUs. Each was independently reviewed and passed normal hooks. Actual
+GitHub CI is **SUCCESS: 1,904 API tests / 4 existing skips, 3,093 web tests**. Its two-CPU
+runner used one file worker. The Deploy API workflow and final smoke test are also SUCCESS. The earlier failures are retained, not waived.
+
+Startup confirms automatic eBay setup OFF and Amazon rotation OFF (no credential
+queue configured). Vendor probes, channel activation, exact-ten deletion and each P7
+drop remain separately gated. The full plan is still open in the completion matrix.
+
+### Historical pre-deployment audit — final release above supersedes it
 
 Read [COMPLETION-MATRIX.md](COMPLETION-MATRIX.md) and
 [CX-COMPLETION](build/CX-COMPLETION.md) before historical package summaries. Fresh

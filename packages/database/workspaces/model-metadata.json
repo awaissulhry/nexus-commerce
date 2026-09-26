@@ -2096,6 +2096,31 @@
     },
     {
       "name": "WebhookEvent",
+      "fields": [
+        {
+          "name": "ebayQuarantine",
+          "kind": "object",
+          "type": "EbayNoticeQuarantine",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "EbayNoticeQuarantine",
+      "fields": [
+        {
+          "name": "resolvedReceipt",
+          "kind": "object",
+          "type": "WebhookEvent",
+          "relationFromFields": [
+            "resolvedReceiptId"
+          ],
+          "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "EbayQuarantineMaintenanceAudit",
       "fields": []
     },
     {

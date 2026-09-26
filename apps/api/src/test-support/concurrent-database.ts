@@ -64,7 +64,22 @@ export async function concurrentDatabase(options: { maxConnections?: number } = 
     try {
       await client.$disconnect()
       await Promise.all([runtimePool.end(), pool.end()])
-      if (databaseCreated) await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
+      if (databaseCreated) {
+        for (let attempt = 0; ; attempt++) {
+          try { await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); break } catch (error) {
+            const remaining = await admin.query('SELECT pid,usename,backend_type,application_name,state FROM pg_stat_activity WHERE datname=$1', [name]).catch(() => null)
+            const failure = error as { code?: string; detail?: string }
+            // An autovacuum worker runs with no role (usename NULL to us), so a NOSUPERUSER
+            // owner may not terminate it (42501); it finishes on its own. Wait briefly for
+            // that case only: any backend with a visible user is a real leaked connection.
+            if (failure.code === '42501' && attempt < 40 && remaining?.rows.length && remaining.rows.every(row => row.usename === null)) {
+              await new Promise(resolve => setTimeout(resolve, 250)); continue
+            }
+            console.error('[real-pg] disposable database cleanup failed', { code: failure.code, detail: failure.detail, attempts: attempt + 1, backends: remaining?.rows ?? 'unavailable' })
+            throw error
+          }
+        }
+      }
       if (roleCreated) await admin.query(`DROP ROLE IF EXISTS ${runtimeLogin}`)
     } finally { await admin.end() }
   }

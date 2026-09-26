@@ -57,7 +57,7 @@ it('runs verified events in their owning profile with the persisted account', as
 it('counts an event another worker claimed first as neither run nor failed', async () => {
   state.events = [{ id: 'taken', workspaceId: 'motovento', channel: 'ETSY', eventType: 'order.paid', signatureOk: true, verifiedBy: 'none', payload: {}, connectionId: 'etsy-2' }]
   state.claimedElsewhere.add('taken')
-  expect(await runInboundRetrySweep()).toEqual({ due: 1, succeeded: 0, failed: 0, unreplayable: 0 })
+  expect(await runInboundRetrySweep()).toEqual({ due: 1, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 })
   expect(state.handle).not.toHaveBeenCalled()
   expect(state.finished).not.toHaveBeenCalled()
 })

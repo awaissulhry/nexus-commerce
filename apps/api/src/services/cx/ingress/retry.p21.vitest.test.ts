@@ -59,18 +59,23 @@ const prismaMock = {
       }
       return null
     }),
-    create: vi.fn(async (args: any) => {
-      const id = `row-${rows.size + 1}`
-      rows.set(id, { id, ...args.data })
-      return { id }
+    createMany: vi.fn(async (args: any) => {
+      if ([...rows.values()].some(row => row.channel === args.data.channel && row.externalId === args.data.externalId)) return { count: 0 }
+      rows.set(args.data.id, { ...args.data })
+      return { count: 1 }
     }),
     findMany: vi.fn(async (args: any) => {
       lastRawArgs = [args]
       return rawRows.filter(row => matchesWhere(row, args.where)).slice(0, args.take)
     }),
     update: vi.fn(async (args: any) => {
-      const row = rows.get(args.where.id)
-      if (!row || !matchesWhere(row, args.where)) throw new Error('No matching inbound event')
+      // Package A's redelivery guards identity in the UPDATE itself (P2025 on mismatch);
+      // #4's writers are conditional on their claim fields. Both go through matchesWhere.
+      const key = args.where.channel_externalId
+      const row = key ? [...rows.values()].find(row => row.channel === key.channel && row.externalId === key.externalId) : rows.get(args.where.id)
+      if (key) {
+        if (!row || ['eventType', 'connectionId', 'signatureOk', 'verifiedBy'].some(field => (row[field] ?? null) !== args.where[field])) throw Object.assign(new Error('No matching receipt'), { code: 'P2025' })
+      } else if (!row || !matchesWhere(row, args.where)) throw new Error('No matching inbound event')
       applyUpdate(row, args.data)
       return row
     }),
@@ -111,7 +116,7 @@ describe('a redelivery is not a handling attempt', () => {
   it('counts a duplicate arrival as a delivery, leaving the retry budget alone', async () => {
     seed('e1', { channel: 'SHOPIFY', externalId: 'delivery-1', status: 'pending', attempts: 3 })
     const result = await recordInbound({
-      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1',
+      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1', connectionId: 'account-1',
       payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac',
     })
     expect(result.duplicate).toBe(true)
@@ -124,7 +129,7 @@ describe('a redelivery is not a handling attempt', () => {
   it('reports the status the row ALREADY had, so a receiver can tell a retry from a duplicate', async () => {
     seed('e1', { externalId: 'delivery-1', status: 'failed' })
     const result = await recordInbound({
-      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1',
+      channel: 'SHOPIFY', eventType: 'product/update', externalId: 'delivery-1', connectionId: 'account-1',
       payload: {}, signatureOk: true, verifiedBy: 'shopify_hmac',
     })
     // Without this, a channel resending BECAUSE we failed gets a 200 and is dropped.
@@ -266,7 +271,9 @@ describe('replay', () => {
       rows.get('raced')![field as string] = value
       return updateMany(args)
     })
-    expect(await replayInbound({ id: 'raced' })).toMatchObject({ ok: false, reason: 'already_pending' })
+    // Refused either way; the reason names what raced it (Package A's replay reasons).
+    const reason = field === 'processingToken' ? 'already_pending' : field === 'archivedAt' ? 'archived' : 'changed'
+    expect(await replayInbound({ id: 'raced' })).toMatchObject({ ok: false, reason })
     expect(updates).toHaveLength(0)
     expect(rows.get('raced')!.attempts).toBe(MAX_INBOUND_ATTEMPTS)
     expect(rows.get('raced')![field as string]).toBe(value)

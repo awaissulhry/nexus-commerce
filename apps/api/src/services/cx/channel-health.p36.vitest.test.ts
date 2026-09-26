@@ -13,6 +13,7 @@
  *    is an ABSENCE (there was nothing to ask) — and they must not look alike.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 
@@ -21,7 +22,7 @@ vi.mock('../../db.js', () => ({
   default: new Proxy({} as Record<string, unknown>, { get: (_t, p) => (database.client as unknown as Record<string, unknown>)[p as string] }),
 }))
 
-const WS = 'nexus_legacy_workspace'
+let WS = 'nexus_legacy_workspace'
 const flagBefore = process.env.NEXUS_WORKSPACES_ENABLED
 const inWs = <T>(work: () => Promise<T>) =>
   withWorkspace({ workspaceId: WS, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -40,21 +41,19 @@ describe('P3.6 — the four numbers, against a target', () => {
 
   const webhook = (id: string, channel: string, status: string, at: Date) =>
     q(`INSERT INTO "WebhookEvent" ("workspaceId", id, channel, "externalId", "eventType", payload, "isProcessed", status, "createdAt", "updatedAt")
-       VALUES ($1,$2,$3,$2,'t','{}'::jsonb,false,$4,$5,$5)`, [WS, id, channel, status, at])
+       VALUES ($1,$2,$3,$2,'t','{}'::jsonb,false,$4,$5,$5)`, [WS, `${WS}:${id}`, channel, status, at])
 
   const queued = (id: string, channel: string, at: Date) =>
     // `syncType` is plain TEXT here, not an enum — taken from information_schema
     // rather than guessed from the Prisma field's look.
     q(`INSERT INTO "OutboundSyncQueue" ("workspaceId", id, "productId", "targetChannel", "syncType", "syncStatus", payload, "createdAt", "updatedAt")
-       VALUES ($1,$2,'P-1',$3::"SyncChannel",'QUANTITY_UPDATE','PENDING'::"OutboundSyncStatus",'{}'::jsonb,$4,$4)`,
-      [WS, id, channel, at])
+       VALUES ($1,$2,$5,$3::"SyncChannel",'QUANTITY_UPDATE','PENDING'::"OutboundSyncStatus",'{}'::jsonb,$4,$4)`,
+      [WS, id, channel, at, `${WS}:P-1`])
 
   beforeAll(async () => {
     database = await formulaDatabase()
     process.env.NEXUS_WORKSPACES_ENABLED = '1'
     svc = await import('./channel-health.service.js')
-    await q(`INSERT INTO "Product" ("workspaceId", id, sku, name, "basePrice", "updatedAt")
-             VALUES ($1,'P-1','SKU-1','One',10,CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING`, [WS])
   }, 120_000)
 
   afterAll(async () => {
@@ -64,8 +63,10 @@ describe('P3.6 — the four numbers, against a target', () => {
   })
 
   beforeEach(async () => {
+    WS = `health-${randomUUID()}`
+    await q(`INSERT INTO "Workspace" (id,name,"createdByUserId","creationKey","updatedAt") VALUES ($1,'Health fixture','test',$1,now())`, [WS])
+    await q(`INSERT INTO "Product" ("workspaceId",id,sku,name,"basePrice","updatedAt") VALUES ($1,$2,'SKU-1','One',10,now())`, [WS, `${WS}:P-1`])
     await q(`DELETE FROM "OutboundApiCallLog"`)
-    await q(`DELETE FROM "WebhookEvent"`)
     await q(`DELETE FROM "OutboundSyncQueue"`)
     for (const k of ['NEXUS_SLO_ERROR_RATE_PCT', 'NEXUS_SLO_SLOW_CALL_MS', 'NEXUS_SLO_SLOW_CALL_PCT', 'NEXUS_SLO_BACKLOG_AGE_HOURS', 'NEXUS_SLO_DEAD_LETTERS']) delete process.env[k]
   })

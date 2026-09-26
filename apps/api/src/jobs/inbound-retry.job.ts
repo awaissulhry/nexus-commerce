@@ -20,8 +20,9 @@
  * hours arriving at the same answer, so they are dead-lettered on the first sweep with
  * a reason that names exactly what is missing.
  *
- * Every event is handled INSIDE its own workspace, read from the row. The sweep itself
- * reads across all of them, because it runs as the platform rather than as a member.
+ * Every event is handled inside its stored workspace. The cron wrapper visits active
+ * profiles; each selection remains scoped to that profile. eBay has a separate
+ * four-receipt batch and owns its claim/completion protocol.
  *
  * Cadence: every minute. The backoff decides when an event is actually due; a tight
  * cadence only decides how soon after that moment the worker notices.
@@ -36,6 +37,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { withIngressWorkspace } from '../lib/workspace-ingress.js'
 import { deadLetterInbound, dueInboundEvents, isVerifiedInbound } from '../services/cx/ingress/ledger.js'
 import { canReplayInbound, inboundHandlerFor } from '../services/cx/ingress/handlers.js'
+import { dueEbayInboundEvents, processEbayInbound, ebayInboundProcessingEnabled } from '../services/cx/ingress/ebay-processing.js'
 import { claimInbound, inboundDatabaseNow, runWithInboundClaim } from '../services/cx/ingress/claims.js'
 
 const BATCH = 50
@@ -45,27 +47,48 @@ export interface InboundRetryStats {
   succeeded: number
   failed: number
   unreplayable: number
+  deferred: number
+  skipped: number
 }
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
-let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
+let lastStats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 }
 
 /** One sweep. Exported so a test can run it without a scheduler. */
 export async function runInboundRetrySweep(now?: Date): Promise<InboundRetryStats> {
   now ??= await inboundDatabaseNow()
-  const stats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0 }
-  const events = await dueInboundEvents(BATCH, now)
-  stats.due = events.length
+  const stats: InboundRetryStats = { due: 0, succeeded: 0, failed: 0, unreplayable: 0, deferred: 0, skipped: 0 }
+  // One owner per row type: verified eBay receipts go only to the eBay processor (its own
+  // leases); every other due row goes only to the generic claimant below.
+  const [events, ebayEvents] = await Promise.all([dueInboundEvents(BATCH, now, { excludeVerifiedEbay: true }), dueEbayInboundEvents()])
+  stats.due = events.length + ebayEvents.length
+
+  // At most four remote inspections per profile/sweep; claims fence overlapping
+  // workers. Each receipt owns its completion, so never call the legacy finisher.
+  const ebayWork = Promise.all(ebayEvents.map(event => withIngressWorkspace(event.workspaceId, async () => {
+    try {
+      const outcome = await processEbayInbound(event.id)
+      if (outcome.kind === 'done') stats.succeeded++
+      else if (outcome.kind === 'retry') stats.failed++
+      else if (outcome.kind === 'dead_letter') stats.unreplayable++
+      else if (outcome.kind === 'deferred') stats.deferred++
+      else stats.skipped++
+    } catch {
+      stats.failed++
+      logger.warn('[inbound-retry] stored eBay processing could not persist its outcome', { id: event.id })
+    }
+  })))
 
   for (const event of events) {
-    if (!isVerifiedInbound(event)) {
+    if (!isVerifiedInbound(event) || (event.channel === 'EBAY' && event.verifiedBy !== 'ebay_ecdsa')) {
       await withIngressWorkspace(event.workspaceId, () =>
         deadLetterInbound(event.id, 'This delivery has no successful verification record and cannot be replayed.'),
       )
       stats.unreplayable++
       continue
     }
+    if (event.channel === 'EBAY') { stats.skipped++; continue }
     // Checked before the workspace is entered and before anything is loaded: an event
     // nothing can replay must not consume an attempt, and must not look like a
     // handler that threw.
@@ -110,6 +133,7 @@ export async function runInboundRetrySweep(now?: Date): Promise<InboundRetryStat
     }
   }
 
+  await ebayWork
   lastRunAt = now
   lastStats = stats
   return stats
@@ -132,12 +156,12 @@ export function startInboundRetryCron(): void {
   scheduledTask = cron.schedule(schedule, async () => {
     await recordCronRun('inbound-retry', async () => {
       const stats = await runInboundRetrySweep()
-      return `due=${stats.due} succeeded=${stats.succeeded} failed=${stats.failed} unreplayable=${stats.unreplayable}`
+      return `due=${stats.due} succeeded=${stats.succeeded} failed=${stats.failed} unreplayable=${stats.unreplayable} deferred=${stats.deferred} skipped=${stats.skipped}`
     }).catch((err) => {
       logger.error('inbound-retry cron: failure', { error: err instanceof Error ? err.message : String(err) })
     })
   })
-  logger.info('inbound-retry cron started', { schedule })
+  logger.info('inbound-retry cron started', { schedule, ebayProcessingEnabled: ebayInboundProcessingEnabled() })
 }
 
 export function inboundRetryStatus() {

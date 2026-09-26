@@ -9,10 +9,13 @@
  */
 import { randomBytes } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { FakeKms, FAKE_KMS_KEY_ID } from '../test-support/fake-kms.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../lib/workspace-context.js'
 
 process.env.NEXUS_CREDENTIAL_ENC_KEY = randomBytes(32).toString('base64')
 delete process.env.NEXUS_KMS_KEY_ID
 
+let fake: FakeKms
 const rows: Array<Record<string, unknown>> = []
 const updates: Array<{ where: unknown; data: Record<string, unknown> }> = []
 const appRows: Array<Record<string, unknown>> = []
@@ -20,17 +23,18 @@ const appUpdates: Array<{ where: unknown; data: Record<string, unknown> }> = []
 
 const prismaMock = {
   channelConnection: {
-    findMany: vi.fn(async () => rows),
-    update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+    findMany: vi.fn(async (args?: { where?: { workspaceId?: string; isActive?: boolean } }) => rows.filter(row =>
+      (!args?.where?.workspaceId || row.workspaceId === args.where.workspaceId) && (args?.where?.isActive === undefined || row.isActive === args.where.isActive))),
+    updateMany: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
       updates.push(args)
-      return args
+      return { count: 1 }
     }),
   },
   channelApp: {
     findMany: vi.fn(async () => appRows),
-    update: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
+    updateMany: vi.fn(async (args: { where: unknown; data: Record<string, unknown> }) => {
       appUpdates.push(args)
-      return args
+      return { count: 1 }
     }),
   },
 }
@@ -40,7 +44,12 @@ vi.mock('../utils/cron-observability.js', () => ({ recordCronRun: async (_n: str
 vi.mock('../services/cx/events.service.js', () => ({ recordConnectionEvent: vi.fn(async () => {}), SYSTEM_ACTOR: { kind: 'system' } }))
 
 const crypto = await import('../lib/crypto.js')
-const { verifyCurrentKey, runCredentialsPreflight, runCredentialsRotate, runCredentialsStatus } = await import('./cx-credentials-rotate.job.js')
+const maintenance = await import('./cx-credentials-rotate.job.js')
+const { verifyCurrentKey } = maintenance
+const owned = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
+const runCredentialsPreflight = () => owned(maintenance.runCredentialsPreflight)
+const runCredentialsRotate = () => owned(maintenance.runCredentialsRotate)
+const runCredentialsStatus = () => owned(maintenance.runCredentialsStatus)
 
 beforeEach(() => {
   rows.length = 0
@@ -49,6 +58,9 @@ beforeEach(() => {
   appUpdates.length = 0
   vi.restoreAllMocks()
   delete process.env.NEXUS_KMS_KEY_ID
+  fake = new FakeKms()
+  crypto.__cryptoTest.resetDekCache()
+  crypto.__cryptoTest.setKmsClient(fake as never)
 })
 
 describe('verifyCurrentKey', () => {
@@ -85,31 +97,27 @@ describe('runCredentialsPreflight', () => {
 
   it('says do NOT rotate when the round-trip fails', async () => {
     vi.spyOn(crypto, 'decryptCredentials').mockRejectedValueOnce(new Error('AccessDenied'))
-    const out = await runCredentialsPreflight()
-    expect(out).toMatch(/^FAILED/)
-    expect(out).toContain('do NOT rotate')
+    await expect(runCredentialsPreflight()).rejects.toThrow('do NOT rotate')
   })
 
-  it('WARNS on the state that looks fine and is not: key set, KMS not used', async () => {
+  it('fails when the configured KMS key is not actually used', async () => {
     // A wrong key id or a missing GenerateDataKey permission falls back to the env
     // key silently. "Configured" and "working" are different things.
     process.env.NEXUS_KMS_KEY_ID = 'alias/does-not-exist'
-    const out = await runCredentialsPreflight()
-    expect(out).toMatch(/^WARNING/)
-    expect(out).toContain('NOT being used')
+    fake.failGenerate = true
+    await expect(runCredentialsPreflight()).rejects.toThrow('NOT being used')
   })
 })
 
 describe('runCredentialsRotate — the guard', () => {
   beforeEach(async () => {
     const { blob, keyId } = await crypto.encryptCredentials({ refreshToken: 'r' })
-    rows.push({ id: 'c1', channelType: 'EBAY', credentialsEnc: blob, credentialsKeyId: keyId })
+    rows.push({ id: 'c1', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: blob, credentialsKeyId: keyId })
   })
 
   it('REFUSES and changes nothing when the key cannot round-trip', async () => {
     vi.spyOn(crypto, 'decryptCredentials').mockRejectedValue(new Error('AccessDeniedException: kms:Decrypt'))
-    const out = await runCredentialsRotate()
-    expect(out).toMatch(/^REFUSED/)
+    await expect(runCredentialsRotate()).rejects.toThrow(/^REFUSED/)
     expect(updates).toHaveLength(0)
   })
 
@@ -117,9 +125,8 @@ describe('runCredentialsRotate — the guard', () => {
     // Rotating here would rewrite every credential under the ENV key while the
     // operator believed they had just enabled KMS.
     process.env.NEXUS_KMS_KEY_ID = 'alias/does-not-exist'
-    const out = await runCredentialsRotate()
-    expect(out).toMatch(/^REFUSED/)
-    expect(out).toContain('would rewrite every credential under the ENV key')
+    fake.failGenerate = true
+    await expect(runCredentialsRotate()).rejects.toThrow('would rewrite every credential under the ENV key')
     expect(updates).toHaveLength(0)
   })
 
@@ -131,9 +138,8 @@ describe('runCredentialsRotate — the guard', () => {
   })
 
   it('a failure on one connection leaves that credential untouched', async () => {
-    rows.push({ id: 'c2', channelType: 'AMAZON_ADS', credentialsEnc: 'not-a-blob', credentialsKeyId: 'env' })
-    const out = await runCredentialsRotate()
-    expect(out).toContain('failed=1')
+    rows.push({ id: 'c2', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'AMAZON_ADS', credentialsEnc: 'not-a-blob', credentialsKeyId: 'env' })
+    await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
     expect(updates.find((u) => (u.where as { id: string }).id === 'c2')).toBeUndefined()
   })
 })
@@ -141,8 +147,8 @@ describe('runCredentialsRotate — the guard', () => {
 describe('runCredentialsStatus', () => {
   it('answers the question in one line, including the not-working combination', async () => {
     rows.push(
-      { id: 'a', channelType: 'EBAY', credentialsEnc: 'v1:x', credentialsKeyId: 'env', isActive: true },
-      { id: 'b', channelType: 'AMAZON', credentialsEnc: null, credentialsKeyId: null, isActive: true },
+      { id: 'a', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: (await crypto.encryptCredentials({ synthetic: 'valid-format' })).blob, credentialsKeyId: 'env', isActive: true },
+      { id: 'b', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'AMAZON', credentialsEnc: null, credentialsKeyId: null, isActive: true },
     )
     const out = await runCredentialsStatus()
     expect(out).toContain('withEnvelope=1')
@@ -162,7 +168,7 @@ describe('runCredentialsStatus', () => {
  * on a timer the way a connection grant is.
  */
 describe('runCredentialsRotate — the application secrets', () => {
-  it('rotates a v1 app secret and reports it separately from the connections', async () => {
+  it('keeps an app secret already on the environment key unchanged', async () => {
     // Force a rotation by storing a blob under a key the job will not reproduce: the
     // marker is that the stored form is v1 while the job writes v1 too, so instead we
     // assert the idempotent path below and drive the rotation with a stale v1 blob
@@ -187,8 +193,7 @@ describe('runCredentialsRotate — the application secrets', () => {
 
   it('a field that cannot be re-encrypted leaves that app row unwritten, and is reported', async () => {
     appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: 'not-a-blob', signingKeyEnc: null })
-    const out = await runCredentialsRotate()
-    expect(out).toContain('appFailed=1')
+    await expect(runCredentialsRotate()).rejects.toThrow('appFailed=1')
     expect(appUpdates).toHaveLength(0)
   })
 
@@ -196,12 +201,12 @@ describe('runCredentialsRotate — the application secrets', () => {
     const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
     appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
     const out = await runCredentialsRotate()
-    expect(out).not.toBe('no stored credentials — nothing to rotate')
+    expect(out).not.toBe('no owned connection credentials or app secrets — quarantine not examined')
     expect(out).toContain('connections=0')
   })
 
   it('reports nothing to rotate only when BOTH tables are empty', async () => {
-    await expect(runCredentialsRotate()).resolves.toBe('no stored credentials — nothing to rotate')
+    await expect(runCredentialsRotate()).resolves.toBe('no owned connection credentials or app secrets — quarantine not examined')
   })
 
   it('WRITES the row and counts appRotated when the produced key differs from the stored one', async () => {
@@ -211,12 +216,12 @@ describe('runCredentialsRotate — the application secrets', () => {
     // exactly the shape of the real migration.
     const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
     appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
-    vi.spyOn(crypto, 'reencryptCredentials').mockResolvedValue({ blob: 'v2:rewrapped', keyId: 'arn:k1', mode: 'kms' } as never)
+    process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
     const out = await runCredentialsRotate()
     expect(out).toContain('appRotated=1')
     expect(out).toContain('appAlreadyCurrent=0')
     expect(appUpdates).toHaveLength(1)
-    expect(appUpdates[0]).toMatchObject({ where: { id: 'app1' }, data: { clientSecretEnc: 'v2:rewrapped' } })
+    expect(appUpdates[0]).toMatchObject({ where: { id: 'app1' }, data: { clientSecretEnc: expect.stringMatching(/^v2:/) } })
     // The untouched column must not be written at all — an undefined signingKeyEnc in
     // the update payload would blank a secret that was simply absent.
     expect(Object.keys(appUpdates[0].data)).toEqual(['clientSecretEnc'])
@@ -226,8 +231,7 @@ describe('runCredentialsRotate — the application secrets', () => {
     const { blob } = await crypto.encryptCredentials({ clientSecret: 's' })
     appRows.push({ id: 'app1', channelKey: 'EBAY', environment: 'production', clientSecretEnc: blob, signingKeyEnc: null })
     vi.spyOn(crypto, 'decryptCredentials').mockRejectedValue(new Error('AccessDeniedException: kms:Decrypt'))
-    const out = await runCredentialsRotate()
-    expect(out).toMatch(/^REFUSED/)
+    await expect(runCredentialsRotate()).rejects.toThrow(/^REFUSED/)
     expect(appUpdates).toHaveLength(0)
   })
 })
@@ -237,14 +241,14 @@ describe('runCredentialsStatus — counts come from the BLOB, not the column', (
     // The regression this replaces: `credentialsKeyId === 'env'` counted a null column
     // as KMS-protected, so the migration reported itself finished while an env-keyed
     // envelope was still in the table. The column is nullable; the blob prefix is not.
-    rows.push({ channelType: 'EBAY', credentialsEnc: 'v1:x', credentialsKeyId: null, isActive: true })
+    rows.push({ workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: (await crypto.encryptCredentials({ synthetic: 'valid-format' })).blob, credentialsKeyId: null, isActive: true })
     const out = await runCredentialsStatus()
     expect(out).toContain('onEnvKey=1')
     expect(out).toContain('onKms=0')
   })
 
   it('keeps an unclassifiable value out of both counts', async () => {
-    rows.push({ channelType: 'EBAY', credentialsEnc: 'garbage', credentialsKeyId: 'env', isActive: true })
+    rows.push({ workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: 'garbage', credentialsKeyId: 'env', isActive: true })
     const out = await runCredentialsStatus()
     expect(out).toContain('unreadable=1')
     expect(out).toContain('onEnvKey=0')
@@ -264,5 +268,77 @@ describe('runCredentialsStatus — counts come from the BLOB, not the column', (
     appRows.push({ clientSecretEnc: null, signingKeyEnc: null })
     const out = await runCredentialsStatus()
     expect(out).toContain('appSecrets=0')
+  })
+})
+
+
+describe('maintenance target and inventory safety', () => {
+  it('retains the original when target decrypt access fails after successful preflight', async () => {
+    const original = await crypto.encryptCredentials({ synthetic: 'retained' })
+    rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
+    process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
+    const send = fake.send.bind(fake)
+    let decrypts = 0
+    vi.spyOn(fake, 'send').mockImplementation(async command => {
+      if (command.constructor.name === 'DecryptCommand' && ++decrypts > 1) throw new Error('Synthetic permission change after preflight')
+      return send(command)
+    })
+    await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
+    expect(updates).toEqual([])
+  })
+
+  it.each(['connection', 'app'])('uses the resolved preflight ARN for the %s replacement request', async kind => {
+    const original = await crypto.encryptCredentials({ synthetic: 'retained' })
+    if (kind === 'connection') rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
+    else appRows.push({ id: 'owned-app', channelKey: 'EBAY', clientSecretEnc: original.blob, signingKeyEnc: null })
+    process.env.NEXUS_KMS_KEY_ID = 'alias/operator-choice'
+    await runCredentialsRotate()
+    expect(fake.generateCalls.map(call => call.KeyId)).toEqual(['alias/operator-choice', FAKE_KMS_KEY_ID])
+  })
+
+  it.each(['connection', 'app'])('refuses a mid-run KMS fallback for a %s after successful preflight', async kind => {
+    process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
+    const original = await crypto.encryptCredentials({ synthetic: 'retained' })
+    if (kind === 'connection') rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: original.blob })
+    else appRows.push({ id: 'owned-app', channelKey: 'EBAY', clientSecretEnc: original.blob, signingKeyEnc: null })
+    const reencrypt = crypto.reencryptCredentials
+    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async (blob, target) => { fake.failGenerate = true; return reencrypt(blob, target) })
+    await expect(runCredentialsRotate()).rejects.toThrow(/failed=1|appFailed=1/)
+    expect(updates).toEqual([]); expect(appUpdates).toEqual([])
+  })
+
+  it('refuses a changed target key after preflight', async () => {
+    const old = await crypto.encryptCredentials({ synthetic: 'retained' })
+    rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: old.blob })
+    process.env.NEXUS_KMS_KEY_ID = 'alias/current'
+    const reencrypt = crypto.reencryptCredentials
+    vi.spyOn(crypto, 'reencryptCredentials').mockImplementationOnce(async (blob, target) => { fake.keyId = 'unexpected-target'; return reencrypt(blob, target) })
+    await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
+    expect(updates).toEqual([])
+  })
+
+  it('cannot downgrade KMS history when the target configuration disappears', async () => {
+    process.env.NEXUS_KMS_KEY_ID = FAKE_KMS_KEY_ID
+    const old = await crypto.encryptCredentials({ synthetic: 'retained' })
+    rows.push({ id: 'owned', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: old.blob })
+    delete process.env.NEXUS_KMS_KEY_ID
+    await expect(runCredentialsRotate()).rejects.toThrow('failed=1')
+    expect(updates).toEqual([])
+  })
+
+  it('includes inactive owned credentials and identifies the unexamined quarantine/recovery scope', async () => {
+    const { blob } = await crypto.encryptCredentials({ synthetic: 'inactive' })
+    rows.push({ id: 'inactive', workspaceId: LEGACY_WORKSPACE_ID, channelType: 'EBAY', credentialsEnc: blob, isActive: false })
+    const status = await runCredentialsStatus()
+    expect(status).toContain('withEnvelope=1')
+    expect(status).toContain('active=0')
+    expect(status).toContain('quarantine=not-examined')
+    expect(status).toContain('recovery=not-verified')
+  })
+
+  it('does not classify a truncated v1 prefix as a valid encrypted envelope', async () => {
+    rows.push({ id: 'broken', workspaceId: LEGACY_WORKSPACE_ID, credentialsEnc: 'v1:x', isActive: true })
+    expect(await runCredentialsStatus()).toContain('unreadable=1')
+    expect(await runCredentialsStatus()).toContain('onEnvKey=0')
   })
 })

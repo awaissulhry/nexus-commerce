@@ -20,6 +20,7 @@ let receiptPause: Promise<void> | undefined
 let receiptEntered: (() => void) | undefined
 
 vi.mock('../services/cx/ingress/ledger.js', () => ({
+  inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
   recordInbound: async (rec: any) => {
     recorded.push(rec)
     if (nextWrite.id && !storedRecords.has(nextWrite.id)) storedRecords.set(nextWrite.id, rec)

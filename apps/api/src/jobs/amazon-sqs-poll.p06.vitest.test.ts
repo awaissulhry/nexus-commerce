@@ -38,6 +38,7 @@ vi.mock('../services/cx/ingress/ledger.js', async () => {
   const { workspaceContext } = await import('../lib/workspace-context.js')
   let n = 0
   return {
+    inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
     recordInbound: vi.fn(async (rec: { externalId?: string; status?: string; eventType: string; lastError?: string; payload?: unknown }) => {
       if (h.ledgerDown) return { id: null, duplicate: false }
       const id = `wh-${++n}`

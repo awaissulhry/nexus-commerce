@@ -30,6 +30,7 @@ vi.mock('../services/cx/ingress/ledger.js', () => ({
     return nextWrite
   }),
   completeInbound: vi.fn(async (id: any, ok: boolean, error?: string) => { completed.push({ id, ok, error }) }),
+  inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
 }))
 // Lease timing/CAS is covered by claims.vitest.test.ts. The receiver double keeps
 // the original arrival and one active owner so routing and duplicate behavior stay observable.
@@ -277,6 +278,18 @@ describe('when the ledger or the routing is unavailable', () => {
     const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
     // 200 would tell Shopify an unrecorded, unhandled event was dealt with.
     expect(res.statusCode).toBe(503)
+    expect(res.json().error).toMatch(/inbound ledger is unavailable/)
+    expect(handled).toHaveLength(0)
+    await app.close()
+  })
+
+  it('names an identity refusal as such, not as a ledger outage', async () => {
+    nextWrite = { id: null, duplicate: true, conflict: 'identity_mismatch' } as any
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toMatch(/already bound to another account/)
+    expect(res.json().error).not.toMatch(/unavailable/)
     expect(handled).toHaveLength(0)
     await app.close()
   })
