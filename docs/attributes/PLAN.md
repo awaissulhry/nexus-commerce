@@ -338,7 +338,7 @@ The P3b screens (S5 review screen, S6 badges and "Show hidden", S8 settings scre
 | P5 | ✅ live 2026-09-26 | §10.5 |
 | P6 | ✅ API live 2026-09-26; the screens are the product-sheet session's (§11) | §10.6 |
 | Ship | ✅ PR #18 merged as `71888bd6d` (squash) after 3 CI runs; deployed 2026-09-26 | §10.7 |
-| P3b | 🟡 S0–S3 merged; S4, S5 (API) built 2026-09-26; S5's production apply waits for the Owner's word, per business | §10.9 |
+| P3b | 🟡 S0–S5 merged (S2 live); S6 (API) built 2026-09-26; S5 apply approved by the Owner (disputed: keep 3, archive `collar_style`; Xavia Racing first), not yet run; S7 needs the assortment owner; S9 open | §10.9 |
 | P7 | 🟡 first pass merged 2026-09-26 (PR #23, `b169cd76e`): cheaper rebuild, `requiredBy` sources, the missing-required query. Open: the bulk endpoints onto the index, the condition source | §10.8 |
 | P8 | 🟡 first pass merged 2026-09-26 (PR #23): `resolveFieldValue` deleted, master `attr_*` writes without a market. Open: the reader switches (shadow first) | §10.8 |
 
@@ -880,6 +880,24 @@ keys per attribute and readiness rows by state.
   or the concept list's). The review screen (`settings/pim/attributes/placement/`) is the product-sheet session's; until
   it exists the preview can be read and approved from this report.
 
+**S6 built — API (2026-09-26, branch `feat/attributes-p3b-s6`): "used by" and dormant.**
+
+- `attribute-usage.service.ts`: a channel DECLARES an attribute through its concept binding (`semanticKey` → the
+  catalogue's `bindings`), a mapping rule of one of its markets (`Marketplace.schemaMapping`, source or fallback), its
+  cached schema (Amazon: a property of a cached product type), or the attribute's placement. The declaring channels
+  in the footprint USE it. DORMANT = no connected user and no family requirement.
+- The Shared (family) column set: each dictionary column carries `usedBy`; a dormant one gets `defaultVisible: false`
+  and stays in the set (the "Show hidden" section of the Customise dialog is the product-sheet session's).
+  `GET /api/attributes/usage` lists every attribute's `declaredBy`, `usedBy`, `requiredBy`, `dormant` (for S8).
+- `dictionaryVersion()` now also covers `ChannelConnection`, `Marketplace` (with its mapping rules) and the cached
+  Amazon schemas, so a connect or a mapping change shows on the next read.
+- Tests: `attribute-usage.vitest.test.ts` (13, profiles off and on; 4 planted mistakes caught): the pure rule; **F1
+  (eBay only) names only eBay** and hides the starter attributes eBay does not use (`size_system`, `fabric_type`,
+  `age_group`, `water_resistance`) while keeping them in the set; connecting Amazon shows at once; an eBay mapping rule
+  makes eBay a user. Full API suite: OFF only the 4 local-only files; ON only the baseline files.
+- Column build (private copy, best of 5): Shared family cold 40 ms, warm 7 ms; Amazon channel cold 69 ms, warm 5 ms
+  (the version read now spans 9 tables). The plan's bound was 191 ms cold.
+
 ## 11. For the product-sheet session (the screens are theirs)
 
 The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the design system was touched.
@@ -898,6 +916,7 @@ The API below is live since 2026-09-26 (PR #18). Nothing in `apps/web` or the de
 | Which channels and markets to show (P3b S1) | `GET /api/channel-footprint` → `channels[{ channel, accounts, markets }]`, `markets`, `notConnected`, `excludedMarkets` | Replaces marketplaces + connections in the scope bar when you choose; hides a channel whose accounts are all disconnected. |
 | Move an attribute to a channel, archive, restore, undo (P3b S3; settings screen S8) | `PATCH /api/attributes/:id/placement`, `POST …/archive`, `POST …/restore`, `POST /api/attributes/placement-changes/:auditId/undo` | 409 answers carry the reason (and `details`); `DELETE /api/attributes/:id` now says "Archive it instead" for a used attribute. |
 | The cleanup review screen (P3b S5) | `GET /api/attributes/placement-proposal` → `{ revision, fingerprint, disputed[], groups[{ group, rows, changes, blocked }], notInProposal }`; `POST …/apply { fingerprint, groups, includeDisputed }` → `{ batchId }`; `POST …/:batchId/undo` | Show the disputed rows first; a 409 on apply means "load again". |
+| "Used by" badges and "Show hidden" (P3b S6) | Shared columns: `usedBy: string[]` (connected channels), `defaultVisible: false` when dormant; `GET /api/attributes/usage` for the settings list | A dormant column is still in the set; show it from the Customise dialog. |
 | Save any value in an attribute cell | unchanged `PATCH /api/products/bulk` | Off a channel's closed list: saved, then flagged (`… contains an unaccepted value`) in readiness/preview. Off a business-strict list: refused, named per row. |
 | The dictionary at scale | `POST /api/attributes/bulk`, `GET /api/attributes/concepts`, `POST /api/attributes/concepts/apply` | All-or-nothing with per-row errors; apply is a dry run unless `dryRun: false`. |
 

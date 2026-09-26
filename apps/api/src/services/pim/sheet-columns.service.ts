@@ -159,6 +159,11 @@ export interface SheetColumn {
    * (2026-09-04) the sheet LANDS FULL; this is the "Essentials" preset's hint, nothing more.
    */
   defaultVisible: boolean
+  /**
+   * P3b S6 — Shared only: the connected channels that use this dictionary attribute (its concept, a mapping rule, the
+   * channel's schema, or its placement). Absent on other columns. `[]` with `defaultVisible: false` = dormant.
+   */
+  usedBy?: string[]
   /** Enum values the channel still offers but marks deprecated — warn, never block. */
   deprecatedOptions?: string[]
   /** P11 — TRUE when this column IS one of the family's variation axes (set by `/studio/sheet`). */
@@ -1454,7 +1459,18 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     }
   }
 
-  const { columns, droppedKeys, groups } = buildSheetColumns({ fields, specs, coordinates, variationAxes: input.variationAxes, englishLabels, scopeKind, familySchema })
+  const built = buildSheetColumns({ fields, specs, coordinates, variationAxes: input.variationAxes, englishLabels, scopeKind, familySchema })
+  const { droppedKeys, groups } = built
+  let columns = built.columns
+  // P3b S6 (docs/attributes/PLAN.md §10.9) — on Shared, each dictionary column names the connected channels that use it,
+  // and a DORMANT one (no connected channel uses it, no family requires it) is hidden by default. Never removed.
+  if (familySchema) {
+    const usage = await (await import('./attribute-usage.service.js')).attributeUsages()
+    columns = columns.map((c) => {
+      const u = c.writeField?.startsWith('attr_') ? usage.get(c.key) : undefined
+      return u ? { ...c, usedBy: u.usedBy, defaultVisible: c.defaultVisible && !u.dormant } : c
+    })
+  }
   for (const cov of coverage) {
     cov.columns = columns.filter((c) => c.channels?.[cov.coordinate]?.categories.includes(cov.category)).length
   }
