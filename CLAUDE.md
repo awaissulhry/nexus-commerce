@@ -2,8 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-@AGENTS.md
-
 Nexus Commerce is the back office for selling on Amazon, eBay, Shopify and Etsy: catalog/PIM, listings, stock,
 orders, fulfillment and advertising. Several businesses ("business profiles", `Workspace` in code) share one
 PostgreSQL database, kept apart by row-level security.
@@ -51,12 +49,14 @@ Each app and package below has its own CLAUDE.md; it loads when you open a file 
   `node scripts/<name>.mjs` whose header states its rule; run the failing one alone.
 - Most guards are ratchets: a file may keep the violations it has, may not gain one, and a new file starts at
   zero. Fix the code; never raise a baseline to pass.
+- A guard that fails on code you did not change: report it clearly, with the script name.
 
 ## Definition of done
 - `npm run typecheck -w <workspace>` passes for every workspace you changed.
 - The tests of the changed area pass (the file or directory, not the whole suite).
 - Schema changed → a migration in the same PR and `npm run check:drift` passes (packages/database/CLAUDE.md).
-- UI: design-system components, and no new Tailwind classes (apps/web/CLAUDE.md).
+- UI: design-system components, and no new Tailwind classes (apps/web/CLAUDE.md). Check it by keyboard, and in
+  light and dark at phone and desktop widths.
 
 ## Hard rules
 1. **Nothing from this machine touches production.** On this machine the root `.env` holds the production
