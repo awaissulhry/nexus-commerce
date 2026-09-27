@@ -30,7 +30,7 @@ import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
 import { wireAliasKey } from './types'
 import { wholeListWriteField } from './provenance'
-import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow } from './types'
+import type { AliasGroup, ChannelScopeChannel, ChannelScopePage, ChannelSheetRow, SheetListing } from './types'
 
 export interface UseChannelSheetOptions {
   schemaRevision?: string
@@ -204,9 +204,137 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 export const writeLandsOnListing = (cell: { writeTarget?: string } | null | undefined): boolean =>
   cell?.writeTarget === 'channelListing'
 
+/* ── Product-sheet create path, step 6 (the Owner's D1 = A, 2026-09-27) ─────────────────────────────────────────────
+ *
+ * The first channel-scope save on a coordinate where the product has no listing starts the family's inert DRAFT
+ * (parent + every variant) on the server, in the save's own transaction. The token for "I saw no listing" is version
+ * 0 — the projection's convention, and the one the bulk route now accepts:
+ *   - a channel write on a row with no listing sends `expectedVersion: 0` (it used to send none, which the price and
+ *     fulfilment doors refused with the wrong reason);
+ *   - a 200 may carry `createdListings` (the whole started family): every grid row it names adopts its listing at once,
+ *     so the next save on ANY row of the family carries the real id and version without a reload;
+ *   - a 409 to token 0 names the listing that was there after all (`listingId`, `currentVersion`): the row adopts it
+ *     and the save is sent ONCE more at that version — never a loop. Every other conflict is answered as before.
+ */
+
+/** "I saw no listing on this coordinate" — a listing's own version is never 0 (the schema starts it at 1). */
+export const NO_LISTING_VERSION = 0
+
+/** One listing a save started, as the server reports it (`createdListings[]`). */
+export interface CreatedListing {
+  productId: string
+  listingId: string
+  /** The version it holds after the save's writes; `null` when the server could not read it back. */
+  version: number | null
+}
+
+/** The listings a save started, from its answer. Anything malformed is left out rather than guessed. */
+export function createdListingsOf(body: unknown): CreatedListing[] {
+  const list = (body as { createdListings?: unknown } | null)?.createdListings
+  if (!Array.isArray(list)) return []
+  return list.flatMap((entry) => {
+    const e = entry as { productId?: unknown; listingId?: unknown; version?: unknown } | null
+    if (!e || typeof e.productId !== 'string' || typeof e.listingId !== 'string') return []
+    const version = typeof e.version === 'number' && Number.isSafeInteger(e.version) ? e.version : null
+    return [{ productId: e.productId, listingId: e.listingId, version }]
+  })
+}
+
+/** The API's `FOLLOW_FLAGS` (`studio-sheet.service.ts`): all true on a started draft, their schema default. */
+const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterPrice', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
+
+/**
+ * A listing the save STARTED: every field is what `ensureDraftListings` writes (the API's one creator — DRAFT, never
+ * published, paused, no channel id, no price or quantity), so the row reads as the draft it is until the next read.
+ */
+export function startedDraftListing(id: string, version: number): SheetListing {
+  return {
+    id, version, listingStatus: 'DRAFT', isPublished: false, offerActive: true, price: null, quantity: null,
+    externalListingId: null, syncPaused: true, follows: Object.fromEntries(FOLLOW_FLAGS.map((flag) => [flag, true])),
+  }
+}
+
+/**
+ * A listing known only from a version-0 conflict: its id and version, nothing else. Its status reads "not recorded"
+ * (empty) and it carries no channel id until the sheet's next read, which follows every settled save — so nothing on
+ * screen calls it a draft (`isStillDraftListing` is false for it) or a live listing meanwhile.
+ */
+function conflictListing(id: string, version: number): SheetListing {
+  return { id, version, listingStatus: '', isPublished: false, offerActive: true, price: null, quantity: null, externalListingId: null, follows: {} }
+}
+
+/**
+ * Adopt the listings a save started into every grid row they belong to: the saved row and its family, because the
+ * server starts the parent and every variant together. Only rows of the saved row's alias that hold no listing yet
+ * (a started draft never replaces a listing the sheet already read); an entry without a read-back version is left for
+ * the next read — a save on that row sends 0 and adopts from the conflict. Returns the rows it changed.
+ */
+export function adoptCreatedListings(
+  rows: Iterable<ChannelSheetRow>,
+  created: readonly CreatedListing[],
+  aliasId: string | null,
+): ChannelSheetRow[] {
+  const adopted: ChannelSheetRow[] = []
+  for (const row of rows) {
+    if (row.listing || (row.aliasId ?? '') !== (aliasId ?? '')) continue
+    const hit = created.find((entry) => entry.productId === row.id)
+    if (!hit || hit.version === null) continue
+    row.listing = startedDraftListing(hit.listingId, hit.version)
+    adopted.push(row)
+  }
+  return adopted
+}
+
+/** The listings a variation-theme save at version 0 started, from the projection it answers with. */
+export function projectionStartedListings(payload: unknown): CreatedListing[] {
+  const read = payload as {
+    version?: unknown
+    parent?: { id?: unknown; listing?: { listingId?: unknown } }
+    children?: Array<{ id?: unknown; listing?: { listingId?: unknown } }>
+  } | null
+  const parentId = read?.parent?.id, parentListing = read?.parent?.listing?.listingId
+  if (typeof parentId !== 'string' || typeof parentListing !== 'string') return []
+  const version = typeof read?.version === 'number' && Number.isSafeInteger(read.version) ? read.version : null
+  // The projection states the PARENT listing's version only; a variant's is left for the next read.
+  return [{ productId: parentId, listingId: parentListing, version }, ...(Array.isArray(read?.children) ? read.children : []).flatMap((child) =>
+    typeof child?.id === 'string' && typeof child.listing?.listingId === 'string' ? [{ productId: child.id, listingId: child.listing.listingId, version: null }] : [])]
+}
+
+/**
+ * A variation-theme save on a coordinate that HAS a listing: the projection answers with its parent listing's new
+ * version (`ProjectionRead.version`). It is the LISTING's number, so it goes to the row's listing — the one the
+ * projection names — and never to the product version the sheet writer tracks.
+ */
+export function adoptProjectionListingVersion(row: ChannelSheetRow | null, payload: unknown): void {
+  const read = payload as { version?: unknown; parent?: { listing?: { listingId?: unknown } } } | null
+  if (!row?.listing || !Number.isSafeInteger(read?.version) || read?.parent?.listing?.listingId !== row.listing.id) return
+  row.listing.version = read!.version as number
+}
+
+/** Where a channel write goes, and how the host hears about the drafts a save started. */
+export interface ChannelWriteCoord {
+  channel: ChannelScopeChannel
+  marketplace: string
+  accountId?: string
+  locale?: string
+  kindOf?: (colId: string) => string | undefined
+  /** Every row the grid holds, so a started family is adopted into all of them — not only the saved one. */
+  familyRows?: () => Iterable<ChannelSheetRow>
+  /** A save started listings on this coordinate (`adopted`: the rows that now hold one). */
+  onListingsCreated?: (created: CreatedListing[], adopted: ChannelSheetRow[]) => void
+}
+
+function reportCreated(req: SheetWriteRequest<ChannelSheetRow>, coord: ChannelWriteCoord, created: CreatedListing[]): void {
+  if (!created.length) return
+  const rows = [...(req.row ? [req.row] : []), ...(coord.familyRows?.() ?? [])]
+  // Adopted whether or not a host listens: the next save's token depends on it.
+  const adopted = adoptCreatedListings(rows, created, req.row?.aliasId ?? null)
+  coord.onListingsCreated?.(created, adopted)
+}
+
 async function commitChannelLanguage(
   req: SheetWriteRequest<ChannelSheetRow>,
-  coord: { channel: ChannelScopeChannel; marketplace: string; accountId?: string; locale?: string },
+  coord: ChannelWriteCoord,
 ): Promise<SheetWriteResult> {
   const row = req.row
   if (!row) return { ok: false, reason: 'The grid no longer holds this row — reload the sheet' }
@@ -293,10 +421,12 @@ async function commitChannelLanguage(
       reason: results.find(r => !r.ok)?.reason,
     }
   }
-  const casVersion = touchesChannel ? row.listing?.version : req.expectedVersion
+  // A channel write CAS-guards the LISTING; with no listing on the row yet, 0 says "I saw none" and the server starts
+  // the family's draft (create path, step 6). Never the product's version as a stand-in.
+  const casVersion = touchesChannel ? row.listing ? row.listing.version : NO_LISTING_VERSION : req.expectedVersion
 
   try {
-    const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+    const send = (expectedVersion: number | undefined) => fetch(`${getBackendUrl()}/api/products/bulk`, {
       method: 'PATCH',
         signal: AbortSignal.timeout(30_000),
       credentials: 'include',
@@ -309,13 +439,30 @@ async function commitChannelLanguage(
         marketplaceContexts: [
           { channel: coord.channel, marketplace: coord.marketplace, ...(coord.accountId ? { accountId: coord.accountId } : {}), ...(coord.locale ? { locale: coord.locale } : {}), aliasKey: wireAliasKey(row.aliasId) },
         ],
-        ...(casVersion !== undefined ? { expectedVersion: casVersion } : {}),
+        ...(expectedVersion !== undefined ? { expectedVersion } : {}),
       }),
     })
-    const body = await res.json().catch(() => null)
+    let res = await send(casVersion)
+    let body = await res.json().catch(() => null)
+    /**
+     * The version-0 conflict: a listing WAS there (another tab's first save, or any other creator, won the race). The
+     * 409 names it — adopt its id and version and send the same edit ONCE more at that version. The retry's own answer
+     * is final: a second conflict is reported like every other, never retried again.
+     */
+    if (touchesChannel && casVersion === NO_LISTING_VERSION && res.status === 409 && body?.code === 'VERSION_CONFLICT' &&
+        body.versionOf === 'channelListing' && typeof body.listingId === 'string' && Number.isSafeInteger(body.currentVersion) &&
+        (!row.listing || row.listing.id === body.listingId)) {
+      if (row.listing) row.listing.version = body.currentVersion
+      else row.listing = conflictListing(body.listingId, body.currentVersion)
+      res = await send(body.currentVersion)
+      body = await res.json().catch(() => null)
+    }
     if (res.status >= 500 || res.ok && (!body || typeof body.updated !== 'number' && !Array.isArray(body.errors))) {
       return { ok: false, unreachable: true, reason: 'Save confirmation was unavailable. Checking the stored values.' }
     }
+    // The drafts this save started: adopted into the saved row and its whole family BEFORE the version write-back
+    // below, which then lands on the listing the saved row now holds.
+    if (res.ok) reportCreated(req, coord, createdListingsOf(body))
     const raw = typeof body?.currentVersion === 'number' ? body.currentVersion : undefined
     /**
      * 🔴 `versionOf` says WHICH ROW the number belongs to — read it, never infer it.
@@ -472,7 +619,7 @@ export async function updateListingAlias(input: {
 
 export function commitChannelRow(
   req: SheetWriteRequest<ChannelSheetRow>,
-  coord: { channel: ChannelScopeChannel; marketplace: string; accountId?: string; locale?: string; kindOf?: (colId: string) => string | undefined },
+  coord: ChannelWriteCoord,
 ): Promise<SheetWriteResult> {
   /**
    * VT.2 — a `variationTheme` cell leaves by its OWN route, exactly as the master sheet's does.
@@ -494,7 +641,18 @@ export function commitChannelRow(
        the URL would address no product at all. */
     const productId = req.row?.id ?? req.rowId.split(':').pop() ?? req.rowId
     return (async () => {
-      const themed = await commitVariationTheme({ ...req, cells: theme }, productId)
+      /* Create path, step 6 — a theme saved at version 0 ("no listing here") started the family's draft on this
+         coordinate (`writeProjectionMapping`, step 4). The projection it answers with names the started listings. */
+      const themed = await commitVariationTheme({ ...req, cells: theme }, productId, (after, payload) => {
+        if (after.write?.endpoint !== 'projection') return
+        // The projection's `version` is the parent LISTING's: onto `row.listing`, never the row's product version.
+        if (after.write.expectedVersion !== NO_LISTING_VERSION) return adoptProjectionListingVersion(req.row, payload)
+        // The projection lists every listing the family now has here; a variant the sheet already showed listed was
+        // not started by this save, so it is not reported as started.
+        const aliasKey = req.row?.aliasId ?? ''
+        const listed = new Set([...(coord.familyRows?.() ?? [])].filter((row) => row.listing && (row.aliasId ?? '') === aliasKey).map((row) => row.id))
+        reportCreated(req, coord, projectionStartedListings(payload).filter((entry) => !listed.has(entry.productId)))
+      })
       if (rest.length === 0) return themed
       const other = await commitChannelRow({ ...req, cells: rest }, coord)
       return {

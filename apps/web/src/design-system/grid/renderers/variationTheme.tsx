@@ -300,7 +300,9 @@ export function variationThemeTooltip(cell: VariationThemeCell | null | undefine
     cell.collisions?.summary,
     cell.locked?.reason,
     ...cell.axes.filter((a) => a.unbound).map((a) => a.unbound!.reason),
-    cell.writable ? undefined : cell.writeBlockedReason ?? undefined,
+    /* The note the server states for where a save lands: why it cannot be saved here, or — when it can — what the save
+       does (`deliveryNote`: on a market with no listing yet, "Saved to the Amazon · SE draft. Publish sends it."). */
+    cell.writable ? cell.deliveryNote : cell.writeBlockedReason ?? undefined,
   )
 }
 
