@@ -10,6 +10,8 @@ const fixture = vi.hoisted(() => ({
   providerWrite: vi.fn(),
   shopPreview: vi.fn(),
   shopSend: vi.fn(),
+  fillAsins: vi.fn(),
+  seenAtFill: null as unknown,
 }))
 
 vi.mock('@nexus/database', async () => {
@@ -43,6 +45,9 @@ vi.mock('./studio-publication-ebay.js', () => ({
   ebayPublicationRequest: (plan: any, reviewId: string) => ({ operation: 'AddFixedPriceItem', xml: plan.xml.replace('<Item>', `<Item><UUID>${reviewId}</UUID>`) }),
   usesEbayInventory: () => false, prepareEbayInventoryPublication: async () => { throw new Error('Inventory is not part of this suite.') },
 }))
+// The ASIN read after an Amazon promotion calls Amazon. Here it records what it was asked, and what the database
+// showed it at that moment — the proof that it runs after the promotion committed.
+vi.mock('../amazon/listing-asin-fill.service.js', () => ({ fillAmazonListingAsins: fixture.fillAsins }))
 vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
 vi.mock('./studio-publication-amazon-changes.js', () => ({
   prepareAmazonChanges: async (_facts: any, publication: any) => ({ kind: 'amazon-changes', publication, remoteRevision: 'remote-1', products: [], schemas: [],
@@ -128,6 +133,11 @@ beforeEach(async () => {
     catch (error) { throw Object.assign(error, { notSent: true }) }
     fixture.providerWrite()
     return 'feed-database'
+  })
+  fixture.seenAtFill = null
+  fixture.fillAsins.mockImplementation(async (ids: string[]) => {
+    fixture.seenAtFill = await prisma.channelListing.findMany({ where: { id: { in: ids } }, select: { id: true, isPublished: true, listingStatus: true, syncPaused: true } })
+    return { dryRun: false, rows: [], counts: { filled: 0, not_visible_yet: ids.length, already_had_asin: 0, error: 0 } }
   })
   await prisma.bulkOperation.deleteMany({ where: { changes: { path: ['kind'], equals: 'studio-publication' } } })
   await prisma.channelListing.deleteMany({ where: { productId: { in: [productId, childId] } } })
@@ -255,15 +265,22 @@ it('Amazon ACCEPTED promotes and unpauses the accepted still-draft row, and leav
   expect(await prisma.channelListingSnapshot.findFirst({ where: { publishEventId: review.id, channelListingId: draft.id } })).toMatchObject({ outcome: 'SUBMITTED' })
   // Submitted is not accepted: nothing is promoted yet.
   expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } })).toMatchObject({ listingStatus: 'DRAFT', isPublished: false, syncPaused: true })
+  expect(fixture.fillAsins).not.toHaveBeenCalled()
   fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: false, message: 'Accepted' }] })
   expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'ACCEPTED' })
   expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } }))
     .toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: null, version: draft.version + 1 })
   expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: live.id } }))
     .toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: true, version: live.version })
-  // A repeated status read changes nothing.
+  // The ASIN read: the promoted row only (the paused live row was accepted too, and is not a promotion), and it
+  // already sees the promotion — it ran after the transaction committed.
+  await vi.waitFor(() => expect(fixture.fillAsins).toHaveBeenCalledOnce())
+  expect(fixture.fillAsins).toHaveBeenCalledWith([draft.id])
+  expect(fixture.seenAtFill).toEqual([{ id: draft.id, isPublished: true, listingStatus: 'ACTIVE', syncPaused: false }])
+  // A repeated status read changes nothing, and reads nothing again.
   await studioPublicationResult(productId, review.id!, null)
   expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: draft.id } })).version).toBe(draft.version + 1)
+  expect(fixture.fillAsins).toHaveBeenCalledOnce()
 }, 30_000)
 
 it('Amazon PARTIAL promotes only the accepted SKU; the rejected SKU stays an unpublished draft', async () => {
@@ -274,8 +291,12 @@ it('Amazon PARTIAL promotes only the accepted SKU; the rejected SKU stays an unp
   fixture.readAmazon.mockResolvedValue({ results: [{ sku: 'REMOTE-PGLITE-PUBLISH', failed: false, message: 'Accepted' }, { sku: 'REMOTE-PGLITE-CHILD', failed: true, message: 'Invalid content' }] })
   expect(await studioPublicationResult(productId, review.id!, null)).toMatchObject({ status: 'PARTIAL' })
   const where = (id: string) => ({ productId: id, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: amazonAccountId, aliasKey: '' })
-  expect(await prisma.channelListing.findFirstOrThrow({ where: where(productId) })).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false })
+  const accepted = await prisma.channelListing.findFirstOrThrow({ where: where(productId) })
+  expect(accepted).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false })
   expect(await prisma.channelListing.findFirstOrThrow({ where: where(childId) })).toMatchObject({ listingStatus: 'DRAFT', isPublished: false })
+  // Only the promoted SKU reads its ASIN; the rejected draft is not read.
+  await vi.waitFor(() => expect(fixture.fillAsins).toHaveBeenCalledOnce())
+  expect(fixture.fillAsins).toHaveBeenCalledWith([accepted.id])
 }, 30_000)
 
 it('eBay read-back promotes a paused still-draft row and lifts its pause; a paused row that is not a draft keeps its pause', async () => {
@@ -293,6 +314,8 @@ it('eBay read-back promotes a paused still-draft row and lifts its pause; a paus
     .toMatchObject({ externalListingId: '123456789012', isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: draft.version + 1 })
   expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: other.id } }))
     .toMatchObject({ externalListingId: '123456789012', isPublished: true, listingStatus: 'ACTIVE', syncPaused: true, version: other.version + 1 })
+  // eBay's receipt carries the ItemID: no ASIN read.
+  expect(fixture.fillAsins).not.toHaveBeenCalled()
 }, 30_000)
 
 it('Shopify VERIFIED keeps the rows exactly as the Shopify synchronisation wrote them — a Shopify draft stays INACTIVE', async () => {

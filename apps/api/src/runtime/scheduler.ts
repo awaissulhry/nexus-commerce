@@ -62,6 +62,7 @@ import { startReservationReconcileCron } from "../jobs/reservation-reconcile.job
 import { startOutboundQueueJanitorCron } from "../jobs/outbound-queue-janitor.job.js";
 import { startEbayItemStatusReconcileCron } from "../jobs/ebay-item-status-reconcile.job.js";
 import { startAmazonQtyReadbackCron } from "../jobs/amazon-qty-readback.job.js";
+import { startAmazonAsinFillCron } from "../jobs/amazon-asin-fill.job.js";
 import { startEbayReadbackCron } from "../jobs/ebay-readback.job.js";
 import { startShopifyQtyReadbackCron } from "../jobs/shopify-qty-readback.job.js";
 import { startAdsRegionReconcileCron } from "../jobs/p45b-ads-region-reconcile.job.js";
@@ -542,6 +543,9 @@ export async function startScheduler(): Promise<void> {
   // vs intended; the check that would have caught the 403 era in hours).
   // Default-ON; opt out via NEXUS_QTY_READBACK=0.
   startAmazonQtyReadbackCron();
+  // Published Amazon listings read their ASIN once Amazon makes them visible (Publish reads it once, at promotion).
+  // Default-ON; opt out via NEXUS_AMAZON_ASIN_FILL=0.
+  startAmazonAsinFillCron();
   // P5.2 — eBay inventory read-back → ChannelStockEvent (NEXUS_EBAY_READBACK=0 to disable)
   startEbayReadbackCron();
   // P4.3f — Shopify quantity read-back, the third channel's closed loop
