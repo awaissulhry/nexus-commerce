@@ -162,17 +162,20 @@ describe('a save on a coordinate with no listing starts one draft set and lands 
 })
 
 describe('version 0 means "I saw no listing"', () => {
-  it('against a listing that exists: 409 with THAT listing\'s version, and nothing is started or written', async () => {
+  it('against a listing that exists: 409 with THAT listing\'s id and version, and nothing is started or written', async () => {
     const before = await listingsOf(members('taken'))
+    const taken = before.find(row => row.productId === ids.takenA)!
     const result = await save({ id: ids.takenA, field: 'attr_color', value: 'Rosso' }, amazonSE, 0)
-    expect(result).toMatchObject({ status: 409, code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 4, versionOf: 'channelListing' })
+    // The id lets the sheet adopt the row at once, without a refresh.
+    expect(result).toMatchObject({ status: 409, code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 4, listingId: taken.id, versionOf: 'channelListing' })
     expect(await listingsOf(members('taken'))).toEqual(before)
   })
 
   it('a pin against a listing that exists: the same 409', async () => {
+    const [taken] = await listingsOf([ids.takenA])
     const result = await save({ id: ids.takenA, field: 'amazon_title', value: 'Svensk titel', contentAcknowledged: true,
       contentAddress: { tier: 'pin', language: 'sv', coordinate: { channel: 'AMAZON', market: 'SE' } } }, amazonSE, 0)
-    expect(result).toMatchObject({ status: 409, code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 4, versionOf: 'channelListing' })
+    expect(result).toMatchObject({ status: 409, code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 4, listingId: taken.id, versionOf: 'channelListing' })
   })
 
   it('a second save reuses the set: nothing new is started, and the returned version chains', async () => {

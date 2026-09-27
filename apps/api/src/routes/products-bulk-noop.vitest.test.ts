@@ -258,7 +258,7 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
       const result = await patch({ changes: [{ id: PRODUCT_ID, field, value: 'DEFAULT', target: 'channel', intent: 'set' }],
         marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT' }], expectedVersion: 0 })
       expect(result.statusCode).toBe(409)
-      expect(result.json()).toMatchObject({ code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 19, versionOf: 'channelListing' })
+      expect(result.json()).toMatchObject({ code: 'VERSION_CONFLICT', expectedVersion: 0, currentVersion: 19, listingId: 'listing_1', versionOf: 'channelListing' })
       expect(ensureDrafts).not.toHaveBeenCalled()
       expect(fulfilmentWrite).not.toHaveBeenCalled()
     } finally { spies.forEach(s => s.mockRestore()) }

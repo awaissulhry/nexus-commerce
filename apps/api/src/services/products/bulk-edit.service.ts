@@ -1763,10 +1763,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const accountId = connFor.get(ctx.channel) ?? null
     const aliasKey = ctx.aliasKey ?? ''
     const existing = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: ctx.channel, marketplace: ctx.marketplace,
-      channelConnectionId: accountId, aliasKey }, select: { productId: true, version: true } })
+      channelConnectionId: accountId, aliasKey }, select: { id: true, productId: true, version: true } })
     if (listingToken && expectedVersion === 0 && existing.length) throw new ProductBulkError(409, {
       code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
-      expectedVersion, currentVersion: existing[0].version, versionOf: 'channelListing',
+      expectedVersion, currentVersion: existing[0].version, listingId: existing[0].id, versionOf: 'channelListing',
     })
     const missing = productIds.filter(id => !existing.some(row => row.productId === id))
     if (!missing.length) continue

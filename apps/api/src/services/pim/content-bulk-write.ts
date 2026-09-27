@@ -57,7 +57,7 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         const listings = await prisma.channelListing.findMany({ where: { productId: product.id, channel: coordinate.channel, marketplace: coordinate.market,
           ...(coordinate.accountId ? { channelConnectionId: coordinate.accountId } : {}), aliasKey: coordinate.aliasId ?? '' }, include: { translations: true } })
         if (listings.length === 1 && input.expectedVersion === 0) throw new ProductBulkError(409, { code: 'VERSION_CONFLICT',
-          error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.', expectedVersion: 0, currentVersion: listings[0].version, versionOf: 'channelListing' })
+          error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.', expectedVersion: 0, currentVersion: listings[0].version, listingId: listings[0].id, versionOf: 'channelListing' })
         draft = listings.length === 0 && !coordinate.aliasId
         if (listings.length !== 1 && !draft) throw new Error(`${column.label} needs one existing listing and account.`)
         if (!draft) {
