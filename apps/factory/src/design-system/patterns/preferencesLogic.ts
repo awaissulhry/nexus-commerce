@@ -269,7 +269,8 @@ export function inViewCount(
   defaultLocked: readonly string[],
 ): { shown: number; total: number } {
   const locks = new Set(effectiveLocks(value, defaultLocked))
-  const nonStructural = allColumns.filter((c) => !c.locked)
+  // `uncounted` columns (the sheet's progress columns) are listed but never counted.
+  const nonStructural = allColumns.filter((c) => !c.locked && !c.uncounted)
   const shown = nonStructural.filter((c) => locks.has(c.key) || value.visibleColumns.includes(c.key)).length
   return { shown, total: nonStructural.length }
 }

@@ -796,6 +796,19 @@
 .nds-prefs-nomatch {
   padding: 12px 10px;
 }
+/* "Select all · Clear all" (2026-09-27) — the find row's link style, on a row of its own under it. (Not
+   `.nds-prefs-bulk`: that is the In-view pane's bulk-action bar.) */
+.nds-prefs-pickall {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 0 8px;
+}
+.nds-prefs-findall:disabled {
+  color: var(--nds-text-muted);
+  text-decoration: none;
+  cursor: default;
+}
 .nds-prefs-row {
   display: flex;
   align-items: center;

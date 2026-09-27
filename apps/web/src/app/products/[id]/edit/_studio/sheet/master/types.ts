@@ -38,6 +38,9 @@ export interface SheetColumn {
   localizable?: boolean
   /** Set on a <key>@<locale> column in the saved Languages view. */
   locale?: string
+  /** On a <key>@<locale> column: the field's own group before the Languages split (API since 2026-09-27). */
+  sourceGroup?: string
+  sourceGroupKey?: string
   /** `productMedia`: the gallery column. `progress`: a progress column (2026-09-26) — built by `progressColumns.ts`, never a server column. */
   managedBy?: 'productMedia' | 'progress'
   familyRules?: Record<string, { required: boolean; sortOrder: number }>

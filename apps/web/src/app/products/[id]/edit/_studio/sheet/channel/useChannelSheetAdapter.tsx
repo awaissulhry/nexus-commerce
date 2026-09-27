@@ -39,7 +39,7 @@ import { Button } from '@/design-system/primitives';
 import { Banner, EmptyState, Modal, useToast, type MenuItemDef } from '@/design-system/components';
 import { refusalWords } from '@/design-system/grid/editors/refusalWords';
 import { AliasBandCell, BandExpander } from './AliasBandCell';
-import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
+import { SCOPE_PROGRESS_COLUMN, isProgressColumn, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, type ColumnPresence } from '../progressColumns';
 import { resetSourceLabel } from './value-source';
 import { AliasPublishControl } from './AliasPublishControl';
 import { useCellFormulas } from '../../useCellFormulas';
@@ -52,7 +52,7 @@ import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
 import { addListingAlias, commitChannelRow, useChannelSheet } from './useChannelSheet';
-import { useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
+import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
 import { useAuth } from '@/lib/auth/AuthProvider';
 import { SheetTransfer } from '../../transfer/SheetTransfer';
@@ -115,6 +115,21 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const data = useReferenceNames(shopifyData, channel, marketplace, accountId);
     const refreshRef = useRef(refresh);
     refreshRef.current = refresh;
+    /* TOOLBAR REBUILD (2026-09-27) — the scope's readiness (the Editing menu's percentages) is read again after every
+       confirmed save, on Reload and on "Refresh progress". A burst of saves asks once. */
+    const refreshReadiness = useReadinessRefresh();
+    const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
+    const refreshReadinessSoonRef = useRef(() => { });
+    refreshReadinessSoonRef.current = () => {
+        if (readinessTimer.current) clearTimeout(readinessTimer.current);
+        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness(); }, 800);
+    };
+    /* When the rows (and so this scope's progress bars) were last read — "Refresh progress · read 12:04". */
+    const [progressReadAt, setProgressReadAt] = useState<number | null>(null);
+    useEffect(() => { if (data) setProgressReadAt(Date.now()); }, [data]);
+    const progressReadAtRef = useRef(progressReadAt);
+    progressReadAtRef.current = progressReadAt;
     const [tracker] = useState(() => new CellSaveTracker());
     const activeCellsRef = useRef<{
         byRow: Record<string, string[]>;
@@ -282,6 +297,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 unsettledWrites.current.delete(rowId);
                 if (ok) {
                     setLastSavedAt(savedAt);
+                    refreshReadinessSoonRef.current();
                     void refreshRef.current(() => writerRef.current?.pending === 0 && !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
                 }
             },
@@ -289,6 +305,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 if (!ok)
                     return;
                 setLastSavedAt(savedAt);
+                refreshReadinessSoonRef.current();
                 if (writerRef.current?.pending !== 0)
                     return;
                 const savedSequence = writeSeq.current;
@@ -320,7 +337,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         reporterRef.current.cleared(rows.map(row => channelWriteIdentity(row.rowId, 0, { channel, marketplace, accountId, locale, instanceId: writeInstanceId }).subject));
         writer.discard();
         reload();
-    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask]);
+        refreshReadiness();
+    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask, refreshReadiness]);
+    /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
+    const refreshProgress = useCallback(() => {
+        refreshReadiness();
+        void refreshRef.current(() => !tracker.hasUnconfirmedChanges && (getGridApi()?.getEditingCells().length ?? 0) === 0);
+    }, [refreshReadiness, tracker, getGridApi]);
     const aliasLabel = useCallback((aliasId: string | null) => {
         const alias = data?.aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(aliasId));
         return alias?.label == null ? 'Listing alias label not reported' : alias.label;
@@ -570,6 +593,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             headerName: label,
             headerTooltip: `Progress on ${label}: filled ÷ every field ${label} applies here, required and optional. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — this listing cannot be scored yet. Hover or click a bar to see what is missing. Completeness, not publish readiness.`,
             value: (row) => rowProgressValue(row, rowProgressUnscorable(row, dataRef.current?.aliases.find(alias => aliasKeyOf(alias.id) === aliasKeyOf(row.aliasId)))),
+            menu: () => [refreshProgressItem(refreshProgress, progressReadAtRef.current)],
             cell: {
                 scopeLabel: label,
                 subjectOf: (p) => (p.data as ChannelSheetRow | undefined)?.sku ?? null,
@@ -582,7 +606,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 footerLink: () => ({ label: `All products for ${label}`, href: listingsHref({ channel: data.scope.channel, market: marketplace, language: data.scope.locale }) }),
             },
         })];
-    }, [data, marketplace, getGridApi, revealCell]);
+    }, [data, marketplace, getGridApi, revealCell, refreshProgress]);
     const allColumnDefs = useMemo(() => [...progressColumns, ...columnDefs], [progressColumns, columnDefs]);
     const searchColumnLabels = useMemo(() => new Map(gridColumns.map(col => [col.key, col.optionLabels])), [gridColumns]);
     const searchTerm = search.trim().toLowerCase();
@@ -620,13 +644,13 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         apiRef,
         gridReady,
         columns: schemaColumns,
-        languages: { selected: languageScope.locales, available: languageScope.options.locales.map(language => language.code), set: languageScope.setLocales },
         viewCtx,
         identityColumn: '__identity',
         prefsBridge,
         activeChip: active,
-        setChip: setActive,
-        layoutSurface: `product-edit:layout:${channel.toUpperCase()}:${marketplace.toUpperCase()}`,
+        /* TOOLBAR REBUILD (2026-09-27) — one layout and one remembered view per channel, on every market. */
+        layoutSurface: `product-edit:layout:${channel.toUpperCase()}`,
+        legacyLayoutSurface: `product-edit:layout:${channel.toUpperCase()}:${marketplace.toUpperCase()}`,
         productType: data ? data.family?.productType ?? null : undefined,
         grid: {
             surface: surfaceKey,
@@ -828,7 +852,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [liveRead.menuItem, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [liveRead.menuItem, { id: 'refresh-progress', label: refreshProgressItem(refreshProgress, progressReadAt).name, description: `Read the progress bars of ${data?.scope.label ?? 'this scope'} again`, disabled: !data, onSelect: refreshProgress }, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             // 2026-09-27 — one wording for the chip, the dialog and the empty grid (`rulesStatus`).
             status: data ? [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))] : [],
         },

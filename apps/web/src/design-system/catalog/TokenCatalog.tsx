@@ -213,6 +213,8 @@ function PreferencesModalDemo() {
         attributeGroups
         groupToggles
         inViewCount
+        bulkPick
+        rememberInteraction
         title="Customise columns"
         open={open}
         onClose={() => setOpen(false)}
@@ -856,6 +858,17 @@ export function TokenCatalog() {
                 { id: 'edit', label: 'Edit' },
                 { id: 'dup', label: 'Duplicate' },
                 { id: 'arch', label: 'Archive', disabled: true },
+              ]}
+            />
+            {/* 2026-09-27 — section headings and an on/off item (`heading`, `checked`). */}
+            <Menu
+              label="Rows ▾"
+              items={[
+                { id: 'h-rows', label: 'Show', heading: true },
+                { id: 'all', label: 'All rows ✓' },
+                { id: 'missing', label: 'Missing required · 168 cells' },
+                { id: 'sep', separator: true },
+                { id: 'narrow', label: 'Only columns with matches', checked: true },
               ]}
             />
           </div>

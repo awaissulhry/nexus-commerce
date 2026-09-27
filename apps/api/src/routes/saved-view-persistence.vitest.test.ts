@@ -392,6 +392,29 @@ describe('team views and product-type defaults (SHEET-VIEWS P2)', () => {
   })
 })
 
+describe('the remembered view (TOOLBAR REBUILD 2026-09-27)', () => {
+  const SCOPE = 'product-edit:layout:master'
+  it('keeps the view picked last beside My layout on a per-scope working layout, and an empty My layout', async () => {
+    for (const picked of [{ kind: 'all' }, { kind: 'custom' }, { kind: 'preset', id: 'required' }, { kind: 'saved', id: 'view-9' }]) {
+      db.rows = []
+      const filters = { ...payload(), picked }
+      const response = await send('POST', '/saved-views', { surface: SCOPE, name: 'Current layout', filters })
+      expect(response.statusCode, JSON.stringify(picked)).toBe(200)
+      expect(response.json().filters).toEqual(filters)
+    }
+    db.rows = []
+    const empty = { v: 3, kind: 'columns', columns: [], columnOrder: [], lockedColumns: [], groupOrder: [], groupOverrides: {}, picked: { kind: 'all' } }
+    expect((await send('POST', '/saved-views', { surface: SCOPE, name: 'Current layout', filters: empty })).statusCode).toBe(200)
+  })
+
+  it('refuses a pick the sheet could not open', async () => {
+    for (const picked of ['all', { kind: 'languages' }, { kind: 'saved' }, { kind: 'preset', id: '  ' }, { kind: 'all', id: 'x' }, { kind: 'saved', id: 'v', extra: 1 }]) {
+      expect((await send('POST', '/saved-views', { surface: SCOPE, name: 'Current layout', filters: { ...payload(), picked } })).statusCode, JSON.stringify(picked)).toBe(400)
+    }
+    expect(db.rows).toEqual([])
+  })
+})
+
 describe('rule views (SHEET-VIEWS step 5)', () => {
   it('stores a view that follows groups, the required fields and the gaps', async () => {
     const rules = [{ kind: 'group', group: 'content' }, { kind: 'required' }, { kind: 'gaps' }]

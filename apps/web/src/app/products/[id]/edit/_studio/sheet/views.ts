@@ -51,7 +51,6 @@
  */
 import { allColumnsPreset, type GridViewPreset } from '@/design-system/grid/views/presets'
 
-import { LANGUAGES_VIEW_ID } from './languages'
 import { flaggedColumnKeys } from './flaggedColumns'
 import { defaultViewKeys, slotListViewNote } from './slotListColumns'
 import type { SheetColumn } from './master/types'
@@ -131,9 +130,9 @@ export function alwaysColumnsFor(addressable: readonly string[], structural: rea
  * QUESTION FOR THE OWNER rather than assumed.
  */
 export function structuralColumnKeys(columns: readonly SheetColumn[]): string[] {
-  // Progress columns (2026-09-26) join for the same reason: every saved view predates them, and a view saved before a
-  // column existed cannot have excluded it. They are movable, lockable and hideable like any column.
-  return columns.filter((c) => c.kind === 'variationTheme' || c.managedBy === 'progress').map((c) => c.key)
+  // Progress columns (2026-09-26) are NOT structural since the toolbar rebuild (2026-09-27): a layout may hide them
+  // on purpose, and one that never mentions them shows them (`sheetLayoutMemory.progressShown`).
+  return columns.filter((c) => c.kind === 'variationTheme').map((c) => c.key)
 }
 
 /** The #173 rule, as a preset. Was the landing view (`'narrow'`); the id changed with the role. */
@@ -341,12 +340,12 @@ export function sheetViews(
   const note = slotListViewNote(columns)
   const allKeys = defaultViewKeys(orderColumnKeys(columns, ctx), columns)
   const all = note ? { ...allColumnsPreset(allKeys), description: note } : allColumnsPreset(allKeys)
-  const languages: GridViewPreset = { id: LANGUAGES_VIEW_ID, label: 'Languages', description: 'Compare shared content languages side by side, grouped by field', columns: defaultViewKeys(columns.filter(column => column.localizable || !!column.locale).map(column => column.key), columns) }
-
+  /* TOOLBAR REBUILD (Owner, 2026-09-27): the "Languages" view is gone. Languages are the Languages menu's alone, and
+     every view shows each of its text fields in every language picked there. */
   if (serverViews && serverViews.length > 0) {
     return {
       source: 'server',
-      presets: [all, languages, ...serverViews.map((v) => ({ id: v.id, label: v.label, columns: v.columnKeys }))],
+      presets: [all, ...serverViews.map((v) => ({ id: v.id, label: v.label, columns: v.columnKeys }))],
     }
   }
 
@@ -373,9 +372,11 @@ export function sheetViews(
   const focused: GridViewPreset[] = [
     { id: ESSENTIALS_VIEW_ID, label: 'Essentials', description: 'Identity, required facts, variation axes and fields that need attention', columns: essentialsColumns(columns, ctx) },
     { id: 'family-facts', label: 'Family facts', description: 'Attributes declared by this product family', columns: columns.filter(column => column.familyRules).map(column => column.key) },
-    { id: 'localized-content', label: 'Localized content', description: `Content for ${ctx.locale}`, columns: columns.filter(column => column.storage === 'localizedContent' || Object.values(column.channels ?? {}).some(facts => facts.store?.kind === 'platformAttributes' && ['_etsyInformationLocales', '_shopifyInformationLocales'].includes(facts.store.path[0]))).map(column => column.key) },
+    /* Was "Localized content" (id kept, so a remembered pick still resolves). The fields a language changes: with two
+       or more languages picked, each shows once per language. */
+    { id: 'localized-content', label: 'Text fields', description: 'The fields each language has its own text for', columns: defaultViewKeys(columns.filter(column => column.localizable || column.storage === 'localizedContent' || Object.values(column.channels ?? {}).some(facts => facts.store?.kind === 'platformAttributes' && ['_etsyInformationLocales', '_shopifyInformationLocales'].includes(facts.store.path[0]))).map(column => column.key), columns) },
   ].filter(view => view.columns.length > 0)
-  return { source: 'rules', presets: [all, ...required, languages, ...gaps, ...focused] }
+  return { source: 'rules', presets: [all, ...required, ...gaps, ...focused] }
 }
 
 /**

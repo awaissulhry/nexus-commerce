@@ -24,8 +24,8 @@ import { FormulaHistoryDialog } from '../FormulaHistoryDialog';
 import { ExpandButton, ExpandSlot, IdentityBand, BAND_WIDTH_FLOOR, useExpanded, ProvenanceMark, actionContextMenu, actionMenuItems, useActionConfirm, useActionPress, GridExportRefused, sheetPasteProcessor, writeGate, exprOf, isFormulaDraft, landOnCell, type FormulaCandidate, type ColDef, type ICellRendererParams, type PrefsBridgeOptions } from '@/design-system/grid';
 import { getBackendUrl } from '@/lib/backend-url';
 import { ClassificationDialog } from './ClassificationDialog';
-import { SCOPE_PROGRESS_COLUMN, SHARED_PROGRESS_TIP, coordinateProgressValue, coordinateReadinessColumns, listingsHref, progressColumn, progressSheetColumn, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
-import { useStudioScope, useSaveReporter, useStudioRecord, useScopeReadiness, useViewChips, viewChipHasCell } from '../../contracts';
+import { SCOPE_PROGRESS_COLUMN, SHARED_PROGRESS_TIP, coordinateProgressValue, coordinateReadinessColumns, listingsHref, progressColumn, progressSheetColumn, refreshProgressItem, rowProgressValue, sheetFieldAction, studioFieldHref, withoutProgressColumns, type ColumnPresence } from '../progressColumns';
+import { useStudioScope, useSaveReporter, useStudioRecord, useScopeReadiness, useReadinessRefresh, useViewChips, viewChipHasCell } from '../../contracts';
 import { type RecordWriteRequest, type RecordWriteResult, type SheetRow as DrawerSheetRow } from '../../drawer';
 import { AiDraftReview, useAiDraftLayer } from '../../ai';
 import { buildSheetColumns } from '../buildSheetColumns';
@@ -54,7 +54,9 @@ import { useSheetColumns } from '../useSheetColumns';
 import { exportGridCsv } from '@/design-system/grid/export/exportGrid';
 import type { SheetExportMode } from '../sheetExport';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
-const progressKeyOf = (readyColId: string) => `progress:${readyColId.slice('ready:'.length)}`;
+/* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
+   layout that hides or pins it keeps doing so in every language. */
+const progressKeyOf = (readyColId: string) => `progress:${readyColId.slice('ready:'.length).replace(/:[^:]+$/, '')}`;
 const marketProgressTip = (label: string, language: string, computedAt: string | null) =>
     `Progress on ${label} in ${language}: filled ÷ every field ${label} applies, required and optional, from the readiness index${computedAt ? ` (computed ${new Date(computedAt).toLocaleString()})` : ''}. Red — a required field is empty. Yellow — only optional fields are empty. Green — nothing is empty. Grey — not computed yet, which is not a score. Completeness, not publish readiness.`;
 
@@ -92,6 +94,17 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* LX.FIN (R-LX-22) — the same readiness read the scope chips use; no second request. */
     const readinessQuery = useScopeReadiness();
     const readinessMatrix = readinessQuery.status === 'ready' ? readinessQuery.matrix : undefined;
+    /* TOOLBAR REBUILD (2026-09-27) — the channel · market bars are read again after every confirmed save (the server
+       rebuilds the index inside the write), on Reload and on "Refresh progress". A burst of saves asks once. */
+    const refreshReadiness = useReadinessRefresh();
+    const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (readinessTimer.current) clearTimeout(readinessTimer.current); }, []);
+    const refreshReadinessSoon = useCallback(() => {
+        if (readinessTimer.current) clearTimeout(readinessTimer.current);
+        readinessTimer.current = setTimeout(() => { readinessTimer.current = null; refreshReadiness(); }, 800);
+    }, [refreshReadiness]);
+    const readinessRef = useRef(readinessQuery);
+    readinessRef.current = readinessQuery;
     const reporter = useSaveReporter();
     const record = useStudioRecord();
     const columnByKeyRef = useRef<Map<string, SheetColumn>>(new Map());
@@ -102,9 +115,11 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         ok: boolean;
         savedAt: string;
     }) => {
-        if (ok)
+        if (ok) {
             setLastSavedAt(savedAt);
-    }, []);
+            refreshReadinessSoon();
+        }
+    }, [refreshReadinessSoon]);
     const { sheet: loadedSheet, loading, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
@@ -192,7 +207,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const contextMenuRef = useRef(getContextMenuItems);
     contextMenuRef.current = getContextMenuItems;
     const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => contextMenuRef.current(p), []);
-    const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); }, [familyQuery, reload]);
+    const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); refreshReadinessSoon(); }, [familyQuery, reload, refreshReadinessSoon]);
     onFamilyChangedRef.current = onFamilyChanged;
     const [classificationOpen, setClassificationOpen] = useState(false);
     const [formulaHistoryOpen, setFormulaHistoryOpen] = useState(false);
@@ -222,6 +237,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const impact = reloadImpact({ pending: writer.pending, refused, unknown: writer.unknownCount });
         if (!impact) {
             reload();
+            refreshReadiness();
             return;
         }
         if (!(await reloadConfirm.ask(impact)))
@@ -229,7 +245,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         reporter.cleared(sheet?.rows.map(row => row.id) ?? [...refusedRowIds]);
         writer.discard();
         reload();
-    }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm]);
+        refreshReadiness();
+    }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm, refreshReadiness]);
+    /** "Refresh progress": the rows' own bars (a quiet re-read — edits in flight stay) and the channel · market bars. */
+    const refreshProgress = useCallback(() => { refresh(); refreshReadiness(); }, [refresh, refreshReadiness]);
+    const progressMenu = useCallback(() => {
+        const q = readinessRef.current;
+        return [refreshProgressItem(refreshProgress, q.status === 'ready' ? q.at : null, q.status === 'ready' ? q.refreshError : q.status === 'error' ? q.message : null)];
+    }, [refreshProgress]);
     const mediaEditor = useProductMediaEditor(refresh, locale);
     const mediaClipboard = useMemo(() => mediaGridTransfer(formulaClipboard, mediaEditor.actions), [formulaClipboard, mediaEditor.actions]);
     /* Progress columns (2026-09-26) — members of the column model (Customise, views, locks), built by `progressColumns`
@@ -260,14 +283,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         apiRef,
         gridReady,
         columns: schemaColumns,
-        languages: { selected: languageScope.locales, available: languageScope.options.locales.map(language => language.code), set: languageScope.setLocales },
         viewCtx,
         serverViews: sheet?.views,
         identityColumn: IDENTITY_COLUMN,
         prefsBridge,
         activeChip: chipBar.active,
-        setChip: chipBar.setActive,
-        layoutSurface: `product-edit:layout:master:${market.toUpperCase()}`,
+        /* TOOLBAR REBUILD (2026-09-27) — one layout and one remembered view for the shared product, on every market. */
+        layoutSurface: 'product-edit:layout:master',
+        legacyLayoutSurface: `product-edit:layout:master:${market.toUpperCase()}`,
         productType: sheet ? sheet.family.productType ?? null : undefined,
         grid: {
             surface: 'product-edit:master',
@@ -330,6 +353,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             headerName: 'Shared product',
             headerTooltip: SHARED_PROGRESS_TIP,
             value: (row) => rowProgressValue(row),
+            menu: progressMenu,
             cell: {
                 scopeLabel: 'Shared product',
                 subjectOf,
@@ -343,6 +367,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             headerName: c.label,
             headerTooltip: marketProgressTip(c.label, languageLabel(c.language), c.computedAt),
             value: (row) => coordinateProgressValue(c.byProduct[row.id], c.missingByProduct[row.id] ?? [], c.optionalByProduct[row.id] ?? []),
+            menu: progressMenu,
             cell: {
                 scopeLabel: c.label,
                 subjectOf,
@@ -359,7 +384,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             },
         }));
         return [own, ...perMarket];
-    }, [sheet, coordinateColumns, locale]);
+    }, [sheet, coordinateColumns, locale, progressMenu]);
     const columnDefs = useMemo(() => {
         const rank = new Map(orderColumnKeys(schemaColumns, viewCtx).map((k, i) => [k, i]));
         const ordered = attributeColumns
@@ -546,7 +571,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             onReload: onReload,
             loading: loading,
             unavailable: !!error,
-            overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'refresh-progress', label: progressMenu()[0].name, description: 'Read the progress bars again — the shared product and every channel · market', onSelect: refreshProgress }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
             status: [
                 ...(staleTypes.length > 0 || (sheet?.meta.schemaMissing.length ?? 0) > 0 ? [{
                     tone: 'warning' as const,
@@ -556,6 +581,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
                         : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
                 }] : []),
                 ...familyVerbs.status,
+                ...(readinessQuery.status === 'error' ? [{ tone: 'warning' as const, label: 'Progress unavailable', detail: `The channel · market progress bars could not be read: ${readinessQuery.message} Choose ⋯ → Refresh progress to try again.` }]
+                    : readinessQuery.status === 'ready' && readinessQuery.refreshError ? [{ tone: 'warning' as const, label: 'Progress not refreshed', detail: `The bars show the last good reading. The refresh failed: ${readinessQuery.refreshError} Choose ⋯ → Refresh progress to try again.` }] : []),
             ],
         },
         toolbarExtra: <></>,

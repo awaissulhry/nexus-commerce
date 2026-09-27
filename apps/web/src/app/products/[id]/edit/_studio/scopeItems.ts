@@ -81,7 +81,10 @@ export function scopeItems(i: ScopeItemsInput): ScopeBarItem[] {
   }
   const channelItems: ScopeBarItem[] = i.channels.map(c => {
     const policy = connectionScopePolicy(c.health, c.label, i.discoveryFailed)
-    return { id: c.id, label: c.label, disabled: policy.disabled, disabledReason: policy.disabledReason ?? undefined,
+    // TOOLBAR REBUILD (2026-09-27) — on Shared the market is not on the bar, yet each channel's verdict here is for ONE
+    // market; the item names it ("Amazon · BE") so the number is never read as the channel's everywhere.
+    const label = scope === MASTER_SCOPE && market && c.markets.includes(market) ? `${c.label} · ${market}` : c.label
+    return { id: c.id, label, disabled: policy.disabled, disabledReason: policy.disabledReason ?? undefined,
       readiness: policy.disabled ? undefined : market && c.markets.includes(market) ? scored(c.id) : undefined }
   })
   return [{ id: MASTER_SCOPE, label: 'Shared product', readiness: sharedReadiness(scored(MASTER_SCOPE), channelItems, scope === MASTER_SCOPE && save.kind === 'error') }, ...channelItems]
