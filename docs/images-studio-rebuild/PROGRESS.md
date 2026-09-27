@@ -43,10 +43,31 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   from: …" had no DS size and showed at the browser's 16 px, so it read as a foreign font. The page, the preview and the
   loading state now set `--nds-font-size-base` (13 px); after the fix 0 of 62 (preview) and 0 of 208 (plan page) text
   runs are at 16 px or in a non-DS font. Guarded in the same test file.
+- **Scroll fix LIVE (#121, `e79ee631d`, 2026-09-28):** checked in production on GALE-JACKET — the wheel scrolls the
+  Media page (354 of 484 px), text 13 px, no extra panel scroll. Found after it: the Redo tooltip (hidden) made the page
+  15 px wider, so it could slide sideways → **#122 MERGED** (`ad253f4c8`) puts the tab's tooltips in a portal (0 px overflow) and sets
+  `overflow-x: hidden`.
+- **First real eBay photo send — blocked, nothing sent (2026-09-28):** the production review of GALE-JACKET eBay IT
+  "IT-GALE-JACKET" shows the colour sets already equal on eBay (Nero 7, Giallo 7: same Cloudinary URLs) and the 2
+  gallery photos the same pictures (eBay hosts copies). But 21 "Season contains an unaccepted value" issues (Nexus
+  "Tutte le stagioni", eBay's list "Tutte le stagione") block every send — even photos only. P4c changes that rule.
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
-  researched and Fix 1 built — one card per picture, copies count as the same photo, family-wide upload check, and the
+  researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **Next:** P4 (upload dialog with file-name rules, Compare, Review & publish).
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare built (below).
+
+## P4a — Compare
+- Toolbar **Compare**: one chip per destination; each set one block, each chosen destination one line (source, count,
+  photos in position order, each in its market's language version). Each line is compared with the first destination
+  that uses the set: extra photos outlined, missing ones named ("Lacks …"), "Other order". Safety is Amazon's; per-SKU
+  sets Amazon's and Shopify's (shown only when a chosen destination has one).
+- Model `compareDestinations` (`plan-page/model.ts`), dialog `plan-page/CompareDialog.tsx`, DS `Modal` + `FilterChip` +
+  `SourceIndicator` + `Thumbnail` + `Tag`. A first version in the DS data grid cut rows and hid columns inside the
+  dialog; the list layout reads better and stacks on a phone.
+- Checked on the local stack: TEST-JACKET (Amazon, eBay IT, eBay IT "Winter" with its own sets) → "4 of 6 sets differ",
+  Winter's Common "+1 · −2, Lacks Common 2 detail, Size chart IT"; keyboard (Enter opens, Tab reaches each chip, Space
+  ticks, the summary updates, Escape closes and focus returns to Compare); dark; 390 px (lines stack, no sideways
+  scroll). Test: model 7 (a deliberate break of the version rule fails it).
 
 ## P3d — polish and proof
 - **Phone:** under 720 px of page width the destinations table becomes one card per destination (title, markets or API,
