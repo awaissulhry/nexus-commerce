@@ -14,7 +14,7 @@ import {
   channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, listingStateOf, priceCellOf,
   reportedFulfilment, syncCellOf, withoutInventory, writableFor, FORMULA_REASON, PARENT_PRICE_REASON, PARENT_REASON, PINNED_BUFFER_REASON, PRICE_PERMISSION_REASON,
 } from './matrix-cells.js'
-import { businessAbsence, flattenAudience } from './matrix-cells.js'
+import { businessAbsence, effectiveFulfilment, flattenAudience } from './matrix-cells.js'
 
 const facts = (over: Partial<Parameters<typeof listingStateOf>[0]> = {}) => ({
   listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0X', offerClosedAt: null, suppressed: false, excluded: false, needsValue: false, ...over,
@@ -153,5 +153,25 @@ describe('business pricing absence — derived from the cached schema, three hon
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL', 'B2B'] })
     for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR', 'DE'))
     expect(out[0]!.reason).not.toBe(MATRIX_COPY.absentBusiness('OUTERWEAR', 'DE'))
+  })
+})
+
+describe('effectiveFulfilment — ONE rule for the sheet cell, the Matrix and the Amazon publish step (2026-09-27)', () => {
+  const nested = (code: string) => ({ fulfillment_availability: [{ fulfillment_channel_code: code }] })
+
+  it('the case that used to split: Amazon reports FBA, no typed column, product flag FBM → FBA, never FBM', () => {
+    expect(effectiveFulfilment({ typed: null, platformAttributes: nested('AMAZON_EU'), productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'reported' })
+  })
+
+  it('precedence: active offer → typed → reported → flat mirror → product', () => {
+    expect(effectiveFulfilment({ activeOfferMethod: 'FBA', typed: 'FBM', platformAttributes: nested('DEFAULT'), productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'offer' })
+    expect(effectiveFulfilment({ typed: 'FBM', platformAttributes: nested('AMAZON_EU'), productMethod: 'FBA' })).toEqual({ method: 'FBM', source: 'set' })
+    expect(effectiveFulfilment({ platformAttributes: { fulfillmentChannel: 'AFN' }, productMethod: 'FBM' })).toEqual({ method: 'FBA', source: 'mirror' })
+    expect(effectiveFulfilment({ platformAttributes: {}, productMethod: 'FBA' })).toEqual({ method: 'FBA', source: 'product' })
+  })
+
+  it('nothing says anything → null, so a new listing must still choose', () => {
+    expect(effectiveFulfilment({})).toBeNull()
+    expect(effectiveFulfilment({ typed: '', platformAttributes: { fulfillmentChannel: 'weird' }, productMethod: null })).toBeNull()
   })
 })

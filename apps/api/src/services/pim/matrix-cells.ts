@@ -161,6 +161,39 @@ export function deriveFulfilment(channel: string, flatChannel: unknown, productM
   return String(productMethod ?? '').toUpperCase() === 'FBA' ? 'FBA' : 'FBM'
 }
 
+/**
+ * 2026-09-27 — ONE rule for "which fulfilment does this Amazon coordinate use", read by the product sheet's
+ * Fulfillment method cell, the Matrix and the Amazon publish step. It used to be three: the Matrix read
+ * `typed ?? flat mirror ?? product`, publish read `active offer ?? typed ?? product`, and the sheet read the nested
+ * code first — so a listing Amazon runs as FBA, with no typed column and a product flag of FBM, was shown FBA and
+ * published as FBM.
+ *
+ * Order: an active offer's method → the typed column (`setFulfillmentMethod` writes it with both mirrors) → Amazon's
+ * own reported code (the nested key a pull writes and the FBA guard reads) → the flat mirror → the product's flag.
+ * `null` when nothing says anything: a new listing must still choose (the publish step refuses it by name).
+ */
+export function effectiveFulfilment(input: {
+  activeOfferMethod?: string | null
+  typed?: string | null
+  platformAttributes?: unknown
+  productMethod?: string | null
+}): { method: 'FBA' | 'FBM'; source: 'offer' | 'set' | 'reported' | 'mirror' | 'product' } | null {
+  const named = (v: unknown): 'FBA' | 'FBM' | null => {
+    const s = typeof v === 'string' ? v.toUpperCase() : ''
+    return s === 'FBA' || s === 'AFN' ? 'FBA' : s === 'FBM' || s === 'MFN' || s === 'MERCHANT' ? 'FBM' : null
+  }
+  const offer = named(input.activeOfferMethod)
+  if (offer) return { method: offer, source: 'offer' }
+  const typed = named(input.typed)
+  if (typed) return { method: typed, source: 'set' }
+  const reported = named(reportedFulfilment(input.platformAttributes))
+  if (reported) return { method: reported, source: 'reported' }
+  const mirror = named((input.platformAttributes as { fulfillmentChannel?: unknown } | null)?.fulfillmentChannel)
+  if (mirror) return { method: mirror, source: 'mirror' }
+  const product = named(input.productMethod)
+  return product ? { method: product, source: 'product' } : null
+}
+
 /** Amazon's last REPORTED channel — the nested key the flat-file PULL writes from Amazon's own data. */
 export function reportedFulfilment(platformAttributes: unknown): 'AFN' | 'MFN' | null {
   const code = String((platformAttributes as { fulfillment_availability?: Array<{ fulfillment_channel_code?: unknown }> } | null)?.fulfillment_availability?.[0]?.fulfillment_channel_code ?? '').toUpperCase()
