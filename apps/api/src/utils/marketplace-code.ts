@@ -50,7 +50,10 @@ export const MARKETPLACE_ID_TO_CODE: Record<string, string> = {
   A2VIGQ35RCS4UG: 'AE',
   A17E79C6D8DWNP: 'SA',
   A2Q3Y263D00KWC: 'BR',
-  AE08WJ6YKNBMC: 'BE',
+  // 🔴 South Africa (amazon.co.za), not Belgium. It was mapped to 'BE' AFTER AMEN7PMS3EDWL, and the
+  // inverse map keeps the LAST id per code, so marketplaceCodeToId('BE') returned South Africa's id
+  // to the Amazon image routes. Corrected 2026-09-27 (Amazon's SP-API marketplace id table).
+  AE08WJ6YKNBMC: 'ZA',
   ARBP9OOSHTCHU: 'EG',
   A33AVAJ2PDY3EV: 'TR',
   A21TJRUUN4KGV_IN: 'IN',
