@@ -336,7 +336,17 @@ export async function commitVariationTheme<T>(
       const payload = await res.json().catch(() => ({}))
       if (res.ok) {
         cells[cell.colId] = { ok: true }
-        const next = (payload as { version?: number; product?: { version?: number } }).version ?? (payload as { product?: { version?: number } }).product?.version
+        /**
+         * 🔴 WHICH ROW the answer's `version` counts depends on the ENDPOINT, and the result's `version` is always the
+         * PRODUCT's (the sheet writer stores it as the row's product version, and `seed` only ever raises it).
+         *  - `variation-axes` (master) answers `{ version }` of the family PRODUCT it wrote — the product version.
+         *  - `projection` (a channel coordinate) answers `ProjectionRead.version`: the coordinate's parent LISTING
+         *    version. Returning that here made the next shared-product edit on the parent send the listing's number (a
+         *    false 409), so only a product version the answer actually states (`product.version`) is taken, and the
+         *    listing version reaches the caller through `onSaved` (the channel sheet writes it to `row.listing`).
+         */
+        const stated = payload as { version?: unknown; product?: { version?: unknown } }
+        const next = decision.endpoint === 'variation-axes' ? stated.version ?? stated.product?.version : stated.product?.version
         if (typeof next === 'number') version = next
         if (after) onSaved?.(after, payload)
       } else {

@@ -300,6 +300,17 @@ export function projectionStartedListings(payload: unknown): CreatedListing[] {
     typeof child?.id === 'string' && typeof child.listing?.listingId === 'string' ? [{ productId: child.id, listingId: child.listing.listingId, version: null }] : [])]
 }
 
+/**
+ * A variation-theme save on a coordinate that HAS a listing: the projection answers with its parent listing's new
+ * version (`ProjectionRead.version`). It is the LISTING's number, so it goes to the row's listing — the one the
+ * projection names — and never to the product version the sheet writer tracks.
+ */
+export function adoptProjectionListingVersion(row: ChannelSheetRow | null, payload: unknown): void {
+  const read = payload as { version?: unknown; parent?: { listing?: { listingId?: unknown } } } | null
+  if (!row?.listing || !Number.isSafeInteger(read?.version) || read?.parent?.listing?.listingId !== row.listing.id) return
+  row.listing.version = read!.version as number
+}
+
 /** Where a channel write goes, and how the host hears about the drafts a save started. */
 export interface ChannelWriteCoord {
   channel: ChannelScopeChannel
@@ -633,7 +644,9 @@ export function commitChannelRow(
       /* Create path, step 6 — a theme saved at version 0 ("no listing here") started the family's draft on this
          coordinate (`writeProjectionMapping`, step 4). The projection it answers with names the started listings. */
       const themed = await commitVariationTheme({ ...req, cells: theme }, productId, (after, payload) => {
-        if (after.write?.endpoint !== 'projection' || after.write.expectedVersion !== NO_LISTING_VERSION) return
+        if (after.write?.endpoint !== 'projection') return
+        // The projection's `version` is the parent LISTING's: onto `row.listing`, never the row's product version.
+        if (after.write.expectedVersion !== NO_LISTING_VERSION) return adoptProjectionListingVersion(req.row, payload)
         // The projection lists every listing the family now has here; a variant the sheet already showed listed was
         // not started by this save, so it is not reported as started.
         const aliasKey = req.row?.aliasId ?? ''

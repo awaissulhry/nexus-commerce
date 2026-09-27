@@ -5,6 +5,9 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { SheetWriter } from '@/design-system/grid'
+import { commitVariationTheme } from '../master/masterWrite'
+
 import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
 
@@ -530,5 +533,84 @@ describe('the variation theme on a market with no listing', () => {
     await commitChannelRow({ rowId: 'primary:root', row: parent, cells: [{ colId: 'variation_theme', value: { ...live, theme: { code: 'COLOR' }, baseline: live }, intent: 'set' }] } as never,
       { channel: 'AMAZON', marketplace: 'SE', kindOf: () => 'variationTheme', onListingsCreated: (created) => told.push(created) })
     expect(told).toEqual([])
+  })
+})
+
+
+/**
+ * The two counters stay apart after a variation-theme save (found while building step 6; it predates it).
+ *
+ * `PATCH …/studio/projection` answers with the coordinate's PARENT LISTING version (`ProjectionRead.version`). The theme
+ * commit handed that number back as the write result's `version`, which the sheet writer stores as the row's PRODUCT
+ * version — and `seed` only ever raises a version, so the next read could not lower it back. The next edit on the parent
+ * that writes the shared product then sent the listing's number (a false 409), and a channel edit on the parent sent
+ * the listing's OLD number, because the new one never reached `row.listing` (another false 409).
+ */
+describe('a variation-theme save keeps the listing version and the product version apart', () => {
+  const tracker = () => {
+    const m = new Map<string, { state: string; reason?: string }>()
+    return {
+      set: (rowId: string, colId: string, state: string, reason?: string) => m.set(`${rowId}:${colId}`, { state, reason }),
+      get: (rowId: string, colId: string) => m.get(`${rowId}:${colId}`),
+      clear: (rowId: string, colId: string) => m.delete(`${rowId}:${colId}`),
+      clearAll: () => m.clear(),
+    }
+  }
+  const live = {
+    axes: [{ axisKey: 'color', familyKey: 'Colore', target: 'color_name', included: true }],
+    theme: { code: 'COLOR' }, writable: true, writeBlockedReason: null, locked: null,
+    write: { endpoint: 'projection' as const, expectedVersion: 82, aliasKey: '', coordinate: { channel: 'AMAZON', market: 'SE', accountId: 'account-a' } },
+  }
+
+  it('a shared-product write after it sends the PRODUCT version, and a channel write sends the NEW listing version', async () => {
+    // The parent: product at 7, its Amazon · SE listing at 82 — the unrelated pair the whole token contract exists for.
+    const parent = row({ id: 'root', rowId: 'primary:root', rowKind: 'parent', version: 7, listing: { id: 'l-root', version: 82 },
+      values: { ...row().values, variation_theme: cell({ writeField: 'variation_theme', value: live as never }) } } as never)
+    const bodies: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string)
+      bodies.push({ url, body })
+      // The projection answers with the parent listing's version, and nothing about the product.
+      if (url.includes('/studio/projection')) return new Response(JSON.stringify({ version: 83, parent: { id: 'root', listing: { listingId: 'l-root' } }, children: [] }))
+      // The bulk route, answering like the server: a stale token is a 409, never a silent write.
+      const guarded = body.changes[0].target === 'channel' ? 83 : 7
+      if (body.expectedVersion !== guarded) return new Response(JSON.stringify({ code: 'VERSION_CONFLICT', currentVersion: guarded, versionOf: body.changes[0].target === 'channel' ? 'channelListing' : 'product' }), { status: 409 })
+      return new Response(JSON.stringify(body.changes[0].target === 'channel'
+        ? { updated: 1, currentVersion: 84, versionOf: 'channelListing' } : { updated: 1, currentVersion: 8, versionOf: 'product' }))
+    }))
+    const coordinate = { channel: 'AMAZON' as const, marketplace: 'SE', accountId: 'account-a', kindOf: (colId: string) => colId === 'variation_theme' ? 'variationTheme' : undefined }
+    const writer = new SheetWriter<ChannelSheetRow>({ tracker: tracker() as never, getApi: () => null, commit: (req) => commitChannelRow(req, coordinate) })
+    writer.seed([{ id: parent.rowId, version: parent.version, row: parent }])
+
+    writer.set(parent.rowId, 'variation_theme', { ...live, theme: { code: 'SIZE/COLOR' }, baseline: live }, { row: parent })
+    await writer.flush()
+    expect(bodies[0].body.expectedVersion).toBe(82)
+    // The listing version the projection answered lands on the parent LISTING.
+    expect(parent.listing).toMatchObject({ id: 'l-root', version: 83 })
+
+    // A shared-product write on the parent: the product's own 7, not the listing's 83.
+    writer.set(parent.rowId, 'sku', 'GALE-JACKET-2', { row: parent })
+    await writer.flush()
+    expect(bodies[1].body).toMatchObject({ expectedVersion: 7, changes: [{ field: 'sku', target: 'master' }] })
+
+    // A channel write on the parent: the listing's NEW 83, not the 82 it was read at.
+    writer.set(parent.rowId, 'material', 'Nylon', { row: parent })
+    await writer.flush()
+    expect(bodies[2].body).toMatchObject({ expectedVersion: 83, changes: [{ field: 'material', target: 'channel' }] })
+    expect(bodies).toHaveLength(3)
+    writer.destroy()
+  })
+
+  it('the CONTROL: on master, `variation-axes` answers the PRODUCT version, and it is still the result\'s version', async () => {
+    const master = { ...live, write: { endpoint: 'variation-axes' as const, expectedVersion: 7, aliasKey: '', coordinate: { channel: null, market: 'IT', accountId: null }, childIds: ['c1'] } }
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ version: 8 }))))
+    const result = await commitVariationTheme({ rowId: 'root', row: null, cells: [{ colId: 'variation_theme', value: { ...master, axes: [...master.axes, { axisKey: 'size', familyKey: 'Taglia', target: null, included: true }], baseline: master }, intent: 'set' }] }, 'root')
+    expect(result).toMatchObject({ ok: true, version: 8 })
+  })
+
+  it('a projection answer that states a product version is taken as the product version', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ version: 83, product: { version: 9 } }))))
+    const result = await commitVariationTheme({ rowId: 'root', row: null, cells: [{ colId: 'variation_theme', value: { ...live, theme: { code: 'SIZE/COLOR' }, baseline: live }, intent: 'set' }] }, 'root')
+    expect(result).toMatchObject({ ok: true, version: 9 })
   })
 })
