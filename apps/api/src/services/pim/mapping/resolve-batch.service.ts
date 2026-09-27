@@ -233,7 +233,7 @@ export async function resolveBatch(input: {
       where: { productId: { in: [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
       orderBy: { id: 'asc' },
     }),
-    resolveCategoriesForProducts({ productIds: [...found], channel, marketplace, mappingSnapshot: input.categoryMappingSnapshot }),
+    resolveCategoriesForProducts({ productIds: [...found], channel, marketplace, mappingSnapshot: input.categoryMappingSnapshot, channelConnectionId: connectionId }),
   ])
   const parentById = new Map(parents.map((p) => [p.id, { ...p, ...input.productChangesByProduct?.[p.id] }]))
   const listingByProduct = new Map(listings.slice().reverse().map((l) => [l.productId, { ...l, ...input.listingChangesByProduct?.[l.productId] }]))

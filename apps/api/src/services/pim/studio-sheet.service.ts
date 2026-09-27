@@ -67,7 +67,7 @@ import { withCachedSchemas } from './cached-schema-context.js'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { productCategoryContext } from './product-category-context.js'
 import { isPrimaryChannelConnection } from '../connection-resolver.service.js'
-import { categoryForListing } from './mapping/category-mapping.service.js'
+import { categoryForListing, categorySourceLabel, type CategoryResolutionSource } from './mapping/category-mapping.service.js'
 import { savedAttributeFields } from './family-sheet-schema.js'
 import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
@@ -228,6 +228,19 @@ export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' 
   writeBlockedReason: string | null
 }
 
+/** P2 (D2 = A) — the resolver's provenance for the row's channel category, with its plain-English label. */
+export interface StudioCategorySource {
+  source: CategoryResolutionSource
+  label: string
+  fromMarkets?: string[]
+  otherMarketConflicts?: string[]
+}
+function categorySourceOf(category: ResolvedCategory): StudioCategorySource {
+  return { source: category.source, label: categorySourceLabel(category),
+    ...(category.fromMarkets ? { fromMarkets: category.fromMarkets } : {}),
+    ...(category.otherMarketConflicts ? { otherMarketConflicts: category.otherMarketConflicts } : {}) }
+}
+
 export interface StudioRow {
   /** Multiple product owners can belong to one connected listing alias. */
   shopify?: import('@nexus/shared/shopify-information').ShopifySheetRow
@@ -245,6 +258,8 @@ export interface StudioRow {
   rowKind: 'parent' | 'variant'
   status: string
   productType: string | null
+  /** Channel scope only: where `productType` (the channel category) came from, e.g. another market's Amazon listing. */
+  categorySource?: StudioCategorySource
   version: number
   basePrice: number | null
   childCount: number
@@ -1222,9 +1237,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const parent = product.parentId ? (root as unknown as ProductLike) : null
       const listingRow = coordinate ? listingByRow.get(`${product.id}:${projection.id ?? ''}`) ?? null : null
 
-      const effectiveCategory = coordinate
-        ? categoryForListing(context?.defaults[product.id], coordinate.channel, listingRow?.platformAttributes).channelCategoryId
-        : product.productType
+      const rowCategory = coordinate ? categoryForListing(context?.defaults[product.id], coordinate.channel, listingRow?.platformAttributes) : null
+      const effectiveCategory = rowCategory ? rowCategory.channelCategoryId : product.productType
       const rowShape = { isParent, productType: effectiveCategory, familyId: product.familyId ?? root.familyId }
       const resolved: ResolvedAttributes = resolveAttributes({
         localizableKeys: columns.filter(c => c.storage === 'localizedContent').map(c => c.slot?.of ?? (c.key === 'name' ? 'title' : c.key)),
@@ -1629,6 +1643,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         rowKind: product.parentId === null ? 'parent' : 'variant',
         status: product.status ?? 'ACTIVE',
         productType: effectiveCategory ?? null,
+        ...(rowCategory ? { categorySource: categorySourceOf(rowCategory) } : {}),
         familyId: rowShape.familyId,
         version: product.version ?? 1,
         basePrice: decimalToNumber(product.basePrice),

@@ -73,7 +73,7 @@ export async function listMappingPreviewProducts(input: { channel: string; marke
   // because previewing a product that is not on the channel is the less useful answer.
   const channel = input.channel.toUpperCase()
   const connectionId = (await primaryConnectionIds([channel])).get(channel) ?? null
-  const categories = await resolveCategoriesForProducts({ productIds: products.map(p => p.id), channel, marketplace: input.marketplace })
+  const categories = await resolveCategoriesForProducts({ productIds: products.map(p => p.id), channel, marketplace: input.marketplace, channelConnectionId: connectionId })
   const listed = await prisma.channelListing.findMany({
     where: {
       productId: { in: products.map((p) => p.id) },

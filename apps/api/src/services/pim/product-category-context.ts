@@ -7,7 +7,8 @@ import { resolveChannelConnectionId } from '../connection-resolver.service.js'
 export async function productCategoryContext(productIds: string[], channel: string, marketplace: string, accountId?: string | null) {
   const connectionId = await resolveChannelConnectionId(channel, accountId)
   const [defaults, listings] = await Promise.all([
-    resolveCategoriesForProducts({ productIds, channel, marketplace }),
+    // The same account as this market's listings below, so a sibling market's listing of another seller never decides.
+    resolveCategoriesForProducts({ productIds, channel, marketplace, channelConnectionId: connectionId ?? null }),
     prisma.channelListing.findMany({
       where: { productId: { in: productIds }, channel: channel as SheetChannel, marketplace, channelConnectionId: connectionId ?? null },
       select: { productId: true, aliasId: true, platformAttributes: true },

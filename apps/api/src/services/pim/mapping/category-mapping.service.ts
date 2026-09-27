@@ -11,6 +11,9 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * that category inherit.
  *
  * Resolution order for one product (highest → lowest):
+ *   0. Amazon only — the product type the product's own Amazon listings carry in the OTHER markets of this
+ *      market's region, when they all agree (`source: 'listingOtherMarket'`; see `amazonRegionSiblings`). A listing
+ *      in THIS market beats all of it, in `categoryForListing`.
  *   1. its PRIMARY category's mapping for (channel, exact market)
  *   2. its primary category's mapping for (channel, '*')
  *   3. the nearest MAPPED ancestor of that category, same two steps — a mapping on
@@ -25,8 +28,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * query, not a recursive walk.
  */
 
+import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { getMappingForMarketplace } from '../schema-mapping.service.js'
+import { MARKET_CATALOGUE } from '../market-catalogue.js'
 
 export type CategoryResolutionSource =
   | 'categoryExact'    // mapped on this category, this market
@@ -35,6 +40,7 @@ export type CategoryResolutionSource =
   | 'ancestorWildcard'
   | 'productType'      // legacy Product.productType
   | 'listing'          // the category/product type assigned to this channel listing
+  | 'listingOtherMarket' // Amazon: the product's own listings in the other markets of this region, all agreeing
   | 'none'
 
 export interface ResolvedCategory {
@@ -51,6 +57,14 @@ export interface ResolvedCategory {
   reviewed: boolean
   /** Equal-priority shared category memberships need an explicit primary/category override. */
   conflicts?: string[]
+  /** `listingOtherMarket` only: the markets whose listings carry the type, e.g. `['DE', 'IT']`. */
+  fromMarkets?: string[]
+  /**
+   * The product's Amazon listings in the region's other markets DISAGREE (`['DE → OUTERWEAR', 'IT → COAT']`), so
+   * that tier chose nothing and the result below it stands. Not `conflicts`: that one blocks every cell
+   * (`resolve-batch`), while this is a fact to show beside a category that still resolved.
+   */
+  otherMarketConflicts?: string[]
 }
 
 const EMPTY: ResolvedCategory = {
@@ -101,6 +115,32 @@ export function categoryForListing(
   if (id) return { ...EMPTY, channelCategoryId: ch === 'AMAZON' ? id.toUpperCase() : id, source: 'listing' }
   if (ch !== 'AMAZON' && category?.source === 'productType') return { ...EMPTY }
   return category ?? { ...EMPTY }
+}
+
+/**
+ * Where a resolved category came from, in the operator's words. The sheet shows it beside the product type, so a type
+ * taken from another market's listing, or the product's own legacy value, never reads as a mapping.
+ */
+export function categorySourceLabel(category: ResolvedCategory): string {
+  const on = category.categoryName ?? 'its category'
+  const markets = category.fromMarkets ?? []
+  const base = ((): string => {
+    switch (category.source) {
+      case 'listing': return 'From this listing'
+      case 'listingOtherMarket': return `From this product's Amazon ${markets.length > 1 ? 'listings' : 'listing'} in ${markets.join(', ')}`
+      case 'categoryExact': return `Mapped on ${on} for this market`
+      case 'categoryWildcard': return `Mapped on ${on} for every market`
+      case 'ancestorExact': return `Inherited from the mapping on ${on} for this market`
+      case 'ancestorWildcard': return `Inherited from the mapping on ${on} for every market`
+      case 'productType': return "The product's own product type (no mapping for this market)"
+      case 'none': return category.conflicts?.length ? 'Conflicting shared categories. Choose a primary category.' : 'No category'
+      // A new source fails the type check here until it has words of its own.
+      default: { const unlabelled: never = category.source; return String(unlabelled) }
+    }
+  })()
+  return category.otherMarketConflicts?.length
+    ? `${base}. Its Amazon listings in other markets disagree: ${category.otherMarketConflicts.join(', ')}`
+    : base
 }
 
 /** `{ "en": { "name": "Coats" } }` or `{ "en": "Coats" }` — both shapes exist in the wild. */
@@ -155,14 +195,55 @@ function pick(
 }
 
 /**
+ * The other Amazon markets of this market's region, from `MARKET_CATALOGUE` (so UK and TR count as EU because the
+ * catalogue says so). A market the catalogue does not know has no region and so no siblings: nothing is guessed.
+ *
+ * Why a sibling listing outranks a mapping (P2, the Owner's D2 = A, 2026-09-27): an ASIN normally carries one product
+ * type across a region, and the listing IS Amazon's answer for this product, while a mapping is a default for a whole
+ * category. Measured before: GALE-JACKET was COAT in its four listed markets and OUTERWEAR (its own `productType`) in
+ * the seven unlisted ones, so one jacket showed COAT's rules in DE and OUTERWEAR's in BE (249 vs 163 columns).
+ */
+export function amazonRegionSiblings(marketplace: string): string[] {
+  const code = marketplace.trim().toUpperCase()
+  const own = MARKET_CATALOGUE.find(m => m.channel === 'AMAZON' && m.code === code)
+  return own ? MARKET_CATALOGUE.filter(m => m.channel === 'AMAZON' && m.region === own.region && m.code !== code).map(m => m.code) : []
+}
+
+/** productId → product type → the sibling markets whose listings carry it. One query for the whole set. */
+async function amazonTypesInSiblingMarkets(productIds: string[], marketplace: string, channelConnectionId: string | null | undefined) {
+  const markets = amazonRegionSiblings(marketplace)
+  const out = new Map<string, Map<string, Set<string>>>()
+  if (!markets.length || !productIds.length) return out
+  // Raw on purpose: `platformAttributes` averages ~12 KB per Amazon listing (a local database, 2026-09-27) and this reads up
+  // to ten markets per product, so the model API would pull megabytes per sheet load for one key. The workspace adapter
+  // scopes raw SQL exactly as it scopes model queries. `undefined` = the caller reads every account's listings.
+  const rows = await prisma.$queryRaw<Array<{ productId: string; marketplace: string; productType: string }>>(Prisma.sql`
+    SELECT DISTINCT "productId", marketplace, upper(btrim("platformAttributes"->>'productType')) AS "productType"
+    FROM "ChannelListing"
+    WHERE "productId" IN (${Prisma.join(productIds)}) AND channel = 'AMAZON' AND marketplace IN (${Prisma.join(markets)})
+      AND jsonb_typeof("platformAttributes"->'productType') = 'string' AND btrim("platformAttributes"->>'productType') <> ''
+      ${channelConnectionId === undefined ? Prisma.empty : Prisma.sql`AND "channelConnectionId" IS NOT DISTINCT FROM ${channelConnectionId}`}`)
+  for (const row of rows) {
+    const types = out.get(row.productId) ?? new Map<string, Set<string>>()
+    types.set(row.productType, (types.get(row.productType) ?? new Set()).add(row.marketplace))
+    out.set(row.productId, types)
+  }
+  return out
+}
+
+/**
  * Resolve the effective channel category for MANY products in one pass — the sheet and the
  * batch resolver both need it per row, so a per-product query would be N+1 by construction.
+ *
+ * `channelConnectionId` scopes the Amazon sibling-market listings to the account the caller reads its own listings
+ * with (the sheet, the batch resolver); omitted, every account's listings count.
  */
 export async function resolveCategoriesForProducts(input: {
   productIds: string[]
   channel: string
   marketplace: string
   mappingSnapshot?: MappingRow[]
+  channelConnectionId?: string | null
 }): Promise<Record<string, ResolvedCategory>> {
   const { channel, marketplace } = input
   const productIds = [...new Set(input.productIds)].filter(Boolean)
@@ -173,7 +254,7 @@ export async function resolveCategoriesForProducts(input: {
     where: { id: { in: productIds } }, select: { id: true, parentId: true, productType: true },
   })
   const membershipIds = [...new Set([...productIds, ...products.map(p => p.parentId).filter((id): id is string => !!id)])]
-  const [memberships, mappings] = await Promise.all([
+  const [memberships, mappings, siblingTypes] = await Promise.all([
     prisma.productCategory.findMany({
       where: { productId: { in: membershipIds } },
       select: { productId: true, categoryId: true, isPrimary: true },
@@ -189,6 +270,7 @@ export async function resolveCategoriesForProducts(input: {
         reviewedAt: true,
       },
     }),
+    channel.toUpperCase() === 'AMAZON' ? amazonTypesInSiblingMarkets(membershipIds, marketplace, input.channelConnectionId) : Promise.resolve(new Map<string, Map<string, Set<string>>>()),
   ])
 
   const mappedCategoryIds = new Set(mappings.map((m) => m.categoryId))
@@ -228,7 +310,19 @@ export async function resolveCategoriesForProducts(input: {
   })
   const names = new Map(nameRows.map((r) => [r.id, categoryName(r.name)]))
 
+  const disagreements = new Map<string, string[]>()
   for (const p of products) {
+    // Tier 0 (Amazon): the variant's own sibling listings, else its parent's, like category memberships below.
+    const sibling = siblingTypes.get(p.id) ?? siblingTypes.get(p.parentId ?? '')
+    if (sibling?.size === 1) {
+      const [[type, markets]] = [...sibling]
+      out[p.id] = { ...EMPTY, channelCategoryId: type, source: 'listingOtherMarket', fromMarkets: [...markets].sort() }
+      continue
+    }
+    // Disagreeing listings are never settled by a guess: fall through, and say so on whatever resolves below.
+    if (sibling && sibling.size > 1) {
+      disagreements.set(p.id, [...sibling].flatMap(([type, markets]) => [...markets].map(m => `${m} → ${type}`)).sort())
+    }
     const cats = (byProduct.get(p.id) ?? byProduct.get(p.parentId ?? '') ?? []).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.categoryId.localeCompare(b.categoryId))
     let resolved: ResolvedCategory | null = null
     const candidates: Array<{ primary: boolean; value: ResolvedCategory }> = []
@@ -257,6 +351,7 @@ export async function resolveCategoriesForProducts(input: {
       out[p.id] = { ...EMPTY }
     }
   }
+  for (const [id, conflicts] of disagreements) out[id] = { ...out[id], otherMarketConflicts: conflicts }
 
   for (const id of productIds) if (!out[id]) out[id] = { ...EMPTY }
   return out

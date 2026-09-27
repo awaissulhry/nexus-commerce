@@ -110,7 +110,7 @@ export interface ResolvedCell {
 
 export type CategoryResolutionSource =
   | 'categoryExact' | 'categoryWildcard' | 'ancestorExact' | 'ancestorWildcard' | 'listing'
-  | 'productType' | 'none'
+  | 'listingOtherMarket' | 'productType' | 'none'
 
 export interface ResolvedCategory {
   channelCategoryId: string | null
@@ -120,6 +120,10 @@ export interface ResolvedCategory {
   categoryId: string | null
   categoryName: string | null
   reviewed: boolean
+  /** `listingOtherMarket`: the Amazon markets whose listings of this product carry the type. */
+  fromMarkets?: string[]
+  /** The product's Amazon listings in other markets of the region disagree, so none of them decided. */
+  otherMarketConflicts?: string[]
 }
 
 export interface ResolvedProduct {

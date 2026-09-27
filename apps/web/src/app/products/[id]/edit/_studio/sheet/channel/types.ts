@@ -347,6 +347,11 @@ export interface StudioRow {
   isParent: boolean
   status: string
   productType: string | null
+  /**
+   * Where `productType` (the channel category) came from, with a plain-English `label` — e.g. "From this product's
+   * Amazon listing in DE" when the row has no listing here. `otherMarketConflicts` lists disagreeing markets.
+   */
+  categorySource?: { source: string; label: string; fromMarkets?: string[]; otherMarketConflicts?: string[] }
   version: number
   childCount: number
   /** Which alias group this row belongs to. `null` = the PRIMARY listing (PES.5 §3.2). */
