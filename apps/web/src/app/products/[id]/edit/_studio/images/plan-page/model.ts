@@ -220,6 +220,67 @@ export function destinationCells(read: MediaRead, d: MediaDestinationRow): SetCe
   })
 }
 
+// ── Compare (P4) ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One destination's copy of one set, against the first chosen destination (the reference). */
+export interface CompareCell {
+  key: string
+  /** The channel uses this set (Safety is Amazon's; per-SKU photos are Amazon's and Shopify's). */
+  applies: boolean
+  source: SetCell['source']
+  items: string[]
+  /** Photos this destination has and the reference does not (its own ids), and the reference's photos it lacks (the
+   *  reference's ids) — by photo, not by language version (a photo's versions count as one photo, D6). */
+  added: string[]
+  missing: string[]
+  /** Same photos as the reference, in a different order. */
+  reordered: boolean
+  same: boolean
+}
+export interface CompareRow { ref: MediaSetRef; label: string; kind: SetRow['kind']; same: boolean; cells: CompareCell[] }
+
+const SKU_CHANNELS: ReadonlySet<MediaChannel> = new Set(['AMAZON', 'SHOPIFY'])
+
+/**
+ * Images rebuild P4 — Compare (PLAN.md §4.3): the chosen destinations' sets side by side. Each set is one row; each
+ * destination's cell says where its photos come from and how it differs from the first chosen destination. Per-SKU
+ * sets appear only when a chosen destination has one. Pure: the page and the tests call it the same way.
+ */
+export function compareDestinations(read: MediaRead, keys: readonly string[]): CompareRow[] {
+  const chosen = keys.map(k => read.destinations.find(d => d.key === k)).filter((d): d is MediaDestinationRow => !!d?.targetable)
+  if (!chosen.length) return []
+  // One photo: any stored copy of a picture (its library card), and its language versions.
+  const card = cardOf(read)
+  const group = new Map(read.library.map(a => [a.id, a.versionGroupId ?? a.id]))
+  const photo = (id: string) => group.get(card(id)) ?? card(id)
+  const perDestination = chosen.map(d => new Map(setRows(read, { layer: 'LISTING', destination: d.key }, { skus: true }).map(r => [r.ref, r])))
+  const order: SetRow[] = []
+  for (const rows of perDestination) for (const row of rows.values()) if (!order.some(r => r.ref === row.ref)) order.push(row)
+  const applies = (d: MediaDestinationRow, row: SetRow) => row.kind === 'safety' ? d.channel === 'AMAZON' : row.kind === 'sku' ? SKU_CHANNELS.has(d.channel) : true
+  const result: CompareRow[] = []
+  for (const head of order) {
+    const cells = chosen.map((d, i): CompareCell => {
+      const row = perDestination[i].get(head.ref)
+      const source: SetCell['source'] = !row?.source ? 'none' : row.source === 'LISTING' ? 'own' : row.source === 'CHANNEL' ? 'channel' : 'shared'
+      return { key: d.key, applies: !!row && applies(d, row), source, items: row?.items ?? [], added: [], missing: [], reordered: false, same: true }
+    })
+    const used = cells.filter(c => c.applies)
+    // A per-SKU row shows only when some chosen destination that uses SKU photos has that SKU's own set.
+    if (head.kind === 'sku' && !used.some(c => c.source !== 'none')) continue
+    if (!used.length) continue
+    const reference = used[0].items.map(photo)
+    for (const cell of used) {
+      const mine = cell.items.map(photo)
+      cell.added = cell.items.filter(id => !reference.includes(photo(id)))
+      cell.missing = used[0].items.filter(id => !mine.includes(photo(id)))
+      cell.reordered = !cell.added.length && !cell.missing.length && mine.join('|') !== reference.join('|')
+      cell.same = !cell.added.length && !cell.missing.length && !cell.reordered
+    }
+    result.push({ ref: head.ref, label: head.kind === 'safety' ? 'Safety' : head.label, kind: head.kind, same: used.every(c => c.same), cells })
+  }
+  return result
+}
+
 export function checkCounts(checks: readonly MediaCheck[]) {
   const unique = [...new Map(checks.map(c => [`${c.severity}|${c.message}`, c])).values()]
   return { errors: unique.filter(c => c.severity === 'error'), warnings: unique.filter(c => c.severity === 'warning') }

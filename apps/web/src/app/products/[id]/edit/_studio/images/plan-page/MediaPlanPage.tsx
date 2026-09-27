@@ -15,6 +15,7 @@ import { LibraryManager } from './LibraryManager'
 import { PlanBoard } from './PlanBoard'
 import { DestinationsTable } from './DestinationsTable'
 import { ChannelView } from './ChannelView'
+import { CompareDialog } from './CompareDialog'
 import {
   CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
   type LayerView, type MediaChannel, type MediaRead,
@@ -58,6 +59,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [managing, setManaging] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)
+  const [comparing, setComparing] = useState(false)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -106,6 +108,11 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   const axis = viewAxis(read, stack)
   const skuCount = ownedSkuSets(read, shared)
   const openDestination = read.destinations.find(d => d.key === open) ?? null
+  // Compare starts from the open destination and the others of its channel, else the first three destinations.
+  const comparable = read.destinations.filter(d => d.targetable)
+  const compareStart = openDestination?.targetable
+    ? [openDestination.key, ...comparable.filter(d => d.key !== openDestination.key && d.channel === openDestination.channel).map(d => d.key)].slice(0, 3)
+    : comparable.slice(0, 3).map(d => d.key)
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
@@ -137,6 +144,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
           options={[{ value: '', label: 'Placed versions' }, ...showAsList.map(o => ({ value: o.value, label: o.label }))]} />
       </label>
       <span className={styles.spacer} />
+      <Button size="sm" variant="secondary" disabled={comparable.length < 2} onClick={() => setComparing(true)}
+        title={comparable.length < 2 ? 'Compare needs two or more destinations' : undefined}>Compare</Button>
       <ToolbarButton icon={<Undo2 size={16} />} label={plan.undoLabel ? `Undo: ${plan.undoLabel}` : 'Undo'} shortcut="⌘Z" disabled={!plan.canUndo} onClick={() => plan.undo()} />
       <ToolbarButton icon={<Redo2 size={16} />} label={plan.redoLabel ? `Redo: ${plan.redoLabel}` : 'Redo'} shortcut="⌘⇧Z" disabled={!plan.canRedo} onClick={() => plan.redo()} />
       {!wide && <Button size="sm" variant="secondary" onClick={() => setLibraryOpen(true)}>Library · {read.library.length}</Button>}
@@ -188,6 +197,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <Drawer open={!wide && libraryOpen} onClose={() => { setLibraryOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
       {library}
     </Drawer>
+    <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
       {viewingAsset && <p className={styles.muted}>{viewingAsset.width && viewingAsset.height ? `${viewingAsset.width} × ${viewingAsset.height} px · ` : ''}{usage.get(viewingAsset.id)?.join(' · ') || 'Not in any set'}</p>}
