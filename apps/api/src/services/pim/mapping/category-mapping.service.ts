@@ -362,13 +362,30 @@ export async function resolveCategoryForProduct(input: {
   productId: string
   channel: string
   marketplace: string
+  channelConnectionId?: string | null
 }): Promise<ResolvedCategory> {
   const map = await resolveCategoriesForProducts({
     productIds: [input.productId],
     channel: input.channel,
     marketplace: input.marketplace,
+    channelConnectionId: input.channelConnectionId,
   })
   return map[input.productId] ?? { ...EMPTY }
+}
+
+/**
+ * One product's category for its listing in one market — `platformAttributes` of that listing, or null/undefined when
+ * it has none yet. The one call for a caller that holds a single product and listing (the product-page schema, GTIN
+ * status, direct publish and its preflight, the Amazon pre-flight report), so none of them re-derives the rule.
+ */
+export async function resolveListingCategory(input: {
+  productId: string
+  channel: string
+  marketplace: string
+  platformAttributes: unknown
+  channelConnectionId?: string | null
+}): Promise<ResolvedCategory> {
+  return categoryForListing(await resolveCategoryForProduct(input), input.channel, input.platformAttributes)
 }
 
 // ────────────────────────────────────────────────────────────────────

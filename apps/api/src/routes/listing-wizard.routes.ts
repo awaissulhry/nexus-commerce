@@ -60,6 +60,7 @@ import {
 } from '../services/listing-wizard/channels.js'
 import { publishListingEvent } from '../services/listing-events.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
+import { resolveListingCategory } from '../services/pim/mapping/category-mapping.service.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -3201,11 +3202,16 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // called with a non-numeric ID (which causes errorId 62005).
       const isValidEbayCategoryId = (v: string) => /^\d+$/.test(v.trim())
 
+      // Amazon: the ONE product-type rule (#82) — this market's listing, else the product's own listings in the
+      // region's other markets, else the category mapping, else Product.productType. So a new listing here gets
+      // COAT when the product is COAT everywhere else, not its own OUTERWEAR. The GTIN-status route below asks the same.
       const productType = isEbay
         ? (listingProductType && isValidEbayCategoryId(listingProductType)
             ? listingProductType
             : '')
-        : (listingProductType || product.productType || '')
+        : channel.toUpperCase() === 'AMAZON'
+          ? ((await resolveListingCategory({ productId: id, channel: 'AMAZON', marketplace, platformAttributes: platformAttrs })).channelCategoryId ?? '')
+          : (listingProductType || product.productType || '')
 
       if (!productType) {
         const [msg, code] = isEbay
@@ -3641,7 +3647,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const product = await prisma.product.findUnique({
         where: { id },
-        select: { id: true, brand: true, gtin: true, upc: true, ean: true, productType: true },
+        select: { id: true, brand: true, gtin: true, upc: true, ean: true },
       })
       if (!product) {
         return reply.code(404).send({ error: `Product ${id} not found` })
@@ -3657,20 +3663,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!product.brand) {
         return { needed: true, reason: 'needed' }
       }
-      // Per-listing productType override wins — same resolution as the
-      // schema endpoint above.
+      // The schema endpoint above's product type: the same listing and the same call (#82 rule), so an exemption is
+      // checked against the type that endpoint shows and the listing is created with.
       const listing = await prisma.channelListing.findFirst({
         where: { productId: id, channel, marketplace },
         select: { platformAttributes: true },
       })
-      const platformAttrs =
-        (listing?.platformAttributes as Record<string, any> | null) ?? null
-      const productType =
-        (platformAttrs && typeof platformAttrs.productType === 'string'
-          ? platformAttrs.productType
-          : null) ??
-        product.productType ??
-        null
+      const productType = (await resolveListingCategory({ productId: id, channel: 'AMAZON', marketplace, platformAttributes: listing?.platformAttributes })).channelCategoryId
       if (!productType) {
         return { needed: true, reason: 'no_product_type' }
       }

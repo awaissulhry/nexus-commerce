@@ -46,6 +46,7 @@ export {
 export {
   resolveCategoriesForProducts,
   resolveCategoryForProduct,
+  resolveListingCategory,
   listCategoryMappings,
   upsertCategoryMapping,
   removeCategoryMapping,
