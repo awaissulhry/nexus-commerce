@@ -1839,3 +1839,25 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-grid-confirm-unknown { color: var(--nds-warning-text); }
 
 .nds-axes-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+
+/* ── Variation theme, shared product (sheet pop-up rebuild P2, 2026-09-28) ─────────────────────────────────────────
+   Each axis row: name, count, remove; its values as chips with photos, dragged into order. Then the variants, each with its
+   photo. A refused removal says why under the rows. */
+.nds-axes-mrow { display: flex; flex-direction: column; gap: var(--nds-space-4); flex: 1; min-width: 0; padding: var(--nds-space-4) 0; }
+.nds-axes-mhead { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.nds-axes-mname { font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-base); color: var(--nds-text); }
+.nds-axes-mrow .nds-axes-meta { margin-left: 0; color: var(--nds-text-muted); }
+.nds-axes-mhead > :last-child { margin-left: auto; }
+.nds-axes-refusal { margin: var(--nds-space-4) 0 0; padding: var(--nds-space-6) var(--nds-space-8); border-radius: var(--nds-radius-md); background: var(--nds-warning-soft); color: var(--nds-warning-strong); font-size: var(--nds-font-size-sm); }
+.nds-axes-familynote { display: flex; align-items: center; gap: var(--nds-space-6); padding: var(--nds-space-6) 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.nds-axes-variants { display: flex; flex-direction: column; gap: var(--nds-space-6); margin-top: var(--nds-space-8); }
+.nds-axes-varlist { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.nds-axes-var { display: flex; align-items: center; gap: var(--nds-space-8); min-height: 34px; padding: var(--nds-space-2) var(--nds-space-4); border-radius: var(--nds-radius-sm); font-size: var(--nds-font-size-base); color: var(--nds-text); }
+.nds-axes-var:hover { background: var(--nds-surface-hover); }
+.nds-axes-varlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-axes-varsku { flex: none; color: var(--nds-text-muted); max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-axes-varnone { color: var(--nds-text-muted); }
+.nds-axes-varphoto { flex: none; display: inline-flex; width: 28px; justify-content: center; }
+/* The `+ Add axis` note wraps inside the wider media box instead of running past its edge. */
+.nds-axes-editor .nds-axes-add { flex-wrap: wrap; }
+.nds-axes-editor .nds-axes-add .nds-axes-filterhint { flex: 1 1 12rem; white-space: normal; min-width: 0; }

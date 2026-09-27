@@ -39,10 +39,10 @@
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useGridCellEditor } from 'ag-grid-react'
-import { ChevronDown, ChevronRight, Plus, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Search, X } from 'lucide-react'
 
-import { Banner, Listbox, OrderedList } from '../../components'
-import { AxisChip, Button, InfoTip, Input, MappingChip, Tag } from '../../primitives'
+import { Banner, Listbox, MediaChipField, MediaMark, OrderedList } from '../../components'
+import { AxisChip, Button, InfoTip, Input, MappingChip, Spinner, Tag, ToolbarButton } from '../../primitives'
 import { channelDisplayName } from '../../lib/account-identity'
 import {
   isMasterProjection,
@@ -54,6 +54,7 @@ import {
 import { ProvenanceMark } from '../renderers/provenanceMark'
 import { editorBox } from './editorBox'
 import { variationThemeChange } from './sheetWriter'
+import { axisRemovalRefusal, familyAxisFor, filterVariants, orderValues, valueOrderAfterDrag, type VariationFamilyLoader, type VariationFamilyState } from './variationFamily'
 
 /* ── copy (Appendix A, verbatim — one source for every lane) ──────────────────────────────── */
 
@@ -296,6 +297,12 @@ export type AxesEditorHost = 'cell' | 'dock'
 export interface AxesPanelProps {
   cell: VariationThemeCell
   host: AxesEditorHost
+  /**
+   * Sheet pop-up rebuild P2 — the family behind a MASTER cell: each axis's values with photos and counts, and the variants
+   * with photos. Given, the master rows show the values as chips (dragged into order) and a variant list follows; absent or
+   * still loading, the rows are today's. Channel scopes ignore it.
+   */
+  family?: VariationFamilyState
   /** Called on EVERY change with the whole edited cell. The cell host wires this to `onValueChange`. */
   onChange: (next: VariationThemeCell) => void
   /**
@@ -311,7 +318,7 @@ export interface AxesPanelProps {
   style?: CSSProperties
 }
 
-export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width, maxHeight, style }: AxesPanelProps) {
+export function AxesPanel({ cell, host, family, onChange, onPlanRequired, footer, width, maxHeight, style }: AxesPanelProps) {
   /**
    * 🔴 The BASELINE is captured once, at open — it is NOT the `cell` prop.
    *
@@ -330,6 +337,9 @@ export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width,
   const [draft, setDraft] = useState<VariationThemeCell>(cell)
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
+  /** A refused removal's sentence, shown until the next change (P2: the VT master rule, measured as missing 2026-09-27). */
+  const [refusal, setRefusal] = useState<string | null>(null)
+  const [variantQuery, setVariantQuery] = useState('')
   /**
    * 🔴 The FIRST NON-EMPTY group opens, not always `Covers every axis`.
    *
@@ -600,14 +610,50 @@ export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width,
     const a = draft.axes.find((x) => x.axisKey === axisKey)
     if (!a) return null
     if (master) {
+      /**
+       * 🔴 P2 (sheet pop-up rebuild) — an axis whose values are still on variants is REFUSED, with the count. The approved VT
+       * master rule (`docs/2026-09-13-variation-theme-column-design.md` §4) said so and the chip removed it silently on a
+       * single click (`RESEARCH-1-shared.md`); while the family loads, the cell's own `valueCount` decides.
+       */
+      const fa = family?.state === 'ready' ? familyAxisFor(family.view, a) : undefined
+      const fallback = draft.masterCandidates?.find((m) => m.axisKey === a.axisKey)?.valueCount ?? 0
+      const refused = axisRemovalRefusal(a.label, fa, fa ? 0 : fallback)
+      const remove = () => {
+        if (refused) { setRefusal(refused); return }
+        setRefusal(null)
+        report({ ...draft, axes: draft.axes.filter((x) => x.axisKey !== a.axisKey) })
+      }
+      if (!fa) {
+        return <AxisChip label={a.label} count={`${fallback} values`} grip={false} onClick={remove} title={refused ?? `Remove ${a.label}`} />
+      }
+      /* The values as Shopify's option row shows them: chips with the value's photo, dragged into the family's order. Only
+         dictionary values are ordered by code; a family without codes shows its values and says why they do not move. */
+      const values = orderValues(fa, draft.valueOrder?.[fa.code])
+      const orderable = fa.dictionary && values.some((v) => v.option)
       return (
-        <AxisChip
-          label={a.label}
-          count={`${draft.masterCandidates?.find((m) => m.axisKey === a.axisKey)?.valueCount ?? 0} values`}
-          grip={false}
-          onClick={() => report({ ...draft, axes: draft.axes.filter((x) => x.axisKey !== a.axisKey) })}
-          title={`Remove ${a.label}`}
-        />
+        <span className="nds-axes-mrow">
+          <span className="nds-axes-mhead">
+            <span className="nds-axes-mname">{a.label}</span>
+            <span className="nds-axes-meta">{values.length} {values.length === 1 ? 'value' : 'values'}{orderable ? ' · drag to order' : ''}</span>
+            <ToolbarButton label={`Remove ${a.label}`} description={refused ?? undefined} icon={<X size={14} />} onClick={remove} />
+          </span>
+          <MediaChipField
+            label={`${a.label} values, in order`}
+            searchable={false}
+            removable={false}
+            reorderable={orderable}
+            items={values.map((v) => ({ value: v.key, label: v.label, image: v.photo, detail: `${v.count} ${v.count === 1 ? 'variant' : 'variants'}` }))}
+            onChange={(keys) => {
+              const order = valueOrderAfterDrag(fa, keys)
+              const rest = { ...(draft.valueOrder ?? {}) }
+              if (order) rest[fa.code] = order
+              else delete rest[fa.code]
+              setRefusal(null)
+              report({ ...draft, valueOrder: Object.keys(rest).length ? rest : undefined })
+            }}
+          />
+          {!fa.dictionary && <span className="nds-axes-ordernote">These values are not in the dictionary yet, so their order cannot be saved.</span>}
+        </span>
       )
     }
     /**
@@ -868,9 +914,12 @@ export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width,
           renderItem={axisRow}
           disabled={!orderState.writable}
           keyboardGrip={host === 'dock'}
+          /* P2: the shared product's rows lift and slide while dragged (the DS's live drag); the ↑/↓ buttons stay. */
+          liveDrag={master && host === 'cell'}
           compact
         />
       </div>
+      {refusal && <p className="nds-axes-refusal" role="alert">{refusal}</p>}
 
       {/* The dock's `+ Add` adds a FAMILY AXIS (`addableAxes`) and that is meaningful on every channel,
           Amazon included — VP.4's section rendered it unconditionally. In the CELL host on Amazon the
@@ -929,6 +978,43 @@ export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width,
         </>
       )}
 
+      {/* P2 — the variants, each with its photo, as Shopify's Variants card lists them under the options. */}
+      {master && host === 'cell' && family?.state === 'loading' && (
+        <div className="nds-axes-familynote" role="status"><Spinner size={12} /> Loading values and photos…</div>
+      )}
+      {master && host === 'cell' && family?.state === 'error' && (
+        <div className="nds-axes-banner"><Banner tone="warning">Values and photos could not be loaded ({family.message}). The axes can still be edited.</Banner></div>
+      )}
+      {master && host === 'cell' && family?.state === 'ready' && family.view.variants.length > 0 && (() => {
+        const all = family.view.variants
+        const shown = filterVariants(all, variantQuery)
+        /* One photo column for the whole list when any variant has a photo, so the names line up (as `MediaPickList`
+           does); a list with no photo at all has no column. */
+        const withPhotos = all.some((v) => !!v.photo)
+        return (
+          <div className="nds-axes-variants">
+            <div className="nds-axes-sectionlabel">
+              <span className="nds-axes-sectionname">Variants</span>
+              <span className="nds-axes-sectionhint"><Tag tone="neutral">{all.length}</Tag></span>
+            </div>
+            {all.length > 8 && (
+              <Input size="sm" value={variantQuery} onChange={(e) => setVariantQuery(e.target.value)} placeholder="Find a variant"
+                aria-label="Find a variant" leadingIcon={<Search size={13} aria-hidden />} />
+            )}
+            <ul className="nds-axes-varlist" aria-label="Variants">
+              {shown.map((v) => (
+                <li key={v.id} className="nds-axes-var">
+                  {withPhotos && <span className="nds-axes-varphoto"><MediaMark choice={{ image: v.photo, label: v.label }} /></span>}
+                  <span className="nds-axes-varlabel">{v.label}</span>
+                  <span className="nds-axes-mono nds-axes-varsku">{v.sku}</span>
+                </li>
+              ))}
+              {shown.length === 0 && <li className="nds-axes-var nds-axes-varnone">No variant matches “{variantQuery}”.</li>}
+            </ul>
+          </div>
+        )
+      })()}
+
       {/* The lock reason is the SERVER's sentence (Appendix A's lock copy), never rebuilt here. In the
           dock it is section §4.4.4's own `LockBanner`, with the same sentence and a title — one
           banner, not two. */}
@@ -949,7 +1035,9 @@ export function AxesPanel({ cell, host, onChange, onPlanRequired, footer, width,
             <span>{draft.collisions?.summary ?? (change.kind === 'none' ? 'Collisions have not been evaluated.' : 'Collisions will be checked when you save.')}</span>
           )}
           <span className="nds-axes-footright">
-            {change.kind === 'none' ? <Tag tone="neutral">no change</Tag> : <Tag tone="info">{change.kind}</Tag>}
+            {change.kind !== 'none' ? <Tag tone="info">{change.kind}</Tag>
+              : draft.valueOrder && Object.keys(draft.valueOrder).length ? <Tag tone="info">value order</Tag>
+              : <Tag tone="neutral">no change</Tag>}
           </span>
           {footer}
         </div>
@@ -1213,6 +1301,10 @@ export interface AxesPanelEditorParams {
   onValueChange?: (value: unknown) => void
   eGridCell?: HTMLElement
   onPlanRequired?: AxesPanelProps['onPlanRequired']
+  /** P2 — the row the cell belongs to (AG's `data`); its `id` is the family the loader reads. */
+  data?: { id?: string }
+  /** P2 — reads the family's values, photos and variants for a MASTER cell. Absent → today's rows. */
+  loadFamily?: VariationFamilyLoader
 }
 
 export function AxesPanelEditor(props: AxesPanelEditorParams) {
@@ -1225,7 +1317,26 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
   const touched = useRef(false)
   useGridCellEditor({ isCancelAfterEnd: () => !touched.current })
 
-  const cell = (value ?? null) as VariationThemeCell | null
+  /* The value is read ONCE for the life of the editor: AG re-renders it with each reported value (see `AxesPanel`'s baseline
+     note). A draft `valueOrder` left on the row by an earlier commit is stripped — the family's saved order is the truth, and
+     it arrives with the family below. */
+  const [cell] = useState(() => {
+    const opened = (value ?? null) as VariationThemeCell | null
+    if (!opened || !opened.valueOrder) return opened
+    const { valueOrder: _drop, ...rest } = opened
+    return rest as VariationThemeCell
+  })
+  const master = !!cell && isMasterProjection(cell)
+  const [family, setFamily] = useState<VariationFamilyState | undefined>(() => (master && props.loadFamily && props.data?.id ? { state: 'loading' } : undefined))
+  useEffect(() => {
+    const id = props.data?.id
+    if (!master || !props.loadFamily || !id) return
+    let live = true
+    props.loadFamily(id)
+      .then((view) => { if (live) setFamily({ state: 'ready', view }) })
+      .catch((error: unknown) => { if (live) setFamily({ state: 'error', message: error instanceof Error ? error.message : 'the read failed' }) })
+    return () => { live = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- one read per opening
 
   const [, refreshViewport] = useState(0)
   useEffect(() => {
@@ -1248,7 +1359,8 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
     cellHeight: cellRect?.height ?? 0,
     // Reserve viewport gutters; this panel uses fixed placement below the anchor where it fits.
     roomToRight: Math.max(0, viewportWidth - 16),
-    kind: 'axes',
+    /* P2: the shared product's panel carries value chips with photos and a variant list — the `media` box. */
+    kind: master && props.loadFamily ? 'media' : 'axes',
   })
 
   const onChange = useCallback(
@@ -1263,7 +1375,7 @@ export function AxesPanelEditor(props: AxesPanelEditorParams) {
      this is the second door, because a renderer that can be reached two ways must answer both. */
   if (!cell) return null
 
-  return <AxesPanel cell={cell} host="cell" onChange={onChange} onPlanRequired={props.onPlanRequired} width={box.width} maxHeight={Math.min(box.height, viewportHeight - 16)} style={cellRect ? { position: 'fixed', left: Math.max(8, Math.min(cellRect.left, viewportWidth - box.width - 8)), top: Math.max(8, Math.min(cellRect.bottom, viewportHeight - Math.min(box.height, viewportHeight - 16) - 8)) } : undefined} />
+  return <AxesPanel cell={cell} host="cell" family={family} onChange={onChange} onPlanRequired={props.onPlanRequired} width={box.width} maxHeight={Math.min(box.height, viewportHeight - 16)} style={cellRect ? { position: 'fixed', left: Math.max(8, Math.min(cellRect.left, viewportWidth - box.width - 8)), top: Math.max(8, Math.min(cellRect.bottom, viewportHeight - Math.min(box.height, viewportHeight - 16) - 8)) } : undefined} />
 }
 
 /** The text the grid shows for this cell — re-exported so a host never re-derives it. */

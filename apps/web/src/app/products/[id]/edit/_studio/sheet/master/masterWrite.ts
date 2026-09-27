@@ -250,6 +250,31 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
  * and left `Product.version` at 2. A decision function nobody calls is not a write path; it is a
  * unit test with a nice comment.
  */
+/**
+ * Sheet pop-up rebuild P2 — the family's value order, dragged in the master variation-theme pop-up, to
+ * `PUT …/studio/family-value-order` (`setFamilyValueOrder`, compare-and-set on the family version). Only a MASTER cell
+ * carries one; a channel's own order is the channel's.
+ */
+export function masterValueOrder(after: { valueOrder?: Record<string, string[]>; write?: { coordinate: { channel: string | null } } | null } | null): Record<string, string[]> | null {
+  if (!after?.valueOrder || after.write?.coordinate.channel) return null
+  return Object.keys(after.valueOrder).length ? after.valueOrder : null
+}
+
+async function putValueOrder(backend: string, productId: string, expectedVersion: number, order: Record<string, string[]>):
+  Promise<{ ok: true; version?: number } | { ok: false; status: number; reason: string; unreachable?: true }> {
+  try {
+    const res = await fetch(`${backend}/api/products/${productId}/studio/family-value-order`, {
+      method: 'PUT', signal: AbortSignal.timeout(30_000), credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedVersion, order }),
+    })
+    const body = await res.json().catch(() => ({})) as { version?: unknown; error?: string; message?: string }
+    if (res.ok) return { ok: true, version: typeof body.version === 'number' ? body.version : undefined }
+    return { ok: false, status: res.status, reason: body.error ?? body.message ?? `The server refused the value order (${res.status})` }
+  } catch (err) {
+    return { ok: false, status: 0, unreachable: true, reason: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export async function commitVariationTheme<T>(
   req: SheetWriteRequest<T>,
   productId: string,
@@ -265,6 +290,17 @@ export async function commitVariationTheme<T>(
        current value cannot serve as one, because AG's setter already replaced it in place. */
     const after = (cell.value ?? null) as (VariationThemeWriteFacts & { baseline?: VariationThemeWriteFacts }) | null
     const decision = variationThemeWrite({ kind: 'variationTheme' }, after?.baseline ?? null, after)
+    const order = masterValueOrder(after)
+    /* P2: only the value order moved — the axes decision says "Nothing changed", and the order is the whole write. */
+    if (!decision.send && order && !('plan' in decision) && after?.write) {
+      const saved = await putValueOrder(backend, productId, after.write.expectedVersion, order)
+      if (saved.ok) { cells[cell.colId] = { ok: true }; if (typeof saved.version === 'number') version = saved.version }
+      else {
+        if (saved.status === 409) conflict = true
+        cells[cell.colId] = { ok: false, reason: saved.reason, ...(saved.unreachable ? { unreachable: true as const } : {}) }
+      }
+      continue
+    }
     if (!decision.send) {
       /* A held commit is not a refusal to paint red: `plan` means VT.4's dry-run Modal opens and
          nothing is written, and `Nothing changed` means the operator closed an editor they had not
@@ -349,6 +385,15 @@ export async function commitVariationTheme<T>(
         const next = decision.endpoint === 'variation-axes' ? stated.version ?? stated.product?.version : stated.product?.version
         if (typeof next === 'number') version = next
         if (after) onSaved?.(after, payload)
+        /* P2: the axes were saved; the value order follows on the family version they produced. */
+        if (order && decision.endpoint === 'variation-axes' && typeof next === 'number') {
+          const saved = await putValueOrder(backend, productId, next, order)
+          if (saved.ok) { if (typeof saved.version === 'number') version = saved.version }
+          else {
+            if (saved.status === 409) conflict = true
+            cells[cell.colId] = { ok: false, reason: `The axes were saved; the value order was not: ${saved.reason}`, ...(saved.unreachable ? { unreachable: true as const } : {}) }
+          }
+        }
       } else {
         /* 409 → repaint + refetch exactly like every other cell (design §3.6). */
         if (res.status === 409) conflict = true

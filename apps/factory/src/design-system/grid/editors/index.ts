@@ -51,6 +51,8 @@ export { isNumberDraft, numberStart, acceptNumberEdit, numberCommitText, NUMBER_
 export { EDITOR_KEY_HINT, EDITOR_KEY_HINT_FORM, EDITOR_KEY_HINT_PANEL } from './editorHint'
 // Sheet pop-up rebuild P1 (2026-09-28) — a pop-up hosted outside AG's popup layer sizes itself by the same rule.
 export { editorBox, roomToRightOf, EDITOR_CAPS, MIN_EDITOR_WIDTH, type EditorKind, type EditorBox } from './editorBox'
+// Sheet pop-up rebuild P2 — the family behind a master variation-theme cell (values with photos, variants).
+export { axisRemovalRefusal, axisValueCount, familyAxisFor, filterVariants, orderValues, valueOrderAfterDrag, type VariationFamilyAxis, type VariationFamilyLoader, type VariationFamilyState, type VariationFamilyValue, type VariationFamilyVariant, type VariationFamilyView } from './variationFamily'
 export { isFormulaDraft, commitValue, coerceTyped, completionToAccept, formulaAvailability, formulaEditorChoice, formulaSaveOutcome, FORMULA_BLOCKED_REASON, FORMULA_STORED_NOT_EVALUATED, type FormulaSaveResponse, type FormulaSaveOutcome, type FormulaAvailability, type FormulaEditorChoice, type CommitKind, exprOf, inStringLiteral, refTokenAt, completionsFor, applyCompletion, unknownRefs, type FormulaCandidate, type RefToken } from './formulaEditing'
 export { tokenizeForDisplay, refsOf, matchBrackets, callAt, type Token, type TokenKind, type CallContext } from './formulaTokens'
 export { assignRefColours, refColoursWrap, colourFor, REF_CYCLE, CYCLE_MEASURED_CONTRAST, type RefColour } from './formulaPalette'

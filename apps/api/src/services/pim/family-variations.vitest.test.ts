@@ -22,7 +22,7 @@ vi.mock('./readiness-index.service.js', () => ({ produceReadinessForProducts: vi
 // Business profiles may be ON (CI runs both): every statement runs as the legacy business.
 aroundAll(run => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, run))
 import prisma from '../../db.js'
-import { FamilyVariationError, setFamilyAxes, setFamilyVariationValues } from './family-variations.service.js'
+import { FamilyVariationError, setFamilyAxes, setFamilyValueOrder, setFamilyVariationValues } from './family-variations.service.js'
 
 beforeEach(async () => {
   await prisma.productReadCache.deleteMany()
@@ -127,3 +127,36 @@ describe('setFamilyAxes', () => {
   })
 })
 
+/* Sheet pop-up rebuild P2: the value order dragged in the variation-theme pop-up. */
+describe('setFamilyValueOrder', () => {
+  const coded = () => prisma.product.update({ where: { id: 'fam' }, data: { variationAxisCodes: ['color', 'size'] } })
+  const order = async () => (await prisma.product.findUniqueOrThrow({ where: { id: 'fam' }, select: { version: true, variationValueOrder: true } }))
+
+  it('saves the order of the axes it names, keeps the others, and moves the family version once', async () => {
+    await coded()
+    await prisma.product.update({ where: { id: 'fam' }, data: { variationValueOrder: { size: ['l', 'm'] } } })
+    expect(await setFamilyValueOrder('fam', { expectedVersion: 7, order: { color: ['red', 'black'] } })).toEqual({ version: 8 })
+    expect(await order()).toEqual({ version: 8, variationValueOrder: { size: ['l', 'm'], color: ['red', 'black'] } })
+  })
+  it('writes nothing for the order it already has', async () => {
+    await coded()
+    await prisma.product.update({ where: { id: 'fam' }, data: { variationValueOrder: { color: ['red', 'black'] } } })
+    expect(await setFamilyValueOrder('fam', { expectedVersion: 7, order: { color: ['red', 'black'] } })).toEqual({ version: 7 })
+    expect((await order()).version).toBe(7)
+  })
+  it('refuses an axis the family does not vary by, an option its attribute does not have, and a repeated value', async () => {
+    await coded()
+    await expect(setFamilyValueOrder('fam', { expectedVersion: 7, order: { material: ['wool'] } })).rejects.toThrow('does not vary by material')
+    await expect(setFamilyValueOrder('fam', { expectedVersion: 7, order: { color: ['black', 'purple'] } })).rejects.toThrow('purple is not a value of Color')
+    await expect(setFamilyValueOrder('fam', { expectedVersion: 7, order: { color: ['black', 'black'] } })).rejects.toThrow('black twice')
+    expect((await order()).version).toBe(7)
+  })
+  it('refuses a stale family version with 409 and a child with 400', async () => {
+    await coded()
+    const stale = await setFamilyValueOrder('fam', { expectedVersion: 6, order: { color: ['red'] } }).catch(e => e)
+    expect(stale).toBeInstanceOf(FamilyVariationError)
+    expect(stale.status).toBe(409)
+    const child = await setFamilyValueOrder('v1', { expectedVersion: 2, order: { color: ['red'] } }).catch(e => e)
+    expect(child.status).toBe(400)
+  })
+})

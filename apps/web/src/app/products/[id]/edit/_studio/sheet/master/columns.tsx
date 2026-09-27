@@ -35,6 +35,10 @@ import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } fro
 import { isReferenceField } from '../referenceOptions'
 import { ReferenceSelectEditor } from '../ReferenceSelectEditor'
 import type { SheetColumn, StudioRow } from './types'
+import { loadVariationFamily } from './variationFamilyLoader'
+
+/** P2 — the master variation-theme editor's params: one frozen object for the life of the module (see the column below). */
+const MASTER_VARIATION_EDITOR_PARAMS: Record<string, unknown> = Object.freeze({ loadFamily: loadVariationFamily })
 
 export interface BuildColumnsOptions {
   columns: SheetColumn[]
@@ -406,7 +410,10 @@ export function buildMasterColumns(
     if (col.kind === 'variationTheme') {
       /* `def.cellClassRules` is what THIS builder composed (validation → provenance → round-trip →
          its own); the engine extends it rather than replacing it — see `variationThemeColumnDef`. */
-      return { ...def, ...variationThemeColumnDef<StudioRow>(col, (d) => cellOf(d, col.key)?.value, def.cellClassRules as never) }
+      /* Sheet pop-up rebuild P2: on the SHARED product the editor also shows each axis's values with photos (dragged into
+         order) and the variants with photos — it reads the family through `loadVariationFamily`. ONE module-level params
+         object, so AG never re-runs its column model for it. */
+      return { ...def, ...variationThemeColumnDef<StudioRow>(col, (d) => cellOf(d, col.key)?.value, def.cellClassRules as never), cellEditorParams: MASTER_VARIATION_EDITOR_PARAMS }
     }
 
     if (Array.isArray(col.validation?.recordFields)) return { ...def,

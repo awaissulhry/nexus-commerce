@@ -173,6 +173,21 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await updateFamilyVariationAxes(id, request.body) }
     catch (error) { return sendError(reply, error, request.log, { id }) }
   })
+  /**
+   * Sheet pop-up rebuild P2 — the family's value order (per axis code, option codes), dragged in the variation-theme pop-up.
+   * Written by `setFamilyValueOrder`, beside `setFamilyAxes` in VTR's one writer module. A PUT: the body is the whole order of each
+   * axis it names.
+   */
+  fastify.put('/products/:id/studio/family-value-order', async (request, reply) => {
+    const { FamilyVariationError, setFamilyValueOrder } = await import('../services/pim/family-variations.service.js')
+    const { id } = request.params as { id: string }
+    const body = (request.body ?? {}) as { expectedVersion?: unknown; order?: unknown }
+    try { return await setFamilyValueOrder(id, { expectedVersion: Number(body.expectedVersion), order: body.order as Record<string, string[]> }) }
+    catch (error) {
+      if (error instanceof FamilyVariationError) return reply.code(error.status).send({ error: error.message, ...(error.details ?? {}) })
+      return sendError(reply, error, request.log, { id })
+    }
+  })
   // ── VP.2 — the Variants page (spec §5, contract `docs/vp2-contracts.md`) ──
   //
   // Four routes, all under `/api/products`, so RBAC is inherited exactly as every other studio route's is:

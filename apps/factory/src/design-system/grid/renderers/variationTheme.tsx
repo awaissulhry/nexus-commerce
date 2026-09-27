@@ -173,6 +173,12 @@ export interface VariationThemeCell {
    * cell object, so the baseline cannot reach a route.
    */
   baseline?: VariationThemeCell
+  /**
+   * Sheet pop-up rebuild P2 — a DRAFT only, never served: the value order the operator dragged, per axis attribute code, as
+   * dictionary option codes (`{ color: ['yellow', 'black'] }`). Only the axes that were re-ordered appear. The master
+   * commit sends it to `PUT …/studio/family-value-order`.
+   */
+  valueOrder?: Record<string, string[]>
 }
 
 /* ── pure decisions (node-testable: this module is imported, never rendered, by the suite) ──── */
