@@ -819,7 +819,7 @@ record; the notes below say only what decides the state. Checked 2026-09-26.
 | P7a | deployed | `build/P7a.md`, `build/P7a.1.md` | Nothing else is safe to delete yet |
 | P7b | not implemented | — | Each drop needs its own yes, after a green week |
 | P8 | deferred | — | The Owner: Amazon, eBay and Etsy only for now (§14.3) |
-| FBM stock hotfix | deployed | PR #14 | Never take an order line's stock twice. The stock repair waits for its own yes |
+| FBM stock hotfix | deployed | PR #14 | Never take an order line's stock twice. Stock repair APPLIED 2026-09-26 11:22 UTC on the Owner's yes (option A: add back, per product, only the units taken twice after that product's last manual stock change; guarded per-product `applyStockMovement`, MANUAL_ADJUSTMENT, proven on a private copy first; channel updates all succeeded). Do NOT run it again. Per-product evidence is kept locally. |
 | Package A (C9–C11f6c) | deployed | `RELEASE-C9-C11F6C.md`, `build/CX-REMAINING.md` | PR #15; eight migrations `20260923a..h_cx_*`; eBay processing OFF; no operator grant |
 | Release B+C | deployed | `2026-09-26-STOCK-MODEL.md`, PR #32 | Nine migrations `20260926n..v_cx_*`; every new switch OFF |
 | eBay privacy review | deployed | `EBAY-PRIVACY-REVIEW.md` | `NEXUS_ENABLE_EBAY_PRIVACY_REVIEW` OFF; option A executor not implemented |

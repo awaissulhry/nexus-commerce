@@ -35,9 +35,9 @@ Production after PR #32: the API, worker and scheduler deployments reached Railw
 migration step is part of that deployment. Health still reports existing Amazon Ads integrity
 findings (see "Held or not built" below); a healthy response is not a blanket operational verdict.
 
-What is **not** claimed: no B+C behaviour has a recorded real-event proof yet, and the stock repair
-for the orders the FBM bug deducted twice has not run (it needs its own Owner yes, after the hotfix is
-proven in production). Per-release detail: [RELEASE-C1-C8](RELEASE-C1-C8.md) (2026-09-22),
+What is **not** claimed: no B+C behaviour has a recorded real-event proof yet, and nothing here is
+claimed about real-event proof. Both stock repairs are done: the FBM double-deduction repair (2026-09-26
+11:22 UTC, option A) and the cancellation phantom-stock repair (19:31 UTC); do not run either again. Per-release detail: [RELEASE-C1-C8](RELEASE-C1-C8.md) (2026-09-22),
 [RELEASE-C9-C11F6C](RELEASE-C9-C11F6C.md) (Package A), the PR #32 description and
 [the stock model](2026-09-26-STOCK-MODEL.md) (B+C).
 
@@ -55,7 +55,7 @@ Both carry the release's `packages/database` byte for byte.
 3. eBay account deletion: remove personal data now and keep only what tax law needs (option A).
    **Recorded, not built.**
 4. Merges happen by pull request; the Owner decides each merge.
-5. Also recorded: the FBM stock repair runs only after the hotfix is proven and with a separate yes;
+5. Also recorded: the FBM stock repair ran on 2026-09-26 11:22 UTC after the hotfix was proven, with its own yes (option A);
    Package A may use KMS after a KMS test passes. Summary of the day's review:
    [2026-09-26 approach review](2026-09-26-APPROACH-REVIEW.md).
 
@@ -184,7 +184,7 @@ implementation was already in the deployed commit `7c70556ea` (before 2026-09-22
 | P3.6 | deployed | Channel health and trace; baseline | No positive SLO evidence | Read per-operation counts against targets | Observation |
 | P4.1 | enabled | Per-channel publish lanes; baseline | Amazon and eBay publishing live; no per-operation proof recorded | Keep previews and Presence boundaries | — |
 | P4.2 | enabled | Image gateway and read-back sweep; baseline | Sweep ON since 2026-09-21; positive-count proof not recorded | Read sweep counts and issues | Observation |
-| P4.3 | deployed | FBM hotfix (PR #14); one stock model R1–R10 for every channel (PR #32) | No real-event proof recorded yet; FBM repair not run | Prove on real orders; repair after its own yes | Observation + Owner |
+| P4.3 | deployed | FBM hotfix (PR #14); one stock model R1–R10 for every channel (PR #32) | No real-event proof recorded yet; FBM repair APPLIED 2026-09-26 (do not re-run) | Prove on real orders | Observation + Owner |
 | P4.4 | deployed | eBay price rework: one market per row, FIXED_PRICE offer, report-only read-back, variation confirmation, FX refusals (PR #32) | Read-back is report-only; heal OFF | Observe read-back findings; heal policy | Owner policy |
 | P4.5 | deployed | Regional Ads discovery, disconnect, expiry; baseline | Do not reconnect Ads | Verify daily region repair | Observation |
 | P4.6 | deployed | Etsy writers, freshness stamps (PR #32); baseline | Publish switch not measured; no Etsy listing in Nexus | Dry run, then live, after a yes | Owner switch |

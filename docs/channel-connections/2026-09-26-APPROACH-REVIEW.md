@@ -24,7 +24,7 @@ repository. Current status lives in [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
 
 1. Stock bug: a small hotfix PR first (PR #14). The damaged stock is repaired only with a separate yes,
    after the hotfix is proven in production: add back, per product, only the units taken twice after
-   that product's last manual stock change.
+   that product's last manual stock change. **Applied 2026-09-26 11:22 UTC — do not run it again.**
 2. Plan: change it as this review says — fix the wrong designs, drop unneeded parts, two releases by PR.
 3. Merging: the Owner decides every merge; each pull request is merged only on the Owner's word.
 4. KMS: Package A may use KMS after a KMS test passes.
@@ -78,7 +78,7 @@ repository. Current status lives in [COMPLETION-MATRIX](COMPLETION-MATRIX.md).
 
 ## Revised sequence and where it stands
 
-1. Hotfix PR (FBM double deduction) — merged and deployed (PR #14). Repair list waits for its own yes.
+1. Hotfix PR (FBM double deduction) — merged and deployed (PR #14). Repair applied the same day on the Owner's yes (option A).
 2. Package A — merged and deployed (PR #15).
 3. Rework the lanes per the table, one stock rule for all channels — done.
 4. B+C as one PR — merged and deployed (PR #32).
