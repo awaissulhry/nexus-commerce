@@ -2,6 +2,8 @@
 // read. See that file's header for why it exists and why it is a `.cjs` and not the `.mjs` the
 // hand-off note below guessed.
 const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rules-automation/_shared/rulesTabRoutes.cjs');
+// The browser's /backend API calls as a Vercel external rewrite — no function (see the module's header).
+const { backendRewrites, backendHeaders } = require('./src/lib/workspaces/backendRewrite.cjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -30,10 +32,20 @@ const nextConfig = {
   // (local dev only), /api/* is rewritten SERVER-SIDE to the stub — same-origin in the browser,
   // so no CORS and no LNA apply. Pair with NEXT_PUBLIC_API_URL=http://localhost:<dev-port>.
   // Unset everywhere real (prod, Vercel, the pre-push build) → zero rewrites, zero change.
+  //
+  // beforeFiles: `/backend/api/*` goes straight to the API as a Vercel external rewrite, ahead of the `/backend` route
+  // handler (which keeps only the channel-connect callback). Vercel paused the site on 2026-09-27 for the function
+  // proxy's memory use; see src/lib/workspaces/backendRewrite.cjs.
   async rewrites() {
     const stub = process.env.NEXT_DEV_STUB_PROXY
-    if (!stub) return []
-    return [{ source: '/api/:path*', destination: `${stub}/api/:path*` }]
+    return {
+      beforeFiles: backendRewrites(process.env),
+      afterFiles: stub ? [{ source: '/api/:path*', destination: `${stub}/api/:path*` }] : [],
+      fallback: [],
+    }
+  },
+  async headers() {
+    return backendHeaders(process.env)
   },
   // CI smoke build only (docs/ci-plan.md §3): the `checks` job already type-checks the app, so the
   // smoke job's build skips that step. Unset in prod and on Vercel, where next build still type-checks.
