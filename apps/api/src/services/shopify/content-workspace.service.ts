@@ -13,6 +13,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { emptyShopifyContent, shopifyContentSchema, inspectShopifyContent, resolveShopifyContent, type ShopifyContent, type ContentVariant } from '@nexus/shared/shopify-content'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
+import { draftListingFields, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { nativeListingValue } from './native-listing-value.js'
 import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
@@ -122,6 +123,29 @@ export function publicContent(data: Awaited<ReturnType<typeof readContent>>) {
   }
 }
 
+/**
+ * Step 7 — a family's first Shopify save starts an inert draft of the WHOLE family from the one draft rule (DRAFT,
+ * unpublished, paused): the primary listing through `ensureDraftListings` (family: true), an alias listing from
+ * `draftListingFields` for the parent and every live variant, which `ensureDraftListings` never creates. Returns the
+ * parent's row; the caller writes its own document onto it. Shopify's synchronisation writes the Shopify ids and
+ * lifts the pause from every still-draft it delivers (content-sync.service.ts).
+ */
+export async function startShopifyFamilyDraft(tx: Prisma.TransactionClient, destination: WorkspaceDestination, family: { id: string; children: Array<{ id: string }> }) {
+  const aliasKey = destination.aliasKey ?? ''
+  if (aliasKey === '') {
+    const rows = await ensureDraftListings(tx, { channel: 'SHOPIFY', market: destination.marketplace, accountId: destination.accountId, productIds: [family.id], family: true })
+    return rows.find(row => row.productId === family.id)!
+  }
+  const created = await tx.channelListing.createManyAndReturn({
+    data: [family.id, ...family.children.map(child => child.id)].sort().map(productId => draftListingFields({ productId, channel: 'SHOPIFY', market: destination.marketplace, accountId: destination.accountId, aliasKey })),
+    skipDuplicates: true, select: { id: true, productId: true, version: true },
+  })
+  const parent = created.find(row => row.productId === family.id)
+  if (parent) return { ...parent, created: true }
+  const existing = await tx.channelListing.findFirstOrThrow({ where: { productId: family.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey }, select: { id: true, productId: true, version: true } })
+  return { ...existing, created: false }
+}
+
 export async function getContentWorkspace(productId: string, scope: ContentScope) {
   const destination = await contentDestination(productId, scope)
   const schema = await readShopifyMappingSchema(destination.accountId)
@@ -146,7 +170,9 @@ export async function saveContentWorkspace(productId: string, scope: ContentScop
         const saved = await tx.channelListing.updateMany({ where: { id: current.listing.id, version: current.listing.version }, data: { platformAttributes, version: { increment: 1 } } })
         if (saved.count !== 1) throw new WorkspaceScopeError('Another save overlapped this one. Reload before retrying.')
       } else {
-        await tx.channelListing.create({ data: { productId: current.family.id, channel: 'SHOPIFY', channelMarket: 'SHOPIFY_GLOBAL', marketplace: destination.marketplace, region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey, platformAttributes, isPublished: false } })
+        const parent = await startShopifyFamilyDraft(tx, destination, current.family)
+        if (!parent.created) throw new WorkspaceScopeError('Another save overlapped this one. Reload before retrying.')
+        await tx.channelListing.update({ where: { id: parent.id }, data: { platformAttributes, version: { increment: 1 } } })
       }
       return publicContent(await readContent(tx, destination, schema.locales, schema))
     }, { isolationLevel: 'Serializable', timeout: 20_000 })

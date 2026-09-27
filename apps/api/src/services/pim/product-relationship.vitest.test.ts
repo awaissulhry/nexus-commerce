@@ -223,6 +223,10 @@ describe('product family actions against the production Prisma schema', () => {
     expect(await row('standalone')).toMatchObject({ isParent: true, version: 4 })
   })
   it('creates a draft child and keeps copied listings in their exact account and alias', async () => {
+    // Step 7 — the copies come from the one draft rule, which (as for every draft) needs the market to be active here.
+    if (!await prisma.marketplace.findFirst({ where: { channel: 'EBAY', code: 'IT' } })) {
+      await prisma.marketplace.create({ data: { channel: 'EBAY', code: 'IT', name: 'eBay Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } })
+    }
     const alias = await addAlias()
     await addListing('child', { title: 'Shared title' })
     await addListing('child', { aliasId: alias.id, aliasKey: alias.id, title: 'Alias title' })
@@ -234,8 +238,9 @@ describe('product family actions against the production Prisma schema', () => {
     expect(await prisma.productReadCache.findUniqueOrThrow({ where: { id: 'parent' } })).toMatchObject({ childCount: 3 })
     const listings = await prisma.channelListing.findMany({ where: { productId: product.id }, orderBy: { aliasKey: 'asc' } })
     expect(listings).toHaveLength(2)
-    expect(listings[0]).toMatchObject({ channelConnectionId: 'account', aliasId: null, aliasKey: '', isPublished: false, externalListingId: null })
-    expect(listings[1]).toMatchObject({ channelConnectionId: 'account', aliasId: alias.id, aliasKey: alias.id, isPublished: false, externalListingId: null })
+    // Both copies are inert drafts (paused), and each keeps the content it was copied with.
+    expect(listings[0]).toMatchObject({ channelConnectionId: 'account', aliasId: null, aliasKey: '', isPublished: false, syncPaused: true, listingStatus: 'DRAFT', externalListingId: null, title: 'Shared title' })
+    expect(listings[1]).toMatchObject({ channelConnectionId: 'account', aliasId: alias.id, aliasKey: alias.id, isPublished: false, syncPaused: true, listingStatus: 'DRAFT', externalListingId: null, title: 'Alias title' })
   })
   it('rolls back a new child when the copy source belongs to another family', async () => {
     const res = await post('/api/catalog/products/other/children', { sku: 'new', name: 'New', copyFromProductId: 'child' })

@@ -24,7 +24,9 @@ import {
 import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
-import { tryResolveConnection } from '../services/connection-resolver.service.js'
+import { AmbiguousConnectionError, tryResolveConnection } from '../services/connection-resolver.service.js'
+import { DraftListingError, ensureDraftListingsInTransaction } from '../services/pim/draft-listing.service.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 
@@ -3644,7 +3646,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         where: { productId: source.id, channel: channel.toUpperCase(), marketplace: marketplace.toUpperCase() },
         select: { translations: true,
           price: true, title: true, description: true,
-          quantity: true, bulletPointsOverride: true,
+          quantity: true, bulletPointsOverride: true, channelConnectionId: true,
         },
       })
       if (!sourceListing) {
@@ -3691,11 +3693,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const ch = channel.toUpperCase()
       const region = mp === 'UK' ? 'GB' : mp
       const results: Array<{ productId: string; sku: string }> = []
+      // Step 7 — a sibling the draft rule cannot start a listing for (market or account no longer active) is reported.
+      const skipped: Array<{ productId: string; sku: string; reason: string }> = []
 
       for (const sibling of siblings) {
         const existing = await prisma.channelListing.findFirst({
           where: { productId: sibling.id, channel: ch, marketplace: mp },
-          select: { translations: true, id: true, price: true, quantity: true },
+          select: { translations: true, id: true, price: true, quantity: true, listingStatus: true, isPublished: true, externalListingId: true },
         })
 
         // Build update — field values + mark followMaster=false for each pushed field
@@ -3710,27 +3714,29 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         const prevPrice = existing?.price != null ? Number(existing.price) : null
         const prevQty = existing?.quantity ?? null
 
+        // Step 7 — a sibling with no listing here gets an inert Nexus draft from the one draft rule, on the source
+        // listing's account (none recorded: the channel's primary), and the cascaded values are written onto it.
+        // A still-draft is not on the channel: nothing is queued or sent for it.
+        let stillDraft: boolean
         if (existing) {
-          await prisma.channelListing.update({ where: { id: existing.id }, data: updateData as any })
           listingId = existing.id
+          stillDraft = isStillDraftListing(existing)
         } else {
-          const created = await prisma.channelListing.create({
-            data: {
-              productId: sibling.id,
-              channel: ch,
-              marketplace: mp,
-              region,
-              channelMarket: `${ch}_${mp}`,
-              listingStatus: 'DRAFT',
-              ...updateData,
-            } as any,
-          })
-          listingId = created.id
+          try {
+            const [draft] = await ensureDraftListingsInTransaction({ channel: ch, market: mp, accountId: sourceListing.channelConnectionId, productIds: [sibling.id] })
+            listingId = draft.id
+          } catch (error) {
+            if (!(error instanceof DraftListingError || error instanceof AmbiguousConnectionError)) throw error
+            skipped.push({ productId: sibling.id, sku: sibling.sku, reason: error.message })
+            continue
+          }
+          stillDraft = true
         }
+        await prisma.channelListing.update({ where: { id: listingId }, data: updateData as any })
 
         // Enqueue outbound sync for price/qty changes (RT.2 — instant lane)
         const currency = await marketCurrency('AMAZON', mp) // P4.4a — the Marketplace row
-        if ('price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
+        if (!stillDraft && 'price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
           const qRow = await createOutboundRow(prisma, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
@@ -3745,7 +3751,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           })
           void fireOutboundJobs([qRow], { source: 'CASCADE' })
         }
-        if ('quantity' in valueMap && valueMap.quantity != null && prevQty !== valueMap.quantity) {
+        if (!stillDraft && 'quantity' in valueMap && valueMap.quantity != null && prevQty !== valueMap.quantity) {
           const qRow = await createOutboundRow(prisma, {
             select: { id: true, productId: true, syncType: true, holdUntil: true },
             data: {
@@ -3783,7 +3789,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         },
       })
 
-      return reply.send({ affected: results.length, preview: results })
+      return reply.send({ affected: results.length, preview: results, ...(skipped.length ? { skipped } : {}) })
     } catch (err: any) {
       fastify.log.error({ err }, '[listings/cascade] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })

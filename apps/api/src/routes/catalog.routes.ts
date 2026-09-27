@@ -8,7 +8,7 @@ import { amazonCatalogService } from "../services/amazon-catalog.service.js";
 import outboundSyncService from "../services/outbound-sync.service.js";
 import prisma from "../db.js";
 import { assertCanDeleteRelationshipProduct, ProductRelationshipError, relationshipParent, relationshipProduct, relationshipTransaction } from '../services/pim/product-relationship.service.js'
-import { validateAliasWriteTargets } from '../services/pim/listing-alias.service.js'
+import { copySiblingListings, type SkippedListingCopy } from '../services/pim/variant-listing-copy.service.js'
 
 import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { channelSyncQueue } from "../lib/queue.js";
@@ -1267,6 +1267,7 @@ export async function catalogRoutes(app: FastifyInstance) {
       }
       const hasVariantAttrs = Object.keys(cleanedVariantAttrs).length > 0
 
+      let skippedListings: SkippedListingCopy[] = []
       const childProduct = await relationshipTransaction(async tx => {
       await relationshipParent(tx, parentId)
       // Create the child product. Persist axis values in BOTH places
@@ -1295,60 +1296,15 @@ export async function catalogRoutes(app: FastifyInstance) {
       // children (#43.1-#43.3). The child Product above already carries
       // variantAttributes, which is what the wizard now reads.
 
-      // MX.1 — clone ChannelListings from a sibling variant when requested.
-      // Copies content / attributes / pricing (per copyGroups) and strips
-      // all variation-specific SP-API fields (color, size, ASIN, offers, etc.)
-      // so the new variant starts with shared content but its own identifiers.
+      // MX.1 — clone ChannelListings from a sibling variant when requested (copySiblingListings).
+      // Step 7 — each copy is an inert Nexus draft from the one draft rule; a coordinate it refuses is skipped
+      // and reported, and the child is still created.
       const { copyFromProductId, copyGroups: rawCopyGroups } = request.body as any
       if (copyFromProductId && typeof copyFromProductId === 'string') {
         const source = await relationshipProduct(tx, copyFromProductId)
         if (source.parentId !== parentId) throw new ProductRelationshipError('Choose a child from this family as the copy source.')
         const groups = new Set<string>(Array.isArray(rawCopyGroups) ? rawCopyGroups : ['content', 'attributes'])
-        const AXIS_ATTRS = new Set([
-          'color', 'color_name', 'colour_name',
-          'apparel_size', 'size', 'size_name', 'variation_size_base_size',
-          'parentage_level', 'child_parent_sku_relationship',
-          'purchasable_offer', 'fulfillment_availability', 'skip_offer',
-        ])
-        const siblings = await tx.channelListing.findMany({ where: { productId: copyFromProductId } })
-        await validateAliasWriteTargets(siblings.filter(sib => sib.aliasKey).map(sib => ({ productId: source.id, channel: sib.channel, marketplace: sib.marketplace, connectionId: sib.channelConnectionId, aliasKey: sib.aliasKey })), tx)
-        await Promise.all(siblings.map(async (sib) => {
-          const platAttrs = sib.platformAttributes as Record<string, any> | null
-          const sibAttrs = (platAttrs?.attributes ?? {}) as Record<string, any>
-          const cleanedAttrs: Record<string, any> = {}
-          if (groups.has('attributes')) {
-            for (const [k, v] of Object.entries(sibAttrs)) {
-              if (!AXIS_ATTRS.has(k)) cleanedAttrs[k] = v
-            }
-          }
-          await tx.channelListing.create({
-            data: {
-              productId: childProduct.id,
-              channelConnectionId: sib.channelConnectionId,
-              aliasId: sib.aliasId,
-              aliasKey: sib.aliasKey,
-              isPublished: false,
-              channel: sib.channel,
-              marketplace: sib.marketplace,
-              region: sib.region,
-              channelMarket: sib.channelMarket,
-              ...(groups.has('content') ? {
-                title: sib.title,
-                description: sib.description,
-                bulletPointsOverride: sib.bulletPointsOverride,
-              } : {}),
-              ...(groups.has('pricing') ? {
-                price: sib.price,
-                pricingRule: sib.pricingRule,
-                priceAdjustmentPercent: sib.priceAdjustmentPercent,
-              } : {}),
-              platformAttributes: { ...platAttrs, attributes: cleanedAttrs } as any,
-              variationTheme: sib.variationTheme,
-              listingStatus: 'DRAFT',
-              stockBuffer: sib.stockBuffer,
-            } as any,
-          })
-        }))
+        skippedListings = await copySiblingListings(tx, { sourceProductId: source.id, productId: childProduct.id, groups })
       }
 
       await productReadCacheService.refreshInTransaction(tx, [childProduct.id, parentId])
@@ -1359,6 +1315,7 @@ export async function catalogRoutes(app: FastifyInstance) {
         success: true,
         data: childProduct,
         message: `Child product "${name}" created successfully`,
+        ...(skippedListings.length ? { skippedListings } : {}),
       });
     } catch (error: any) {
       logger.error("Failed to create child product", {

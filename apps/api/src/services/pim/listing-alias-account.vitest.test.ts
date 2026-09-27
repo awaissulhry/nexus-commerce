@@ -41,12 +41,20 @@ describe('listing alias ownership', () => {
   it('creates a fully inheriting alias family on the named account, including when no primary listing exists', async () => {
     await createAlias({ productId: 'variant', channel: 'EBAY', marketplace: 'IT', accountId: 'b' })
     expect(db.channelConnection.findMany).not.toHaveBeenCalled()
-    expect(db.channelListing.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { productId: 'family', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'b', aliasKey: '' } }))
     expect(db.productListingAlias.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ channelConnectionId: 'b', productId: 'family' }) }))
     const rows = db.channelListing.createMany.mock.calls[0][0].data
     expect(rows).toHaveLength(2)
-    for (const row of rows) expect(row).toMatchObject({ channelConnectionId: 'b', aliasKey: 'alias-b', aliasId: 'alias-b', isPublished: false, listingStatus: 'DRAFT' })
+    // Step 7 — every alias row is an inert draft from the one draft rule, exactly as a primary draft.
+    for (const row of rows) expect(row).toEqual({ productId: expect.any(String), channel: 'EBAY', marketplace: 'IT', channelMarket: 'EBAY_IT', region: 'IT', channelConnectionId: 'b',
+      aliasKey: 'alias-b', aliasId: 'alias-b', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, externalListingId: null, quantity: null, price: null })
     expect(rows.every((row: object) => !Object.hasOwn(row, 'overrideData'))).toBe(true)
+  })
+
+  it('refuses an alias when the channel has no connected account, and writes nothing', async () => {
+    db.channelConnection.findMany.mockResolvedValue([])
+    await expect(createAlias({ productId: 'variant', channel: 'EBAY', marketplace: 'IT' })).rejects.toThrow('Connect an eBay account')
+    expect(db.productListingAlias.create).not.toHaveBeenCalled()
+    expect(db.channelListing.createMany).not.toHaveBeenCalled()
   })
 
   it.each(['rename', 'archive'])('validates the family and account before %s', async operation => {

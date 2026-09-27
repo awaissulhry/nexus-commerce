@@ -19,6 +19,9 @@ import { relationshipTransaction, relationshipProduct, ProductRelationshipError 
  */
 import { UnknownProductError } from './studio-sheet.service.js'
 import { resolveChannelConnectionId } from '../connection-resolver.service.js'
+import { channelLabel } from '@nexus/shared/channel-label'
+// A call-time import only: draft-listing.service imports this module's alias check the same way.
+import { draftListingFields } from './draft-listing.service.js'
 
 export class AliasCreationBlockedError extends Error {
   readonly code = 'alias_creation_blocked'
@@ -95,6 +98,9 @@ export async function createAlias(input: CreateAliasInput) {
   const marketplace = input.marketplace.toUpperCase()
 
   const connectionId = await resolveChannelConnectionId(channel, input.accountId)
+  // An alias is a listing on one account: none connected means no alias (the draft rule requires the account).
+  const label = channelLabel(channel)
+  if (!connectionId) throw new ProductRelationshipError(`Connect ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label} account before adding a listing on ${marketplace}.`)
   if (await legacyAliasIndexesPresent()) throw new AliasCreationBlockedError()
   return relationshipTransaction(async tx => {
     const seed = await tx.product.findFirst({
@@ -109,13 +115,6 @@ export async function createAlias(input: CreateAliasInput) {
     const family = await tx.product.findMany({
       where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null },
       select: { id: true },
-    })
-
-    // Existing listing metadata is reused only within the resolved account.
-    // Account attribution itself comes from the validated destination above.
-    const sibling = await tx.channelListing.findFirst({
-      where: { productId: rootId, channel, marketplace, channelConnectionId: connectionId, aliasKey: '' },
-      select: { channelConnectionId: true, channelMarket: true, region: true },
     })
 
     const highest = await tx.productListingAlias.findFirst({
@@ -137,25 +136,12 @@ export async function createAlias(input: CreateAliasInput) {
       },
     })
 
+    // Step 7 — every alias row is an inert draft decided by the one draft rule (`draftListingFields`): DRAFT,
+    // unpublished and paused, so a brand-new alias is never swept into an outbound push before an operator has
+    // looked at it. BOTH `aliasId` (the FK) and `aliasKey` (the NOT NULL discriminator on the unique keys, because
+    // Prisma cannot target a null inside a compound unique) are written together there.
     await tx.channelListing.createMany({
-      data: family.map((p) => ({
-        productId: p.id,
-        // BOTH: `aliasId` is the FK (relation, cascade); `aliasKey` is the NOT
-        // NULL discriminator that rides the unique keys, because Prisma cannot
-        // target a null inside a compound unique. They are written together and
-        // the cell writer also preserves this relation when materializing rows.
-        aliasId: alias.id,
-        aliasKey: alias.id,
-        channel,
-        marketplace,
-        region: sibling?.region ?? marketplace,
-        channelMarket: sibling?.channelMarket ?? `${channel}_${marketplace}`,
-        channelConnectionId: connectionId,
-        listingStatus: 'DRAFT',
-        // isPublished false: a brand-new alias must never be swept into an
-        // outbound push before an operator has looked at it.
-        isPublished: false,
-      })),
+      data: family.map((p) => draftListingFields({ productId: p.id, channel, market: marketplace, accountId: connectionId, aliasKey: alias.id })),
     })
 
     await productReadCacheService.refreshInTransaction(tx, family.map(member => member.id))

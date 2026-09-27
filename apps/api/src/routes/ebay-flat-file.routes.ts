@@ -1080,6 +1080,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           };
 
           let listingId: string;
+          // Step 7 — a still-draft (a Nexus draft never published) is not on eBay: this save queues nothing for it.
+          let stillDraft = false;
 
           // Step 7 — a row carrying an eBay ItemID that creates the listing, or reaches a still-draft, records a
           // listing eBay already has: through the one live-listing rule, on the listing's own account (the primary
@@ -1109,6 +1111,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               data: listingData as any,
             });
             listingId = existing.id;
+            stillDraft = isStillDraftListing({ ...existing, listingStatus: (listingData as { listingStatus?: string }).listingStatus ?? existing.listingStatus });
             rowListingWrites++;
             writtenMps.add(mp);
           } else {
@@ -1128,11 +1131,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             writtenMps.add(mp);
           }
 
-          // Create OutboundSyncQueue entries only when price or qty actually changed
+          // Create OutboundSyncQueue entries only when price or qty actually changed — and never for a still-draft.
           const priceChanged = newPrice != null && oldPrice !== newPrice;
           const qtyChanged = newQty != null && oldQty !== newQty;
 
-          if (priceChanged) {
+          if (priceChanged && !stillDraft) {
             const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {
@@ -1150,7 +1153,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             void fireOutboundJobs([qRow], { source: 'EBAY_FLAT_FILE_SAVE' })
           }
 
-          if (qtyChanged) {
+          if (qtyChanged && !stillDraft) {
             const qRow = await createOutboundRow(prisma, {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               data: {

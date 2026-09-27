@@ -17,7 +17,9 @@
  *     channel's primary active account. Never null, and a named account never falls back to another store.
  *   - Market: an active `Marketplace` row of the channel (as `workspace-destination.ts` requires).
  *   - Alias: only the primary listing (`aliasKey ''`) is created here. A non-primary alias listing must
- *     already exist (`POST /products/:id/aliases` makes those rows); it is returned, never created.
+ *     already exist (`POST /products/:id/aliases` makes those rows); it is returned, never created. The creators of
+ *     alias rows (`createAlias`, and the sites that copy an alias row) take their fields from `draftListingFields`,
+ *     so an alias draft is exactly as inert as a primary one.
  *   - Family (`family: true`): when the family has NO row on the coordinate, the draft is born as the parent
  *     plus every live variant — a variant with no row counts as EXCLUDED (`family-projection.service.ts`,
  *     "absence IS exclusion"), so a parent-only draft would read "0 of N variants". When the family already
@@ -37,8 +39,9 @@
  * READ or SERIALIZABLE it fails with a serialization error, which `inDatabaseTransaction` retries.
  */
 import type { Prisma } from '@prisma/client'
+import prisma from '../../db.js'
 import { channelLabel } from '@nexus/shared/channel-label'
-import { whereCoordinate } from '../../lib/listing-coordinate.js'
+import { listingRegion, whereCoordinate } from '../../lib/listing-coordinate.js'
 import { chooseConnection, listActiveConnections } from '../connection-resolver.service.js'
 import { validateAliasWriteTargets } from './listing-alias.service.js'
 
@@ -123,7 +126,7 @@ export async function ensureDraftListings(tx: Tx, input: EnsureDraftListingsInpu
   // One insert order for every caller (by product id): two calls that name the same products in another order then
   // queue on the unique key instead of deadlocking on it.
   const inserted = missing.length === 0 ? [] : await tx.channelListing.createManyAndReturn({
-    data: [...missing].sort().map(productId => draftListingData({ productId, channel, market, accountId })),
+    data: [...missing].sort().map(productId => draftListingFields({ productId, channel, market, accountId })),
     skipDuplicates: true,
     select: { id: true, productId: true, version: true },
   })
@@ -147,17 +150,29 @@ export async function ensureDraftListings(tx: Tx, input: EnsureDraftListingsInpu
   })
 }
 
-/** Every field of a Nexus-created draft is decided here, and only here. */
-function draftListingData(c: { productId: string; channel: string; market: string; accountId: string }): Prisma.ChannelListingCreateManyInput {
+/** For a caller that holds no transaction (a route): the same rule, in a transaction of its own. */
+export function ensureDraftListingsInTransaction(input: EnsureDraftListingsInput): Promise<EnsuredDraftListing[]> {
+  return prisma.$transaction(tx => ensureDraftListings(tx, input))
+}
+
+/**
+ * Every field of a Nexus-created draft is decided here, and only here — for `ensureDraftListings` and for the creators
+ * of alias drafts (`aliasKey` = the alias id; `aliasId` is always written with it). The account is required.
+ */
+export function draftListingFields(c: { productId: string; channel: string; market: string; accountId: string; aliasKey?: string }): Prisma.ChannelListingCreateManyInput {
+  if (typeof c.accountId !== 'string' || !c.accountId.trim()) {
+    throw new DraftListingError('NO_ACTIVE_ACCOUNT', `Connect ${withArticle(channelLabel(c.channel))} account before listing on ${c.market}.`)
+  }
+  const aliasKey = c.aliasKey ?? ''
   return {
     productId: c.productId,
     channel: c.channel,
     marketplace: c.market,
     channelMarket: `${c.channel}_${c.market}`,
-    region: c.market,
+    region: listingRegion(c.channel, c.market),
     channelConnectionId: c.accountId,
-    aliasKey: '',
-    aliasId: null,
+    aliasKey,
+    aliasId: aliasKey === '' ? null : aliasKey,
     listingStatus: 'DRAFT',
     isPublished: false,
     syncPaused: true,
