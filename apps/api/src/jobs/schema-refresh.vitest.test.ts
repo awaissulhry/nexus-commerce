@@ -1,64 +1,41 @@
 // apps/api/src/jobs/schema-refresh.vitest.test.ts
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 const cron = vi.hoisted(() => ({ schedule: vi.fn(() => ({ stop: vi.fn() })) }))
+const m = vi.hoisted(() => ({ targets: [] as unknown[], configured: true, getSchema: vi.fn(), refreshSchema: vi.fn() }))
 vi.mock('../lib/cron/clustered.js', () => ({ default: cron }))
-import { collectInUseSchemaTargets, startSchemaRefreshCron, REFRESHED_CHANNELS } from './schema-refresh.job.js'
+vi.mock('../db.js', () => ({ default: {} }))
+vi.mock('../utils/cron-observability.js', () => ({ recordCronRun: (_job: string, handler: () => Promise<unknown>) => handler() }))
+vi.mock('../services/marketplaces/amazon.service.js', () => ({ AmazonService: class { isConfigured = async () => m.configured } }))
+vi.mock('../services/categories/schema-sync.service.js', () => ({ CategorySchemaService: class { getSchema = m.getSchema; refreshSchema = m.refreshSchema } }))
+// The target rules are proven on PGlite in schema-coverage.vitest.test.ts; here only the job's use of them.
+vi.mock('../services/categories/schema-coverage.service.js', async (actual) => ({ ...(await actual<object>()), collectSchemaTargets: async () => m.targets }))
+import { runSchemaRefresh, startSchemaRefreshCron, REFRESHED_CHANNELS } from './schema-refresh.job.js'
 
-describe('collectInUseSchemaTargets', () => {
-  it('returns distinct (channel, marketplace, productType) targets from cached schemas', async () => {
-    const prisma = {
-      categorySchema: {
-        findMany: vi.fn().mockResolvedValue([
-          { channel: 'AMAZON', marketplace: 'IT', productType: 'COAT' },
-          { channel: 'AMAZON', marketplace: 'IT', productType: 'PANTS' },
-          { channel: 'AMAZON', marketplace: 'IT', productType: 'COAT' }, // duplicate — should be removed
-          { channel: 'EBAY', marketplace: 'IT', productType: '177104' },
-          { channel: 'ETSY', marketplace: 'GLOBAL', productType: '1429' },
-        ]),
-      },
-    } as any
-    const out = await collectInUseSchemaTargets(prisma)
-    expect(out).toEqual([
-      { channel: 'AMAZON', marketplace: 'IT', productType: 'COAT' },
-      { channel: 'AMAZON', marketplace: 'IT', productType: 'PANTS' },
-      { channel: 'EBAY', marketplace: 'IT', productType: '177104' },
-      { channel: 'ETSY', marketplace: 'GLOBAL', productType: '1429' },
-    ])
+const t = (channel: string, marketplace: string, productType: string, status: string) => ({ channel, marketplace, productType, status, fetchedAt: null, expiresAt: null })
+
+describe('runSchemaRefresh — P3: in-use targets, missing ones downloaded', () => {
+  beforeEach(() => {
+    m.getSchema.mockReset().mockImplementation(async (q: { channel: string }) => { if (q.channel === 'EBAY') throw new Error('eBay unavailable'); return {} })
+    m.refreshSchema.mockReset().mockResolvedValue({})
+    m.targets = [t('AMAZON', 'BE', 'COAT', 'missing'), t('AMAZON', 'IT', 'OUTERWEAR', 'cached'), t('EBAY', 'IT', '177104', 'missing'), t('ETSY', 'GLOBAL', '1429', 'stale')]
   })
 
-  it('defaults a null Amazon marketplace to IT and a null Etsy one to GLOBAL', async () => {
-    const prisma = {
-      categorySchema: {
-        findMany: vi.fn().mockResolvedValue([
-          { channel: 'AMAZON', marketplace: null, productType: 'SHOE' },
-          { channel: 'AMAZON', marketplace: 'DE', productType: 'SHOE' },
-          { channel: 'ETSY', marketplace: null, productType: '1429' },
-        ]),
-      },
-    } as any
-    const out = await collectInUseSchemaTargets(prisma)
-    expect(out).toEqual([
-      { channel: 'AMAZON', marketplace: 'IT', productType: 'SHOE' },
-      { channel: 'AMAZON', marketplace: 'DE', productType: 'SHOE' },
-      { channel: 'ETSY', marketplace: 'GLOBAL', productType: '1429' },
-    ])
+  it('downloads a missing pair, refreshes a cached or stale one, continues past a failure, and counts per channel', async () => {
+    m.configured = true
+    expect(await runSchemaRefresh()).toBe('targets=4 AMAZON: added=1 refreshed=1 failed=0 skipped=0 · EBAY: added=0 refreshed=0 failed=1 skipped=0 · ETSY: added=0 refreshed=1 failed=0 skipped=0')
+    expect(m.getSchema.mock.calls.map(c => c[0])).toEqual([{ channel: 'AMAZON', marketplace: 'BE', productType: 'COAT' }, { channel: 'EBAY', marketplace: 'IT', productType: '177104' }])
+    expect(m.refreshSchema.mock.calls.map(c => c[0].productType)).toEqual(['OUTERWEAR', '1429'])
   })
 
-  it('returns empty array when no active schemas exist', async () => {
-    const prisma = { categorySchema: { findMany: vi.fn().mockResolvedValue([]) } } as any
-    expect(await collectInUseSchemaTargets(prisma)).toEqual([])
+  it('skips every Amazon target when this business has no usable Amazon connection', async () => {
+    m.configured = false
+    expect(await runSchemaRefresh()).toContain('AMAZON: added=0 refreshed=0 failed=0 skipped=2')
+    expect(m.getSchema.mock.calls.every(c => c[0].channel !== 'AMAZON')).toBe(true)
   })
 
-  it('asks for every refreshed channel, and never the Shopify store rows', async () => {
-    const findMany = vi.fn().mockResolvedValue([])
-    const prisma = { categorySchema: { findMany } } as any
-    await collectInUseSchemaTargets(prisma)
-    expect(findMany).toHaveBeenCalledWith({
-      where: { channel: { in: ['AMAZON', 'EBAY', 'ETSY'] }, isActive: true },
-      select: { channel: true, marketplace: true, productType: true },
-      orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { productType: 'asc' }],
-    })
+  it('keeps every per-category channel, and never the Shopify store rows', () => {
+    expect([...REFRESHED_CHANNELS]).toEqual(['AMAZON', 'EBAY', 'ETSY'])
     expect(REFRESHED_CHANNELS).not.toContain('SHOPIFY_STORE')
   })
 })

@@ -16,6 +16,15 @@
  * version logs its changes and marks the affected families' readiness for a rebuild (schema-sync.service.ts).
  * Shopify store definitions refresh on their own path (channel-specs/shopify.ts).
  *
+ * P3 (attribute parity, D1 = A, 2026-09-27): until now the targets were read FROM the cached rows, so the job refreshed
+ * what existed and never downloaded a pair nobody had opened (28 of 66 Amazon market × type pairs cached). Targets now
+ * come from what the business USES (services/categories/schema-coverage.service.ts): a missing pair is downloaded, a
+ * cached one refreshed. The sheet's "Download rules" action runs the same loop.
+ *
+ * Per business: registered through lib/cron/clustered.ts, which with business profiles on runs this handler once per
+ * active profile inside withWorkspace — every read, provider credential and cache row belongs to that business. With
+ * profiles off it runs once, for the original business.
+ *
  * Pattern mirrors catalog-refresh.job.ts (node-cron + recordCronRun). Default schedule: 04:00 UTC
  * daily (after catalog-refresh at 03:00) so they share the SP-API throttle budget.
  * Sequential with a small inter-call delay — the Product Type Definitions API is
@@ -23,75 +32,36 @@
  */
 
 import nodeCron from '../lib/cron/clustered.js'
-import type { PrismaClient } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
+import { COVERAGE_CHANNELS, collectSchemaTargets, fillSchemaTargets } from '../services/categories/schema-coverage.service.js'
 
 let scheduledTask: ReturnType<typeof nodeCron.schedule> | null = null
 
 const amazonService = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazonService)
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-/** The channels whose per-category rules this job refreshes. */
-export const REFRESHED_CHANNELS = ['AMAZON', 'EBAY', 'ETSY'] as const
-export type RefreshTarget = { channel: (typeof REFRESHED_CHANNELS)[number]; marketplace: string; productType: string }
-
-/**
- * Returns DISTINCT (channel, marketplace, productType) targets from active cached schemas,
- * ordered by channel, marketplace, productType (first-seen wins on duplicates).
- * A null Amazon marketplace defaults to 'IT' (Nexus primary market). Etsy's rules are global.
- */
-export async function collectInUseSchemaTargets(client: PrismaClient): Promise<RefreshTarget[]> {
-  const rows = await client.categorySchema.findMany({
-    where: { channel: { in: [...REFRESHED_CHANNELS] }, isActive: true },
-    select: { channel: true, marketplace: true, productType: true },
-    orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { productType: 'asc' }],
-  })
-  const seen = new Set<string>()
-  const out: RefreshTarget[] = []
-  for (const r of rows) {
-    const channel = r.channel as RefreshTarget['channel']
-    const mp = r.marketplace ?? (channel === 'ETSY' ? 'GLOBAL' : 'IT')
-    const key = `${channel}:${mp}:${r.productType}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({ channel, marketplace: mp, productType: r.productType })
-  }
-  return out
-}
+/** The channels whose per-category rules this job keeps. */
+export const REFRESHED_CHANNELS = COVERAGE_CHANNELS
 
 export async function runSchemaRefresh(): Promise<string> {
   const amazonReady = await amazonService.isConfigured()
   if (!amazonReady) logger.warn('schema-refresh cron: Amazon SP-API not configured — Amazon targets skipped')
 
   return recordCronRun('schema-refresh', async () => {
-    // Refresh every (channel, marketplace, category) actively in use — keeps required-field
-    // rules and option lists ≤24h fresh, and a change rebuilds the affected readiness.
-    const targets = await collectInUseSchemaTargets(prisma)
-
-    const counts: Record<string, { refreshed: number; failed: number; skipped: number }> = {}
-    for (const { channel, productType, marketplace } of targets) {
-      const count = (counts[channel] ??= { refreshed: 0, failed: 0, skipped: 0 })
-      if (channel === 'AMAZON' && !amazonReady) { count.skipped++; continue }
-      try {
-        await schemaService.refreshSchema({ channel, marketplace, productType })
-        count.refreshed++
-      } catch (err) {
-        count.failed++
-        logger.warn('schema-refresh cron: refresh failed', {
-          channel, productType, marketplace, error: err instanceof Error ? err.message : String(err),
-        })
-      }
-      await sleep(300) // throttle the providers' definition APIs
-    }
+    // P3 — every pair this business USES (missing ones are downloaded) plus every cached one (refreshed, as before),
+    // so required-field rules and option lists stay ≤24h fresh and a change rebuilds the affected readiness.
+    const targets = await collectSchemaTargets(prisma)
+    const { counts } = await fillSchemaTargets(targets, {
+      service: schemaService, refreshCached: true, throttleMs: 300, label: 'schema-refresh cron',
+      skip: target => target.channel === 'AMAZON' && !amazonReady,
+    })
 
     const summary = `targets=${targets.length} ` + Object.entries(counts)
-      .map(([channel, c]) => `${channel}: refreshed=${c.refreshed} failed=${c.failed}${c.skipped ? ` skipped=${c.skipped}` : ''}`).join(' · ')
+      .map(([channel, c]) => `${channel}: added=${c.added} refreshed=${c.refreshed} failed=${c.failed} skipped=${c.skipped}`).join(' · ')
     logger.info(`schema-refresh cron: ${summary}`)
     return summary
   })

@@ -12,7 +12,7 @@ vi.mock('../db.js', () => ({
   default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
 }))
 
-const ROUTES = ['/api/products/bulk-replicate', '/api/pim/attach-to-parent', '/api/pim/promote-to-parent']
+const ROUTES = ['/api/products/bulk-replicate', '/api/pim/attach-to-parent', '/api/pim/promote-to-parent', '/api/categories/schema/download']
 const BODY = { source: 'original-product' }
 const WORKSPACE_B = 'command_receipt_workspace_b'
 const workspaces = [LEGACY_WORKSPACE_ID, WORKSPACE_B]

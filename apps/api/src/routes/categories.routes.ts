@@ -8,6 +8,7 @@ import {
 } from '../services/categories/schema-sync.service.js'
 import { ProductTypesService } from '../services/listing-wizard/product-types.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+import { CoverageRequestError, downloadMissingSchemas, schemaCoverageReport } from '../services/categories/schema-coverage.service.js'
 
 const amazon = new AmazonService()
 const service = new CategorySchemaService(prisma as any, amazon)
@@ -129,6 +130,39 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       return reply
         .code(isAuth ? 503 : 500)
         .send({ error: msg })
+    }
+  })
+
+  // GET /api/categories/schema/coverage?channel=AMAZON&market=BE
+  //
+  // P3 (D1 = A) — the rule sets this business USES for a channel (optionally one market) and whether each is cached,
+  // stale (past expiresAt, still served) or missing (the sheet shows only fixed columns). Cache rows only.
+  fastify.get<{ Querystring: { channel?: string; market?: string } }>('/categories/schema/coverage', async (request, reply) => {
+    try {
+      return await schemaCoverageReport(prisma, request.query)
+    } catch (err) {
+      if (err instanceof CoverageRequestError) return reply.code(400).send({ error: err.message, ...err.details })
+      throw err
+    }
+  })
+
+  // POST /api/categories/schema/download  { channel, market, productTypes? }
+  //
+  // P3 (D1 = A) — the sheet's urgent-case "Download rules": fetch the MISSING in-use rule sets for one channel + market
+  // through the ordinary cache path, one at a time. A listed type must be in use there — never an arbitrary one.
+  // An Idempotency-Key makes a double-click one run (COMMAND_SCOPES).
+  fastify.post<{ Body: { channel?: unknown; market?: unknown; productTypes?: unknown } | null }>('/categories/schema/download', async (request, reply) => {
+    try {
+      const result = await downloadMissingSchemas(prisma, service, request.body ?? {})
+      if (result.results.some(r => r.outcome === 'added')) {
+        const { clearSheetColumnCache } = await import('../services/pim/sheet-columns.service.js')
+        const { clearStudioColumnCache } = await import('../services/pim/studio-columns.js')
+        clearSheetColumnCache(); clearStudioColumnCache()
+      }
+      return result
+    } catch (err) {
+      if (err instanceof CoverageRequestError) return reply.code(400).send({ error: err.message, ...err.details })
+      throw err
     }
   })
 

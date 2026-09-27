@@ -205,6 +205,7 @@ describe('the API’s command receipts', () => {
 
   it('honours a key on exactly the routes the web keys', () => {
     expect(routes.sort()).toEqual([
+      '/api/categories/schema/download',
       '/api/listing-wizard/:id/submit',
       '/api/pim/attach-to-parent',
       '/api/pim/promote-to-parent',
