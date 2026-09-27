@@ -25,7 +25,7 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { recordLiveListings } from './live-listing.service.js'
 import { ensureDraftListings } from './draft-listing.service.js'
-import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
+import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl, raceChannelListingInserts } from '../../test-support/concurrent-database.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -44,26 +44,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`recordLiveListings — concurrent wri
 
   /** Both callers must have READ the coordinate and be BLOCKED on their insert before the lock is released. */
   async function race<T>(calls: Array<() => Promise<T>>): Promise<T[]> {
-    const locker = await state.db.pool.connect()
-    try {
-      await locker.query('BEGIN')
-      await locker.query('LOCK TABLE "ChannelListing" IN SHARE MODE')
-      const running = calls.map(call => scoped(call).then(value => ({ value }), error => ({ error })))
-      let waiting = 0
-      for (let i = 0; i < 600 && waiting < calls.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 25))
-        const { rows } = await state.db.pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [state.db.name])
-        waiting = rows[0].n
-      }
-      // The positive control: without it the "race" may have run one call after the other.
-      expect(waiting, 'both callers must be blocked on their insert before the lock is released').toBe(calls.length)
-      await locker.query('COMMIT')
-      const settled = await Promise.all(running)
-      for (const outcome of settled) if ('error' in outcome) throw outcome.error
-      return settled.map(outcome => (outcome as { value: T }).value)
-    } finally {
-      locker.release()
-    }
+    const settled = await raceChannelListingInserts(state.db, calls.map(call => () => scoped(call)))
+    for (const outcome of settled) if ('error' in outcome) throw outcome.error
+    return settled.map(outcome => (outcome as { value: T }).value)
   }
 
   const rowsOf = (productId: string) => scoped(() => prisma.channelListing.findMany({ where: { productId } }))
@@ -77,7 +60,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`recordLiveListings — concurrent wri
     expect(rows[0]).toMatchObject({ channelConnectionId: ids.account, listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: 'ASIN-RACE' })
     expect(results.map(([r]) => r.id)).toEqual([rows[0].id, rows[0].id])
     expect(results.map(([r]) => r.created).sort()).toEqual([false, true])
-  }, 60_000)
+  }, 90_000)
 
   it('a draft creator and a recorder: one row, and it ends up live and unpaused whichever inserted first', async () => {
     const draft = () => prisma.$transaction(tx => ensureDraftListings(tx, { channel: 'AMAZON', market: 'SE', accountId: ids.account, productIds: [ids.draftAndLive] }))
@@ -85,5 +68,5 @@ describe.skipIf(!concurrentDatabaseUrl())(`recordLiveListings — concurrent wri
     const rows = await rowsOf(ids.draftAndLive)
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ listingStatus: 'ACTIVE', isPublished: true, syncPaused: false, externalListingId: 'ASIN-RACE' })
-  }, 60_000)
+  }, 90_000)
 })

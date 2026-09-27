@@ -37,7 +37,7 @@ vi.mock('../categories/seller-schema.service.js', async () => {
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { writeProjectionMapping } from './family-projection.service.js'
-import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
+import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl, raceChannelListingInserts } from '../../test-support/concurrent-database.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -61,25 +61,8 @@ describe.skipIf(!concurrentDatabaseUrl())(`the first theme save on a new market 
 
   it('one save starts the draft and stores its theme; the other is a version conflict, never a write over it', async () => {
     const save = (theme: string) => () => writeProjectionMapping({ productId: ids.parent, channel: 'AMAZON', market: 'SE', accountId: ids.account, includeOrder: false, expectedVersion: 0, theme })
-    const locker = await state.db.pool.connect()
-    let settled: Array<{ value?: unknown; error?: any }>
-    try {
-      await locker.query('BEGIN')
-      await locker.query('LOCK TABLE "ChannelListing" IN SHARE MODE')
-      const running = [save('SIZE/COLOR'), save('COLOR/SIZE')].map(call => scoped(call).then(value => ({ value }), error => ({ error })))
-      let waiting = 0
-      for (let i = 0; i < 1200 && waiting < 2; i++) {
-        await new Promise(resolve => setTimeout(resolve, 25))
-        const { rows } = await state.db.pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [state.db.name])
-        waiting = rows[0].n
-      }
-      // The positive control: without it the "race" may have run one save after the other.
-      expect(waiting, 'both saves must be blocked on the draft insert before the lock is released').toBe(2)
-      await locker.query('COMMIT')
-      settled = await Promise.all(running)
-    } finally {
-      locker.release()
-    }
+    // Both saves must be blocked on the draft insert before the lock is released (the helper's positive control).
+    const settled: Array<{ value?: unknown; error?: any }> = await raceChannelListingInserts(state.db, [save('SIZE/COLOR'), save('COLOR/SIZE')].map(call => () => scoped(call)))
     const won = settled.filter(outcome => !('error' in outcome))
     const lost = settled.filter(outcome => 'error' in outcome)
     expect(won).toHaveLength(1)

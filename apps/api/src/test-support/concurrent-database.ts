@@ -93,6 +93,50 @@ async function dropDisposableDatabase(admin: Pool, name: string) {
  * `timeZone` is set on the database right after CREATE DATABASE, before any session opens, so every
  * session of both pools inherits it (the pools stay open from setup to close).
  */
+/**
+ * Force a race on `ChannelListing` inserts: hold a SHARE lock (reads pass, inserts wait), start every call, wait until
+ * PostgreSQL shows each of them blocked on a lock, then release the lock and return what each call did. Without the
+ * wait the "race" may run one call after the other, so a call count that never blocks is an error (the positive
+ * control).
+ *
+ * The lock is ALWAYS released before anything else, a failed check included. A SHARE lock left open on a pooled
+ * connection blocks every caller for good, and `close()` then waits on those callers before it ends the pool that
+ * holds the lock — so the whole real-PostgreSQL run stopped at its 10-minute limit with no report (CI, 2026-09-27).
+ */
+export async function raceChannelListingInserts<T>(
+  db: { pool: Pool; name: string },
+  calls: Array<() => Promise<T>>,
+  options: { waitMs?: number } = {},
+): Promise<Array<{ value: T } | { error: unknown }>> {
+  const locker = await db.pool.connect()
+  let running: Array<Promise<{ value: T } | { error: unknown }>> = []
+  let released = false
+  try {
+    await locker.query('BEGIN')
+    await locker.query('LOCK TABLE "ChannelListing" IN SHARE MODE')
+    running = calls.map(call => call().then(value => ({ value }), error => ({ error })))
+    let waiting = 0
+    const deadline = Date.now() + (options.waitMs ?? 40_000)
+    while (waiting < calls.length && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 25))
+      const { rows } = await db.pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [db.name])
+      waiting = rows[0].n
+    }
+    const forced = waiting === calls.length
+    await locker.query(forced ? 'COMMIT' : 'ROLLBACK')
+    released = true
+    const settled = await Promise.all(running)
+    if (!forced) throw new Error(`The race was not forced: ${waiting} of ${calls.length} calls were blocked on their insert before the lock was released.`)
+    return settled
+  } finally {
+    if (!released) {
+      await locker.query('ROLLBACK').catch(() => undefined)
+      await Promise.all(running)
+    }
+    locker.release()
+  }
+}
+
 export async function concurrentDatabase(options: { maxConnections?: number; timeZone?: string } = {}) {
   const server = concurrentDatabaseUrl()
   if (!server) throw new Error(`${CONCURRENT_PG_ENV} is not set.`)
