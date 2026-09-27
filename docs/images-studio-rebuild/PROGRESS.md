@@ -38,6 +38,11 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   `plan-page/planPage.scroll.vitest.test.ts`; rule in `apps/web/CLAUDE.md`. Checked locally: wheel scroll on the page
   and on the preview + gallery; all 11 studio tabs have 0 px extra panel height and no panel scroll bar; 390 px = the
   page is its own scroll box, no sideways page scroll; Tab moves through the photos and the page follows the focus.
+- **"I still noticed Arial" (Owner, 2026-09-27, screenshot of the switch preview):** measured on the local stack — every
+  text run on the page is drawn in Inter (its width equals Inter's, not Arial's). The line "Shared photos would come
+  from: …" had no DS size and showed at the browser's 16 px, so it read as a foreign font. The page, the preview and the
+  loading state now set `--nds-font-size-base` (13 px); after the fix 0 of 62 (preview) and 0 of 208 (plan page) text
+  runs are at 16 px or in a non-DS font. Guarded in the same test file.
 - **Next:** P4 (upload dialog with file-name rules, Compare, Review & publish).
 
 ## P3d — polish and proof

@@ -34,3 +34,12 @@ describe('the Media tab always scrolls', () => {
     expect(panel).not.toMatch(/overflow: hidden;/)
   })
 })
+
+/* Owner, 2026-09-27: "I still noticed Arial". Measured: the preview's "Shared photos would come from" line was Inter at the
+   browser's 16 px (no DS size), so it read as a foreign font. Each Media surface sets the DS body size for its plain text. */
+describe('the Media page text uses the DS body size', () => {
+  it('the page, the switch preview and the loading state set --nds-font-size-base', () => {
+    const plan = read('./planPage.module.css')
+    for (const selector of ['.page', '.switch', '.state']) expect(rule(plan, selector)).toMatch(/font-size: var\(--nds-font-size-base\);/)
+  })
+})
