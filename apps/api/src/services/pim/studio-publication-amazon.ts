@@ -25,6 +25,7 @@ import { amazonExcludedRoots, amazonRootOf, pushExclusionsCache } from '../chann
 import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { languageTag } from './market-languages.js'
+import { effectiveFulfilment } from './matrix-cells.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -103,7 +104,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     row.record_action = row._isNew ? 'full_update' : 'partial_update'
     if (projection?.theme) row.variation_theme = projection.theme.code
     const activeOffer = listing?.offers.find(o => o.isActive)
-    const fulfillment = activeOffer?.fulfillmentMethod ?? listing?.fulfillmentMethod ?? product.fulfillmentMethod
+    // 2026-09-27 — the ONE rule the sheet cell and the Matrix show (`effectiveFulfilment`): Amazon's reported code and
+    // the flat mirror now sit above the product flag, so an FBA listing is never sent as FBM because of that flag.
+    const fulfillment = effectiveFulfilment({ activeOfferMethod: activeOffer?.fulfillmentMethod, typed: listing?.fulfillmentMethod,
+      platformAttributes: listing?.platformAttributes, productMethod: product.fulfillmentMethod })?.method
     if (fulfillment) row.fulfillment_availability__fulfillment_channel_code = fulfillment === 'FBA' ? `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(scope.accountId)]}` : 'DEFAULT'
     if (row._isNew && !product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
     const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))

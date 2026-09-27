@@ -9,7 +9,7 @@ import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
 import { contentWireValue } from './content-read.js'
 import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
-import { deriveFulfilment } from './matrix-cells.js'
+import { effectiveFulfilment } from './matrix-cells.js'
 import { normalizeLanguage } from './content-language.js'
 /**
  * PES.5 — the Product Edit Studio's sheet read: ONE family, ONE scope.
@@ -520,8 +520,10 @@ const LISTING_SELECT = {
   // AM.1 — the listing's OWN bag: eBay item specifics and listing settings, Amazon's synced
   // attributes. Read for columns whose `channels[coord].store` is a `platformAttributes` path.
   platformAttributes: true,
-  // 2026-09-27 — the typed fulfilment column (`setFulfillmentMethod` writes it with both mirrors).
+  // 2026-09-27 — the typed fulfilment column (`setFulfillmentMethod` writes it with both mirrors) and the active
+  // offer's method: the first two tiers of `effectiveFulfilment`.
   fulfillmentMethod: true,
+  offers: { where: { isActive: true }, select: { fulfillmentMethod: true }, take: 1 },
 } as const
 
 const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterPrice', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
@@ -1361,15 +1363,16 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           }
         }
 
-        // 2026-09-27 — no nested fulfilment code on the listing: show the method the Matrix shows for this coordinate
-        // (`deriveFulfilment`: the typed column, else the flat mirror, else the product's flag), marked INHERITED — a
-        // derived answer, never dressed as a stored one.
-        if (!base && coordinate?.channel === 'AMAZON' && col.key === AMAZON_FULFILMENT_KEY) {
-          const typed = (listingRow as { fulfillmentMethod?: string | null } | null)?.fulfillmentMethod
-          const flat = (listingRow?.platformAttributes as { fulfillmentChannel?: unknown } | null)?.fulfillmentChannel
-          const method = typed === 'FBA' || typed === 'FBM' ? typed : deriveFulfilment('AMAZON', flat, (product as { fulfillmentMethod?: string | null }).fulfillmentMethod ?? null)
-          const code = method === 'FBA' ? col.options?.find((o) => o.startsWith('AMAZON_')) : col.options?.includes('DEFAULT') ? 'DEFAULT' : undefined
-          if (code) base = { value: code, source: 'master', inheritedFrom: rootId, inherited: true }
+        // 2026-09-27 — the Fulfillment method cell shows the ONE rule the Matrix and the Amazon publish step read
+        // (`effectiveFulfilment`): what this listing will be published as. The channel's own answers (an active offer,
+        // the typed column, Amazon's reported code) are explicit; the flat mirror and the product flag are inherited.
+        if (coordinate?.channel === 'AMAZON' && col.key === AMAZON_FULFILMENT_KEY) {
+          const row = listingRow as { fulfillmentMethod?: string | null; platformAttributes?: unknown; offers?: Array<{ fulfillmentMethod: string | null }> } | null
+          const effective = effectiveFulfilment({ activeOfferMethod: row?.offers?.[0]?.fulfillmentMethod, typed: row?.fulfillmentMethod,
+            platformAttributes: row?.platformAttributes, productMethod: (product as { fulfillmentMethod?: string | null }).fulfillmentMethod ?? null })
+          const code = effective?.method === 'FBA' ? col.options?.find((o) => o.startsWith('AMAZON_')) : effective?.method === 'FBM' && col.options?.includes('DEFAULT') ? 'DEFAULT' : undefined
+          const own = effective?.source === 'offer' || effective?.source === 'set' || effective?.source === 'reported'
+          base = code ? { value: code, source: own ? 'channelExplicit' : 'master', inheritedFrom: own ? null : rootId, inherited: !own } : null
         }
 
         // The mapped category fills only the coordinate channel's own category field (`CHANNEL_CATEGORY_FIELD`), never

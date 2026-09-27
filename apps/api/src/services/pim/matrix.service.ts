@@ -48,7 +48,7 @@ import { readSaleWindows } from './sale-window.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
-  listingStateOf, priceCellOf, reportedFulfilment, syncCellOf, withoutInventory, writableFor, type QueueRowFacts,
+  effectiveFulfilment, listingStateOf, priceCellOf, reportedFulfilment, syncCellOf, withoutInventory, writableFor, type QueueRowFacts,
 } from './matrix-cells.js'
 
 export interface MatrixReadInput {
@@ -303,7 +303,10 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const sync = syncCellOf(res, { followMasterQuantity: l.followMasterQuantity, held: l.quantity, buffer: l.stockBuffer ?? 0, routed, fbaAtAmazon, publishable })
     const pa = (l.platformAttributes ?? {}) as Record<string, unknown>
     const typed = l.fulfillmentMethod as FulfilmentMethod | null
-    const method: FulfilmentMethod = ch === 'EBAY' ? (typed === 'FBA' ? 'MCF' : 'FBM') : typed ?? deriveFulfilment(ch, pa.fulfillmentChannel, member.fulfillmentMethod)
+    // 2026-09-27 — Amazon reads the ONE rule the sheet and the publish step read (`effectiveFulfilment`).
+    const method: FulfilmentMethod = ch === 'EBAY' ? (typed === 'FBA' ? 'MCF' : 'FBM')
+      : ch === 'AMAZON' ? effectiveFulfilment({ activeOfferMethod: fbaOfferOn.has(l.id) ? 'FBA' : null, typed, platformAttributes: pa, productMethod: member.fulfillmentMethod })?.method ?? 'FBM'
+      : typed ?? deriveFulfilment(ch, pa.fulfillmentChannel, member.fulfillmentMethod)
     const fulfilment: FulfilmentCell = {
       method, source: typed ? 'set' : 'derived',
       guard: ch === 'AMAZON' ? (isFba ? 'FBA' : 'FBM') : 'FBM',

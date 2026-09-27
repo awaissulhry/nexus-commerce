@@ -302,6 +302,22 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
 })
 
+it('2026-09-27: an existing listing Amazon runs as FBA is published as FBA even when the product flag says FBM', async () => {
+  const product = { id: 'p', sku: 'SKU-1', name: 'Giacca', basePrice: 29, totalStock: 5, fulfillmentMethod: 'FBM', images: [{ id: 'image', url: 'https://example.test/image' }] }
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent: product, products: [product], languages: ['it'], destination: { aliasKey: '' },
+    listings: [{ productId: 'p', externalListingId: 'ASIN', fulfillmentMethod: null, platformAttributes: { fulfillment_availability: [{ fulfillment_channel_code: 'AMAZON_EU' }] },
+      offers: [{ isActive: true, sku: 'SKU-1', fulfillmentMethod: null }] }],
+    resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
+  m.region.mockResolvedValue('eu')
+  await prepareAmazonPublication(facts)
+  // The old rule (`offer ?? typed ?? product`) sent DEFAULT here: the product flag outranked Amazon's own report.
+  expect(m.row.mock.calls.at(-1)![0].fulfillment_availability__fulfillment_channel_code).toBe('AMAZON_EU')
+  // CONTROL: with no report and no mirror, the product flag still decides.
+  facts.listings[0].platformAttributes = {}
+  await prepareAmazonPublication(facts)
+  expect(m.row.mock.calls.at(-1)![0].fulfillment_availability__fulfillment_channel_code).toBe('DEFAULT')
+})
+
 const mappingRow = (channelKey: string, targetKind: string, targetKey: string, extra: Record<string, unknown> = {}) => ({ id: channelKey, setId: 'set-1', channelKey, columnKey: channelKey, label: null, aliases: [], productTypes: [],
   requirement: 'optional', templateRequirement: null, targetKind, targetKey, transform: [], direction: 'both', state: 'mapped', reason: null, decidedBy: 'rule', sortOrder: 0, ...extra })
 
