@@ -41,7 +41,8 @@ function variationPicturesXml(value: unknown): string {
   const seen = new Set<string>()
   const rendered = sets.map(set => {
     const value = ebayXmlText(set.VariationSpecificValue), urls = ebayXmlList(set.PictureURL).map(ebayXmlText)
-    if (!value?.trim() || seen.has(value) || !urls.length || urls.length > 24 || urls.some(url => !url || !/^https:\/\//i.test(url))) throw new Error('The variation picture collection is incomplete or invalid.')
+    // eBay allows 12 pictures per variation value (the listing gallery allows 24).
+    if (!value?.trim() || seen.has(value) || !urls.length || urls.length > 12 || urls.some(url => !url || !/^https:\/\//i.test(url))) throw new Error('The variation picture collection is incomplete or invalid.')
     seen.add(value)
     return `<VariationSpecificPictureSet><VariationSpecificValue>${escapeXml(value)}</VariationSpecificValue>${urls.map(url => `<PictureURL>${escapeXml(url!)}</PictureURL>`).join('')}</VariationSpecificPictureSet>`
   })
