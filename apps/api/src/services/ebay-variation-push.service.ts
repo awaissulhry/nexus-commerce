@@ -9,7 +9,7 @@ import { assertListingContentReviewed } from './pim/publish-review-gate.js'
  * the eBay flat-file page and the per-product Images tab publish through ONE proven
  * code path. No logic changes vs the original at extraction time.
  */
-import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { familyPushRefusal } from './ebay-push-lock.js'
 import { ebayWriteRefusal, ebayHostOf } from './ebay-publish-gate.service.js'
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
@@ -806,6 +806,8 @@ export async function pushVariationGroup(
      *  valued). The push route merges these into its response `warnings` so the
      *  flat-file client can show them. Never affects the pushed payload. */
     warningsSink?: string[]
+    /** An explicit publish (the flat-file Push): a still-draft on the pushed site may be sent (`familyPushRefusal`). */
+    publishesDrafts?: boolean
     /** EFX P9e — the PARENT's per-market resolved content for the target market
      *  (title/subtitle/description). A variation listing has ONE parent-level
      *  title/subtitle/description, so the caller resolves it from the parent
@@ -835,10 +837,8 @@ export async function pushVariationGroup(
     channel: 'EBAY', channelConnectionId: connectionId,
     product: { OR: [{ sku: { in: pushSkus } }, { id: { in: pushProductIds } }] },
   } })
-  for (const row of pushControls) {
-    const refusal = assertPushAllowed(row)
-    if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
-  }
+  const refusal = familyPushRefusal(pushControls, mp, opts?.publishesDrafts === true)
+  if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
   await assertLegacyPresentationPublishAllowed({ sku: String((rows.find(r => r._isParent) ?? rows[0])?.sku ?? ''), marketplace: mp, accountId: connectionId })
   // D7 / R-LX-7 — the one review verdict, beside the presentation one. The group
   // title/description this push sends are resolved content; an unreviewed machine
@@ -2232,10 +2232,9 @@ export async function pushOffersOnly(
     channel: 'EBAY', channelConnectionId: connectionId,
     product: { OR: [{ sku: { in: pushSkus } }, { id: { in: pushProductIds } }] },
   } })
-  for (const row of pushControls) {
-    const refusal = assertPushAllowed(row)
-    if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
-  }
+  // Offers only: this never publishes, so a still-draft on the pushed site still refuses.
+  const refusal = familyPushRefusal(pushControls, mp)
+  if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
   if (!pushControls.length) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: 'PUSH_CONTROL_UNAVAILABLE: No stored eBay listing controls were found.' }))
   const region = mp === 'UK' ? 'GB' : mp
   const currency = await marketCurrency('EBAY', mp) // P4.4a — the Marketplace row, not a UK ternary
