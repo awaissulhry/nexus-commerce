@@ -26,6 +26,9 @@ import { AMAZON_LISTING_SKU_KEYS } from '../channel-mapping/defaults.js'
 import { CONTENT_ROOTS } from '../channel-drift/amazon-content-compare.js'
 import { languageTag } from './market-languages.js'
 import { effectiveFulfilment } from './matrix-cells.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { mediaLayoutFor } from '../images/media-plan.service.js'
+import { amazonSlotsFor, type AmazonMediaLayout } from '@nexus/shared/media-plan-channels'
 
 export interface AmazonPublication {
   kind: 'amazon'
@@ -44,7 +47,13 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   if (!products.length) return { kind: 'amazon', sellerId, marketplaceId, products: [], feed: { header: { sellerId, version: '2.0' }, messages: [] } }
   const service = new AmazonFlatFileService(prisma, new CategorySchemaService(prisma, new AmazonService()))
   const rootListing = listings.find(l => l.productId === parent.id)
-  const gallery = object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing
+  // Images rebuild P2e — a family on the media plan: new listings take their slots from the plan's Amazon layout; an
+  // existing listing sends no image attributes here (the Amazon photo review owns them), so the two paths never collide.
+  const planMedia = await isOnMediaPlan(parent.id)
+    ? await mediaLayoutFor({ productId: parent.id, channel: 'AMAZON', marketplace: scope.marketplace, accountId: scope.accountId, includedIds: products.map(p => p.id) }) : null
+  if (planMedia && planMedia.layout.channel !== 'AMAZON') throw new Error('This product\'s photo plan changed. Review again.')
+  const planLayout = planMedia?.layout as (AmazonMediaLayout & { channel: 'AMAZON' }) | undefined
+  const gallery = !planMedia && object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing
     ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
@@ -113,7 +122,16 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const available = Math.max(0, (tracked ? ledger!.available : product.totalStock) - (listing?.stockBuffer ?? 0))
     row.fulfillment_availability__quantity = Math.min(available, Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0)))
     if (row._isNew && !Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
-    if (gallery && listing) {
+    if (planMedia && planLayout) {
+      for (const slot of amazonImageSlots) delete row[slot.attribute]
+      if (row._isNew) {
+        const errors = planLayout.checks.filter(c => c.severity === 'error').map(c => c.message)
+        if (errors.length) throw new Error(`${product.sku}: ${errors.join('; ')}`)
+        const slots = amazonSlotsFor(planLayout, product.id)
+        if (!slots?.MAIN) throw new Error(`${product.sku}: choose a main photo on the Media page before publishing.`)
+        for (const slot of amazonImageSlots) { const id = slots[slot.code as keyof typeof slots]; if (id) row[slot.attribute] = planMedia.url(id) }
+      }
+    } else if (gallery && listing) {
       const { desired, problems } = desiredAmazonImages(gallery, listing.id)
       if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
       if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images before publishing.`)

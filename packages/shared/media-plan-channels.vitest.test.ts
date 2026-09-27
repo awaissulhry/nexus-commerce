@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MediaPlan, MediaPlanStack } from './media-plan'
-import { channelNames, pickVersion, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
+import { amazonSlotsFor, channelNames, pickVersion, projectAmazon, projectEbay, projectEtsy, projectShopify, type MediaAsset, type MediaDestination, type MediaFamily } from './media-plan-channels'
 
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
@@ -81,6 +81,12 @@ describe('Amazon layout', () => {
     expect(black.slots).toEqual({ MAIN: 'cover', PT01: 'n1', PT02: 'n2', PT03: 'detail', PT04: 'chart-it' })
     expect(out.items.map(i => i.sku)).toEqual(['GALE-YELLOW-M', 'GALE-BLACK-M', 'GALE-BLACK-L'])
     expect(out.parent?.slots.MAIN).toBe('cover')
+  })
+  it('gives each product its own slots, the parent its Common slots, and nothing to a product not in the layout', () => {
+    const out = projectAmazon(stack, family, assets, amazon)
+    expect(amazonSlotsFor(out, 'b-m')?.MAIN).toBe('cover')
+    expect(amazonSlotsFor(out, 'root')?.MAIN).toBe('cover')
+    expect(amazonSlotsFor(out, 'b-xl')).toBeNull()
   })
   it('names what does not fit, adds the swatch, and lets a per-SKU set win', () => {
     const many = library(...assets.values(), ...Array.from({ length: 10 }, (_, i) => asset(`m${i}`)), asset('sw'), asset('own'))
