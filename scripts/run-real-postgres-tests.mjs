@@ -110,6 +110,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'shared copy into a business with no marketplace (AE.3)', file: 'src/services/assortment/copy-unknown-market.vitest.test.ts', expect: 3 },
   { name: 'media plan layers (images rebuild P1: edits to one layer, compare-and-swap retry under a real race, account and alias checks)', file: 'src/services/images/media-plan.service.vitest.test.ts', expect: 7 },
   { name: 'price door race (product sheet Step 2.2 Gate 2, A-17 retry)', file: 'src/services/pim/price-door-concurrency.vitest.test.ts', expect: 11 },
+  { name: 'draft listings race (product sheet create path step 2: two concurrent first saves create one set)', file: 'src/services/pim/draft-listing-postgres.vitest.test.ts', expect: 2 },
   { name: 'eBay price read-back dedupe (JSON-path key, classes, 24 h, per business)', file: 'src/services/ebay-price-readback-postgres.vitest.test.ts', expect: 4 },
   { name: 'master-price currency refusal (own transaction, caller rollback and commit)', file: 'src/services/master-price-currency-postgres.vitest.test.ts', expect: 3 },
   { name: 'pending readiness vs a concurrent rebuild (attributes P2)', file: 'src/services/pim/readiness-pending-race.vitest.test.ts', expect: 2 },
