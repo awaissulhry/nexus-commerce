@@ -48,6 +48,9 @@ export type ListingEvent =
   | { type: 'product.updated'; productId: string; reason?: string; ts: number }
   | { type: 'product.created'; productId: string; ts: number }
   | { type: 'product.deleted'; productId: string; ts: number }
+  // Images rebuild P1 — a family's photo plan changed on one layer (`layer` = SHARED, CHANNEL:EBAY, LISTING:…).
+  // The Media page and the Information sheet's Product media column refetch; `productId` is the family root.
+  | { type: 'product.media.changed'; productId: string; layer: string; ts: number }
   // EV.3 — raised by the API on every stock movement and fanned out here, so
   // an open grid's stock column can move for a change made anywhere. Payload
   // mirrors the catalogue's inventory.stock_changed.
@@ -102,7 +105,7 @@ import type { EventType } from '@nexus/events'
 const LISTING_BUS_TYPES_LIST = [
   'shopify.schema.changed',
   'listing.synced', 'listing.syncing', 'listing.updated', 'listing.created', 'listing.deleted',
-  'wizard.submitted', 'product.updated', 'product.created', 'product.deleted',
+  'wizard.submitted', 'product.updated', 'product.created', 'product.deleted', 'product.media.changed',
   'bulk.progress', 'bulk.completed', 'inventory.stock_changed',
 ] as const satisfies readonly EventType[]
 

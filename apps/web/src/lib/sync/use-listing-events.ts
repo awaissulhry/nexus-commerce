@@ -31,6 +31,7 @@
 //                       leaves /products/[id]/list-wizard mid-submit)
 //   bulk.progress    → invalidation 'bulk-job.completed' (debounced upstream)
 //   bulk.completed   → invalidation 'bulk-job.completed'
+//   product.media.changed → invalidation 'product-media.changed' (images rebuild P1)
 //   ping             → no-op (just confirms liveness)
 
 'use client'
@@ -130,6 +131,9 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
           // quantityBefore/After, available, poolTotal, reason and orderId, so a surface that finds
           // this too blunt can narrow on `id` without the publisher changing.
           emitInvalidation({ type: 'stock.adjusted', id: parsed.productId, meta: { source: 'sse' } })
+        } else if (parsed.type === 'product.media.changed') {
+          // Images rebuild P1 — the family's photo plan changed: the Media page and the Product media column refetch.
+          emitInvalidation({ type: 'product-media.changed', id: parsed.productId, meta: { source: 'sse', layer: parsed.layer } })
         } else if (parsed.type === 'product.created') {
           emitInvalidation({ type: 'product.created', id: parsed.productId, meta: { source: 'sse' } })
         } else if (parsed.type === 'product.deleted') {
@@ -159,6 +163,7 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'product.updated',
       'product.created',
       'product.deleted',
+      'product.media.changed',
       'ping',
     ]
     for (const t of namedTypes) source.addEventListener(t, handle as EventListener)

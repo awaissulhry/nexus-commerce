@@ -6376,5 +6376,30 @@
         ]
       }
     ]
+  },
+  "ProductMediaPlan": {
+    "scalar": {},
+    "compound": {
+      "media_plan_layer": [
+        "productId",
+        "layer",
+        "channel",
+        "marketplace",
+        "channelConnectionId",
+        "aliasKey"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }

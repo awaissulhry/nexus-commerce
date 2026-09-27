@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'vitest'
+import { applyMediaOps, emptyMediaPlan, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, planAssetIds, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
+
+const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
+const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
+const NERO = 'value:color:black' as const, GIALLO = 'value:color:yellow' as const
+
+const shared = plan({ common: ids('cover', 'detail'), values: { 'color:black': ids('n1', 'n2'), 'color:yellow': ids('g1') } }, 'color')
+
+describe('media plan layers', () => {
+  it('a lower layer wins only for the sets it owns; an empty array is an owned empty set', () => {
+    const stack: MediaPlanStack = { shared, channel: plan({ values: { 'color:black': ids('n9') } }), listing: plan({ common: [] }) }
+    expect(resolveSet(stack, 'common')).toEqual({ items: [], source: 'LISTING' })
+    expect(resolveSet(stack, NERO)).toEqual({ items: ['n9'], source: 'CHANNEL' })
+    expect(resolveSet(stack, GIALLO)).toEqual({ items: ['g1'], source: 'SHARED' })
+    expect(resolveSet(stack, 'safety')).toEqual({ items: [], source: null })
+  })
+  it('resolves the axis and swatches by layer, and lists sets only a lower layer knows', () => {
+    const stack: MediaPlanStack = { shared: plan({ swatches: { 'color:black': { assetId: 's1' } } }, 'color'), listing: plan({ skus: { child9: ids('x') }, swatches: { 'color:black': null } }, null) }
+    expect(resolveAxis(stack, 'size')).toEqual({ axis: null, source: 'LISTING' })
+    expect(resolveAxis({ shared: emptyMediaPlan() }, 'size')).toEqual({ axis: 'size', source: null })
+    expect(resolveSwatch(stack, 'color:black')).toEqual({ assetId: null, source: 'LISTING' })
+    expect(resolveSwatch({ shared: stack.shared }, 'color:black')).toEqual({ assetId: 's1', source: 'SHARED' })
+    expect(knownSetRefs(stack)).toContain('sku:child9')
+  })
+  it('keys layers the way the table stores them', () => {
+    expect(mediaLayerKey({ layer: 'SHARED' })).toBe('SHARED')
+    expect(mediaLayerKey({ layer: 'CHANNEL', channel: 'EBAY' })).toBe('CHANNEL:EBAY')
+    expect(mediaLayerKey({ layer: 'LISTING', channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: 'a1' })).toBe('LISTING:EBAY:IT:acc:a1')
+  })
+  it('refuses malformed plans and value keys', () => {
+    expect(mediaPlanSchema.safeParse(plan({ values: { Nero: ids('a') } })).success).toBe(false)
+    expect(mediaPlanSchema.safeParse(plan({ values: { 'color:text:nerolucido': ids('a') } })).success).toBe(true)
+    expect(mediaPlanSchema.safeParse({ version: 2, sets: {} }).success).toBe(false)
+    expect(mediaOpSchema.safeParse({ op: 'insert', set: 'value:Nero', assetIds: ['a'] }).success).toBe(false)
+  })
+})
+
+describe('media plan edits', () => {
+  it('inserts at a position and never adds a photo twice to one set', () => {
+    const next = applyMediaOps({ shared }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['new'], index: 1 }])
+    expect(next.sets.common).toEqual(ids('cover', 'new', 'detail'))
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['cover'] }])).toThrow(MediaPlanEditError)
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['a', 'a'] }])).toThrow(MediaPlanEditError)
+  })
+  it('counts language versions of one photo as the same photo', () => {
+    const sameGroup = (a: string, b: string) => a === b || (a.startsWith('chart') && b.startsWith('chart'))
+    const withChart = applyMediaOps({ shared }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['chart-it'] }], sameGroup)
+    expect(() => applyMediaOps({ shared: withChart }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['chart-de'] }], sameGroup)).toThrow(MediaPlanEditError)
+  })
+  it('D8: the same photo may sit in Common and in a colour set on purpose, but a move never makes a copy', () => {
+    const also = applyMediaOps({ shared }, 'SHARED', [{ op: 'insert', set: NERO, assetIds: ['cover'], index: 0 }])
+    expect(also.sets.common?.[0]).toEqual({ assetId: 'cover' })
+    expect(also.sets.values?.['color:black']).toEqual(ids('cover', 'n1', 'n2'))
+    const moved = applyMediaOps({ shared }, 'SHARED', [{ op: 'move', from: 'common', to: GIALLO, assetId: 'detail', index: 0 }])
+    expect(moved.sets.common).toEqual(ids('cover'))
+    expect(moved.sets.values?.['color:yellow']).toEqual(ids('detail', 'g1'))
+    expect(() => applyMediaOps({ shared: also }, 'SHARED', [{ op: 'move', from: 'common', to: NERO, assetId: 'cover', index: 0 }])).toThrow(MediaPlanEditError)
+  })
+  it('moves within a set to any position and keeps the order dense', () => {
+    const next = applyMediaOps({ shared }, 'SHARED', [{ op: 'move', from: NERO, to: NERO, assetId: 'n2', index: 0 }])
+    expect(next.sets.values?.['color:black']).toEqual(ids('n2', 'n1'))
+  })
+  it('editing an inherited set on a lower layer copies it there first and leaves the layers above alone', () => {
+    const stack: MediaPlanStack = { shared, channel: null, listing: null }
+    const listing = applyMediaOps(stack, 'LISTING', [{ op: 'remove', set: NERO, assetId: 'n1' }])
+    expect(listing).toEqual(plan({ values: { 'color:black': ids('n2') } }))
+    expect(shared.sets.values?.['color:black']).toEqual(ids('n1', 'n2'))
+  })
+  it('own copies and follow drops a layer copy; Shared cannot follow anything', () => {
+    const owned = applyMediaOps({ shared, channel: null }, 'CHANNEL', [{ op: 'own', set: 'common' }])
+    expect(owned.sets.common).toEqual(ids('cover', 'detail'))
+    expect(applyMediaOps({ shared, channel: owned }, 'CHANNEL', [{ op: 'follow', set: 'common' }])).toEqual(emptyMediaPlan())
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'follow', set: 'common' }])).toThrow(MediaPlanEditError)
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'axis', axis: undefined }])).toThrow(MediaPlanEditError)
+  })
+  it('reorder must be the same photos — a concurrent change is refused, not merged', () => {
+    expect(applyMediaOps({ shared }, 'SHARED', [{ op: 'reorder', set: 'common', assetIds: ['detail', 'cover'] }]).sets.common).toEqual(ids('detail', 'cover'))
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'reorder', set: 'common', assetIds: ['detail'] }])).toThrow(MediaPlanEditError)
+  })
+  it('sets and clears the axis and swatches per layer', () => {
+    const listing = applyMediaOps({ shared, listing: null }, 'LISTING', [{ op: 'axis', axis: null }, { op: 'swatch', value: 'color:black', assetId: 'sw' }])
+    expect(listing).toEqual(plan({ swatches: { 'color:black': { assetId: 'sw' } } }, null))
+    const back = applyMediaOps({ shared, listing }, 'LISTING', [{ op: 'axis', axis: undefined }, { op: 'swatch', value: 'color:black', assetId: undefined }])
+    expect(back).toEqual(emptyMediaPlan())
+  })
+  it('lists every photo a plan points at', () => {
+    expect(planAssetIds(plan({ common: ids('a'), values: { 'color:black': ids('b') }, skus: { c1: ids('c') }, swatches: { 'color:black': { assetId: 'd' } }, safety: ids('e') })).sort()).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+})

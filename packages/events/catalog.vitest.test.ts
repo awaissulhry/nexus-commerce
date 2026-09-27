@@ -103,6 +103,7 @@ describe('subject derivation', () => {
     const samples: Record<string, unknown> = {
       'product.created': { productId: 'p1' },
       'product.updated': { productId: 'p1' },
+      'product.media.changed': { productId: 'p1', layer: 'SHARED' },
       'product.deleted': { productId: 'p1' },
       'listing.created': { listingId: 'l1' },
       'listing.updated': { listingId: 'l1' },

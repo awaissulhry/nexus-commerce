@@ -1003,10 +1003,31 @@ CREATE TABLE "ProductImage" (
     "posterUrl" TEXT,
     "durationSec" DOUBLE PRECISION,
     "sourceAssetId" TEXT,
+    "languageTag" TEXT NOT NULL DEFAULT 'zxx',
+    "versionGroupId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ProductImage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProductMediaPlan" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "layer" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT '',
+    "marketplace" TEXT NOT NULL DEFAULT '',
+    "channelConnectionId" TEXT NOT NULL DEFAULT '',
+    "aliasKey" TEXT NOT NULL DEFAULT '',
+    "plan" JSONB NOT NULL,
+    "revision" INTEGER NOT NULL DEFAULT 1,
+    "updatedById" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductMediaPlan_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -10080,7 +10101,19 @@ CREATE INDEX "ProductImage_productId_mediaType_sortOrder_idx" ON "ProductImage"(
 CREATE INDEX "ProductImage_workspaceId_idx" ON "ProductImage"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "ProductImage_versionGroupId_idx" ON "ProductImage"("versionGroupId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ProductImage_productId_contentHash_key" ON "ProductImage"("workspaceId", "productId", "contentHash");
+
+-- CreateIndex
+CREATE INDEX "ProductMediaPlan_workspaceId_idx" ON "ProductMediaPlan"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "ProductMediaPlan_productId_idx" ON "ProductMediaPlan"("productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductMediaPlan_workspaceId_productId_layer_channel_market_key" ON "ProductMediaPlan"("workspaceId", "productId", "layer", "channel", "marketplace", "channelConnectionId", "aliasKey");
 
 -- CreateIndex
 CREATE INDEX "TerminologyPreference_brand_marketplace_idx" ON "TerminologyPreference"("brand", "marketplace");
@@ -14710,6 +14743,9 @@ ALTER TABLE "ProductImage" ADD CONSTRAINT "ProductImage_productId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "ProductImage" ADD CONSTRAINT "ProductImage_derivedFromImageId_fkey" FOREIGN KEY ("derivedFromImageId") REFERENCES "ProductImage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductMediaPlan" ADD CONSTRAINT "ProductMediaPlan_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "MarketplaceSync" ADD CONSTRAINT "MarketplaceSync_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
