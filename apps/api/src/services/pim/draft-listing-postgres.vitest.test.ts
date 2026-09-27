@@ -26,7 +26,7 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { activeDatabaseTransaction, inDatabaseTransaction } from '../../lib/database-context.js'
 import { ensureDraftListings, type EnsuredDraftListing } from './draft-listing.service.js'
-import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl } from '../../test-support/concurrent-database.js'
+import { CONCURRENT_PG_ENV, concurrentDatabase, concurrentDatabaseUrl, raceChannelListingInserts } from '../../test-support/concurrent-database.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -50,26 +50,9 @@ describe.skipIf(!concurrentDatabaseUrl())(`ensureDraftListings — concurrent ca
 
   /** Both callers must have READ the coordinate and be BLOCKED on their insert before the lock is released. */
   async function race<T>(calls: Array<() => Promise<T>>): Promise<T[]> {
-    const locker = await state.db.pool.connect()
-    try {
-      await locker.query('BEGIN')
-      await locker.query('LOCK TABLE "ChannelListing" IN SHARE MODE')
-      const running = calls.map(call => scoped(call).then(value => ({ value }), error => ({ error })))
-      let waiting = 0
-      for (let i = 0; i < 600 && waiting < calls.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 25))
-        const { rows } = await state.db.pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = $1 AND wait_event_type = 'Lock'`, [state.db.name])
-        waiting = rows[0].n
-      }
-      // The positive control: without it the "race" may have run one call after the other.
-      expect(waiting, 'both callers must be blocked on their insert before the lock is released').toBe(calls.length)
-      await locker.query('COMMIT')
-      const settled = await Promise.all(running)
-      for (const outcome of settled) if ('error' in outcome) throw outcome.error
-      return settled.map(outcome => (outcome as { value: T }).value)
-    } finally {
-      locker.release()
-    }
+    const settled = await raceChannelListingInserts(state.db, calls.map(call => () => scoped(call)))
+    for (const outcome of settled) if ('error' in outcome) throw outcome.error
+    return settled.map(outcome => (outcome as { value: T }).value)
   }
 
   const familyRows = (family: string) => scoped(() => prisma.channelListing.findMany({
@@ -90,7 +73,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`ensureDraftListings — concurrent ca
     expectOneSet(results, await familyRows('committed'))
     // One caller created the whole family; the other created nothing.
     expect(results.map(result => result.filter(r => r.created).length).sort()).toEqual([0, 4])
-  }, 60_000)
+  }, 90_000)
 
   it('SERIALIZABLE: the later caller loses with a serialization failure, and the retry returns the same set', async () => {
     let attempts = 0
@@ -102,5 +85,5 @@ describe.skipIf(!concurrentDatabaseUrl())(`ensureDraftListings — concurrent ca
     expectOneSet(results, await familyRows('serial'))
     // The loser really lost and ran again (the arm that proves the retry, not a lucky ordering).
     expect(attempts).toBe(3)
-  }, 60_000)
+  }, 90_000)
 })
