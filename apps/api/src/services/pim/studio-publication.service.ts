@@ -9,6 +9,7 @@ import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { STILL_DRAFT_LISTING } from '@nexus/shared/push-lock'
+import { ensureDraftListings } from './draft-listing.service.js'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { prepareEbayPublication, sendEbayPublication, readEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
 import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
@@ -285,11 +286,10 @@ export async function submitStudioPublication(productId: string, id: string, bod
       await settlePublicationRecords(tx, context, value)
     })
   }
-  // Journal FKs name only this destination. These drafts never establish channel presence.
-  const ensureDrafts = () => prisma.channelListing.createMany({ data: plan.facts.products.filter(p => data.delivery.productIds.includes(p.id) && !plan.facts.listings.some(l => l.productId === p.id)).map(p => ({
-    productId: p.id, channel: plan.facts.scope.channel, marketplace: plan.facts.scope.marketplace, region: plan.facts.scope.marketplace, channelMarket: `${plan.facts.scope.channel}_${plan.facts.scope.marketplace}`,
-    channelConnectionId: plan.facts.scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', aliasId: plan.facts.destination.aliasKey, isPublished: false, listingStatus: 'DRAFT',
-  })), skipDuplicates: true })
+  // Journal FKs name only this destination. These drafts never establish channel presence. The one creator
+  // (`ensureDraftListings`) starts exactly the delivered products that have no row here (`family: false`).
+  const ensureDrafts = () => prisma.$transaction(tx => ensureDraftListings(tx, { channel: plan.facts.scope.channel, market: plan.facts.scope.marketplace,
+    accountId: plan.facts.scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', productIds: data.delivery.productIds, family: false }))
   try {
     const { scope } = plan.facts
     if (publishMode(scope.channel) !== 'live') throw new Error('Live publication was disabled before submission.')

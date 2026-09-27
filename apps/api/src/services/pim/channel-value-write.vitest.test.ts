@@ -19,6 +19,12 @@ const primary = { productId: 'fixture-product', channel: 'AMAZON', marketplace: 
 const write = (patch: Record<string, unknown>, remove: string[] = [], coord = primary, connection: string | null = 'account-a') =>
   writeChannelOverrideMerge(sqlWriter, { ...coord, patch, remove }, connection)
 const rows = async () => (await db.query<Record<string, any>>('SELECT * FROM "ChannelListing" ORDER BY "id"')).rows
+/** The listing a write lands on. The merge creates none: `ensureDraftListings` starts a missing listing. */
+const seed = (coord = primary, connection: string | null = 'account-a') => db.query(
+  `INSERT INTO "ChannelListing" ("id", "productId", "channel", "marketplace", "channelMarket", "region", "aliasKey", "aliasId", "channelConnectionId",
+     "listingStatus", "isPublished", "version", "createdAt", "updatedAt")
+   VALUES (gen_random_uuid()::text, $1, $2, $3, $2 || '_' || $3, $3, $4, NULLIF($4, ''), $5, 'DRAFT', false, 1, now(), now())`,
+  [coord.productId, coord.channel, coord.marketplace, coord.aliasKey, connection])
 
 beforeAll(async () => {
   await db.exec(`CREATE TABLE "ChannelListing" (
@@ -41,6 +47,8 @@ describe('channel override persistence', () => {
       const value = await resolve({ field: 'merchant_shipping_group', value: name, channel: 'AMAZON', marketplace: 'IT', accountId, productType: 'COAT' })
       await write({ merchant_shipping_group: value }, [], primary, accountId)
     }
+    await seed(primary, 'account-a')
+    await seed(primary, 'account-b')
     await commit('Standard delivery', 'account-a')
     await commit('Standard delivery', 'account-b')
     const before = await rows()
@@ -48,10 +56,11 @@ describe('channel override persistence', () => {
     expect(before.find(row => row.channelConnectionId === 'account-b')?.overrideData.merchant_shipping_group).toBe('template-account-b')
     await expect(commit('template-account-b', 'account-a')).rejects.toThrow('not an available choice')
     expect(await rows()).toEqual(before)
-    expect(before.every(row => row.isPublished === false && row.version === 1)).toBe(true)
+    expect(before.every(row => row.isPublished === false && row.version === 2)).toBe(true)
   })
 
   it.each([false, 0, '', ['first', null, 'third']].map(value => ({ value })))('round trips an explicit value, clear and inheritance: $value', async ({ value }) => {
+    await seed()
     await write({ retained: 'unrelated', legacy: 'old' })
     for (const action of ['SET', 'CLEAR', 'INHERIT'] as const) {
       const mutation = channelValueMutation(undefined, ['field', 'legacy'], action, value)
@@ -65,10 +74,12 @@ describe('channel override persistence', () => {
       expect(listing.isPublished).toBe(false)
       expect(listing.listingStatus).toBe('DRAFT')
     }
-    expect((await rows())[0].version).toBe(4)
+    expect((await rows())[0].version).toBe(5)
   })
 
   it('keeps account, alias, market, channel and product coordinates independent', async () => {
+    for (const [coord, connection] of [[primary, 'account-a'], [primary, 'account-b'], [{ ...primary, aliasKey: 'alias-b' }, 'account-a'],
+      [{ ...primary, marketplace: 'DE' }, 'account-a'], [{ ...primary, channel: 'EBAY' }, 'account-a'], [{ ...primary, productId: 'other' }, 'account-a']] as const) await seed(coord, connection)
     await write({ field: 'primary' })
     await write({ field: 'account-b' }, [], primary, 'account-b')
     await write({ field: 'alias-b' }, [], { ...primary, aliasKey: 'alias-b' })
@@ -85,22 +96,32 @@ describe('channel override persistence', () => {
   })
 
   it('merges independent simultaneous edits without replacing unrelated JSON', async () => {
+    await seed()
     await write({ retained: true })
     await Promise.all([write({ first: 'one' }), write({ second: 'two' })])
-    expect((await rows())[0]).toMatchObject({ overrideData: { retained: true, first: 'one', second: 'two' }, version: 3 })
+    expect((await rows())[0]).toMatchObject({ overrideData: { retained: true, first: 'one', second: 'two' }, version: 4 })
   })
 
   it('updates one unattributed listing when the account is null', async () => {
+    await seed(primary, null)
     await write({ first: true }, [], primary, null)
     await write({ second: false }, [], primary, null)
-    expect(await rows()).toMatchObject([{ channelConnectionId: null, overrideData: { first: true, second: false }, version: 2 }])
+    expect(await rows()).toMatchObject([{ channelConnectionId: null, overrideData: { first: true, second: false }, version: 3 }])
+  })
+
+  it('creates no listing: a coordinate with no row is left untouched (the draft is started by ensureDraftListings)', async () => {
+    await seed({ ...primary, marketplace: 'DE' })
+    await write({ field: 'nowhere' })
+    await write({ field: 'nowhere' }, [], primary, null)
+    expect(await rows()).toMatchObject([{ marketplace: 'DE', overrideData: null, version: 1 }])
   })
 
   it('rolls a merge back with its containing transaction', async () => {
+    await seed()
     await write({ field: 'original' })
     await db.exec('BEGIN')
     await write({ field: 'changed' })
     await db.exec('ROLLBACK')
-    expect((await rows())[0]).toMatchObject({ overrideData: { field: 'original' }, version: 1 })
+    expect((await rows())[0]).toMatchObject({ overrideData: { field: 'original' }, version: 2 })
   })
 })

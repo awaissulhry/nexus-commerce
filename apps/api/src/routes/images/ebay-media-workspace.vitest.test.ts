@@ -34,7 +34,7 @@ const fixture = vi.hoisted(() => {
     const snapshot = structuredClone({ products: state.products, images: state.images, listings: state.listings })
     try { return await fn(db) } catch (error) { Object.assign(state, snapshot); throw error }
   }
-  return { state, db, destination: vi.fn(), axes: vi.fn(), spec: vi.fn() }
+  return { state, db, destination: vi.fn(), axes: vi.fn(), spec: vi.fn(), ensure: vi.fn() }
 })
 vi.mock('../../db.js', () => ({ default: fixture.db }))
 // Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
@@ -42,6 +42,8 @@ vi.mock('../../services/images/media-plan-switch.js', async original => ({ ...aw
 vi.mock('../../services/pim/workspace-destination.js', async original => ({ ...await original<object>(), resolveWorkspaceDestination: fixture.destination }))
 vi.mock('../../services/ebay-family-axes.service.js', () => ({ resolveFamilyAxes: fixture.axes }))
 vi.mock('../../services/pim/channel-specs/index.js', () => ({ loadEbaySpec: fixture.spec }))
+// The draft creator's own rules run on PostgreSQL (draft-listing.service tests); here it starts the primary row.
+vi.mock('../../services/pim/draft-listing.service.js', async original => ({ ...await original<object>(), ensureDraftListings: fixture.ensure }))
 vi.mock('../../lib/auth/session.js', () => ({ validateSession: vi.fn(), truncateIp: () => 'fixture' }))
 vi.mock('../../lib/auth/audit.js', () => ({ writeAuthAudit: vi.fn() }))
 vi.mock('../../lib/auth/rbac.js', () => ({ resolvePermissions: async (user: any) => ({ permissions: new Set(user.id === 'editor' ? ['products.view', 'products.images.edit'] : ['products.view']) }), hasPermission: (resolved: any, permission: string) => resolved.permissions.has(permission) }))
@@ -185,12 +187,37 @@ describe('eBay Media registered route and persistence', () => {
     expect((await save({ expectedRevision: before.revision, draft: before.draft })).statusCode).toBe(409)
     expect((await read()).axes[0].values).toEqual(['Blu', 'Verde'])
   })
-  it('never saves into an arbitrary alias when the primary is missing', async () => {
+  it('never saves into an arbitrary alias when the primary is missing: the save starts the PRIMARY listing\'s draft', async () => {
     fixture.state.listings = fixture.state.listings.filter(l => l.aliasKey)
+    const alias = structuredClone(fixture.state.listings[0])
+    fixture.ensure.mockImplementation(async (_tx: unknown, input: any) => {
+      fixture.state.listings.push({ id: 'draft-primary', productId: 'p', channel: 'EBAY', marketplace: input.market, channelConnectionId: input.accountId, aliasKey: '',
+        externalListingId: null, version: 1, syncPaused: true, listingStatus: 'DRAFT', isPublished: false, platformAttributes: null })
+      return [{ id: 'draft-primary', productId: 'p', version: 1, created: true }]
+    })
     const unselected = url.replace('&listingId=listing-b', '')
     const before = (await app.inject({ url: unselected, headers: { authorization: 'viewer' } })).json()
     expect(before.destination.listingId).toBe(null)
-    expect((await app.inject({ method: 'PUT', url: unselected, headers: { authorization: 'editor' }, payload: { expectedRevision: before.revision, draft: before.draft } })).statusCode).toBe(422)
+    expect(fixture.ensure).not.toHaveBeenCalled()
+    const saved = await app.inject({ method: 'PUT', url: unselected, headers: { authorization: 'editor' }, payload: { expectedRevision: before.revision, draft: before.draft } })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(fixture.ensure).toHaveBeenCalledWith(expect.anything(), { channel: 'EBAY', market: 'IT', accountId: 'b', productIds: ['p'], family: true })
+    // The answer is the started listing's own workspace, and the alias listing is untouched.
+    expect(saved.json().destination).toMatchObject({ listingId: 'draft-primary', aliasKey: '', label: 'Primary listing' })
+    expect(fixture.state.listings.find(l => l.id === 'draft-primary')).toMatchObject({ version: 2, platformAttributes: { _mediaGalleryDraft: expect.objectContaining({ version: 1 }) } })
+    expect(fixture.state.listings.find(l => l.id === 'listing-b')).toEqual(alias)
+  })
+
+  it('no account to start a draft under: the draft creator\'s sentence, and nothing is written', async () => {
+    fixture.state.listings = fixture.state.listings.filter(l => l.aliasKey)
+    const { DraftListingError } = await import('../../services/pim/draft-listing.service.js')
+    fixture.ensure.mockRejectedValue(new DraftListingError('ACCOUNT_UNAVAILABLE', 'The selected eBay account is not connected. Reconnect it or choose another account before listing on IT.'))
+    const unselected = url.replace('&listingId=listing-b', '')
+    const before = (await app.inject({ url: unselected, headers: { authorization: 'viewer' } })).json()
+    const saved = await app.inject({ method: 'PUT', url: unselected, headers: { authorization: 'editor' }, payload: { expectedRevision: before.revision, draft: before.draft } })
+    expect(saved.statusCode).toBe(409)
+    expect(saved.json().error).toBe('The selected eBay account is not connected. Reconnect it or choose another account before listing on IT.')
+    expect(fixture.state.listings).toHaveLength(1)
   })
   it('starts from the selected listing’s own image URLs, including an explicit empty gallery', async () => {
     fixture.state.listings[1].platformAttributes.imageUrls = [fixture.state.master[2].url]
