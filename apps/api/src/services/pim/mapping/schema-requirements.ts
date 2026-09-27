@@ -5,6 +5,7 @@ import type { ChannelSpec, ChannelFieldSpec } from '../channel-specs/types.js'
 import { isPresent } from '../resolve-channel-field.js'
 import { addAmazonVocabulary } from './amazon-schema-vocabulary.js'
 import { isBlankValue } from '../sheet-values.js'
+import { selectorAutoValue } from '../channel-specs/amazon.js'
 
 type Node = Record<string, any>
 const serializedValue = (value: unknown) => !isBlankValue(value)
@@ -52,7 +53,7 @@ export function attributesFromCells(spec: ChannelSpec, values: Record<string, un
           let value: unknown
           if (key === 'value' && exact && exact.shape !== 'measure') value = read(exact)
           else if (['marketplace_id', 'language_tag'].includes(key) || (fields.some(f => f.selectors?.includes(key)) && !fields.some(f => f.path.join('/') === [...path, key].join('/')))) {
-            value = definition.const ?? (definition.enum?.length === 1 ? definition.enum[0] : definition.default)
+            value = selectorAutoValue(definition)
             if (value !== undefined && definition.enum && !definition.enum.includes(value)) throw new Error(`The schema has an invalid ${key} selector for ${attribute}.`)
           } else if (exact?.shape === 'measure' && ['value', 'unit'].includes(key)) {
             const measure = read(exact) as Record<string, unknown> | null

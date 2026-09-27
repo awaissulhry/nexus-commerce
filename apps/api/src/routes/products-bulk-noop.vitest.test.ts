@@ -46,6 +46,12 @@ const priceWrite = vi.fn()
 // This file gates routing. Real price persistence, pin/reset and enqueue are covered on
 // disposable PostgreSQL in price-door-reset.vitest.test.ts (A-12 / A-18).
 vi.mock('../services/pim/channel-price-write.service.js', () => ({ writeChannelPrices: (...args: unknown[]) => priceWrite(...args) }))
+// 2026-09-27 — the fulfilment door is its own service (real rules in fulfillment-method tests); here only its routing.
+const fulfilmentWrite = vi.fn()
+vi.mock('../services/pim/fulfillment-method.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/pim/fulfillment-method.service.js')>()),
+  setFulfillmentMethod: (...args: unknown[]) => fulfilmentWrite(...args),
+}))
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
 // Persistence contracts run without Redis or background cache workers.
 // LX.F R-LX-13 — and that now includes the QUEUE: this file's 68 failures in this
@@ -102,6 +108,10 @@ import * as sheetColumns from '../services/pim/sheet-columns.service.js'
 import * as fieldRegistry from '../services/pim/field-registry.service.js'
 import * as categoryContext from '../services/pim/product-category-context.js'
 import { etsyProductSpec, shopifyProductSpec } from '../services/pim/channel-specs/store.js'
+import { amazonSpecFromDefinition, AMAZON_FULFILMENT_KEY } from '../services/pim/channel-specs/amazon.js'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 let app: FastifyInstance
 
@@ -165,6 +175,68 @@ describe('Shopify and Etsy store information saves', () => {
 
 })
 
+describe('the Amazon fulfilment method writes through its one door (2026-09-27)', () => {
+  const coordinate = { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true }
+  const fixture = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../services/pim/channel-specs/__tests__/fixtures/amazon-it-outerwear.trimmed.json'), 'utf8'))
+  const field = `attr_${AMAZON_FULFILMENT_KEY}`
+  const setUp = () => {
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTERWEAR', schemaDefinition: fixture })
+    const built = sheetColumns.buildSheetColumns({ fields: [], specs: [{ coordinate, spec }], coordinates: [coordinate], scopeKind: 'channel' })
+    const category = { channelCategoryId: 'OUTERWEAR' }
+    return [
+      vi.spyOn(sheetColumns, 'getSheetColumns').mockResolvedValue({ ...built, coordinates: [coordinate] } as never),
+      vi.spyOn(categoryContext, 'productCategoryContext').mockResolvedValue({ categories: ['OUTERWEAR'], byRow: new Map([[`${PRODUCT_ID}:`, category]]), defaults: { [PRODUCT_ID]: category } } as never),
+    ]
+  }
+  const send = (value: unknown) => patch({ changes: [{ id: PRODUCT_ID, field, value, target: 'channel', intent: 'set' }],
+    marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT' }], expectedVersion: 19 })
+
+  it('FBM goes to setFulfillmentMethod on the exact listing, never as a raw nested write', async () => {
+    const spies = setUp()
+    channelListingFindMany.mockResolvedValue([listingRow({ channelConnectionId: 'account-a', platformAttributes: {} })])
+    try {
+      const result = await send('DEFAULT')
+      expect(result.statusCode, result.body).toBe(200)
+      expect(fulfilmentWrite).toHaveBeenCalledTimes(1)
+      expect(fulfilmentWrite.mock.calls[0][0].targets).toEqual([{ listingId: 'listing_1', method: 'FBM', expectedVersion: 19 }])
+      expect(executeRaw.mock.calls.some(args => String(args[0]?.join?.('') ?? '').includes('"platformAttributes" ='))).toBe(false)
+      expect(channelListingUpsert).not.toHaveBeenCalled()
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+
+  it('AMAZON_EU is FBA', async () => {
+    const spies = setUp()
+    channelListingFindMany.mockResolvedValue([listingRow({ channelConnectionId: 'account-a', platformAttributes: {} })])
+    try {
+      const result = await send('AMAZON_EU')
+      expect(result.statusCode, result.body).toBe(200)
+      expect(fulfilmentWrite.mock.calls[0][0].targets[0]).toMatchObject({ method: 'FBA' })
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+
+  it('a refusal from the door reaches the operator by name (FBA stock on hand)', async () => {
+    const spies = setUp()
+    channelListingFindMany.mockResolvedValue([listingRow({ channelConnectionId: 'account-a', platformAttributes: {} })])
+    fulfilmentWrite.mockResolvedValueOnce({ results: [{ listingId: 'listing_1', outcome: 'refused', reason: 'Refused — 4 units of FBA stock on hand keep the guard closed', version: 19 }] })
+    try {
+      const result = await send('DEFAULT')
+      expect(result.statusCode).toBe(400)
+      expect(result.body).toContain('units of FBA stock on hand')
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+
+  it('no listing in this market: refused, and the door is never called', async () => {
+    const spies = setUp()
+    channelListingFindMany.mockResolvedValue([])
+    try {
+      const result = await send('DEFAULT')
+      expect(result.statusCode).toBe(400)
+      expect(result.body).toContain('no Amazon listing on IT')
+      expect(fulfilmentWrite).not.toHaveBeenCalled()
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+})
+
 beforeAll(async () => {
   app = Fastify()
   await app.register(productsRoutes)
@@ -175,6 +247,11 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
+  fulfilmentWrite.mockReset().mockImplementation(async ({ targets }) => ({
+    results: targets.map((target: { listingId: string; expectedVersion: number }) => ({
+      listingId: target.listingId, outcome: 'applied', version: target.expectedVersion + 1, productFlag: null,
+    })),
+  }))
   priceWrite.mockReset().mockImplementation(async ({ targets }) => ({
     results: targets.map((target: { listingId: string; expectedVersion: number }) => ({
       listingId: target.listingId, outcome: 'applied', version: target.expectedVersion + 1, guarded: true,

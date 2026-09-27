@@ -34,6 +34,8 @@ import { isPrimaryChannelConnection, primaryConnectionIds, resolveConnection } f
 import { normalizeEbayListingValue } from '../pim/ebay-listing-values.js'
 import { numericStorageError } from '../pim/numeric-storage.js'
 import { writeChannelPrices } from '../pim/channel-price-write.service.js'
+import { AMAZON_FULFILMENT_KEY } from '../pim/channel-specs/amazon.js'
+import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
 
 export interface ProductBulkInput {
   changes: Array<{
@@ -1480,6 +1482,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     await validateAliasWriteTargets(aliasTargets)
   }
 
+  const isFulfilmentChange = (v: Validated) => v.target === 'channel' && v.field === `attr_${AMAZON_FULFILMENT_KEY}`
   const isPriceChange = (v: Validated) => {
     if (CHANNEL_FIELD_MAP[v.field] === 'price') return true
     const store = v.target === 'channel' ? storeFor(v.id, v.field.replace(/^attr_/, '')) : undefined
@@ -1772,6 +1775,46 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
     if (prices.results.length === 1) {
       noOpCurrentVersion = prices.results[0].version
+      noOpVersionOf = 'channelListing'
+    }
+  }
+
+  // 2026-09-27 — the Amazon fulfilment method goes through its ONE door as well (`setFulfillmentMethod`): the typed
+  // column and both mirrors in one write, CAS on the listing, FBA → FBM refused while FBA stock is on hand. The
+  // generic path below would set only the nested code the guard reads, and leave the typed column and the flat
+  // mirror saying something else — the two-store split that door exists to end. Inside this transaction, like
+  // prices: a later failure rolls it back too. An applied row joins `priceWrittenIds` (= "a door already moved this
+  // listing's version in this request"), so the later CAS checks read its new version instead of refusing it.
+  const fulfilmentEdits = validated.filter(isFulfilmentChange)
+  if (fulfilmentEdits.length) {
+    const destinations = fulfilmentEdits.flatMap(change => effectiveContexts.filter(ctx => ctx.channel === 'AMAZON')
+      .map(ctx => ({ change, marketplace: ctx.marketplace, channelConnectionId: connFor.get('AMAZON') ?? null, aliasKey: ctx.aliasKey ?? '' })))
+    const listings = destinations.length ? await prisma.channelListing.findMany({ where: { OR: destinations.map(d => ({
+      productId: d.change.id, channel: 'AMAZON', marketplace: d.marketplace, channelConnectionId: d.channelConnectionId, aliasKey: d.aliasKey,
+    })) }, select: { id: true, productId: true, marketplace: true, channelConnectionId: true, aliasKey: true } }) : []
+    const targets = destinations.map(d => {
+      const listing = listings.find(l => l.productId === d.change.id && l.marketplace === d.marketplace &&
+        l.channelConnectionId === d.channelConnectionId && l.aliasKey === d.aliasKey)
+      if (!listing) throw new ProductBulkError(400, { error: `There is no Amazon listing on ${d.marketplace} for this product yet. The fulfillment method is set on an existing listing.` })
+      const code = d.change.reset || d.change.value === null || d.change.value === undefined || d.change.value === '' ? null : String(d.change.value).toUpperCase()
+      return { listingId: listing.id, method: code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const, expectedVersion }
+    })
+    const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })
+    for (const outcome of written.results) {
+      if (outcome.outcome === 'conflict') throw new ProductBulkError(409, {
+        code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
+      })
+      if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
+      if (outcome.outcome === 'applied') priceWrittenIds.add(outcome.listingId)
+    }
+    if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of fulfilmentEdits) {
+      if (destinations.every((d, i) => d.change !== change || written.results[i].outcome === 'noop')) {
+        noOpKeys.add(`${change.id}:${change.field}`)
+        validated.splice(validated.indexOf(change), 1)
+      }
+    }
+    if (written.results.length === 1) {
+      noOpCurrentVersion = written.results[0].version
       noOpVersionOf = 'channelListing'
     }
   }
@@ -2201,6 +2244,8 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
 
     for (const v of validated) {
       if (!isCategoryAttrField(v.field)) continue
+      // Written through the fulfilment door above — never a second time as a raw path.
+      if (isFulfilmentChange(v)) continue
       if (v.target === 'channel') {
         const stripped = v.field.replace(/^attr_/, '')
         const store = storeFor(v.id, stripped)

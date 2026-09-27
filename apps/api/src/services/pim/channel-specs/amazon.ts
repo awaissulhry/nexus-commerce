@@ -72,6 +72,17 @@ export const AMAZON_LISTING_STORES: Record<string, ChannelStore> = {
   list_price: { kind: 'platformAttributes', path: ['list_price', 'value_with_tax'], legacyPaths: [['attributes', 'list_price', '0', 'value_with_tax']] },
 }
 
+/**
+ * 2026-09-27 — the fulfilment selector, once it is a column. Amazon calls it "Fulfillment Channel Code" and
+ * offers its wire codes; the operator knows it as FBA / FBM. It READS the nested code the FBA guard reads
+ * (`isFbaListing`), and a write never lands on this path directly: the product sheet sends it through the ONE
+ * fulfilment door (`setFulfillmentMethod`), which writes the typed column and both mirrors together and refuses
+ * FBA → FBM while FBA stock is on hand.
+ */
+export const AMAZON_FULFILMENT_KEY = 'fulfillment_availability__fulfillment_channel_code'
+const fulfilmentOptionLabel = (code: string) =>
+  code.startsWith('AMAZON_') ? 'FBA — Amazon stores and ships' : code === 'DEFAULT' ? 'FBM — you ship' : code
+
 /** Product type selects the schema, so it must remain editable even before a schema is cached. */
 export function amazonClassificationSpec(marketplace: string): ChannelSpec {
   const group: ChannelGroup = { key: 'classification', label: 'Classification', channelLabel: null, order: 0 }
@@ -127,6 +138,12 @@ export function amazonSpecFromDefinition(input: AmazonSpecInput): ChannelSpec {
       }
       const listingStore = AMAZON_LISTING_STORES[name]
       if (listingStore && f.path.length <= 1) f.channelStore = listingStore
+      if (f.key === AMAZON_FULFILMENT_KEY) {
+        f.label = f.englishLabel = 'Fulfillment method'
+        f.optionLabels = Object.fromEntries((f.options ?? []).map((code) => [code, fulfilmentOptionLabel(code)]))
+        f.channelStore = { kind: 'platformAttributes', path: ['fulfillment_availability', '0', 'fulfillment_channel_code'] }
+        f.helpText = 'FBA: Amazon stores and ships the order. FBM: you ship it. A change to FBM is refused while FBA stock is on hand or an FBA offer is active.'
+      }
     }
     coverage[name] = produced.map((f) => f.key)
     fields.push(...produced)
@@ -187,7 +204,41 @@ function walkArray(key: string, node: Node, inh: Inherited): ChannelFieldSpec[] 
   return [unrecognisedLeaf(key, next, `array of ${JSON.stringify(items.type ?? null)}`)]
 }
 
+/**
+ * The value the writer supplies for a selector on its own (`attributesFromCells`): a const, the one allowed
+ * value, or a default. ONE rule for both sides — a selector with no such value is a column, because nothing
+ * else can fill it.
+ */
+export function selectorAutoValue(node: Node | undefined): unknown {
+  if (!node || typeof node !== 'object') return undefined
+  return node.const ?? (Array.isArray(node.enum) && node.enum.length === 1 ? node.enum[0] : node.default)
+}
+
+/**
+ * 2026-09-27 — a selector with a CHOICE is authored too. The walk used to drop every selector, so the seven that
+ * offer more than one value (`fulfillment_availability.fulfillment_channel_code` FBA/FBM,
+ * `externally_assigned_product_identifier.type`, `num_batteries.type`, `language.type`,
+ * `compliance_media.content_type` + `content_language`, `package_contains_sku.sku`) had no column, and the
+ * writer — which fills only a selector with one value — could not fill them either. They are appended as
+ * `key__selector` leaves AFTER the existing walk, so no existing key moves. A `$ref` selector keeps the old
+ * behaviour: this walk cannot read what it points at.
+ */
 function walkObject(key: string, obj: Node, inh: Inherited): ChannelFieldSpec[] {
+  const out = walkAuthored(key, obj, inh)
+  const props = (obj.properties ?? {}) as Record<string, Node>
+  const own = Object.keys(props).filter((k) => !ALWAYS_SELECTORS.has(k))
+  // A keyed set already authored its selectors (below).
+  if (own.every((k) => inh.selectors.includes(k))) return out
+  const required = new Set<string>(Array.isArray(obj.required) ? obj.required.map(String) : [])
+  const title = typeof obj.title === 'string' ? obj.title : inh.title
+  for (const k of own) {
+    if (!inh.selectors.includes(k) || typeof props[k]?.$ref === 'string' || selectorAutoValue(props[k]) !== undefined) continue
+    out.push(...walkNode(leafKey(key, k), props[k], { ...inh, title, requiredInParent: required.has(k), path: [...inh.path, k] }))
+  }
+  return out
+}
+
+function walkAuthored(key: string, obj: Node, inh: Inherited): ChannelFieldSpec[] {
   const props = (obj.properties ?? {}) as Record<string, Node>
   const required = new Set<string>(Array.isArray(obj.required) ? obj.required.map(String) : [])
   let authored = Object.keys(props).filter((k) => !ALWAYS_SELECTORS.has(k) && !inh.selectors.includes(k))

@@ -3,6 +3,7 @@ import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { marketLanguages } from './market-languages.js'
 import { assertInformationLocale } from './information-locale.js'
 import { WorkspaceCache } from '../../lib/workspace-cache.js'
+import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
 /**
  * MS.1 / AM.1 — the SHEET's columns for one market and one scope.
  *
@@ -768,7 +769,8 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
       width: d.width ?? defaultWidth(kind, d.shape),
       helpText: d.helpText,
       // A connected store's own metafields are shown on its channel scope by default (Owner, 2026-09-24).
-      defaultVisible: d.requiredBy.length > 0 || DEFAULT_VISIBLE_GROUPS.has(d.group) || (scopeKind === 'channel' && !!d.shopifyField?.definition),
+      // 2026-09-27 — the fulfilment method is on screen by default on the Amazon scope (Owner: it looked missing).
+      defaultVisible: d.requiredBy.length > 0 || DEFAULT_VISIBLE_GROUPS.has(d.group) || (scopeKind === 'channel' && (!!d.shopifyField?.definition || d.key === AMAZON_FULFILMENT_KEY)),
       deprecatedOptions: d.deprecatedOptions.length > 0 ? d.deprecatedOptions : undefined,
       shape: d.shape,
       ...(d.shape === 'list' ? { cardinality: d.cardinality } : {}),
