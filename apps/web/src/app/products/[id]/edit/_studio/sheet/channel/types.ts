@@ -338,7 +338,10 @@ export type StudioRowKind = 'parent' | 'variant'
 export interface StudioRow {
   /** Multiple product owners can belong to one connected listing alias. */
   shopify?: import('@nexus/shared/shopify-information').ShopifySheetRow
-  productMedia?: Array<{ id: string; type: string; preview: string | null; alt: string }>
+  /** `muted`: a variant's Common photo shown after its own set (photo plan families). */
+  productMedia?: Array<{ id: string; type: string; preview: string | null; alt: string; muted?: boolean }>
+  /** Photo plan families only (images P3c): the set this row's cell edits. */
+  productMediaSet?: { ref: string; label: string; sharedBy: number }
   productMediaError?: string
   productRole?: import('@nexus/shared/master-sheet').ProductRole
   parentSku?: string | null

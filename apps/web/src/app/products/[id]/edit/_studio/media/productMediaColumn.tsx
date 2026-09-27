@@ -4,9 +4,12 @@ import { CellAction, MediaStrip } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
 import type { ColDef, ICellRendererParams } from '@/design-system/grid'
 import { mediaLocaleSchema, type ProductMediaQuery } from '@nexus/shared/product-media'
-import { useSaveReporter, useStudioScope } from '../contracts'
+import { useSaveReporter, useStudioProduct, useStudioScope } from '../contracts'
 import type { SheetColumn } from '../sheet/master/types'
 import { ProductMediaDialog } from './ProductMediaDialog'
+import { PlanSetDialog } from './PlanSetDialog'
+import { planAddress } from './planCellTransfer'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import styles from './media.module.css'
 import { useMediaCellActions, type MediaCellActions, type MediaRow } from './useMediaCellActions'
 
@@ -43,9 +46,25 @@ export function useProductMediaEditor(onSaved: () => void, sheetLocale?: string 
     const guard = (event: BeforeUnloadEvent) => { if (busy.current) { event.preventDefault(); event.returnValue = '' } }
     window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard)
   }, [])
+  // The photo plan changed (the Media page, another tab or person): the sheet refreshes this family's cells.
+  const refreshTimer = useRef<number | null>(null)
+  const product = useStudioProduct()
+  const familyRoot = product.parentId ?? product.id
+  useInvalidationChannel(['product-media.changed'], event => {
+    if (event.id && event.id !== familyRoot) return
+    if (refreshTimer.current) window.clearTimeout(refreshTimer.current)
+    refreshTimer.current = window.setTimeout(() => { refreshTimer.current = null; if (!busy.current) onSaved() }, 500)
+  })
+  useEffect(() => () => { if (refreshTimer.current) window.clearTimeout(refreshTimer.current) }, [])
   const accountLabel = scope.accounts.find(account => account.id === scope.accountId)?.label
   const contextLabel = [channel === 'MASTER' ? 'Shared product' : [channel, accountLabel, selected?.row.aliasId ? `Listing ${(selected.row.aliasPosition ?? 0) + 1}` : 'Primary listing'].filter(Boolean).join(' · '), context.market, context.locale === 'und' ? 'All languages' : context.locale].join(' · ')
-  return { open, actions, element: selected ? <ProductMediaDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'} context={context} contextLabel={contextLabel} anchor={selected.anchor} onClose={() => setSelected(null)} onSaved={() => { actions.clearError(selected.row); onSaved() }} onDirtyChange={onDirtyChange} /> : null }
+  const planTarget = selected?.row.productMediaSet ? planAddress(context) : null
+  const planElement = selected?.row.productMediaSet
+    ? <PlanSetDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} rowProductId={selected.row.productId ?? selected.row.id}
+        title={selected.row.sku || selected.row.name || 'Product'} address={planTarget} language={context.locale === 'und' ? null : context.locale} anchor={selected.anchor}
+        onClose={edited => { setSelected(null); actions.clearError(selected.row); if (edited) onSaved() }} />
+    : undefined
+  return { open, actions, element: planElement !== undefined ? planElement : selected ? <ProductMediaDialog key={JSON.stringify([selected.row.id, context])} productId={selected.row.productId ?? selected.row.id} title={selected.row.sku || selected.row.name || 'Product'} context={context} contextLabel={contextLabel} anchor={selected.anchor} onClose={() => setSelected(null)} onSaved={() => { actions.clearError(selected.row); onSaved() }} onDirtyChange={onDirtyChange} /> : null }
 }
 
 /** AG owns fill/paste; a gallery edit opens the same dialog from every native open gesture. */
@@ -76,10 +95,19 @@ export function productMediaColumn<Row extends MediaRow>(open: (row: Row, anchor
       return <div className={styles.cell} aria-busy={row.productMediaSaving || undefined}>
         {row.productMediaError ? <span>Media needs attention</span> : row.productMedia ? <MediaStrip items={row.productMedia} label={label}
           limit={Math.max(1, Math.min(5, Math.floor(((p.column?.getActualWidth() ?? 280) - 80) / 36)))}
-          onReorder={actions?.canEdit() && !row.productMediaSaving ? ids => actions.reorder(row, ids, refresh) : undefined}
+          onReorder={actions?.canEdit() && !row.productMediaSaving && !row.productMediaSet ? ids => actions.reorder(row, ids, refresh) : undefined}
           onFocusCell={focus} onOpen={() => open(row, p.eGridCell)} /> : <span>Manage media</span>}
-        <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : !actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.' : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.')} onFocusCell={focus} onActivate={anchor => open(row, anchor)} />
+        <CellAction label={`${actions?.canEdit() ? 'Edit' : 'View'} product media: ${label}`} description={actions?.error(row) || (row.productMediaSaving ? 'Saving media…' : !actions?.canEdit() ? 'View images and videos. Media editing is unavailable with your current permissions.'
+          : row.productMediaSet ? planCellHint(row) : 'Drag thumbnails to reorder. Drag the bottom-right handle to copy the gallery. Enter or F2 opens the editor.')} onFocusCell={focus} onActivate={anchor => open(row, anchor)} />
       </div>
     },
   }
+}
+
+/** What a photo plan cell stands for: "Nero · shared by 3 SKUs, then 2 common photos". */
+export function planCellHint(row: MediaRow): string {
+  const set = row.productMediaSet!
+  const common = (row.productMedia ?? []).filter(item => item.muted).length
+  const who = set.ref === 'common' ? 'Common · every variant' : set.ref.startsWith('sku:') ? `${set.label}` : `${set.label} · shared by ${set.sharedBy} SKU${set.sharedBy === 1 ? '' : 's'}`
+  return `${who}${common ? `, then ${common} common photo${common === 1 ? '' : 's'}` : ''}. Photo plan: Enter or F2 edits this set; copy, paste and the fill handle copy its photos.`
 }

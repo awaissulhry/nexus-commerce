@@ -229,7 +229,8 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
       }
       case 'own': write(op.set, current(op.set)); break
       case 'follow':
-        if (layer === 'SHARED') throw new MediaPlanEditError('Shared photos have nothing to follow.')
+        // On Shared only a per-SKU set can be dropped: the SKU then shows its value's photos again.
+        if (layer === 'SHARED' && !op.set.startsWith('sku:')) throw new MediaPlanEditError('Shared photos have nothing to follow.')
         expectHolds(op.set, op.expect)
         plan = withSet(plan, op.set, undefined)
         break
@@ -256,7 +257,7 @@ export function applyMediaOps(stack: MediaPlanStack, layer: MediaLayer, ops: rea
  * The ops that put one layer back the way it was (Undo), from the layer before and after an edit, set by set: a set
  * the layer did not own follows again, an owned set gets its old photos back. Each set op carries what the layer holds
  * now (`expect`), so an undo is refused when someone changed that set in between. On Shared "not owned" and an empty
- * set look the same, so a set new on Shared is undone to empty.
+ * set look the same, so a set new on Shared is undone to empty — except a per-SKU set, which is dropped again.
  */
 export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, after: MediaPlan | null): MediaOp[] {
   const was = before ?? emptyMediaPlan(), now = after ?? emptyMediaPlan()
@@ -271,7 +272,7 @@ export function inverseMediaOps(layer: MediaLayer, before: MediaPlan | null, aft
     const old = ids(was, ref), current = ids(now, ref)
     if (JSON.stringify(old) === JSON.stringify(current)) continue
     const expect = current ?? null
-    if (old === undefined && layer !== 'SHARED') ops.push({ op: 'follow', set: ref, expect })
+    if (old === undefined && (layer !== 'SHARED' || ref.startsWith('sku:'))) ops.push({ op: 'follow', set: ref, expect })
     else ops.push({ op: 'replace', set: ref, assetIds: old ?? [], expect })
   }
   if (was.axis !== now.axis) ops.push({ op: 'axis', axis: was.axis })

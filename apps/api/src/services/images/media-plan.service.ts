@@ -1,6 +1,6 @@
 import prisma from '../../db.js'
 import { applyMediaOps, emptyMediaPlan, inverseMediaOps, MediaPlanEditError, mediaPlanSchema, mediaLayerKey, resolveAxis, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack } from '@nexus/shared/media-plan'
-import { channelNames, projectMediaDestination, type MediaAsset, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { channelNames, projectMediaDestination, rowGallery, type MediaAsset, type MediaFamily } from '@nexus/shared/media-plan-channels'
 import { storedVariationValues } from '../pim/stored-variation-projection.js'
 import { optionForValue, type DictionaryAttribute } from '../pim/family-variations-core.js'
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
@@ -184,6 +184,44 @@ export async function readMediaWorkspace(productId: string) {
     library: ctx.library, layers: ctx.layers, destinations: ctx.destinations, layouts,
     // Value and axis names here are the Shared ones; a publisher passes each market's own names (value maps, pins).
     meta: { tookMs: Date.now() - started, names: 'shared' as const } }
+}
+
+/**
+ * The Information sheet's view of a switched family (P3c, PLAN.md §5.7): each row's gallery from the plan, as the Media
+ * page resolves it — the Shared layer on the master sheet, a destination's layers on a channel sheet. `null` = the family
+ * is not on the plan (the sheet keeps its older column).
+ */
+export async function sheetMediaPlan(rootId: string) {
+  // One read decides it: a family with no Shared layer is not on the plan, and the sheet pays nothing more.
+  const rows = await prisma.productMediaPlan.findMany({ where: { productId: rootId }, select: { layer: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, plan: true } })
+  if (!rows.some(r => r.layer === 'SHARED')) return null
+  const { root, family } = await loadFamily(rootId)
+  const library = await loadLibrary([root.id, ...root.children.map(c => c.id)])
+  const plans = new Map(rows.map(r => [mediaLayerKey({ layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey }), readPlan(r.plan)]))
+  const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
+  const byId = new Map(library.map(a => [a.id, a]))
+  /** The layers a sheet reads: Shared on the master sheet; on a channel sheet, that listing's destination. */
+  const stackFor = (coordinate: { channel: string; marketplace: string; accountId: string; aliasKey: string } | null): MediaPlanStack => {
+    if (!coordinate) return { shared: plans.get('SHARED') ?? null }
+    const channel = coordinate.channel as MediaChannel
+    const key = mediaLayerKey({ layer: 'LISTING', channel, marketplace: GLOBAL_CHANNELS.has(channel) || channel === 'ETSY' ? 'GLOBAL' : coordinate.marketplace,
+      accountId: coordinate.accountId, aliasKey: channel === 'AMAZON' ? '' : coordinate.aliasKey })
+    return { shared: plans.get('SHARED') ?? null, channel: plans.get(`CHANNEL:${channel}`) ?? null, listing: plans.get(key) ?? null }
+  }
+  return {
+    /** One row's cell: the set it edits, and its photos (a variant's Common photos come last, marked `muted`). */
+    row(productId: string, coordinate: Parameters<typeof stackFor>[0], language: string) {
+      const gallery = rowGallery({ stack: stackFor(coordinate), family, productId, assets, languages: [language], mainLanguage: language })
+      return {
+        set: { ref: gallery.set, label: gallery.label, sharedBy: gallery.sharedBy },
+        items: gallery.items.map(item => {
+          const asset = byId.get(item.assetId)
+          return { id: item.placedId, type: asset?.mediaType ?? 'FILE', preview: asset ? asset.mediaType === 'IMAGE' ? asset.url : asset.posterUrl : null,
+            alt: asset?.alt?.trim() || asset?.label || '', ...(item.from === 'common' ? { muted: true } : {}) }
+        }),
+      }
+    },
+  }
 }
 
 /** A family is switched to the media plan once it has a Shared layer: its publishers send the plan's layout. */

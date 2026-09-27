@@ -32,6 +32,8 @@ vi.mock('../../db.js', () => ({
     $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
     product: { findFirst: (...a: unknown[]) => productFindFirst(...a), findMany: (...a: unknown[]) => productFindMany(...a) },
     channelListing: { findMany: (...a: unknown[]) => channelListingFindMany(...a) },
+    // No family here is on the photo plan (images P3c reads it for the Product media cell).
+    productMediaPlan: { findMany: async () => [] },
     productListingAlias: { findMany: (...a: unknown[]) => aliasFindMany(...a) },
     fieldLinkGroup: { findMany: (...a: unknown[]) => fieldLinkGroupFindMany(...a) },
     cellFormula: { findMany: (...a: unknown[]) => cellFormulaFindMany(...a) },

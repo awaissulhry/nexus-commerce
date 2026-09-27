@@ -1,3 +1,7 @@
+## MediaStrip: muted items — 2026-09-27
+
+For the Information sheet's "Product media" column on the photo plan (images P3c, `docs/images-studio-rebuild/PLAN.md` §5.7): a variant's cell shows its own set, then the photos shared by every variant. **`MediaStripItem.muted`** marks an item that is shown for context and is not part of the cell's own list: dashed frame, image at 55% opacity, and "· shared" in its tooltip (the difference is never colour alone). Catalog: `MediaGalleryExample` (a variant strip). Mirrored in Factory: `MediaStrip.tsx`, `catalog/MediaGalleryExample.tsx`, `styles/components.css`.
+
 ## Row state `pending` and the projection word "Published · ASIN pending" — 2026-09-27
 
 `grid/renderers/readiness.ts` — a sixth ROW state, **`pending`**, labelled **"Published · ASIN pending"** in `live`'s `info` tone: Amazon accepted the listing and Nexus has not read its ASIN back yet (`isAsinPending`, `packages/shared/listing-risk.ts`). Not a draft, and not yet `live`. **`readinessPillLabel`** — the words on `ReadinessCell`'s pill, moved out of the `.tsx` so node tests reach it; unchanged for the other states, and `pending` shows its label alone (no issue count, no reference). `grid/renderers/projection.ts` — **`asin-pending`**, whose tone AND word are read from `readinessMeta('pending', 'row')`; the catalog's projection table lists it. Mirrored in Factory: `readiness.ts`, `projection.ts`, `cells.tsx`.

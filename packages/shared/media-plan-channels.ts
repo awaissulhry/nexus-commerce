@@ -304,6 +304,43 @@ export function projectMediaDestination(input: {
   return project(input.stack, family, input.assets, destination)
 }
 
+// ── One sheet row ───────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface RowGalleryItem { placedId: string; assetId: string; exact: boolean; language: string; from: 'row' | 'common' }
+export interface RowGallery {
+  /** The set this row edits: Common on the parent (or a single product), else the SKU's own set or its value's set. */
+  set: MediaSetRef
+  label: string
+  /** Variants that share the set (a value set is shared by every SKU of the value). */
+  sharedBy: number
+  /** The set's photos, then (on a variant) the Common photos it does not already show — in the order a buyer sees them. */
+  items: RowGalleryItem[]
+}
+
+/**
+ * What the Information sheet's "Product media" cell shows for one row (PLAN.md §5.7): the parent row shows Common; a
+ * variant shows its own SKU set, else its value's set, then the Common photos. Each placed photo shows the version for
+ * the sheet's languages (D6). The same resolver as every channel layout, so the cell and the Media page cannot disagree.
+ */
+export function rowGallery(input: { stack: MediaPlanStack; family: MediaFamily; productId: string; assets: ReadonlyMap<string, MediaAsset>; languages: readonly string[]; mainLanguage: string }): RowGallery {
+  const { stack, family } = input
+  const pick = (ids: string[], from: RowGalleryItem['from']) => ids.flatMap(id => {
+    const picked = pickVersion(id, input.assets, input.languages, input.mainLanguage)
+    return picked ? [{ placedId: id, assetId: picked.assetId, exact: picked.exact, language: picked.language, from }] : [{ placedId: id, assetId: id, exact: false, language: 'zxx', from }]
+  })
+  const common = resolveSet(stack, 'common').items
+  const variant = family.variants.find(v => v.productId === input.productId)
+  if (!variant) return { set: 'common', label: 'Common', sharedBy: family.variants.length || 1, items: pick(common, 'row') }
+  const withCommon = (ref: MediaSetRef, label: string, sharedBy: number, own: string[]): RowGallery =>
+    ({ set: ref, label, sharedBy, items: [...pick(own, 'row'), ...pick(common.filter(id => !own.includes(id)), 'common')] })
+  const sku = resolveSet(stack, `sku:${variant.productId}`)
+  if (sku.source !== null) return withCommon(`sku:${variant.productId}`, `${variant.sku} only`, 1, sku.items)
+  const { axis } = resolveAxis(stack, family.defaultAxis)
+  const key = axis ? variant.values[axis] : undefined
+  if (!key) return withCommon('common', 'Common', family.variants.length, [])
+  return withCommon(`value:${key}`, family.valueLabels[key] ?? key.split(':').slice(1).join(':'), family.variants.filter(v => v.values[axis!] === key).length, resolveSet(stack, `value:${key}`).items)
+}
+
 // ── Channel names ───────────────────────────────────────────────────────────────────────────────────────────────
 
 /**

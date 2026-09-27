@@ -8,6 +8,7 @@ vi.mock('../../db.js', () => ({ default: {
   $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
   product: { findFirst: async () => ({ id: 'p', parentId: null }), findMany: async () => [product] },
   channelListing: { findMany: mocks.listings }, productListingAlias: { findMany: async () => [] },
+  productMediaPlan: { findMany: async () => [] },
   fieldLinkGroup: { findMany: async () => [] }, cellFormula: { findMany: async () => [] },
   // LX.F R-LX-13 — the LX reach read (`studio-sheet.service.ts:1058`).
   marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: async () => [{ channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' }] },

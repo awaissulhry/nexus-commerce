@@ -55,6 +55,7 @@ export function MediaGalleryExample() {
     </div></div></div>
     <h3>Mixed media in a column</h3>
     <MediaStrip label="Example product" items={[{ id: 'photo', type: 'IMAGE', preview: image('Front') }, { id: 'video', type: 'VIDEO' }, { id: 'model', type: 'MODEL_3D' }]} />
+    <MediaStrip label="Example variant: its own photos, then shared ones (muted)" items={[{ id: 'own', type: 'IMAGE', preview: image('Black 1') }, { id: 'shared', type: 'IMAGE', preview: image('Detail'), alt: 'Detail', muted: true }]} />
     <MediaCard mediaType="VIDEO" label="Video without a poster" onPreview={() => setPreview('Video without a poster')} />
     <MediaPreview type="EXTERNAL_VIDEO" url="https://example.com/video" label="External video example" transcript="A translated transcript can accompany a hosted video. This is a synthetic catalog example." />
     <MediaBoardExample />
