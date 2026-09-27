@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { MEDIA_LAYERS, mediaOpSchema } from '@nexus/shared/media-plan'
 import { applyMediaPlanOps, readMediaWorkspace } from '../../services/images/media-plan.service.js'
+import { previewMediaSwitch, switchToMediaPlan } from '../../services/images/media-plan-seed.service.js'
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 
 /** Images rebuild P1 — one read for the Media page, and small edits to one layer (docs/images-studio-rebuild/PLAN.md §6.3). */
@@ -35,6 +36,27 @@ export const mediaPlanRoutes: FastifyPluginAsync = async app => {
       if (error instanceof z.ZodError) return reply.code(422).send({ error: 'This photo change is not valid. Reload the page and try again.' })
       request.log.error({ err: error }, 'Media edit failed')
       return reply.code(500).send({ error: 'The change could not be confirmed. Reload the page before trying again.' })
+    }
+  })
+  // P3a — move one family onto the plan: a preview that writes nothing, then the switch bound to that preview.
+  app.get<{ Params: { productId: string } }>('/products/:productId/media/switch-preview', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try { return await previewMediaSwitch(request.params.productId) } catch (error) {
+      if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+      request.log.error({ err: error }, 'Media switch preview failed')
+      return reply.code(500).send({ error: 'The preview could not be built. Retry.' })
+    }
+  })
+  app.post<{ Params: { productId: string }; Body: unknown }>('/products/:productId/media/switch', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    try {
+      const body = z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/) }).strict().parse(request.body)
+      return await switchToMediaPlan(request.params.productId, body, request.authUser?.id ?? null)
+    } catch (error) {
+      if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+      if (error instanceof z.ZodError) return reply.code(422).send({ error: 'Review the preview again before switching.' })
+      request.log.error({ err: error }, 'Media switch failed')
+      return reply.code(500).send({ error: 'The switch could not be confirmed. Reload the page before trying again.' })
     }
   })
 }

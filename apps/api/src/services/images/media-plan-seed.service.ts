@@ -169,7 +169,14 @@ export async function switchToMediaPlan(productId: string, input: { revision: st
   const familyIds = [seed.rootId, ...seed.fam.root.children.map(c => c.id)]
   const real = new Map<string, string>()
   for (const { url, id } of seed.imports) real.set(id, await importLibraryUrl(seed.rootId, familyIds, url))
-  const swap = (plan: MediaPlan): MediaPlan => mediaPlanSchema.parse(JSON.parse(JSON.stringify(plan), (key, value) => key === 'assetId' && typeof value === 'string' && real.has(value) ? real.get(value) : value))
+  // An imported URL can turn out to be a photo the library already holds (same bytes): after the swap a set keeps it once.
+  const dedupe = (items?: Array<{ assetId: string }>) => items?.filter((item, i) => items.findIndex(other => other.assetId === item.assetId) === i)
+  const swap = (plan: MediaPlan): MediaPlan => {
+    const swapped = mediaPlanSchema.parse(JSON.parse(JSON.stringify(plan), (key, value) => key === 'assetId' && typeof value === 'string' && real.has(value) ? real.get(value) : value))
+    const sets = { ...swapped.sets, common: dedupe(swapped.sets.common), ...(swapped.sets.values ? { values: Object.fromEntries(Object.entries(swapped.sets.values).map(([k, v]) => [k, dedupe(v)!])) } : {}) }
+    if (!sets.common) delete sets.common
+    return { ...swapped, sets }
+  }
   await prisma.$transaction(async tx => {
     if (await tx.productMediaPlan.count({ where: { productId: seed.rootId, layer: 'SHARED' } })) throw new WorkspaceScopeError('This product already uses the photo plan.', 409)
     for (const layer of seed.layers) await tx.productMediaPlan.create({ data: { productId: seed.rootId, layer: layer.address.layer, channel: layer.address.channel,
