@@ -214,6 +214,12 @@ export function projectAmazon(stack: MediaPlanStack, family: MediaFamily, assets
   return { parent, items, safety, checks: ctx.checks }
 }
 
+/** The Amazon slots (MAIN, PT01–PT08, SWCH → asset id) one product receives from a layout; the parent uses `parent`. */
+export function amazonSlotsFor(layout: Pick<AmazonMediaLayout, 'items' | 'parent'>, productId: string): AmazonItemLayout['slots'] | null {
+  const item = layout.items.find(i => i.productId === productId) ?? (layout.parent?.productId === productId ? layout.parent : null)
+  return item ? item.slots : null
+}
+
 // ── Shopify ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface ShopifyMediaLayout { media: string[]; variantImages: Record<string, string | null>; checks: MediaCheck[] }
@@ -267,4 +273,31 @@ export function projectEtsy(stack: MediaPlanStack, family: MediaFamily, assets: 
   if (!images.length) ctx.checks.push({ severity: 'error', code: 'no-common', message: 'Etsy needs at least one photo.' })
   else if (first?.width && first.height && Math.min(first.width, first.height) < limits.firstMinEdge) ctx.checks.push({ severity: 'warning', code: 'too-small', assetId: first.id, message: `The first photo should be at least ${limits.firstMinEdge} px — Etsy ranks it lower.` })
   return { images, videos, variationImages, cut, checks: ctx.checks }
+}
+
+// ── Channel names ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A publisher's own names for the picture axis and its values (pins, value maps), keyed the plan's way. `byProduct`:
+ * per variant, per axis label (`Colore`), the value the channel receives; `axisNames`: per axis label, the channel's
+ * axis name. Only the channel's names are returned — a value it does not name is left for the checks to report.
+ */
+export function channelNames(input: {
+  axes: ReadonlyArray<{ code: string; label: string }>
+  variants: ReadonlyArray<{ productId: string; values: Record<string, string> }>
+  axis: string | null
+  channelValues: { byProduct: Record<string, Record<string, string>>; axisNames: Record<string, string | null> }
+  valueLabels?: Record<string, string>
+}) {
+  const valueNames: Record<string, string> = {}
+  const conflicts: string[] = []
+  for (const axis of input.axes) for (const variant of input.variants) {
+    const valueKey = variant.values[axis.code], name = input.channelValues.byProduct[variant.productId]?.[axis.label]
+    if (!valueKey || !name) continue
+    if (valueNames[valueKey] !== undefined && valueNames[valueKey] !== name)
+      conflicts.push(`${input.valueLabels?.[valueKey] ?? valueKey} is named both "${valueNames[valueKey]}" and "${name}" on this listing.`)
+    valueNames[valueKey] ??= name
+  }
+  const label = input.axes.find(a => a.code === input.axis)?.label
+  return { valueNames, axisName: label ? input.channelValues.axisNames[label] ?? null : null, conflicts }
 }

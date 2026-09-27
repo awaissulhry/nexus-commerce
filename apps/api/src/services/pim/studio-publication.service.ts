@@ -9,6 +9,7 @@ import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 import { STILL_DRAFT_LISTING } from '@nexus/shared/push-lock'
+import { ensureDraftListings } from './draft-listing.service.js'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { prepareEbayPublication, sendEbayPublication, readEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
 import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
@@ -285,11 +286,10 @@ export async function submitStudioPublication(productId: string, id: string, bod
       await settlePublicationRecords(tx, context, value)
     })
   }
-  // Journal FKs name only this destination. These drafts never establish channel presence.
-  const ensureDrafts = () => prisma.channelListing.createMany({ data: plan.facts.products.filter(p => data.delivery.productIds.includes(p.id) && !plan.facts.listings.some(l => l.productId === p.id)).map(p => ({
-    productId: p.id, channel: plan.facts.scope.channel, marketplace: plan.facts.scope.marketplace, region: plan.facts.scope.marketplace, channelMarket: `${plan.facts.scope.channel}_${plan.facts.scope.marketplace}`,
-    channelConnectionId: plan.facts.scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', aliasId: plan.facts.destination.aliasKey, isPublished: false, listingStatus: 'DRAFT',
-  })), skipDuplicates: true })
+  // Journal FKs name only this destination. These drafts never establish channel presence. The one creator
+  // (`ensureDraftListings`) starts exactly the delivered products that have no row here (`family: false`).
+  const ensureDrafts = () => prisma.$transaction(tx => ensureDraftListings(tx, { channel: plan.facts.scope.channel, market: plan.facts.scope.marketplace,
+    accountId: plan.facts.scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', productIds: data.delivery.productIds, family: false }))
   try {
     const { scope } = plan.facts
     if (publishMode(scope.channel) !== 'live') throw new Error('Live publication was disabled before submission.')
@@ -337,7 +337,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
       } else if (plan.prepared.kind === 'ebay-inventory-send') {
         // PE P3.4 — one whole-group PUT built from the fresh live group; journal first, read back after. No offer is touched.
         const inventory = plan.prepared
-        const receipt = await sendEbayInventoryGroup({ destination: inventory.destination, groupKey: inventory.groupKey, group: inventory.group,
+        const receipt = await sendEbayInventoryGroup({ destination: inventory.destination, groupKey: inventory.groupKey, group: inventory.group, items: inventory.items,
           expectedRevision: inventory.expectedRevision, fields: inventory.fields, reads: ebayInventoryReads(scope.accountId, scope.marketplace, inventory.destination.itemId),
           beforeSend: request => recordPublicationRequests(context, inventory.products.map(p => ({ ...p, request: { ...request, intentVersion: 1, writes: inventory.fieldWrites[p.productId] ?? [] } }))) })
         result = { id, status: receipt.verified ? 'VERIFIED' : 'UNVERIFIED', warnings: receipt.warnings,

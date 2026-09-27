@@ -6,8 +6,9 @@ import { applyContentBulk, type ContentEdit } from '../pim/content-bulk-write.js
 import { variationAttributePatch } from '../pim/shared-variation-values.js'
 import { optionModeFrom } from '@nexus/shared/attributes'
 import type { SheetChannel } from '../pim/sheet-columns.service.js'
-import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyBaseLogger } from 'fastify'
+import { channelLabel } from '@nexus/shared/channel-label'
+import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
@@ -542,7 +543,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
    *   - everything else routes on the FIELD NAME (:2398) and IGNORES target —
    *     `amazon_title` is always a listing write; `brand` is always a master
    *     column, even with `target: 'channel'`, because `CHANNEL_FIELD_MAP`
-   *     has no entry for it and `upsertChannelListings` returns [] for a
+   *     has no entry for it and `updateChannelListings` returns [] for a
    *     field it cannot map. Treating `brand` + `target:'channel'` as a
    *     channel change would route it to a writer that silently drops it.
    */
@@ -1636,7 +1637,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           //   attr_* + target:'channel' → the `overrideData` JSONB bag
           //   mapped/prefixed fields    → a real COLUMN (`title`,
           //                               `description`), written by
-          //                               `upsertChannelListings` as a column
+          //                               `updateChannelListings` as a column
           // Reading the bag for a mapped field returns undefined forever,
           // which is what #692 did — right key, wrong store.
           if (isCategoryAttrField(v.field)) {
@@ -1739,9 +1740,62 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     }
   }
 
+  // A listing a door already moved in this request → the version it holds now. Every later guard on that listing
+  // reads this version instead of refusing the caller's token (named for the first door; the fulfilment door and a
+  // draft started below join it too).
+  const priceWrittenIds = new Map<string, number>()
+
+  // Product-sheet create path, step 3 (the Owner's D1 = A and D2 = A, 2026-09-27; RESEARCH-2026-09-27.md §5). The FIRST
+  // channel-scope save on a coordinate where a product has no listing starts its draft here, in this transaction and
+  // before any door writes: `ensureDraftListings` is the one creator (parent and variants, inert through `syncPaused`),
+  // and every writer below only UPDATEs. It creates only the primary listing; on a non-primary alias it returns the
+  // rows or refuses by name, because an edit never creates an alias listing.
+  //
+  // Version 0 means "I saw no listing" (the projection's convention). Against a row that exists it is a conflict, and
+  // the 409 hands back that row's version; against no row the draft is started and joins `priceWrittenIds` at its fresh
+  // version. A refusal (no account, an inactive market) is that change's own error, never a 500.
+  const createdListings: Array<{ productId: string; listingId: string }> = []
+  const listingToken = expectedVersion !== undefined && validated.every(isChannelChange)
+  for (const ctx of effectiveContexts) {
+    const onCoordinate = validated.filter(v => isChannelChange(v) && (!channelOf(v.field) || channelOf(v.field) === ctx.channel))
+    if (!onCoordinate.length) continue
+    const productIds = [...new Set(onCoordinate.map(v => v.id))]
+    const accountId = connFor.get(ctx.channel) ?? null
+    const aliasKey = ctx.aliasKey ?? ''
+    const existing = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: ctx.channel, marketplace: ctx.marketplace,
+      channelConnectionId: accountId, aliasKey }, select: { id: true, productId: true, version: true } })
+    if (listingToken && expectedVersion === 0 && existing.length) throw new ProductBulkError(409, {
+      code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
+      expectedVersion, currentVersion: existing[0].version, listingId: existing[0].id, versionOf: 'channelListing',
+    })
+    const missing = productIds.filter(id => !existing.some(row => row.productId === id))
+    if (!missing.length) continue
+    try {
+      const ensured = await ensureDraftListings(activeDatabaseTransaction()!, { channel: ctx.channel, market: ctx.marketplace, accountId, aliasKey, productIds: missing, family: true })
+      for (const row of ensured) {
+        if (!row.created) continue
+        createdListings.push({ productId: row.productId, listingId: row.id })
+        if (missing.includes(row.productId)) priceWrittenIds.set(row.id, row.version)
+      }
+    } catch (error) {
+      if (!(error instanceof DraftListingError)) throw error
+      // Thrown after its insert: roll the whole save back rather than keep part of a family.
+      if (error.code === 'COORDINATE_TAKEN') throw new ProductBulkError(409, { error: error.message })
+      for (const v of onCoordinate.filter(change => missing.includes(change.id))) {
+        errors.push({ id: v.id, field: v.field, error: error.message })
+        validated.splice(validated.indexOf(v), 1)
+      }
+    }
+  }
+  /** The drafts this request started, each with the version it holds after the writes, so the sheet adopts them at once. */
+  const createdListingsReadBack = async () => {
+    if (!createdListings.length) return {}
+    const rows = await prisma.channelListing.findMany({ where: { id: { in: createdListings.map(row => row.listingId) } }, select: { id: true, version: true } })
+    return { createdListings: createdListings.map(row => ({ ...row, version: rows.find(r => r.id === row.listingId)?.version ?? null })) }
+  }
+
   // Both mapped wire fields and schema-declared price columns use the same door. This is
   // still inside the bulk editor's outer transaction: a later failure rolls the price back too.
-  const priceWrittenIds = new Set<string>()
   const priceEdits = validated.filter(isPriceChange)
   if (priceEdits.length) {
     if (expectedVersion === undefined) throw new ProductBulkError(400, { error: 'Price edits require the listing expectedVersion.' })
@@ -1756,8 +1810,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const targets = destinations.map(d => {
       const listing = listings.find(l => l.productId === d.change.id && l.channel === d.channel &&
         l.marketplace === d.marketplace && l.channelConnectionId === d.channelConnectionId && l.aliasKey === d.aliasKey)
-      if (!listing) throw new ProductBulkError(400, { error: `No ${d.channel} listing on ${d.marketplace} for this account and alias — reload before editing its price.` })
-      return { listingId: listing.id, price: d.change.reset ? null : Number(d.change.value), expectedVersion }
+      // Only a non-primary alias can get here (the draft step above starts every missing primary listing).
+      if (!listing) throw new ProductBulkError(400, { error: `This listing alias has no ${channelLabel(d.channel)} listing on ${d.marketplace} for this product. An edit never creates an alias listing, so its price cannot be set here.` })
+      return { listingId: listing.id, price: d.change.reset ? null : Number(d.change.value), expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
     })
     const prices = await writeChannelPrices({ targets, actor: context.userId ?? 'system', source: 'MANUAL_OVERRIDE', reason: 'Product sheet' })
     for (const outcome of prices.results) {
@@ -1765,7 +1820,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
       })
       if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
-      if (outcome.outcome === 'applied') priceWrittenIds.add(outcome.listingId)
+      if (outcome.outcome === 'applied') priceWrittenIds.set(outcome.listingId, outcome.version)
     }
     if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of priceEdits) {
       if (destinations.every((d, i) => d.change !== change || prices.results[i].outcome === 'noop')) {
@@ -1795,9 +1850,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const targets = destinations.map(d => {
       const listing = listings.find(l => l.productId === d.change.id && l.marketplace === d.marketplace &&
         l.channelConnectionId === d.channelConnectionId && l.aliasKey === d.aliasKey)
-      if (!listing) throw new ProductBulkError(400, { error: `There is no Amazon listing on ${d.marketplace} for this product yet. The fulfillment method is set on an existing listing.` })
+      // Only a non-primary alias can get here (the draft step above starts every missing primary listing).
+      if (!listing) throw new ProductBulkError(400, { error: `This listing alias has no Amazon listing on ${d.marketplace} for this product. An edit never creates an alias listing, so its fulfillment method cannot be set here.` })
       const code = d.change.reset || d.change.value === null || d.change.value === undefined || d.change.value === '' ? null : String(d.change.value).toUpperCase()
-      return { listingId: listing.id, method: code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const, expectedVersion }
+      return { listingId: listing.id, method: code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const, expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
     })
     const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })
     for (const outcome of written.results) {
@@ -1805,7 +1861,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         code: 'VERSION_CONFLICT', error: outcome.reason, expectedVersion, currentVersion: outcome.version, versionOf: 'channelListing',
       })
       if (outcome.outcome === 'refused') throw new ProductBulkError(400, { error: outcome.reason })
-      if (outcome.outcome === 'applied') priceWrittenIds.add(outcome.listingId)
+      if (outcome.outcome === 'applied') priceWrittenIds.set(outcome.listingId, outcome.version)
     }
     if (!currentFormulaWrite(context.formulaWriteToken)?.operations) for (const change of fulfilmentEdits) {
       if (destinations.every((d, i) => d.change !== change || written.results[i].outcome === 'noop')) {
@@ -1825,10 +1881,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
   // the value was already right. `updated: 0` with no `errors[]` is what the
   // client already paints as saved.
   if (validated.length === 0 && errors.length === 0 && noOpKeys.size > 0) {
+    // A door's no-op on a draft this request started still started it (e.g. clearing an empty price).
+    const draftProductIds = [...new Set(createdListings.map(row => row.productId))]
+    if (draftProductIds.length) await afterDatabaseCommit(`product-cache:${draftProductIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(draftProductIds))
     return {
       success: true,
       updated: 0,
       unchanged: noOpKeys.size,
+      ...(await createdListingsReadBack()),
       ...(normalizedChanges.length ? { normalizedChanges } : {}),
       cascadeCount: 0,
       affectedChildren: 0,
@@ -2033,14 +2093,14 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const updates: any[] = []
     const listingGuards = new Map<string, any>()
 
-    // Helper for ChannelListing upsert by (productId, channel,
+    // Helper for a ChannelListing column write by (productId, channel,
     // marketplace). R.1 — fans out to every effectiveContext whose
     // channel matches the field's prefix, so one change targets all
     // selected markets in a single transaction. Returns an array of
     // Prisma promises (possibly empty) rather than a single one.
     // The listings a CHANNEL-targeted request writes to. Used to report the
     // version from the row that actually changed rather than from the product.
-    const channelListingIdsTouched: string[] = [...priceWrittenIds]
+    const channelListingIdsTouched: string[] = [...priceWrittenIds.keys()]
 
     // #700(i)/(ii) — the listings a MAPPED channel write touches.
     //
@@ -2075,7 +2135,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           })
         : []
 
-    const upsertChannelListings = (
+    const updateChannelListings = (
       productId: string,
       field: string,
       value: any,
@@ -2091,7 +2151,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         ? effectiveContexts.filter((ctx) => ctx.channel === expected)
         : effectiveContexts
       return targets.flatMap((ctx) => {
-        const channelMarket = `${ctx.channel}_${ctx.marketplace}`
         // #703 — the CONTEXT's aliasKey, not a hardcoded primary. The client
         // sends it (PES.3's writer emits `aliasKey: 'alias-2'` for a row under
         // a non-primary alias and `''` for the primary); this path used to
@@ -2123,7 +2182,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             listingGuards.set(hit.id,
               prisma.channelListing.update({
                 where: { id: hit.id, version: expectedVersion },
-                // ⚠ VERIFY ONLY — do NOT bump. The upsert below already does
+                // ⚠ VERIFY ONLY — do NOT bump. The update below already does
                 // `version: { increment: 1 }`; bumping here too would advance
                 // the row by TWO while the response reported ONE, and the next
                 // write would 409 every time. Prisma still throws P2025 when
@@ -2137,38 +2196,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // response able to report the LISTING's version for a mapped write.
           channelListingIdsTouched.push(hit.id)
         }
-        // Prisma cannot target an unattributed listing's null account in a compound unique.
-        // A previewed cell already identifies that exact listing, so use its ID in this case.
-        stmts.push(hit && !connFor.get(ctx.channel) ? prisma.channelListing.update({
-          where: { id: hit.id },
-          data: { ...patch, version: { increment: 1 } } as any,
-        }) : prisma.channelListing.upsert({
-          where: {
-            productId_channel_marketplace: workspaceKey({
-              productId,
-              channel: ctx.channel,
-              marketplace: ctx.marketplace,
-              channelConnectionId: connFor.get(ctx.channel) ?? null,
-              // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing. NOT NULL because Prisma cannot target a null inside a compound unique.
-              aliasKey: ctxAliasKey,
-            }),
-          },
-          create: {
-            productId,
-            channel: ctx.channel,
-            channelMarket,
-            region: ctx.marketplace,
-            marketplace: ctx.marketplace,
-            listingStatus: 'DRAFT',
-            // Without this the CREATE branch defaults `aliasKey` to '' — so a
-            // first write under a non-primary alias would silently create the
-            // PRIMARY row instead of the alias's.
-            aliasKey: ctxAliasKey,
-            aliasId: ctxAliasKey || null,
-            channelConnectionId: connFor.get(ctx.channel) ?? null,
-            isPublished: false,
-            ...patch,
-          } as any,
+        // UPDATE only. The row exists: it was there, or `ensureDraftListings` started it above (the one creator). A
+        // cascade to a variant with no row on this coordinate writes nothing there: absence is exclusion, and an edit
+        // never re-includes a variant. Matched by the coordinate, so an unattributed listing's null account matches too.
+        stmts.push(prisma.channelListing.updateMany({
+          where: { productId, channel: ctx.channel, marketplace: ctx.marketplace, aliasKey: ctxAliasKey, channelConnectionId: connFor.get(ctx.channel) ?? null },
           // #542(3) — EVERY ChannelListing write bumps the version.
           //
           // Measured: this path left version at 64 while the override-bag path
@@ -2177,10 +2209,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           // fails exactly when two writers use different paths — which is the
           // case it exists for. A client holding v64 would have passed CAS
           // after this write and silently overwritten it.
-          update: {
-            ...patch,
-            version: { increment: 1 },
-          } as any,
+          data: { ...patch, version: { increment: 1 } } as any,
         }))
         if (mutation.overrideRemove.length) {
           const keys = mutation.overrideRemove
@@ -2251,7 +2280,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         const stripped = v.field.replace(/^attr_/, '')
         const store = storeFor(v.id, stripped)
         if (store?.kind === 'listingColumn') {
-          updates.push(...upsertChannelListings(v.id, v.field, v.value, v.reset, store))
+          updates.push(...updateChannelListings(v.id, v.field, v.value, v.reset, store))
           continue
         }
         if (store?.kind === 'platformAttributes') {
@@ -2335,17 +2364,13 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     /**
      * PES.5 — merge an attribute patch into ONE listing's `overrideData`.
      *
-     * UPSERT rather than UPDATE: every family member currently has a listing
-     * on the coordinates that exist (measured: 21/21, 41/41, 50/50), but the
-     * sheet legitimately shows a coordinate the family is not listed on yet,
-     * and an edit there must stick rather than vanish.
+     * An UPDATE of a row that exists: the sheet legitimately shows a coordinate
+     * the family is not listed on yet, and an edit there must stick rather than
+     * vanish, so the draft step before the price door starts that listing first
+     * (`ensureDraftListings`, the one creator: DRAFT, `isPublished: false`,
+     * `syncPaused: true`). Typing in a cell never produces something publishable.
      *
-     * ⚠ A listing born this way is `isPublished: false` and `DRAFT`. Typing in
-     * a cell must never produce something publishable — the existing 6-field
-     * upsert path leaves `isPublished` at its schema default of TRUE, which is
-     * a sharper edge than this one needs.
-     *
-     * `ON CONFLICT` names the five-column key including `aliasKey`, so the
+     * The coordinate names all five key columns including `aliasKey`, so the
      * merge lands on THE listing the cell belongs to and not on the primary.
      */
 
@@ -2418,15 +2443,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       if (v.cascade) {
         // Cascade applies to the parent itself + all its children.
         // For channel fields, each "update" is a ChannelListing
-        // upsert in the active marketplace context. cascadedFields
+        // update in the active marketplace context. cascadedFields
         // tracking still goes on the Product row so children can be
         // visually distinguished as inheriting.
         if (isCh) {
-          updates.push(...upsertChannelListings(v.id, v.field, v.value, v.reset))
+          updates.push(...updateChannelListings(v.id, v.field, v.value, v.reset))
           const kids = childrenByParent.get(v.id) ?? []
           for (const childId of kids) {
             updates.push(
-              ...upsertChannelListings(childId, v.field, v.value),
+              ...updateChannelListings(childId, v.field, v.value),
             )
             // Track on Product.cascadedFields with the prefixed name
             updates.push(
@@ -2466,10 +2491,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         }
       } else if (isCh) {
         // Direct channel-field edit. With R.1 multi-targets this
-        // upserts one ChannelListing row per matching context. For
+        // updates one ChannelListing row per matching context. For
         // children, also remove the prefixed field from
         // cascadedFields so future renders don't show "inherited."
-        updates.push(...upsertChannelListings(v.id, v.field, v.value, v.reset))
+        updates.push(...updateChannelListings(v.id, v.field, v.value, v.reset))
         if (childIdSet.has(v.id)) {
           updates.push(
             prisma.$executeRaw`
@@ -2507,10 +2532,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // so a direct override clears the "inherited" marker (matching
     // the non-attr child override semantics above).
     // ── PES.5 / #169 — channel-targeted attribute writes ────────────
-    // Connections resolved once per channel from the family's existing
-    // listings, so a row born here lands on the SAME account as its siblings.
+    // Connections resolved once per channel (`connFor`, the account the draft
+    // step used), so the merge lands on the row that step found or started.
     // channelConnectionId is part of the unique key, so an unattributed row
-    // would collide differently too.
+    // is matched on its null account too.
     if (channelAttrByCoord.size > 0) {
       const coordProductIds = [...new Set([...channelAttrByCoord.values()].map((e) => e.productId))]
       const siblings = await prisma.channelListing.findMany({
@@ -2531,9 +2556,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             (l) => l.productId === e.productId && l.channel === e.channel &&
                    l.marketplace === e.marketplace && l.aliasKey === e.aliasKey,
           )
-          // Only guard a listing that EXISTS. A first write to a coordinate
-          // has no version to conflict with, and inventing one would reject
-          // the very edit that creates the row.
+          // The row exists by now (the draft step started any missing one). A
+          // draft started or a listing a door moved in THIS request is in
+          // `priceWrittenIds`: its version is this transaction's own, not the
+          // caller's token, so there is nothing to guard it against.
           if (hit && !priceWrittenIds.has(hit.id)) {
             listingGuards.set(hit.id,
               prisma.channelListing.update({
@@ -2921,8 +2947,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // worker health, matching how products-catalog.routes.ts already
     // refreshes after its direct PATCH. Runs after all post-commit
     // cascades (price/stock/content) so the cache captures their writes.
+    // Every product whose draft this request started, too: the grid reads its listings from the cache.
     const cacheRefreshIds = Array.from(
-      new Set<string>([...productIds, ...allAffectedChildIds]),
+      new Set<string>([...productIds, ...allAffectedChildIds, ...createdListings.map((row) => row.productId)]),
     )
     // Listing-only edits cannot affect another destination. Keep shared/mixed writes broad,
     // and use the same routing predicate and resolved account as the mutation above.
@@ -3069,6 +3096,9 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // P2 — present only when readiness was NOT rebuilt in this request: the number of families whose readiness is
       // being rebuilt in the background. Their readiness rows read "pending" until then.
       ...(readiness.pending ? { readinessPendingFamilies: readiness.pending } : {}),
+      // Product-sheet create path — the drafts this save started (`{ productId, listingId, version }`), so the sheet
+      // adopts each listing at once instead of waiting for its next read.
+      ...(await createdListingsReadBack()),
       currentVersion: freshChannelVersion ?? freshMasterVersion ?? undefined,
       versionOf: freshChannelVersion !== undefined ? 'channelListing' : expectedVersion !== undefined ? 'product' : undefined,
     }

@@ -124,7 +124,8 @@ export interface AddFixedPriceItemInput {
   variationSpecificsSet?: Record<string, string[]>
   variations: TradingVariation[]
   pictureUrls?: string[]
-  variationPictures?: { axisName: string; byValue: Record<string, string[]> }
+  /** `order` (images rebuild P2c): emit the sets in exactly this order — an object re-orders number-like keys ("42"). */
+  variationPictures?: { axisName: string; byValue: Record<string, string[]>; order?: string[] }
   policies?: { fulfillmentPolicyId?: string; paymentPolicyId?: string; returnPolicyId?: string }
 }
 
@@ -176,7 +177,8 @@ export function buildAddFixedPriceItemXml(input: AddFixedPriceItemInput): string
 
   let picturesXml = ''
   if (input.variationPictures && Object.keys(input.variationPictures.byValue).length) {
-    const sets = Object.entries(input.variationPictures.byValue)
+    const byValue = input.variationPictures.byValue
+    const sets = (input.variationPictures.order ?? Object.keys(byValue)).map((value) => [value, byValue[value] ?? []] as const)
       .filter(([, urls]) => urls.length > 0)
       .map(([value, urls]) => {
         const pics = urls.map((u) => `          <PictureURL>${escapeXml(u)}</PictureURL>`).join('\n')

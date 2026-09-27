@@ -15,6 +15,7 @@ import { ListingPhotoPreview } from './ListingPhotoPreview'
 import { MediaReview } from './MediaReview'
 import { dimensions, SourceLibrary } from './SourceLibrary'
 import { MediaRequestError, requestWorkspace } from './transport'
+import { connectAccountSentence, coordinateName, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence } from '../../draftListing'
 import styles from './media.module.css'
 
 const LISTING: EbayMediaGallery = { axis: null, value: null, assetIds: [] }
@@ -100,7 +101,11 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
   const assignedUrls = new Set(active.assetIds.flatMap(id => byId.has(id) ? [byId.get(id)!.url] : []))
   const preview = previewId ? byId.get(previewId) : undefined
   const check = draft && workspace ? inspectMediaDraft(draft, workspace.assets, workspace.axisLabels) : { problems: [], review: [] }
-  const blocked = busy || uploading || !canEdit || !workspace?.destination.listingId
+  /* Create path, step 5/6 — with no listing on this coordinate the gallery is still editable when the primary listing
+     is the destination and an account holds it: the first save starts that listing's draft (the family's parent and
+     variants) and stores the gallery on it. Nothing is sent to eBay. An alias with no listing stays read-only. */
+  const gate = workspace ? mediaDestinationGate(workspace.destination) : 'listing'
+  const blocked = busy || uploading || !canEdit || (gate !== 'listing' && gate !== 'starts-draft')
 
   function replaceGallery(gallery: EbayMediaGallery) {
     if (blocked) return
@@ -162,11 +167,15 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
     if (!workspace || !draft || blocked || pending.current || (!dirty && !workspace.destination.inherited) || requiresReload || check.problems.length) return
     ++readSequence.current
     const writeId = `${subject}:${crypto.randomUUID()}`
+    const startsDraft = gate === 'starts-draft'
     setBusy(true); pending.current = true; setError(null); reporter.pending(writeId, subject)
     try {
       const next = await requestWorkspace(path, { expectedRevision: workspace.revision, draft })
       reporter.resolved(writeId, true, undefined, subject)
-      if (alive.current) { adopt(next); setSavedMessage('Gallery saved in Nexus. No live eBay listing was updated.') }
+      if (alive.current) {
+        adopt(next)
+        setSavedMessage(startsDraft && next.destination.listingId ? mediaDraftStartedMessage('EBAY', next.destination.marketplace) : 'Gallery saved in Nexus. No live eBay listing was updated.')
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The save result could not be confirmed.'
       reporter.resolved(writeId, false, message, subject)
@@ -223,7 +232,7 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
       </div>} />
       <section className={styles.destination} aria-label="Listing destination">
         <Field label="Listing alias"><Select value={workspace.destination.listingId ?? ''} disabled={busy || uploading || !workspace.destination.listings.length} onChange={event => onListingChange(event.target.value)}>
-          {!workspace.destination.listingId && <option value="">Choose a listing</option>}
+          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
           {workspace.destination.listings.map(listing => <option key={listing.id} value={listing.id}>{listing.label}{listing.externalListingId ? ` · ${listing.externalListingId}` : ' · No live ID'}{workspace.destination.listings.some(other => other.id !== listing.id && other.label === listing.label && other.externalListingId === listing.externalListingId) ? ` · ${listing.id}` : ''}</option>)}
         </Select></Field>
         <div className={styles.destinationSummary}><strong>eBay {workspace.destination.marketplace} · {accountLabel}</strong><p>Draft only · Saving does not publish</p></div>
@@ -231,7 +240,11 @@ export function EbayMediaWorkspace({ path, productId, onListingChange, accountLa
       </section>
     </header>
     <div className={styles.workspaceBody}>
-      {!workspace.destination.listingId && <Banner tone="neutral" title="Choose a listing to edit">{workspace.destination.listings.length ? 'Select a listing alias above to load its galleries and variation groups.' : 'There are no available listings for this product in the selected account and market. Create a listing in Information, then reload Media.'}</Banner>}
+      {gate === 'starts-draft' && <Banner tone="info" title={`Not listed on ${coordinateName('EBAY', workspace.destination.marketplace)} yet`}>
+        {mediaDraftStartSentence('EBAY', workspace.destination.marketplace)}{workspace.destination.listings.length ? ' To edit a listing alias instead, choose it above.' : ''}
+      </Banner>}
+      {gate === 'choose-listing' && <Banner tone="neutral" title="Choose a listing to edit">Select a listing alias above to load its galleries and variation groups.</Banner>}
+      {gate === 'no-account' && <Banner tone="warning" title="No eBay account">{connectAccountSentence('EBAY', workspace.destination.marketplace)}</Banner>}
       {!canEdit && <Banner tone="neutral" title="View access">You can inspect these galleries. Image editing permission is required to change them.</Banner>}
       {error && <Banner tone="danger" title={requiresReload ? 'Reload required before saving' : 'Action could not be completed'} action={requiresReload ? <Button disabled={busy || uploading} onClick={askReload}>Reload saved</Button> : undefined}>{error}</Banner>}
       {check.problems.length > 0 && <Banner tone="neutral" title="Review required before saving"

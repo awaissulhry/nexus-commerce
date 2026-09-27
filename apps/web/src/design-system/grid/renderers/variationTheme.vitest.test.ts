@@ -152,6 +152,17 @@ describe('the tooltip — server-stated lines only', () => {
     expect(variationThemeTooltip(GALE_EBAY_DE_UNAVAILABLE)).toContain('has no category yet')
     expect(variationThemeTooltip(GALE_CHILD)).toBe(VARIATION_THEME_CHILD_REASON)
   })
+
+  /* Product-sheet create path, step 4/6 — on a market with no listing the cell is writable and the server states what a
+     save does. The note ends the tooltip where a blocked cell's reason used to; a blocked cell keeps its reason. */
+  it('ends with the delivery note on a writable cell, and with the blocked reason on a blocked one', () => {
+    const note = 'Saved to the Amazon · SE draft. Publish sends it.'
+    const writable = { ...GALE_AMAZON_DE_DERIVED, writable: true, writeBlockedReason: null, deliveryNote: note }
+    expect(variationThemeTooltip(writable).split('\n\n').at(-1)).toBe(note)
+    const blocked = { ...writable, writable: false, writeBlockedReason: 'Connect an Amazon account before listing on SE.' }
+    expect(variationThemeTooltip(blocked).split('\n\n').at(-1)).toBe('Connect an Amazon account before listing on SE.')
+    expect(variationThemeTooltip(blocked)).not.toContain(note)
+  })
 })
 
 describe('the markup', () => {

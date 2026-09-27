@@ -18,6 +18,7 @@ import { BulkImageAssignment } from './BulkImageAssignment'
 import { SkuSelection } from './SkuSelection'
 import { SafetyImageExport } from './SafetyImageExport'
 import styles from './media.module.css'
+import { connectAccountSentence, coordinateName, mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence } from '../../draftListing'
 
 const working = (run: AmazonMediaRun | null) => !!run && ['REVIEW_QUEUED', 'REVIEWING', 'QUEUED', 'READY', 'SUBMITTING'].includes(run.status)
 const sending = (run: AmazonMediaRun | null) => !!run && ['QUEUED', 'READY', 'SUBMITTING'].includes(run.status)
@@ -64,7 +65,10 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
   const subject = `amazon-media:${path}`
   const dirty = !!workspace && !!draft && imageDraftFingerprint(workspace.draft) !== imageDraftFingerprint(draft)
   const locked = busy || uploading || sending(run)
-  const disabled = locked || !canEdit || needsReload
+  /* Create path, step 5/6 — no Amazon listing on this market yet: the gallery opens empty and stays editable; its first
+     save starts the primary listing's draft (the family's parent and variants). Nothing is sent to Amazon. */
+  const gate = workspace ? mediaDestinationGate(workspace.destination) : 'listing'
+  const disabled = locked || !canEdit || needsReload || (gate !== 'listing' && gate !== 'starts-draft')
   operation.current = locked
   const adopt = useCallback((next: Workspace) => {
     setWorkspace(next); setDraft(next.draft); setBulkUndo(null); setError(null); setNeedsReload(false); reporter.cleared([subject])
@@ -163,9 +167,13 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     editVersion.current++
     setBusy(true); setError(null)
     const write = crypto.randomUUID(); reporter.pending(write, subject)
+    const startsDraft = gate === 'starts-draft'
     try {
       const next = await requestAmazonWorkspace(path, 'PUT', { expectedRevision: workspace.revision, draft })
-      if (alive.current) { adopt(next); setMessage('Draft saved for this Amazon market.'); setRun(null) }
+      if (alive.current) {
+        adopt(next); setRun(null)
+        setMessage(startsDraft && next.destination.listingId ? mediaDraftStartedMessage('AMAZON', next.destination.marketplace) : 'Draft saved for this Amazon market.')
+      }
       reporter.resolved(write, true, undefined, subject)
     } catch (e) {
       const text = e instanceof Error ? e.message : 'Save outcome unknown. Reload before retrying.'
@@ -240,7 +248,8 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     </header>
     <div className={styles.body}>
       <aside className={styles.navigation} aria-label="Amazon image galleries">
-        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId} disabled={locked} onChange={event => onListingChange(event.target.value)}>
+        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId ?? ''} disabled={locked} onChange={event => onListingChange(event.target.value)}>
+          {!workspace.destination.listingId && <option value="">{gate === 'starts-draft' ? 'Primary listing · starts as a draft on save' : 'Choose a listing'}</option>}
           {workspace.destination.listings.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select></Field>
         <PressableRow label="Common images" current={active === 'common'} onClick={() => setActive('common')} description="Images shared by SKUs in this market; SKU overrides take precedence."><Tag>{Object.values(draft.common).filter(Boolean).length}</Tag></PressableRow>
@@ -260,6 +269,9 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
       </aside>
       <section className={styles.canvas} aria-label="Amazon gallery editor">
         {error && <Banner tone="danger" title="Action needs attention" children={error} />}
+        {gate === 'starts-draft' && <Banner tone="info" title={`Not listed on ${coordinateName('AMAZON', workspace.destination.marketplace)} yet`}>{mediaDraftStartSentence('AMAZON', workspace.destination.marketplace)}</Banner>}
+        {gate === 'choose-listing' && <Banner tone="neutral" title="Choose a listing to edit">This listing alias has no Amazon listing here. Choose another listing above.</Banner>}
+        {gate === 'no-account' && <Banner tone="warning" title="No Amazon account">{connectAccountSentence('AMAZON', workspace.destination.marketplace)}</Banner>}
         {message && <p role="status" className={styles.note}>{message}</p>}
         {workspace.warnings.map(warning => <Banner key={warning} tone="warning" children={warning} />)}
         <div className={styles.galleryHeading}>
@@ -268,7 +280,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
             <Button disabled={disabled || !emptyCodes.length} onClick={() => setPickerSlot('batch')}>Add images</Button>
             <Button disabled={disabled || dirty} onClick={() => setMarketCopyOpen(true)}>Copy from market</Button>
             <Button size="sm" disabled={disabled} onClick={() => setCopyOpen(true)}><Copy size={16} />Apply to SKUs</Button>
-            {section === 'gallery' && <Button disabled={locked || dirty || !canEdit} onClick={() => void checkAmazon()}>Check Amazon</Button>}
+            {section === 'gallery' && <Button disabled={locked || dirty || !canEdit || !workspace.destination.listingId} onClick={() => void checkAmazon()}>Check Amazon</Button>}
           </div>
         </div>
         <div className={styles.actions} role="group" aria-label="Amazon image type">

@@ -34,6 +34,8 @@ vi.mock('./studio-publication-ebay.js', () => ({
 vi.mock('./studio-publication-ebay-inventory.js', () => ({ ebayInventoryReads: () => ({}), sendEbayInventoryGroup: m.send }))
 vi.mock('./studio-publication-records.js', () => ({ recordPublicationRequests: m.record, settlePublicationRecords: vi.fn() }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
+// Publish starts missing rows through the one creator (`ensureDraftListings`); its own rules run on PostgreSQL.
+vi.mock('./draft-listing.service.js', () => ({ ensureDraftListings: async () => [] }))
 vi.mock('../../db.js', () => {
   const matches = (row: any, where: any) => (!where.id || (typeof where.id === 'string' ? row.id === where.id : row.id !== where.id.not))
     && (!Object.hasOwn(where, 'userId') || row.userId === where.userId)

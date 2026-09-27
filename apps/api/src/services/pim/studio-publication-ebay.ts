@@ -15,6 +15,10 @@ import { publicationImages } from './studio-publication-media.js'
 import { readEbayMediaGallery } from '../images/ebay-media-workspace.service.js'
 import { inspectMediaDraft } from '@nexus/shared/ebay-media'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { mediaLayoutFor, type MediaChannelValues } from '../images/media-plan.service.js'
+import type { EbayMediaLayout } from '@nexus/shared/media-plan-channels'
+import { aspectCanonicalName } from '../ebay-theme-axes.js'
 import type { StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
 import { ebayPublicationRequest } from './studio-publication-ebay-changes.js'
@@ -122,6 +126,10 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   }
   // Shared stock — each product's ledger: its own warehouses, or the pool it sells from.
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
+  // Images rebuild P2c — a family on the media plan takes its photos from the plan (finishEbayListingInput). Its older
+  // per-product galleries are not read, so a stale one can neither block the send nor leak into it.
+  const onPlan = await isOnMediaPlan(parent.id)
+  let channelValues: MediaChannelValues | undefined
   const rows = []
   const identities: Array<{ productId: string; sku: string }> = []
   const galleries = new Map<string, string[]>()
@@ -180,11 +188,13 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
     identities.push({ productId: product.id, sku: row.sku })
     row[`${scope.marketplace.toLowerCase()}_price`] = price
     row[`${scope.marketplace.toLowerCase()}_qty`] = quantity
-    const images = pa._productMediaLocales !== undefined ? publicationImages(facts, product)
-      : Array.isArray(pa.imageUrls) ? pa.imageUrls as string[] : publicationImages(facts, product)
-    if (images.length > 24 || images.some(url => !/^https:\/\//i.test(url))) throw new Error(`${product.sku}: eBay needs at most 24 publicly accessible HTTPS images.`)
-    galleries.set(product.id, images)
-    for (let i = 0; i < 6; i++) row[`image_${i + 1}`] = images[i] ?? ''
+    if (!onPlan) {
+      const images = pa._productMediaLocales !== undefined ? publicationImages(facts, product)
+        : Array.isArray(pa.imageUrls) ? pa.imageUrls as string[] : publicationImages(facts, product)
+      if (images.length > 24 || images.some(url => !/^https:\/\//i.test(url))) throw new Error(`${product.sku}: eBay needs at most 24 publicly accessible HTTPS images.`)
+      galleries.set(product.id, images)
+      for (let i = 0; i < 6; i++) row[`image_${i + 1}`] = images[i] ?? ''
+    }
     rows.push(row)
   }
   const parentRow = rows[0], variants = products.length > 1 ? rows.slice(1) : rows
@@ -205,9 +215,29 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
       if (!value) throw new Error(`${row.sku}: ${axis.familyKey} is missing.`)
       if (axis.channelName) row[`aspect_${axis.channelName.replace(/ /g, '_')}`] = value ?? ''
     }
+    // The values this listing receives, per variant — the media plan names its photo sets with them.
+    channelValues = { byProduct: Object.fromEntries((input.family.variants ?? []).map(v => [v.id, v.axisValues])), axisNames: Object.fromEntries(axes.map(a => [a.familyKey, a.channelName ?? null])) }
   }
   const shared = buildSharedListingInput(parentRow, variants, scope.marketplace, undefined, object(parentListing?.platformAttributes)._axisValueOrder, options.currency)
-  return { shared, itemId, parentListing, settings, galleries, variants, identities }
+  return { shared, itemId, parentListing, settings, galleries, variants, identities, media: onPlan ? { channelValues } : null }
+}
+
+/** Images rebuild P2c — the plan's eBay layout, checked, as the Trading/Inventory input's pictures (screen order = payload order). */
+async function ebayPicturesFromPlan(facts: PublicationFacts, shared: Awaited<ReturnType<typeof buildEbayListingInput>>['shared'], channelValues: MediaChannelValues | undefined) {
+  const { scope, parent, products } = facts
+  const media = await mediaLayoutFor({ productId: parent.id, channel: 'EBAY', marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '',
+    includedIds: products.map(p => p.id), channelValues })
+  if (!media || media.layout.channel !== 'EBAY') throw new Error('This product\'s photo plan changed while publishing. Review again.')
+  const layout = media.layout as EbayMediaLayout & { channel: 'EBAY' }
+  const errors = layout.checks.filter(c => c.severity === 'error')
+  if (errors.length) throw new Error(errors.map(c => c.message).join('; '))
+  shared.pictureUrls = layout.gallery.map(media.url)
+  if (!layout.axisName || !layout.sets.length) { shared.variationPictures = undefined; return }
+  const axisName = shared.variationSpecificNames.find(name => aspectCanonicalName(name) === aspectCanonicalName(layout.axisName!))
+  if (!axisName) throw new Error(`Photos vary by ${layout.axisName}, which is not a variation of this eBay listing. Choose the photo axis on the Media page.`)
+  const allowed = shared.variationSpecificsSet?.[axisName] ?? shared.variations.map(v => String(v.specifics?.[axisName] ?? ''))
+  for (const set of layout.sets) if (!allowed.includes(set.value)) throw new Error(`${set.value} is not a ${axisName} value of this eBay listing.`)
+  shared.variationPictures = { axisName, byValue: Object.fromEntries(layout.sets.map(set => [set.value, set.items.map(media.url)])), order: layout.sets.map(set => set.value) }
 }
 
 function assertLiveEbay() {
@@ -241,6 +271,15 @@ export async function prepareEbayInventoryPublication(facts: PublicationFacts): 
     aspects: Object.fromEntries(Object.entries(shared.itemSpecifics ?? {}).map(([name, values]) => [name, (Array.isArray(values) ? values : [values]).map(String)])),
     axes: shared.variationSpecificNames, order: shared.variationSpecificsSet ?? {},
     variants: shared.variations.filter(v => bySku.has(v.sku)).map(v => ({ productId: bySku.get(v.sku)!, sku: v.sku, values: v.specifics })) }
+  // Images rebuild P2d — each SKU carries its value's photos (the same sets a Trading listing sends as picture sets).
+  if (shared.variationPictures) {
+    const { axisName, byValue } = shared.variationPictures
+    const skus = Object.fromEntries(shared.variations.filter(v => bySku.has(v.sku)).flatMap(v => {
+      const urls = byValue[String(v.specifics?.[axisName] ?? '')]
+      return urls?.length ? [[v.sku, urls]] : []
+    }))
+    if (Object.keys(skus).length) ours.variationPictures = { axis: axisName, bySku: skus }
+  }
   return { kind: 'ebay-inventory', marketplace: scope.marketplace, itemId: built.itemId, destination, owner, products: [owner], ours, live }
 }
 
@@ -254,8 +293,9 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   shared.location = String(settings.itemLocation ?? origin.city ?? process.env.EBAY_ITEM_LOCATION ?? '')
   shared.postalCode = String(settings.itemPostalCode ?? origin.postalCode ?? process.env.EBAY_ITEM_POSTAL_CODE ?? '')
   if (!itemId && (!shared.country || !shared.location)) throw new Error('Configure the item origin country and city for this eBay account before creating a listing.')
-  shared.pictureUrls = galleries.get(parent.id) ?? []
-  if (shared.variationPictures) {
+  if (built.media) await ebayPicturesFromPlan(facts, shared, built.media.channelValues)
+  else shared.pictureUrls = galleries.get(parent.id) ?? []
+  if (!built.media && shared.variationPictures) {
     const axis = shared.variationPictures.axisName
     for (const [value] of Object.entries(shared.variationPictures.byValue)) {
       const matching = variants.filter(row => String(row[`aspect_${axis.replace(/ /g, '_')}`]) === value)
@@ -266,7 +306,7 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
   }
   shared.policies = { fulfillmentPolicyId: shared.policies?.fulfillmentPolicyId ?? defaults.fulfillmentPolicyId,
     paymentPolicyId: shared.policies?.paymentPolicyId ?? defaults.paymentPolicyId, returnPolicyId: shared.policies?.returnPolicyId ?? defaults.returnPolicyId }
-  if (parentListing && object(parentListing.platformAttributes)._mediaGalleryDraft !== undefined) {
+  if (!built.media && parentListing && object(parentListing.platformAttributes)._mediaGalleryDraft !== undefined) {
     const axes = shared.variationSpecificNames.map(name => ({ name, key: name, label: name, values: shared.variationSpecificsSet?.[name] ?? [] }))
     const gallery = await readEbayMediaGallery(parent.id, { axes, axesVerified: true, destination: { ...facts.destination, productId: parent.id,
       listing: { id: parentListing.id, productId: parent.id, aliasKey: parentListing.aliasKey, version: parentListing.version } } })
