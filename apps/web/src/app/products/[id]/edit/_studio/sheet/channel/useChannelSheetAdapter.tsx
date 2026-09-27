@@ -24,6 +24,7 @@ import { ProductRoleChip } from '../ProductRoleChip';
 import { formulaTransfer, type CellEditorContext } from '@/design-system/grid';
 import { historyLoaderFor, inheritedContextOf } from '../cellEditorContext';
 import { SchemaStatus } from './SchemaStatus';
+import { rulesStatus } from './rulesStatus';
 import { channelLabel, languageLabel } from '../../scopes';
 import { buildCompareTargets } from '../compareTargets';
 import { sheetEmptyState } from '../sheetGridStates';
@@ -827,14 +828,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
             loading: loading,
             unavailable: unavailable,
-            overflow: [liveRead.menuItem, { id: 'requirements', label: data?.meta.schemaMissing.length ? 'Requirements incomplete…' : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
-            status: data ? [{
-                tone: data.meta.schemaMissing.length ? 'warning' : 'neutral',
-                label: data.meta.schemaMissing.length ? 'Requirements incomplete' : 'Requirements',
-                detail: data.meta.schemaMissing.length
-                    ? `Incomplete: ${data.meta.schemaMissing.map(key => key === 'ETSY:*' ? 'Etsy category not selected' : key === SHOPIFY_FIELDS_UNREAD ? 'Shopify store fields still loading' : key.replace(/^ETSY:/, 'Etsy category ')).join(', ')}. Readiness cannot be confirmed until these requirements are available.`
-                    : 'Requirements depend on the listing category and marketplace. Refresh them after changing categories and before publishing.',
-            }] : [],
+            overflow: [liveRead.menuItem, { id: 'requirements', label: data ? `${rulesStatus(channel, marketplace, data.meta.schemaMissing).label}…` : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+            // 2026-09-27 — one wording for the chip, the dialog and the empty grid (`rulesStatus`).
+            status: data ? [(({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing))] : [],
         },
         toolbarExtra: <>    {liveRead.element}{pendingMasterWrite && (() => {
                 const pm = pendingMasterWrite;
@@ -936,7 +932,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             columnDialog: columnDialog,
         },
         gridOverlay: <>    {!loading && data && data.meta.schemaMissing.length > 0 && sheetColumns.landed && sheetColumns.visibleAttributeKeys().length === 0 && (<div className="cs-contract-empty" style={{ left: bandWidth }} role="status">
-          <EmptyState title="Requirements incomplete" description={`${channelLabel(channel)} · ${marketplace}: ${data.meta.schemaMissing.join(', ')} contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.`}/>
+          <EmptyState title={rulesStatus(channel, marketplace, data.meta.schemaMissing).label} description={rulesStatus(channel, marketplace, data.meta.schemaMissing).detail}/>
         </div>)}</>,
         drawer: data && !unavailable ? {
             resolveRow: (id) => rows.find((r) => r.rowId === id) ?? null,
@@ -955,7 +951,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         } : null,
         preferences: !unavailable ? preferences : null,
         before: null, beforePreferences: <>{data && <>
-              <SchemaStatus open={requirementsOpen} onClose={() => setRequirementsOpen(false)} channel={channel} market={marketplace} accountId={accountId} categories={[...new Set(rows.map(row => row.productType).filter((v): v is string => !!v))]} missing={data.meta.schemaMissing} ages={data.meta.schemaAge} onRefreshed={reload}/>
+              <SchemaStatus open={requirementsOpen} onClose={() => setRequirementsOpen(false)} channel={channel} market={marketplace} accountId={accountId} categories={[...new Set(rows.map(row => row.productType).filter((v): v is string => !!v))]} missing={data.meta.schemaMissing} downloadable={rulesStatus(channel, marketplace, data.meta.schemaMissing).downloadable} differences={(data.meta.coverage ?? []).flatMap(c => c.marketDifference ? [{ category: c.category, ...c.marketDifference }] : [])} ages={data.meta.schemaAge} onRefreshed={reload}/>
               
               {preflightAlias && (<Modal open onClose={() => {
                         if (!reviewBusy)

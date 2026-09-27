@@ -214,6 +214,40 @@ export interface SheetSpecCoverage {
   columns: number
   fetchedAt: string | null
   unrecognised: string[]
+  /**
+   * 2026-09-27 — Amazon asks for slightly different fields per country (DE adds its RRP and an eco fee and has no
+   * GHS; UK has no `image_locator_ps*` slots). Measured against the fields MOST cached Amazon markets declare for
+   * the same product type, so no market is the reference. Absent when fewer than two other markets are cached.
+   */
+  marketDifference?: SheetMarketDifference
+}
+
+export interface SheetMarketDifference {
+  /** The other Amazon markets whose cached rules were compared. */
+  comparedWith: string[]
+  /** Fields this market declares that most markets do not. */
+  onlyHere: Array<{ key: string; label: string }>
+  /** Fields most markets declare that this market does not. */
+  missingHere: Array<{ key: string; label: string }>
+}
+
+/**
+ * PURE — this market's top-level fields against the fields declared by MORE THAN HALF of all the markets compared
+ * (this one included). Two markets alone cannot say which of them is the odd one, so it needs two others.
+ */
+export function marketDifference(own: string[], others: Array<{ market: string; keys: string[] }>, label: (key: string) => string): SheetMarketDifference | undefined {
+  if (others.length < 2) return undefined
+  const all = [own, ...others.map((o) => o.keys)]
+  const count = new Map<string, number>()
+  for (const keys of all) for (const k of new Set(keys)) count.set(k, (count.get(k) ?? 0) + 1)
+  const common = new Set([...count].filter(([, n]) => n * 2 > all.length).map(([k]) => k))
+  const mine = new Set(own)
+  const named = (keys: string[]) => keys.sort().map((key) => ({ key, label: label(key) }))
+  return {
+    comparedWith: others.map((o) => o.market).sort(),
+    onlyHere: named([...mine].filter((k) => !common.has(k))),
+    missingHere: named([...common].filter((k) => !mine.has(k))),
+  }
 }
 
 export interface SheetColumnSet {
@@ -1475,6 +1509,22 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   }
   for (const cov of coverage) {
     cov.columns = columns.filter((c) => c.channels?.[cov.coordinate]?.categories.includes(cov.category)).length
+  }
+  // 2026-09-27 — the Amazon scope names how this market's rules differ from most markets'. Cache only, and never with
+  // an account: without one `loadAmazonSpec` cannot fall through to a provider read, whatever scope this runs in.
+  if (scopeKind === 'channel') {
+    const amazonMarkets = [...new Set(marketplaceRows.filter((m) => String(m.channel).toUpperCase() === 'AMAZON' && m.isActive !== false).map((m) => String(m.code).toUpperCase()))]
+    for (const cov of coverage.filter((c) => c.channel === 'AMAZON' && c.category !== '*')) {
+      const own = specs.find((s) => s.coordinate.label === cov.coordinate && s.spec.category === cov.category)?.spec
+      if (!own) continue
+      const others: Array<{ market: string; keys: string[] }> = []
+      for (const other of amazonMarkets.filter((m) => m !== market)) {
+        const spec = await loadAmazonSpec(other, cov.category)
+        if (!spec.absent) others.push({ market: other, keys: Object.keys(spec.coverage) })
+      }
+      const diff = marketDifference(Object.keys(own.coverage), others, (key) => englishLabels.get(normaliseKey(key)) ?? humanizeKey(key))
+      if (diff) cov.marketDifference = diff
+    }
   }
   const value: SheetColumnSet = { market, locale, coordinates, productTypes, columns, groups, droppedKeys, schemaMissing, schemaAge, coverage, availableMarkets, coordinatesNotListed }
   if (!lacksShopifyStoreFields(value)) columnSetCache.set(cacheKey, { at: Date.now(), value })
