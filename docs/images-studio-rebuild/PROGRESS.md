@@ -54,7 +54,29 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **Library duplicates (Owner, 2026-09-28: "multiple duplicates of the same image … I do not want that to happen ever"):**
   researched; Fix 1 **MERGED #123** (`03db635e2`) — one card per picture, copies count as the same photo, family-wide upload check, and the
   four older per-SKU copy writers stop for plan families. Record and next step: [LIBRARY-DUPLICATES.md](LIBRARY-DUPLICATES.md).
-- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare = PR #125; P4b Upload photos built (below).
+- **P4 — in progress:** plan [P4-PLAN.md](P4-PLAN.md). P4a Compare MERGED #125 (`aea9ee33f`); P4b Upload photos MERGED #126 (`5b24fef76`); P4c Review & publish photos = PR (below).
+
+## P4c — Review & publish photos
+- **The rule that blocked GALE-JACKET's photos, changed:** a change-only review whose errors all name a field (an
+  off-list Season value) is now saved with `photosOnly`; a selection of photo fields only (`pictures`, `Pictures`,
+  `variationPictures`) is sent, any other selection is refused (422, "Choose only photos, or fix them first"). An error
+  that names no field (account, paused listing, the photo plan's own checks) still blocks everything. One shared rule,
+  `blockingIssues` (`packages/shared/src/studio-publication.ts`), used by preview, selection, submit and the studio's
+  Publish window (which now ticks only photo rows on such a review and says why the others are locked).
+- **The window** (`plan-page/PublishPhotosDialog.tsx`, toolbar **Review & publish**, also from the upload's Done): every
+  destination is checked against its channel first — eBay (Trading and Inventory) by the studio publication review of
+  that listing (a fresh read of eBay), Amazon by an image run's review (image attributes only, one run per account through
+  its first listed market). Each line: Ready / No change / Fix first / Not here, and what would change ("Gallery: will be
+  replaced · Colour sets: same on eBay"; "3 SKUs · 7 photo slots change"). Only ticked, ready destinations are sent, one
+  at a time, each with its channel's answer (eBay read-back; Amazon receipts). Shopify is not sent here (its publish is
+  the whole product); Etsy is P5. "Only photos are sent. Titles, prices and stock are not touched."
+- **Change to the plan:** no new `/media/publish/*` server orchestrator — the window drives the channels' existing
+  review → selection → submit routes, which already hold the plan-revision binding, the idempotency and the read-back.
+- **Checked:** server tests 30 (2 new: a field error does not block a photos-only send and refuses any other field; an
+  error without a field still blocks — a deliberate break of the submit rule fails the test); shared rule 3; page model
+  4; studio web suite 164 files / 2,144 tests. Local stack (test channels have no logins, test listings are not live):
+  every line says why it cannot be sent (Amazon: no ASIN yet; eBay: Category required) — the real send is the first
+  production proof, with the Owner's word per send.
 
 ## P4b — Upload photos
 - **Open:** toolbar **Upload photos**, the **U** key, or files dropped anywhere on the page (a dashed outline shows the

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { blockingIssues, isPhotoChangeId, type StudioPublishResult, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { Button, Select } from '@/design-system/primitives'
 import { Banner, Disclosure, Field, Modal, ProgressBar } from '@/design-system/components'
 import { usePermission } from '@/lib/auth/AuthProvider'
@@ -62,7 +62,7 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
       if (controller.signal.aborted) return
       if (!matchesPublicationReview(data, product.id, scope)) throw new Error('The review does not match this product and destination. Refresh the review.')
       setReview(data)
-      setSelectedIds(data.changes?.filter(c => c.selectable && c.selectedByDefault).map(c => c.id) ?? [])
+      setSelectedIds(data.changes?.filter(c => c.selectable && c.selectedByDefault && (!data.photosOnly || isPhotoChangeId(c.id))).map(c => c.id) ?? [])
       if (data.previousPublicationId) setUncertain(true)
       if (data.locations?.length === 1) setLocationId(data.locations[0].id)
     }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e)) })
@@ -121,7 +121,8 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { sending.current = false; setBusy(null) }
   }
-  const blockers = review?.issues.filter(i => i.severity === 'error') ?? []
+  // P4c — on a photos-only review, other fields' problems block only a selection that includes them.
+  const blockers = review ? blockingIssues(review.issues, review.photosOnly ? selectedIds : undefined) : []
   const pending = busy === 'publish' || busy === 'status'
   const canSend = currentReview && !!review?.id && !busy && !blockedSave && canPublish && !blockers.length && !result && !uncertain
     && (!review.locations || review.locations.some(l => l.id === locationId))
@@ -153,10 +154,10 @@ export function PublishDialog({ onClose }: { onClose(): void }) {
         <p>{review.rows.length} {review.rows.length === 1 ? 'product reviewed' : 'products reviewed'}{review.excluded ? ` · ${review.excluded} excluded` : ''}{review.skipped?.length ? ` · ${review.skipped.length} skipped` : ''}.</p>
         {review.visibility && <Banner tone="info" title={`Shopify visibility: ${review.visibility}`}>The saved status and sales-channel selections will be applied.</Banner>}
         {review.locations && <Field label="Inventory location"><Select size="sm" disabled={pending || uncertain || !!result} value={locationId} onChange={e => setLocationId(e.target.value)}><option value="">Choose a location</option>{review.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>}
-        {review.issues.length > 0 && <Banner tone={blockers.length ? 'warning' : 'info'} title={blockers.length ? `${blockers.length} ${blockers.length === 1 ? 'issue' : 'issues'} to resolve before publishing` : 'Review notes'}>
+        {review.issues.length > 0 && <Banner tone={blockers.length || review.photosOnly ? 'warning' : 'info'} title={review.photosOnly ? 'Other fields have problems — only photos can be sent now' : blockers.length ? `${blockers.length} ${blockers.length === 1 ? 'issue' : 'issues'} to resolve before publishing` : 'Review notes'}>
           <ul className={styles.issues}>{review.issues.map((issue, i) => <li key={i}>{issue.sku && <strong>{issue.sku}: </strong>}{issue.message}</li>)}</ul>
         </Banner>}
-        {sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={chooseFields} disabled={!review.id || !!busy || uncertain || !!result} />}
+        {sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={chooseFields} disabled={!review.id || !!busy || uncertain || !!result} photosOnly={review.photosOnly} />}
         {sparse && !review.changes && <Banner tone="warning" title="Field review unavailable">Refresh this review after the server update before publishing.</Banner>}
         {selectedReview && <div ref={selectionPreview} tabIndex={-1} role="region" aria-label="Selected publication request"><Banner tone="info" title="Selected request ready">
           <p>{selectedReview.fieldCount} {selectedReview.fieldCount === 1 ? 'change' : 'changes'} affecting {selectedReview.products.length} {selectedReview.products.length === 1 ? 'product' : 'products'}.</p>
