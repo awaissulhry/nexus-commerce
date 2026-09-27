@@ -27,6 +27,7 @@ const channelListingFindMany = vi.fn()
 const channelListingFindUnique = vi.fn()
 const channelListingUpdate = vi.fn()
 const channelListingUpsert = vi.fn()
+const channelListingUpdateMany = vi.fn()
 const bulkOperationCreate = vi.fn()
 const executeRaw = vi.fn()
 const $transaction = vi.fn()
@@ -46,6 +47,7 @@ vi.mock('../db.js', () => {
       findUnique: (...a: unknown[]) => channelListingFindUnique(...a),
       update: (...a: unknown[]) => channelListingUpdate(...a),
       upsert: (...a: unknown[]) => channelListingUpsert(...a),
+      updateMany: (...a: unknown[]) => channelListingUpdateMany(...a),
     },
     cellFormula: { findMany: (...a: unknown[]) => cellFormulaFindMany(...a) },
     bulkOperation: { create: (...a: unknown[]) => bulkOperationCreate(...a) },
@@ -93,7 +95,7 @@ afterAll(async () => { await app.close() })
 
 beforeEach(() => {
   for (const m of [productFindMany, productFindUnique, productUpdate, productUpdateMany,
-    channelListingFindMany, channelListingFindUnique, channelListingUpdate, channelListingUpsert,
+    channelListingFindMany, channelListingFindUnique, channelListingUpdate, channelListingUpsert, channelListingUpdateMany,
     bulkOperationCreate, executeRaw, $transaction, cellFormulaFindMany, reevaluate]) m.mockReset()
   $transaction.mockResolvedValue([])
   bulkOperationCreate.mockResolvedValue({ id: 'bulk_test' })
@@ -101,6 +103,7 @@ beforeEach(() => {
   channelListingFindUnique.mockResolvedValue({ version: 19 })
   productUpdate.mockReturnValue({ __stmt: 'product.update' })
   channelListingUpsert.mockReturnValue({ __stmt: 'listing.upsert' })
+  channelListingUpdateMany.mockReturnValue({ __stmt: 'listing.updateMany' })
   productFindMany.mockResolvedValue([
     { id: PRODUCT_ID, manufacturer: null, version: 26, categoryAttributes: {} },
   ])
@@ -122,6 +125,8 @@ const patch = (headers?: Record<string, string>) =>
 
 describe('the bulk route READS the formula-cascade header', () => {
   it.each(['account-a', 'account-b'])('recalculates only the edited account coordinate: %s', async accountId => {
+    // The account's listing exists (a missing one is started by the draft step, covered on PostgreSQL elsewhere).
+    channelListingFindMany.mockResolvedValue([{ id: 'listing_1', productId: PRODUCT_ID, channel: 'EBAY', marketplace: 'IT', aliasKey: '', channelConnectionId: accountId, quantity: 100, overrideData: {}, version: 19 }])
     const res = await app.inject({ method: 'PATCH', url: '/products/bulk', payload: {
       changes: [{ id: PRODUCT_ID, field: 'ebay_quantity', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId }],

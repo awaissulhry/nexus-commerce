@@ -23,6 +23,8 @@ import { completeAxisValueOrder } from './shared-variation-values.js'
  * whether a family member is INCLUDED on a coordinate.
  */
 import prisma from '../../db.js'
+import { activeDatabaseTransaction, inDatabaseTransaction } from '../../lib/database-context.js'
+import { ensureDraftListings } from './draft-listing.service.js'
 // VT.1 — MOVED to a leaf so the SHEET can read the exclusion set without importing this module (which imports
 // `studio-sheet.service.ts`, so the import would close a cycle and hand back a half-built module). Re-exported here
 // because this module's existing callers import it from here.
@@ -1788,6 +1790,19 @@ export async function writeProjectionMapping(input: MappingWriteInput): Promise<
   if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new ProjectionRequestError('An observed listing version is required.')
   if (current.version !== input.expectedVersion) throw new ProjectionConflictError('version_conflict', 'This listing changed after you opened the mapping. Reload it.', { current })
   if (input.reset && (input.theme !== undefined || input.mapping !== undefined || input.presentationOrder !== undefined)) throw new ProjectionRequestError('Send reset on its own.')
+  // Product-sheet create path, step 4 (D1 = A) — token 0 on a coordinate with no parent row ("I saw no listing"): the
+  // family's draft (parent and variants, `ensureDraftListings`) is started inside this write's own Serializable
+  // transaction, and the theme or mapping then lands on the new parent draft through the path below, validated
+  // against the variants the draft includes. A save that finds the draft already started by someone else lost a race
+  // it never saw: a version conflict, never a write over the winner's theme. A reset has nothing to reset here.
+  if (current.parent.listing.listingId === null && !input.reset) {
+    return inDatabaseTransaction(prisma, async () => {
+      const [parent] = await ensureDraftListings(activeDatabaseTransaction()!, { channel, market, accountId: current.coordinate.accountId,
+        aliasKey: current.coordinate.aliasKey, productIds: [current.parent.id], family: true })
+      if (!parent.created) throw new ProjectionConflictError('version_conflict', 'Another edit started this listing first. Reload before saving.')
+      return writeProjectionMapping({ ...input, expectedVersion: parent.version })
+    }, { isolationLevel: 'Serializable' })
+  }
   if (input.presentationOrder && (channel !== 'EBAY' || typeof input.presentationOrder.expectedToken !== 'string' || !input.presentationOrder.expectedToken || !input.presentationOrder.change)) throw new ProjectionRequestError('Reload the eBay presentation order before saving.')
   let requested = input.reset ? undefined : input.mapping ?? current.mapping.filter(m => m.target).map((m, order) => ({ axisKey: m.axisKey, target: m.target!, order }))
   if (requested) {
@@ -1886,7 +1901,8 @@ export interface InclusionResult {
  *  - INCLUDE clears `variationExcluded` and nothing else. Raising `isPublished` could make a row eligible for
  *    an outbound sweep, so a tick can never restore publishing — that stays the explicit Publish action.
  *
- * A row that does not exist yet is CREATED as a local draft. It is born `syncPaused: true` because
+ * A row that does not exist yet is CREATED as a local draft (`ensureDraftListings` on the primary listing). It is born
+ * `syncPaused: true` because
  * `cascadeQuantityToListings` selects every listing of a product with no status filter at all, and Amazon's
  * dispatch PATCHes by SKU rather than by external id — so without the pause a new row would join the next
  * stock movement's quantity push. `syncPaused` is checked at BOTH the enqueue and the dispatch layer, and is
@@ -1959,11 +1975,19 @@ export async function writeProjectionInclusion(input: InclusionWriteInput): Prom
     if (fresh) {
       const guarded = await tx.channelListing.updateMany({ where: { id: fresh.id, version: input.expectedVersion }, data: { version: { increment: 1 } } })
       if (guarded.count !== 1) throw new ProjectionConflictError('version_conflict', 'Another change won this listing. Reload and review it again.')
-    } else {
+    }
+    if (!aliasKey) {
+      // Product-sheet create path, step 4 — the missing parent and every ticked variant with no row are started by the
+      // one creator, and exactly those (`family: false`): a tick names what it includes, and absence is exclusion.
+      const missing = [...(fresh ? [] : [root.id]), ...toCreate]
+      if (missing.length > 0) await ensureDraftListings(tx, { channel, market, accountId: before.coordinate.accountId, productIds: missing, family: false })
+    } else if (!fresh) {
+      // A non-primary alias keeps its own creates: `ensureDraftListings` never adds a row to an alias listing ("an edit
+      // never creates an alias listing"), and on an alias a tick includes a variant precisely by creating its row.
       await tx.channelListing.create({ data: { productId: root.id, channel, marketplace: market, channelConnectionId: before.coordinate.accountId,
         region: market, channelMarket: `${channel}_${market}`, aliasKey, aliasId: aliasKey || null, listingStatus: 'DRAFT', isPublished: false, syncPaused: true } })
     }
-    if (toCreate.length > 0) {
+    if (aliasKey && toCreate.length > 0) {
       await tx.channelListing.createMany({
         data: toCreate.map((productId) => ({
           productId,

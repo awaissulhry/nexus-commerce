@@ -214,8 +214,13 @@ export const VT_COPY = {
     `Live on eBay ${site} (item ${id}) — changing the set relists it. Reordering does not.`,
   genericLock: (channelName: string, market: string, id: string) =>
     `Live on ${channelName} ${market} (${id}) — changing the set is an operation. Commit opens the plan.`,
-  noListingHere: (channelName: string, market: string) =>
-    `This family has no ${channelName} listing on ${market}, so there is nothing to project yet.`,
+  /** No listing here yet (product-sheet create path, step 4): the first save starts the coordinate's draft. */
+  draftNote: (channelName: string, market: string) => `Saved to the ${channelName} · ${market} draft. Publish sends it.`,
+  /** The draft creator's own refusal (`ensureDraftListings`), word for word, so the cell and the save agree. */
+  connectAccount: (channelName: string, market: string) =>
+    `Connect ${/^[aeiou]/i.test(channelName) ? 'an' : 'a'} ${channelName} account before listing on ${market}.`,
+  aliasNoListing: (channelName: string, market: string) =>
+    `This listing alias has no ${channelName} · ${market} listing. An edit never creates an alias listing.`,
   ebayNoCategory: (market: string) =>
     `This eBay ${market} listing has no category yet, so its variation specifics cannot be read.`,
   notASiteAspect:
@@ -513,6 +518,12 @@ function resolveMaster(input: ResolveVariationInput): VariationThemeCell {
 function channelShell(input: ResolveVariationInput): VariationThemeCell {
   const channel = String(input.coordinate.channel ?? '').toUpperCase()
   const noListing = !input.listing
+  // Product-sheet create path, step 4 (D1 = A) — with no listing here the theme is still writable: its first save
+  // (token 0 = "I saw no listing") starts the family's draft on this coordinate and lands on the new parent draft.
+  // Only the primary listing is started, and only with an account to start it under.
+  const blockedReason = !noListing ? null
+    : input.coordinate.aliasKey ? VT_COPY.aliasNoListing(channelDisplayName(channel), input.coordinate.market)
+      : !input.coordinate.accountId ? VT_COPY.connectAccount(channelDisplayName(channel), input.coordinate.market) : null
   return {
     axes: [],
     theme: null,
@@ -526,15 +537,16 @@ function channelShell(input: ResolveVariationInput): VariationThemeCell {
     /* Filled by each channel branch once it knows what it delivers — `applyAddableAxes` at the end of
        each resolver, so no branch can forget it and no branch computes its own list. */
     addableAxes: [],
-    write: noListing ? null : {
+    write: blockedReason ? null : {
       endpoint: 'projection',
-      expectedVersion: input.listing!.version,
+      expectedVersion: input.listing?.version ?? 0,
       aliasKey: input.coordinate.aliasKey ?? '',
       coordinate: { channel, market: input.coordinate.market, accountId: input.coordinate.accountId ?? null },
     },
-    ...(channel === 'ETSY' ? { deliveryNote: 'Saved as a Nexus draft. Publishing Etsy variation properties is not available yet.' } : {}),
-    writable: !noListing,
-    writeBlockedReason: noListing ? VT_COPY.noListingHere(channelDisplayName(channel), input.coordinate.market) : null,
+    ...(channel === 'ETSY' ? { deliveryNote: 'Saved as a Nexus draft. Publishing Etsy variation properties is not available yet.' }
+      : noListing && !blockedReason ? { deliveryNote: VT_COPY.draftNote(channelDisplayName(channel), input.coordinate.market) } : {}),
+    writable: !blockedReason,
+    writeBlockedReason: blockedReason,
     vocabulary: input.vocabulary,
     separator: separatorFor(channel),
   }

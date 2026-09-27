@@ -28,6 +28,8 @@ vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: vi.fn()
 vi.mock('./studio-publication-ebay-changes.js', () => ({ prepareEbayChanges: vi.fn(), compileEbayChanges: vi.fn() }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: async () => ({ initialized: true }), saveContentWorkspace: vi.fn() }))
 vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: m.shopPreview, synchronizeContent: m.shopSend }))
+// Publish starts missing rows through the one creator (`ensureDraftListings`); its own rules run on PostgreSQL.
+vi.mock('./draft-listing.service.js', () => ({ ensureDraftListings: async () => [] }))
 vi.mock('../../db.js', () => {
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   const matches = (row: any, where: any) => (!where.id || (typeof where.id === 'string' ? row.id === where.id : row.id !== where.id.not))

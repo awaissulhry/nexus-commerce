@@ -9,6 +9,7 @@ import prisma from '../../db.js'
 import { axisSynonymKey } from '../ebay-theme-axes.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
+import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
 
 /** A draft only. Existing publishers must not interpret it as live image evidence. */
 export const EBAY_MEDIA_DRAFT_KEY = '_mediaGalleryDraft'
@@ -104,7 +105,8 @@ export async function saveEbayMediaGallery(productId: string, input: unknown, co
   const expectedRevision = (input as { expectedRevision?: unknown } | null)?.expectedRevision
   if (!parsed.success || typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(expectedRevision))
     throw new WorkspaceScopeError('A valid gallery and its observed revision are required.', 400)
-  if (!context.destination.listing) throw new WorkspaceScopeError('Choose a listing before saving its gallery.', 422)
+  // No listing selected: only the PRIMARY listing may be started here (below), never an arbitrary alias.
+  if (!context.destination.listing && context.destination.aliasKey) throw new WorkspaceScopeError('Choose a listing before saving its gallery.', 422)
   try {
     return await prisma.$transaction(async tx => {
       const current = await read(tx, productId, context)
@@ -124,12 +126,22 @@ export async function saveEbayMediaGallery(productId: string, input: unknown, co
       const stored: z.infer<typeof storedSchema> = { version: 1, axis: draft.axis, galleries: draft.galleries.map(g => ({ axis: g.axis, value: g.value,
         images: g.assetIds.map(id => { const { url, label, width, height } = byId.get(id)!; return { url, label, width, height } }),
       })) }
-      const listing = current.listing!
+      // Product-sheet create path, step 5 — no listing on this coordinate yet: the save starts the primary listing's draft
+      // (the family's parent and variants, `ensureDraftListings`) in this transaction and stores the gallery on it.
+      let destination = context.destination
+      let listing = current.listing
+      if (!listing) {
+        const started = await ensureDraftListings(tx, { channel: 'EBAY', market: destination.marketplace, accountId: destination.accountId, productIds: [productId], family: true })
+          .catch(error => { throw error instanceof DraftListingError ? new WorkspaceScopeError(error.message, error.statusCode) : error })
+        const own = started.find(row => row.productId === productId)!
+        listing = { id: own.id, version: own.version, platformAttributes: null }
+        destination = { ...destination, aliasKey: '', listing: { id: own.id, productId, aliasKey: '', version: own.version } }
+      }
       const result = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version,
-        productId, channel: 'EBAY', marketplace: context.destination.marketplace, channelConnectionId: context.destination.accountId, aliasKey: context.destination.aliasKey ?? '',
+        productId, channel: 'EBAY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '',
       }, data: { platformAttributes: { ...object(listing.platformAttributes), [EBAY_MEDIA_DRAFT_KEY]: stored } as Prisma.InputJsonValue, version: { increment: 1 } } })
       if (result.count !== 1) throw new WorkspaceScopeError('This listing changed during the save. Reload before trying again.')
-      return read(tx, productId, context)
+      return read(tx, productId, { ...context, destination })
     }, { isolationLevel: 'Serializable', timeout: 20_000 })
   } catch (error) {
     if ((error as { code?: string }).code === 'P2034') throw new WorkspaceScopeError('Another save overlapped this one. Your edits are still here. Reload before trying again.')
@@ -181,6 +193,8 @@ export async function ebayMediaWorkspace(productId: string, input: { market?: st
   }
   const context = { destination, axes, axesVerified }
   const data = method === 'GET' ? await readEbayMediaGallery(productId, context) : await saveEbayMediaGallery(productId, body, context)
+  // The save started this coordinate's listing: answer as that listing's workspace, so the editor adopts it at once.
+  if (method === 'PUT' && !destination.listing && data.listing) return ebayMediaWorkspace(productId, { market: destination.marketplace, accountId: destination.accountId, listingId: data.listing.id }, 'GET')
   const names = [...axes.map(a => a.name), ...data.draft.galleries.flatMap(g => g.axis ? [g.axis] : []), ...(data.draft.axis ? [data.draft.axis] : [])]
   const axisLabels = Object.fromEntries(names.map(name => [name, label(name)]))
   const otherImageCount = await prisma.listingImage.count({ where: { productId, platform: 'EBAY', NOT: ebayGalleryWhere(productId) } })
