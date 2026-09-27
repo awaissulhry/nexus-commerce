@@ -42,7 +42,7 @@ beforeAll(() => scoped(async () => {
 }), 60_000)
 afterAll(async () => { await state.db?.close() })
 
-type ListingSeed = { channel?: 'AMAZON' | 'EBAY'; marketplace: string; live: boolean; paused: boolean; status?: string; quantity?: number | null; price?: number | null }
+type ListingSeed = { channel?: 'AMAZON' | 'EBAY'; marketplace: string; live: boolean; paused: boolean; status?: string; published?: boolean; quantity?: number | null; price?: number | null }
 /** A live listing has a channel id and is published; a draft has neither (the Variants tick's recipe when paused). */
 async function seed(sku: string, listings: ListingSeed[], product: { stock?: number; status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE' } = {}) {
   const created = await prisma.product.create({ data: { sku, name: sku, basePrice: 10, status: product.status ?? 'ACTIVE', fulfillmentMethod: 'FBM', totalStock: product.stock ?? 0 } })
@@ -53,7 +53,7 @@ async function seed(sku: string, listings: ListingSeed[], product: { stock?: num
     rows[`${channel}_${l.marketplace}`] = await prisma.channelListing.create({ data: {
       productId: created.id, channel, marketplace: l.marketplace, region: l.marketplace, channelMarket: `${channel}_${l.marketplace}`,
       channelConnectionId: channel === 'AMAZON' ? amazon : ebay, aliasKey: '', fulfillmentMethod: 'FBM',
-      listingStatus: l.status ?? (l.live ? 'ACTIVE' : 'DRAFT'), isPublished: l.live, externalListingId: l.live ? `FIXTURE-${sku}-${l.marketplace}` : null,
+      listingStatus: l.status ?? (l.live ? 'ACTIVE' : 'DRAFT'), isPublished: l.published ?? l.live, externalListingId: l.live ? `FIXTURE-${sku}-${l.marketplace}` : null,
       syncPaused: l.paused, followMasterQuantity: true, followMasterPrice: true,
       quantity: l.quantity === undefined ? (l.live ? 5 : null) : l.quantity, price: l.price === undefined ? (l.live ? 10 : null) : l.price,
     } as never })
@@ -142,6 +142,16 @@ describe('a product status change leaves a still-draft listing alone', () => {
     expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
     expect(await stored(rows.AMAZON_IT.id)).toMatchObject({ listingStatus: 'INACTIVE' })
     expect(await stored(rows.AMAZON_SE.id)).toMatchObject({ listingStatus: 'DRAFT', version: rows.AMAZON_SE.version })
+  }))
+
+  it('also skips a DRAFT row a creator left isPublished: true — it has not reached the channel either (broader than the Publish rule)', () => scoped(async () => {
+    const { product, rows } = await seed('DRAFT-SAFETY-STATUS-PUB', [
+      { marketplace: 'IT', live: true, paused: false, status: 'INACTIVE' },
+      { marketplace: 'SE', live: false, paused: false, published: true },
+    ], { status: 'INACTIVE' })
+    const result = await new MasterStatusService(prisma as never).update(product.id, 'ACTIVE', { reason: 'draft-safety' })
+    expect(result.cascadedListingIds).toEqual([rows.AMAZON_IT.id])
+    expect(await stored(rows.AMAZON_SE.id)).toMatchObject({ listingStatus: 'DRAFT', isPublished: true, version: rows.AMAZON_SE.version })
   }))
 
   it('keeps flipping a DRAFT row that has a channel id — it has reached the channel, so it is not a still-draft', () => scoped(async () => {

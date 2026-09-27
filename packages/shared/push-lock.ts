@@ -34,3 +34,39 @@ export function assertPushAllowed(listing: PushLockListing | null | undefined): 
   }
   return null
 }
+
+/** The facts that say whether a listing is still a Nexus draft. */
+export interface DraftListingFacts {
+  listingStatus?: string | null
+  isPublished?: boolean | null
+  externalListingId?: string | null
+}
+
+/**
+ * A still-draft listing, as a database filter: DRAFT, never marked published, and no channel id. The same rule as
+ * `isStillDraftListing`, for a `where` — a push-lock test pins that the two agree.
+ */
+export const STILL_DRAFT_LISTING = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null } as const
+
+/**
+ * THE rule for "this listing is still a Nexus draft": it has never been published to the channel. Publish may send
+ * it while it is paused, and a channel's acceptance turns it live (published, ACTIVE, unpaused). Anything else — a
+ * live listing, a DRAFT row a creator left `isPublished: true`, a row with a channel id — is not a still-draft, and a
+ * missing fact counts as "not a draft", so the pause keeps holding it.
+ */
+export function isStillDraftListing(listing: DraftListingFacts | null | undefined): boolean {
+  return !!listing && listing.listingStatus === STILL_DRAFT_LISTING.listingStatus
+    && listing.isPublished === STILL_DRAFT_LISTING.isPublished && listing.externalListingId == null
+}
+
+/**
+ * The lock for PUBLISH only (the studio review and the channel publishers it drives). A still-draft's pause is what
+ * keeps the draft inert — no cascade or dispatch sends it — not an operator's hold on a live listing, and Publish is
+ * the one action allowed to send a draft. So for a still-draft the pause is not a refusal here; every other lock
+ * (a closed offer, a Presence intent, an ended listing) still is. Any other paused listing is refused exactly as by
+ * `assertPushAllowed`, which every other caller keeps using: dispatch must go on refusing a paused draft.
+ */
+export function assertPublishAllowed(listing: (PushLockListing & DraftListingFacts) | null | undefined): PushRefusal | null {
+  if (listing?.syncPaused && isStillDraftListing(listing)) return assertPushAllowed({ ...listing, syncPaused: false })
+  return assertPushAllowed(listing)
+}

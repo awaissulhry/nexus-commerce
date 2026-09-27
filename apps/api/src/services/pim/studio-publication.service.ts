@@ -8,6 +8,7 @@ import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { readPublicationFacts, publicationDigest, object } from './studio-publication-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
+import { STILL_DRAFT_LISTING } from '@nexus/shared/push-lock'
 import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication, type AmazonPublication } from './studio-publication-amazon.js'
 import { prepareEbayPublication, sendEbayPublication, readEbayPublication, prepareEbayInventoryPublication, usesEbayInventory, type EbayPublication, type EbayInventoryPublication } from './studio-publication-ebay.js'
 import { prepareEbayInventoryChanges } from './studio-publication-ebay-inventory-changes.js'
@@ -51,8 +52,7 @@ async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: Publ
   select: { channelListingId: true } })
   if (!accepted.length) return
   await tx.channelListing.updateMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, channel: context.channel,
-    marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey,
-    listingStatus: 'DRAFT', isPublished: false, externalListingId: null },
+    marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey, ...STILL_DRAFT_LISTING },
   data: { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } })
 }
 
@@ -78,10 +78,15 @@ async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioP
   const warnings = [...new Set([...(previous.warnings ?? []), ...receipt.warnings])]
   if (!receipt.verified) return { ...previous, warnings, status: 'UNVERIFIED', message: `eBay acknowledged item ${reference}, but its active listing status could not be confirmed. Review the channel messages before publishing again.` }
   // Idempotent recovery after a receipt was stored but the local listing update failed.
-  await prisma.channelListing.updateMany({ where: { productId: { in: data.delivery.productIds }, channel: 'EBAY',
-    marketplace: data.scope.marketplace, channelConnectionId: data.scope.accountId, aliasKey: data.delivery.aliasKey,
+  const destination = { productId: { in: data.delivery.productIds }, channel: 'EBAY',
+    marketplace: data.scope.marketplace, channelConnectionId: data.scope.accountId, aliasKey: data.delivery.aliasKey }
+  const live = { externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE', version: { increment: 1 } } as const
+  // A still-draft becomes the live listing and loses the pause that kept it inert. It runs first: once promoted, a row
+  // no longer matches the second write, so no row is bumped twice. Any other row keeps its own pause.
+  await prisma.channelListing.updateMany({ where: { ...destination, ...STILL_DRAFT_LISTING }, data: { ...live, syncPaused: false } })
+  await prisma.channelListing.updateMany({ where: { ...destination,
     OR: [{ externalListingId: null }, { externalListingId: { not: reference } }, { isPublished: false }, { listingStatus: { not: 'ACTIVE' } }] },
-    data: { externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE', version: { increment: 1 } } })
+    data: live })
   const projected = await prisma.channelListing.count({ where: { productId: { in: data.delivery.productIds }, channel: 'EBAY',
     marketplace: data.scope.marketplace, channelConnectionId: data.scope.accountId, aliasKey: data.delivery.aliasKey,
     externalListingId: reference, isPublished: true, listingStatus: 'ACTIVE' } })

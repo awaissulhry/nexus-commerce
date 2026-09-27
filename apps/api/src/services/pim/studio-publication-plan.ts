@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { StudioPublishIssue, StudioPublishScope } from '@nexus/shared/studio-publication'
-import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { assertPublishAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
 import { resolveConnection } from '../connection-resolver.service.js'
 import { resolveWorkspaceDestination, WorkspaceScopeError } from './workspace-destination.js'
@@ -57,8 +57,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   for (const skip of skipped) issues.push({ ...skip, message: skip.reason, severity: 'warning' })
   if (included.length > 200) error('This family exceeds the publication limit of 200 products.')
   if (['disconnected', 'revoked', 'needs_reauth'].includes(account.authStatus)) error('Reconnect this account before publishing.')
+  // Publish's lock: a paused still-draft may be sent (Publish is what makes it live); any other paused listing is refused.
   for (const listing of listings.filter(l => included.some(p => p.id === l.productId))) {
-    const refusal = assertPushAllowed(listing)
+    const refusal = assertPublishAllowed(listing)
     if (refusal) error(refusal.sentence)
   }
   const languages = await marketLanguages(scope.channel, scope.marketplace)
