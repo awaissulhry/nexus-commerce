@@ -4,7 +4,6 @@ import { marketCurrency, marketCurrencyRows } from '../pim/market-currency.js'
 import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
 import { flatVariationMapping } from '@nexus/shared/variation-mapping'
 import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages.js'
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Step 9/10 — wizard state validation + Amazon listings payload
  * composition.
@@ -26,6 +25,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import type { PrismaClient } from '@nexus/database'
 import { primaryConnectionIds } from '../connection-resolver.service.js'
 import { sellableQuantity } from '../stock-pool/sync-ledgers.js'
+import { recordLiveListings, type LiveListingRow } from '../pim/live-listing.service.js'
+import { logger } from '../../utils/logger.js'
 
 export type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
 
@@ -1418,86 +1419,38 @@ export class SubmissionService {
   }): Promise<void> {
     const marketplace = args.marketplace.toUpperCase()
 
-    // Audit-fix #1 — upsert (not update) the parent ChannelListing. First-time
-    // publish to a new marketplace doesn't have a pre-existing ChannelListing
-    // row; the original update() crashed with P2025 and silently dropped the
-    // ASIN. The legacy `channelMarket` composite key is `<CHANNEL>_<REGION>`
-    // by Phase 9 convention; `region` mirrors `marketplace` for region-scoped
-    // channels. Schema defaults handle everything else.
-    // MAP.2b — resolved once for this publish; both the parent and every child
-    // upsert below use it, so a family lands wholly on one account.
+    // MAP.2b — resolved once for this publish, so a family lands wholly on one account: the primary, which
+    // is the account the wizard's SP-API client published through.
+    // Step 7 — the parent and every child are recorded through the one live-listing rule: the row is found
+    // AND created on the same coordinate (the old upsert created an unattributed row its own `where` could
+    // not find, so a second publish hit the unique key and dropped the ASIN), it is published and ACTIVE,
+    // and a still-draft loses the pause that kept it inert. A different stored ASIN is kept, never replaced.
     const wizardConn = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
-
-    await this.prisma.channelListing.upsert({
-      where: {
-        productId_channel_marketplace: workspaceKey({
-          productId: args.productId,
-          channel: 'AMAZON',
-          marketplace,
-          channelConnectionId: wizardConn,
-          // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
-          aliasKey: '',
-        }),
-      },
-      create: {
-        productId: args.productId,
-        channel: 'AMAZON',
-        marketplace,
-        region: marketplace,
-        channelMarket: `AMAZON_${marketplace}`,
-        externalParentId: args.parentAsin,
-        platformProductId: args.parentAsin,
-      },
-      update: {
-        externalParentId: args.parentAsin,
-        platformProductId: args.parentAsin,
-      },
-    })
-
-    const childMap = args.childAsinByMasterSku ?? {}
-    const skus = Object.keys(childMap)
-    if (skus.length === 0) return
 
     // TECH_DEBT #43.2 — child variants live on Product.parentId, not the
     // empty ProductVariation table. Per-marketplace child ASINs are
     // written to ChannelListing.externalListingId scoped to the child's
     // own productId (each child has its own ChannelListing rows).
-    const variants = await this.prisma.product.findMany({
+    const childMap = args.childAsinByMasterSku ?? {}
+    const skus = Object.keys(childMap)
+    const variants = skus.length === 0 ? [] : await this.prisma.product.findMany({
       where: { sku: { in: skus }, parentId: args.productId },
       select: { id: true, sku: true },
     })
 
-    await Promise.all(
-      variants.map((v) => {
-        const asin = childMap[v.sku]
-        if (!asin) return Promise.resolve()
-        return this.prisma.channelListing.upsert({
-          where: {
-            productId_channel_marketplace: workspaceKey({
-              productId: v.id,
-              channel: 'AMAZON',
-              marketplace,
-              channelConnectionId: wizardConn,
-              // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
-              aliasKey: '',
-            }),
-          },
-          create: {
-            productId: v.id,
-            channel: 'AMAZON',
-            marketplace,
-            region: marketplace,
-            channelMarket: `AMAZON_${marketplace}`,
-            externalListingId: asin,
-            platformProductId: asin,
-          },
-          update: {
-            externalListingId: asin,
-            platformProductId: asin,
-          },
-        })
-      }),
-    )
+    const rows: LiveListingRow[] = [
+      { productId: args.productId, listingStatus: 'ACTIVE', externalParentId: args.parentAsin, fields: { platformProductId: args.parentAsin } },
+      ...variants.filter((v) => childMap[v.sku]).map((v) => ({
+        productId: v.id, listingStatus: 'ACTIVE', externalListingId: childMap[v.sku], fields: { platformProductId: childMap[v.sku] },
+      })),
+    ]
+    const recorded = await this.prisma.$transaction((tx) => recordLiveListings(tx, { channel: 'AMAZON', market: marketplace, accountId: wizardConn as string, rows }))
+    const kept = recorded.filter((r) => r.keptExternalListingId || r.keptExternalParentId)
+    if (kept.length > 0) {
+      logger.warn('writeAsinsBack: a stored ASIN differs from the one Amazon reported — kept, not replaced', {
+        productId: args.productId, marketplace, kept: kept.map((r) => ({ productId: r.productId, ...r.keptExternalListingId && { asin: r.keptExternalListingId }, ...r.keptExternalParentId && { parentAsin: r.keptExternalParentId } })),
+      })
+    }
   }
 }
 

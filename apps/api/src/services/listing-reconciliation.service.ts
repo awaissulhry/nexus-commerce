@@ -29,6 +29,7 @@ import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { recordLiveListings } from './pim/live-listing.service.js'
 import { mergeCategoryAttributes } from './pim/category-attributes-write.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
@@ -509,15 +510,26 @@ export async function confirmReconRow(id: string, reviewedBy: string, coordinate
     if (existing?.listingStatus === 'ENDED' || ['ENDED', 'DISCONTINUED', 'RELEASED'].includes((existing as any)?.presenceIntent)) {
       throw new Error('RECON_RECREATE_REQUIRED: ended coordinates require an explicit recreate action')
     }
-    if (existing) await tx.channelListing.update({
-      where: { id: existing.id, ...where, listingStatus: existing.listingStatus, ...('presenceIntent' in existing ? { presenceIntent: existing.presenceIntent } : {}) },
-      data: { ...(row.parentAsin ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin } : {}), listingStatus: 'ACTIVE' },
+    // Step 7 — the one live-listing rule: an account is required (the channel reported this listing on one),
+    // the row is published and ACTIVE, and a still-draft loses its pause. The existing row keeps the ASINs it
+    // was confirmed with before (the parent ASIN when there is one); a new row takes the listing ASIN. A
+    // DIFFERENT stored ASIN is never replaced by a confirm: it is refused so the operator sees it.
+    if (reconConn === null) throw new Error('RECON_ACCOUNT_REQUIRED: choose the account this listing is live on')
+    const [recorded] = await recordLiveListings(tx, {
+      channel: coordinate.channel, market: coordinate.marketplace, accountId: reconConn, aliasKey: coordinate.aliasKey,
+      rows: [{
+        productId: coordinate.productId,
+        listingStatus: 'ACTIVE',
+        ...(existing
+          ? (row.parentAsin ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin } : {})
+          : { externalListingId: listingAsin, externalParentId: row.parentAsin ?? null,
+              createFields: { title: row.title ?? undefined, price: row.channelPrice ?? undefined, masterQuantity: row.channelQuantity ?? undefined } }),
+        // The status and intent this confirm was decided on must still hold when the row is written.
+        ...(existing ? { guard: { listingStatus: existing.listingStatus, ...('presenceIntent' in existing ? { presenceIntent: (existing as any).presenceIntent } : {}) } } : {}),
+      }],
     })
-    else await tx.channelListing.create({ data: {
-      ...where, channelMarket: `${row.channel}_${row.marketplace}`, region: row.marketplace,
-      externalListingId: listingAsin, externalParentId: row.parentAsin ?? null, listingStatus: 'ACTIVE',
-      title: row.title ?? undefined, price: row.channelPrice ?? undefined, masterQuantity: row.channelQuantity ?? undefined,
-    } })
+    const kept = recorded.keptExternalListingId ?? recorded.keptExternalParentId
+    if (kept) throw new Error(`RECON_ASIN_CONFLICT: this listing is linked to ${kept.stored}, not ${kept.offered}. Re-link it before confirming.`)
 
     // ── 2. Upsert VariantChannelListing (per-variation) ─────────────────
     // Only when this is a variation child with a known variation ID.

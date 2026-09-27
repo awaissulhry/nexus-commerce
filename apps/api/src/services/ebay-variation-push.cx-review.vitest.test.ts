@@ -19,8 +19,12 @@ const h = vi.hoisted(() => ({
   itemXmlSeq: [] as string[], hangOnCall: 0, getItemCalls: 0,
   /** getOffers answers for another market, keyed `${sku}|${marketplace_id}` (the base lists answer EBAY_IT only). */
   marketLists: {} as Record<string, any[]>,
+  /** Step 7 — the write-back records through the one live-listing rule. */
+  recordLive: vi.fn(async (_tx: unknown, input: any) => input.rows.map((r: any, i: number) => ({ id: `listing-${i}`, productId: r.productId, version: 1, created: false, adopted: false, unpaused: false }))),
 }))
+vi.mock('./pim/live-listing.service.js', () => ({ recordLiveListings: (...args: unknown[]) => (h.recordLive as any)(...args) }))
 vi.mock('../db.js', () => ({ default: {
+  $transaction: async (work: (tx: unknown) => unknown) => work({}),
   channelListing: {
     findMany: vi.fn(async (args: any) => args.where.channel === 'AMAZON' ? [] : h.listings),
     findFirst: vi.fn(async () => null), updateMany: h.updateMany, createMany: vi.fn(async () => ({ count: 0 })), update: vi.fn(async () => ({})),
@@ -130,7 +134,8 @@ describe('A — the FIXED_PRICE offer, never offers[0]', () => {
     h.publishId = null
     const result = await call('group')
     expect(result.map((r) => (r as { itemId?: string }).itemId)).toEqual(['123456789012', '123456789012'])
-    expect(h.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ externalListingId: '123456789012' }) }))
+    expect(h.recordLive).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ channel: 'EBAY', market: 'IT', accountId: 'account-a',
+      rows: expect.arrayContaining([expect.objectContaining({ listingStatus: 'ACTIVE', externalListingId: '123456789012' })]) }))
   })
 })
 

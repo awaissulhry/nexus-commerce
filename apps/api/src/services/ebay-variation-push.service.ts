@@ -17,6 +17,7 @@ import { reconcileEbayPolicies } from './ebay-policy-reconcile.service.js'
 // P4.2b — only eBay's OWN verdicts are filed on a listing; our validation is not.
 import { recordEbayOfferRejection } from './listing-issue-recorder.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
+import { recordLiveListings } from './pim/live-listing.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
 import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
@@ -2111,46 +2112,36 @@ export async function pushVariationGroup(
   }
   // Include the parent product ID so its ChannelListing transitions to ACTIVE too.
   const allIds = [...new Set([...productIds, ...(parentProductId ? [parentProductId] : [])])]
+  // Step 7 — the ItemID an existing row already holds for ANOTHER listing is kept (a re-link is verified, never a
+  // write-back), and the SKU's result says so instead of the ID vanishing silently.
+  const keptItemIds = new Map<string, string>()
   if (allIds.length > 0) {
     try {
-      await prisma.channelListing.updateMany({
-        where: { productId: { in: allIds }, channel: 'EBAY', region },
-        // Only set externalListingId when we have a fresh value from the publish response.
-        // Re-publishing an existing listing returns no new listingId — don't overwrite with null.
-        data: { ...(listingId ? { externalListingId: listingId } : {}), listingStatus: 'ACTIVE', offerActive: true },
-      })
-      // Seed any missing parent/child ChannelListing rows for this market so the
-      // cockpit and status views reflect the live eBay state going forward.
-      const existing = await prisma.channelListing.findMany({
-        where: { productId: { in: allIds }, channel: 'EBAY', region },
-        select: { productId: true },
-      })
-      const existingSet = new Set(existing.map(e => e.productId))
-      const missing = allIds.filter(id => !existingSet.has(id))
-      if (missing.length > 0) {
-        // Persist the price we just sent to eBay so a reload doesn't show 0.
-        const pricePrefix = mp.toLowerCase()
-        const priceByProductId = new Map<string, number>()
-        for (const r of variantRows) {
-          const pid = r._productId as string | undefined
-          if (!pid) continue
-          const p = Number(r[`${pricePrefix}_price`] ?? r.price ?? 0)
-          if (p > 0) priceByProductId.set(pid, p)
-        }
-        await prisma.channelListing.createMany({
-          data: missing.map(productId => ({
-            productId,
-            channel: 'EBAY',
-            channelMarket: `EBAY_${region}`,
-            region,
-            marketplace: region,
-            listingStatus: 'ACTIVE' as const,
-            ...(listingId ? { externalListingId: listingId } : {}),
-            ...(priceByProductId.has(productId) ? { price: priceByProductId.get(productId) } : {}),
-          })),
-          skipDuplicates: true,
-        })
+      // Persist the price we just sent to eBay on a row this publish creates, so a reload doesn't show 0.
+      const pricePrefix = mp.toLowerCase()
+      const priceByProductId = new Map<string, number>()
+      for (const r of variantRows) {
+        const pid = r._productId as string | undefined
+        if (!pid) continue
+        const p = Number(r[`${pricePrefix}_price`] ?? r.price ?? 0)
+        if (p > 0) priceByProductId.set(pid, p)
       }
+      // Step 7 — the one live-listing rule records the parent and every variant on THIS account and market
+      // (eBay UK as 'UK', not the 'GB' region): it seeds a missing row, turns an existing one ACTIVE and
+      // published, and lifts the pause only from a still-draft. Only set externalListingId when we have a
+      // fresh value from the publish response: re-publishing an existing listing returns no new listingId.
+      const recorded = await prisma.$transaction(tx => recordLiveListings(tx, {
+        channel: 'EBAY', market: mp, accountId: connectionId,
+        rows: allIds.map(productId => ({
+          productId,
+          listingStatus: 'ACTIVE',
+          ...(listingId ? { externalListingId: listingId } : {}),
+          fields: { offerActive: true },
+          ...(priceByProductId.has(productId) ? { createFields: { price: priceByProductId.get(productId) } } : {}),
+        })),
+      }))
+      for (const r of recorded) if (r.keptExternalListingId) keptItemIds.set(r.productId, r.keptExternalListingId.stored)
+      if (keptItemIds.size > 0) console.warn(`[ebay-push] ItemID ${listingId} NOT recorded on ${keptItemIds.size} listing(s) already linked to another ItemID — re-link them in the Item ID column`)
       // FFT.3c — Lane-A parity with the shared lane: snapshot-less CLs (incl.
       // the ones this publish just created) persist the PUSHED row as their
       // snapshot, so a reload shows exactly what went live. Existing snapshots
@@ -2163,7 +2154,7 @@ export async function pushVariationGroup(
         }
         if (rowByProductId.size > 0) {
           const snapState = await prisma.channelListing.findMany({
-            where: { productId: { in: allIds }, channel: 'EBAY', region },
+            where: { id: { in: recorded.map(r => r.id) } },
             select: { id: true, productId: true, flatFileSnapshot: true },
           })
           for (const cl of snapState) {
@@ -2177,11 +2168,7 @@ export async function pushVariationGroup(
           }
         }
       } catch { /* parity is best-effort — the publish itself already succeeded */ }
-      const activated = await prisma.channelListing.findMany({
-        where: { productId: { in: allIds }, channel: 'EBAY', region },
-        select: { id: true },
-      })
-      void syncActivatedListings(activated.map(l => l.id))
+      void syncActivatedListings(recorded.map(l => l.id))
     } catch (e) {
       // Previously swallowed silently — which hid that the ItemID/status never persisted.
       // Non-fatal (the listing is live on eBay) but MUST be visible so a broken write-back
@@ -2196,7 +2183,9 @@ export async function pushVariationGroup(
 
   // Preserve step-1 errors even on successful publish — a SKU that failed
   // inventory_item PUT was not actually pushed, even though the group published.
-  return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: `pushed as variation group${priceMessages.has(r.sku) ? `. ${priceMessages.get(r.sku)}` : ''}`, itemId: listingId })
+  const keptItemIdBySku = new Map(variantRows.filter(r => keptItemIds.has(r._productId as string)).map(r => [r.sku as string, keptItemIds.get(r._productId as string)!]))
+  const keptNote = (sku: string) => keptItemIdBySku.has(sku) ? `. Item ID ${listingId} not recorded: this listing is linked to ${keptItemIdBySku.get(sku)}; change it in the Item ID column` : ''
+  return results.map(r => r.status === 'ERROR' ? r : { ...r, status: 'PUSHED' as const, message: `pushed as variation group${priceMessages.has(r.sku) ? `. ${priceMessages.get(r.sku)}` : ''}${keptNote(r.sku)}`, itemId: listingId })
 }
 
 /** CX — the published ItemID each SKU's own listing holds (this account, this market's region); none or several → null. */

@@ -28,6 +28,8 @@ import { AmazonService, AMAZON_MARKETPLACE_CODE_TO_ID } from '../marketplaces/am
 import { AmazonFlatFileService } from './flat-file.service.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { MARKETPLACE_ID_MAP, LANGUAGE_TAG_MAP } from './flat-file.service.js'
+import { primaryConnectionIds } from '../connection-resolver.service.js'
+import { recordLiveListings } from '../pim/live-listing.service.js'
 
 // ── Job types ──────────────────────────────────────────────────────────────
 
@@ -163,7 +165,6 @@ async function runAllMarketsJob(parentJob: AllMarketsPullJob): Promise<void> {
 async function runJob(job: PullJob): Promise<void> {
   const { marketplace: mp, productType: pt } = job
   const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
-  const channelMarket = `AMAZON_${mp}`
 
   // All products for this productType, parents first
   const products = await prisma.product.findMany({
@@ -182,6 +183,14 @@ async function runJob(job: PullJob): Promise<void> {
   }
 
   const amazonService = new AmazonService()
+  // The SP-API client reads with the primary Amazon account, so that is the account every pulled listing is live on.
+  const accountId = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
+  if (!accountId) {
+    job.status = 'failed'
+    job.fatalError = 'No active Amazon account: connect one before pulling listings.'
+    job.doneAt = new Date().toISOString()
+    return
+  }
 
   // Pre-build ASIN → SKU from existing ChannelListings for this marketplace
   // so child rows can resolve their parent SKU even before the parent is pulled.
@@ -250,30 +259,19 @@ async function runJob(job: PullJob): Promise<void> {
         ? bulletsRaw.map((b: any) => b?.value ?? String(b)).filter(Boolean)
         : []
 
-      // ── Upsert ChannelListing ────────────────────────────────────
-      const existingCl = await prisma.channelListing.findFirst({
-        where: { productId: product.id, channel: 'AMAZON', marketplace: mp },
-        select: { id: true, version: true },
-      })
-
-      const listingPayload: Record<string, any> = {
-        channel: 'AMAZON',
-        marketplace: mp,
-        region: mp,
-        channelMarket,
+      // ── Record the live ChannelListing ───────────────────────────
+      // Step 7 — through the one live-listing rule, on the primary account the SP-API client read with (the
+      // old lookup matched any account or alias row of the product): published, with Amazon's status, and a
+      // still-draft loses its pause. A different stored ASIN is kept and reported, never replaced.
+      // P0 2026-07-20 — DISCOVERABLE means the listing EXISTS on Amazon (incomplete offer, but live +
+      // manageable): any Amazon-known status is published, so dispatch never skips it.
+      const listingFields: Record<string, any> = {
         title: title ?? attrs.item_name?.[0]?.value ?? undefined,
         description: attrs.product_description?.[0]?.value ?? undefined,
         platformAttributes: { attributes: attrs },
-        externalListingId: asin,
         syncStatus: 'SYNCED',
         lastSyncedAt: new Date(),
         lastSyncStatus: 'SUCCESS',
-        // P0 2026-07-20 — DISCOVERABLE means the listing EXISTS on Amazon
-        // (incomplete offer, but live + manageable); marking it unpublished
-        // made dispatch skip every push (431 blocked rows measured). Any
-        // Amazon-known status is publishable.
-        isPublished: ['BUYABLE', 'ACTIVE', 'DISCOVERABLE'].includes(listingStatus ?? 'ACTIVE'),
-        listingStatus: listingStatus ?? 'ACTIVE',
         followMasterTitle: false,
         followMasterDescription: false,
         ...(bullets.length > 0 ? { bulletPointsOverride: bullets, followMasterBulletPoints: false } : {}),
@@ -289,16 +287,12 @@ async function runJob(job: PullJob): Promise<void> {
       // truth); on UPDATE the pool owns ChannelListing.quantity.
       const createOnlyQty = qty !== null && !isNaN(qty) ? { quantity: qty } : {}
 
-      if (existingCl) {
-        await prisma.channelListing.update({
-          where: { id: existingCl.id },
-          data: { ...listingPayload, version: { increment: 1 } },
-        })
-      } else {
-        Object.assign(listingPayload, createOnlyQty)
-        await prisma.channelListing.create({
-          data: { productId: product.id, ...listingPayload } as any,
-        })
+      const [recorded] = await prisma.$transaction(tx => recordLiveListings(tx, {
+        channel: 'AMAZON', market: mp, accountId,
+        rows: [{ productId: product.id, listingStatus: listingStatus ?? 'ACTIVE', externalListingId: asin, fields: listingFields, createFields: createOnlyQty }],
+      }))
+      if (recorded.keptExternalListingId) {
+        job.errors.push({ sku: product.sku, error: `Amazon reports ASIN ${asin}, but this listing is linked to ${recorded.keptExternalListingId.stored}: the stored ASIN was kept.` })
       }
 
       // ── Product hierarchy ────────────────────────────────────────
