@@ -1,3 +1,7 @@
+## Catalog: no text inside synthetic images — 2026-09-27
+
+Mirrored from web. The synthetic example photos in `catalog/MediaGalleryExample.tsx` draw no text (an SVG image cannot use the page fonts; its label fell back to Arial on Windows).
+
 ## MediaStrip: muted items — 2026-09-27
 
 Mirrored from web. **`MediaStripItem.muted`**: an item shown for context, not part of the cell's own list (dashed frame, faded image, "· shared" in the tooltip).

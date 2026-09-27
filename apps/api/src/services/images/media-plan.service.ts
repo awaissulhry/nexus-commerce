@@ -6,6 +6,7 @@ import { optionForValue, type DictionaryAttribute } from '../pim/family-variatio
 import { canonicalVariantAxis } from '../pim/variant-attribute-keys.js'
 import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages.js'
 import { NoConnectionError, resolveChannelConnectionId } from '../connection-resolver.service.js'
+import { connectionLabel } from '../connection-label.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { publishListingEvent } from '../listing-events.service.js'
 import { readExcludedListingIds } from '../pim/variation-excluded.js'
@@ -107,7 +108,10 @@ export async function loadDestinations(productIds: string[]) {
   const aliasIds = [...new Set(listings.map(l => l.aliasKey).filter(Boolean))]
   const aliases = aliasIds.length ? await prisma.productListingAlias.findMany({ where: { id: { in: aliasIds } }, select: { id: true, label: true, position: true, status: true } }) : []
   const accountIds = [...new Set(listings.map(l => l.channelConnectionId).filter((id): id is string => !!id))]
-  const accounts = accountIds.length ? await prisma.channelConnection.findMany({ where: { id: { in: accountIds } }, select: { id: true, accountLabel: true, isActive: true, isPrimary: true } }) : []
+  const accounts = accountIds.length ? (await prisma.channelConnection.findMany({ where: { id: { in: accountIds } }, select: { id: true, channelType: true, accountLabel: true,
+    ebayStoreName: true, displayName: true, ebaySignInName: true, externalAccountId: true, isActive: true, isPrimary: true } }))
+    // The human name the rest of the app shows (label, store name, display or sign-in name), never "Unknown account".
+    .map(a => ({ ...a, accountLabel: connectionLabel(a).label })) : []
   const markets: MarketLanguageRow[] = await prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } })
   const languagesOf = (channel: string, code: string) => { try { return marketLanguages(channel, code, markets) } catch { return [] } }
   const groups = new Map<string, { channel: MediaChannel; marketplace: string; accountId: string; aliasKey: string; markets: Map<string, number>; listed: number; productIds: Set<string>; listingIds: string[] }>()

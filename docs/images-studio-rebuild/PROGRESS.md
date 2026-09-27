@@ -17,8 +17,20 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **P3b — the new Media page. MERGED 2026-09-27 (#102, squash `90119fb37`) on the Owner's word; deployed (API build
   `90119fb3`, web on Vercel). No production family is switched yet — the first switch is the Owner's click.**
 - **P3c — the Information sheet's "Product media" column on the plan. MERGED 2026-09-27 (#112, `b5291447`); deployed.**
-- **P3d — polish and proof (2026-09-27): PR open.** Details below.
-- **Next:** the first real switch (the test family), then P4 (upload dialog, Compare, Review & publish).
+- **P3d — polish and proof. MERGED 2026-09-27 (#115, `200afbaa`); deployed.**
+- **First real switch — DONE 2026-09-27 on the Owner's authorization ("You do everything for me and go ahead. I authorize
+  you"):** the test family GALE-JACKET, through the production Media page after P3d was live. The preview first (read
+  through the app): 6 destinations, 0 errors, 0 warnings; ALT1's 14 photos under "Colore" taken in (12 repeats, +1 per
+  colour, as the old publisher sent them); 0 downloads. After the switch the read shows Shared + the 4 alias layers
+  exactly as previewed (Common 2, Nero 7, Giallo 7; ALT1 8 + 8), 20 variants, 6 destinations, no unmapped values; the
+  page read took 482 ms on the server. Nothing was sent to any channel. Effect to know: the eBay flat-file FULL push now
+  refuses this family ("Offers only" still pushes price and quantity); the studio's Publish sends the plan's photos.
+- **No Arial (Owner, 2026-09-27):** measured in production on the Media page, a channel view, a tile menu, the photo
+  preview and the Information sheet — every text element is Inter or JetBrains Mono, both faces loaded
+  (`document.fonts.check`). One real source found and removed: the design-system catalog's synthetic example photos drew
+  a `sans-serif` label inside an SVG image (system font = Arial on Windows); they draw no text now and the font guard no
+  longer excepts that file. The local test photos and the screenshots below were redrawn without text as well.
+- **Next:** P4 (upload dialog with file-name rules, Compare, Review & publish).
 
 ## P3d — polish and proof
 - **Phone:** under 720 px of page width the destinations table becomes one card per destination (title, markets or API,
