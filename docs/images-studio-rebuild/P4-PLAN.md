@@ -56,6 +56,9 @@ complete whatever is left … AAA quality", and moved the Amazon ZIP from P5 int
 - Sent → Accepted → checked on the channel (eBay read-back; Amazon run receipts), or Failed with the channel's reason
   and Retry. Permission: `products.publish`.
 - The first real send stays one listing, with the Owner's word per send.
+- **Built differently (2026-09-28):** the window drives each channel's existing review → selection → submit routes from
+  the page; no new `/media/publish/*` orchestrator (the existing routes already bind reviews to plan revisions, fence
+  duplicate sends and read back the result).
 
 ## P4d — Amazon ZIPs (PLAN §7.1, moved from P5)
 - `GET /media` carries each Amazon SKU's ASIN per market.

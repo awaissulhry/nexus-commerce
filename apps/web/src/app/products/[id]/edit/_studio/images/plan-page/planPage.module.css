@@ -71,6 +71,8 @@
 .uploadFooterNote { display: flex; flex: 1 1 200px; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); }
 /* The column name beside a control, on a phone only (the header row is hidden there). */
 .uploadLabel { display: none; }
+.publishLine { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); align-items: start; gap: var(--nds-space-12); padding: var(--nds-space-8) 0; border-top: 1px solid var(--nds-border-subtle); }
+.publishDetail { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
 .compareBody { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
 .compareChips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); }
 .compareSetBlock { display: flex; flex-direction: column; gap: var(--nds-space-6); padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
@@ -96,6 +98,7 @@
 
 @media (max-width: 640px) {
   .uploadHead { display: none; }
+  .publishLine { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); }
   .uploadLabel { display: block; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); }
   .uploadLine { grid-template-columns: 48px minmax(0, 1fr); }
   .uploadCell[data-col='set'], .uploadCell[data-col='position'], .uploadCell[data-col='language'], .uploadCell[data-col='status'] { grid-column: 2; }

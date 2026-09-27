@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { Redo2, Undo2, Upload } from 'lucide-react'
+import { Redo2, Send, Undo2, Upload } from 'lucide-react'
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 
 import { Banner, Drawer, Listbox, MediaPreview, Modal, SourceIndicator, useToast } from '@/design-system/components'
@@ -17,6 +17,7 @@ import { DestinationsTable } from './DestinationsTable'
 import { ChannelView } from './ChannelView'
 import { CompareDialog } from './CompareDialog'
 import { UploadDialog } from './UploadDialog'
+import { PublishPhotosDialog } from './PublishPhotosDialog'
 import {
   CHANNEL_LABEL, assetMap, cardOf, libraryUsage, ownedSkuSets, setRows, showAsOptions, swatchRows, viewAxis, viewStack,
   type LayerView, type MediaChannel, type MediaRead,
@@ -64,6 +65,7 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
   // P4b — the upload dialog, with the files dropped on the page (if any).
   const [uploading, setUploading] = useState<File[] | null>(null)
   const [dropping, setDropping] = useState(false)
+  const [publishing, setPublishing] = useState(false)
 
   const assets = useMemo(() => assetMap(read), [read])
   const usage = useMemo(() => libraryUsage(read), [read])
@@ -163,12 +165,13 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
           options={[{ value: '', label: 'Placed versions' }, ...showAsList.map(o => ({ value: o.value, label: o.label }))]} />
       </label>
       <span className={styles.spacer} />
-      <Button size="sm" variant="primary" onClick={() => setUploading([])} title="Upload photos (U)"><Upload size={14} aria-hidden />Upload photos</Button>
+      <Button size="sm" variant="secondary" onClick={() => setUploading([])} title="Upload photos (U)"><Upload size={14} aria-hidden />Upload photos</Button>
       <Button size="sm" variant="secondary" disabled={comparable.length < 2} onClick={() => setComparing(true)}
         title={comparable.length < 2 ? 'Compare needs two or more destinations' : undefined}>Compare</Button>
       <ToolbarButton icon={<Undo2 size={16} />} label={plan.undoLabel ? `Undo: ${plan.undoLabel}` : 'Undo'} shortcut="⌘Z" disabled={!plan.canUndo} onClick={() => plan.undo()} />
       <ToolbarButton icon={<Redo2 size={16} />} label={plan.redoLabel ? `Redo: ${plan.redoLabel}` : 'Redo'} shortcut="⌘⇧Z" disabled={!plan.canRedo} onClick={() => plan.redo()} />
       {!wide && <Button size="sm" variant="secondary" onClick={() => setLibraryOpen(true)}>Library · {read.library.length}</Button>}
+      <Button size="sm" variant="primary" onClick={() => setPublishing(true)}><Send size={14} aria-hidden />Review &amp; publish</Button>
     </header>
 
     {plan.writeError && <Banner tone="danger" title="Not saved" onDismiss={plan.clearWriteError}
@@ -217,7 +220,8 @@ export function MediaPlanPage({ read, plan }: { read: MediaRead; plan: MediaPlan
     <Drawer open={!wide && libraryOpen} onClose={() => { setLibraryOpen(false); setPending(null) }} title="Photo library" width="min(520px, 100vw)">
       {library}
     </Drawer>
-    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} />
+    <UploadDialog read={read} plan={plan} open={uploading !== null} files={uploading ?? []} onClose={() => setUploading(null)} onReview={() => setPublishing(true)} />
+    <PublishPhotosDialog read={read} open={publishing} onClose={() => setPublishing(false)} />
     <CompareDialog read={read} assets={assets} open={comparing} initial={compareStart} onClose={() => setComparing(false)} onOpenDestination={setOpen} />
     <Modal open={!!viewingAsset} onClose={() => setViewing(null)} title={viewingAsset?.label} size="lg">
       {viewingAsset && <MediaPreview type={viewingAsset.mediaType} url={viewingAsset.url} label={viewingAsset.label} />}
