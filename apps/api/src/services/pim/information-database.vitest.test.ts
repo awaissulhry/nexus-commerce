@@ -183,9 +183,9 @@ it('refuses Amazon conditional serialized byte errors before saving while permit
   const row = await prisma.channelListing.findUniqueOrThrow({ where: { id: 'amazon-b-1-row-one' } })
   expect(row.overrideData).not.toMatchObject({ mode: 'restricted' })
 })
-it('reports a listing-field refusal on a market with no listing under the cell\'s own field (attr_brand), not the JSON path', async () => {
-  // Draft listing safety step 1: the refusal came back as `field: 'brand'`, the sheet matched errors by
-  // `change.field` (`attr_brand`), found none, and painted the refused cell as saved.
+it('a listing field on a market with no listing starts the draft, and the value lands (create path, step 3)', async () => {
+  // Draft listing safety step 1 pinned this save as a refusal; product-sheet create path step 3 (the Owner's D1 = A)
+  // makes it the first save that starts the coordinate's draft, in the same transaction, and the brand lands on it.
   await prisma.product.create({ data: { id: 'brand-unlisted', sku: 'INFO-UNLISTED', name: 'Unlisted jacket', basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET' } })
   const columns = (await sheet('AMAZON', 'amazon-a')).columns
   const brand = columns.find((column: any) => Object.values(column.channels ?? {}).some((facts: any) => facts.store?.kind === 'platformAttributes' && facts.store.path?.[0] === 'brand'))
@@ -193,8 +193,27 @@ it('reports a listing-field refusal on a market with no listing under the cell\'
   const response = await request('PATCH', '/api/products/bulk', { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-a', aliasKey: '', locale: 'it' }],
     changes: [{ id: 'brand-unlisted', field: brand.writeField, value: ['Nexus Moto'], target: 'channel' }] })
   expect(response.statusCode, response.body).toBe(200)
-  expect(response.json().errors, response.body).toEqual([{ id: 'brand-unlisted', field: 'attr_brand', error: 'No AMAZON listing on IT yet — a listing field needs the listing to exist' }])
-  expect(await prisma.channelListing.count({ where: { productId: 'brand-unlisted' } })).toBe(0)
+  expect(response.json().errors ?? [], response.body).toEqual([])
+  const rows = await prisma.channelListing.findMany({ where: { productId: 'brand-unlisted' } })
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'amazon-a', aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, externalListingId: null })
+  expect((rows[0].platformAttributes as any).brand).toEqual(['Nexus Moto'])
+  expect(response.json().createdListings).toEqual([{ productId: 'brand-unlisted', listingId: rows[0].id, version: rows[0].version }])
+})
+it('reports a listing-field refusal under the cell\'s own field (attr_brand), not the JSON path — a listing alias with no row', async () => {
+  // Draft listing safety step 1: the refusal came back as `field: 'brand'`, the sheet matched errors by
+  // `change.field` (`attr_brand`), found none, and painted the refused cell as saved. An edit never creates an alias
+  // listing, so an alias with no row for the product is still refused — under the change's own field.
+  await prisma.product.create({ data: { id: 'brand-alias-root', sku: 'INFO-ALIAS-ROOT', name: 'Alias jacket', basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET' } })
+  await prisma.productListingAlias.create({ data: { id: 'brand-alias-2', productId: 'brand-alias-root', channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'amazon-a', label: 'Listing 2', position: 1 } })
+  const columns = (await sheet('AMAZON', 'amazon-a')).columns
+  const brand = columns.find((column: any) => Object.values(column.channels ?? {}).some((facts: any) => facts.store?.kind === 'platformAttributes' && facts.store.path?.[0] === 'brand'))
+  const response = await request('PATCH', '/api/products/bulk', { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-a', aliasKey: 'brand-alias-2', locale: 'it' }],
+    changes: [{ id: 'brand-alias-root', field: brand.writeField, value: ['Nexus Moto'], target: 'channel' }] })
+  expect(response.statusCode, response.body).toBe(400)
+  expect(response.json().errors, response.body).toEqual([{ id: 'brand-alias-root', field: 'attr_brand',
+    error: 'This listing alias has no Amazon · IT listing for INFO-ALIAS-ROOT. An edit never creates an alias listing.' }])
+  expect(await prisma.channelListing.count({ where: { productId: 'brand-alias-root' } })).toBe(0)
 })
 it('counts conditional requirements in the actual sheet and alias summary before and after filling them', async () => {
   const destination = { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-b', aliasKey: 'amazon-b-2', locale: 'it' }] }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRODUCT_MEDIA_KEY, type ProductMediaQuery } from '@nexus/shared/product-media'
-const mocks = vi.hoisted(() => ({ products: [] as any[], listings: [] as any[], files: [] as any[], conflict: false, updates: [] as any[], destination: vi.fn() }))
+const mocks = vi.hoisted(() => ({ products: [] as any[], listings: [] as any[], files: [] as any[], conflict: false, updates: [] as any[], destination: vi.fn(), ensure: vi.fn() }))
 // Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
 vi.mock('./media-plan-switch.js', async original => ({ ...await original<object>(), isOnMediaPlan: async () => false, mediaPlanProducts: async () => new Set() }))
 vi.mock('../../db.js', () => {
@@ -20,6 +20,9 @@ vi.mock('../../db.js', () => {
   return { default: db }
 })
 vi.mock('../pim/workspace-destination.js', async importOriginal => ({ ...await importOriginal<object>(), resolveWorkspaceDestination: mocks.destination }))
+// The draft creator's own rules run on PostgreSQL (draft-listing.service tests). Here it stands in for the one creator:
+// it starts an inert draft row for the product (the family is the product alone in this fixture).
+vi.mock('../pim/draft-listing.service.js', async importOriginal => ({ ...await importOriginal<object>(), ensureDraftListings: mocks.ensure }))
 import { readProductMedia, saveProductMedia, copyProductMedia } from './product-media.service.js'
 const context = { productId: 'p1', scope: 'MASTER', market: 'GLOBAL', locale: 'it' }
 const collection = { version: 1 as const, items: [{ assetId: 'video1', alt: 'Video italiano', captions: [{ language: 'it', label: 'Italiano', url: 'https://cdn.example/it.vtt' }] }] }
@@ -28,6 +31,12 @@ beforeEach(() => {
   mocks.listings = ['a', 'b'].map(account => ({ id: `listing-${account}`, productId: 'p1', version: 1, channel: 'ETSY', channelConnectionId: account, marketplace: 'GLOBAL', platformAttributes: { title: account } }))
   mocks.files = [{ id: 'image1', productId: 'p1', mediaType: 'IMAGE', url: 'https://cdn.example/image.jpg', alt: 'Front', sortOrder: 0, updatedAt: '1' }, { id: 'video1', productId: 'p1', mediaType: 'VIDEO', url: 'https://cdn.example/movie.mp4', posterUrl: null, alt: '', sortOrder: 1, updatedAt: '1' }]
   mocks.conflict = false; mocks.updates = []; mocks.destination.mockReset(); mocks.destination.mockResolvedValue({ listing: { productId: 'p1' } })
+  mocks.ensure.mockReset().mockImplementation(async (_tx: unknown, input: any) => input.productIds.map((productId: string) => {
+    const row = { id: `draft-${productId}-${input.market}`, productId, version: 1, channel: input.channel, marketplace: input.market, channelConnectionId: input.accountId,
+      aliasKey: input.aliasKey, listingStatus: 'DRAFT', isPublished: false, syncPaused: true, platformAttributes: null }
+    mocks.listings.push(row)
+    return { id: row.id, productId, version: 1, created: true }
+  }))
 })
 describe('Product media persistence', () => {
   it('persists localized mixed media and preserves all source files and other languages', async () => {
@@ -70,15 +79,29 @@ describe('Product media persistence', () => {
     const inherited = await saveProductMedia(context, { expectedRevision: empty.revision, collection: null })
     expect(inherited.collection.items).toHaveLength(2); expect(inherited.hasOverride).toBe(false)
   })
-  it('creates an unpublished listing draft only on save for an explicit unlisted coordinate', async () => {
+  it('starts the listing draft only on save for an explicit unlisted coordinate, through the one creator', async () => {
     mocks.destination.mockResolvedValue({ listing: null })
     const unlisted = { ...context, scope: 'ETSY', market: 'DE', accountId: 'a', aliasKey: '' }
     const before = await readProductMedia(unlisted)
     expect(mocks.listings).toHaveLength(2)
+    expect(mocks.ensure).not.toHaveBeenCalled()
     const saved = await saveProductMedia(unlisted, { expectedRevision: before.revision, collection })
     expect(saved.hasOverride).toBe(true)
-    expect(mocks.listings[2]).toMatchObject({ productId: 'p1', marketplace: 'DE', channelConnectionId: 'a', aliasKey: '', listingStatus: 'DRAFT', isPublished: false })
+    expect(mocks.ensure).toHaveBeenCalledWith(expect.anything(), { channel: 'ETSY', market: 'DE', accountId: 'a', aliasKey: '', productIds: ['p1'], family: true })
+    // The gallery lands on the started draft, guarded on its fresh version.
+    expect(mocks.updates.at(-1).where).toEqual({ id: 'draft-p1-DE', version: 1 })
+    expect(mocks.listings[2]).toMatchObject({ productId: 'p1', marketplace: 'DE', channelConnectionId: 'a', aliasKey: '', listingStatus: 'DRAFT', isPublished: false, syncPaused: true, version: 2 })
     expect(mocks.products[0].localizedContent.it[PRODUCT_MEDIA_KEY]).toBeUndefined()
+  })
+
+  it('no account: the draft creator\'s sentence reaches the operator, and nothing is written', async () => {
+    mocks.destination.mockResolvedValue({ listing: null })
+    const { DraftListingError } = await import('../pim/draft-listing.service.js')
+    mocks.ensure.mockRejectedValue(new DraftListingError('NO_ACTIVE_ACCOUNT', 'Connect an Etsy account before listing on DE.'))
+    const unlisted = { ...context, scope: 'ETSY', market: 'DE', aliasKey: '' }
+    const before = await readProductMedia(unlisted)
+    await expect(saveProductMedia(unlisted, { expectedRevision: before.revision, collection })).rejects.toMatchObject({ statusCode: 409, message: 'Connect an Etsy account before listing on DE.' })
+    expect(mocks.updates).toHaveLength(0)
   })
 })
 

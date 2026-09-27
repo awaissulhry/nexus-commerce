@@ -240,7 +240,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     </header>
     <div className={styles.body}>
       <aside className={styles.navigation} aria-label="Amazon image galleries">
-        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId} disabled={locked} onChange={event => onListingChange(event.target.value)}>
+        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId ?? ''} disabled={locked} onChange={event => onListingChange(event.target.value)}>
           {workspace.destination.listings.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select></Field>
         <PressableRow label="Common images" current={active === 'common'} onClick={() => setActive('common')} description="Images shared by SKUs in this market; SKU overrides take precedence."><Tag>{Object.values(draft.common).filter(Boolean).length}</Tag></PressableRow>
