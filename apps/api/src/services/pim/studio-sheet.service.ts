@@ -71,7 +71,7 @@ import { categoryForListing, categorySourceLabel, type CategoryResolutionSource 
 import { savedAttributeFields } from './family-sheet-schema.js'
 import { normalizeEbayListingValue } from './ebay-listing-values.js'
 import { writerAcceptsField } from './master-field-gate.js'
-import { completenessFor, decimalToNumber, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
+import { completenessFor, decimalToNumber, listedState, type SheetCellValue, type SheetListing, type SheetReadiness, type ReadinessIssue } from './sheet-rows.service.js'
 import type { MasterCompleteness } from './master-completeness.service.js'
 import { categoryFieldValue, channelCategoryField } from './mapping/category-mapping.service.js'
 
@@ -1621,13 +1621,12 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
       const readiness: SheetReadiness = {
         state: hasErrors
           ? 'errors'
-          : listing && listing.externalListingId && listing.isPublished
-            ? 'live'
-            : !listing && coordinate
+          : listedState(listing, listingRow?.channel)
+            ?? (!listing && coordinate
               ? 'unlisted'
               : issues.length > 0
                 ? 'missing'
-                : 'ready',
+                : 'ready'),
         issues,
         ref: listing?.externalListingId ?? undefined,
       }

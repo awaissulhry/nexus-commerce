@@ -117,6 +117,8 @@ export function projectionState(channel: ProjectionChannel, projection: RowProje
   if (!channel.connected) return 'not-set-up'
   if (!projection?.included) return 'excluded'
   if (projection.state === 'missing' || projection.state === 'errors') return 'needs-value'
+  // Published on Amazon with its ASIN not read back yet: live, never a Draft, and not Listed with an id either.
+  if (projection.state === 'pending') return 'asin-pending'
   return projection.published ? 'listed' : 'draft'
 }
 
@@ -188,7 +190,7 @@ export function excludedSomewhere(projections: FamilyProjections, childIds: read
   return childIds.filter(id => live.some(c => !projections.byProduct[id]?.[c.key]?.included))
 }
 
-const ROW_STATES = new Set<RowReadinessState>(['ready', 'missing', 'errors', 'live', 'unlisted'])
+const ROW_STATES = new Set<RowReadinessState>(['ready', 'missing', 'errors', 'live', 'pending', 'unlisted'])
 
 export function asRowState(state: unknown): RowReadinessState | null {
   return typeof state === 'string' && ROW_STATES.has(state as RowReadinessState) ? (state as RowReadinessState) : null

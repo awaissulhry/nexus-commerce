@@ -9,7 +9,8 @@
 export type SheetChannel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
 export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent'
-export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+/** `pending` — published on Amazon, ASIN not read back yet (the server's `isAsinPending`). */
+export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
 
 export interface SheetCoordinate {
   languages?: string[]

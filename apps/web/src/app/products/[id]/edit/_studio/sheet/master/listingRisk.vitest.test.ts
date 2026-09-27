@@ -51,3 +51,20 @@ describe('classifyListings', () => {
     expect(classifyListings([])).toEqual({ verdicts: [], live: [], local: [] })
   })
 })
+
+describe('an Amazon listing whose ASIN is pending — the delete warning must warn', () => {
+  const pending = row({ channel: 'AMAZON', marketplace: 'IT', externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' })
+
+  it('is live on the channel, though no id is recorded yet', () => {
+    expect(isLiveOnChannel(pending)).toBe(true)
+    const impact = classifyListings([pending])
+    expect(impact.live).toHaveLength(1)
+    expect(impact.live[0].label).toBe('AMAZON · IT — ACTIVE, published, ASIN pending')
+  })
+
+  it('is not stretched to eBay, to an unpublished row or to a still-draft', () => {
+    expect(isLiveOnChannel(row({ externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' }))).toBe(false)
+    expect(isLiveOnChannel({ ...pending, isPublished: false })).toBe(false)
+    expect(isLiveOnChannel({ ...pending, listingStatus: 'DRAFT', isPublished: false })).toBe(false)
+  })
+})

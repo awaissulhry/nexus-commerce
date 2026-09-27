@@ -24,7 +24,7 @@ import { BLANK_CELL_LABEL, useGridEmptyCells } from './emptyCells'
 import { emptyValueA11y } from './emptyValue'
 import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } from './format'
 import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
-import { readinessMeta, type RowReadinessState, type ScopeReadinessState } from './readiness'
+import { readinessMeta, readinessPillLabel, type RowReadinessState, type ScopeReadinessState } from './readiness'
 
 /* ── the dash ─────────────────────────────────────────────────────────────────────────────── */
 
@@ -435,8 +435,7 @@ export const ReadinessCell = memo(function ReadinessCell(p: ICellRendererParams)
   if (!v) return <EmptyValue />
   const meta = readinessMeta(v.state, 'row')
   const n = v.issues?.length ?? 0
-  const label = n && v.state !== 'live' && v.state !== 'ready' ? `${meta.label} · ${n}` : v.state === 'live' && v.ref ? `${meta.label} · ${v.ref}` : meta.label
-  const pill = <Pill tone={meta.tone} size="sm">{label}</Pill>
+  const pill = <Pill tone={meta.tone} size="sm">{readinessPillLabel(v)}</Pill>
   return n ? <InfoTip tip={v.issues!.join(' · ')}>{pill}</InfoTip> : pill
 })
 

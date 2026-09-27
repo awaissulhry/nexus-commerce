@@ -1,3 +1,7 @@
+## Row state `pending` and the projection word "Published · ASIN pending" — 2026-09-27
+
+`grid/renderers/readiness.ts` — a sixth ROW state, **`pending`**, labelled **"Published · ASIN pending"** in `live`'s `info` tone: Amazon accepted the listing and Nexus has not read its ASIN back yet (`isAsinPending`, `packages/shared/listing-risk.ts`). Not a draft, and not yet `live`. **`readinessPillLabel`** — the words on `ReadinessCell`'s pill, moved out of the `.tsx` so node tests reach it; unchanged for the other states, and `pending` shows its label alone (no issue count, no reference). `grid/renderers/projection.ts` — **`asin-pending`**, whose tone AND word are read from `readinessMeta('pending', 'row')`; the catalog's projection table lists it. Mirrored in Factory: `readiness.ts`, `projection.ts`, `cells.tsx`.
+
 ## Variation theme tooltip carries the delivery note — 2026-09-27
 
 `grid/renderers/variationTheme.tsx` — **`variationThemeTooltip`** now ends with the cell's **`deliveryNote`** when the cell is writable (it ended with `writeBlockedReason` only when it was not). The product-sheet create path (step 4/6) serves the theme cell writable on a market with no listing yet, with the note "Saved to the Amazon · SE draft. Publish sends it."; before this the note reached the axes editor's banner but not the cell's hover. Etsy's existing note ("Saved as a Nexus draft …") shows there too. Mirrored in Factory: `variationTheme.tsx`.

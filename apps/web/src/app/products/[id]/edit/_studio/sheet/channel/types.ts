@@ -45,8 +45,9 @@ import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared
  *
  * ROW/LISTING-level readiness vocabulary — deliberately distinct from PES.1's SCOPE-level
  * `ready|warn|blocked|absent` chips. No lane maps one onto the other locally (layout §3).
+ * `pending` — published on Amazon, ASIN not read back yet (the server's `isAsinPending`).
  */
-export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
 
 /**
  * VT.2 (2026-09-13, additive) — `'variationTheme'` is the `Variation theme` column
@@ -443,7 +444,7 @@ export interface ChannelReadinessIssue {
   severity: 'error' | 'warn'
 }
 
-/** ROW/LISTING-level readiness (5-state). Never mapped onto PES.1's scope-level 4-state. */
+/** ROW/LISTING-level readiness (6-state). Never mapped onto PES.1's scope-level 4-state. */
 export interface ChannelReadiness {
   state: ReadinessState
   /**

@@ -81,7 +81,7 @@ export function ListingsPane({
     <section className={styles.lCard}>
       <div className={styles.lHead}>
         <span className={styles.lName}>
-          {state === 'live' || state === 'ready' ? (
+          {state === 'live' || state === 'pending' || state === 'ready' ? (
             <CheckCircle2 size={13} aria-hidden />
           ) : state === 'errors' ? (
             <AlertTriangle size={13} aria-hidden />

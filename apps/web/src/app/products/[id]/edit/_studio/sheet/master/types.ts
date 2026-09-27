@@ -200,7 +200,7 @@ export interface ReadinessIssue {
 }
 
 export interface RowReadiness {
-  state: 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+  state: 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
   issues: ReadinessIssue[]
   ref?: string
 }

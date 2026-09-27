@@ -13,6 +13,7 @@ import {
   computeReadiness,
   decimalToNumber,
   coordKey,
+  listedState,
 } from '../pim/sheet-rows.service.js'
 import type { SheetColumn, SheetCoordinate } from '../pim/sheet-columns.service.js'
 import type { SheetCellValue, SheetListing } from '../pim/sheet-rows.service.js'
@@ -253,5 +254,50 @@ describe('coordKey', () => {
   it('keys a listing by channel AND marketplace, so IT and DE never collide', () => {
     expect(coordKey({ channel: 'AMAZON', marketplace: 'IT' })).toBe('AMAZON:IT')
     expect(coordKey({ channel: 'AMAZON', marketplace: 'DE' })).not.toBe(coordKey({ channel: 'AMAZON', marketplace: 'IT' }))
+  })
+})
+
+describe('an Amazon listing whose ASIN is pending (Owner, 2026-09-27)', () => {
+  const EBAY_IT: SheetCoordinate = { channel: 'EBAY', marketplace: 'IT', label: 'eBay · IT', inMarket: true }
+  const promoted = (over: Partial<SheetListing> = {}) => listing({ externalListingId: null, isPublished: true, listingStatus: 'ACTIVE', ...over })
+
+  it('reads pending, not ready or missing: Publish promoted it and Amazon has not reported its ASIN', () => {
+    const columns = [col({ key: 'brand' })]
+    expect(computeReadiness({ columns, values: { brand: val('XAVIA') }, row: CHILD, coordinate: AMAZON_IT, listing: promoted() }).state).toBe('pending')
+    // A warning does not demote it, as it does not demote `live`.
+    const warned = computeReadiness({ columns: [col({ key: 'gender', mode: 'strict', options: ['male'] })], values: { gender: val('unisex') },
+      row: CHILD, coordinate: AMAZON_IT, listing: promoted({ listingStatus: 'BUYABLE' }) })
+    expect(warned.state).toBe('pending')
+    expect(warned.issues).toHaveLength(1)
+  })
+
+  it('errors still beat pending', () => {
+    const r = computeReadiness({ columns: [col({ key: 'brand', requiredBy: ['Amazon · IT'] })], values: {}, row: CHILD, coordinate: AMAZON_IT, listing: promoted() })
+    expect(r.state).toBe('errors')
+  })
+
+  it('leaves a still-draft, and eBay, exactly as before', () => {
+    const columns = [col({ key: 'brand' })]
+    const values = { brand: val('XAVIA') }
+    expect(computeReadiness({ columns, values, row: CHILD, coordinate: AMAZON_IT, listing: promoted({ listingStatus: 'DRAFT', isPublished: false }) }).state).toBe('ready')
+    expect(computeReadiness({ columns, values, row: CHILD, coordinate: AMAZON_IT, listing: promoted({ listingStatus: 'DRAFT' }) }).state).toBe('ready')
+    expect(computeReadiness({ columns, values, row: CHILD, coordinate: EBAY_IT, listing: promoted() }).state).toBe('ready')
+  })
+
+  it('listedState — the one listing half both sheets read', () => {
+    expect(listedState(listing(), 'AMAZON')).toBe('live')
+    expect(listedState(listing({ externalListingId: '256789012345' }), 'EBAY')).toBe('live')
+    expect(listedState(promoted(), 'AMAZON')).toBe('pending')
+    expect(listedState(promoted({ listingStatus: 'DISCOVERABLE' }), 'AMAZON')).toBe('pending')
+    expect(listedState(promoted(), 'EBAY')).toBeNull()
+    expect(listedState(promoted({ isPublished: false }), 'AMAZON')).toBeNull()
+    expect(listedState(listing({ isPublished: false }), 'AMAZON')).toBeNull()
+    expect(listedState(null, 'AMAZON')).toBeNull()
+  })
+
+  it('the studio sheet reads the same helper', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('../pim/studio-sheet.service.ts', import.meta.url), 'utf8')
+    expect(source).toContain('listedState(listing, listingRow?.channel)')
   })
 })

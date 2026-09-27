@@ -29,12 +29,14 @@ import { columnApplies as applies, columnRequiredHere as requiredHere } from '@n
 import { coordinatesFor, getSheetColumns, type SheetColumn, type SheetCoordinate, type SheetColumnSet } from './sheet-columns.service.js'
 import { buildCoordinateValidators, evaluateRow, type CoordinateValidators, type FlatRow } from './readiness.service.js'
 import { projectCellValue, isBlankValue } from './sheet-values.js'
+import { isAsinPending } from '@nexus/shared/listing-risk'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────────────────
 
-export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+/** `pending` — published on Amazon, ASIN not read back yet (`isAsinPending`): not a draft, and not yet `live`. */
+export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
 
 export interface ReadinessIssue {
   key: string
@@ -320,6 +322,16 @@ function normaliseColumnValue(v: unknown, kind: SheetColumn['kind']): unknown {
  */
 export { columnApplies, columnRequiredHere } from '@nexus/shared/master-sheet'
 
+/**
+ * The listing half of a row's readiness, shared with the studio sheet: `live` when published with a channel id,
+ * `pending` when Amazon accepted it and its ASIN is not read back yet (`isAsinPending`), else `null`.
+ */
+export function listedState(listing: Pick<SheetListing, 'externalListingId' | 'isPublished' | 'listingStatus'> | null | undefined, channel: string | null | undefined): 'live' | 'pending' | null {
+  if (!listing) return null
+  if (listing.externalListingId && listing.isPublished) return 'live'
+  return isAsinPending({ channel, ...listing }) ? 'pending' : null
+}
+
 export function computeReadiness(input: {
   columns: SheetColumn[]
   values: Record<string, SheetCellValue>
@@ -361,7 +373,8 @@ export function computeReadiness(input: {
 
   if (hasErrors) return { state: 'errors', issues, ref }
   // A live listing stays live even with warnings — it is already on the channel.
-  if (listing && listing.externalListingId && listing.isPublished) return { state: 'live', issues, ref }
+  const listed = listedState(listing, coordinate.channel)
+  if (listed) return { state: listed, issues, ref }
   if (!listing) return { state: 'unlisted', issues, ref }
   if (issues.length > 0) return { state: 'missing', issues, ref }
   return { state: 'ready', issues, ref }

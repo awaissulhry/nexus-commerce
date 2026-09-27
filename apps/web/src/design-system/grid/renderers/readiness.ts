@@ -7,10 +7,12 @@
  *
  * ## Two vocabularies, and why they must not be collapsed
  *
- * **ROW level** — `ready | missing | errors | live | unlisted`. One row against one channel
+ * **ROW level** — `ready | missing | errors | live | pending | unlisted`. One row against one channel
  * coordinate: what would happen if this SKU were published to Amazon · IT right now. `live` is not
  * a degree of readiness at all — it means our record holds a channel reference — and `unlisted`
- * means the question has never been asked. Computed per row by the sheet read.
+ * means the question has never been asked. `pending` is `live` before its reference arrives: Amazon
+ * accepted the listing and Nexus has not read its ASIN back yet (`isAsinPending`,
+ * `packages/shared/listing-risk.ts`). Computed per row by the sheet read.
  *
  * **SCOPE level** — `ready | warn | blocked | absent | notComputed`. A whole scope chip: Amazon ●92%,
  * eBay ⚠71%.
@@ -29,7 +31,7 @@
  */
 
 /** One row against one channel coordinate. */
-export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
 
 /** A whole scope: the chips on the studio's scope bar. */
 export type ScopeReadinessState = 'ready' | 'warn' | 'blocked' | 'absent' | 'notComputed'
@@ -52,6 +54,8 @@ export interface ReadinessMeta {
 const ROW: Record<RowReadinessState, ReadinessMeta> = {
   ready: { tone: 'success', label: 'Ready', vocabulary: 'row', hint: 'Every field this channel requires is filled — this row can be published' },
   live: { tone: 'info', label: 'Listed', vocabulary: 'row', hint: 'Our record holds a channel reference. Whether it is selling is on the presence line.' },
+  /* Published, not a draft — the same tone as `live`. The word is the Owner's (2026-09-27). */
+  pending: { tone: 'info', label: 'Published · ASIN pending', vocabulary: 'row', hint: 'Amazon accepted this listing. Its ASIN has not been read back yet; Nexus reads it from Amazon.' },
   missing: { tone: 'warning', label: 'Missing', vocabulary: 'row', hint: 'Required fields are empty — publishing would be refused' },
   errors: { tone: 'danger', label: 'Errors', vocabulary: 'row', hint: 'A value breaks this channel’s rules — publishing would be refused' },
   unlisted: { tone: 'neutral', label: 'No listing here', vocabulary: 'row', hint: 'We hold no listing record for this coordinate. Nothing has been checked against the channel.' },
@@ -99,6 +103,18 @@ export function readinessMeta(state: ReadinessStateName, vocabulary: 'row' | 'sc
   // An unknown state is a contract change, and a grid that renders it as "Ready" would be lying.
   // Name it instead: neutral, verbatim, and obviously not one of ours.
   return { tone: 'neutral', label: String(state), vocabulary, hint: `Unrecognised ${vocabulary} readiness state “${state}”` }
+}
+
+/**
+ * The words on a row readiness pill (`ReadinessCell`): the label, with the issue count on a row that is not on the
+ * channel yet, or the channel reference on a `live` row. `pending` has no reference yet, so its label stands alone —
+ * here rather than in the `.tsx` so the node-environment tests can reach it.
+ */
+export function readinessPillLabel(value: { state: RowReadinessState; issues?: readonly unknown[]; ref?: string }): string {
+  const meta = readinessMeta(value.state, 'row')
+  if (value.state === 'live') return value.ref ? `${meta.label} · ${value.ref}` : meta.label
+  const n = value.issues?.length ?? 0
+  return n && value.state !== 'ready' && value.state !== 'pending' ? `${meta.label} · ${n}` : meta.label
 }
 
 /**

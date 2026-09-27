@@ -52,7 +52,7 @@ import type { AliasGroup as PreflightAlias } from './types';
 import { mappingHref } from '@/app/channels/mapping/_shared/navigation';
 import type { GetContextMenuItemsParams } from '@/design-system/grid';
 import { addListingAlias, commitChannelRow, useChannelSheet, type CreatedListing } from './useChannelSheet';
-import { connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, notListedSentence } from '../../draftListing';
+import { ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount, connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, notListedSentence } from '../../draftListing';
 import { useReadinessRefresh, useSaveReporter, useStudioRecord, useStudioScope, useViewChips } from '../../contracts';
 import type { CompareTarget } from '../../drawer/types';
 import { useAuth } from '@/lib/auth/AuthProvider';
@@ -839,6 +839,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
        or, with no account to start it under, says the API's own refusal. `draft`: every listing here is still a Nexus
        draft by the shared rule (`isStillDraftListing`), and the chip says it is not published. */
     const listingState = useMemo(() => (data ? coordinateListingState(rows) : null), [data, rows, listingEpoch]);
+    const asinPending = useMemo(() => (data ? asinPendingCount(rows, channel) : 0), [data, rows, channel]);
     const startsDraftHere = listingState === 'none' && rows.some((row) => row.aliasId == null);
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
@@ -880,6 +881,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 ...(switching ? [{ tone: 'info' as const, label: 'Loading languages…', detail: 'The sheet keeps the languages it shows until the new ones arrive; editing resumes then.' }] : []),
                 ...(data ? [
                 ...(listingState === 'draft' ? [{ tone: 'info' as const, label: DRAFT_CHIP_LABEL, detail: draftChipDetail(channel, marketplace) }] : []),
+                ...(asinPending ? [{ tone: 'info' as const, label: ASIN_PENDING_CHIP_LABEL, detail: asinPendingChipDetail(asinPending, marketplace) }] : []),
                 (({ tone, label, detail }) => ({ tone, label, detail }))(rulesStatus(channel, marketplace, data.meta.schemaMissing)),
             ] : []),
             ],
