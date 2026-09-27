@@ -93,6 +93,27 @@ describe('durable mapping impact at catalog scale', () => {
     expect(chunks.every((chunk, index) => index === 0 || chunk.createdAt > chunks[index - 1].createdAt)).toBe(true)
   })
 
+  it('lets only listed products block a category change: an unlisted product\'s empty new fields are shown, not blocking', async () => {
+    catalogueSize = 2
+    job.total = 2
+    job.changes = { ...job.changes, category: undefined, categoryChange: { categoryId: 'jackets', channelCategoryId: '177117' }, changes: [], allFields: true }
+    job.changes.categoryBefore = []
+    job.changes.categoryAfter = [{ categoryId: 'jackets', marketplace: 'IT', channelCategoryId: '177117' }]
+    // p0000 is listed on this site, p0001 is not.
+    db.channelListing.findMany.mockImplementation(async ({ where }) => where.productId.in.filter((id: string) => id === 'p0000')
+      .map((id: string) => ({ id: `${id}-a`, productId: id, channelConnectionId: 'account-a', aliasKey: '' })))
+    resolve.mockImplementation(async input => {
+      const after = input.categoryMappingSnapshot?.length > 0
+      return { products: input.productIds.map((id: string) => ({ productId: id, sku: id, category: { channelCategoryId: after ? '177117' : null },
+        cells: { aspect_Marke: { value: null, provenance: 'mapped', errors: after ? ['Required'] : [] } } })) }
+    })
+    await runMappingImpact(job.id)
+    expect(job.status).toBe('MAPPING_REVIEW')
+    // Both products' empty item specific is reported; only the listed one blocks.
+    expect(job.changes.counts.invalid).toBe(2)
+    expect(job.changes.counts.introducedInvalid).toBe(1)
+  })
+
   it('resumes from a committed checkpoint after a partial failure without duplicate records', async () => {
     resolve.mockRejectedValueOnce(new Error('temporary schema service failure'))
     await runMappingImpact(job.id)
