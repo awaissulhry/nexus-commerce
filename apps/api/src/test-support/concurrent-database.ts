@@ -34,6 +34,61 @@ export function concurrentDatabaseUrl(): URL | null {
   return url
 }
 
+/** A backend still in the disposable database when its DROP failed, as the owner sees it. */
+export type TeardownBackend = {
+  pid: number
+  usename: string | null
+  backend_type: string | null
+  application_name: string | null
+  state: string | null
+  /** The owner has this backend's role's privileges, so DROP … WITH (FORCE) may terminate it. */
+  terminable: boolean
+}
+
+/**
+ * Whether a failed DROP of the disposable database is worth another attempt.
+ *
+ * DROP … WITH (FORCE) checks every backend in the database before it signals any, and the NOSUPERUSER owner
+ * may terminate only roles whose privileges it has: itself and the runtime login granted to it. An autovacuum
+ * worker has no role (usename NULL to us), so while one is inside, the DROP fails with 42501 and terminates
+ * nothing. The worker leaves on its own, and by the time teardown looks it may already have gone, or be
+ * starting or exiting (in the process array but not in pg_stat_activity). So a 42501 is retried unless its
+ * cause is VISIBLE: a backend with a user whose privileges the owner lacks is a real leaked connection and
+ * fails at once. The fixture's own backends, still exiting after the pools end, are terminable: not the cause.
+ */
+export function dropFailureVerdict(code: string | undefined, backends: TeardownBackend[] | null): 'retry' | 'fail' {
+  if (code !== '42501' || backends === null) return 'fail'
+  return backends.some(backend => backend.usename !== null && !backend.terminable) ? 'fail' : 'retry'
+}
+
+// The old bound was 40 × 250 ms. Past the deadline a still-blocked DROP fails and names what it saw.
+const DROP_RETRY_DEADLINE_MS = 10_000
+const DROP_RETRY_INTERVAL_MS = 250
+const BACKENDS_SQL = `SELECT a.pid, a.usename, a.backend_type, a.application_name, a.state,
+    COALESCE((SELECT pg_has_role(current_user, r.oid, 'USAGE') FROM pg_roles r WHERE r.oid = a.usesysid), false) AS terminable
+  FROM pg_stat_activity a WHERE a.datname = $1`
+
+async function dropDisposableDatabase(admin: Pool, name: string) {
+  // One session for the DROP and the look: pg-pool discards a client whose query failed, and opening a new
+  // connection between the two gives a blocking autovacuum worker time to leave unseen.
+  const session = await admin.connect()
+  try {
+    const deadline = Date.now() + DROP_RETRY_DEADLINE_MS
+    for (let attempt = 1; ; attempt++) {
+      try { await session.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); return } catch (error) {
+        const failure = error as { code?: string; detail?: string }
+        const backends = await session.query<TeardownBackend>(BACKENDS_SQL, [name]).then(result => result.rows, () => null)
+        if (dropFailureVerdict(failure.code, backends) === 'retry' && Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, DROP_RETRY_INTERVAL_MS)); continue
+        }
+        // One line, so scripts/run-real-postgres-tests.mjs can print it in CI.
+        console.error(`[real-pg] disposable database cleanup failed ${JSON.stringify({ database: name, code: failure.code, detail: failure.detail, attempts: attempt, backends: backends ?? 'unavailable' })}`)
+        throw error
+      }
+    }
+  } finally { session.release() }
+}
+
 /**
  * `timeZone` is set on the database right after CREATE DATABASE, before any session opens, so every
  * session of both pools inherits it (the pools stay open from setup to close).
@@ -68,22 +123,7 @@ export async function concurrentDatabase(options: { maxConnections?: number; tim
     try {
       await client.$disconnect()
       await Promise.all([runtimePool.end(), pool.end()])
-      if (databaseCreated) {
-        for (let attempt = 0; ; attempt++) {
-          try { await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); break } catch (error) {
-            const remaining = await admin.query('SELECT pid,usename,backend_type,application_name,state FROM pg_stat_activity WHERE datname=$1', [name]).catch(() => null)
-            const failure = error as { code?: string; detail?: string }
-            // An autovacuum worker runs with no role (usename NULL to us), so a NOSUPERUSER
-            // owner may not terminate it (42501); it finishes on its own. Wait briefly for
-            // that case only: any backend with a visible user is a real leaked connection.
-            if (failure.code === '42501' && attempt < 40 && remaining?.rows.length && remaining.rows.every(row => row.usename === null)) {
-              await new Promise(resolve => setTimeout(resolve, 250)); continue
-            }
-            console.error('[real-pg] disposable database cleanup failed', { code: failure.code, detail: failure.detail, attempts: attempt + 1, backends: remaining?.rows ?? 'unavailable' })
-            throw error
-          }
-        }
-      }
+      if (databaseCreated) await dropDisposableDatabase(admin, name)
       if (roleCreated) await admin.query(`DROP ROLE IF EXISTS ${runtimeLogin}`)
     } finally { await admin.end() }
   }
