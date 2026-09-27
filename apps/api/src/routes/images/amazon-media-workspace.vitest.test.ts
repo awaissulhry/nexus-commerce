@@ -87,6 +87,8 @@ it.skipIf(process.env.NEXUS_AMAZON_MEDIA_BROWSER !== '1')('serves an isolated Am
   await server.close()
 }, 3_650_000)
 vi.mock('../../db.js', () => ({ default: fixture.db }))
+// Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
+vi.mock('../../services/images/media-plan-switch.js', async original => ({ ...await original<object>(), isOnMediaPlan: async () => false, mediaPlanProducts: async () => new Set() }))
 vi.mock('../../services/connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_channel: string, id: string) => { if (!['account-a', 'account-b'].includes(id)) throw new Error('Invalid account'); return id } }))
 vi.mock('../../services/images/amazon-media-client.js', async original => ({ ...await original<object>(), amazonMediaClient: fixture.client }))
 vi.mock('../../services/pim/catalog-source-fetch.js', () => ({ fetchCatalogSource: fixture.download }))

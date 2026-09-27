@@ -85,6 +85,7 @@ import { findMissingRequiredAspects, type AspectRequirement } from '../services/
 import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 import { tryResolveConnection } from '../services/connection-resolver.service.js';
 import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
+import { mediaPlanProducts, MEDIA_PLAN_REFUSAL } from '../services/images/media-plan-switch.js';
 
 // P1.2 — every eBay REST send in this file goes through the channel gateway (ebaySend).
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
@@ -1849,6 +1850,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     // base) have no __offerIds → shared/Trading lane. Replaces the it_item_id
     // heuristic, which misrouted Trading primaries into the Inventory lane.
     const inventoryManagedProducts = new Set<string>();
+    // Images rebuild P2b — families whose photos live in the media plan: a full push would overwrite them.
+    const mediaPlanFamilies = await mediaPlanProducts(rows.map((r) => String((r as Record<string, unknown>)._productId ?? '')));
     /** P4.1e — true when the lane marker could not be read at all. */
     let laneMarkersUnavailable = false;
     try {
@@ -2072,6 +2075,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         // bare HTTP 500 that failed the WHOLE push with zero information.
         // One family's crash is now that family's visible ERROR result.
         try {
+        if (strategy !== 'offers-only' && familyRows.some((r) => mediaPlanFamilies.has(String((r as Record<string, unknown>)._productId ?? '')))) {
+          for (const r of familyRows) {
+            perRowResults.push({ sku: String((r as Record<string, unknown>).sku ?? ''), market: mp, status: 'ERROR',
+              message: `${MEDIA_PLAN_REFUSAL} Use "Offers only" to push price and quantity.` });
+          }
+          continue;
+        }
         if (strategy === 'offers-only') {
           const offerResults = await pushOffersOnly(
             familyRows,

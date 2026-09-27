@@ -37,6 +37,8 @@ const fixture = vi.hoisted(() => {
   return { state, db, destination: vi.fn(), axes: vi.fn(), spec: vi.fn() }
 })
 vi.mock('../../db.js', () => ({ default: fixture.db }))
+// Images rebuild P2b — these families are not on the media plan (its own guard is tested in media-plan-switch.vitest.test.ts).
+vi.mock('../../services/images/media-plan-switch.js', async original => ({ ...await original<object>(), isOnMediaPlan: async () => false, mediaPlanProducts: async () => new Set() }))
 vi.mock('../../services/pim/workspace-destination.js', async original => ({ ...await original<object>(), resolveWorkspaceDestination: fixture.destination }))
 vi.mock('../../services/ebay-family-axes.service.js', () => ({ resolveFamilyAxes: fixture.axes }))
 vi.mock('../../services/pim/channel-specs/index.js', () => ({ loadEbaySpec: fixture.spec }))

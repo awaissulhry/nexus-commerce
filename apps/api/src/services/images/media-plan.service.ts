@@ -10,6 +10,7 @@ import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { publishListingEvent } from '../listing-events.service.js'
 import { readExcludedListingIds } from '../pim/variation-excluded.js'
 import { usesEbayInventory } from '../pim/ebay-listing-model.js'
+import { isOnMediaPlan } from './media-plan-switch.js'
 
 /**
  * Images rebuild P1 — the media plan read and write (docs/images-studio-rebuild/PLAN.md §6). One read gives the page
@@ -186,8 +187,8 @@ export async function readMediaWorkspace(productId: string) {
 
 /** A family is switched to the media plan once it has a Shared layer: its publishers send the plan's layout. */
 export async function isMediaSwitched(productId: string): Promise<boolean> {
-  const rootId = await familyRoot(productId)
-  return (await prisma.productMediaPlan.count({ where: { productId: rootId, layer: 'SHARED' } })) > 0
+  await familyRoot(productId)
+  return isOnMediaPlan(productId)
 }
 
 /**
@@ -197,7 +198,7 @@ export async function isMediaSwitched(productId: string): Promise<boolean> {
  */
 export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string } & MediaLayoutOverrides) {
   const rootId = await familyRoot(input.productId)
-  if (!(await prisma.productMediaPlan.count({ where: { productId: rootId, layer: 'SHARED' } }))) return null
+  if (!(await isOnMediaPlan(rootId))) return null
   const ctx = await loadMediaContext(rootId)
   const marketplace = GLOBAL_CHANNELS.has(input.channel) || input.channel === 'ETSY' ? 'GLOBAL' : input.marketplace
   const key = mediaLayerKey({ layer: 'LISTING', channel: input.channel, marketplace, accountId: input.accountId, aliasKey: input.channel === 'AMAZON' ? '' : input.aliasKey ?? '' })

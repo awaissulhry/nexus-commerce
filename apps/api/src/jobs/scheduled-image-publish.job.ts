@@ -23,6 +23,7 @@ import { submitAmazonImageFeed } from '../services/images/amazon-image-feed.serv
 // Inventory-listed products (ebayItemId is null); use the real Inventory push.
 import { publishEbayImagesViaInventory } from '../services/images/ebay-inventory-image-publish.service.js'
 import { publishShopifyImages } from '../services/images/shopify-image-publish.service.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from '../services/images/media-plan-switch.js'
 
 const TICK_INTERVAL_MS = 60 * 1000
 const FIRE_RESULT_MAX_BYTES = 4 * 1024
@@ -62,6 +63,8 @@ async function fireOneSchedule(scheduleId: string): Promise<'fired' | 'failed'> 
     const channel = schedule.channel
     const marketplace = schedule.marketplace
     const productId = schedule.productId
+    // Images rebuild P2b — a schedule made before the family moved to the media plan must not overwrite its photos.
+    if (await isOnMediaPlan(productId)) { await markFailed(scheduleId, MEDIA_PLAN_REFUSAL); return 'failed' }
 
     let result: unknown
 

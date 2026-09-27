@@ -34,6 +34,7 @@ import { galleryForCuratedRow } from './ebay-gallery-verbatim.pure.js'
 import { publishEbaySharedListingImages } from './ebay-shared-image-publish.service.js'
 import { tryResolveConnection } from '../connection-resolver.service.js'
 import { ebayWriteRefusal, ebayHostOf } from '../ebay-publish-gate.service.js'
+import { isOnMediaPlan, MEDIA_PLAN_REFUSAL } from './media-plan-switch.js'
 
 /**
  * PURE — the per-variation gallery a publish sends for one curated row.
@@ -89,6 +90,8 @@ export async function publishEbayImagesViaInventory(
     select: { id: true, sku: true, isParent: true, parentId: true, imageAxisPreference: true, productType: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
+  // Images rebuild P2b — the media plan owns this family's photos; this publish would overwrite them.
+  if (await isOnMediaPlan(product.id)) return { success: false, message: MEDIA_PLAN_REFUSAL, error: MEDIA_PLAN_REFUSAL, pictureCount: 0, colorSetCount: 0 }
 
   // EB-IMG — LISTING SHELLS (extra flat-file listings) have no product
   // children; their variants are pooled SKUs via SharedListingMembership and
