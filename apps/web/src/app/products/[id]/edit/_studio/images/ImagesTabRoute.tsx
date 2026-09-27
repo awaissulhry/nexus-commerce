@@ -12,6 +12,7 @@
  * needs nothing from PES.1 and cannot drift from the URL the frame is already keyed to.
  */
 import type { ReactNode } from 'react'
+import { TooltipPortalProvider } from '@/design-system/primitives'
 import { useStudioProduct, useStudioScope } from '../contracts'
 import { ImagesTab } from './ImagesTab'
 import { EbayMediaRoute } from './ebay/EbayMediaRoute'
@@ -27,5 +28,6 @@ export function ImagesTabRoute() {
     : scope === 'AMAZON' ? <AmazonMediaRoute />
     : scope === 'SHOPIFY' ? <ShopifyContentRoute />
     : <ImagesTab header={header} productId={destination.status === 'ready' ? destination.data.listing?.productId ?? product.id : product.id} />
-  return <MediaPlanRoute productId={product.id} fallback={fallback} />
+  // The tab is a scroll area: its tooltips draw in a portal, so a hidden one at the right edge cannot widen it (2026-09-28).
+  return <TooltipPortalProvider><MediaPlanRoute productId={product.id} fallback={fallback} /></TooltipPortalProvider>
 }
