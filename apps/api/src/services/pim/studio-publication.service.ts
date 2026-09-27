@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import type { StudioPublishReview, StudioPublishResult, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { blockingIssues, isPhotoChangeId, type StudioPublishReview, type StudioPublishResult, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { workspaceIdForQuery } from '@nexus/database/workspace-context'
@@ -188,11 +188,16 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
   if (unresolved) return { ...plan.review, ...(unresolved.userId === userId ? { previousPublicationId: unresolved.id } : {}), issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). ${unresolved.userId === userId ? 'Check its status before publishing again.' : 'Ask the colleague who submitted it to check its status.'}` }] }
-  if (!plan.prepared || plan.review.issues.some(i => i.severity === 'error')) return plan.review
+  // P4c — errors that each name a field (an off-list Season value) block that field, not the listing: on a change-only
+  // review the photos can still be sent. Any error that names no field blocks the review as before.
+  const errors = plan.review.issues.filter(i => i.severity === 'error')
+  const photosOnly = errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan && !!plan.review.changes?.some(c => c.selectable && isPhotoChangeId(c.id))
+  if (!plan.prepared || (errors.length && !photosOnly)) return plan.review
+  const review = { ...plan.review, id, ...(photosOnly ? { photosOnly: true } : {}) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
-      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review: { ...plan.review, id } }) } })
-  return { ...plan.review, id }
+      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review }) } })
+  return review
 }
 
 /** The exact wire preview is compiled from the saved review. No channel reads or writes occur here. */
@@ -206,6 +211,8 @@ export async function previewStudioPublicationSelection(productId: string, id: s
   const ids = object(body).selectedIds
   if (!Array.isArray(ids) || ids.length > 50_000 || ids.some(id => typeof id !== 'string' || id.length > 2_000))
     throw new WorkspaceScopeError('Choose valid fields from this review.', 400)
+  if (object(data.review).photosOnly === true && !ids.every(value => isPhotoChangeId(value as string)))
+    throw new WorkspaceScopeError('Other fields of this listing have problems (listed in the review). Choose only photos, or fix them first.', 422)
   let compiled: ReturnType<typeof compileSelection>
   try { compiled = compileSelection(data.changePlan, ids, id) }
   catch (error) { throw new WorkspaceScopeError(error instanceof Error ? error.message : String(error), 400) }
@@ -266,7 +273,8 @@ export async function submitStudioPublication(productId: string, id: string, bod
     throw new WorkspaceScopeError('Review the exact selected changes before publishing. This selection token is missing or stale.', 400)
   const plan = await buildReview(productId, data.scope as StudioPublishScope)
   if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination, channel settings or content-read evidence changed. Review the current values before publishing.')
-  const blockers = plan.review.issues.filter(i => i.severity === 'error')
+  // A photos-only selection is not blocked by other fields' problems (P4c); everything else is, as before.
+  const blockers = sparse ? blockingIssues(plan.review.issues, data.selection?.selectedIds) : plan.review.issues.filter(i => i.severity === 'error')
   if (blockers.length || !plan.prepared) throw new WorkspaceScopeError(blockers.map(i => i.message).join('\n') || 'Publication is unavailable.', 422)
   if (sparse) {
     if (!plan.changePlan) throw new WorkspaceScopeError('The change-only review is unavailable. Refresh the review.')
