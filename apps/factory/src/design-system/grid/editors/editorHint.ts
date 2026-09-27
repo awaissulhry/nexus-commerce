@@ -21,3 +21,10 @@ export const EDITOR_KEY_HINT = 'Enter saves · Tab saves and moves right · Esc 
  * equal (`editorHint.vitest.test.ts`). Both stay single-quoted literals: the editor-open gate reads them from this file.
  */
 export const EDITOR_KEY_HINT_FORM = 'Enter saves · Tab next bullet, then moves right · Esc cancels'
+
+/**
+ * The media pop-ups (sheet pop-up rebuild P1, 2026-09-28): a panel of several controls — search, a pick list, chips,
+ * buttons — so Tab moves between those controls instead of leaving the cell, and a click outside saves as Shopify's
+ * bulk editor does. One key line, like every editor (R-48).
+ */
+export const EDITOR_KEY_HINT_PANEL = 'Enter saves · Click outside saves · Esc cancels'

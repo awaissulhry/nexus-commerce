@@ -91,6 +91,8 @@ export interface SheetColumn {
   optionLabels?: Record<string, string>
   /** Shopify reference id → picture URL (files, video posters, products), resolved with the names. Display only. */
   referenceImages?: Record<string, string>
+  /** Reference id → colour swatch, for entries whose picture is a colour (sheet pop-up rebuild P1). */
+  referenceSwatches?: Record<string, string>
   /** `strict` = the channel accepts only the list (an off-list value WARNS, never blocks). */
   mode?: 'strict' | 'open'
   requiredBy: string[]

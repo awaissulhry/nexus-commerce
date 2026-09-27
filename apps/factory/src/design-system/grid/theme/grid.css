@@ -1415,6 +1415,8 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 /* italic overhang — see `.nds-cell-required` */
 .nds-mf-pending { color: var(--nds-text-muted); font-style: italic; padding-inline-end: 2px; }
 .nds-mf-refs, .nds-mf-colors, .nds-mf-rating, .nds-mf-bool { display: inline-flex; align-items: center; gap: var(--nds-space-2); min-width: 0; max-width: 100%; overflow: hidden; }
+/* A reference chip with its picture or swatch in front (sheet pop-up rebuild P1, 2026-09-28). */
+.nds-mf-refchip .t { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; }
 .nds-mf-picture {
   flex: none; width: 24px; height: 24px; border-radius: var(--nds-radius-sm); object-fit: cover; display: inline-flex;
   align-items: center; justify-content: center; background: var(--nds-surface-sunken); border: 1px solid var(--nds-border-subtle); color: var(--nds-text-muted);

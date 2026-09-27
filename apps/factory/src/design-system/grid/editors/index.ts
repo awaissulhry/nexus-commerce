@@ -48,7 +48,9 @@ export { variationThemeChange, variationThemeWrite, type VariationThemeChange, t
 export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, scalarValueEditor, scalarValueEditorSpec, CELL_EDITING_UNDER_CLASS, type FormulaEditorParams, type FormulaWiring, type CellEditorContext, type CellHistoryEntry } from './FormulaCellEditor'
 // R-47 / R-48 (A-42 step 1, 2026-09-24) — a number cell never loses its value to a stray letter; ONE key line for every editor.
 export { isNumberDraft, numberStart, acceptNumberEdit, numberCommitText, NUMBER_ONLY_MESSAGE, type NumberStart } from './numberEntry'
-export { EDITOR_KEY_HINT, EDITOR_KEY_HINT_FORM } from './editorHint'
+export { EDITOR_KEY_HINT, EDITOR_KEY_HINT_FORM, EDITOR_KEY_HINT_PANEL } from './editorHint'
+// Sheet pop-up rebuild P1 (2026-09-28) — a pop-up hosted outside AG's popup layer sizes itself by the same rule.
+export { editorBox, roomToRightOf, EDITOR_CAPS, MIN_EDITOR_WIDTH, type EditorKind, type EditorBox } from './editorBox'
 export { isFormulaDraft, commitValue, coerceTyped, completionToAccept, formulaAvailability, formulaEditorChoice, formulaSaveOutcome, FORMULA_BLOCKED_REASON, FORMULA_STORED_NOT_EVALUATED, type FormulaSaveResponse, type FormulaSaveOutcome, type FormulaAvailability, type FormulaEditorChoice, type CommitKind, exprOf, inStringLiteral, refTokenAt, completionsFor, applyCompletion, unknownRefs, type FormulaCandidate, type RefToken } from './formulaEditing'
 export { tokenizeForDisplay, refsOf, matchBrackets, callAt, type Token, type TokenKind, type CallContext } from './formulaTokens'
 export { assignRefColours, refColoursWrap, colourFor, REF_CYCLE, CYCLE_MEASURED_CONTRAST, type RefColour } from './formulaPalette'

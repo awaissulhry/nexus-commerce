@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { shopifyLinkedDraftSchema, shopifyProductGid } from '@nexus/shared/shopify-linked-products'
 import { contentDestination, type ContentScope } from '../../services/shopify/content-workspace.service.js'
 import { shopifyAdmin } from '../../services/shopify/admin-client.js'
-import { readLinkedFields, readLinkedOwner, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences, searchLinkedReferences } from '../../services/shopify/linked-products-gateway.js'
+import { invalidateLinkedReferenceNames, readLinkedFields, readLinkedOwner, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferenceNames, searchLinkedReferences } from '../../services/shopify/linked-products-gateway.js'
 import { advanceLinkedSync, beginLinkedSync, getLinkedWorkspace, importLinkedFamily, previewLinkedWorkspace, rebaseLinkedWorkspace, saveLinkedWorkspace } from '../../services/shopify/linked-products.service.js'
 import { getLinkedEntry, saveLinkedEntry } from '../../services/shopify/linked-metaobjects.service.js'
 import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
@@ -103,7 +103,7 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
         }
         if (suffix === '/owner') return await readLinkedOwner(graphql, query.ownerId ?? '')
         if (suffix === '/references') return await searchLinkedReferences(graphql, { type: query.type ?? '', query: query.query, cursor: query.cursor, metaobjectType: query.metaobjectType })
-        if (suffix === '/reference-names') return await resolveLinkedReferences(graphql, z.object({ ids: z.array(z.string()).max(100) }).parse(request.body).ids)
+        if (suffix === '/reference-names') return await resolveLinkedReferenceNames(graphql, destination.accountId, z.object({ ids: z.array(z.string()).max(100) }).parse(request.body).ids)
         if (suffix === '/products') return await readLinkedProducts(graphql, z.object({ ids: z.array(shopifyProductGid).max(2048) }).parse(request.body).ids)
         if (suffix === '/field-values') return await readLinkedFields(graphql, z.object({ addresses: z.array(z.object({ ownerId: shopifyProductGid, namespace: z.string().min(1), key: z.string().min(1) })).max(2048) }).parse(request.body).addresses)
         if (suffix === '/read-links') {
@@ -114,7 +114,13 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
           const input = z.object({ sourceId: shopifyProductGid, relationship: z.object({ namespace: z.string().min(1), key: z.string().min(1), includeSelf: z.boolean() }).nullable() }).strict().parse(request.body)
           return shopifyLinkedDraftSchema.parse(await importLinkedFamily(graphql, input.sourceId, input.relationship))
         }
-        if (suffix === '/entry') return method === 'GET' ? await getLinkedEntry(graphql, query.id ?? '') : await saveLinkedEntry(graphql, request.body)
+        if (suffix === '/entry') {
+          if (method === 'GET') return await getLinkedEntry(graphql, query.id ?? '')
+          const saved = await saveLinkedEntry(graphql, request.body)
+          /* A saved entry's name or picture may have changed: the next display read must not serve the old one. */
+          invalidateLinkedReferenceNames()
+          return saved
+        }
       } catch (error) {
         if (error instanceof z.ZodError) return reply.code(400).send({ error: error.issues.map(i => i.message).join(' ') })
         if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })

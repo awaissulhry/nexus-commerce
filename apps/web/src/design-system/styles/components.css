@@ -3099,6 +3099,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-mpick-detail, .nds-mpick-held { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 .nds-mpick-held { color: var(--nds-warning-strong); }
 .nds-mpick-check { flex-shrink: 0; color: var(--nds-primary); }
+.nds-mpick-actions { flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--nds-space-2); cursor: default; }
 .nds-mpick-state { display: flex; align-items: center; justify-content: center; gap: var(--nds-space-6); padding: var(--nds-space-12) var(--nds-space-9); font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-muted); }
 .nds-mpick-state.error { color: var(--nds-danger-strong); }
 .nds-mpick-more { display: flex; justify-content: center; padding: var(--nds-space-4); }
@@ -3115,8 +3116,9 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 .nds-mchip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .nds-mchip.unknown .nds-mchip-label { color: var(--nds-warning-strong); font-style: italic; }
 .nds-mchips-input { flex: 1 1 120px; min-width: 120px; }
-.nds-mchips-field { width: 100%; border-color: transparent; background: transparent; box-shadow: none; }
-.nds-mchips-field:focus-within { outline: none; box-shadow: none; }
+/* The search line is part of the chip field's box: the FIELD draws the one focus ring, the line inside draws none
+   (a second ring inside the first read as two boxes; measured on /design/shopify-popup, 2026-09-28). */
+.nds-mchips .nds-field.nds-mchips-field, .nds-mchips .nds-field.nds-mchips-field:hover, .nds-mchips .nds-field.nds-mchips-field:focus-within { width: 100%; border-color: transparent; background: transparent; outline: none; box-shadow: none; }
 .nds-mchips-clear { flex-shrink: 0; align-self: center; }
 
 .nds-molist { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }

@@ -208,7 +208,7 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
       })
     }
     if (definition?.shopifyField && !shopifySchema) return { ...column, editable: false }
-    return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open),
+    return definition?.shopifyField && shopifySchema ? { ...column, ...shopifyDraftColumn(definition, shopifyEditor.open, shopifyEditor.closed),
       editable: p => !!p.data?.values[definition.key]?.writable && auth.has('products.edit') && (definition.shopifyField?.id !== 'inventory' || auth.has('inventory.adjust')),
       cellRendererParams: { ...column.cellRendererParams, openEditor: shopifyEditor.open, formattedPreview: true,
         suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') },

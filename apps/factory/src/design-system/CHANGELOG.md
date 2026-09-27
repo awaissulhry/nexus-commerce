@@ -1,3 +1,7 @@
+## Shopify pop-up pieces — 2026-09-28
+
+Mirrored from web. `MetafieldValue` reference chips with pictures and swatches (`metafieldDisplay` `swatches`), `MediaPickList` `rowActions`, `EDITOR_KEY_HINT_PANEL`, `editorBox`/`EDITOR_CAPS` exported from the editors barrel.
+
 ## Media pickers: MediaMark, MediaPickList, MediaChipField, MediaOrderedList, ResourcePickerDialog — 2026-09-28
 
 Mirrored from web. Pickers whose choices carry a picture or a colour swatch (`MediaChoice`, `lib/media-choice.ts`), and the grid editor size kind `media` (480 × 520). Also the opt-in `OrderedList liveDrag` prop and `useSortableDrag` (`lib/sortable.ts`).

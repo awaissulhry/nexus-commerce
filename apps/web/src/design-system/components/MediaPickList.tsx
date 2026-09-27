@@ -18,7 +18,7 @@
  *   - `local` search ranks in memory; `remote` shows the page the server returned for the query as given.
  *   - A held row is reachable and read out with its reason, and never ticks.
  */
-import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type Ref } from 'react'
+import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react'
 import { Check, Plus, Search } from 'lucide-react'
 
 import { Button } from '../primitives/Button'
@@ -65,6 +65,11 @@ export interface MediaPickListProps {
    * takes it here instead; the list then leaves Enter alone.
    */
   onEnterKey?: (active: MediaChoice | undefined) => void
+  /**
+   * Buttons at the end of a row (e.g. "Edit entry" on a picked entry). A click inside them never ticks the row.
+   * Keep them few: the row's own click is the main action.
+   */
+  rowActions?: (choice: MediaChoice, picked: boolean) => ReactNode
   /** The highlighted row changed — its DOM id, for `aria-activedescendant` on a caller's own field. */
   onActiveChange?: (optionId: string | undefined) => void
   /** Scroll height of the rows; the search field and footer stay in view. */
@@ -79,7 +84,7 @@ const LIST_KEYS = new Set<string>(['ArrowDown', 'ArrowUp', 'Home', 'End', 'PageD
 export const MediaPickList = forwardRef<MediaPickListHandle, MediaPickListProps>(function MediaPickList(props, ref) {
   const {
     label, choices, selected, onToggle, mode = 'multi', search = 'local', query: controlledQuery, onQueryChange, searchPlaceholder = 'Search',
-    loading = false, error = null, emptyText = 'No matches', hasMore = false, onLoadMore, createLabel, onCreate, onEnterKey, onActiveChange, maxHeight = 280,
+    loading = false, error = null, emptyText = 'No matches', hasMore = false, onLoadMore, createLabel, onCreate, onEnterKey, onActiveChange, rowActions, maxHeight = 280,
     autoFocus = false, inputRef, className,
   } = props
   const searchField = props.searchField ?? search !== 'none'
@@ -171,6 +176,7 @@ export const MediaPickList = forwardRef<MediaPickListHandle, MediaPickListProps>
                 {choice.detail && <span className="nds-mpick-detail">{choice.detail}</span>}
                 {held && <span className="nds-mpick-held">{choice.heldReason}</span>}
               </span>
+              {rowActions && (() => { const actions = rowActions(choice, on); return actions ? <span className="nds-mpick-actions" onClick={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}>{actions}</span> : null })()}
               {mode === 'single' && on && <Check className="nds-mpick-check" size={16} aria-hidden />}
             </div>
           )

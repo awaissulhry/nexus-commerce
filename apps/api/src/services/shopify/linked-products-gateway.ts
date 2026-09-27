@@ -1,4 +1,4 @@
-import type { ShopifyFieldDefinition, ShopifyFieldOwner, ShopifyFieldSnapshot, ShopifyLinkedMember, ShopifyReferencePage, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import type { ShopifyFieldDefinition, ShopifyFieldOwner, ShopifyFieldSnapshot, ShopifyLinkedMember, ShopifyReference, ShopifyReferencePage, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { shopifyGid, shopifyProductGid } from '@nexus/shared/shopify-linked-products'
 import { createHash } from 'node:crypto'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
@@ -9,6 +9,17 @@ export function invalidateShopifyDefinitionConstraints() { constraintPages.clear
 
 export const linkedDigest = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const pageInfo = 'pageInfo { hasNextPage endCursor }'
+/**
+ * An entry's own picture: the field its definition marks as the thumbnail (a file or a colour). Shopify's admin draws
+ * exactly this beside each entry — the swatch in the category Color list, the icon in a "Text with icon" list
+ * (measured in the bulk editor 2026-09-27, docs/sheet-popup-editor/PLAN-2026-09-27.md §2). Read generically: no field
+ * key is assumed.
+ */
+const entryThumbnail = 'thumbnailField { thumbnail { hex file { preview { image { url } } } } }'
+const entryPicture = (n: any): { image: string | null; swatch: string | null } => ({
+  image: n?.thumbnailField?.thumbnail?.file?.preview?.image?.url ?? null,
+  swatch: n?.thumbnailField?.thumbnail?.hex ?? null,
+})
 const fieldSelection = 'id namespace key type value compareDigest'
 const definitionSelection = `id name description namespace key ownerType type { name } validations { name value } access { admin storefront } constraints { key values(first:250) { nodes { value } ${pageInfo} } }`
 const metaDefinitionSelection = 'id name type description access { admin storefront } capabilities { publishable { enabled } } fieldDefinitions { key name description required type { name } validations { name value } }'
@@ -150,7 +161,7 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   const query = input.query?.trim().slice(0, 200) || null, after = input.cursor || null
   let selection: string, root: string, args = 'first:40,after:$after,query:$query', variables: Record<string, unknown> = { after, query }, extra = ''
   if (type === 'product_reference') { root = 'products'; selection = 'id title handle featuredMedia { preview { image { url } } }' }
-  else if (type === 'variant_reference') { root = 'productVariants'; selection = 'id title sku product { title } image { url }' }
+  else if (type === 'variant_reference') { root = 'productVariants'; selection = 'id title sku product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } }' }
   else if (type === 'collection_reference') { root = 'collections'; selection = 'id title image { url }' }
   else if (type === 'customer_reference') { root = 'customers'; selection = 'id displayName' }
   else if (type === 'company_reference') { root = 'companies'; selection = 'id name' }
@@ -161,7 +172,7 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   else if (type === 'product_media') { root = 'files'; selection = '__typename id alt fileStatus preview { image { url } } ... on MediaImage { image { url } } ... on Video { sources { url mimeType } } ... on Model3d { sources { url mimeType } }'; variables.query = `media_type:IMAGE OR media_type:VIDEO OR media_type:MODEL_3D`; if (query) variables.query = `(${variables.query}) AND (${query})` }
   else if (type === 'metaobject_reference' || type === 'mixed_reference' || type === 'disclosure_reference') {
     if (!input.metaobjectType) throw new WorkspaceScopeError('Choose the reusable entry type.', 400)
-    root = 'metaobjects'; selection = 'id displayName handle type'; args += ',type:$type'; extra = ',$type:String!'; variables.type = input.metaobjectType
+    root = 'metaobjects'; selection = `id displayName handle type ${entryThumbnail}`; args += ',type:$type'; extra = ',$type:String!'; variables.type = input.metaobjectType
   } else if (type === 'product_taxonomy_value_reference') {
     if (!query || !/^gid:\/\/shopify\/TaxonomyValue\/\d+$/.test(query)) return { items: [], cursor: null }
     const refs = await resolveLinkedReferences(gql, [query])
@@ -182,15 +193,48 @@ export async function searchLinkedReferences(gql: ShopifyGraphql, input: { type:
   const data = await gql(`query NexusLinkedReferenceSearch($after:String,$query:String${extra}) { ${root}(${args}) { nodes { ${selection} } ${pageInfo} } }`, variables)
   const page = data[root]
   if (!page || !Array.isArray(page.nodes) || (page.pageInfo.hasNextPage && !page.pageInfo.endCursor)) throw new WorkspaceScopeError('The search result is incomplete. Retry.', 502)
-  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? n.alt ?? n.id), image: n.image?.url ?? n.featuredMedia?.preview?.image?.url ?? n.preview?.image?.url ?? null, ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
+  return { items: page.nodes.filter((n: any) => type !== 'product_media' || ['MediaImage', 'Video', 'Model3d'].includes(n.__typename)).map((n: any) => ({ id: n.id, label: n.displayName ?? (n.product ? `${n.product.title} / ${n.title}${n.sku ? ` · ${n.sku}` : ''}` : n.title ?? n.name ?? n.alt ?? n.id), image: referenceImage(n), ...(n.thumbnailField?.thumbnail?.hex ? { swatch: n.thumbnailField.thumbnail.hex } : {}), ...(n.type || n.__typename ? { type: n.type ?? n.__typename } : {}), ...(n.handle ? { handle: n.handle } : {}),
     ...(type === 'product_media' ? { media: { id: n.id, alt: n.alt ?? '', type: ({ MediaImage: 'IMAGE', Video: 'VIDEO', Model3d: 'MODEL_3D' } as Record<string, string>)[n.__typename], status: n.fileStatus, preview: n.preview?.image?.url ?? n.image?.url ?? null, url: n.image?.url ?? n.sources?.[0]?.url ?? null, ...(n.sources ? { sources: n.sources } : {}) } } : {}) })), cursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null }
 }
 
-export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]) {
+/** The picture a reference carries, whatever its kind: an entry's thumbnail file, a variant's first media (else its
+ *  product's), a collection or file image, a product's featured media. */
+function referenceImage(n: any): string | null {
+  return entryPicture(n).image ?? n?.media?.nodes?.[0]?.preview?.image?.url ?? n?.image?.url ?? n?.preview?.image?.url ?? n?.featuredMedia?.preview?.image?.url
+    ?? n?.product?.featuredMedia?.preview?.image?.url ?? null
+}
+
+export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]): Promise<ShopifyReference[]> {
   if (ids.length > 100 || ids.some(id => !shopifyGid.safeParse(id).success)) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
-  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title } } ... on Collection { title } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
+  const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title featuredMedia { preview { image { url } } } } ... on ProductVariant { title product { title featuredMedia { preview { image { url } } } } media(first:1) { nodes { preview { image { url } } } } } ... on Collection { title image { url } } ... on Page { title } ... on Article { title } ... on TaxonomyValue { name } ... on Customer { displayName } ... on Company { name } ... on Order { name } ... on Metaobject { displayName type ${entryThumbnail} } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Model3d { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
   if (!Array.isArray(nodes) || nodes.length !== ids.length || nodes.some((n: any, i: number) => n && n.id !== ids[i])) throw new WorkspaceScopeError('Shopify returned incomplete or mismatched references. Retry before synchronizing.', 502)
-  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: n?.image?.url ?? n?.preview?.image?.url ?? n?.featuredMedia?.preview?.image?.url ?? null, available: !!n, type: n?.type ?? n?.__typename }))
+  return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.name ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: referenceImage(n), ...(entryPicture(n).swatch ? { swatch: entryPicture(n).swatch } : {}), available: !!n, type: n?.type ?? n?.__typename }))
+}
+
+/**
+ * Names and pictures for DISPLAY — the sheet's cells and the pop-ups — cached per store for 10 minutes.
+ *
+ * Every sheet load used to ask Shopify for every referenced name and picture again, and every pop-up opening asked
+ * once more (research 2026-09-27). Only display reads use this: validation (`shopifyReferenceError`) and
+ * synchronization call `resolveLinkedReferences` directly and always read fresh. An unavailable reference is never
+ * cached (it may be restored); saving an entry clears the cache (`invalidateLinkedReferenceNames`).
+ */
+export const REFERENCE_NAME_TTL_MS = 10 * 60 * 1000
+const referenceNames = new WorkspaceCache<string, { expires: number; value: ShopifyReference }>(20000)
+export function invalidateLinkedReferenceNames() { referenceNames.clear() }
+export async function resolveLinkedReferenceNames(gql: ShopifyGraphql, accountId: string, ids: string[], now = Date.now()): Promise<ShopifyReference[]> {
+  if (ids.length > 100) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
+  const key = (id: string) => `${accountId}|${id}`
+  const known = new Map<string, ShopifyReference>()
+  for (const id of ids) { const hit = referenceNames.get(key(id)); if (hit && hit.expires > now) known.set(id, hit.value) }
+  const missing = [...new Set(ids.filter(id => !known.has(id)))]
+  if (missing.length) {
+    for (const ref of await resolveLinkedReferences(gql, missing)) {
+      known.set(ref.id, ref)
+      if (ref.available) referenceNames.set(key(ref.id), { expires: now + REFERENCE_NAME_TTL_MS, value: ref })
+    }
+  }
+  return ids.map(id => known.get(id)!)
 }
 
 export async function readLinkedMetaobject(gql: ShopifyGraphql, id: string) {
