@@ -1,7 +1,7 @@
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 import { parseMediaFileName, versionGroups, type FileNameContext, type ParsedFileName } from '@nexus/shared/media-plan-files'
 
-import { setRows, valueLabel, viewAxis, viewStack, type LayerView, type MediaRead } from './model'
+import { cardOf, setRows, valueLabel, viewAxis, viewStack, type LayerView, type MediaRead } from './model'
 
 /**
  * Images rebuild P4b — the upload dialog's logic (PLAN.md §4.6, §5.5), pure so it is tested without a browser.
@@ -83,8 +83,12 @@ export interface Placement { ops: MediaOp[]; sets: Array<{ ref: MediaSetRef; lab
  */
 export function placementOps(read: MediaRead, view: LayerView, rows: readonly UploadRow[]): Placement {
   const current = new Map(setRows(read, view, { skus: true }).map(r => [r.ref, r]))
+  // The duplicate check may answer with another SKU's copy of a picture: the plan gets its library card, and any copy
+  // or language version counts as the photo already there.
+  const card = cardOf(read)
   const group = new Map(read.library.map(a => [a.id, a.versionGroupId ?? a.id]))
-  const photo = (id: string) => group.get(id) ?? id
+  const photo = (id: string) => group.get(card(id)) ?? card(id)
+  const asset = (row: UploadRow) => card(placedAsset(row)!)
   const ready = rows.filter(r => placedAsset(r))
   const versions = versionRows(ready)
   const dropped = new Set(versions.flatMap(g => { const keep = placedVersion(ready.filter(r => g.includes(r.key)), read.mainLanguage); return g.filter(k => k !== keep.key) }))
@@ -93,19 +97,19 @@ export function placementOps(read: MediaRead, view: LayerView, rows: readonly Up
   const bySet = new Map<MediaSetRef, UploadRow[]>()
   for (const row of ready) {
     if (dropped.has(row.key)) continue
-    if (row.swatch && row.set.startsWith('value:')) { ops.push({ op: 'swatch', value: row.set.slice('value:'.length), assetId: placedAsset(row)! }); continue }
+    if (row.swatch && row.set.startsWith('value:')) { ops.push({ op: 'swatch', value: row.set.slice('value:'.length), assetId: asset(row) }); continue }
     bySet.set(row.set, [...(bySet.get(row.set) ?? []), row])
   }
   const sets: Placement['sets'] = []
   for (const [ref, list] of bySet) {
     const have = new Set((current.get(ref)?.items ?? []).map(photo))
-    const fresh = list.filter(r => { const id = placedAsset(r)!; if (have.has(photo(id))) { skipped.push(r.fileName); return false } have.add(photo(id)); return true })
+    const fresh = list.filter(r => { const id = asset(r); if (have.has(photo(id))) { skipped.push(r.fileName); return false } have.add(photo(id)); return true })
     if (!fresh.length) continue
     const placedAt = [...fresh.filter(r => r.position !== null).sort((a, b) => a.position! - b.position!), ...fresh.filter(r => r.position === null)]
     let length = current.get(ref)?.items.length ?? 0
     const atEnd: string[] = []
     for (const row of placedAt) {
-      const id = placedAsset(row)!
+      const id = asset(row)
       if (row.position === null || row.position - 1 >= length) atEnd.push(id)
       else { ops.push({ op: 'insert', set: ref, assetIds: [id], index: row.position - 1 }); length++ }
     }

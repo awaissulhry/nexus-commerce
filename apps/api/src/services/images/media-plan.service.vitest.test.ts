@@ -218,6 +218,8 @@ describe('one picture, one library card (Owner, 2026-09-28: "multiple duplicates
     expect((await scoped(() => uploadDedupScope(ids.nm))).sort()).toEqual([ids.root, ids.nm, ids.nl, ids.gm, ids.rm].sort())
     await expect(scoped(() => applyImagesToProducts({ sourceProductId: ids.root, targetProductIds: [ids.nm] }))).rejects.toBeInstanceOf(MediaPlanRefusal)
     expect(await scoped(() => prisma.productImage.count({ where: { productId: ids.nm } }))).toBe(2)
+  })
+})
 
 describe('library languages and versions (P4b upload)', () => {
   const photo = (name: string, languageTag = 'zxx') => scoped(async () => (await prisma.productImage.create({ data: { productId: ids.root, url: `https://cdn.example/${name}.jpg`, alt: name, type: 'ALT', languageTag } as never })).id)

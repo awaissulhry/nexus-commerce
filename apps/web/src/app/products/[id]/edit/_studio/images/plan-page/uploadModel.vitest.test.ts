@@ -54,6 +54,12 @@ describe('upload dialog', () => {
     expect(placed.skipped).toEqual(['look-alike.jpg', 'cover-again.jpg'])
     expect(placed.sets.map(s => `${s.label}:${s.count}`)).toEqual(['Nero:2', 'Common:1'])
   })
+  it('a look-alike that is another SKU\'s copy of a picture places the picture\'s library card, and counts as already there', () => {
+    const withCopies: MediaRead = { ...read, library: read.library.map(a => a.id === 'n1' ? { ...a, copies: ['n1-kid'] } : a) }
+    const placed = placementOps(withCopies, { layer: 'SHARED' }, [row('nero-again.jpg', { kind: 'similar', candidate: { id: 'n1-kid', url: 'u', label: 'n1' } }, { set: 'common' })])
+    expect(placed.ops).toEqual([{ op: 'insert', set: 'common', assetIds: ['n1'] }])
+    expect(placementOps(withCopies, { layer: 'SHARED' }, [row('nero-again.jpg', { kind: 'exact', assetId: 'n1-kid' }, { set: 'value:color:black' })]).skipped).toEqual(['nero-again.jpg'])
+  })
   it('names each new photo\'s language and groups the versions; a version of a photo already in the library joins it', () => {
     expect(libraryUpdate([row('size-chart-it.jpg', { kind: 'new', assetId: 'cit' }), row('size-chart-de.jpg', { kind: 'new', assetId: 'cde' }), row('gale-black-01.jpg', { kind: 'new', assetId: 'a1' })]))
       .toEqual({ languages: [{ id: 'cit', languageTag: 'it' }, { id: 'cde', languageTag: 'de' }, { id: 'a1', languageTag: 'zxx' }], groups: [{ ids: ['cit', 'cde'], join: null }] })
