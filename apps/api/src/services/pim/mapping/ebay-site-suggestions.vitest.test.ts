@@ -21,7 +21,7 @@ vi.mock('../../ebay-category.service.js', () => ({ EbayCategoryService: class {}
 vi.mock('../../taxonomy/repository.js', () => ({ taxonomyWhere: (channel: string, marketplace: string) => ({ channel, marketplace }) }))
 vi.mock('./category-mapping.service.js', async importOriginal => ({ ...(await importOriginal<object>()), listCategoryMappings }))
 
-import { ebaySiteCoverage, ebaySiteSuggestions, pickSourceSite, rankCandidates, type TreeNode } from './ebay-site-suggestions.service.js'
+import { confidentDefault, ebaySiteCoverage, ebaySiteSuggestions, pickSourceSite, rankCandidates, type TreeNode } from './ebay-site-suggestions.service.js'
 
 const leaf = (path: string, assignable = true): TreeNode => ({ path, name: path.split(' › ').pop()!, assignable })
 
@@ -43,14 +43,31 @@ describe('rankCandidates', () => {
     ])
   })
 
-  it('on equal counts, same_name beats ebay_suggestion, which beats same_id; then the order found', () => {
+  it('on equal counts, same_id beats ebay_suggestion, which beats same_name; then the order found', () => {
     const ranked = rankCandidates([
-      { categoryId: '1', reason: 'same_id' },
+      { categoryId: '2', reason: 'same_name' },
       { categoryId: '4', reason: 'ebay_suggestion' },
       { categoryId: '3', reason: 'ebay_suggestion' },
-      { categoryId: '2', reason: 'same_name' },
+      { categoryId: '1', reason: 'same_id' },
     ], tree)
-    expect(ranked.map(c => c.categoryId)).toEqual(['2', '4', '3'])
+    expect(ranked.map(c => c.categoryId)).toEqual(['1', '4', '3'])
+  })
+
+  it('starts a site with a category only when two sources agree (production 2026-09-27: DE got "E-Gitarren" from the name alone)', () => {
+    expect(confidentDefault([{ categoryId: '33034', path: 'Gitarren › E-Gitarren', reasons: ['same_name'] }, { categoryId: '57988', path: 'Herrenmode › Jacken', reasons: ['ebay_suggestion'] }])).toBeNull()
+    expect(confidentDefault([{ categoryId: '177104', path: 'Vêtements moto › Blousons', reasons: ['same_id', 'ebay_suggestion'] }])).toBe('177104')
+    expect(confidentDefault([{ categoryId: '177104', path: 'Vêtements moto › Blousons', reasons: ['same_id'] }])).toBeNull()
+    expect(confidentDefault([])).toBeNull()
+  })
+
+  it('ranks the same number above the name match on a tie (production: ES offered men\'s coats before moto jackets)', () => {
+    const esTree = new Map<string, TreeNode>([['57988', leaf('Ropa de hombre › Abrigos, chaquetas y chalecos')], ['177104', leaf('Vestimenta motoristas › Chaquetas motoristas')]])
+    const ranked = rankCandidates([
+      { categoryId: '57988', reason: 'same_name' }, { categoryId: '57988', reason: 'ebay_suggestion' },
+      { categoryId: '177104', reason: 'same_id' }, { categoryId: '177104', reason: 'ebay_suggestion' },
+    ], esTree)
+    expect(ranked.map(c => c.categoryId)).toEqual(['177104', '57988'])
+    expect(confidentDefault(ranked)).toBe('177104')
   })
 
   it('keeps only assignable nodes of the target tree, at most three', () => {
@@ -111,8 +128,9 @@ describe('ebaySiteSuggestions', () => {
     const result = await ebaySiteSuggestions('jackets', { ebay })
     expect(result.source).toEqual({ market: 'IT', channelCategoryId: '177104', path: 'Abbigliamento per moto › Giacche e giubbotti' })
     const site = (market: string) => result.sites.find(s => s.market === market)!
-    expect(site('FR')).toEqual({ market: 'FR', treeReady: true, defaultCategoryId: '177104', candidates: [{ categoryId: '177104', path: 'Vêtements moto › Blousons', reasons: ['same_id'] }] })
-    expect(site('ES').defaultCategoryId).toBe('177104')
+    // A same number alone is offered, never chosen for the operator.
+    expect(site('FR')).toEqual({ market: 'FR', treeReady: true, defaultCategoryId: null, candidates: [{ categoryId: '177104', path: 'Vêtements moto › Blousons', reasons: ['same_id'] }] })
+    expect(site('ES').defaultCategoryId).toBeNull()
     // DE has no 177104: no same-number candidate, and no default without another source.
     expect(site('DE')).toEqual({ market: 'DE', treeReady: true, defaultCategoryId: null, candidates: [] })
     expect(result.ebay).toEqual({ available: true, message: null })
@@ -127,6 +145,7 @@ describe('ebaySiteSuggestions', () => {
     const de = result.sites.find(s => s.market === 'DE')!
     // 177000 is not a leaf in the DE tree, so it is never offered.
     expect(de.candidates).toEqual([{ categoryId: '177117', path: 'Motorradjacken', reasons: ['same_name', 'ebay_suggestion'] }])
+    expect(de.defaultCategoryId).toBe('177117')
     const fr = result.sites.find(s => s.market === 'FR')!
     // Same number AND same name beats eBay's suggestion of the motocross leaf.
     expect(fr.candidates.map(c => [c.categoryId, c.reasons])).toEqual([['177104', ['same_id', 'same_name']], ['177117', ['ebay_suggestion']]])
@@ -142,7 +161,8 @@ describe('ebaySiteSuggestions', () => {
     const result = await ebaySiteSuggestions('jackets', { ebay })
     expect(result.ebay.available).toBe(false)
     expect(result.ebay.message).toContain('eBay could not be reached')
-    expect(result.sites.find(s => s.market === 'FR')!.defaultCategoryId).toBe('177104')
+    expect(result.sites.find(s => s.market === 'FR')!.candidates.map(c => c.categoryId)).toEqual(['177104'])
+    expect(result.sites.find(s => s.market === 'FR')!.defaultCategoryId).toBeNull()
     expect(result.sites.find(s => s.market === 'DE')!.candidates).toEqual([])
   })
 
