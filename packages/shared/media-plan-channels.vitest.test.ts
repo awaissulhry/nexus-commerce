@@ -106,6 +106,12 @@ describe('Amazon layout', () => {
 
 describe('Shopify and Etsy layouts', () => {
   const shopify: MediaDestination = { channel: 'SHOPIFY', market: 'GLOBAL', languages: ['it'], mainLanguage: 'it', axisName: null, valueNames: {} }
+  it('Shopify: more than 50 photos in the gallery is refused (the Nexus storefront rule), never cut', () => {
+    const lib = library(...Array.from({ length: 51 }, (_, i) => asset(`s${i}`)))
+    const out = projectShopify({ shared: plan({ common: ids(...Array.from({ length: 51 }, (_, i) => `s${i}`)) }) }, { ...family, variants: [] }, lib, shopify)
+    expect(out.media).toHaveLength(51)
+    expect(out.checks.map(c => c.code)).toEqual(['over-limit'])
+  })
   it('Shopify keeps 3D models under either stored spelling, never as a variant image', () => {
     const lib = library(asset('cover'), asset('m3d', { mediaType: 'MODEL_3D' }), asset('m3d-old', { mediaType: 'MODEL3D' }))
     const out = projectShopify({ shared: plan({ common: ids('m3d', 'cover', 'm3d-old') }) }, { ...family, variants: [] }, lib, shopify)

@@ -19,6 +19,10 @@ import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { applyListingMediaContent } from './listing-media-content.js'
 import { listingSheetValues } from './listing-sheet-values.js'
 import { sellableQuantity } from '../stock-pool/sync-ledgers.js'
+import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { mediaLayoutFor } from '../images/media-plan.service.js'
+import { applyMediaPlanToShopifyContent } from './media-plan-content.js'
+import type { ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
 
 /** Stable family keys in the explicitly selected order; omissions remain omitted. */
 export function shopifyAxisOrder(familyAxes: string[], variationMapping: unknown): string[] {
@@ -85,7 +89,11 @@ export async function readContent(tx: Prisma.TransactionClient, destination: Wor
   draft = applyShopifyVariationProjection(draft, projection)
   const publish = object(pa[PUBLISH_KEY])
   const mediaFiles = await tx.productImage.findMany({ where: { productId: { in: [family.id, ...family.children.map(c => c.id)] } }, select: { id: true, productId: true, url: true, mediaType: true, alt: true, updatedAt: true } })
-  draft = applyListingMediaContent(draft, family.id, listings, mediaFiles)
+  // Images rebuild P2f — a family on the media plan publishes the plan's Shopify layout instead of the sheet galleries.
+  const planMedia = await isOnMediaPlan(family.id) ? await mediaLayoutFor({ productId: family.id, channel: 'SHOPIFY', marketplace: destination.marketplace,
+    accountId: destination.accountId, includedIds: (family.children.length ? family.children : [family]).map(p => p.id) }) : null
+  if (planMedia && planMedia.layout.channel !== 'SHOPIFY') throw new WorkspaceScopeError('This product\'s photo plan changed. Reload it.', 409)
+  draft = planMedia ? applyMediaPlanToShopifyContent(draft, planMedia.layout as ShopifyMediaLayout, mediaFiles) : applyListingMediaContent(draft, family.id, listings, mediaFiles)
   const products = family.children.length ? family.children : [family]
   // Shared stock — a pooled product publishes the pool's number, not its business's own total. Kept
   // out of `family` so the review revision below does not change with every pool sale.

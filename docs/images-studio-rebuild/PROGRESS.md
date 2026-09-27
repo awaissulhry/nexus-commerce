@@ -9,8 +9,24 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
   finished, table `ProductMediaPlan` exists with RLS forced and its policy, `ProductImage.languageTag` and
   `versionGroupId` exist; `/api/health/ready` 200; `GET /media` and `POST /media/ops` answer 401 without a login.
   Nothing on screen changed; no family has a plan yet, so every publisher behaves as before.
-- **P2a — built and tested locally (branch `feat/images-p2a`).** See below.
-- **Next:** P2a pull request, then P2b (the old photo paths refuse switched families) — [P2-PLAN.md](P2-PLAN.md).
+- **P2 — publishers read the plan (2026-09-27).** Merged: P2a #90 (helper), P2b #92 (older paths refuse plan
+  families), P2c #93 (eBay Trading). Open: P2e #95 (Amazon), P2d #98 (eBay Inventory, stock-safe), P2f (Shopify).
+  Merged under the Owner's standing OK for the P2 series once CI is green. Nothing changes for a live listing until a
+  family is edited on the new Media page (P3): no family has a Shared layer yet.
+- **Next:** P3 — the Media page and the Information column on the plan.
+
+## P2 — what each channel does for a family on the plan
+| Channel | Sends | Safety |
+|---|---|---|
+| eBay Trading (28 of 36 eBay destinations) | `PictureDetails` = Common in order; one `VariationSpecificPictureSet` per value in family order, named with the listing's own value (pins, value maps) under its axis name; explicit order kept for number-like values | any blocking check refuses the send with its reason; 12 per value |
+| eBay Inventory (8) | group `imageUrls` = Common; "Variation pictures" row: each SKU's value set via `inventory_item` PUT + `aspectsImageVariesBy` | quantity read fresh before each write and echoed; a move in the window is reported; unknown item fields refuse; first real send = one listing with the Owner's word |
+| Amazon (1 account, 32 families) | the photo review asks Amazon for each SKU's plan slots (MAIN, PT01–08, SWCH); new listings in the studio feed get plan slots; existing listings get no image attributes from the feed | review bound to the plan's revisions (a plan edit after review blocks approval); blocking plan problems refuse the review |
+| Shopify (0 listings today) | content document gallery = plan media in order, one photo per variant; gallery reconcile on | blocking checks refuse; Nexus's 50-per-gallery rule is a check |
+| Older paths | refuse plan families with one sentence (legacy Amazon feed, legacy eBay publishes, eBay flat-file full push, schedules, older editors) | — |
+
+**Known limits (by design, later steps):** linked (existing) Shopify products do not sync photos from the plan yet —
+their older sheet-gallery sync refuses plan families; Etsy publishing is P5; the page read still shows Shared value
+names (the publishers already use each market's own names).
 
 ## P2a — publisher helper (not yet merged)
 - `mediaLayoutFor(...)`: the layout one destination must receive, computed by the same loader and projection as the

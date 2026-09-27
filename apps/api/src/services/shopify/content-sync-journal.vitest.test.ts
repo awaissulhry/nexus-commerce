@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const s = vi.hoisted(() => ({ row: {} as any, remote: null as any, tx: {} as any, graphql: vi.fn(), events: [] as string[] }))
+// Images rebuild P2f — not on the media plan: the older Shopify gallery paths run here.
+vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
 vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))
 vi.mock('../../db.js', () => ({ default: { $transaction: (fn: any) => fn(s.tx), channelListing: { findFirst: async () => s.row } } }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))

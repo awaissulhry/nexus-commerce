@@ -10,7 +10,8 @@ import { resolveAxis, resolveSet, resolveSwatch, valueKeyAttribute, type MediaPl
 export const MEDIA_LIMITS = {
   EBAY: { gallery: 24, perValue: 12, minLongEdge: 500, maxBytes: 12 * 1024 * 1024, tradingUrlChars: 3975 },
   AMAZON: { others: 8, safety: 6, minLongEdge: 500, zoomLongEdge: 1000 },
-  SHOPIFY: { media: 250, maxPixels: 20_000_000, maxBytes: 20 * 1024 * 1024 },
+  // Shopify allows 250 media per product; Nexus publishes at most 50 per resolved storefront gallery (shopify-content.ts).
+  SHOPIFY: { media: 250, storefrontGallery: 50, maxPixels: 20_000_000, maxBytes: 20 * 1024 * 1024 },
   ETSY: { images: 20, videos: 2, variationOptions: 20, firstMinEdge: 635 },
 } as const
 export const AMAZON_SLOTS = ['MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08'] as const
@@ -241,6 +242,7 @@ export function projectShopify(stack: MediaPlanStack, family: MediaFamily, asset
     variantImages[variant.productId] = ids.find(id => assets.get(id)?.mediaType === 'IMAGE') ?? null
   }
   if (media.length > MEDIA_LIMITS.SHOPIFY.media) ctx.checks.push({ severity: 'error', code: 'over-limit', message: `Shopify allows ${MEDIA_LIMITS.SHOPIFY.media} media per product; this has ${media.length}.` })
+  else if (media.length > MEDIA_LIMITS.SHOPIFY.storefrontGallery) ctx.checks.push({ severity: 'error', code: 'over-limit', message: `Nexus publishes at most ${MEDIA_LIMITS.SHOPIFY.storefrontGallery} photos in a Shopify gallery; this has ${media.length}.` })
   for (const id of media) {
     const a = assets.get(id)
     if (a?.width && a.height && a.width * a.height > MEDIA_LIMITS.SHOPIFY.maxPixels) ctx.checks.push({ severity: 'error', code: 'too-large', assetId: id, message: `${name(ctx, id)} is over 20 megapixels — Shopify refuses it.` })
