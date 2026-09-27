@@ -19,10 +19,6 @@ const sortLib = fs.readFileSync(
   path.join(repo, 'apps/web/src/app/bulk-operations/lib/multi-sort.ts'),
   'utf8',
 )
-const client = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/BulkOperationsClient.tsx'),
-  'utf8',
-)
 
 console.log('Case 1: lib exports')
 for (const name of ['cycleSortKey', 'readRowValue', 'compareValues', 'sortRows']) {
@@ -142,24 +138,6 @@ console.log('\nCase 5: sortRows — multi-key behaviour')
   check("empty keys → array as-is",
     empty === rows)
 }
-
-console.log('\nCase 6: BulkOperationsClient wires sortKeys')
-check("imports cycleSortKey + sortRows + SortKey",
-  /cycleSortKey, sortRows, type SortKey/.test(client))
-check("sortKeys state declared",
-  /const \[sortKeys, setSortKeys\] = useState<SortKey\[\]>/.test(client))
-check("displayRows applies sortRows BEFORE buildHierarchy",
-  /sortRows\([\s\S]{0,80}sortKeys[\s\S]{0,200}buildHierarchy\(sorted, expandedParents\)/.test(client))
-check("header onClick wires cycleSortKey with shift detection",
-  /setSortKeys\(\(prev\) =>\s*cycleSortKey\(prev, header\.column\.id, e\.shiftKey\)/.test(client))
-check("system cols don't trigger sort",
-  /isSystemCol\s*\?\s*undefined/.test(client))
-
-console.log('\nCase 7: header renders sort indicator')
-check("indicator includes ↑ / ↓",
-  /\?\s*'↑'\s*:\s*'↓'/.test(client))
-check("multi-key indicator shows order index",
-  /sortIdx \+ 1[\s\S]{0,40}sortKeys\.length/.test(client))
 
 if (failures > 0) {
   console.log(`\n✗ ${failures} assertion(s) failed`)

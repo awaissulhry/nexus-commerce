@@ -19,10 +19,6 @@ const svc = fs.readFileSync(
   path.join(repo, 'apps/api/src/services/bulk-action.service.ts'),
   'utf8',
 )
-const strip = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/ActiveJobsStrip.tsx'),
-  'utf8',
-)
 
 console.log('Case 1: cancel cadence optimised')
 check('CANCEL_POLL_EVERY constant defined',
@@ -51,21 +47,6 @@ check('IN_PROGRESS → CANCELLING (cooperative)',
   /Cancelling job \(cooperative\)[\s\S]{0,200}status: 'CANCELLING'/.test(svc))
 check('rejects other statuses',
   /Cannot cancel job with status:/.test(svc))
-
-console.log('\nCase 4: ActiveJobsStrip confirm dialog')
-check('imports useConfirm',
-  /import \{ useConfirm \} from '@\/components\/ui\/ConfirmProvider'/.test(strip))
-check('uses askConfirm before POST /cancel',
-  /askConfirm = useConfirm\(\)/.test(strip) &&
-  /await askConfirm/.test(strip))
-check('confirm copy differs for IN_PROGRESS vs queued',
-  /inFlight = job\.status === 'IN_PROGRESS'/.test(strip) &&
-  /partial results stay in the audit trail/.test(strip))
-check('returns early when operator cancels the confirm',
-  /if \(!ok\) return/.test(strip))
-check('cancelJob signature accepts ActiveJob (not just id)',
-  /async \(job: ActiveJob\)/.test(strip) &&
-  /onClick=\{\(\) => cancelJob\(job\)\}/.test(strip))
 
 if (failures > 0) {
   console.log(`\n✗ ${failures} assertion(s) failed`)

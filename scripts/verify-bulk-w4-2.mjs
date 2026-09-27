@@ -23,14 +23,6 @@ const bar = fs.readFileSync(
   path.join(repo, 'apps/web/src/app/bulk-operations/components/ConditionalFormatBar.tsx'),
   'utf8',
 )
-const client = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/BulkOperationsClient.tsx'),
-  'utf8',
-)
-const grid = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/components/GridRow.tsx'),
-  'utf8',
-)
 
 console.log('Case 1: lib exports')
 for (const name of ['evaluateRule', 'tonefor', 'buildToneMap']) {
@@ -101,32 +93,6 @@ check('Add rule button',
 check('Esc closes the panel', /e\.key === 'Escape'/.test(bar))
 check('hides value input for empty / notEmpty',
   /rule\.op !== 'empty' && rule\.op !== 'notEmpty'/.test(bar))
-
-console.log('\nCase 6: BulkOperationsClient wires the editor + tone pipeline')
-check('imports ConditionalFormatBar', /import\s*\{\s*ConditionalFormatBar\s*\}/.test(client))
-check('declares conditionalRules state',
-  /const \[conditionalRules, setConditionalRules\] = useState<ConditionalRule\[\]>/.test(client))
-check('declares conditionalEditorOpen state',
-  /const \[conditionalEditorOpen, setConditionalEditorOpen\]/.test(client))
-check('renders the bar with onChange wired',
-  /<ConditionalFormatBar[\s\S]{0,300}onChange=\{setConditionalRules\}/.test(client))
-check('builds tone map via buildToneMap',
-  /buildToneMap\([\s\S]{0,80}conditionalRules/.test(client))
-check('per-row tone signature memo',
-  /conditionalToneSigByRow = useMemo/.test(client))
-check('Rules button toolbar trigger',
-  /Rules[\s\S]{0,100}conditionalRules\.filter\(\(r\) => r\.enabled\)/.test(client))
-
-console.log('\nCase 7: GridRow paints conditional tones')
-check('GridRow imports TONE_CLASSES + RuleTone',
-  /TONE_CLASSES,\s*type RuleTone,?\s*\}\s*from\s*'\.\.\/lib\/conditional-format'/.test(grid))
-check('GridRow accepts conditionalToneSig + conditionalToneMap props',
-  /conditionalToneSig\?: string/.test(grid) &&
-    /conditionalToneMap\?: Map<string, RuleTone>/.test(grid))
-check('memo comparator includes conditionalToneSig',
-  /prev\.conditionalToneSig === next\.conditionalToneSig/.test(grid))
-check('cell wrapper applies condTone class',
-  /condTone && TONE_CLASSES\[condTone\]/.test(grid))
 
 if (failures > 0) {
   console.log(`\n✗ ${failures} assertion(s) failed`)

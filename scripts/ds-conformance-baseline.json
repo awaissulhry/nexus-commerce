@@ -66,13 +66,13 @@
       "tailwindType": 29
     },
     "bulk-operations": {
-      "select": 1,
-      "date": 1,
+      "select": 0,
+      "date": 0,
       "fontSize": 0,
       "hex": 0,
-      "legacyKit": 38,
-      "rawColor": 956,
-      "tailwindType": 485
+      "legacyKit": 18,
+      "rawColor": 250,
+      "tailwindType": 148
     },
     "catalog": {
       "select": 1,
@@ -332,8 +332,8 @@
       "fontSize": 0,
       "hex": 1,
       "legacyKit": 145,
-      "rawColor": 4301,
-      "tailwindType": 2160
+      "rawColor": 4279,
+      "tailwindType": 2152
     },
     "reconciliation": {
       "select": 0,

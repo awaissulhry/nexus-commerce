@@ -32,10 +32,6 @@ const routes = fs.readFileSync(
   path.join(repo, 'apps/api/src/routes/bulk-operations.routes.ts'),
   'utf8',
 )
-const strip = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/ActiveJobsStrip.tsx'),
-  'utf8',
-)
 const schema = fs.readFileSync(
   path.join(repo, 'packages/database/prisma/schema.prisma'),
   'utf8',
@@ -86,16 +82,6 @@ check('sigFor includes estimatedCompletionAt',
   /estimatedCompletionAt[\s\S]{0,300}\.toISOString\(\)/.test(routes))
 check('eta change triggers an update event',
   /'\|'.*eta|eta,\s*\]\.join/.test(routes))
-
-console.log('\nCase 6: ActiveJobsStrip renders ETA')
-check('ActiveJob type includes estimatedCompletionAt',
-  /estimatedCompletionAt\?:\s*string \| null/.test(strip))
-check('formatEta helper renders relative ms',
-  /function formatEta\(/.test(strip))
-check('shows ETA chip while IN_PROGRESS',
-  /job\.status === 'IN_PROGRESS' && formatEta\(job\.estimatedCompletionAt\)/.test(strip))
-check('tooltip shows projected finish time',
-  /Projected finish:/.test(strip))
 
 if (failures > 0) {
   console.log(`\n✗ ${failures} assertion(s) failed`)

@@ -16,47 +16,9 @@ function check(label, cond) {
 
 console.log('\nW3.4 — replace flow + undo integration\n')
 
-const client = fs.readFileSync(
-  path.join(repo, 'apps/web/src/app/bulk-operations/BulkOperationsClient.tsx'),
-  'utf8',
-)
 const bar = fs.readFileSync(
   path.join(repo, 'apps/web/src/app/bulk-operations/components/FindReplaceBar.tsx'),
   'utf8',
-)
-
-console.log('Case 1: handleFindReplaceCell calls writeChange')
-check(
-  'no longer a stub',
-  !/Intentionally empty — wired up in W3\.4/.test(client),
-)
-check(
-  'writeChange invoked with batch arg',
-  /writeChange\(\s*rowId,\s*columnId,\s*newValue,\s*false,\s*batch as HistoryDelta\[\] \| undefined,?\s*\)/.test(
-    client,
-  ),
-)
-
-console.log('\nCase 2: handleFindReplaceCommitBatch pushes one history entry')
-check(
-  'commit-batch handler exists',
-  /const handleFindReplaceCommitBatch = useCallback/.test(client),
-)
-check(
-  'pushHistoryEntry called with the batch',
-  /pushHistoryEntry\(\{ cells: typed, timestamp: Date\.now\(\) \}\)/.test(
-    client,
-  ),
-)
-check(
-  'no-op when batch empty',
-  /typed\.length === 0\) return/.test(client),
-)
-
-console.log('\nCase 3: bar wired to commit-batch handler')
-check(
-  'onCommitReplaceBatch prop passed',
-  /onCommitReplaceBatch=\{handleFindReplaceCommitBatch\}/.test(client),
 )
 
 console.log('\nCase 4: bar Replace-All triggers the commit-batch')

@@ -1,7 +1,4 @@
 [
-  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:122: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
-  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:129: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
-  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:187: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
   "apps/web/src/app/fulfillment/inbound/v2/NewPlanModal.tsx:131: Marketplace array lookup by code without channel",
   "apps/web/src/app/marketing/aplus/AplusListClient.tsx:339: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
   "apps/web/src/app/marketing/aplus/_lib/types.ts:105: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
