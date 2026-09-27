@@ -39,4 +39,6 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(destination, 307)
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|woff2?)$).*)'] }
+// `backend/` is left out: those API calls are a Vercel external rewrite (next.config.js) and must not start a function
+// here first — the paused-site incident of 2026-09-27 (src/lib/workspaces/backendRewrite.cjs).
+export const config = { matcher: ['/((?!backend/|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|woff2?)$).*)'] }
