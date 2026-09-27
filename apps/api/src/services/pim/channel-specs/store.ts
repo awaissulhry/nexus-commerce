@@ -1,6 +1,6 @@
 import { normalizeLanguage } from '../content-language.js'
 import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey } from '@nexus/shared/shopify-information'
-import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import { shopifyDefinitionApplicability, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
 
 /** Store product information. Source references and scope are recorded in the audit. */
@@ -17,8 +17,22 @@ function field(key: string, label: string, group: string, extra: Partial<Channel
 const titleStore = column('title', 'followMasterTitle')
 const descriptionStore = column('description', 'followMasterDescription')
 
+/**
+ * A category-specific metafield on a sheet whose family's Shopify categories are known (`categoryIds`, possibly
+ * empty): the reason it cannot be edited there, or null when it applies. Shopify matches a definition's
+ * category constraint exactly (a sub-category is listed on its own), and so does `shopifyDefinitionApplicability`,
+ * the rule the Shopify Information editor already uses — so the sheet and the editor refuse the same values.
+ * With several categories in one family, the field applies when it applies to any of them; Shopify still checks
+ * each product before a write (`verifyFieldApplicability`).
+ */
+function categoryFieldReason(definition: NonNullable<ReturnType<typeof informationRegistry>[number]['definition']>, categoryIds: string[] | undefined): string | undefined {
+  if (!definition.constraints?.key || categoryIds === undefined) return undefined
+  const reasons = (categoryIds.length ? categoryIds : [null]).map(category => shopifyDefinitionApplicability(definition, category))
+  return reasons.some(reason => reason === null) ? undefined : reasons[0] ?? undefined
+}
+
 /** The information sheet and mapping catalogue consume the same native/live registry. */
-export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, accountId?: string | null, locale?: string): ChannelSpec {
+export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, accountId?: string | null, locale?: string, categoryIds?: string[]): ChannelSpec {
   if (schema && !accountId) throw new Error('A Shopify definition requires its connected store identity.')
   if (locale) locale = normalizeLanguage(locale)
   const primaryTag = schema?.locales.find(l => l.primary)?.locale
@@ -56,6 +70,8 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
     // P4 (docs/attributes/PLAN.md §4.2) — the definition's own rules: `choices` is Shopify's closed list, and
     // `list.min` / `list.max` bound a list. They were enforced on write (`validateShopifyField`) but not offered.
     const rules = shopifyDefinitionRules(info.definition?.validations)
+    const categoryReason = info.definition ? categoryFieldReason(info.definition, categoryIds) : undefined
+    const constrainedTo = info.definition?.constraints?.key === 'category' ? info.definition.constraints.values.length : 0
     const entry = field(key, info.label, 'content', {
       attribute: info.id, kind: rules.choices ? 'select' : kind, group, shopifyField: info,
       shape: info.cardinality, cardinality: { min: rules.listMin ?? 0, max: info.cardinality === 'list' ? rules.listMax ?? null : 1 },
@@ -63,17 +79,17 @@ export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, acc
       variantEligible: info.owner === 'PRODUCTVARIANT',
       channelStore: info.definition ? pa('metafields', info.owner, info.definition.namespace, info.definition.key, info.type)
         : pa(...info.id.split('.')),
-      helpText: info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}`.trim()
+      helpText: info.definition ? `${info.owner === 'PRODUCT' ? 'Product' : 'Variant'} · ${info.source}. ${info.definition.description ?? ''}${constrainedTo ? ` Applies only to ${constrainedTo} Shopify ${constrainedTo === 1 ? 'category' : 'categories'}.` : ''}`.replace(/\s+/g, ' ').trim()
         : [info.channelLabel !== info.label ? `Shopify: ${info.channelLabel}.` : '', info.reason].filter(Boolean).join(' ') || undefined,
       // Media and stock require a published Shopify resource; their native workspace
       // owns exact file and stocking-location identities after publication.
-      readOnlyReason: info.reason ?? (info.id === 'media' ? 'Use the media workspace to manage product media.' : undefined),
-      editable: !info.reason,
+      readOnlyReason: info.reason ?? categoryReason ?? (info.id === 'media' ? 'Use the media workspace to manage product media.' : undefined),
+      editable: !info.reason && !categoryReason,
       ...(native[info.id] ?? {}),
     })
     if (translationLocale) {
       const translatable = info.definition ? ['single_line_text_field', 'multi_line_text_field', 'rich_text_field', 'json', 'url', 'link', 'list.single_line_text_field', 'list.url', 'list.link'].includes(info.type) : !!nativeTranslationKeys[info.id]
-      const reason = info.reason ?? (!translatable ? 'Shopify shares this field across languages. Select the store’s primary language to edit its base value.'
+      const reason = info.reason ?? categoryReason ?? (!translatable ? 'Shopify shares this field across languages. Select the store’s primary language to edit its base value.'
         : !schema?.native?.scopes.includes('write_translations') ? 'This Shopify connection needs write_translations permission.' : undefined)
       entry.channelStore = pa('_shopifyInformationLocales', translationLocale, info.id)
       entry.readOnlyReason = reason

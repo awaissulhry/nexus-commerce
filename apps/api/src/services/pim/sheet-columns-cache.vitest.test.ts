@@ -16,7 +16,8 @@ it('honours a fresh channel account cache and isolates account and language keys
  // The trailing [] is `productIds` (Step 2.4). It narrows the coordinate set, so it changes the
  // RESULT and has to be in the key — this hand-written key is the assertion that it is.
  // P3b S4 — it now starts with the dictionary version and the saved-fields mode ('all' unless a Shared view asks).
- const key = JSON.stringify(['test-dictionary', 'all', 'BE', [], [], [], ['AMAZON'], false, [], [], 'channel', [], [], 'seller', 'nl', []])
+ // The null after the Etsy categories is `shopifyCategoryIds` left out (not judged), which differs from [] (none).
+ const key = JSON.stringify(['test-dictionary', 'all', 'BE', [], [], [], ['AMAZON'], false, [], [], null, 'channel', [], [], 'seller', 'nl', []])
  cache.set(key, { at: Date.now(), value })
  for (let i = 0; i < 3; i++) expect(await getSheetColumns(input)).toBe(value as any)
  expect(readMarkets).not.toHaveBeenCalled()
