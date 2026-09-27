@@ -51,7 +51,7 @@ its pre-deployment audit) are superseded; their evidence is in
 | 6 | **eBay notifications** — setup OFF, every topic `handlerMissing`, the verification token refused by eBay | **Owner + code** | The Owner fixes `EBAY_NOTIFICATION_VERIFICATION_TOKEN` (32–80 characters, `[A-Za-z0-9_-]`) and checks the deletion endpoint in eBay's portal; code marks handlers ready and adds seller-token subscriptions (planning) |
 | 7 | **P7b** destructive drops | **Owner** | A **green week** and a separate yes per table. `AmazonAdsConnection` is NOT a candidate |
 | 8 | **Section 8** Owner items (FINAL-PLAN) | **Owner** | KMS done 2026-09-26. Open: Amazon app-secret expiry date, Neon password rotation (in git history), eBay deletion endpoint, Etsy webhook. Items 5 and 6 are not needed |
-| 9 | **FBM stock repair** (after the PR #14 hotfix) | **Owner** | Only after the hotfix is proven in production, with its own yes (option A: add back only units taken twice after the last manual change) |
+| 9 | **FBM stock repair** (after the PR #14 hotfix) | done | APPLIED 2026-09-26 11:22 UTC on the Owner's yes (option A: add back, per product, only the units taken twice after that product's last manual stock change; guarded per-product `applyStockMovement`, MANUAL_ADJUSTMENT, proven on a private copy first; channel updates all succeeded). Do NOT run it again. Per-product evidence is kept locally. A second repair (stock created by cancellations of never-held orders, fixed by PR #32) removed the phantom units added after each product's last manual change, 2026-09-26 19:31 UTC. |
 
 ### 0a-2. The switches
 
