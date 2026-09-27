@@ -1,4 +1,4 @@
-import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { assertPushAllowed, isStillDraftListing } from '@nexus/shared/push-lock'
 import { marketCurrency } from '../services/pim/market-currency.js'
 import { createOutboundRow } from '../services/outbound-rows.js'
 import { ebaySend } from '../services/gateway/ebay.js';
@@ -84,6 +84,7 @@ import { buildListingScopeWhere, type ListingScope } from '../services/flat-file
 import { findMissingRequiredAspects, type AspectRequirement } from '../services/ebay-aspect-preflight.js';
 import { fireOutboundJobs } from '../services/outbound-enqueue.js';
 import { tryResolveConnection } from '../services/connection-resolver.service.js';
+import { LiveListingError, recordLiveListingsInTransaction } from '../services/pim/live-listing.service.js';
 import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 import { mediaPlanProducts, MEDIA_PLAN_REFUSAL } from '../services/images/media-plan-switch.js';
 
@@ -882,7 +883,8 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       const prefetchedCls = prefetchProductIds.size > 0
         ? await prisma.channelListing.findMany({
             where: { productId: { in: [...prefetchProductIds] }, channel: 'EBAY' },
-            select: { id: true, price: true, quantity: true, platformAttributes: true, externalListingId: true, productId: true, region: true },
+            select: { id: true, price: true, quantity: true, platformAttributes: true, externalListingId: true, productId: true, region: true,
+              listingStatus: true, isPublished: true, channelConnectionId: true, aliasKey: true },
           })
         : [];
       const clByProductRegion = new Map(prefetchedCls.map((cl) => [`${cl.productId}::${cl.region}`, cl]));
@@ -1078,7 +1080,28 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           let listingId: string;
 
-          if (existing) {
+          // Step 7 — a row carrying an eBay ItemID that creates the listing, or reaches a still-draft, records a
+          // listing eBay already has: through the one live-listing rule, on the listing's own account (the primary
+          // eBay account for a new row), published, and a still-draft loses the pause that kept it inert. Any
+          // other existing row keeps the plain save below, so a live row's status and pause stay its own.
+          const liveItemId = (listingData as { externalListingId?: string }).externalListingId;
+          if (liveItemId && (!existing || isStillDraftListing(existing))) {
+            const { externalListingId: _itemId, listingStatus: _status, ...liveFields } = listingData as Record<string, unknown>;
+            try {
+              const accountId = existing?.channelConnectionId ?? (await tryResolveConnection({ channel: 'EBAY', primary: true }))?.id;
+              const [recorded] = await recordLiveListingsInTransaction({
+                channel: 'EBAY', market: mp, accountId: accountId as string, aliasKey: existing?.aliasKey ?? '',
+                rows: [{ productId, listingStatus: status ?? 'ACTIVE', externalListingId: liveItemId, fields: liveFields }],
+              });
+              listingId = recorded.id;
+            } catch (err) {
+              if (!(err instanceof LiveListingError)) throw err;
+              rowErrors.push({ sku, rowId: String((row as Record<string, unknown>)._rowId ?? '') || undefined, error: `${mp}: ${err.message} Not saved.` });
+              continue;
+            }
+            rowListingWrites++;
+            writtenMps.add(mp);
+          } else if (existing) {
             await prisma.channelListing.update({
               where: { id: existing.id },
               // eslint-disable-next-line @typescript-eslint/no-explicit-any

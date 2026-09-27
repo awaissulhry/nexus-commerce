@@ -32,6 +32,8 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { whereCoordinate } from '../../lib/listing-coordinate.js'
 import { amazonDiscountedPrice } from './discounted-price.js'
+import { primaryConnectionIds } from '../connection-resolver.service.js'
+import { recordLiveListings } from '../pim/live-listing.service.js'
 
 /** PR-PRESENCE-SANCTIONED-PAIR: offerActive:false => skip_offer:true is the ONE
  * sanctioned two-flag pairing. Acknowledged close owns offerClosedAt + offerActive;
@@ -3464,6 +3466,8 @@ export class AmazonFlatFileService {
     }
 
     const closedMarkets = await closedMarketSet([...productBySku.values()].map(product => product.id))
+    // Step 7 — the account a published row with no account of its own is live on: the primary, which the feed used.
+    let primaryAmazonAccount: string | null | undefined
     await Promise.allSettled(validRows.map(async (row) => {
       const sku = String(row.item_sku).trim()
       const product = productBySku.get(sku)
@@ -3553,7 +3557,7 @@ export class AmazonFlatFileService {
           lastSyncedAt: new Date(),
           lastSyncStatus: pushRefusal ? 'SKIPPED' : opts.isPublished ? 'SUCCESS' : null,
           ...(pushRefusal ? { lastSyncError: `${pushRefusal.code}: ${pushRefusal.sentence}` } : {}),
-          ...(opts.isPublished && !pushRefusal ? { isPublished: true, listingStatus: 'ACTIVE' } : {}),
+          // The published branch below records isPublished + ACTIVE through the live-listing rule (step 7).
           ...((() => {
             // Link the listing to its ASIN: prefer an imported _asin, else the
             // typed Product ID column when it holds an ASIN (a relist). Barcode
@@ -3568,7 +3572,42 @@ export class AmazonFlatFileService {
           })()),
         }
 
-        if (existing) {
+        // FFT.1 — carry the row's CURRENT version so the client can adopt
+        // it (row stays dirty; the next Save then passes CAS and the
+        // operator's data wins knowingly, instead of a dead-end loop).
+        const versionConflict = (e: { currentVersion?: number | null }) => result.errors.push({
+          sku,
+          error: 'Changed elsewhere since you pulled — this row was NOT saved. Save again to overwrite with your version.',
+          currentVersion: e.currentVersion ?? undefined,
+        })
+        if (opts.isPublished && !pushRefusal) {
+          // Step 7 — a feed Amazon accepted: the one live-listing rule records it on the listing's own account
+          // (the primary for a new row, or one saved without an account), published and ACTIVE, and lifts the
+          // pause only from a still-draft. A different stored ASIN is kept, never replaced by a resync.
+          const { channel: _channel, marketplace: _marketplace, region: _region, channelMarket: _channelMarket,
+            isPublished: _isPublished, listingStatus: _listingStatus, externalListingId, ...fields } = listingPayload
+          try {
+            primaryAmazonAccount ??= (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
+            const [recorded] = await this.prisma.$transaction(tx => recordLiveListings(tx, {
+              channel: 'AMAZON', market: mp, accountId: (existing?.channelConnectionId ?? primaryAmazonAccount) as string, aliasKey: existing?.aliasKey ?? '',
+              rows: [{ productId: product.id, listingStatus: 'ACTIVE', externalListingId, fields,
+                // A3 — optimistic concurrency on the version the grid was pulled at, as the save below.
+                expectedVersion: existing && row._version != null ? Number(row._version) : undefined }],
+            }))
+            if (recorded.keptExternalListingId) {
+              logger.warn('flat-file sync: the stored ASIN differs from the row — kept, not replaced', { sku, marketplace: mp, ...recorded.keptExternalListingId })
+            }
+            if (recorded.created) {
+              if (!createdProductIds.includes(product.id)) result.created++
+            } else {
+              result.synced++
+              result.versions[sku] = recorded.version
+            }
+          } catch (e) {
+            if (isVersionConflict(e)) versionConflict(e)
+            else throw e
+          }
+        } else if (existing) {
           try {
             // A3 — optimistic concurrency: CAS on the version the grid was pulled
             // at, so a concurrent edit (cockpit / another operator) is rejected
@@ -3584,18 +3623,8 @@ export class AmazonFlatFileService {
             // legitimate second save (same operator, no re-pull) doesn't conflict.
             if (updated?.version != null) result.versions[sku] = Number(updated.version)
           } catch (e) {
-            if (isVersionConflict(e)) {
-              // FFT.1 — carry the row's CURRENT version so the client can adopt
-              // it (row stays dirty; the next Save then passes CAS and the
-              // operator's data wins knowingly, instead of a dead-end loop).
-              result.errors.push({
-                sku,
-                error: 'Changed elsewhere since you pulled — this row was NOT saved. Save again to overwrite with your version.',
-                currentVersion: e.currentVersion ?? undefined,
-              })
-            } else {
-              throw e
-            }
+            if (isVersionConflict(e)) versionConflict(e)
+            else throw e
           }
         } else {
           await this.prisma.channelListing.create({
