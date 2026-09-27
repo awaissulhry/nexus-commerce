@@ -74,6 +74,19 @@ export interface GridViewsMenuProps<TPage> {
   manage?: 'full' | 'minimal'
   /** Which presets appear as ITEMS. The trigger label still resolves against every preset given. */
   presetInMenu?: (preset: GridViewPreset) => boolean
+  /**
+   * TOOLBAR REBUILD (2026-09-27) — the studio sheet's "Columns" menu. All optional; every other caller is unchanged.
+   *  - `triggerLabel` replaces the computed trigger text ("Columns: All attributes · 215").
+   *  - `headings` names the sections ("Built-in views", "My views", "Team views", the active view's own verbs)
+   *    instead of separating them with bare rules.
+   *  - `afterPresets` are items right after the built-in views (the sheet's "My layout").
+   *  - `endItems` close the menu ("Customise columns…").
+   */
+  triggerLabel?: ReactNode
+  triggerAriaLabel?: string
+  headings?: boolean
+  afterPresets?: readonly MenuItemDef[]
+  endItems?: readonly MenuItemDef[]
 }
 
 /**
@@ -131,6 +144,11 @@ export function GridViewsMenu<TPage>({
   manage = 'full',
   presetInMenu,
   productType = null,
+  triggerLabel,
+  triggerAriaLabel,
+  headings = false,
+  afterPresets = [],
+  endItems = [],
 }: GridViewsMenuProps<TPage>) {
   const { toast, inline } = useSafeToast()
   const [prompt, setPrompt] = useState<Prompt | null>(null)
@@ -200,17 +218,25 @@ export function GridViewsMenu<TPage>({
   }
   const mineItems = views.views.filter((v) => !isTeammates(v)).map(savedItem)
   const teamItems = views.views.filter(isTeammates).map(savedItem)
-  const savedItems: MenuItemDef[] = [
-    ...mineItems,
-    ...(mineItems.length && teamItems.length ? [{ id: 'sep-team', separator: true } as MenuItemDef] : []),
-    ...teamItems,
-  ]
+  const heading = (id: string, label: ReactNode): MenuItemDef => ({ id, label, heading: true })
+  const builtIn = [...presetItems, ...afterPresets]
+  const savedItems: MenuItemDef[] = headings
+    ? [
+        ...(mineItems.length ? [heading('h-mine', 'My views'), ...mineItems] : []),
+        ...(teamItems.length ? [heading('h-team', 'Team views'), ...teamItems] : []),
+      ]
+    : [
+        ...mineItems,
+        ...(mineItems.length && teamItems.length ? [{ id: 'sep-team', separator: true } as MenuItemDef] : []),
+        ...teamItems,
+      ]
 
   const open = (p: Prompt, initial = '') => { setName(initial); setPrompt(p) }
 
   const items: MenuItemDef[] = [
-    ...presetItems,
-    ...(presetItems.length && savedItems.length ? [{ id: 'sep-presets', separator: true } as MenuItemDef] : []),
+    ...(headings && builtIn.length ? [heading('h-builtin', 'Built-in views')] : []),
+    ...builtIn,
+    ...(!headings && builtIn.length && savedItems.length ? [{ id: 'sep-presets', separator: true } as MenuItemDef] : []),
     ...savedItems,
     { id: 'sep-1', separator: true },
     ...(onNewView && manage === 'full' ? [{ id: 'new', label: 'New view…', onSelect: onNewView }] : []),
@@ -246,7 +272,13 @@ export function GridViewsMenu<TPage>({
           { id: 'delete', label: 'Delete…', onSelect: () => open({ mode: 'delete', view: active }) },
         ]
       : []),
+    ...(endItems.length ? [{ id: 'sep-end', separator: true } as MenuItemDef, ...endItems] : []),
   ]
+  /* With headings, the active view's own verbs sit under its name, so "Rename…" says WHICH view it renames. */
+  if (headings && active) {
+    const first = items.findIndex((item) => item.id === 'update' || item.id === 'duplicate')
+    if (first >= 0) items.splice(first, 0, { id: 'sep-active', separator: true }, heading('h-active', `“${active.name}”`))
+  }
 
   const trimmed = name.trim()
   const verb = prompt?.mode === 'save' ? 'Save view' : prompt?.mode === 'rename' ? 'Rename' : 'Duplicate'
@@ -288,9 +320,9 @@ export function GridViewsMenu<TPage>({
   return (
     <span className="nds-grid-views" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
       <span ref={anchorRef}><Menu
-        label={<>{active ? `${active.name}${countOf(active)}` : activePreset ? `${activePreset.label}${count(activePreset.columns.length)}` : emptyLabel} <ChevronDown size={11} /></>}
+        label={<>{triggerLabel ?? (active ? `${active.name}${countOf(active)}` : activePreset ? `${activePreset.label}${count(activePreset.columns.length)}` : emptyLabel)} <ChevronDown size={11} /></>}
         items={items}
-        triggerProps={{ className: 'nds-btn sm', disabled: !!prompt || busy }}
+        triggerProps={{ className: 'nds-btn sm', disabled: !!prompt || busy, ...(triggerAriaLabel ? { 'aria-label': triggerAriaLabel } : {}) }}
       /></span>
       {promptPanel}
       {inline && (

@@ -2300,6 +2300,27 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
   margin: 4px 2px;
   background: var(--nds-border-subtle);
 }
+/* A section heading inside a menu (2026-09-27) — the Listbox group heading's look, so both read as one family. */
+.nds-menu-heading {
+  padding: 6px 9px 3px;
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-muted);
+  cursor: default;
+  user-select: none;
+}
+.nds-menu-sep + .nds-menu-heading { padding-top: 4px; }
+/* An on/off item draws its own tick in a fixed slot, so ticked and unticked labels line up. */
+.nds-menu [role='menuitemcheckbox']::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+.nds-menu [role='menuitemcheckbox'][aria-checked='true']::before { content: '✓'; }
 
 /* Leading node on a Listbox option or trigger — a flag, a channel mark, a swatch. Decorative and
    text-free, so it is sized rather than coloured. */

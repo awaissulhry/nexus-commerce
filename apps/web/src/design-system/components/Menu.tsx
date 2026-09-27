@@ -51,6 +51,16 @@ export interface MenuItemDef {
    * without one the two groups read as one undifferentiated list.
    */
   separator?: boolean
+  /**
+   * Render a section heading instead of an item (2026-09-27): "Built-in views", "My views". Not focusable, not
+   * selectable; arrow keys pass over it. `label` is the text; everything else on the entry is ignored.
+   */
+  heading?: boolean
+  /**
+   * An on/off item (`menuitemcheckbox`): `true` / `false` is announced as checked / not checked, and the DS draws the
+   * tick. Absent = an ordinary item. Choosing it still closes the menu.
+   */
+  checked?: boolean
 }
 
 export interface MenuProps {
@@ -123,7 +133,7 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
     if (!open) return
     const panel = popRef.current
     const selected = panel?.querySelector<HTMLElement>('[data-selected="true"]:not([disabled]):not([aria-disabled="true"])')
-    const first = panel?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled]):not([aria-disabled="true"])')
+    const first = panel?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])')
     ;(selected ?? first ?? panel)?.focus({ preventScroll: true })
   }, [open, popRef])
 
@@ -141,7 +151,7 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
         createPortal(
           <div id={menuId} ref={popRef} style={popStyle} className="nds-menu" role="menu" tabIndex={-1} aria-label={triggerProps?.['aria-label']}
             onKeyDown={event => {
-              const options = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')]
+              const options = [...event.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])')]
               const index = options.indexOf(document.activeElement as HTMLElement)
               if (event.key === 'Escape') {
                 event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus({ preventScroll: true }); return
@@ -163,6 +173,8 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
             {items.map((it) =>
               it.separator ? (
                 <div key={it.id} className="nds-menu-sep" role="separator" />
+              ) : it.heading ? (
+                <div key={it.id} className="nds-menu-heading" role="presentation">{it.label}</div>
               ) : (
               it.href && !it.disabled ? (
                 <a
@@ -196,11 +208,12 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
               <button
                 key={it.id}
                 type="button"
-                role="menuitem"
+                role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                aria-checked={it.checked}
                 tabIndex={-1}
                 data-selected={it.id === selectedId || undefined}
                 data-tone={it.tone}
-                className={it.description != null ? 'has-desc' : undefined}
+                className={[it.description != null ? 'has-desc' : '', it.checked !== undefined ? 'is-check' : ''].filter(Boolean).join(' ') || undefined}
                 title={it.title}
                 disabled={it.disabled && it.description == null}
                 aria-disabled={it.disabled || undefined}

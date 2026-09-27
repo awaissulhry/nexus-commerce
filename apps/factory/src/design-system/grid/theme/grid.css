@@ -1113,6 +1113,12 @@
   padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 600; line-height: 1;
   background: var(--nds-surface-sunken); color: var(--nds-text-2);
 }
+/* TOOLBAR REBUILD (2026-09-27) — "Columns ▾" and "Rows ▾" name their QUESTION in quiet type and their answer in
+   bold (`.nds-toolbar-fold-active`), with the number in the fold count's pill. */
+.nds-toolbar-menu-lead { color: var(--nds-text-2); font-weight: 500; }
+.nds-toolbar-menu-lead::after { content: ':'; }
+.nds-toolbar-rows { display: inline-flex; align-items: center; gap: 2px; }
+.nds-btn.nds-toolbar-rows-clear { padding-inline: 6px; }
 /* Portaled to <body> and placed by `usePopoverPosition` (fixed `top`/`left` inline) since 2026-09-26 —
    an absolute panel inside the toolbar's `overflow: auto` was clipped under the grid. The popover layer
    is the same one every other DS popover uses. */

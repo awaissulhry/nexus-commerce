@@ -351,7 +351,13 @@ export function NexusGrid<T>({
       const own: MenuItemDef<T>[] = []
       if (columnDialog.customise) own.push({ name: 'Customise columns…', icon: agIcon('columns'), action: columnDialog.customise })
       if (columnDialog.reset) own.push({ name: 'Reset columns', action: columnDialog.reset })
-      return own.length ? [...kept, 'separator', ...own] : kept
+      /* A column's OWN verbs (2026-09-27 — "Refresh progress" on a progress column), from `colDef.context.menuItems`:
+         AG's `colDef.mainMenuItems` would REPLACE this whole menu, and with it Customise and Reset. */
+      const context = p.column?.getColDef().context as { menuItems?: () => MenuItemDef<T>[] } | undefined
+      const columnOwn = context?.menuItems?.() ?? []
+      const tail = [...(columnOwn.length ? [...columnOwn, 'separator' as const] : []), ...own]
+      while (tail[tail.length - 1] === 'separator') tail.pop()
+      return tail.length ? [...kept, 'separator', ...tail] : kept
     }
   }, [columnDialog])
 
