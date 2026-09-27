@@ -1201,11 +1201,17 @@ export interface GetSheetColumnsInput {
   productIds?: string[]
   /**
    * AM.1 — the eBay leaf categories the family's listings use (`platformAttributes.categoryId`),
-   * so the eBay coordinate's spec is THOSE categories' aspects. Without any, the marketplace-wide
-   * aspect rows stand in.
+   * so the eBay coordinate's spec is THOSE categories' aspects. Without any, the spec is the generic
+   * eBay listing fields only (`EBAY:*` in `schemaMissing`): marketplace-wide `aspect_` rows only annotate
+   * aspects that are already cached, they add none.
    */
   ebayCategoryIds?: string[]
   etsyCategoryIds?: string[]
+  /**
+   * The family's Shopify categories (the Shopify scope passes them, possibly empty). A category-specific metafield
+   * that applies to none of them is served read-only with Shopify's reason. Omitted: not judged.
+   */
+  shopifyCategoryIds?: string[]
   /** `channel` includes fields that live only on the listing; default derives from `onlyChannels`. */
   scopeKind?: 'master' | 'channel'
 }
@@ -1284,6 +1290,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
   const axes = [...new Set((input.variationAxes ?? []).map((a) => String(a)))].sort()
   const ebayCategoryIds = [...new Set((input.ebayCategoryIds ?? []).map(String).filter(Boolean))].sort()
   const etsyCategoryIds = [...new Set((input.etsyCategoryIds ?? []).map(String).filter(Boolean))].sort()
+  const shopifyCategoryIds = input.shopifyCategoryIds === undefined ? undefined : [...new Set(input.shopifyCategoryIds.map(String).filter(Boolean))].sort()
   const scopeKind: 'master' | 'channel' = input.scopeKind ?? ((input.onlyChannels?.length ?? 0) === 1 ? 'channel' : 'master')
 
   // P3b S4 (docs/attributes/PLAN.md §10.9) — the dictionary's version: a new attribute, a placement move or an archive
@@ -1305,6 +1312,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     !!input.includeEmptyChannels,
     ebayCategoryIds,
     etsyCategoryIds,
+    shopifyCategoryIds ?? null,
     scopeKind,
     (input.familyIds ?? []).slice().sort(),
     input.savedFields ?? [],
@@ -1455,7 +1463,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
       let spec
       if (coordinate.channel === 'SHOPIFY') {
         const shopify = await import('./channel-specs/shopify.js')
-        try { spec = await shopify.loadShopifyProductSpec(input.accountId, input.locale) }
+        try { spec = await shopify.loadShopifyProductSpec(input.accountId, input.locale, shopifyCategoryIds) }
         catch (error) {
           console.error('[sheet-columns] Shopify requirements unavailable:', error instanceof Error ? error.message : error)
           schemaMissing.push(SHOPIFY_FIELDS_UNREAD)

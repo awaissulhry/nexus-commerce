@@ -932,26 +932,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> 
 // The read
 // ────────────────────────────────────────────────────────────────────
 
-/** The distinct eBay leaf category ids the given products are listed under on this market. */
-export async function ebayCategoryIdsFor(
-  prisma: { channelListing: { findMany: (args: unknown) => Promise<Array<{ platformAttributes: unknown }>> } },
-  productIds: string[],
-  market: string,
-): Promise<string[]> {
-  if (productIds.length === 0) return []
-  const rows = await prisma.channelListing.findMany({
-    where: { productId: { in: productIds }, channel: 'EBAY', marketplace: String(market).toUpperCase() },
-    select: { platformAttributes: true },
-  })
-  const ids = new Set<string>()
-  for (const r of rows) {
-    const id = (r.platformAttributes as { categoryId?: unknown } | null)?.categoryId
-    if (typeof id === 'string' && id.trim()) ids.add(id.trim())
-    else if (typeof id === 'number') ids.add(String(id))
-  }
-  return [...ids].sort()
-}
-
 /**
  * R-LX-10 (on LX.R's P2-19, confirmed live by LX.6) — a Studio sheet read is
  * CACHE-ONLY by construction, not by every branch inside it remembering to be.
@@ -1038,6 +1018,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     variationAxes,
     ebayCategoryIds,
     etsyCategoryIds: wantChannel === 'ETSY' ? context!.categories : [],
+    ...(wantChannel === 'SHOPIFY' ? { shopifyCategoryIds: context!.categories } : {}),
     scopeKind: wantChannel ? 'channel' : 'master',
     // ⚠ BOTH options, and the pair is load-bearing. `onlyChannels` narrows to
     // this channel's caps; `includeEmptyChannels` keeps a coordinate the product

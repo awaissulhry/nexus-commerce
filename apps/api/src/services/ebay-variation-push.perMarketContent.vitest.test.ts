@@ -273,3 +273,38 @@ describe('market isolation — active-first sort keeps one market’s content of
     expect(after.subtitle).toBe('FR subtitle')
   })
 })
+
+describe('site-bound values never cross eBay sites', () => {
+  // IT is the only site with a listing; the row is rendered for DE.
+  const itListing = listing({
+    region: 'IT',
+    title: 'IT title',
+    externalListingId: '110000000001',
+    platformAttributes: { categoryId: '177104', fulfillmentPolicyId: 'it-ship', paymentPolicyId: 'it-pay', returnPolicyId: 'it-return', subtitle: 'IT subtitle' },
+  })
+
+  it('a site with no listing gets no category, policies or item id from another site', () => {
+    const row = buildFlatRow(makeProduct([itListing]), { marketplace: 'DE' })
+    expect(row.category_id).toBe('')
+    expect(row.fulfillment_policy_id).toBe('')
+    expect(row.payment_policy_id).toBe('')
+    expect(row.return_policy_id).toBe('')
+    expect(row.ebay_item_id).toBe('')
+    expect(row.listing_status).toBe('DRAFT')
+    // Text content still falls back to the other market, as before.
+    expect(row.title).toBe('IT title')
+  })
+
+  it('the site’s own listing supplies them', () => {
+    const row = buildFlatRow(makeProduct([itListing]), { marketplace: 'EBAY_IT' })
+    expect(row.category_id).toBe('177104')
+    expect(row.fulfillment_policy_id).toBe('it-ship')
+    expect(row.ebay_item_id).toBe('110000000001')
+  })
+
+  it('no market supplied keeps the legacy first-listing behaviour', () => {
+    const row = buildFlatRow(makeProduct([itListing]))
+    expect(row.category_id).toBe('177104')
+    expect(row.ebay_item_id).toBe('110000000001')
+  })
+})

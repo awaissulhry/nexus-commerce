@@ -15,7 +15,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *      market's region, when they all agree (`source: 'listingOtherMarket'`; see `amazonRegionSiblings`). A listing
  *      in THIS market beats all of it, in `categoryForListing`.
  *   1. its PRIMARY category's mapping for (channel, exact market)
- *   2. its primary category's mapping for (channel, '*')
+ *   2. its primary category's mapping for (channel, '*') — never for eBay (`categoryMappingMarkets`)
  *   3. the nearest MAPPED ancestor of that category, same two steps — a mapping on
  *      `Clothing > Outerwear` covers `Clothing > Outerwear > Coats` without re-declaring it,
  *      which is the whole reason we keep a closure table
@@ -32,6 +32,23 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { getMappingForMarketplace } from '../schema-mapping.service.js'
 import { MARKET_CATALOGUE } from '../market-catalogue.js'
+
+/**
+ * The marketplaces whose category mappings apply to one market: the market itself and the all-market `'*'` row —
+ * except on eBay. eBay keeps one category tree per site, so a leaf id names a different category (or none) on
+ * another site: 177104 is motorcycle jackets in IT, FR and ES and does not exist in DE or UK, where 177117 is, while
+ * FR's 177117 is motocross. An eBay mapping always names its site.
+ */
+export function categoryMappingMarkets(channel: string, marketplace: string): string[] {
+  return channel.toUpperCase() === 'EBAY' ? [marketplace] : [marketplace, '*']
+}
+
+/** An all-market `'*'` mapping cannot exist on eBay (see `categoryMappingMarkets`). */
+export function assertCategoryMappingMarket(channel: string, marketplace: string): void {
+  if (channel.toUpperCase() === 'EBAY' && (!marketplace || marketplace === '*')) {
+    throw new Error('An eBay category is chosen per eBay site. Choose the site (for example IT or DE), not all markets.')
+  }
+}
 
 export type CategoryResolutionSource =
   | 'categoryExact'    // mapped on this category, this market
@@ -259,8 +276,8 @@ export async function resolveCategoriesForProducts(input: {
       where: { productId: { in: membershipIds } },
       select: { productId: true, categoryId: true, isPrimary: true },
     }),
-    input.mappingSnapshot ? Promise.resolve(input.mappingSnapshot) : prisma.categoryChannelMapping.findMany({
-      where: { channel: channel.toUpperCase(), marketplace: { in: [marketplace, '*'] } },
+    input.mappingSnapshot ? Promise.resolve(input.mappingSnapshot.filter(m => categoryMappingMarkets(channel, marketplace).includes(m.marketplace))) : prisma.categoryChannelMapping.findMany({
+      where: { channel: channel.toUpperCase(), marketplace: { in: categoryMappingMarkets(channel, marketplace) } },
       select: {
         categoryId: true,
         marketplace: true,
@@ -428,7 +445,7 @@ export async function listCategoryMappings(input: {
       orderBy: [{ depth: 'asc' }, { sortOrder: 'asc' }],
     }),
     prisma.categoryChannelMapping.findMany({
-      where: { channel, marketplace: { in: [marketplace, '*'] } },
+      where: { channel, marketplace: { in: categoryMappingMarkets(channel, marketplace) } },
     }),
     prisma.productCategory.groupBy({ by: ['categoryId'], _count: { productId: true } }),
     prisma.categoryClosure.findMany({
@@ -528,6 +545,7 @@ export async function upsertCategoryMapping(input: {
 }) {
   const channel = input.channel.toUpperCase()
   const marketplace = input.marketplace || '*'
+  assertCategoryMappingMarket(channel, marketplace)
   const confidence = input.confidence ?? 'MANUAL'
   // A hand-made mapping is reviewed by definition; an AI suggestion is not until confirmed.
   const reviewedAt = confidence === 'MANUAL' ? new Date() : null

@@ -41,6 +41,8 @@ export interface StudioColumnsInput {
   /** AM.1 — the eBay leaf categories the family's listings use; part of the key. */
   ebayCategoryIds?: string[]
   etsyCategoryIds?: string[]
+  /** See `GetSheetColumnsInput.shopifyCategoryIds`; part of the key (omitted ≠ empty). */
+  shopifyCategoryIds?: string[]
   scopeKind?: 'master' | 'channel'
 }
 
@@ -65,6 +67,7 @@ export async function getStudioColumns(input: StudioColumnsInput): Promise<Sheet
     input.includeEmptyChannels ? '1' : '0',
     (input.ebayCategoryIds ?? []).slice().sort().join(','),
     (input.etsyCategoryIds ?? []).slice().sort().join(','),
+    input.shopifyCategoryIds === undefined ? '-' : input.shopifyCategoryIds.slice().sort().join(','),
     input.scopeKind ?? '',
     (input.familyIds ?? []).slice().sort().join(','),
     JSON.stringify(input.savedFields ?? []),

@@ -2625,13 +2625,18 @@ export function buildFlatRow(
   // else the first listing that has data, else the product.
   const listings = product.channelListings;
   const wantRegion = (opts?.marketplace ?? '').toUpperCase().replace(/^EBAY[_-]/, '');
-  const first = (wantRegion
+  // The site's own listing. With a market supplied and no listing there, this is undefined: text content may still
+  // come from another market below, but a site-bound value never does — eBay category ids name a different thing (or
+  // nothing) on another site's tree, business policies and item ids belong to one site.
+  const siteListing = wantRegion
     ? listings.find((l) => {
         const r = (l.region ?? '').toUpperCase();
         return r === wantRegion || (wantRegion === 'UK' && r === 'GB') || (wantRegion === 'GB' && r === 'UK');
       })
-    : undefined) ?? listings[0];
+    : listings[0];
+  const first = siteListing ?? listings[0];
   const firstAttrs = first ? ((first.platformAttributes ?? {}) as Record<string, unknown>) : {};
+  const siteAttrs = siteListing ? ((siteListing.platformAttributes ?? {}) as Record<string, unknown>) : {};
   const firstImageUrls = (firstAttrs.imageUrls as string[] | undefined) ?? [];
 
   // Prefer Cloudinary images (ProductImage rows) over Amazon CDN platformAttributes URLs.
@@ -2680,7 +2685,7 @@ export function buildFlatRow(
     // shared listing fields from first listing
     title: first?.title || product.name || '',
     condition: (firstAttrs.conditionId as string | undefined) ?? 'NEW',
-    category_id: (firstAttrs.categoryId as string | undefined) ?? '',
+    category_id: (siteAttrs.categoryId as string | undefined) ?? '',
     subtitle: (firstAttrs.subtitle as string | undefined) ?? '',
     // ED.3 — per-market description theme assignment (blank = default theme).
     description_theme: (firstAttrs.descriptionThemeId as string | undefined) ?? '',
@@ -2722,15 +2727,15 @@ export function buildFlatRow(
       (firstAttrs.quantityLimitPerBuyer as number | undefined) != null
         ? (firstAttrs.quantityLimitPerBuyer as number)
         : '',
-    fulfillment_policy_id: (firstAttrs.fulfillmentPolicyId as string | undefined) ?? '',
-    payment_policy_id: (firstAttrs.paymentPolicyId as string | undefined) ?? '',
-    return_policy_id: (firstAttrs.returnPolicyId as string | undefined) ?? '',
+    fulfillment_policy_id: (siteAttrs.fulfillmentPolicyId as string | undefined) ?? '',
+    payment_policy_id: (siteAttrs.paymentPolicyId as string | undefined) ?? '',
+    return_policy_id: (siteAttrs.returnPolicyId as string | undefined) ?? '',
     _brand: product.brand ?? '',
     // legacy single-market fields (backward compat)
-    listing_status: first?.listingStatus ?? 'DRAFT',
-    last_pushed_at: first?.updatedAt.toISOString() ?? '',
-    sync_status: first?.syncStatus ?? 'pending',
-    ebay_item_id: first?.externalListingId ?? '',
+    listing_status: siteListing?.listingStatus ?? 'DRAFT',
+    last_pushed_at: siteListing?.updatedAt.toISOString() ?? '',
+    sync_status: siteListing?.syncStatus ?? 'pending',
+    ebay_item_id: siteListing?.externalListingId ?? '',
     // EV.5b — family group key: children share the parent's id, the parent
     // uses its own. So a family groups (push + UI) instead of every row
     // being its own one-row "family".

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMediaOps, emptyMediaPlan, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, planAssetIds, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
+import { applyMediaOps, emptyMediaPlan, inverseMediaOps, knownSetRefs, mediaLayerKey, MediaPlanEditError, mediaOpSchema, mediaPlanSchema, planAssetIds, resolveAxis, resolveSet, resolveSwatch, type MediaPlan, type MediaPlanStack } from './media-plan'
 
 const plan = (sets: MediaPlan['sets'], axis?: string | null): MediaPlan => ({ version: 1, ...(axis !== undefined ? { axis } : {}), sets })
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
@@ -72,7 +72,8 @@ describe('media plan edits', () => {
     expect(owned.sets.common).toEqual(ids('cover', 'detail'))
     expect(applyMediaOps({ shared, channel: owned }, 'CHANNEL', [{ op: 'follow', set: 'common' }])).toEqual(emptyMediaPlan())
     expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'follow', set: 'common' }])).toThrow(MediaPlanEditError)
-    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'axis', axis: undefined }])).toThrow(MediaPlanEditError)
+    // Shared can drop its axis choice: the family's default axis applies again.
+    expect(applyMediaOps({ shared }, 'SHARED', [{ op: 'axis', axis: undefined }]).axis).toBeUndefined()
   })
   it('reorder must be the same photos — a concurrent change is refused, not merged', () => {
     expect(applyMediaOps({ shared }, 'SHARED', [{ op: 'reorder', set: 'common', assetIds: ['detail', 'cover'] }]).sets.common).toEqual(ids('detail', 'cover'))
@@ -83,6 +84,37 @@ describe('media plan edits', () => {
     expect(listing).toEqual(plan({ swatches: { 'color:black': { assetId: 'sw' } } }, null))
     const back = applyMediaOps({ shared, listing }, 'LISTING', [{ op: 'axis', axis: undefined }, { op: 'swatch', value: 'color:black', assetId: undefined }])
     expect(back).toEqual(emptyMediaPlan())
+  })
+  it('replace sets a set exactly and refuses when the layer changed since (expect)', () => {
+    expect(applyMediaOps({ shared }, 'SHARED', [{ op: 'replace', set: 'common', assetIds: ['detail'], expect: ['cover', 'detail'] }]).sets.common).toEqual(ids('detail'))
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'replace', set: 'common', assetIds: ['detail'], expect: ['cover'] }])).toThrow(MediaPlanEditError)
+    expect(() => applyMediaOps({ shared }, 'SHARED', [{ op: 'replace', set: 'common', assetIds: ['a', 'a'] }])).toThrow(MediaPlanEditError)
+    // expect: null = the layer must still follow that set.
+    const own = plan({ common: ids('x') })
+    expect(() => applyMediaOps({ shared, channel: own }, 'CHANNEL', [{ op: 'follow', set: 'common', expect: null }])).toThrow(MediaPlanEditError)
+  })
+  it('undo ops put a layer back exactly, set by set, and refuse after a later change', () => {
+    const cases: Array<[MediaPlanStack, 'SHARED' | 'CHANNEL', Parameters<typeof applyMediaOps>[2]]> = [
+      [{ shared }, 'SHARED', [{ op: 'move', from: NERO, to: 'common', assetId: 'n2', index: 0 }]],
+      [{ shared }, 'SHARED', [{ op: 'insert', set: 'value:color:red', assetIds: ['r1'] }, { op: 'axis', axis: 'size' }, { op: 'swatch', value: 'color:black', assetId: 's1' }]],
+      [{ shared, channel: null }, 'CHANNEL', [{ op: 'remove', set: GIALLO, assetId: 'g1' }, { op: 'axis', axis: null }]],
+      [{ shared, channel: plan({ common: ids('detail') }) }, 'CHANNEL', [{ op: 'follow', set: 'common' }]],
+    ]
+    for (const [stack, layer, ops] of cases) {
+      const key = layer === 'SHARED' ? 'shared' : 'channel'
+      const before = stack[key] ?? null
+      const after = applyMediaOps(stack, layer, ops)
+      const undo = inverseMediaOps(layer, before, after)
+      const back = applyMediaOps({ ...stack, [key]: after }, layer, undo)
+      // On Shared a new set comes back empty (it shows the same as absent); every other layer comes back byte for byte.
+      const strip = (p: MediaPlan | null) => JSON.parse(JSON.stringify(p ?? emptyMediaPlan(), (k, v) => Array.isArray(v) && !v.length && k !== 'common' ? undefined : v))
+      expect(strip(back)).toEqual(strip(before))
+      const redo = inverseMediaOps(layer, after, back)
+      expect(applyMediaOps({ ...stack, [key]: back }, layer, redo)).toEqual(after)
+    }
+    const after = applyMediaOps({ shared }, 'SHARED', [{ op: 'remove', set: 'common', assetId: 'cover' }])
+    const later = applyMediaOps({ shared: after }, 'SHARED', [{ op: 'insert', set: 'common', assetIds: ['x'] }])
+    expect(() => applyMediaOps({ shared: later }, 'SHARED', inverseMediaOps('SHARED', shared, after))).toThrow(MediaPlanEditError)
   })
   it('lists every photo a plan points at', () => {
     expect(planAssetIds(plan({ common: ids('a'), values: { 'color:black': ids('b') }, skus: { c1: ids('c') }, swatches: { 'color:black': { assetId: 'd' } }, safety: ids('e') })).sort()).toEqual(['a', 'b', 'c', 'd', 'e'])

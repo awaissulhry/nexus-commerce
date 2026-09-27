@@ -10,6 +10,8 @@ import { mappingHref } from '@/app/channels/mapping/_shared/navigation'
 import type { CategoryMappingRow } from '@/app/channels/mapping/_shared/contracts'
 import { CategoryDialog } from './CategoryDialog'
 import { TaxonomyDialog } from './TaxonomyDialog'
+import { EbaySitesDialog } from './EbaySitesDialog'
+import { coveragePath, type SiteCoverage } from './ebaySites'
 import { refreshSource, scopePath, type Assignments, type CategoryCommand, type CategoryRow, type Directory, type ImportRun, type Source } from './api'
 import { useResource } from './useResource'
 import styles from './categories.module.css'
@@ -37,11 +39,14 @@ export function CategoriesWorkspace({ initialView, initialChannel, initialMarket
   const [edit, setEdit] = useState<{ action: CategoryCommand['action']; category?: CategoryRow; parentId?: string } | null>(null)
   const [picker, setPicker] = useState<{ source: Source; assignment?: CategoryMappingRow; token?: string } | null>(null)
   const [history, setHistory] = useState<Source | null>(null)
+  const [fill, setFill] = useState<{ categoryId: string; categoryName: string } | null>(null)
   const directory = useResource<Directory>('category-workspace', revision)
   const sourceResult = useResource<{ sources: Source[] }>('taxonomies', sourceRevision)
   const sources = sourceResult.data?.sources ?? []
   const source = sources.find(s => `${s.channel}/${s.market}` === scope) ?? (!scope ? sources[0] : undefined)
   const assignments = useResource<Assignments>(view === 'assignments' && source ? `category-workspace/${scopePath(source)}/assignments` : null, revision + sourceRevision)
+  // "Fill other eBay sites" is offered on a row with its own eBay category on one site and none on another.
+  const ebayCoverage = useResource<SiteCoverage>(view === 'assignments' && source?.channel === 'EBAY' ? coveragePath : null, revision + sourceRevision)
   const changed = () => { setRevision(v => v + 1); setSourceRevision(v => v + 1) }
   const pending = sources.some(s => s.state === 'queued' || s.state === 'refreshing')
   useEffect(() => {
@@ -126,7 +131,7 @@ export function CategoriesWorkspace({ initialView, initialChannel, initialMarket
             { key: 'source', label: 'Assignment source', render: row => row.mapping ? <Pill tone={row.mapping.reviewedAt ? 'success' : 'warning'}>{row.mapping.reviewedAt ? row.mapping.marketplace === '*' ? 'All-market default' : 'Direct assignment' : 'Needs review'}</Pill> : row.inheritedFrom ? <div className={styles.identity}><span>Inherited from {row.inheritedFrom.categoryName}</span>{row.inheritedFrom.reviewed === false && <Pill tone="warning">Needs review</Pill>}</div> : <Pill tone="neutral">Not assigned</Pill> },
             { key: 'health', label: 'Requirements', render: row => <Pill tone={needsAttention(row.health) ? 'warning' : 'neutral'}>{healthLabels[row.health] ?? 'Checking requirements'}</Pill> },
             { key: 'products', label: 'Direct products', numeric: true, render: row => row.productCount.toLocaleString() },
-            { key: 'actions', label: 'Actions', render: row => <div className={styles.actions}><Button size="xs" disabled={!source.supported || assignments.loading} onClick={() => setPicker({ source, assignment: row, token: assignments.data?.token })}>{row.mapping ? 'Change' : 'Assign'}</Button>{(row.mapping || row.inheritedFrom) && <Button asChild size="xs" variant="link"><Link href={mappingHref({ channel: source.channel, market: source.market, category: row.mapping?.channelCategoryId ?? row.inheritedFrom?.channelCategoryId })}>Attribute rules</Link></Button>}</div> },
+            { key: 'actions', label: 'Actions', render: row => <div className={styles.actions}><Button size="xs" disabled={!source.supported || assignments.loading} onClick={() => setPicker({ source, assignment: row, token: assignments.data?.token })}>{row.mapping ? 'Change' : 'Assign'}</Button>{(row.mapping || row.inheritedFrom) && <Button asChild size="xs" variant="link"><Link href={mappingHref({ channel: source.channel, market: source.market, category: row.mapping?.channelCategoryId ?? row.inheritedFrom?.channelCategoryId })}>Attribute rules</Link></Button>}{source.channel === 'EBAY' && ebayCoverage.data?.fillable[row.categoryId] && <Button size="xs" disabled={assignments.loading} onClick={() => setFill({ categoryId: row.categoryId, categoryName: row.categoryName })}>Fill other eBay sites</Button>}</div> },
           ]} emptyState={<EmptyState title={rows.length ? 'No matching assignments' : 'Create an internal category first'} description={rows.length ? 'Clear the search or change the assignment filter.' : 'Your shared categories appear here once created.'} action={<Button size="sm" onClick={() => rows.length ? (setQuery(''), setFilter('all')) : selectView('categories')}>{rows.length ? 'Clear filters' : 'Open our categories'}</Button>} />} />}
         </>}
       </>}
@@ -146,6 +151,7 @@ export function CategoriesWorkspace({ initialView, initialChannel, initialMarket
     {edit && directory.data && <CategoryDialog {...edit} directory={directory.data} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); setNotice(edit.action === 'delete' ? 'Category deleted.' : 'Category saved.'); changed() }} />}
     {picker && <TaxonomyDialog source={sources.find(s => s.channel === picker.source.channel && s.market === picker.source.market) ?? picker.source} assignment={picker.assignment} token={picker.token} revision={sourceRevision} onClose={() => setPicker(null)} onChanged={changed} />}
     {history && <HistoryDialog source={history} onClose={() => setHistory(null)} />}
+    {fill && <EbaySitesDialog {...fill} onClose={() => setFill(null)} onChanged={changed} />}
   </div>
 }
 
