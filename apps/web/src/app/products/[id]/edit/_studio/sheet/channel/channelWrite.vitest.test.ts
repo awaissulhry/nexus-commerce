@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { addListingAlias, channelSheetResponse, commitChannelRow, updateListingAlias, writeLandsOnListing } from './useChannelSheet'
+import { addListingAlias, channelSheetResponse, commitChannelRow, createdListingsOf, NO_LISTING_VERSION, updateListingAlias, writeLandsOnListing, type CreatedListing } from './useChannelSheet'
 import { wireAliasKey, type ChannelSheetRow, type StudioCellValue } from './types'
 
 const cell = (over: Partial<StudioCellValue>): StudioCellValue =>
@@ -206,10 +206,12 @@ describe('expectedVersion names the row the write lands on', () => {
     expect(seen.body.expectedVersion).not.toBe(7)
   })
 
-  it('omits it for a channel write on a row with NO listing — never the product\'s as a stand-in', async () => {
+  /* Create path, step 6: was "omits it". The token for "I saw no listing" is 0 — never the product's as a stand-in, and
+     never nothing, which the price and fulfilment doors refused with the wrong reason. */
+  it('sends 0 for a channel write on a row with NO listing — never the product\'s as a stand-in', async () => {
     const seen = captureBody()
     await commitChannelRow({ rowId: 'primary:p1', row: row({ listing: undefined } as never), expectedVersion: 7, cells: [{ colId: 'material', value: 'N', intent: 'set' }] } as never, coord)
-    expect(seen.body).not.toHaveProperty('expectedVersion')
+    expect(seen.body.expectedVersion).toBe(0)
   })
 
   it('keeps it for a master-only batch — that is the case the CAS was built for', async () => {
@@ -227,11 +229,11 @@ describe('expectedVersion names the row the write lands on', () => {
     expect(seen.body.expectedVersion).not.toBe(7)
   })
 
-  it('omits the token for a mapped field on a row with NO listing — never the product\'s as a stand-in', async () => {
+  it('sends 0 for a mapped field on a row with NO listing — never the product\'s as a stand-in', async () => {
     const seen = captureBody()
     const r = row({ listing: undefined } as never)
     await commitChannelRow({ rowId: 'primary:p1', row: r, expectedVersion: 7, cells: [{ colId: 'ebay_title', value: 'T', intent: 'set' }] } as never, coord)
-    expect(seen.body).not.toHaveProperty('expectedVersion')
+    expect(seen.body.expectedVersion).toBe(0)
   })
 
   it.each(['ebay_title', 'material'])('splits a mixed paste and guards both persisted rows (%s)', async colId => {
@@ -333,5 +335,200 @@ describe('whole-list Follow Master', () => {
     expect(seen.body).toMatchObject({ changes: [{ field: 'amazon_bulletPoints', value: null, intent: 'reset', target: 'channel' }],
       marketplaceContexts: [{ aliasKey: 'alias-2' }], expectedVersion: 82 })
     expect(result.cells?.bulletPoints_2).toEqual({ ok: false, reason: 'List refused' })
+  })
+})
+
+
+/**
+ * Product-sheet create path, step 6 (the Owner's D1 = A, 2026-09-27). The first channel-scope save on a market with no
+ * listing starts the family's inert DRAFT (parent + every variant) on the server; the sheet sends 0 for "I saw no
+ * listing", adopts what the server started, and answers the version-0 conflict by adopting the listing it names and
+ * sending the edit once more.
+ */
+describe('a new market: version 0, the started draft, and the version-0 conflict', () => {
+  const SE = { channel: 'AMAZON' as const, marketplace: 'SE', accountId: 'account-a' }
+  const family = () => ({
+    parent: row({ id: 'root', rowId: 'primary:root', sku: 'GALE-JACKET', rowKind: 'parent', listing: null } as never),
+    v1: row({ id: 'p1', rowId: 'primary:p1', listing: null } as never),
+    v2: row({ id: 'p2', rowId: 'primary:p2', sku: 'GALE-JACKET-BLACK-MEN-L', listing: null } as never),
+    // The same child under another listing alias is another row — a primary draft is not its listing.
+    aliased: row({ id: 'p2', rowId: 'alias-2:p2', aliasId: 'alias-2', listing: null } as never),
+    // A row that already holds a listing keeps it: a started draft never replaces a listing the sheet read.
+    listed: row({ id: 'p3', rowId: 'primary:p3', listing: { id: 'l-p3', version: 40 } } as never),
+  })
+  const started = [
+    { productId: 'root', listingId: 'l-root', version: 1 },
+    { productId: 'p1', listingId: 'l-p1', version: 2 },
+    { productId: 'p2', listingId: 'l-p2', version: 1 },
+    { productId: 'p3', listingId: 'l-other', version: 9 },
+  ]
+  const edit = (r: ChannelSheetRow) => ({ rowId: r.rowId, row: r, expectedVersion: 7, cells: [{ colId: 'material', value: 'Nylon', intent: 'set' as const }] })
+
+  it('sends 0 on the first save, then adopts the WHOLE started family so the next save on any row carries its real version', async () => {
+    const f = family()
+    const seen = captureBody({ updated: 1, currentVersion: 2, versionOf: 'channelListing', createdListings: started })
+    const told: Array<{ created: CreatedListing[]; adopted: string[] }> = []
+    const result = await commitChannelRow(edit(f.v1) as never, { ...SE, familyRows: () => Object.values(f),
+      onListingsCreated: (created, adopted) => told.push({ created, adopted: adopted.map(r => r.rowId) }) })
+    expect(seen.body.expectedVersion).toBe(NO_LISTING_VERSION)
+    expect(result.ok).toBe(true)
+    // The saved row, its parent and its sibling — each at the version the server read back.
+    expect(f.v1.listing).toMatchObject({ id: 'l-p1', version: 2, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    expect(f.parent.listing).toMatchObject({ id: 'l-root', version: 1 })
+    expect(f.v2.listing).toMatchObject({ id: 'l-p2', version: 1 })
+    // Not another alias's row, and not a row that already had a listing.
+    expect(f.aliased.listing).toBeNull()
+    expect(f.listed.listing).toEqual({ id: 'l-p3', version: 40 })
+    expect(told).toEqual([{ created: started, adopted: ['primary:p1', 'primary:root', 'primary:p2'] }])
+
+    // The next save on a SIBLING row: its own draft's version, no reload in between.
+    const next = captureBody({ updated: 1, currentVersion: 2, versionOf: 'channelListing' })
+    await commitChannelRow(edit(f.v2) as never, { ...SE, familyRows: () => Object.values(f) })
+    expect(next.body.expectedVersion).toBe(1)
+  })
+
+  it('adopts a started draft on a stated no-op too — clearing an empty value still started the listing', async () => {
+    const f = family()
+    captureBody({ success: true, updated: 0, unchanged: 1, currentVersion: 1, versionOf: 'channelListing', createdListings: started.slice(0, 3) })
+    const result = await commitChannelRow(edit(f.v1) as never, { ...SE, familyRows: () => Object.values(f) })
+    expect(result.ok).toBe(true)
+    // Adopted at its read-back version, then the answer's own listing version for the saved row.
+    expect(f.v1.listing).toMatchObject({ id: 'l-p1', version: 1 })
+    expect(f.parent.listing).toMatchObject({ id: 'l-root' })
+  })
+
+  it('reads createdListings defensively: a malformed entry is left out, a missing version is not guessed', () => {
+    expect(createdListingsOf({ createdListings: [{ productId: 'a', listingId: 'l-a', version: 3 }, { productId: 'b', listingId: 'l-b', version: null }, { productId: 7 }, null] }))
+      .toEqual([{ productId: 'a', listingId: 'l-a', version: 3 }, { productId: 'b', listingId: 'l-b', version: null }])
+    expect(createdListingsOf({ updated: 1 })).toEqual([])
+    expect(createdListingsOf(null)).toEqual([])
+  })
+
+  it('a started listing with no read-back version is left for the next read (that row sends 0 again)', async () => {
+    const f = family()
+    captureBody({ updated: 1, createdListings: [{ productId: 'p1', listingId: 'l-p1', version: 2 }, { productId: 'p2', listingId: 'l-p2', version: null }] })
+    await commitChannelRow(edit(f.v1) as never, { ...SE, familyRows: () => Object.values(f) })
+    expect(f.v2.listing).toBeNull()
+  })
+
+  const conflict = { code: 'VERSION_CONFLICT', error: 'Another change landed first on this listing — refresh the scope to pick up the latest version.',
+    expectedVersion: 0, currentVersion: 5, listingId: 'l-found', versionOf: 'channelListing' }
+
+  it('on the version-0 conflict adopts the listing it names and sends the edit ONCE more at its version', async () => {
+    const f = family()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(conflict), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ updated: 1, currentVersion: 6, versionOf: 'channelListing' })))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await commitChannelRow(edit(f.v1) as never, SE)
+    const sent = fetchMock.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string))
+    expect(sent.map(body => body.expectedVersion)).toEqual([0, 5])
+    // The same edit, the same destination — only the token moved.
+    expect(sent[1].changes).toEqual(sent[0].changes)
+    expect(sent[1].marketplaceContexts).toEqual(sent[0].marketplaceContexts)
+    expect(result).toMatchObject({ ok: true })
+    expect(f.v1.listing).toMatchObject({ id: 'l-found', version: 6 })
+  })
+
+  it('never loops: a second conflict on the retry is reported as a conflict, after exactly two requests', async () => {
+    const f = family()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(conflict), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...conflict, expectedVersion: 5, currentVersion: 7 }), { status: 409 }))
+      .mockResolvedValue(new Response(JSON.stringify({ updated: 1 })))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await commitChannelRow(edit(f.v1) as never, SE)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toMatchObject({ ok: false, conflict: true })
+    // The writer is left holding the newest version the server named, ready for the operator's retry.
+    expect(f.v1.listing).toMatchObject({ id: 'l-found', version: 7 })
+  })
+
+  it('the CONTROL: a conflict on a row that already had a listing is answered exactly as before — no retry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...conflict, expectedVersion: 82, currentVersion: 83 }), { status: 409 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const r = row()
+    const result = await commitChannelRow(edit(r) as never, SE)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: false, conflict: true })
+    expect(r.listing).toMatchObject({ id: 'l1', version: 83 })
+  })
+
+  it('a version-0 conflict that names no listing is not retried (an older server): reported as a conflict', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'VERSION_CONFLICT', currentVersion: 5, versionOf: 'channelListing' }), { status: 409 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const f = family()
+    const result = await commitChannelRow(edit(f.v1) as never, SE)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: false, conflict: true })
+    expect(f.v1.listing).toBeNull()
+  })
+
+  it.each([
+    'Connect an Amazon account before listing on SE.',
+    'Amazon · SE is not an active market in this business.',
+    'The selected Amazon account is not connected. Reconnect it or choose another account before listing on SE.',
+  ])('paints the draft creator\'s refusal on the cell that asked: %s', async (sentence) => {
+    const f = family()
+    f.v1.values = { ...f.v1.values, brand: cell({ writeField: 'attr_brand' }) }
+    captureBody({ success: true, updated: 0, errors: [{ id: 'p1', field: 'material', error: sentence }] })
+    const result = await commitChannelRow({ ...edit(f.v1), cells: [{ colId: 'material', value: 'Nylon', intent: 'set' }] } as never, SE)
+    expect(result.ok).toBe(false)
+    expect(result.cells?.material).toEqual({ ok: false, reason: sentence })
+    expect(f.v1.listing).toBeNull()
+  })
+})
+
+/**
+ * Step 4 end to end in the web: the variation theme cell on a market with no listing is served writable with
+ * `write.expectedVersion: 0` — nothing in the sheet may block it or swap the token, and the projection it answers
+ * with names the listings the save started.
+ */
+describe('the variation theme on a market with no listing', () => {
+  const write = { endpoint: 'projection' as const, expectedVersion: 0, aliasKey: '', coordinate: { channel: 'AMAZON', market: 'SE', accountId: 'account-a' } }
+  const served = {
+    axes: [{ axisKey: 'color', familyKey: 'Colore', target: 'color_name', included: true }],
+    theme: null, write, writable: true, writeBlockedReason: null,
+    deliveryNote: 'Saved to the Amazon · SE draft. Publish sends it.',
+  }
+  const picked = { ...served, theme: { code: 'COLOR' }, baseline: served }
+
+  it('sends the theme to the projection at version 0, and adopts the parent listing the save started', async () => {
+    const parent = row({ id: 'root', rowId: 'primary:root', rowKind: 'parent', listing: null,
+      values: { variation_theme: cell({ writeField: 'variation_theme', value: served as never }) } } as never)
+    const child = row({ id: 'p1', rowId: 'primary:p1', listing: null } as never)
+    // A variant the sheet already showed listed here was not started by this save.
+    const listedChild = row({ id: 'p3', rowId: 'primary:p3', listing: { id: 'l-p3', version: 4 } } as never)
+    const seen: { url?: string; body?: any } = {}
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      seen.url = url; seen.body = JSON.parse(init.body as string)
+      return new Response(JSON.stringify({ version: 2,
+        parent: { id: 'root', listing: { listingId: 'l-root', state: 'draft' } },
+        children: [{ id: 'p1', listing: { listingId: 'l-p1', state: 'draft' } }, { id: 'p2', listing: { listingId: null, state: 'not-set-up' } },
+          { id: 'p3', listing: { listingId: 'l-p3', state: 'draft' } }] }))
+    }))
+    const told: CreatedListing[][] = []
+    const result = await commitChannelRow({ rowId: 'primary:root', row: parent, cells: [{ colId: 'variation_theme', value: picked, intent: 'set' }] } as never,
+      { channel: 'AMAZON', marketplace: 'SE', accountId: 'account-a', kindOf: (colId) => colId === 'variation_theme' ? 'variationTheme' : undefined,
+        familyRows: () => [parent, child, listedChild], onListingsCreated: (created) => told.push(created) })
+    expect(new URL(seen.url!, 'http://x').pathname).toBe('/api/products/root/studio/projection')
+    expect(Object.fromEntries(new URL(seen.url!, 'http://x').searchParams)).toEqual({ channel: 'AMAZON', market: 'SE', accountId: 'account-a' })
+    expect(seen.body).toEqual({ expectedVersion: 0, theme: 'COLOR', mapping: [{ axisKey: 'Colore', target: 'color_name', order: 0 }] })
+    expect(result.cells?.variation_theme).toEqual({ ok: true })
+    // The parent at the version the projection states; a variant's version is not stated there, so it waits for the read.
+    expect(told).toEqual([[{ productId: 'root', listingId: 'l-root', version: 2 }, { productId: 'p1', listingId: 'l-p1', version: null }]])
+    expect(parent.listing).toMatchObject({ id: 'l-root', version: 2 })
+    expect(child.listing).toBeNull()
+    expect(listedChild.listing).toEqual({ id: 'l-p3', version: 4 })
+  })
+
+  it('a theme saved on a coordinate that HAS a listing reports no started draft', async () => {
+    const parent = row({ id: 'root', rowId: 'primary:root', rowKind: 'parent' } as never)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ version: 83, parent: { id: 'root', listing: { listingId: 'l1' } }, children: [] }))))
+    const told: CreatedListing[][] = []
+    const live = { ...served, write: { ...write, expectedVersion: 82 }, deliveryNote: undefined }
+    await commitChannelRow({ rowId: 'primary:root', row: parent, cells: [{ colId: 'variation_theme', value: { ...live, theme: { code: 'COLOR' }, baseline: live }, intent: 'set' }] } as never,
+      { channel: 'AMAZON', marketplace: 'SE', kindOf: () => 'variationTheme', onListingsCreated: (created) => told.push(created) })
+    expect(told).toEqual([])
   })
 })

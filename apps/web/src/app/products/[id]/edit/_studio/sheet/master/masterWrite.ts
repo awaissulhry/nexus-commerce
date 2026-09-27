@@ -253,6 +253,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
 export async function commitVariationTheme<T>(
   req: SheetWriteRequest<T>,
   productId: string,
+  /** Told of each accepted commit and the route's answer (the channel sheet reads the drafts a version-0 save started). */
+  onSaved?: (after: VariationThemeWriteFacts, payload: unknown) => void,
 ): Promise<SheetWriteResult> {
   const backend = getBackendUrl()
   const cells: NonNullable<SheetWriteResult['cells']> = {}
@@ -336,6 +338,7 @@ export async function commitVariationTheme<T>(
         cells[cell.colId] = { ok: true }
         const next = (payload as { version?: number; product?: { version?: number } }).version ?? (payload as { product?: { version?: number } }).product?.version
         if (typeof next === 'number') version = next
+        if (after) onSaved?.(after, payload)
       } else {
         /* 409 → repaint + refetch exactly like every other cell (design §3.6). */
         if (res.status === 409) conflict = true
