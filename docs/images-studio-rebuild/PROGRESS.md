@@ -4,10 +4,24 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 
 ## Summary
 - **P0 measure — done (2026-09-27).** Production counted read-only: [MEASURE.md](MEASURE.md).
-- **P1 data spine — built and tested locally (2026-09-27). Not committed, not pushed.** Nothing on the screen
-  changes yet; no channel is called; with no plan rows every existing page and publisher behaves as before.
-- **Next:** the Owner's word to commit and open the P1 pull request (the deploy runs the migration in production),
-  then P2 (publishers read the plan).
+- **P1 data spine — LIVE (2026-09-27).** PR #86 merged (squash `f1d8b1b7a`) after CI was green. Deployed: worker
+  12:03, scheduler 12:00, API 12:29 UTC. Verified in production (read-only): migration `20260927i_media_plan`
+  finished, table `ProductMediaPlan` exists with RLS forced and its policy, `ProductImage.languageTag` and
+  `versionGroupId` exist; `/api/health/ready` 200; `GET /media` and `POST /media/ops` answer 401 without a login.
+  Nothing on screen changed; no family has a plan yet, so every publisher behaves as before.
+- **P2a — built and tested locally (branch `feat/images-p2a`).** See below.
+- **Next:** P2a pull request, then P2b (the old photo paths refuse switched families) — [P2-PLAN.md](P2-PLAN.md).
+
+## P2a — publisher helper (not yet merged)
+- `mediaLayoutFor(...)`: the layout one destination must receive, computed by the same loader and projection as the
+  page; `null` when the family is not switched. The publisher passes the channel's own value and axis names and the
+  variants in its review. Returns the plan revisions the layout was read from (a publisher binds its review to them).
+- `isMediaSwitched(productId)`: a family is switched once it has a Shared layer.
+- Destinations now drop variants the listing's variation setup excludes, and know each eBay listing's API (Trading or
+  Inventory) from the same marker the publisher uses (moved to `pim/ebay-listing-model.ts`, re-exported unchanged).
+- eBay sets carry `productIds`; Shopify keeps 3D models under both stored spellings.
+- Tests: shared 316 pass; service 11 pass (a deliberate break of the exclusion rule fails the test); eBay publication
+  suites 58 pass after the marker move; api and web typecheck clean.
 
 ## P1 — what was built
 | Piece | File | What it does |

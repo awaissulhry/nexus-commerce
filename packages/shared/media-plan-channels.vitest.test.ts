@@ -33,6 +33,7 @@ describe('eBay layout — the two sections and their order', () => {
     expect(it.axisName).toBe('Colore')
     expect(it.sets.map(s => [s.value, s.items])).toEqual([['Nero', ['cover', 'n1', 'n2']], ['Giallo', ['g1', 'g2']]])
     expect(it.sets[0].skus).toEqual(['GALE-BLACK-M', 'GALE-BLACK-L'])
+    expect(it.sets[0].productIds).toEqual(['b-m', 'b-l'])
     expect(it.checks.filter(c => c.severity === 'error')).toEqual([])
     const de = projectEbay(stack, family, assets, ebayDE)
     expect(de.axisName).toBe('Farbe')
@@ -99,6 +100,11 @@ describe('Amazon layout', () => {
 
 describe('Shopify and Etsy layouts', () => {
   const shopify: MediaDestination = { channel: 'SHOPIFY', market: 'GLOBAL', languages: ['it'], mainLanguage: 'it', axisName: null, valueNames: {} }
+  it('Shopify keeps 3D models under either stored spelling, never as a variant image', () => {
+    const lib = library(asset('cover'), asset('m3d', { mediaType: 'MODEL_3D' }), asset('m3d-old', { mediaType: 'MODEL3D' }))
+    const out = projectShopify({ shared: plan({ common: ids('m3d', 'cover', 'm3d-old') }) }, { ...family, variants: [] }, lib, shopify)
+    expect(out.media).toEqual(['m3d', 'cover', 'm3d-old'])
+  })
   it('Shopify: product media is Common then each value once; each variant shows its value\'s first photo', () => {
     const out = projectShopify(stack, family, assets, shopify)
     expect(out.media).toEqual(['cover', 'detail', 'chart-it', 'n1', 'n2', 'g1', 'g2'])

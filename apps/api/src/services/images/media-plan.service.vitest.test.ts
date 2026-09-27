@@ -16,7 +16,7 @@ vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: un
 
 import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
-import { applyMediaPlanOps, readMediaWorkspace } from './media-plan.service.js'
+import { applyMediaPlanOps, isMediaSwitched, mediaLayoutFor, readMediaWorkspace } from './media-plan.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -45,6 +45,8 @@ beforeAll(async () => {
       productId, channel, marketplace, channelMarket: `${channel}_${marketplace}`, region: marketplace, channelConnectionId: account,
       ...(alias ? { aliasId: alias, aliasKey: alias } : {}) } as never })
     for (const p of [ids.root, ids.nm, ids.gm]) { await listing(p, 'EBAY', 'IT', ids.ebay); await listing(p, 'EBAY', 'IT', ids.ebay, ids.alias) }
+    // The alias is an eBay Inventory listing (offer ids on its root row); the primary listing is a Trading listing.
+    await prisma.channelListing.updateMany({ where: { productId: root.id, aliasKey: ids.alias }, data: { platformAttributes: { __offerIds: { IT: 'offer-1' } } } as never })
     await listing(ids.root, 'AMAZON', 'IT', ids.amazon); await listing(ids.nm, 'AMAZON', 'IT', ids.amazon); await listing(ids.root, 'AMAZON', 'DE', ids.amazon)
   })
 }, 120_000)
@@ -62,6 +64,14 @@ describe('media plan read', () => {
     expect(read.family.unmapped).toEqual(['color:text:rosso'])
     expect(read.family.defaultAxis).toBe('color')
     expect(read.mainLanguage).toBe('it')
+  })
+  it('a family without a Shared layer is not switched: publishers keep today\'s behaviour', async () => {
+    expect(await scoped(() => isMediaSwitched(ids.nm))).toBe(false)
+    expect(await scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay }))).toBeNull()
+  })
+  it('knows each eBay listing\'s API (Trading or Inventory) from its own offer marker', async () => {
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    expect(read.destinations.filter(d => d.channel === 'EBAY').map(d => [d.alias?.label ?? 'primary', d.api])).toEqual([['primary', 'TRADING'], ['Winter', 'INVENTORY']])
   })
   it('lists one Amazon destination per account (all its markets) and one eBay destination per alias', async () => {
     const read = await scoped(() => readMediaWorkspace(ids.root))
@@ -88,6 +98,25 @@ describe('media plan edits', () => {
     expect(ebay.gallery).toEqual([img.cover, img['chart-it']])
     expect(ebay.sets.map((s: any) => [s.value, s.items])).toEqual([['Giallo', [img.g1]], ['Nero', [img.cover, img.n1]]])
     expect((read.layouts[ebayKey(ids.alias)] as any).gallery).toEqual(ebay.gallery)
+  })
+  it('gives a publisher the same layout as the page, with the channel\'s own names and review variants', async () => {
+    expect(await scoped(() => isMediaSwitched(ids.nm))).toBe(true)
+    const page = (await scoped(() => readMediaWorkspace(ids.root))).layouts[ebayKey()] as any
+    const out = await scoped(() => mediaLayoutFor({ productId: ids.nm, channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay }))
+    expect(out!.layout).toEqual(page)
+    expect(out!.layout.revisions).toEqual(['SHARED@1'])
+    expect(out!.url(img.cover)).toBe('https://cdn.example/cover.jpg')
+    const named = await scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay,
+      axisName: 'Colore', valueNames: { 'color:black': 'Nero lucido', 'color:yellow': 'Giallo fluo' }, includedIds: [ids.nm] }))
+    expect((named!.layout as any).sets.map((s: any) => [s.value, s.productIds])).toEqual([['Nero lucido', [ids.nm]]])
+    await expect(scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'EBAY', marketplace: 'DE', accountId: ids.ebay }))).rejects.toMatchObject({ statusCode: 409 })
+  })
+  it('a variant its listing excludes is not part of that destination', async () => {
+    const child = await scoped(() => prisma.channelListing.findFirstOrThrow({ where: { productId: ids.gm, channel: 'EBAY', aliasKey: '' }, select: { id: true } }))
+    await scoped(() => prisma.$executeRawUnsafe(`update "ChannelListing" set "variationExcluded" = true where id = $1`, child.id))
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    expect((read.layouts[ebayKey()] as any).sets.map((s: any) => s.value)).toEqual(['Nero'])
+    await scoped(() => prisma.$executeRawUnsafe(`update "ChannelListing" set "variationExcluded" = false where id = $1`, child.id))
   })
   it('an alias can own one set; the primary listing keeps following; Follow again removes the layer row', async () => {
     const own = await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'LISTING', channel: 'EBAY', marketplace: 'IT', accountId: ids.ebay, aliasKey: ids.alias },

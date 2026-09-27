@@ -122,8 +122,9 @@ export interface EbayMediaLayout {
   gallery: string[]
   /** `VariationSpecificName` / `aspectsImageVariesBy`; null = one shared gallery. */
   axisName: string | null
-  /** One set per value in value order: `VariationSpecificPictureSet`, and every SKU of the value on the Inventory API. */
-  sets: Array<{ valueKey: string; value: string; items: string[]; skus: string[] }>
+  /** One set per value in value order: `VariationSpecificPictureSet`, and every SKU of the value on the Inventory API.
+   *  `productIds` names the variants (the channel's seller SKU can differ from `skus`). */
+  sets: Array<{ valueKey: string; value: string; items: string[]; skus: string[]; productIds: string[] }>
   checks: MediaCheck[]
 }
 
@@ -148,7 +149,8 @@ export function projectEbay(stack: MediaPlanStack, family: MediaFamily, assets: 
       if (!items.length) ctx.checks.push({ severity: 'error', code: 'value-without-photos', set: ref, message: `${label} has no photos — eBay would show "no picture available".` })
       if (items.length > limits.perValue) ctx.checks.push({ severity: 'error', code: 'over-limit', set: ref, message: `${label} has ${items.length} photos; eBay allows ${limits.perValue} per value.` })
       sizeChecks(ctx, items, ref, limits.minLongEdge, (l, e) => `${l} is ${e} px — eBay needs ${limits.minLongEdge} px on the longest side.`)
-      sets.push({ valueKey: key, value: value ?? label, items, skus: included.filter(v => keyOf(v) === key).map(v => v.sku) })
+      const members = included.filter(v => keyOf(v) === key)
+      sets.push({ valueKey: key, value: value ?? label, items, skus: members.map(v => v.sku), productIds: members.map(v => v.productId) })
     }
     const perSku = included.filter(v => resolveSet(stack, `sku:${v.productId}`).source !== null)
     if (perSku.length) ctx.checks.push({ severity: 'warning', code: 'sku-photos-unused', message: `eBay shows photos per ${destination.axisName ?? axis}; the SKU photos of ${perSku.map(v => v.sku).join(', ')} are not used here.` })
@@ -218,7 +220,8 @@ export interface ShopifyMediaLayout { media: string[]; variantImages: Record<str
 
 export function projectShopify(stack: MediaPlanStack, family: MediaFamily, assets: ReadonlyMap<string, MediaAsset>, destination: MediaDestination): ShopifyMediaLayout {
   const ctx: Context = { stack, family, assets, destination, checks: [] }
-  const kinds = new Set(['IMAGE', 'VIDEO', 'MODEL3D'])
+  // Both spellings of a 3D model exist in stored rows (`MODEL3D` in the library comment, `MODEL_3D` in Shopify content).
+  const kinds = new Set(['IMAGE', 'VIDEO', 'MODEL3D', 'MODEL_3D'])
   const media = pickAll(ctx, resolveSet(stack, 'common').items, 'common', kinds)
   const { axis, values, included, keyOf } = axisPlan(ctx)
   const setOf = new Map<string, string[]>()

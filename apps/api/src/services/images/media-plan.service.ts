@@ -8,6 +8,8 @@ import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages
 import { NoConnectionError, resolveChannelConnectionId } from '../connection-resolver.service.js'
 import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { publishListingEvent } from '../listing-events.service.js'
+import { readExcludedListingIds } from '../pim/variation-excluded.js'
+import { usesEbayInventory } from '../pim/ebay-listing-model.js'
 
 /**
  * Images rebuild P1 — the media plan read and write (docs/images-studio-rebuild/PLAN.md §6). One read gives the page
@@ -90,14 +92,20 @@ function readPlan(value: unknown): MediaPlan {
 /** Every destination of the family, keyed the way LISTING layers are keyed. Amazon and Shopify photos belong to the account. */
 async function loadDestinations(productIds: string[]) {
   const listings = await prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: { in: [...MEDIA_CHANNELS] } },
-    select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
+    select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true } })
+  // Only eBay needs the listing's own attributes (the Trading/Inventory marker); Amazon's are large and are not read.
+  const [excluded, ebayAttributes] = await Promise.all([
+    readExcludedListingIds(listings.map(l => l.id)),
+    prisma.channelListing.findMany({ where: { productId: { in: productIds }, channel: 'EBAY' }, select: { id: true, platformAttributes: true } }),
+  ])
+  const attributesOf = new Map(ebayAttributes.map(l => [l.id, l.platformAttributes]))
   const aliasIds = [...new Set(listings.map(l => l.aliasKey).filter(Boolean))]
   const aliases = aliasIds.length ? await prisma.productListingAlias.findMany({ where: { id: { in: aliasIds } }, select: { id: true, label: true, position: true, status: true } }) : []
   const accountIds = [...new Set(listings.map(l => l.channelConnectionId).filter((id): id is string => !!id))]
   const accounts = accountIds.length ? await prisma.channelConnection.findMany({ where: { id: { in: accountIds } }, select: { id: true, accountLabel: true, isActive: true, isPrimary: true } }) : []
   const markets: MarketLanguageRow[] = await prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } })
   const languagesOf = (channel: string, code: string) => { try { return marketLanguages(channel, code, markets) } catch { return [] } }
-  const groups = new Map<string, { channel: MediaChannel; marketplace: string; accountId: string; aliasKey: string; markets: Map<string, number>; listed: number; productIds: Set<string> }>()
+  const groups = new Map<string, { channel: MediaChannel; marketplace: string; accountId: string; aliasKey: string; markets: Map<string, number>; listed: number; productIds: Set<string>; listingIds: string[] }>()
   for (const l of listings) {
     const channel = l.channel as MediaChannel
     const global = GLOBAL_CHANNELS.has(channel) || channel === 'ETSY'
@@ -105,10 +113,12 @@ async function loadDestinations(productIds: string[]) {
     const aliasKey = channel === 'AMAZON' ? '' : l.aliasKey
     const marketplace = global ? 'GLOBAL' : l.marketplace
     const key = mediaLayerKey({ layer: 'LISTING', channel, marketplace, accountId: l.channelConnectionId ?? '', aliasKey })
-    const group = groups.get(key) ?? { channel, marketplace, accountId: l.channelConnectionId ?? '', aliasKey, markets: new Map(), listed: 0, productIds: new Set() }
+    const group = groups.get(key) ?? { channel, marketplace, accountId: l.channelConnectionId ?? '', aliasKey, markets: new Map(), listed: 0, productIds: new Set(), listingIds: [] }
     group.markets.set(l.marketplace, (group.markets.get(l.marketplace) ?? 0) + 1)
     group.listed += 1
-    group.productIds.add(l.productId)
+    group.listingIds.push(l.id)
+    // A variant the listing's variation setup excludes is not part of what this destination publishes.
+    if (!excluded.has(l.id)) group.productIds.add(l.productId)
     groups.set(key, group)
   }
   const counts = [...groups.values()].flatMap(g => [...g.markets].map(([code, n]) => ({ channel: g.channel, code, n }))).sort((a, b) => b.n - a.n)
@@ -123,13 +133,17 @@ async function loadDestinations(productIds: string[]) {
       : alias && alias.status !== 'ACTIVE' ? 'This listing alias is archived.' : null
     return { key, channel: g.channel, marketplace: g.marketplace, markets: marketList, accountId: g.accountId, accountLabel: account?.accountLabel ?? null,
       accountActive: account?.isActive ?? false, alias: alias ? { id: alias.id, label: alias.label, position: alias.position } : null,
-      languages: [...new Set(own.length ? own : [mainLanguage])], listed: g.listed, productIds: [...g.productIds], targetable: !refusal, refusal }
+      languages: [...new Set(own.length ? own : [mainLanguage])], listed: g.listed, productIds: [...g.productIds], targetable: !refusal, refusal,
+      api: g.channel === 'EBAY' ? (usesEbayInventory({ listings: g.listingIds.map(id => ({ platformAttributes: attributesOf.get(id) })) }) ? 'INVENTORY' as const : 'TRADING' as const) : undefined }
   }).sort((a, b) => order[a.channel] - order[b.channel] || a.marketplace.localeCompare(b.marketplace) || (a.accountLabel ?? '').localeCompare(b.accountLabel ?? '') || (a.alias?.position ?? 0) - (b.alias?.position ?? 0)) }
 }
 
-export async function readMediaWorkspace(productId: string) {
-  const started = Date.now()
-  const rootId = await familyRoot(productId)
+type Destination = Awaited<ReturnType<typeof loadDestinations>>['destinations'][number]
+/** What a publisher knows better than the page: the channel's own names and the variants its review includes. */
+export interface MediaLayoutOverrides { valueNames?: Record<string, string>; axisName?: string | null; includedIds?: readonly string[] }
+
+/** Everything a layout needs, loaded once for the family — the page and the publishers use this one loader. */
+async function loadMediaContext(rootId: string) {
   const { root, family, axes, unmapped } = await loadFamily(rootId)
   const ids = [root.id, ...root.children.map(c => c.id)]
   const [library, rows, { destinations, mainLanguage }] = await Promise.all([
@@ -139,22 +153,64 @@ export async function readMediaWorkspace(productId: string) {
   ])
   const layers = rows.map(r => ({ key: mediaLayerKey({ layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey }),
     layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey, plan: readPlan(r.plan), revision: r.revision, updatedAt: r.updatedAt }))
-  const byKey = new Map(layers.map(l => [l.key, l.plan]))
   const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))
-  const shared = byKey.get('SHARED') ?? null
-  const layouts = Object.fromEntries(destinations.filter(d => d.targetable).map(d => {
-    const stack: MediaPlanStack = { shared, channel: byKey.get(`CHANNEL:${d.channel}`) ?? null, listing: byKey.get(d.key) ?? null }
-    // P1: value and axis names are the Shared ones; P2 swaps in each market's channel names (value maps, pins).
-    const axis = axes.find(a => a.code === (stack.listing?.axis ?? stack.channel?.axis ?? shared?.axis ?? family.defaultAxis))
-    const destination: MediaDestination = { channel: d.channel, market: d.marketplace, languages: d.languages, mainLanguage, valueNames: family.valueLabels, axisName: axis?.label ?? null }
-    const project = d.channel === 'EBAY' ? projectEbay : d.channel === 'AMAZON' ? projectAmazon : d.channel === 'SHOPIFY' ? projectShopify : projectEtsy
-    // A destination shows only the variants listed on it (P2 also drops the ones its variation projection excludes).
-    const listed = new Set(d.productIds)
-    const own: MediaFamily = { ...family, variants: family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
-    return [d.key, { channel: d.channel, ...project(stack, own, assets, destination) }]
-  }))
-  return { productId, rootId, sku: root.sku, name: root.name, mainLanguage, family: { ...family, axes, unmapped }, library, layers, destinations, layouts,
+  return { root, family, axes, unmapped, library, layers, byKey: new Map(layers.map(l => [l.key, l])), assets, destinations, mainLanguage }
+}
+type MediaContext = Awaited<ReturnType<typeof loadMediaContext>>
+
+function projectDestination(ctx: MediaContext, d: Destination, overrides: MediaLayoutOverrides = {}) {
+  const shared = ctx.byKey.get('SHARED')?.plan ?? null
+  const stack: MediaPlanStack = { shared, channel: ctx.byKey.get(`CHANNEL:${d.channel}`)?.plan ?? null, listing: ctx.byKey.get(d.key)?.plan ?? null }
+  const axis = ctx.axes.find(a => a.code === (stack.listing?.axis ?? stack.channel?.axis ?? shared?.axis ?? ctx.family.defaultAxis))
+  const destination: MediaDestination = { channel: d.channel, market: d.marketplace, languages: d.languages, mainLanguage: ctx.mainLanguage, api: d.api,
+    valueNames: overrides.valueNames ?? ctx.family.valueLabels, axisName: overrides.axisName !== undefined ? overrides.axisName : axis?.label ?? null }
+  const project = d.channel === 'EBAY' ? projectEbay : d.channel === 'AMAZON' ? projectAmazon : d.channel === 'SHOPIFY' ? projectShopify : projectEtsy
+  // A destination shows only the variants listed (and not excluded) on it; a publisher may narrow that to its review.
+  const listed = new Set(overrides.includedIds ?? d.productIds)
+  const family: MediaFamily = { ...ctx.family, variants: ctx.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
+  // Revisions of the layers this destination reads — a publisher binds its review to them.
+  const revisions = [ctx.byKey.get('SHARED'), ctx.byKey.get(`CHANNEL:${d.channel}`), ctx.byKey.get(d.key)].map(l => l ? `${l.key}@${l.revision}` : null).filter(Boolean)
+  return { channel: d.channel, revisions, ...project(stack, family, ctx.assets, destination) }
+}
+
+export async function readMediaWorkspace(productId: string) {
+  const started = Date.now()
+  const rootId = await familyRoot(productId)
+  const ctx = await loadMediaContext(rootId)
+  const layouts = Object.fromEntries(ctx.destinations.filter(d => d.targetable).map(d => [d.key, projectDestination(ctx, d)]))
+  return { productId, rootId, sku: ctx.root.sku, name: ctx.root.name, mainLanguage: ctx.mainLanguage, family: { ...ctx.family, axes: ctx.axes, unmapped: ctx.unmapped },
+    library: ctx.library, layers: ctx.layers, destinations: ctx.destinations, layouts,
+    // Value and axis names here are the Shared ones; a publisher passes each market's own names (value maps, pins).
     meta: { tookMs: Date.now() - started, names: 'shared' as const } }
+}
+
+/** A family is switched to the media plan once it has a Shared layer: its publishers send the plan's layout. */
+export async function isMediaSwitched(productId: string): Promise<boolean> {
+  const rootId = await familyRoot(productId)
+  return (await prisma.productMediaPlan.count({ where: { productId: rootId, layer: 'SHARED' } })) > 0
+}
+
+/**
+ * The layout one destination must receive, for a publisher — or `null` when the family is not switched (the publisher
+ * keeps today's behaviour). Computed by the same loader and projection as the page, so both agree on language versions,
+ * listed variants and order; the publisher supplies the channel's own names and the variants its review includes.
+ */
+export async function mediaLayoutFor(input: { productId: string; channel: MediaChannel; marketplace: string; accountId: string; aliasKey?: string } & MediaLayoutOverrides) {
+  const rootId = await familyRoot(input.productId)
+  if (!(await prisma.productMediaPlan.count({ where: { productId: rootId, layer: 'SHARED' } }))) return null
+  const ctx = await loadMediaContext(rootId)
+  const marketplace = GLOBAL_CHANNELS.has(input.channel) || input.channel === 'ETSY' ? 'GLOBAL' : input.marketplace
+  const key = mediaLayerKey({ layer: 'LISTING', channel: input.channel, marketplace, accountId: input.accountId, aliasKey: input.channel === 'AMAZON' ? '' : input.aliasKey ?? '' })
+  const d = ctx.destinations.find(x => x.key === key)
+  if (!d) throw new WorkspaceScopeError('This listing is not one of the product\'s photo destinations yet. Reload the Media page.', 409)
+  if (!d.targetable) throw new WorkspaceScopeError(d.refusal ?? 'This destination cannot receive photos.', 409)
+  const layout = projectDestination(ctx, d, input)
+  const url = (id: string) => {
+    const asset = ctx.assets.get(id)
+    if (!asset) throw new WorkspaceScopeError('A photo in the plan was deleted from the library. Review the Media page.', 409)
+    return asset.url
+  }
+  return { rootId, destination: d, layout, url, mainLanguage: ctx.mainLanguage }
 }
 
 export interface MediaLayerAddress { layer: MediaLayer; channel?: string; marketplace?: string; accountId?: string; aliasKey?: string }
