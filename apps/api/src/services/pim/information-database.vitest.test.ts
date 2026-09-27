@@ -183,6 +183,19 @@ it('refuses Amazon conditional serialized byte errors before saving while permit
   const row = await prisma.channelListing.findUniqueOrThrow({ where: { id: 'amazon-b-1-row-one' } })
   expect(row.overrideData).not.toMatchObject({ mode: 'restricted' })
 })
+it('reports a listing-field refusal on a market with no listing under the cell\'s own field (attr_brand), not the JSON path', async () => {
+  // Draft listing safety step 1: the refusal came back as `field: 'brand'`, the sheet matched errors by
+  // `change.field` (`attr_brand`), found none, and painted the refused cell as saved.
+  await prisma.product.create({ data: { id: 'brand-unlisted', sku: 'INFO-UNLISTED', name: 'Unlisted jacket', basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET' } })
+  const columns = (await sheet('AMAZON', 'amazon-a')).columns
+  const brand = columns.find((column: any) => Object.values(column.channels ?? {}).some((facts: any) => facts.store?.kind === 'platformAttributes' && facts.store.path?.[0] === 'brand'))
+  expect(brand?.writeField).toBe('attr_brand')
+  const response = await request('PATCH', '/api/products/bulk', { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-a', aliasKey: '', locale: 'it' }],
+    changes: [{ id: 'brand-unlisted', field: brand.writeField, value: ['Nexus Moto'], target: 'channel' }] })
+  expect(response.statusCode, response.body).toBe(200)
+  expect(response.json().errors, response.body).toEqual([{ id: 'brand-unlisted', field: 'attr_brand', error: 'No AMAZON listing on IT yet — a listing field needs the listing to exist' }])
+  expect(await prisma.channelListing.count({ where: { productId: 'brand-unlisted' } })).toBe(0)
+})
 it('counts conditional requirements in the actual sheet and alias summary before and after filling them', async () => {
   const destination = { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-b', aliasKey: 'amazon-b-2', locale: 'it' }] }
   const mode = await request('PATCH', '/api/products/bulk', { ...destination, changes: [{ id: 'row-two', field: 'attr_mode', value: ['standard'], target: 'channel' }] })

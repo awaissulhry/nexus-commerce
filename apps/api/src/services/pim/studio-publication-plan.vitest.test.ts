@@ -131,3 +131,29 @@ it('VTR step 0: the family root and a single product keep their answer — only 
   expect(facts.products.map(p => p.id)).toEqual(['solo'])
   expect(facts.excluded).toBe(0)
 })
+
+// Draft listing safety — a still-draft's pause keeps it inert, and Publish is the one action allowed to send it.
+const PAUSED = 'Listing sync is paused. Resume sync before sending changes.'
+const stillDraft = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null, syncPaused: true }
+it('includes a paused still-draft Amazon row in the Publish plan — no refusal, its fields are resolved', async () => {
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft }, { id: 'listing-child', productId: 'child', ...stillDraft }])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('parent', scope)
+  expect(facts.products.map(p => p.id)).toEqual(['parent', 'child'])
+  expect(facts.issues.filter(i => i.severity === 'error')).toEqual([])
+  expect(m.resolve.mock.calls.every(([r]) => r.productIds.join(',') === 'parent,child')).toBe(true)
+})
+it.each([
+  ['an operator-paused LIVE row', { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'LIVE-ITEM', syncPaused: true }],
+  ['a paused DRAFT row a creator left published', { ...stillDraft, isPublished: true }],
+])('still refuses %s with the same sentence as before', async (_, lock) => {
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft }, { id: 'listing-child', productId: 'child', ...lock }])
+  m.excluded.mockResolvedValue(new Set())
+  const facts = await readPublicationFacts('parent', scope)
+  expect(facts.issues.filter(i => i.severity === 'error')).toEqual([{ severity: 'error', message: PAUSED }])
+})
+it('still refuses a paused still-draft that is deliberately held — only the pause is lifted for a draft', async () => {
+  m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...stillDraft, presenceIntent: 'HELD' }, { id: 'listing-child', productId: 'child', ...stillDraft }])
+  m.excluded.mockResolvedValue(new Set())
+  expect((await readPublicationFacts('parent', scope)).issues).toContainEqual(expect.objectContaining({ severity: 'error', message: expect.stringContaining('deliberately held') }))
+})

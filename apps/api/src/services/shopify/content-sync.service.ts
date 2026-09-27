@@ -15,7 +15,7 @@ import { contentDestination, readContent, publicContent, object, digest, CONTENT
 import { shopifyAdmin } from './admin-client.js'
 import { publishContent, readRemoteProduct, shortId, type ShopifyRemoteProduct } from './content-publisher.js'
 import { nativeListingValue } from './native-listing-value.js'
-import { assertPushAllowed, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
+import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
 import { graphqlRootField } from '../gateway/graphql-root-field.js'
 
 function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
@@ -38,8 +38,9 @@ export async function previewContentSync(productId: string, scope: ContentScope,
   const destination = await contentDestination(productId, scope)
   const cachedSchema = await readShopifyMappingSchema(destination.accountId)
   const data = await prisma.$transaction(tx => readContent(tx, destination, cachedSchema.locales, cachedSchema), { isolationLevel: 'RepeatableRead' })
+  // Publish's lock (every caller here is an operator's send): a paused still-draft may be sent; any other pause refuses.
   for (const listing of data.listings) {
-    const refusal = assertPushAllowed(listing)
+    const refusal = assertPublishAllowed(listing)
     if (refusal) throw pushRefused(listing, refusal)
   }
   const identity = `${data.listing?.workspaceId ?? 'nexus'}:${data.family.id}${destination.aliasKey ? ':' + destination.aliasKey : ''}`
@@ -76,7 +77,7 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
   const input = object(body)
   const linkedDestination = await contentDestination(productId, scope)
   const linkedListing = await prisma.channelListing.findFirst({ where: { productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, channelConnectionId: linkedDestination.accountId, aliasKey: linkedDestination.aliasKey ?? '' } })
-  const refusal = assertPushAllowed(linkedListing)
+  const refusal = assertPublishAllowed(linkedListing)
   if (refusal && linkedListing) throw pushRefused(linkedListing, refusal)
   const linkedIssue = shopifyInformationPublicationIssue(linkedListing?.platformAttributes)
   if (linkedIssue) throw new WorkspaceScopeError(linkedIssue, 422)
@@ -97,7 +98,7 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     if (informationIssue) throw new WorkspaceScopeError(informationIssue, 422)
     if (data.revision !== input.expectedRevision || !data.listing) throw new WorkspaceScopeError('Save the content and refresh the preview before synchronising.')
     for (const listing of data.listings) {
-      const refusal = assertPushAllowed(listing)
+      const refusal = assertPublishAllowed(listing)
       if (refusal) throw pushRefused(listing, refusal)
     }
     const wholeProduct = wholeProductRefusal(data)
@@ -112,6 +113,9 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     return data
   }, { isolationLevel: 'Serializable' })
   const listingId = current.listing!.id
+  // Read before anything is sent: the checkpoint below stamps the Shopify product id on the family row mid-delivery,
+  // so "was it still a draft" must be answered from this snapshot, not from the rows at the end.
+  const stillDrafts = new Set(current.listings.filter(isStillDraftListing).map(listing => listing.id))
   const checkpoint = async (patch: Record<string, unknown>) => {
     await prisma.$transaction(async tx => {
       const row = await tx.channelListing.findUnique({ where: { id: listingId } })
@@ -179,11 +183,12 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
         const existing = await tx.channelListing.findFirst({ where: { productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
         const platformAttributes = { ...object(existing?.platformAttributes), nexusFamilyId: current.family.id, variantId: result.variantIds[variant.id].split('/').at(-1), inventoryItemId: result.inventoryItemIds[variant.id].split('/').at(-1), shopifyProductId: result.productId.split('/').at(-1), inventoryLocationId: input.locationId } as Prisma.InputJsonValue
         const mapping = { platformAttributes, externalListingId: result.productId.split('/').at(-1), platformProductId: result.productId.split('/').at(-1), isPublished, listingStatus }
-        if (existing) await tx.channelListing.update({ where: { id: existing.id }, data: { ...mapping, version: { increment: 1 } } })
+        // A still-draft this delivery made real loses the pause that kept it inert; any other row keeps its own.
+        if (existing) await tx.channelListing.update({ where: { id: existing.id }, data: { ...mapping, ...(stillDrafts.has(existing.id) ? { syncPaused: false } : {}), version: { increment: 1 } } })
         else await tx.channelListing.create({ data: { ...mapping, productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey } })
       }
       const parent = await tx.channelListing.findUniqueOrThrow({ where: { id: listingId } })
-      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, listingStatus, platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId } as Prisma.InputJsonValue } })
+      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, listingStatus, ...(stillDrafts.has(listingId) ? { syncPaused: false } : {}), platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId } as Prisma.InputJsonValue } })
     }, { isolationLevel: 'Serializable' })
     await checkpoint({ ...result, error: null })
     return { success: true, ...result, message: `Verified ${current.variants.length} native Shopify variants. Storefront theme verification is a separate review.` }

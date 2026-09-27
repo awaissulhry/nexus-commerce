@@ -1,5 +1,53 @@
 import { describe, expect, it } from 'vitest'
-import { assertPushAllowed } from './push-lock.js'
+import { assertPublishAllowed, assertPushAllowed, isStillDraftListing, STILL_DRAFT_LISTING } from './push-lock.js'
+
+const draft = { listingStatus: 'DRAFT', isPublished: false, externalListingId: null }
+const live = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'LIVE-ID' }
+
+describe('isStillDraftListing — the one still-draft rule', () => {
+  it('is DRAFT, never published and without a channel id — the database filter says the same', () => {
+    expect(isStillDraftListing(draft)).toBe(true)
+    expect(isStillDraftListing({ ...draft, externalListingId: undefined })).toBe(true)
+    expect(STILL_DRAFT_LISTING).toEqual(draft)
+  })
+  it.each([
+    ['a live listing', live],
+    ['a DRAFT row a creator left published', { ...draft, isPublished: true }],
+    ['a DRAFT row with a channel id', { ...draft, externalListingId: 'CHANNEL-ID' }],
+    ['an INACTIVE unpublished row', { ...draft, listingStatus: 'INACTIVE' }],
+    ['a row whose published flag was not read', { listingStatus: 'DRAFT', externalListingId: null }],
+    ['no row', null],
+  ])('is not %s', (_, listing) => {
+    expect(isStillDraftListing(listing as never)).toBe(false)
+  })
+})
+
+describe('assertPublishAllowed — the lock Publish uses', () => {
+  const PAUSED = 'Listing sync is paused. Resume sync before sending changes.'
+  it('lets Publish send a paused still-draft — its pause is the draft being inert, not a hold', () => {
+    expect(assertPublishAllowed({ ...draft, syncPaused: true })).toBeNull()
+    // Dispatch keeps refusing the same row.
+    expect(assertPushAllowed({ ...draft, syncPaused: true })?.code).toBe('PUSH_SYNC_PAUSED')
+  })
+  it.each([
+    ['an operator-paused live listing', live],
+    ['a paused DRAFT row a creator left published', { ...draft, isPublished: true }],
+    ['a paused row whose draft facts were not read', {}],
+  ])('refuses %s exactly as assertPushAllowed does', (_, listing) => {
+    expect(assertPublishAllowed({ ...listing, syncPaused: true })).toEqual({ code: 'PUSH_SYNC_PAUSED', sentence: PAUSED })
+  })
+  it.each([
+    [{ offerClosedAt: new Date() }, 'PUSH_OFFER_CLOSED'],
+    [{ presenceIntent: 'HELD' }, 'PUSH_INTENT_HELD'],
+    [{ presenceIntent: 'ENDED' }, 'PUSH_INTENT_ENDED'],
+  ])('still refuses a paused still-draft for every other lock (%j)', (lock, code) => {
+    expect(assertPublishAllowed({ ...draft, syncPaused: true, ...lock })?.code).toBe(code)
+  })
+  it('answers like assertPushAllowed for an unpaused or missing listing', () => {
+    expect(assertPublishAllowed({ ...live, syncPaused: false })).toBeNull()
+    expect(assertPublishAllowed(null)).toBeNull()
+  })
+})
 
 describe('assertPushAllowed', () => {
   it('refuses paused sync', () => {
