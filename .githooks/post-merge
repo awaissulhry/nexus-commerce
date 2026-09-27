@@ -1,0 +1,3 @@
+#!/bin/bash
+# After a pull or merge: the same stale-packages warning as post-checkout (see there).
+exec "$(dirname "$0")/post-checkout" ORIG_HEAD HEAD 1
