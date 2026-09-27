@@ -11,6 +11,7 @@
  * The frame's provider does hold the product, but does not publish it as a hook; `useParams()`
  * needs nothing from PES.1 and cannot drift from the URL the frame is already keyed to.
  */
+import type { ReactNode } from 'react'
 import { useStudioProduct, useStudioScope } from '../contracts'
 import { ImagesTab } from './ImagesTab'
 import { EbayMediaRoute } from './ebay/EbayMediaRoute'
@@ -22,9 +23,9 @@ export function ImagesTabRoute() {
   const product = useStudioProduct()
   const { scope, destination } = useStudioScope()
   // Images rebuild P3b: a family on the photo plan gets the new Media page; the others keep these tools until P6.
-  const fallback = scope === 'EBAY' ? <EbayMediaRoute />
+  const fallback = (header?: ReactNode) => scope === 'EBAY' ? <EbayMediaRoute />
     : scope === 'AMAZON' ? <AmazonMediaRoute />
     : scope === 'SHOPIFY' ? <ShopifyContentRoute />
-    : <ImagesTab productId={destination.status === 'ready' ? destination.data.listing?.productId ?? product.id : product.id} />
+    : <ImagesTab header={header} productId={destination.status === 'ready' ? destination.data.listing?.productId ?? product.id : product.id} />
   return <MediaPlanRoute productId={product.id} fallback={fallback} />
 }

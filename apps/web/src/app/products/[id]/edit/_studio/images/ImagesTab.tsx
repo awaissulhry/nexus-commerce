@@ -14,7 +14,7 @@
  *
  * Built from scratch on the DS (layout §2.10). Capability spec: inventory §2.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 
 import { Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
@@ -37,9 +37,12 @@ import styles from './images.module.css'
 
 export interface ImagesTabProps {
   productId: string
+  /** Shown at the top, INSIDE this tab's scroll area (the photo plan's switch preview) — never above it, where a tall
+   *  header would squeeze the gallery to nothing (the tab panel hides overflow; 2026-09-27). */
+  header?: ReactNode
 }
 
-export function ImagesTab({ productId }: ImagesTabProps) {
+export function ImagesTab({ productId, header }: ImagesTabProps) {
   // `options.channels` is the marketplace table's own answer — the planner must never invent a
   // channel or a market the DB does not declare.
   const { scope, market, options } = useStudioScope()
@@ -63,6 +66,7 @@ export function ImagesTab({ productId }: ImagesTabProps) {
   if (ws.state.status === 'loading') {
     return (
       <div className={styles.tab}>
+        {header}
         <div className={styles.state}>
           <span>Loading images…</span>
           {/* Measured against prod: this read takes ~6s on a 24-image product. A spinner that says
@@ -80,6 +84,7 @@ export function ImagesTab({ productId }: ImagesTabProps) {
   if (ws.state.status === 'error') {
     return (
       <div className={styles.tab}>
+        {header}
         <div className={styles.state}>
           <span className={styles.stateTitle}>Images could not be loaded</span>
           {/* The server's own sentence — the operator acts on the real reason, not on "an error". */}
@@ -98,6 +103,7 @@ export function ImagesTab({ productId }: ImagesTabProps) {
 
   return (
     <div className={styles.tab}>
+      {header}
       {scope !== MASTER_SCOPE && <Banner tone="neutral" title="Shared gallery assets">These images are shared by product, channel and market. Gallery edits affect every account using them. Account-specific live status, publication, scheduling and cross-channel copying remain unavailable until those operations can preserve this destination.</Banner>}
       {error && <div className={styles.error} role="alert">{error}</div>}
 

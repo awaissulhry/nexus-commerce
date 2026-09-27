@@ -178,14 +178,18 @@
 }
 
 /* The ARIA tabpanel wrapper must not become a layout box of its own — the tab's own surface owns
-   the space, so this is a transparent flex passthrough. */
+   the space, so this is a transparent flex passthrough.
+   Safety net (2026-09-27, the Media page could not be scrolled): a tab whose surface forgets its own scroll area
+   scrolls HERE instead of being cut off. A tab that fills the panel (the sheet's grid) has nothing to overflow, so it
+   looks the same. Guarded by images/plan-page/planPage.scroll.vitest.test.ts. */
 .tabPanel {
   flex: 1;
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* The way up to the family, in the identity line. A link, not a pill: it navigates. */

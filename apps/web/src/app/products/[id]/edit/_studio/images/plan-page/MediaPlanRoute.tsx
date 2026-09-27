@@ -18,7 +18,7 @@ import styles from './planPage.module.css'
  * P2b). A family not on the plan keeps today's tools; on the product scope the switch preview sits above them
  * (docs/images-studio-rebuild/P3-PLAN.md).
  */
-export function MediaPlanRoute({ productId, fallback }: { productId: string; fallback: ReactNode }) {
+export function MediaPlanRoute({ productId, fallback }: { productId: string; fallback(header?: ReactNode): ReactNode }) {
   const plan = useMediaPlan(productId)
   const { scope } = useStudioScope()
   const [slow, setSlow] = useState(false)
@@ -36,16 +36,14 @@ export function MediaPlanRoute({ productId, fallback }: { productId: string; fal
     <div className={styles.switch}><Banner tone="danger" title="The photo plan could not be loaded" action={<Button size="sm" variant="secondary" onClick={() => void plan.reload()}>Try again</Button>}>
       {plan.state.message} The older photo tools are below.
     </Banner></div>
-    {fallback}
+    {fallback()}
   </>
   const read = plan.state.read
   if (isSwitched(read)) return <MediaPlanPage read={read} plan={plan} />
   if (scope !== MASTER_SCOPE) return <>
     <div className={styles.switch}><Banner tone="neutral">This product does not use the photo plan yet. To preview it and start, open Media without a channel (the product scope).</Banner></div>
-    {fallback}
+    {fallback()}
   </>
-  return <>
-    <SwitchPanel productId={productId} onSwitched={() => void plan.reload()} />
-    {fallback}
-  </>
+  // The preview sits INSIDE the older tab's scroll area: above it, a tall preview would squeeze the gallery to nothing.
+  return <>{fallback(<SwitchPanel productId={productId} onSwitched={() => void plan.reload()} />)}</>
 }
