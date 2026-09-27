@@ -201,6 +201,7 @@ import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 // P5.1 verification — ONE read-only live Orders 2026-01-01 call, at the Owner's yes.
 import amazonOrders2026ProbeRoutes from "./routes/amazon-orders-2026-probe.routes.js";
 import connectionDependentsRoutes from "./routes/connection-dependents.routes.js";
+import amazonListingAsinRoutes from "./routes/amazon-listing-asin.routes.js";
 import shopifyShadowReportRoutes from "./routes/shopify-shadow-report.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import pushLatencyRoutes from "./routes/push-latency.routes.js";
@@ -738,6 +739,7 @@ app.register(amazonNotificationsRoutes, { prefix: '/api' });
 app.register(ebayNotificationRoutes, { prefix: '/api' });
 app.register(amazonOrders2026ProbeRoutes, { prefix: '/api' });
 app.register(connectionDependentsRoutes, { prefix: '/api' });
+app.register(amazonListingAsinRoutes, { prefix: '/api' });
 // Shopify orders shadow report — read-only counts before order ingest (NEXUS_ENABLE_SHOPIFY_SHADOW_REPORT=1).
 app.register(shopifyShadowReportRoutes, { prefix: '/api' });
 // RT.1 — unified push-health endpoint feeds the PushHealthChip on

@@ -44,6 +44,8 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['GET', '/api/orders', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/orders/123/refund', ['ADMIN', 'OPS_MANAGER']],
   ['POST', '/api/orders/123/cancel', ['ADMIN', 'OPS_MANAGER']],
+  // Listings — the ASIN read-back of published Amazon listings completes a publication: listings.publish
+  ['POST', '/api/amazon/listings/fill-asins', ['ADMIN', 'OPS_MANAGER']],
   // Fulfillment
   ['POST', '/api/fulfillment/stock/adjust', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT']],
   // Advertising

@@ -422,6 +422,9 @@ export const ENTRIES: Entry[] = [
   RW(F.listingsView, F.listingsEdit, pfx('/api/feed-transform')),
   RW(F.listingsView, F.listingsEdit, pfx('/api/feed-export')),
   RW(F.listingsView, F.listingsEdit, pfx('/api/images/')),
+  // The ASIN read-back of published Amazon listings completes a publication's record (it writes the ASIN, the status
+  // and the published flag), so it takes the listing publish permission rather than the /api/amazon sync default.
+  P(F.listingsPublish, (m, p) => m === 'POST' && p === '/api/amazon/listings/fill-asins'),
   RW(F.listingsView, F.channelsSync, pfx('/api/amazon')),
   RW(F.listingsView, F.channelsSync, pfx('/api/ebay')),
   RW(F.listingsView, F.channelsSync, pfx('/listings')),

@@ -41,7 +41,8 @@ async function loadSources(ids: string[], legacy: boolean) {
   const products = capture(() => prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, sku: true, fulfillmentMethod: true } }))
   const listings = capture(() => prisma.channelListing.findMany({
     where: { productId: { in: ids }, ...(legacy ? { listingStatus: { in: ['ACTIVE', 'INACTIVE'] }, externalListingId: { not: null } } : {}) },
-    select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true,
+    // `isPublished` + `listingStatus`: `identityHeld` also holds a published Amazon listing whose ASIN is pending.
+    select: { id: true, productId: true, channel: true, marketplace: true, region: true, externalListingId: true, isPublished: true, listingStatus: true,
       channelConnectionId: true, aliasKey: true, fulfillmentMethod: true, platformAttributes: true,
       offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
       product: { select: { sku: true } }, channelConnection: { select: { displayName: true } }, alias: { select: { label: true } } },

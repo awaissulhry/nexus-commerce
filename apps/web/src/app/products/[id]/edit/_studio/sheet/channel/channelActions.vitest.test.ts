@@ -222,6 +222,20 @@ describe('Presence W0 honest offer consequences and refusal shape', () => {
       expect(fetcher).not.toHaveBeenCalled()
     } finally { vi.unstubAllGlobals() }
   })
+  it('an Amazon listing whose ASIN is pending is live: the offer verb refuses it, and names why', async () => {
+    const pending = [{ id: null, externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' }] as unknown as ChannelActionDeps['aliases']
+    const amazon = { ...deps('AMAZON'), aliases: pending }
+    const impact = await offerToggle(amazon).preflight!([row])
+    expect(impact.level).toBe('none')
+    expect(impact.unavailable).toContain('Refused on 1 rows')
+    expect(impact.findings).toEqual([{ rowId: 'primary:p1', label: 'GALE-JACKET · published, ASIN pending', severity: 'warn' }])
+    expect(await offerToggle(amazon).run([row])).toEqual({ ok: false, message: impact.unavailable })
+    // eBay keeps the id rule alone: the same facts without an ItemID are not live there.
+    expect((await offerToggle({ ...deps('EBAY'), aliases: pending }).preflight!([row])).level).toBe('confirm')
+    // A still-draft on Amazon is not live either.
+    const draft = [{ id: null, externalListingId: null, isPublished: false, listingStatus: 'DRAFT' }] as unknown as ChannelActionDeps['aliases']
+    expect((await offerToggle({ ...deps('AMAZON'), aliases: draft }).preflight!([row])).level).toBe('confirm')
+  })
   it('the held run and preflight expose the same sentence without transport', async () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     try {

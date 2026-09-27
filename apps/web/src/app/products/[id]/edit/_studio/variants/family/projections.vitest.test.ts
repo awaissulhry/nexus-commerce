@@ -35,6 +35,13 @@ describe('projectionState — §3.3’s five states, in the design’s order', (
     expect(projectionState(amazon, { included: true, published: true, state: 'errors', externalId: 'x' })).toBe('needs-value')
     expect(projectionState(amazon, { included: true, published: true, state: 'missing', externalId: 'x' })).toBe('needs-value')
   })
+  it('says Published · ASIN pending for an Amazon row whose ASIN is not back yet — never Draft', () => {
+    expect(projectionState(amazon, { included: true, published: true, state: 'pending', externalId: null })).toBe('asin-pending')
+    expect(projectionMeta(projectionState(amazon, { included: true, published: true, state: 'pending', externalId: null })).label).toBe('Published · ASIN pending')
+    // The wire's own word wins, as for every other state.
+    expect(projectionState(amazon, { projectionState: 'asin-pending', included: true, published: true, state: 'ready', externalId: null })).toBe('asin-pending')
+    expect(asRowState('pending')).toBe('pending')
+  })
   it('says Listed when published and Draft when not', () => {
     expect(projectionState(amazon, { included: true, published: true, state: 'live', externalId: 'x' })).toBe('listed')
     expect(projectionState(amazon, { included: true, published: false, state: 'ready', externalId: null })).toBe('draft')

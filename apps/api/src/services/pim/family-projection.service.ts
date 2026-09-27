@@ -5,6 +5,7 @@ import { familyAccountId } from './family-account.js'
 import { orderedVariationMapping, parseVariationMapping, variationMappingOrder, variationMappingTarget } from '@nexus/shared/variation-mapping'
 import { resolveWorkspaceDestination } from './workspace-destination.js'
 import { completeAxisValueOrder } from './shared-variation-values.js'
+import { isAsinPending } from '@nexus/shared/listing-risk'
 /**
  * VP.2 — the Variants page's backend: one family read, and one projection read/write per coordinate.
  *
@@ -59,7 +60,19 @@ import {
  * `not_set_up` have no readiness counterpart, and `live` has no exclusion counterpart. So a projection cell
  * carries BOTH its projection state and its row readiness, side by side, and nothing converts between them.
  */
-export type ProjectionState = 'listed' | 'draft' | 'excluded' | 'not_set_up' | 'needs_value'
+export type ProjectionState = 'listed' | 'asin_pending' | 'draft' | 'excluded' | 'not_set_up' | 'needs_value'
+
+const ASIN_PENDING_REASON = 'Published on Amazon. Its ASIN has not been read back yet; Nexus reads it from Amazon.'
+
+/**
+ * One listing's own word, before exclusion and missing values are considered: `listed` when it holds a channel id,
+ * `asin_pending` when Amazon accepted it and its ASIN is not read back yet (`isAsinPending` — live, so never `draft`),
+ * else `draft`. eBay keeps the id rule alone.
+ */
+export function listingProjectionState(row: { channel?: string | null; isPublished?: boolean | null; listingStatus?: string | null; externalListingId?: string | null } | null | undefined): 'listed' | 'asin_pending' | 'draft' {
+  if (row?.externalListingId) return 'listed'
+  return isAsinPending(row) ? 'asin_pending' : 'draft'
+}
 
 /** Honest-copy §3: exclusion is local; an existing identity may still sell. */
 export function excludedReason(hasRow: boolean, childExternalId: string | null | undefined, parentExternalId: string | null | undefined, coordinateLabel: string): string {
@@ -70,7 +83,7 @@ export function excludedReason(hasRow: boolean, childExternalId: string | null |
     : 'Excluded from this listing. Nothing was ever sent for this variant.'
 }
 
-export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted'
 
 /**
  * 🔴 TWO measurements, deliberately NOT one object.
@@ -586,6 +599,7 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
           : 'Live on this channel, with publishing turned off for this listing.',
       }
     }
+    if (listingProjectionState(primary) === 'asin_pending') return { included: true, state: 'asin_pending', externalId: null, readiness, completeness, reason: ASIN_PENDING_REASON }
     return { included: true, state: 'draft', externalId: null, readiness, completeness, reason: 'Included, and not published to this channel yet.' }
   }
 
@@ -1476,13 +1490,13 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
     const state: ProjectionState = isExcluded
       ? 'excluded'
       : missingMapped ? 'needs_value'
-        : row?.externalListingId ? 'listed' : 'draft'
+        : listingProjectionState(row)
     const reason = isExcluded
       ? excludedReason(!!row, row?.externalListingId, parentListing?.externalListingId, coordinateLabel)
       : missingMapped ? sheetRow?.readiness.issues.map(issue => issue.message).join(' ') || `Missing a value for a mapped ${vocabulary.axisNoun}.`
         : row?.externalListingId
           ? (row.isPublished ? 'Live on this channel.' : 'Live on this channel, with publishing turned off for this listing.')
-          : 'Included, not published yet.'
+          : listingProjectionState(row) === 'asin_pending' ? ASIN_PENDING_REASON : 'Included, not published yet.'
     return {
       id: child.id,
       sku: child.sku,
@@ -1658,14 +1672,16 @@ async function readProjection(input: ProjectionInput, proposed?: MappingWriteInp
       listings: listings.filter((l) => l.productId === root.id).length,
       ...readinessOfRow(sheetRows.get(root.id) as never, channelSheet?.meta?.schemaMissing ?? []),
       listing: {
-        state: !parentListing ? 'not_set_up' : parentListing.externalListingId ? 'listed' : 'draft',
+        state: !parentListing ? 'not_set_up' : listingProjectionState(parentListing),
         externalId: parentListing?.externalListingId ?? null,
         listingId: parentListing?.id ?? null,
         reason: !parentListing
           ? 'This family has no parent listing record on this coordinate.'
           : parentListing.externalListingId
             ? `The family's listing on this channel is ${parentListing.externalListingId}.`
-            : 'The family has a listing record here that has not been published yet.',
+            : listingProjectionState(parentListing) === 'asin_pending'
+              ? 'The family\'s listing is published on Amazon. Its parent ASIN has not been read back yet; Nexus reads it from Amazon.'
+              : 'The family has a listing record here that has not been published yet.',
       },
     },
     children: childState,

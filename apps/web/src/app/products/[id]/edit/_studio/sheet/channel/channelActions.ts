@@ -36,6 +36,7 @@ import {
   type GridAction,
 } from '@/design-system/grid/actions/registry'
 import { getBackendUrl } from '@/lib/backend-url'
+import { isAsinPending } from '@nexus/shared/listing-risk'
 import { coordinateSchema } from '../../presence/types'
 
 import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelSheetRow } from './types'
@@ -138,10 +139,11 @@ const variantsOf = (rows: ChannelSheetRow[]) => rows.filter((r) => r.rowKind ===
  *
  * `listingStatus` alone is NOT the answer: a DRAFT row still carries a real ItemID, so eBay knows
  * about it — measured across 20 non-ACTIVE rows tonight, every one had an `externalListingId`.
- * Liveness is therefore "the channel has an id for it", and it is an ALIAS-level fact.
+ * Liveness is therefore "the channel has an id for it", and it is an ALIAS-level fact. One addition,
+ * Amazon only: a listing Publish promoted is live before its ASIN is read back (`isAsinPending`).
  */
-const liveAliasKeys = (aliases: AliasGroup[]) =>
-  new Set(aliases.filter((a) => !!a.externalListingId).map((a) => aliasKeyOf(a.id)))
+const liveAliasKeys = (aliases: AliasGroup[], channel: string) =>
+  new Set(aliases.filter((a) => !!a.externalListingId || isAsinPending({ ...a, channel })).map((a) => aliasKeyOf(a.id)))
 
 const externalIdFor = (aliases: AliasGroup[], r: ChannelSheetRow) =>
   aliases.find((a) => aliasKeyOf(a.id) === aliasKeyOf(r.aliasId))?.externalListingId ?? null
@@ -239,7 +241,7 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
     },
     preflight: async (rows): Promise<ActionImpact> => {
       const vs = variantsOf(rows)
-      const liveKeys = liveAliasKeys(deps.aliases)
+      const liveKeys = liveAliasKeys(deps.aliases, deps.channel)
       const live = vs.filter((r) => liveKeys.has(aliasKeyOf(r.aliasId)))
       // Same `plan` the label and the availability used — the confirmation cannot describe a
       // different action from the one the operator read on the menu item.
@@ -262,10 +264,11 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
           : ['None of these hold a channel id. A listing record is created on this coordinate for any row that has none.'],
         findings: vs.map((r) => {
           const ext = externalIdFor(deps.aliases, r)
+          const pending = !ext && liveKeys.has(aliasKeyOf(r.aliasId))
           return {
             rowId: r.rowId,
-            label: `${r.sku}${ext ? ` · ${ext}` : ' · no channel reference recorded'}`,
-            severity: ext ? ('warn' as const) : ('info' as const),
+            label: `${r.sku}${ext ? ` · ${ext}` : pending ? ' · published, ASIN pending' : ' · no channel reference recorded'}`,
+            severity: ext || pending ? ('warn' as const) : ('info' as const),
           }
         }),
         // 🔴 Wave-1: the outward-facing half does not ship. Stated in the impact so the operator
@@ -279,7 +282,7 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
       const vs = variantsOf(rows)
       // One plan, resolved from the same rows the label and the confirmation described.
       const { activate } = plan(rows)
-      const liveKeys = liveAliasKeys(deps.aliases)
+      const liveKeys = liveAliasKeys(deps.aliases, deps.channel)
       const held = vs.filter(r => liveKeys.has(aliasKeyOf(r.aliasId)))
       if (held.length) return { ok: false, message: heldOfferRefusal(held.length, deps.channel) }
       const targets = vs.map(row => offerCoordinate(deps, row))
@@ -370,7 +373,7 @@ export function broadcastToListings(deps: ChannelActionDeps): GridAction<Channel
     },
     run: async (rows): Promise<ActionResult> => {
       const vs = variantsOf(rows)
-      if (vs.some((r) => liveAliasKeys(deps.aliases).has(aliasKeyOf(r.aliasId)))) {
+      if (vs.some((r) => liveAliasKeys(deps.aliases, deps.channel).has(aliasKeyOf(r.aliasId)))) {
         return { ok: false, message: 'Broadcast is not built. Nothing is sent on any row, live or not.' }
       }
       if (chosen.length === 0) return { ok: false, message: 'No target markets were chosen.' }

@@ -141,7 +141,8 @@ function projectionColumn(
            draw the identity instead of a word; where there is no identity to draw, the state is
            worth saying (an unconnected channel still reads "Not set up"). */
         if (!channel.connected) return { state }
-        if (!projection?.externalId) return { state: 'excluded' }
+        // A parent published on Amazon whose ASIN is not read back yet is live, not excluded: say so.
+        if (!projection?.externalId) return { state: state === 'asin-pending' ? state : 'excluded' }
         return {
           state: null,
           detail: projection.externalId,

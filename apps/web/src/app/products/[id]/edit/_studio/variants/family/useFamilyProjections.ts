@@ -26,7 +26,7 @@ export interface UseFamilyProjections {
  * still PARSED rather than cast — `isProjectionState` decides, and anything else falls back to the
  * flags, because a wire value that drifts must not be able to paint a green dot.
  */
-interface StudioFamilyResponse {
+export interface StudioFamilyResponse {
   version: number
   channels?: Array<{ channel: string; market: string; connected: boolean; label: string; accountId: string | null }>
   axes?: Array<{ key: string; label?: string; storedKey?: string; valueOrder?: { codes: string[] }; values?: Array<string | { code?: string }> }>
@@ -93,8 +93,8 @@ export function useFamilyProjections(
   return { projections, loading, error, reload }
 }
 
-/** Map §5.1's response onto the internal shape. The studio branch states, it does not infer. */
-function fromStudio(body: StudioFamilyResponse): FamilyProjections {
+/** Map §5.1's response onto the internal shape. The studio branch states, it does not infer. Exported for its node test. */
+export function fromStudio(body: StudioFamilyResponse): FamilyProjections {
   const channels = (body.channels ?? []).map((c) => ({
     channel: c.channel.toUpperCase(),
     market: c.market.toUpperCase(),
@@ -151,15 +151,16 @@ function rowOf(p: { included?: boolean; state?: string; externalId?: string | nu
   return {
     included: p.included !== false,
     /* VP.2 states `listed` where the sheet's row vocabulary would say `live`; both mean published.
-       Read BOTH rather than one, so this does not go quiet if the field is renamed on either side. */
-    published: p.published === true || p.state === 'live' || p.state === 'listed',
+       Read BOTH rather than one, so this does not go quiet if the field is renamed on either side.
+       The same for an Amazon listing whose ASIN is pending: `asin_pending` there, `pending` here. */
+    published: p.published === true || p.state === 'live' || p.state === 'listed' || p.state === 'pending' || p.state === 'asin_pending',
     state: asState(p.state),
     projectionState: isProjectionState(p.state?.replace(/_/g, '-')) ? p.state!.replace(/_/g, '-') as ProjectionState : undefined,
     externalId: p.externalId ?? null,
   }
 }
 
-const ROW_STATES = new Set(['ready', 'missing', 'errors', 'live', 'unlisted'])
+const ROW_STATES = new Set(['ready', 'missing', 'errors', 'live', 'pending', 'unlisted'])
 function asState(state: unknown) {
-  return typeof state === 'string' && ROW_STATES.has(state) ? (state as 'ready' | 'missing' | 'errors' | 'live' | 'unlisted') : null
+  return typeof state === 'string' && ROW_STATES.has(state) ? (state as 'ready' | 'missing' | 'errors' | 'live' | 'pending' | 'unlisted') : null
 }

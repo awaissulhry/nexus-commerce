@@ -44,6 +44,15 @@ it('partitions all five listing levels while retaining held ENDED identities', a
   expect(db.channelListing.findMany.mock.calls[0][0].where.listingStatus).toBeUndefined()
   expect(fetch).not.toHaveBeenCalled()
 })
+it('holds a published Amazon listing whose ASIN is pending, and reads the two facts that say so', async () => {
+  db.channelListing.findMany.mockResolvedValue([
+    { ...listing, id: 'pending', externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' },
+    { ...listing, id: 'draft', productId: 'p', aliasKey: '', externalListingId: null, isPublished: false, listingStatus: 'DRAFT' },
+  ])
+  const checks = await read({ productId: 'p' }, 'delete-variant')
+  expect(checks.channelListings.rows.map((row: any) => row.id)).toEqual(['pending'])
+  expect(db.channelListing.findMany.mock.calls[0][0].select).toMatchObject({ isPublished: true, listingStatus: true })
+})
 it('does not narrow away FBA offers on unsent listings while reading impact', async () => {
   const draft = { ...listing, externalListingId: null, fulfillmentMethod: 'FBA', offers: [{ sku: 'FBA-DRAFT-SKU', isActive: true, fulfillmentMethod: 'FBA' }] }
   db.channelListing.findMany.mockImplementation(async (args: any) => args.where.externalListingId ? [] : [draft])

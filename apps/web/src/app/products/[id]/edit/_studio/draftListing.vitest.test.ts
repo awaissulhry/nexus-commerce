@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import * as pushLock from '@nexus/shared/push-lock'
 
 import {
+  ASIN_PENDING_CHIP_LABEL, asinPendingChipDetail, asinPendingCount,
   connectAccountSentence, coordinateListingState, DRAFT_CHIP_LABEL, draftChipDetail, draftStartedMessage, isStillDraftListing,
   mediaDestinationGate, mediaDraftStartedMessage, mediaDraftStartSentence, notListedSentence,
 } from './draftListing'
@@ -121,5 +122,24 @@ describe('the media galleries on a market with no listing', () => {
     expect(mediaDraftStartSentence('EBAY', 'DE')).toBe('Your first save here starts a draft on eBay · DE. Nothing is sent to eBay until you publish.')
     expect(mediaDraftStartSentence('AMAZON', 'SE')).toBe('Your first save here starts a draft on Amazon · SE. Nothing is sent to Amazon until you publish.')
     expect(mediaDraftStartedMessage('EBAY', 'DE')).toBe('Started a draft on eBay · DE and saved this gallery to it. Nothing was sent to eBay.')
+  })
+})
+
+describe('the header chip while Amazon listings wait for their ASIN', () => {
+  const pending = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: null }
+
+  it('counts the listings the shared rule calls pending, on Amazon only', () => {
+    expect(asinPendingCount([{ listing: pending }, { listing: { ...pending, listingStatus: 'BUYABLE' } }, { listing: live }, { listing: draft }, { listing: null }, {}], 'AMAZON')).toBe(2)
+    expect(asinPendingCount([{ listing: pending }], 'EBAY')).toBe(0)
+  })
+
+  it('a pending listing is not a draft, so the draft chip does not show beside it', () => {
+    expect(coordinateListingState([{ listing: pending }, { listing: draft }])).toBe('listed')
+  })
+
+  it('says the row state word, exactly, and why', () => {
+    expect(ASIN_PENDING_CHIP_LABEL).toBe('Published · ASIN pending')
+    expect(asinPendingChipDetail(1, 'IT')).toBe('1 listing on Amazon · IT is published. Its ASIN has not been read back yet; Nexus reads it from Amazon.')
+    expect(asinPendingChipDetail(3, 'DE')).toBe('3 listings on Amazon · DE are published. Their ASINs have not been read back yet; Nexus reads them from Amazon.')
   })
 })

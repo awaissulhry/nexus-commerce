@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
+const m = vi.hoisted(() => ({ facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[] }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -37,6 +37,8 @@ vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace:
 vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: m.shopPreview, synchronizeContent: m.shopSend }))
 // Product-sheet create path, step 5 — Publish starts missing rows through the one creator; its own rules run on PostgreSQL.
 vi.mock('./draft-listing.service.js', () => ({ ensureDraftListings: m.ensure }))
+// The ASIN read after an Amazon promotion calls Amazon; here it only records when it ran.
+vi.mock('../amazon/listing-asin-fill.service.js', () => ({ fillAmazonListingAsins: m.fill }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
 vi.mock('../../db.js', () => {
   const matches = (row: any, where: any) => (!where.id || (typeof where.id === 'string' ? row.id === where.id : row.id !== where.id.not))
@@ -48,9 +50,9 @@ vi.mock('../../db.js', () => {
     create: async ({ data }: any) => { m.rows.set(data.id, structuredClone(data)); return structuredClone(data) },
     updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, structuredClone({ ...row, ...data })); return { count: rows.length } },
     update: async ({ where, data }: any) => { m.persistenceFailure(data); const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, structuredClone(row)); await m.persisted(row); return structuredClone(row) },
-  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, count: async () => 2 },
-  // Draft promotion reads the settled records; they are real only in the database suite.
-  channelListingSnapshot: { findMany: async () => [] }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
+  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, findMany: m.findListings, count: async () => 2 },
+  // Draft promotion reads the settled records; they are real only in the database suite. `commit` marks a transaction's end.
+  channelListingSnapshot: { findMany: m.snapshots }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => { const out = await fn(db); m.events.push('commit'); return out } }
   return { default: db }
 })
 import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult } from './studio-publication.service.js'
@@ -68,7 +70,9 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 }) })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
+  m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0
+  m.fill.mockImplementation(async () => { m.events.push('fill'); return { dryRun: false, rows: [], counts: {} } }) })
 
 const existingFacts = () => ({ ...facts(), listings: [{ id: 'listing-parent', productId: 'parent', externalListingId: 'existing-item' }] })
 const contentObservation = (theirs = 'Channel title') => ({ channelListingId: 'listing-parent',
@@ -278,4 +282,34 @@ it.each([false, true])('uses Shopify’s native family publisher and retains its
     results: [expect.objectContaining({ reference: 'gid://shopify/Product/42' }), expect.anything()] })
   expect(m.shopSend).toHaveBeenCalledOnce()
   expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true }, expect.any(Function))
+})
+
+it('reads the ASINs of the rows an Amazon acceptance promoted, after the promotion commits', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await submitStudioPublication('parent', review.id!, {}, 'user')
+  expect(m.fill).not.toHaveBeenCalled()
+  m.snapshots.mockResolvedValue([{ channelListingId: 'listing-parent' }, { channelListingId: 'listing-child' }])
+  // Both SKUs were accepted; only the parent's row is still a draft, so only it is promoted — and read.
+  m.findListings.mockResolvedValue([{ id: 'listing-parent' }])
+  m.updateListings.mockImplementation(async () => { m.events.push('promote'); return { count: 1 } })
+  m.amazonStatus.mockResolvedValue({ results: [{ sku: 'SELLER-SKU', failed: false }, { sku: 'SELLER-CHILD', failed: false }] })
+  m.events.length = 0
+  expect(await studioPublicationResult('parent', review.id!, 'user')).toMatchObject({ status: 'ACCEPTED' })
+  await vi.waitFor(() => expect(m.fill).toHaveBeenCalledOnce())
+  expect(m.fill).toHaveBeenCalledWith(['listing-parent'])
+  expect(m.events).toEqual(['promote', 'commit', 'fill'])
+  expect(m.findListings.mock.calls[0][0].where).toMatchObject({ id: { in: ['listing-parent', 'listing-child'] }, channel: 'AMAZON', marketplace: 'IT',
+    channelConnectionId: 'seller-b', aliasKey: 'alias-b', listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+  expect(m.updateListings.mock.calls[0][0].where).toMatchObject({ id: { in: ['listing-parent'] }, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+})
+
+it('reads nothing when an Amazon acceptance promoted no row', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  await submitStudioPublication('parent', review.id!, {}, 'user')
+  m.snapshots.mockResolvedValue([{ channelListingId: 'listing-live' }])
+  m.amazonStatus.mockResolvedValue({ results: [{ sku: 'SELLER-SKU', failed: false }, { sku: 'SELLER-CHILD', failed: false }] })
+  expect(await studioPublicationResult('parent', review.id!, 'user')).toMatchObject({ status: 'ACCEPTED' })
+  await new Promise(resolve => setTimeout(resolve, 10))
+  expect(m.updateListings).not.toHaveBeenCalled()
+  expect(m.fill).not.toHaveBeenCalled()
 })

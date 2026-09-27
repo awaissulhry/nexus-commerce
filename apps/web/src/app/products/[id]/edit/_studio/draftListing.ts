@@ -11,7 +11,9 @@
  * draft.
  */
 import { isStillDraftListing, type DraftListingFacts } from '@nexus/shared/push-lock'
+import { isAsinPending } from '@nexus/shared/listing-risk'
 import { channelLabel } from '@nexus/shared/channel-label'
+import { readinessMeta } from '@/design-system/grid/renderers/readiness'
 
 export { isStillDraftListing }
 
@@ -57,6 +59,23 @@ export const DRAFT_CHIP_LABEL = 'Draft · not published'
 
 export function draftChipDetail(channel: string, market: string): string {
   return `The listing on ${coordinateName(channel, market)} is a Nexus draft. Nothing is sent to ${channelLabel(channel)} until you publish.`
+}
+
+/**
+ * The listings on a coordinate that Amazon accepted and whose ASIN is not read back yet — the shared rule
+ * (`isAsinPending`), so the chip, the sheet's row state and the Variants cell count the same rows.
+ */
+export function asinPendingCount(rows: ReadonlyArray<{ listing?: DraftListingFacts | null }>, channel: string): number {
+  return rows.filter((row) => !!row.listing && isAsinPending({ ...row.listing, channel })).length
+}
+
+/** The header chip while listings here wait for their ASIN: the row state's own word. */
+export const ASIN_PENDING_CHIP_LABEL = readinessMeta('pending', 'row').label
+
+export function asinPendingChipDetail(count: number, market: string): string {
+  return count === 1
+    ? `1 listing on ${coordinateName('AMAZON', market)} is published. Its ASIN has not been read back yet; Nexus reads it from Amazon.`
+    : `${count} listings on ${coordinateName('AMAZON', market)} are published. Their ASINs have not been read back yet; Nexus reads them from Amazon.`
 }
 
 /**

@@ -14,15 +14,17 @@ import { PROJECTION_STATES, isProjectionState, projectionMeta, type ProjectionSt
  *    PES.2 ever recolours a readiness state.
  */
 describe('projection vocabulary', () => {
-  it('says exactly the five words spec §9 fixes, the sixth VX D9 adds, and the four MX §3.4 adds', () => {
+  it('says exactly the five words spec §9 fixes, the sixth VX D9 adds, the four MX §3.4 adds, and ASIN pending', () => {
     expect(PROJECTION_STATES).toEqual([
-      'listed', 'draft', 'excluded', 'not-set-up', 'needs-value', 'collides',
+      /* 2026-09-27 — `asin-pending` beside `listed`: published on Amazon, its ASIN not read back yet. */
+      'listed', 'asin-pending', 'draft', 'excluded', 'not-set-up', 'needs-value', 'collides',
       /* MX.G, design §3.4 — the Matrix's four. The ORDER is the declaration order in the table and
          is asserted because `PROJECTION_STATES` is what a legend and a filter's options render. */
       'suppressed', 'closed', 'error', 'ended',
     ])
     expect(PROJECTION_STATES.map((s) => projectionMeta(s).label)).toEqual([
       'Listed',
+      'Published · ASIN pending',
       'Draft',
       'Excluded',
       'Not set up',
@@ -53,15 +55,19 @@ describe('projection vocabulary', () => {
       expect(meta.tone).toBe(source.tone)
       delegated += 1
     }
-    // 9 of the 10 delegate: `excluded` is still the only member that paints no status colour.
+    // 10 of the 11 delegate: `excluded` is still the only member that paints no status colour.
     // The count is the positive control on the loop above — it is what makes a silently skipped
     // member fail rather than pass (the arm that would have failed is the one never run).
-    expect(delegated).toBe(9)
+    expect(delegated).toBe(10)
   })
 
   it('maps each state to the dot §3.3 draws', () => {
     // info solid · neutral hollow · nothing · nothing · warning solid
     expect(projectionMeta('listed')).toMatchObject({ tone: 'info', dot: 'solid', muted: false })
+    // Published, so drawn like Listed; its word and tone are the `pending` row state's, read, not copied.
+    expect(projectionMeta('asin-pending')).toMatchObject({ dot: 'solid', muted: false, interactive: true, from: 'row:pending' })
+    expect(projectionMeta('asin-pending').tone).toBe(readinessMeta('pending', 'row').tone)
+    expect(projectionMeta('asin-pending').label).toBe(readinessMeta('pending', 'row').label)
     expect(projectionMeta('draft')).toMatchObject({ tone: 'neutral', dot: 'hollow', muted: false })
     expect(projectionMeta('excluded')).toMatchObject({ dot: 'none', muted: true })
     expect(projectionMeta('not-set-up')).toMatchObject({ dot: 'none', muted: true })

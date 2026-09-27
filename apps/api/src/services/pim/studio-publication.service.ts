@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import type { StudioPublishReview, StudioPublishResult, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
+import { logger } from '../../utils/logger.js'
 import { workspaceIdForQuery } from '@nexus/database/workspace-context'
 import { getAmazonPublishMode } from '../amazon-publish-gate.service.js'
 import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
@@ -45,30 +46,49 @@ const PROMOTE_ON_ACCEPTANCE = new Set(['AMAZON'])
  * The rows whose SKU the channel accepted in this publication — per SKU, as the settled records say —
  * become published, ACTIVE and unpaused, but only while they are still drafts (DRAFT, unpublished,
  * no channel id). A live listing is never one, so an operator's own pause on it is never undone.
+ * Returns the rows it promoted.
  */
-async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: PublicationRecordContext) {
-  if (!PROMOTE_ON_ACCEPTANCE.has(context.channel)) return
+async function promoteAcceptedDrafts(tx: Prisma.TransactionClient, context: PublicationRecordContext): Promise<string[]> {
+  if (!PROMOTE_ON_ACCEPTANCE.has(context.channel)) return []
   const accepted = await tx.channelListingSnapshot.findMany({ where: { publishEventId: context.reviewId, reason: 'publish', outcome: 'ACCEPTED',
     channel: context.channel, marketplace: context.marketplace, aliasKey: context.aliasKey, payload: { path: ['channelConnectionId'], equals: context.accountId } },
   select: { channelListingId: true } })
-  if (!accepted.length) return
-  await tx.channelListing.updateMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, channel: context.channel,
-    marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey, ...STILL_DRAFT_LISTING },
-  data: { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } })
+  if (!accepted.length) return []
+  const destination = { channel: context.channel, marketplace: context.marketplace, channelConnectionId: context.accountId, aliasKey: context.aliasKey, ...STILL_DRAFT_LISTING }
+  const drafts = await tx.channelListing.findMany({ where: { id: { in: accepted.map(row => row.channelListingId) }, ...destination }, select: { id: true } })
+  if (!drafts.length) return []
+  const ids = drafts.map(row => row.id)
+  await tx.channelListing.updateMany({ where: { id: { in: ids }, ...destination },
+    data: { isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, version: { increment: 1 } } })
+  return ids
+}
+
+/**
+ * Amazon's processing report names no ASIN, so a promoted row reads its own from Amazon once the promotion has
+ * COMMITTED — never inside the transaction, and without holding up the status response. A row Amazon has not made
+ * visible yet is retried by the ASIN sweep (`amazon-asin-fill.job.ts`).
+ */
+function fillPromotedAsins(listingIds: string[]) {
+  void import('../amazon/listing-asin-fill.service.js')
+    .then(({ fillAmazonListingAsins }) => fillAmazonListingAsins(listingIds))
+    .catch(error => logger.warn('studio publication: ASIN read after promotion failed; the ASIN sweep retries it', { error: error instanceof Error ? error.message : String(error) }))
 }
 
 /** Receipt and accepted baseline move together; legacy operations never acquire an invented send record. */
 async function storeResult(id: string, data: Record<string, any>, userId: string | null, result: StudioPublishResult, statuses: string[]) {
-  return prisma.$transaction(async tx => {
+  let promoted: string[] = []
+  const stored = await prisma.$transaction(async tx => {
     const stored = await tx.bulkOperation.updateMany({ where: { id, status: { in: statuses } },
       data: { status: result.status, completedAt: IN_FLIGHT.includes(result.status) ? null : new Date(), changes: json({ ...data, result }) } })
     if (stored.count && data.captureVersion === 1) {
       const context = recordContext(id, data, userId)
       await settlePublicationRecords(tx, context, result)
-      await promoteAcceptedDrafts(tx, context)
+      promoted = await promoteAcceptedDrafts(tx, context)
     }
     return stored
   })
+  if (promoted.length) fillPromotedAsins(promoted)
+  return stored
 }
 
 async function reconcileEbayReceipt(data: Record<string, any>, previous: StudioPublishResult): Promise<StudioPublishResult> {

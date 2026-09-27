@@ -54,7 +54,7 @@ import { readinessMeta, type ReadinessTone } from './readiness'
 
 /** One variant row against one channel coordinate, as the operator reads it. */
 export type ProjectionState =
-  | 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'collides'
+  | 'listed' | 'asin-pending' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'collides'
   /* MX.G — the four the Matrix adds (design `docs/2026-09-13-matrix-page-design.md` §3.4). */
   | 'suppressed' | 'closed' | 'error' | 'ended'
 
@@ -93,6 +93,20 @@ const PROJECTION: Record<ProjectionState, ProjectionMeta> = {
     muted: false,
     interactive: true,
     hint: 'This variant is live on this channel',
+  },
+  /**
+   * Published on Amazon, its ASIN not read back yet (`isAsinPending`, `packages/shared/listing-risk.ts`). Not a `Draft`:
+   * Amazon holds the listing, and calling it one would under-warn every verb that asks "is this live?". The word AND the
+   * tone are READ from the row state it mirrors, `pending`, so the Variants cell and the sheet say the same thing.
+   */
+  'asin-pending': {
+    tone: readinessMeta('pending', 'row').tone,
+    from: 'row:pending',
+    label: readinessMeta('pending', 'row').label,
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'Published on Amazon. Its ASIN has not been read back yet; Nexus reads it from Amazon.',
   },
   draft: {
     tone: readinessMeta('unlisted', 'row').tone,

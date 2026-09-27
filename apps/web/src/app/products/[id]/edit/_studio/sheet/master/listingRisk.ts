@@ -18,7 +18,7 @@
  */
 
 import type { ListingRow } from './familyOps'
-import { identityHeld as isLiveOnChannel } from '@nexus/shared/listing-risk'
+import { identityHeld as isLiveOnChannel, isAsinPending } from '@nexus/shared/listing-risk'
 export { identityHeld as isLiveOnChannel, identityHeld, sellingRisk } from '@nexus/shared/listing-risk'
 
 export type ListingRisk = 'live' | 'local'
@@ -43,8 +43,9 @@ const trimmed = (v: string | null | undefined): string => (typeof v === 'string'
 /**
  * Is this listing real on the marketplace?
  *
- * The presence of an external id, and nothing else. Not status, not `isPublished` — an unpublished
- * row with an ItemID is still an eBay listing that a delete would take down.
+ * The presence of an external id, or, on Amazon only, a published listing whose ASIN has not been read
+ * back yet (`isAsinPending`). Not status, not `isPublished` alone — an unpublished row with an ItemID is
+ * still an eBay listing that a delete would take down.
  */
 
 
@@ -58,8 +59,9 @@ export function classifyListings(rows: readonly ListingRow[]): DeletionImpact {
       risk: live ? 'live' : 'local',
       // The id is NAMED. "1 live listing" is a number an operator already knew; "eBay · IT —
       // ItemID 256789012345" is the thing they can go and look at before agreeing to lose it.
+      // An Amazon listing Publish promoted is live before its ASIN is read back, and says so rather than naming no id.
       label: live
-        ? `${where} — ${status}, ${trimmed(row.externalListingId)}`
+        ? `${where} — ${status}, ${isAsinPending(row) ? 'published, ASIN pending' : trimmed(row.externalListingId)}`
         : `${where} — ${status}, no marketplace id on this record`,
     }
   })
