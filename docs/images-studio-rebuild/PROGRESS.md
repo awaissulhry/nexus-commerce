@@ -12,9 +12,10 @@ Branch `feat/images-studio-rebuild` · worktree `/private/tmp/nexus-images-studi
 - **P2 — publishers read the plan (2026-09-27).** All merged: P2a #90, P2b #92, P2c #93 (eBay Trading), P2d #98
   (eBay Inventory, stock-safe), P2e #95 (Amazon), P2f #99 (Shopify). Nothing changes for a live listing until a family
   is switched onto the plan (P3a) — no family in production is switched yet.
-- **P3a — switch one family, with a preview (API).** PR #101 (base main); merge needs the Owner's word.
-- **P3b — the new Media page. Built and checked on a local throwaway stack (2026-09-27); PR open, base
-  `feat/images-p3a`.** Details below.
+- **P3a — switch one family, with a preview (API).** PR #101 merged 2026-09-27 on the Owner's word (squash `902fbfae1`).
+  In production the switch endpoints exist; no screen uses them until P3b is merged, and no family is switched.
+- **P3b — the new Media page. Built and checked on a local throwaway stack (2026-09-27); PR #102 open, base `main`;
+  merge needs the Owner's word.** Details below.
 - **Next:** P3c — the Information sheet's "Product media" column on the plan; P3d — polish and proof.
 
 ## P3b — the Media page (what was built)
