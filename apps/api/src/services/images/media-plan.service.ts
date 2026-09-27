@@ -299,6 +299,48 @@ async function checkedAddress(rootId: string, address: MediaLayerAddress) {
  * layer's revision; when another edit landed first the ops are applied again on top of it (they still fit or they are
  * refused with the reason). A layer that ends up owning nothing is removed, so it follows again.
  */
+/** A photo's language: `zxx` (no text), `mul` (several languages), or a two- or three-letter language code. */
+export const MEDIA_LANGUAGE = /^(zxx|mul|[a-z]{2,3})$/
+
+/**
+ * Images rebuild P4b — what the upload dialog read from the file names (PLAN.md §4.6, §4.8): each photo's language, and
+ * which photos are language versions of one photo. A group may join a photo already in the library (`join`): it keeps
+ * that photo's group, or starts one with it. Versions of one photo need different languages, none of them "no text".
+ * Only photos of this family; nothing is placed in a set here (the plan's ops do that).
+ */
+export async function updateMediaLibrary(productId: string, input: {
+  languages: Array<{ id: string; languageTag: string }>
+  groups: Array<{ ids: string[]; join?: string | null }>
+}) {
+  const rootId = await familyRoot(productId)
+  const family = [rootId, ...(await prisma.product.findMany({ where: { parentId: rootId, deletedAt: null }, select: { id: true } })).map(c => c.id)]
+  const named = [...new Set([...input.languages.map(l => l.id), ...input.groups.flatMap(g => [...g.ids, ...(g.join ? [g.join] : [])])])]
+  const rows = await prisma.productImage.findMany({ where: { id: { in: named }, productId: { in: family } }, select: { id: true, languageTag: true, versionGroupId: true } })
+  if (rows.length !== named.length) throw new WorkspaceScopeError('A photo is not in this product\'s library any more. Reload the page.', 409)
+  if (input.languages.some(l => !MEDIA_LANGUAGE.test(l.languageTag))) throw new WorkspaceScopeError('Choose a language for each photo.', 422)
+  const grouped = input.groups.flatMap(g => g.ids)
+  if (new Set(grouped).size !== grouped.length) throw new WorkspaceScopeError('A photo can be a version of one photo only.', 422)
+  const language = new Map(rows.map(r => [r.id, input.languages.find(l => l.id === r.id)?.languageTag ?? r.languageTag]))
+  const byId = new Map(rows.map(r => [r.id, r]))
+  // The members each group will have: the joined photo's existing versions, the joined photo, and the new files.
+  const plans = await Promise.all(input.groups.map(async g => {
+    const joined = g.join ? byId.get(g.join)! : null
+    const existing = joined?.versionGroupId ? await prisma.productImage.findMany({ where: { versionGroupId: joined.versionGroupId, productId: { in: family } }, select: { id: true, languageTag: true } }) : []
+    for (const row of existing) if (!language.has(row.id)) language.set(row.id, row.languageTag)
+    const members = [...new Set([...existing.map(r => r.id), ...(joined ? [joined.id] : []), ...g.ids])]
+    const tags = members.map(id => language.get(id)!)
+    if (members.length < 2 || tags.includes('zxx') || new Set(tags).size !== tags.length)
+      throw new WorkspaceScopeError('Versions of one photo need a different language each (and text in them).', 422)
+    return { groupId: joined?.versionGroupId ?? crypto.randomUUID(), ids: members.filter(id => !existing.some(r => r.id === id)) }
+  }))
+  await prisma.$transaction([
+    ...input.languages.map(l => prisma.productImage.update({ where: { id: l.id }, data: { languageTag: l.languageTag } })),
+    ...plans.map(p => prisma.productImage.updateMany({ where: { id: { in: p.ids } }, data: { versionGroupId: p.groupId } })),
+  ])
+  publishListingEvent({ type: 'product.media.changed', productId: rootId, layer: 'LIBRARY', ts: Date.now() })
+  return { rootId, groups: plans.map(p => ({ versionGroupId: p.groupId, ids: p.ids })) }
+}
+
 export async function applyMediaPlanOps(productId: string, input: { address: MediaLayerAddress; ops: MediaOp[] }, actorId: string | null) {
   const rootId = await familyRoot(productId)
   const address = await checkedAddress(rootId, input.address)

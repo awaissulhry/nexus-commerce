@@ -39,6 +39,8 @@ const MATRIX: Array<[string, string, SystemRoleKey[]]> = [
   ['POST', '/api/products/123/media/ops', ['ADMIN', 'OPS_MANAGER']],
   ['GET', '/api/products/123/media/switch-preview', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
   ['POST', '/api/products/123/media/switch', ['ADMIN', 'OPS_MANAGER']],
+  // P4b — a photo's language and its language versions, from the upload dialog.
+  ['PATCH', '/api/products/123/media/library', ['ADMIN', 'OPS_MANAGER']],
   ['PUT', '/api/products/123/product-media', ['ADMIN', 'OPS_MANAGER']],
   // Orders
   ['GET', '/api/orders', ['ADMIN', 'OPS_MANAGER', 'FULFILLMENT', 'FINANCE', 'VIEWER']],
