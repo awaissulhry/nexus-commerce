@@ -24,6 +24,7 @@ import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
 import { logger } from '../../utils/logger.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
+import { afterDatabaseCommit } from '../../lib/database-context.js'
 
 export type FulfilmentWrite = 'FBA' | 'FBM' | null
 
@@ -155,6 +156,9 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
   }
   if (audit.length) await prisma.syncControlAudit.createMany({ data: audit }).catch((err) => logger.warn('fulfillment: audit write failed', { error: err instanceof Error ? err.message : String(err) }))
   // A completed FBM conversion pushes pool truth now (D-MX11) — in the background, like every Sync Control mutation.
-  if (recascade.size > 0) void recascadeAfterSyncControlChange([...recascade], input.actor).then((r) => logger.info('fulfillment: recascade after FBM conversion', { ...r, actor: input.actor }))
+  // After COMMIT when a caller's transaction is open (the product sheet writes through here inside its bulk save):
+  // started inline, it would run on that transaction's client while the transaction is still deciding.
+  if (recascade.size > 0) void afterDatabaseCommit(`fulfillment-recascade:${[...recascade].sort().join(',')}`, () =>
+    recascadeAfterSyncControlChange([...recascade], input.actor).then((r) => logger.info('fulfillment: recascade after FBM conversion', { ...r, actor: input.actor })))
   return result
 }

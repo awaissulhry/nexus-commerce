@@ -8,6 +8,8 @@ import { marketLanguages } from './market-languages.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
 import { contentWireValue } from './content-read.js'
+import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
+import { deriveFulfilment } from './matrix-cells.js'
 import { normalizeLanguage } from './content-language.js'
 /**
  * PES.5 — the Product Edit Studio's sheet read: ONE family, ONE scope.
@@ -476,6 +478,8 @@ const PRODUCT_SELECT = {
   // The Variation theme cell reads it as the eBay override when the coordinate carries no `_variationAxes` of its
   // own, which is the precedence VX D1 settles; without it the eBay cell could not name where its set came from.
   variationTheme: true,
+  // 2026-09-27 — the product's own fulfilment flag: the Amazon fulfilment cell falls back to it (the Matrix rule).
+  fulfillmentMethod: true,
 } as const
 
 const LISTING_SELECT = {
@@ -501,6 +505,8 @@ const LISTING_SELECT = {
   // AM.1 — the listing's OWN bag: eBay item specifics and listing settings, Amazon's synced
   // attributes. Read for columns whose `channels[coord].store` is a `platformAttributes` path.
   platformAttributes: true,
+  // 2026-09-27 — the typed fulfilment column (`setFulfillmentMethod` writes it with both mirrors).
+  fulfillmentMethod: true,
 } as const
 
 const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterPrice', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
@@ -1339,6 +1345,17 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
             base = { value: projectCellValue(col, col.shape === 'measure' || col.shape === 'list' ? raw : normalise(raw, col.kind)),
               source: 'channelExplicit', inheritedFrom: null, inherited: false }
           }
+        }
+
+        // 2026-09-27 — no nested fulfilment code on the listing: show the method the Matrix shows for this coordinate
+        // (`deriveFulfilment`: the typed column, else the flat mirror, else the product's flag), marked INHERITED — a
+        // derived answer, never dressed as a stored one.
+        if (!base && coordinate?.channel === 'AMAZON' && col.key === AMAZON_FULFILMENT_KEY) {
+          const typed = (listingRow as { fulfillmentMethod?: string | null } | null)?.fulfillmentMethod
+          const flat = (listingRow?.platformAttributes as { fulfillmentChannel?: unknown } | null)?.fulfillmentChannel
+          const method = typed === 'FBA' || typed === 'FBM' ? typed : deriveFulfilment('AMAZON', flat, (product as { fulfillmentMethod?: string | null }).fulfillmentMethod ?? null)
+          const code = method === 'FBA' ? col.options?.find((o) => o.startsWith('AMAZON_')) : col.options?.includes('DEFAULT') ? 'DEFAULT' : undefined
+          if (code) base = { value: code, source: 'master', inheritedFrom: rootId, inherited: true }
         }
 
         // The mapped category fills only the coordinate channel's own category field (`CHANNEL_CATEGORY_FIELD`), never

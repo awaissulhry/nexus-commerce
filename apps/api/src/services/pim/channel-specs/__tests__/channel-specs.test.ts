@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { amazonSpecFromDefinition, AMAZON_MASTER_LINKS } from '../amazon.js'
+import { amazonSpecFromDefinition, AMAZON_MASTER_LINKS, AMAZON_FULFILMENT_KEY, selectorAutoValue } from '../amazon.js'
 import { ebaySpecFromCache, aspectNames } from '../ebay.js'
 import { SLOT_COLUMNS_MAX, isProseKey, normaliseKey, slotKey, leafKey, humanizeKey } from '../types.js'
 
@@ -153,10 +153,11 @@ describe('Amazon adapter — shapes, measured against the real definition', () =
     expect(f.selectors).toContain('type')
   })
 
-  it('gift_options flattens to two booleans; fulfillment_availability to its four authored leaves', () => {
+  it('gift_options flattens to two booleans; fulfillment_availability to its four leaves plus the FBA/FBM selector', () => {
     expect(byKey.get('gift_options__can_be_wrapped')!.kind).toBe('boolean')
     expect(byKey.get('gift_options__can_be_messaged')!.kind).toBe('boolean')
     expect(amazon.coverage.fulfillment_availability.sort()).toEqual([
+      'fulfillment_availability__fulfillment_channel_code',
       'fulfillment_availability__is_inventory_available',
       'fulfillment_availability__lead_time_to_ship_max_days',
       'fulfillment_availability__quantity',
@@ -333,3 +334,49 @@ describe('shared rules', () => {
     expect(humanizeKey('product_details')).toBe('Product details')
   })
 })
+
+describe('Amazon adapter — selectors with a choice are columns (2026-09-27)', () => {
+  it('the fulfilment method is a column: FBA / FBM, reading the nested code the FBA guard reads', () => {
+    const f = byKey.get(AMAZON_FULFILMENT_KEY)!
+    expect(f.attribute).toBe('fulfillment_availability')
+    expect(f.path).toEqual(['fulfillment_channel_code'])
+    expect(f.englishLabel).toBe('Fulfillment method')
+    expect(f.options).toEqual(expect.arrayContaining(['AMAZON_EU', 'DEFAULT']))
+    expect(f.optionLabels?.AMAZON_EU).toMatch(/^FBA/)
+    expect(f.optionLabels?.DEFAULT).toMatch(/^FBM/)
+    expect(f.channelStore).toEqual({ kind: 'platformAttributes', path: ['fulfillment_availability', '0', 'fulfillment_channel_code'] })
+  })
+
+  it('a one-value selector stays with the writer; every existing key keeps its name', () => {
+    // list_price.currency (EUR only) and hazmat.aspect (one value) are filled by the writer, never shown.
+    expect(amazon.fields.some((f) => f.key === 'list_price__currency' || f.key === 'hazmat__aspect')).toBe(false)
+    for (const key of ['list_price', 'hazmat', 'num_batteries', 'externally_assigned_product_identifier', 'language']) {
+      expect(byKey.has(key), key).toBe(true)
+    }
+  })
+
+  it('the multi-choice selectors in the real IT definition each get a `key__selector` column', () => {
+    const selectorLeaves = amazon.fields.filter((f) => f.path.length > 0 && f.selectors?.includes(f.path[f.path.length - 1]))
+    const keys = selectorLeaves.map((f) => f.key).sort()
+    expect(keys).toEqual(expect.arrayContaining([AMAZON_FULFILMENT_KEY, 'externally_assigned_product_identifier__type', 'language__type', 'num_batteries__type']))
+    for (const f of selectorLeaves) expect(selectorAutoValue(amazonDefNode(f.attribute, f.path))).toBeUndefined()
+  })
+
+  it('a keyed set is unchanged: the selector IS the leaf, no duplicate column', () => {
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'TEST', schemaDefinition: { properties: {
+      merchant_suggested_asin: { type: 'array', selectors: ['marketplace_id', 'value'], items: { type: 'object', properties: { marketplace_id: { type: 'string' }, value: { type: 'string' } } } },
+    } } })
+    expect(spec.fields.map((f) => f.key)).toEqual(['merchant_suggested_asin'])
+  })
+})
+
+/** The schema node a leaf path points at, inside the fixture (items → properties at each step). */
+function amazonDefNode(attribute: string, path: string[]): Record<string, unknown> | undefined {
+  let node = amazonDef.properties[attribute]
+  for (const step of path) {
+    while (node?.type === 'array') node = node.items
+    node = node?.properties?.[step]
+  }
+  return node
+}
+

@@ -106,8 +106,23 @@ describe('product-aware channel requirements', () => {
   it('does not label every optional leaf required when the envelope itself is required', () => {
     const definition = { type: 'object', required: ['stock'], properties: { stock: { type: 'array', selectors: ['mode'], items: { type: 'object', required: ['mode'], properties: { mode: { enum: ['FBA', 'FBM'] }, quantity: { type: 'integer' }, restock: { type: 'string' } } } } } }
     const result = check(definition, {})
+    // 2026-09-27 — `mode` is a selector with a CHOICE, so it is a column now, and it is the one leaf the envelope
+    // requires. The optional leaves still are not labelled required.
     expect(result.issues).toHaveLength(1)
-    expect(result.issues[0]).toMatchObject({ required: false, message: expect.stringContaining('stock attribute') })
+    expect(result.issues[0]).toMatchObject({ fieldKey: 'stock__mode', required: true })
+    expect(result.requiredFields).toEqual(['stock__mode'])
+  })
+  it('writes a chosen selector from its cell and a one-value selector from the schema', () => {
+    const definition = { properties: {
+      stock: { type: 'array', selectors: ['marketplace_id', 'mode'], items: { type: 'object', required: ['mode'], properties: { marketplace_id: { type: 'string' }, mode: { enum: ['FBA', 'FBM'] }, quantity: { type: 'integer' } } } },
+      price: { type: 'array', selectors: ['marketplace_id', 'currency'], items: { type: 'object', properties: { marketplace_id: { type: 'string' }, currency: { enum: ['EUR'] }, amount: { type: 'number' } } } },
+    } }
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'TEST', schemaDefinition: definition })
+    // One ordinary leaf keeps the attribute's own key (`stock` → quantity); the chosen selector is `stock__mode`.
+    expect(spec.fields.map(f => f.key).sort()).toEqual(['price', 'stock', 'stock__mode'])
+    expect(attributesFromCells(spec, { stock__mode: 'FBM', stock: 4, price: 10 })).toEqual({
+      stock: [{ mode: 'FBM', quantity: 4 }], price: [{ currency: 'EUR', amount: 10 }],
+    })
   })
   it('evaluates date alternatives with format validation enabled', () => {
     const definition = { properties: { restock: attribute({ oneOf: [{ format: 'date' }, { format: 'date-time' }] }) } }
