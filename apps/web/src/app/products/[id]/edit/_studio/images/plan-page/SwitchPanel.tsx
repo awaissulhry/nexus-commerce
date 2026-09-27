@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ChannelMediaLayout, MediaAsset, MediaCheck } from '@nexus/shared/media-plan-channels'
 
-import { Banner, DataGrid, MediaStrip, type Column } from '@/design-system/components'
+import { Banner, MediaStrip } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Spinner } from '@/design-system/primitives'
 
 import { apiGet, apiSend } from '../api'

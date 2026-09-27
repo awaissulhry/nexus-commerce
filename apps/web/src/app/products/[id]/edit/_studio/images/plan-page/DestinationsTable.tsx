@@ -2,7 +2,8 @@
 
 import type { ChannelMediaLayout } from '@nexus/shared/media-plan-channels'
 
-import { DataGrid, SourceIndicator, type Column } from '@/design-system/components'
+import { SourceIndicator } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, Tag } from '@/design-system/primitives'
 
 import { checkCounts, destinationCells, destinationLabel, layoutSummary, type MediaDestinationRow, type MediaRead } from './model'

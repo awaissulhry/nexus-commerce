@@ -4,7 +4,8 @@ import { useState } from 'react'
 import type { MediaOp, MediaSetRef } from '@nexus/shared/media-plan'
 import { AMAZON_SLOTS, type AmazonMediaLayout, type ChannelMediaLayout, type EbayMediaLayout, type EtsyMediaLayout, type MediaAsset, type ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
 
-import { Banner, DataGrid, Menu, Thumbnail, type Column } from '@/design-system/components'
+import { Banner, Menu, Thumbnail } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button, SegmentedControl } from '@/design-system/primitives'
 
 import { CHANNEL_LABEL, checkCounts, copyFromOps, destinationLabel, followAllOps, type LayerView, type MediaDestinationRow, type MediaRead } from './model'
