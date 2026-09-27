@@ -1,3 +1,7 @@
+## Catalog: no text inside synthetic images — 2026-09-27
+
+`catalog/MediaGalleryExample.tsx` — the synthetic example photos no longer draw a label: an SVG shown as an image cannot use the page's fonts, so its `font-family="sans-serif"` label fell back to the system font (Arial on Windows) on the `/design-system` page (Owner, 2026-09-27: no Arial anywhere). The pictures now differ by a bar count; the caption carries the label. `scripts/check-font-families.mjs` no longer excepts this file (web and Factory), so a font named there fails the guard again. Mirrored in Factory: `catalog/MediaGalleryExample.tsx`.
+
 ## MediaStrip: muted items — 2026-09-27
 
 For the Information sheet's "Product media" column on the photo plan (images P3c, `docs/images-studio-rebuild/PLAN.md` §5.7): a variant's cell shows its own set, then the photos shared by every variant. **`MediaStripItem.muted`** marks an item that is shown for context and is not part of the cell's own list: dashed frame, image at 55% opacity, and "· shared" in its tooltip (the difference is never colour alone). Catalog: `MediaGalleryExample` (a variant strip). Mirrored in Factory: `MediaStrip.tsx`, `catalog/MediaGalleryExample.tsx`, `styles/components.css`.

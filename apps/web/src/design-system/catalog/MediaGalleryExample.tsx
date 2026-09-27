@@ -14,8 +14,14 @@ import { CellAction } from '../components/CellAction'
 import { PressableRow } from '../components/PressableRow'
 import { Thumbnail } from '../components/Thumbnail'
 
-// Deliberately synthetic catalog assets; no product or publishing state is implied.
-const image = (label: string) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/><rect x="160" y="100" width="280" height="360" rx="40" fill="none" stroke="black" stroke-width="6"/><text x="300" y="520" text-anchor="middle" font-family="sans-serif" font-size="28">${label}</text></svg>`)}`
+// Deliberately synthetic catalog assets; no product or publishing state is implied. No text inside the picture: an SVG
+// shown as an image cannot use the page's fonts, so any lettering would fall back to the system font (Arial) — the label
+// is the card's caption instead, and the bar count tells the pictures apart.
+const image = (label: string) => {
+  const bars = [...label].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 4 + 1
+  const stripes = Array.from({ length: bars }, (_, i) => `<rect x="200" y="${160 + i * 60}" width="200" height="24" rx="12" fill="black"/>`).join('')
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><rect width="600" height="600" fill="white"/><rect x="160" y="100" width="280" height="360" rx="40" fill="none" stroke="black" stroke-width="6"/>${stripes}</svg>`)}`
+}
 
 export function MediaGalleryExample() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)

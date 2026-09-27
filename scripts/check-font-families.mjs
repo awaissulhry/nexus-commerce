@@ -53,8 +53,6 @@ export const EXCEPTIONS = {
   'apps/factory/src/design-system/tokens/css-vars.ts': 'Factory copy of the --nds-font-* generator',
   'apps/factory/src/design-system/tokens/index.d.ts': 'generated type declarations of the font tokens',
   'apps/factory/src/design-system/tokens/typography.d.ts': 'generated type declarations of the font tokens',
-  'apps/web/src/design-system/catalog/MediaGalleryExample.tsx': 'text inside a synthetic SVG image, where web fonts cannot load',
-  'apps/factory/src/design-system/catalog/MediaGalleryExample.tsx': 'Factory copy of the synthetic SVG image',
   'apps/web/src/design-system/grid/renderers/bandWidth.ts': 'canvas measurement: a plain family only when --nds-font-mono is absent (canvas cannot read var())',
   'apps/factory/src/design-system/grid/renderers/bandWidth.ts': 'Factory copy of the canvas measurement',
 }
