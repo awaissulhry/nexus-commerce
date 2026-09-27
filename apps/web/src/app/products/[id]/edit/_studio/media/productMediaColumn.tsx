@@ -17,7 +17,10 @@ export function withProductMediaColumn<T extends SheetColumn>(columns: T[]): T[]
   // Keep API identity in the catalogue; the shared gallery owns media authoring.
   const rest = columns.filter(column => column.managedBy !== PRODUCT_MEDIA_COLUMN && !(column.key === 'media' && column.label === 'Product media'))
   if (rest.some(column => column.key === PRODUCT_MEDIA_COLUMN)) return rest
-  const at = Math.max(0, rest.findIndex(column => column.key === 'description') + 1)
+  // After Description in every language mode: with two or more languages it arrives as `description@<lang>` columns,
+  // and the gallery used to jump to the front of the sheet (2026-09-27).
+  const isDescription = (column: T) => column.key === 'description' || column.key.startsWith('description@')
+  const at = rest.reduce((last, column, index) => (isDescription(column) ? index + 1 : last), 0)
   return [...rest.slice(0, at), mediaColumn as T, ...rest.slice(at)]
 }
 

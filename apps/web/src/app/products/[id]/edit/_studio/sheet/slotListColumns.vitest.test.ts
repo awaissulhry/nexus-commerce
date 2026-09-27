@@ -74,14 +74,18 @@ describe('R-56 — Bullet 1–10 hidden by default, still reachable', () => {
     expect(ordered).toEqual(copy)
     expect(defaultViewKeys(ordered, COLUMNS)).toEqual(ordered)
   })
-  it('"All attributes" and Languages leave the ten out and SAY so; Required keeps Bullet 1', () => {
+  it('"All attributes" and Text fields leave the ten out and SAY so; Required keeps Bullet 1', () => {
     const ctx = { locale: 'it', variationAxes: [] }
     const views = sheetViews(cols as never, ctx)
     const all = views.presets.find(p => p.id === 'all')!
     expect(all.columns).toEqual(['name', 'slots:bulletPoints', 'description'])
     expect(all.description).toBe(slotListViewNote(cols))
     expect(all.description).toContain('Bullet 1–10')
-    expect(views.presets.find(p => p.id === 'languages')!.columns.some(k => TEN_KEYS.includes(k))).toBe(false)
+    // The Languages view is gone (2026-09-27); Text fields took over its column set.
+    expect(views.presets.some(p => p.id === 'languages')).toBe(false)
+    const text = views.presets.find(p => p.id === 'localized-content')!
+    expect(text.columns).toContain('slots:bulletPoints')
+    expect(text.columns.some(k => TEN_KEYS.includes(k))).toBe(false)
     expect(views.presets.find(p => p.id === 'required')!.columns).toContain('bulletPoints_1')
   })
   it('without a one cell, "All attributes" is every column and says so', () => {
@@ -89,13 +93,16 @@ describe('R-56 — Bullet 1–10 hidden by default, still reachable', () => {
     expect(all.columns).toEqual(COLUMNS.map(c => c.key))
     expect(all.description).toBe('Every column this sheet has')
   })
-  it('useSheetColumns (source read): orderedKeys stays every column; only the three landing sites read landingKeys', () => {
+  it('useSheetColumns (source read): orderedKeys stays every column; only the landing sites read landingKeys', () => {
     const src = readFileSync(join(__dirname, 'useSheetColumns.ts'), 'utf8')
     expect(src.length).toBeGreaterThan(1000) // positive control: the reader found the hook
-    expect(src).toContain('const orderedKeys = useMemo(() => orderColumnKeys(columns, viewCtx), [columns, viewCtx])')
-    expect(src).toContain('columnsViewPayload(languagePreset?.columns ?? landingKeys)')
+    // Every attribute FIELD (2026-09-27: views work on fields; progress columns are not attributes).
+    expect(src).toContain('const orderedKeys = useMemo(() => orderColumnKeys(attributeColumns, fieldCtx), [attributeColumns, fieldCtx])')
+    // The landing sites: All attributes picked, landed on, re-resolved, and reloaded without a layout.
+    expect(src).toContain("activate(all ? { kind: 'all' } : { kind: 'preset', id: preset.id, label: preset.label }, all ? columnsViewPayload(landingKeys) : presetPayload(preset), false)")
+    expect(src).toContain("activate({ kind: 'all' }, columnsViewPayload(landingKeys), false)")
     expect(src).toContain("if (active.kind === 'all') { activate(active, columnsViewPayload(landingKeys), false); return }")
-    expect(src).toContain('record?.filters ?? columnsViewPayload(landingKeys)')
+    expect(src).toContain('const payload = hasMyLayout(layout) ? layout : columnsViewPayload(landingKeys)')
     expect(src).not.toContain('columnsViewPayload(orderedKeys)')
     expect(src).not.toMatch(/const orderedKeys = [^\n]*defaultViewKeys/)
   })

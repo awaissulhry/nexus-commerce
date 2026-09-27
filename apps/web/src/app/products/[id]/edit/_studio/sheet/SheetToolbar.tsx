@@ -33,21 +33,28 @@
  * Duplicate… are back beside save · update · default · delete — and the bar gains the row-height
  * control the products grid has (Compact · Cozy · Spacious). A saved view keeps the row height, the
  * widths and the sort with its columns. Same on every scope, like everything else here.
+ *
+ * TOOLBAR REBUILD (Owner, 2026-09-27: "extremely confusing … especially the filters thing, the different chips").
+ * ONE control per question, each named for its question:
+ *   - **Columns ▾** — which attributes: the built-in views, My layout, my views, the team's, Customise columns….
+ *     The "Required" and "Languages" chips are gone: Required is a built-in view, and languages are the Editing
+ *     bar's Languages menu alone.
+ *   - **Rows ▾** — which rows: All rows or one filter, named on the trigger with its count and a ✕. It says, as a
+ *     switch, that it also narrows the columns (D1 = A, on by default).
+ * `docs/product-sheet-toolbar/PLAN-2026-09-27.md`.
  */
 import { useRef, type ReactNode } from 'react'
-import { AlertTriangle, ChevronDown, MoreHorizontal, Search } from 'lucide-react'
+import { AlertTriangle, ChevronDown, MoreHorizontal, Search, X } from 'lucide-react'
 
-import { Button, FilterChip, Input } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Menu, type MenuItemDef } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'
-import { ALL_VIEW_ID, GRID_DENSITY_OPTIONS, GridDensityToggle, GridSearchSlot, GridSelectionActions, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarOverflowTier, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
+import { GRID_DENSITY_OPTIONS, GridDensityToggle, GridSearchSlot, GridSelectionActions, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarOverflowTier, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
 import type { GridDensityName } from '@/design-system/tokens/grid'
 
 import { viewChipIsAlarm, type ViewChip } from '../contracts'
 import { viewChipCountLabel, viewChipSummary } from '../viewChips'
 import { orderLanguageChips } from './languageChips'
-import { LANGUAGES_VIEW_ID } from './languages'
-import { REQUIRED_VIEW_ID } from './views'
 
 /** A control this scope does not offer, and why. Both fields are required — that is the point. */
 export interface AbsentControl {
@@ -83,10 +90,20 @@ export interface SheetToolbarProps<TPage> {
   views?: GridStateApi<TPage>
   presets?: readonly GridViewPreset[]
   activePresetId?: string | null
+  /** Two or more content languages are on: the language filters lead the Rows menu. */
   languagesView?: boolean
   onApplyPreset?: (preset: GridViewPreset) => void
-  /** The trigger's label when neither a preset nor a saved view is active ("Custom (23)"). */
+  /** What the Columns trigger names when neither a preset nor a saved view is on: "My layout". */
   viewsEmptyLabel?: string
+  /** The attributes on screen in the active view — the Columns trigger's number. */
+  activeCount?: number | null
+  /** "My layout", offered right after the built-in views when the scope has one. */
+  myLayout?: { count: number } | null
+  myLayoutActive?: boolean
+  onApplyMyLayout?: () => void
+  /** D1 = A — while a row filter is on, show only the columns with matches. */
+  narrowToMatches?: boolean
+  onNarrowToMatches?: (on: boolean) => void
   /** Save / update what is on screen as a columns view; the hook supplies both (`useSheetColumns`). */
   onSaveCurrentView?: (name: string) => Promise<unknown>
   onUpdateCurrentView?: (view: SavedGridView<TPage>) => Promise<unknown>
@@ -159,9 +176,10 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
      have moved does a bar that is still over ask its status pills for their width back. Reasoned with
      the measured 230.8px at `design-system/grid/toolbars/GridToolbarFold.tsx`. */
   const compactStatus = useToolbarStatusCompaction(actionsRef, tight)
-  /* The filter dropdown's rows (see the render below for the Owner's ruling). */
-  const filterChips = orderLanguageChips(p.chips ?? [], p.languagesView ?? p.activePresetId === LANGUAGES_VIEW_ID)
+  /* The Rows menu's items (see the render below for the Owner's rulings). */
+  const filterChips = orderLanguageChips(p.chips ?? [], p.languagesView ?? false)
   const activeFilter = filterChips.find((chip) => chip.id === p.activeChipId) ?? null
+  const activeFilterCount = activeFilter ? viewChipCountLabel(activeFilter) : null
   const filterItems: MenuItemDef[] = [
     { id: 'filter:all', label: <>All rows{activeFilter ? '' : ' ✓'}</>, description: 'No filter — every row of this sheet', disabled: blocked, onSelect: () => p.onChipToggle?.(null) },
     { id: 'sep-filters', separator: true },
@@ -185,7 +203,28 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
         onSelect: () => p.onChipToggle?.(on ? null : chip.id),
       }
     }),
+    /* D1 = A (Owner, 2026-09-27) — a filter also narrows the COLUMNS, and says so here, where it can be turned off. */
+    ...(activeFilter && p.onNarrowToMatches ? [
+      { id: 'sep-narrow', separator: true } as MenuItemDef,
+      {
+        id: 'filter:narrow', checked: !!p.narrowToMatches, disabled: blocked,
+        label: 'Only columns with matches',
+        description: p.narrowToMatches ? 'The columns without a match are hidden while this filter is on' : 'Every column of the view stays; the matching cells are marked',
+        onSelect: () => p.onNarrowToMatches?.(!p.narrowToMatches),
+      } as MenuItemDef,
+    ] : []),
   ]
+  /* The Columns menu's own items: My layout after the built-in views, and Customise at the end. */
+  const myLayoutItems: MenuItemDef[] = p.myLayout && p.onApplyMyLayout ? [{
+    id: 'my-layout',
+    label: <>My layout ({p.myLayout.count}){p.myLayoutActive ? ' ✓' : ''}</>,
+    title: 'Your own arrangement for this scope — what Customise columns saves',
+    onSelect: () => p.onApplyMyLayout?.(),
+  }] : []
+  const columnsEnd: MenuItemDef[] = !gone('customise') && p.onCustomise ? [{ id: 'customise', label: 'Customise columns…', disabled: blocked, onSelect: () => p.onCustomise?.() }] : []
+  const activeViewLabel = p.views?.views.find((v) => v.id === p.views?.activeId)?.name
+    ?? p.presets?.find((x) => x.id === p.activePresetId)?.label
+    ?? p.viewsEmptyLabel ?? 'All attributes'
   const foldedActions: MenuItemDef[] = [
     /* The row height folds FIRST and as three items, so it stays one click away (✓ marks the one in force). */
     ...(densityShown && densityFolded ? GRID_DENSITY_OPTIONS.map((o) => ({
@@ -227,45 +266,32 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
             the bar, where the person who forgot the data will see it. Silence was the whole defect.
           */}
           {!gone('views') && (
-            blocked ? <Button size="sm" disabled>All attributes</Button> : p.views && p.presets ? (
-              <>
-                <GridViewsMenu
-                  views={p.views}
-                  presets={p.presets}
-                  activePresetId={p.activePresetId}
-                  onApplyPreset={p.onApplyPreset ?? (() => {})}
-                  emptyLabel={p.viewsEmptyLabel ?? 'View'}
-                  showCounts
-                  manage="full"
-                  onNewView={p.onNewView}
-                  presetInMenu={(x) => x.id !== REQUIRED_VIEW_ID && x.id !== LANGUAGES_VIEW_ID}
-                  onSaveCurrent={p.onSaveCurrentView}
-                  onUpdateCurrent={p.onUpdateCurrentView}
-                  describeView={p.describeView}
-                  productType={p.productType}
-                  viewColumnCount={p.viewColumnCount}
-                />
-                {/* Daily column sets stay beside the view menu; other presets remain in the menu. */}
-                {p.presets.filter((x) => x.id === REQUIRED_VIEW_ID || x.id === LANGUAGES_VIEW_ID).map((x) => {
-                  const on = !p.activeChipId && p.activePresetId === x.id
-                  const all = p.presets!.find((y) => y.id === ALL_VIEW_ID)
-                  return (
-                    <FilterChip
-                      key={x.id}
-                      size="md"
-                      pressed={on}
-                      count={`${x.columns.length} ${x.columns.length === 1 ? 'column' : 'columns'}`}
-                      onClick={() => {
-                        if (!on) p.onApplyPreset?.(x)
-                        else if (all) p.onApplyPreset?.(all)
-                      }}
-                      title={x.description ?? x.label}
-                    >
-                      {x.label}
-                    </FilterChip>
-                  )
-                })}
-              </>
+            blocked ? <Button size="sm" disabled><span className="nds-toolbar-menu-lead">Columns</span></Button> : p.views && p.presets ? (
+              /* TOOLBAR REBUILD — "Columns ▾": which attributes. Built-in views, My layout, my views, the team's. */
+              <GridViewsMenu
+                views={p.views}
+                presets={p.presets}
+                activePresetId={p.activePresetId}
+                onApplyPreset={p.onApplyPreset ?? (() => {})}
+                emptyLabel={p.viewsEmptyLabel ?? 'My layout'}
+                showCounts
+                manage="full"
+                headings
+                triggerLabel={<>
+                  <span className="nds-toolbar-menu-lead">Columns</span>
+                  <span className="nds-toolbar-fold-active">{activeViewLabel}</span>
+                  {p.activeCount != null && <span className="nds-toolbar-fold-count">{p.activeCount}</span>}
+                </>}
+                triggerAriaLabel={`Columns: ${activeViewLabel}${p.activeCount != null ? `, ${p.activeCount} attributes` : ''}`}
+                afterPresets={myLayoutItems}
+                endItems={columnsEnd}
+                onNewView={p.onNewView}
+                onSaveCurrent={p.onSaveCurrentView}
+                onUpdateCurrent={p.onUpdateCurrentView}
+                describeView={p.describeView}
+                productType={p.productType}
+                viewColumnCount={p.viewColumnCount}
+              />
             ) : (
               <span
                 className="nds-grid-toolbar-absent nds-inline-error"
@@ -292,23 +318,32 @@ export function SheetToolbar<TPage>(p: SheetToolbarProps<TPage>) {
               exist) or `Filters · <label>` pressed when one is on. Each row keeps what its chip carried: the
               label, the count (`null` is never printed as 0), the alarm glyph for a warning/danger KIND, and
               the full detail as a visible second line. "All rows" clears; picking the active filter clears it. */}
+          {/* TOOLBAR REBUILD — "Rows ▾": which rows. The trigger names what is on ("Rows: All rows", or the filter
+              and its count); a ✕ beside it clears it in one click. It no longer prints how many filters EXIST,
+              which read as "5 filters on" (2026-09-27). */}
           {!gone('chips') && filterChips.length > 0 && (
-            <Menu
-              label={<>
-                Filters
-                {activeFilter
-                  ? <span className="nds-toolbar-fold-active">· {activeFilter.label}</span>
-                  : <span className="nds-toolbar-fold-count">{filterChips.length}</span>}
-                <ChevronDown size={11} aria-hidden />
-              </>}
-              items={filterItems}
-              selectedId={activeFilter ? `filter:${activeFilter.id}` : 'filter:all'}
-              triggerProps={{
-                className: ['nds-btn sm nds-toolbar-fold-trigger', activeFilter ? 'is-active' : ''].filter(Boolean).join(' '),
-                disabled: blocked,
-                'aria-label': activeFilter ? `Filters: ${activeFilter.label}` : `Filters, ${filterChips.length} available`,
-              }}
-            />
+            <span className="nds-toolbar-rows">
+              <Menu
+                label={<>
+                  <span className="nds-toolbar-menu-lead">Rows</span>
+                  <span className="nds-toolbar-fold-active">{activeFilter ? activeFilter.label : 'All rows'}</span>
+                  {activeFilterCount && <span className="nds-toolbar-fold-count">{activeFilterCount}</span>}
+                  <ChevronDown size={11} aria-hidden />
+                </>}
+                items={filterItems}
+                selectedId={activeFilter ? `filter:${activeFilter.id}` : 'filter:all'}
+                triggerProps={{
+                  className: ['nds-btn sm nds-toolbar-fold-trigger', activeFilter ? 'is-active' : ''].filter(Boolean).join(' '),
+                  disabled: blocked,
+                  'aria-label': activeFilter ? `Rows: ${activeFilter.label}${activeFilterCount ? `, ${activeFilterCount}` : ''}` : 'Rows: all rows',
+                }}
+              />
+              {activeFilter && (
+                <Button size="sm" className="nds-toolbar-rows-clear" disabled={blocked} aria-label={`Clear the filter ${activeFilter.label}`} title="Show all rows" onClick={() => p.onChipToggle?.(null)}>
+                  <X size={12} aria-hidden />
+                </Button>
+              )}
+            </span>
           )}
           <SheetStatuses status={p.status} compact={compactStatus} />
           <div className="nds-sheet-toolbar-actions" ref={actionsRef}>

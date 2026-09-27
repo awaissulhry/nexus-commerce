@@ -14,7 +14,7 @@ import { languageLabel, scopeLanguages } from './scopes'
 
 /** Scope selects the owner; product navigation selects the work. Grid controls stay in the sheet. */
 export function StudioBar() {
-  const { marketplaces, listingId, destination, setListing, accountId, accounts, setAccount, scope, market, locale, locales, setLocales, primaryLanguage, options, setScope, setMarket, setLocale } = useStudioScope()
+  const { marketplaces, listingId, destination, setListing, accountId, accounts, setAccount, scope, market, locale, locales, setLocales, setLanguages, primaryLanguage, options, setScope, setMarket, setLocale } = useStudioScope()
   const readiness = useScopeReadiness()
   const discovery = useStudioDiscovery()
   const save = useStudioSave()
@@ -43,13 +43,19 @@ export function StudioBar() {
 
       {listingId && <Button size="sm" variant="ghost" onClick={() => setListing()} title="Clear this listing selection and show all listings in the selected account and market">{destination.status === 'ready' && destination.data.aliasKey ? 'Listing customization' : 'Selected listing'} · Clear</Button>}
       </>}
-      {/* Step 4.3 #2 (A-44) — ONE language control in the slot the nine chips took. The Languages view
-          makes it a multi-select that can never drop below one language; `locales` keeps its URL. */}
-      {!languageChoice ? null : locales
-        ? <MultiSelect size="sm" width="auto" ariaLabel="Content languages" options={languageOptions} value={locales} minSelected={1}
-            formatLabel={value => languageSummary(value, available, languageLabel)}
-            onChange={next => { const ordered = orderedLocales(next, available); if (ordered) setLocales(ordered) }} />
-        : <Listbox size="sm" width="auto" ariaLabel="Content language" options={languageOptions} value={locale ?? undefined} onChange={setLocale} placeholder="Language" />}
+      {/* TOOLBAR REBUILD (Owner, 2026-09-27) — THE language control, and the only one: the sheet's "Languages" chip
+          is gone. Always a multi-choice that never drops below one language. One ticked is the ordinary sheet; two or
+          more show every text field once per language, whatever view is on. Remembered per scope. */}
+      {languageChoice && <MultiSelect size="sm" width="auto" ariaLabel="Content languages" options={languageOptions}
+        value={locales ?? (locale ? [locale] : [])} minSelected={1}
+        formatLabel={value => `Languages: ${languageSummary(value, available, languageLabel)}`}
+        onChange={next => {
+          const ordered = orderedLocales(next, available)
+          if (!ordered) return
+          if (setLanguages) setLanguages(ordered)
+          else if (ordered.length === 1) { setLocales(null); setLocale(ordered[0]) }
+          else setLocales(ordered)
+        }} />}
     </>
   } />
 }

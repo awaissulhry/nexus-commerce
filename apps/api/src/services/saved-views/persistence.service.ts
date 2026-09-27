@@ -99,6 +99,22 @@ function validateColumnsPayload(value: unknown, allowLegacyGridState: boolean): 
   validateViewDisplay(value)
 }
 
+/**
+ * TOOLBAR REBUILD (2026-09-27) — a sheet's "Current layout" also remembers the view picked last (web
+ * `sheet/sheetLayoutMemory.ts` → `SheetPick`): all attributes, My layout, or a built-in or saved view by id. Optional;
+ * present must be exactly that, because the sheet opens on it.
+ */
+const PICK_KINDS = new Set(['all', 'custom', 'preset', 'saved'])
+function validatePick(value: unknown): void {
+  if (!record(value) || value.picked === undefined) return
+  const pick = value.picked
+  const byId = record(pick) && (pick.kind === 'preset' || pick.kind === 'saved')
+  const valid = record(pick) && typeof pick.kind === 'string' && PICK_KINDS.has(pick.kind) &&
+    (byId ? typeof pick.id === 'string' && pick.id.trim().length > 0 && pick.id.length <= 500 : pick.id === undefined) &&
+    Object.keys(pick).every((key) => key === 'kind' || key === 'id')
+  if (!valid) throw new SavedViewError('A layout remembers all attributes, My layout, or a built-in or saved view by id')
+}
+
 /** Generic catalog filters stay opaque. The product grids own these versioned layout contracts. */
 export function validateSavedViewPayload(surface: string, value: unknown): void {
   if (isProductsGridSurface(surface)) {
@@ -112,7 +128,10 @@ export function validateSavedViewPayload(surface: string, value: unknown): void 
     validateColumnsPayload(layout, false)
     return
   }
-  if (isSheetSurface(surface)) validateColumnsPayload(value, !isWorkingSurface(surface))
+  if (isSheetSurface(surface)) {
+    validateColumnsPayload(value, !isWorkingSurface(surface))
+    if (isWorkingSurface(surface)) validatePick(value)
+  }
 }
 
 function nameOf(value: unknown): string {

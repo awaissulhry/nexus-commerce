@@ -171,7 +171,12 @@ export type ScopeReadinessQuery =
    * only while it matches — a different coordinate is a different question, and the old answer is
    * not a stale version of it (§3.6; measured IT→DE showing IT's 71% under a DE bar).
    */
-  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[]; at: number; coordinate: string }
+  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[]; at: number; coordinate: string
+      /**
+       * A later re-read of the SAME coordinate failed (2026-09-27). The values above are the last good answer, kept on
+       * screen — a failed refresh must not remove the progress columns — and this says why they were not refreshed.
+       */
+      refreshError?: string }
   | { status: 'unavailable'; reason: string }
   | { status: 'error'; message: string }
 

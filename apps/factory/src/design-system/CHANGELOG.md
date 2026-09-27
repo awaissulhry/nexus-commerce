@@ -1,3 +1,11 @@
+## Customise: always-shown columns, emptied groups — 2026-09-27
+
+Mirrored from web. **`PreferencesColumnSpec.alwaysShown`** (always on screen, still movable and pinnable; held tick, no ✕, no hide) and **emptied groups** (left out of the tick-list; "Empty · drag a column here to put it back" in In view). Opt-in; every other caller is unchanged.
+
+## Menu headings and on/off items, Customise select-all — 2026-09-27
+
+Mirrored from web (the product sheet's toolbar rebuild). **`Menu`**: `MenuItemDef.heading` (a section heading, skipped by the arrow keys, `.nds-menu-heading`) and `checked` (`role="menuitemcheckbox"`, a ✓ in a fixed slot). **`PreferencesModal`**: `bulkPick` ("Select all · Clear all", on the matches when filtering), `rememberInteraction` (the filter text and open groups survive a reopen), `confirmLabel`, and `PreferencesColumnSpec.uncounted` (listed, never counted). Styles in `components.css`, `patterns.css` and `grid/theme/grid.css` (the toolbar's “Columns:” / “Rows:” lead words). All opt-in.
+
 ## Focus outlines that paint, and a guard — 2026-09-27
 
 `DetailPopover`'s trigger and panel declared `outline: 2px solid var(--nds-focus-ring)`. That token is a box-SHADOW value (`0 0 0 2px rgb(…)`), so the browser dropped the whole declaration and neither had a visible keyboard focus — every readiness and progress card. Both now use `var(--nds-primary)`, the DS rule `a11y.css` already follows. The same misuse in the app's notifications bell is fixed. New guard **`scripts/check-shadow-token-use.mjs`** (`--self-test`) derives every shadow-valued token from `tokens.css` (lengths + a colour, var() chains followed) and fails any declaration that uses one outside `box-shadow` / `text-shadow` / `filter` / a custom property; it runs in the CI static gates and `gates-full.sh`. Mirrored in Factory: `styles/components.css`.

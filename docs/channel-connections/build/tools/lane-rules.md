@@ -33,7 +33,7 @@ After any schema.prisma change, re-run prisma generate — and NEVER run prisma 
 - `npm run typecheck` in apps/api must pass (run it when no tests are running).
 - Save every evidence log under /private/tmp/cx-completion-20260922/<lane>-*.log.
 - Match the surrounding code style (dense, typed, short comments that state WHY).
-- UI (only if your brief includes it): apps/web/src/design-system only, read DESIGN.md + AGENTS.md; no raw palette values.
+- UI (only if your brief includes it): apps/web/src/design-system only, read DESIGN.md + apps/web/CLAUDE.md; no raw palette values.
 
 ## Commits
 Commit per slice on YOUR branch only, staging files by name. Message style: `feat(cx): ...` / `fix(cx): ...` with a body listing evidence; end the message with:

@@ -247,14 +247,26 @@ export function sheetFieldAction(presence: ColumnPresence, label: string, elsewh
   return { kind: 'none', text: elsewhere.replace('{label}', label) }
 }
 
+/** A verb of the progress column's own header menu (2026-09-27): "Refresh progress · read 12:04". */
+export interface ProgressMenuItem { name: string; action: () => void; disabled?: boolean; tooltip?: string }
+
+/** "Refresh progress", with when the bars were last read — the ⋯ menu and every progress column's header menu say it. */
+export function refreshProgressItem(refresh: () => void, readAt: number | null | undefined, failed?: string | null): ProgressMenuItem {
+  const at = readAt ? new Date(readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null
+  return { name: at ? `Refresh progress · read ${at}` : 'Refresh progress', action: refresh, ...(failed ? { tooltip: `The last refresh failed: ${failed}` } : {}) }
+}
+
 export function progressColumn<Row>(input: {
   colId: string
   headerName: string
   headerTooltip: string
   value: (row: Row) => ProgressValue | null
   cell: ProgressCellParams
+  /** The column's own header-menu verbs, read when the menu opens (`NexusGrid` adds them above Customise). */
+  menu?: () => ProgressMenuItem[]
 }): ColDef<Row> {
   return {
+    ...(input.menu ? { context: { menuItems: input.menu } } : {}),
     colId: input.colId,
     headerName: input.headerName,
     headerTooltip: input.headerTooltip,

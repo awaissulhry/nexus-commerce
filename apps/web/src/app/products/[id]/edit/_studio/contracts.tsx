@@ -37,6 +37,7 @@ import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 
 import { readLastMarket, writeLastMarket } from './lastMarket'
+import { languagesKey, languagesPatch, readLastLanguages, writeLastLanguages } from './lastLanguages'
 import { languageSelection, toggleLanguage } from './sheet/languages'
 import { connectionScopePolicy } from './presence/connection'
 import { channelLabel } from './scopes'
@@ -148,6 +149,11 @@ export interface StudioScopeValue {
   primaryLanguage: string | null
   locales: string[] | null
   setLocales(locales: string[] | null): void
+  /**
+   * TOOLBAR REBUILD (2026-09-27) — the Languages menu's one setter: one language is the ordinary sheet, two or more
+   * split every text field into one column per language. Remembered per scope (`lastLanguages.ts`).
+   */
+  setLanguages?(codes: string[]): void
   tab: StudioTabId
   /** `null` on master — master has no channel coordinate. */
   coordinate: StudioCoordinate | null
@@ -363,6 +369,20 @@ export function useScopeReadiness(): ScopeReadinessQuery {
   return useContext(ReadinessCtx)
 }
 
+const ReadinessRefreshCtx = createContext<() => void>(() => {})
+
+/**
+ * Read the progress bars again (TOOLBAR REBUILD, Owner 2026-09-27: "I'm not able to reload them at all").
+ *
+ * The readiness index is rebuilt on the server inside every write that touches one or two families
+ * (`readiness-index.service.ts`), so the answer is fresh the moment a save returns — the page only has to ASK. The
+ * sheets call this after a confirmed save, from ⋯ → Reload and from "Refresh progress". The last good answer stays
+ * on screen while it reads.
+ */
+export function useReadinessRefresh(): () => void {
+  return useContext(ReadinessRefreshCtx)
+}
+
 function useReadinessQuery(productId: string, market: string | null, nonce: number, channel?: string, accountId?: string, listingId?: string, locale?: string | null, noMarketReason?: string | null): ScopeReadinessQuery {
   const [query, setQuery] = useState<ScopeReadinessQuery>({ status: 'loading' })
   const queryCoordinate = JSON.stringify([productId, market, channel, accountId, listingId, locale])
@@ -434,6 +454,11 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
      * Also still open with PES.5: whether ANY server-side timeout exists on the route. It does not
      * today, which makes this constant the only deadline in the whole system.
      */
+    /* A failed RE-read of the same coordinate keeps the last good answer and says so (`refreshError`); only a first
+       read, or a new coordinate, reports the failure itself. */
+    const fail = (message: string) => setQuery((prev) => (prev.status === 'ready' && prev.coordinate === coordinate
+      ? { ...prev, refreshError: message }
+      : { status: 'error', message }))
     const abort = new AbortController()
     const deadline = setTimeout(() => abort.abort(), CEILING_MS)
     const slowTimer = setTimeout(() => {
@@ -453,7 +478,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
           return
         }
         if (!res.ok) {
-          setQuery({ status: 'error', message: `Readiness request failed (${res.status}).` })
+          fail(`Readiness request failed (${res.status}).`)
           return
         }
         const json: unknown = await res.json()
@@ -462,14 +487,11 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
       } catch (e) {
         if (cancelled) return
         const timedOut = e instanceof DOMException && e.name === 'AbortError'
-        setQuery({
-          status: 'error',
-          message: timedOut
-            ? `Readiness did not answer within ${Math.round(CEILING_MS / 1000)}s.`
-            : e instanceof Error
-              ? e.message
-              : 'Readiness request failed.',
-        })
+        fail(timedOut
+          ? `Readiness did not answer within ${Math.round(CEILING_MS / 1000)}s.`
+          : e instanceof Error
+            ? e.message
+            : 'Readiness request failed.')
       } finally {
         clearTimeout(deadline)
         clearTimeout(slowTimer)
@@ -830,6 +852,16 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     push({ [URL_KEYS.market]: remembered })
   }, [marketParam, market, options.markets, push])
 
+  /* TOOLBAR REBUILD (2026-09-27) — the same for the content languages: a URL that names none opens on the languages
+     this operator last picked in this scope (`lastLanguages.ts`). Replaces, never pushes; a link that names them wins. */
+  useEffect(() => {
+    if (localeParam || localesParam || scopeError) return
+    const remembered = readLastLanguages(languagesKey(scope, market), supportedLanguages)
+    if (!remembered) return
+    if (remembered.length === 1 && remembered[0] === locale) return
+    push(languagesPatch(remembered))
+  }, [localeParam, localesParam, scopeError, scope, market, supportedLanguages, locale, push])
+
 
   const setScope = useCallback(
     (next: StudioScopeId) => {
@@ -858,7 +890,13 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
       // write, rather than by a second effect that would land as a separate history state.
       const strands = scope !== MASTER_SCOPE && !channelServesMarket(scope, code, options)
       const nextLocale = scope === MASTER_SCOPE || strands ? primaryLanguage : localeForMarketChange(scope, code, localeParam, marketplaces)
+      // A channel's languages are its market's: reopen on the ones last picked for THAT market (TOOLBAR REBUILD).
+      const remembered = scope !== MASTER_SCOPE && !strands ? readLastLanguages(languagesKey(scope, code), scopeLanguages(scope, code, marketplaces, primaryLanguage)) : null
       writeLastMarket(code)
+      if (remembered) {
+        push({ [URL_KEYS.market]: code, account: accountId, listing: undefined, [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined, [URL_KEYS.chip]: undefined, ...languagesPatch(remembered) })
+        return
+      }
       push({
         [URL_KEYS.market]: code,
         locales: undefined,
@@ -878,6 +916,12 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   const setAccount = useCallback((id: string) => push({ account: id, listing: undefined, [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined, [URL_KEYS.chip]: undefined }), [push])
   const setListing = useCallback((id?: string) => push({ account: accountId, listing: id, [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined, [URL_KEYS.chip]: undefined }), [push, accountId])
   const setLocales = useCallback((codes: string[] | null) => push({ locales: codes?.join(',') }), [push])
+  const setLanguages = useCallback((codes: string[]) => {
+    const ordered = supportedLanguages.filter((code) => codes.includes(code))
+    if (!ordered.length) return
+    writeLastLanguages(languagesKey(scope, market), ordered)
+    push(languagesPatch(ordered))
+  }, [push, supportedLanguages, scope, market])
   const setLocale = useCallback((code: string) => {
     if (locales) setLocales(toggleLanguage(locales, code, supportedLanguages))
     else push({ [URL_KEYS.locale]: code })
@@ -905,7 +949,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
       market,
       locale,
       primaryLanguage,
-      locales, setLocales,
+      locales, setLocales, setLanguages,
       tab,
       coordinate,
       options,
@@ -915,7 +959,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
       setLocale,
       setTab,
     }),
-    [accountId, accounts, setAccount, registerScopeChangeGuard, canChangeEditor, registerShopifyLocales, listingId, destination, scopeError, setListing, scope, market, locale, primaryLanguage, locales, setLocales, tab, coordinate, options, marketplaces, setScope, setMarket, setLocale, setTab],
+    [accountId, accounts, setAccount, registerScopeChangeGuard, canChangeEditor, registerShopifyLocales, listingId, destination, scopeError, setListing, scope, market, locale, primaryLanguage, locales, setLocales, setLanguages, tab, coordinate, options, marketplaces, setScope, setMarket, setLocale, setTab],
   )
 
   const rowId = search.get(URL_KEYS.record)
@@ -989,9 +1033,11 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   const save = useSaveMachine(JSON.stringify([product.id, scope, market, locale, accountId, listingId]))
   useInFlightGuard(save.state, save.publication.publicationBlocker, canChangeEditor)
   const liveNonce = useLiveRefresh(product.id)
+  const [askedNonce, setAskedNonce] = useState(0)
+  const refreshReadiness = useCallback(() => setAskedNonce((n) => n + 1), [])
   // Only the resolved market being ABSENT has a gate reason; a scope error or an unready destination keeps "No market selected."
   const noMarketReason = market ? null : marketGateReason(marketGate({ market, locale, marketCount: baseOptions.markets.length, discoveryFailed: marketplacesFailed === true }))
-  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason)
+  const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce + askedNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale, noMarketReason)
 
   return (
     <ProductCtx.Provider value={product}>
@@ -1002,9 +1048,11 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
         <RecordCtx.Provider value={recordValue}>
           <SaveCtx.Provider value={save}>
             <ReadinessCtx.Provider value={readiness}>
+            <ReadinessRefreshCtx.Provider value={refreshReadiness}>
             <RegisterCtx.Provider value={registerChip}>
               <ViewChipsCtx.Provider value={viewChips}>{children}</ViewChipsCtx.Provider>
             </RegisterCtx.Provider>
+            </ReadinessRefreshCtx.Provider>
           </ReadinessCtx.Provider>
           </SaveCtx.Provider>
         </RecordCtx.Provider>

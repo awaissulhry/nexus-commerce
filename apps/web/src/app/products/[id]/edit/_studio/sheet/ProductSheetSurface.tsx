@@ -28,6 +28,15 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
     rows="media-line"
     emptyCells="blank"
     treeData
+    /* The VIEW owns the column order (`useSheetColumns` applies it). Without this, AG reverts to the columnDefs order
+       whenever they are rebuilt — a progress refresh, a readiness read — and the variation theme slid behind the
+       identity fields (measured 2026-09-27 after a scope round trip). */
+    maintainColumnOrder
+    /* A header drag is kept like a Customise Save (`useSheetColumns.onColumnMoved`). */
+    onColumnMoved={columns.onColumnMoved}
+    onColumnPinned={columns.onColumnPinned}
+    /* The sheet's locks freeze a column at the LEFT; a right pin could not be kept, so it is not offered. */
+    pinSides="left"
     groupHeaderHeight={gridGeometry.stripH}
   />
   const drawer = model.drawer && <StudioDock {...model.drawer} />
@@ -47,9 +56,15 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         views={columns.gridState}
         presets={columns.presets}
         activePresetId={columns.activePresetId}
-        languagesView={scope.locales !== null}
+        languagesView={(scope.locales?.length ?? 0) > 1}
         onApplyPreset={columns.applyPreset}
         viewsEmptyLabel={columns.emptyLabel}
+        activeCount={columns.activeCount}
+        myLayout={columns.myLayout}
+        myLayoutActive={columns.active.kind === 'custom'}
+        onApplyMyLayout={columns.applyMyLayout}
+        narrowToMatches={columns.narrowToMatches}
+        onNarrowToMatches={columns.setNarrowToMatches}
         onSaveCurrentView={columns.saveCurrentAs}
         onUpdateCurrentView={columns.updateView}
         describeView={columns.describeView}
